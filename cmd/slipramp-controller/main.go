@@ -1,0 +1,40 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/slipramp/slipramp/internal/config"
+	"github.com/slipramp/slipramp/internal/controller"
+)
+
+func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	cfg, err := config.LoadController(os.LookupEnv)
+	if err != nil {
+		logger.Error("invalid controller configuration", "error", err)
+		os.Exit(1)
+	}
+
+	app, err := controller.New(cfg, logger)
+	if err != nil {
+		logger.Error("initialize controller", "error", err)
+		os.Exit(1)
+	}
+
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	if err := app.Run(ctx); err != nil {
+		logger.Error("run controller", "error", err)
+		os.Exit(1)
+	}
+}

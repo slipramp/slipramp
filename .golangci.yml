@@ -1,0 +1,17 @@
+version: "2"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - noctx
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
