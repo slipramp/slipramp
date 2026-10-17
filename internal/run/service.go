@@ -58,6 +58,10 @@ type runReader interface {
 	GetRun(context.Context, uuid.UUID) (Run, error)
 }
 
+type runLister interface {
+	ListRuns(context.Context, ListFilter) ([]Run, error)
+}
+
 type artifactInputStore interface {
 	GetArtifactInputCandidate(context.Context, uuid.UUID) (ArtifactInput, error)
 }
@@ -266,6 +270,43 @@ func (s *Service) GetRun(ctx context.Context, runID uuid.UUID) (Run, error) {
 	}
 
 	return record, nil
+}
+
+func (s *Service) ListRuns(ctx context.Context, filter ListFilter) ([]Run, error) {
+	if filter.RepositoryID != nil && *filter.RepositoryID == uuid.Nil {
+		return nil, fmt.Errorf("%w: repository ID must not be empty", ErrInvalidRequest)
+	}
+	if filter.TargetName != strings.TrimSpace(filter.TargetName) {
+		return nil, fmt.Errorf(
+			"%w: target name must not have surrounding whitespace",
+			ErrInvalidRequest,
+		)
+	}
+	if filter.TargetName != "" && filter.RepositoryID == nil {
+		return nil, fmt.Errorf("%w: target filter requires a repository ID", ErrInvalidRequest)
+	}
+	if filter.Limit == 0 {
+		filter.Limit = DefaultListLimit
+	}
+	if filter.Limit < 1 || filter.Limit > MaximumListLimit {
+		return nil, fmt.Errorf(
+			"%w: limit must be between 1 and %d",
+			ErrInvalidRequest,
+			MaximumListLimit,
+		)
+	}
+
+	lister, ok := s.runs.(runLister)
+	if !ok {
+		return nil, errors.New("run store cannot list Runs")
+	}
+
+	records, err := lister.ListRuns(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("list Runs: %w", err)
+	}
+
+	return records, nil
 }
 
 func (s *Service) resolveInputCandidates(

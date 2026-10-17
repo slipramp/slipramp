@@ -213,6 +213,24 @@ func (e RepositoryRefreshStatus) Valid() bool {
 	}
 }
 
+// Defines values for RunObservationState.
+const (
+	RunObservationStateCurrent RunObservationState = "current"
+	RunObservationStateUnknown RunObservationState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the RunObservationState enum.
+func (e RunObservationState) Valid() bool {
+	switch e {
+	case RunObservationStateCurrent:
+		return true
+	case RunObservationStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunOutcome.
 const (
 	RunOutcomeCanceled  RunOutcome = "canceled"
@@ -768,6 +786,9 @@ type Run struct {
 	// LastObservedAt Time the controller most recently confirmed execution state.
 	LastObservedAt *time.Time `json:"lastObservedAt,omitempty"`
 
+	// ObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Unknown means the controller is unreachable, has not observed the Run, or its observation is stale; it does not change the durable lifecycle phase.
+	ObservationState *RunObservationState `json:"observationState,omitempty"`
+
 	// Outcome Terminal result, present only when phase is finished.
 	Outcome        *RunOutcome               `json:"outcome,omitempty"`
 	OutcomeMessage *string                   `json:"outcomeMessage,omitempty"`
@@ -783,6 +804,9 @@ type Run struct {
 	StartedAt    *time.Time         `json:"startedAt,omitempty"`
 	Target       CatalogName        `json:"target"`
 }
+
+// RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Unknown means the controller is unreachable, has not observed the Run, or its observation is stale; it does not change the durable lifecycle phase.
+type RunObservationState string
 
 // RunOutcome Terminal result, present only when phase is finished.
 type RunOutcome string
@@ -915,6 +939,11 @@ type RunCreate struct {
 	Target       CatalogName        `json:"target"`
 }
 
+// RunList defines model for RunList.
+type RunList struct {
+	Items []Run `json:"items"`
+}
+
 // RunObservation defines model for RunObservation.
 type RunObservation struct {
 	ExitCode *int32 `json:"exitCode,omitempty"`
@@ -1006,6 +1035,18 @@ type TargetSpec struct {
 type TargetStatus struct {
 	// DesiredCommitSha Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
 	DesiredCommitSha string `json:"desiredCommitSha"`
+}
+
+// ListRunsParams defines parameters for ListRuns.
+type ListRunsParams struct {
+	// RepositoryID Limit results to one repository.
+	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
+
+	// Target Limit results to a target name within the selected repository. Requires repositoryId.
+	Target *CatalogName `form:"target,omitempty" json:"target,omitempty"`
+
+	// Limit Maximum number of recent Runs to return.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // CreateRunParams defines parameters for CreateRun.
@@ -1265,6 +1306,13 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListRuns List recent Runs
+	//
+	// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+	//
+	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
+	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateRunWithBody Create an action run
 	//
 	// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
@@ -1509,6 +1557,23 @@ func (c *Client) RemoveRepository(ctx context.Context, repositoryID openapi_type
 // Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetRepositoryCatalogRequest(c.Server, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRuns List recent Runs
+//
+// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+//
+// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
+func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRunsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2017,6 +2082,84 @@ func NewGetRepositoryCatalogRequest(server string, repositoryID openapi_types.UU
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListRunsRequest constructs an http.Request for the ListRuns method
+func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.RepositoryID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repositoryId", *params.RepositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Target != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "target", *params.Target, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -2770,6 +2913,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalogWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRepositoryCatalogResponse, error)
 
+	// ListRunsWithResponse List recent Runs
+	//
+	// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
+	ListRunsWithResponse(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*ListRunsResponse, error)
+
 	// CreateRunWithBodyWithResponse Create an action run
 	//
 	// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
@@ -3300,6 +3452,68 @@ func (r GetRepositoryCatalogResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetRepositoryCatalogResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListRunsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RunList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRunsResponse) GetJSON200() *RunList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListRunsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListRunsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListRunsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRunsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRunsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRunsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRunsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -4375,6 +4589,21 @@ func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Conte
 	return ParseGetRepositoryCatalogResponse(rsp)
 }
 
+// ListRunsWithResponse List recent Runs
+//
+// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
+func (c *ClientWithResponses) ListRunsWithResponse(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*ListRunsResponse, error) {
+	rsp, err := c.ListRuns(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRunsResponse(rsp)
+}
+
 // CreateRunWithBodyWithResponse Create an action run
 //
 // Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
@@ -4929,6 +5158,53 @@ func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalo
 			return nil, err
 		}
 		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRunsResponse parses an HTTP response from a ListRunsWithResponse call
+func ParseListRunsResponse(rsp *http.Response) (*ListRunsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRunsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RunList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -5749,6 +6025,9 @@ type ServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
+	// ListRuns List recent Runs
+	// (GET /api/v1/runs)
+	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams)
@@ -5913,6 +6192,65 @@ func (siw *ServerInterfaceWrapper) GetRepositoryCatalog(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRepositoryCatalog(w, r, repositoryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRunsParams
+
+	// ------------- Optional query parameter "repositoryId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repositoryId", r.URL.Query(), &params.RepositoryID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repositoryId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "target" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "target", r.URL.Query(), &params.Target, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "target"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRuns(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6517,6 +6855,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.SealRunLog)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/execution/v1/runs/{runId}/artifacts/{artifactName}", wrapper.UploadRunArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/execution/v1/runs/{runId}/inputs/{inputName}", wrapper.DownloadRunInput)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs", wrapper.ListRuns)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}", wrapper.GetRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/cancel", wrapper.CancelRun)
@@ -6948,6 +7287,70 @@ func (response GetRepositoryCatalog405ApplicationProblemPlusJSONResponse) VisitG
 type GetRepositoryCatalog500ApplicationProblemPlusJSONResponse Problem
 
 func (response GetRepositoryCatalog500ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunsRequestObject struct {
+	Params ListRunsParams
+}
+
+type ListRunsResponseObject interface {
+	VisitListRunsResponse(w http.ResponseWriter) error
+}
+
+type ListRuns200JSONResponse RunList
+
+func (response ListRuns200JSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuns400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuns400ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuns405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuns405ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuns500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuns500ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8185,6 +8588,9 @@ type StrictServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(ctx context.Context, request GetRepositoryCatalogRequestObject) (GetRepositoryCatalogResponseObject, error)
+	// ListRuns List recent Runs
+	// (GET /api/v1/runs)
+	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(ctx context.Context, request CreateRunRequestObject) (CreateRunResponseObject, error)
@@ -8418,6 +8824,32 @@ func (sh *strictHandler) GetRepositoryCatalog(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryCatalogResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRuns operation middleware
+func (sh *strictHandler) ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams) {
+	var request ListRunsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRuns(ctx, request.(ListRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRunsResponseObject); ok {
+		if err := validResponse.VisitListRunsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

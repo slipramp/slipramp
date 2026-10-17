@@ -36,6 +36,9 @@ export default function App() {
             <Anchor component={Link} to="/repositories">
               Repositories
             </Anchor>
+            <Anchor component={Link} to="/runs">
+              Runs
+            </Anchor>
           </Group>
         </Group>
       </AppShell.Header>

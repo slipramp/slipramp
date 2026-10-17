@@ -52,6 +52,9 @@ import type {
   ListRunArtifactsData,
   ListRunArtifactsErrors,
   ListRunArtifactsResponses,
+  ListRunsData,
+  ListRunsErrors,
+  ListRunsResponses,
   PollForControllerCommandData,
   PollForControllerCommandErrors,
   PollForControllerCommandResponses,
@@ -360,6 +363,19 @@ export const downloadRunInput = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/execution/v1/runs/{runId}/inputs/{inputName}",
+    ...options,
+  });
+
+/**
+ * List recent Runs
+ *
+ * Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+ */
+export const listRuns = <ThrowOnError extends boolean = false>(
+  options?: Options<ListRunsData, ThrowOnError>,
+): RequestResult<ListRunsResponses, ListRunsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListRunsResponses, ListRunsErrors, ThrowOnError>({
+    url: "/api/v1/runs",
     ...options,
   });
 

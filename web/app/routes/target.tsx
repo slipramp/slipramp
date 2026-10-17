@@ -2,27 +2,33 @@ import {
   Alert,
   Anchor,
   Badge,
+  Button,
   Card,
   Code,
   Divider,
   Group,
+  NativeSelect,
+  NumberInput,
   Paper,
   SimpleGrid,
   Stack,
   Table,
   Text,
+  TextInput,
   Title,
 } from "@mantine/core";
-import { Link } from "react-router";
+import { Form, Link, redirect, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
+  createRun,
   getRepositoryCatalog,
   listRepositories,
   type Action,
   type ArtifactDeclaration,
   type ArtifactInput,
   type Parameter,
+  type ParameterValue,
   type ResourceRequirements,
   type Target,
 } from "~/api/generated";
@@ -50,7 +56,60 @@ export async function loader({ params }: Route.LoaderArgs) {
   };
 }
 
-export default function TargetDetail({ loaderData }: Route.ComponentProps) {
+export async function action({ params, request }: Route.ActionArgs) {
+  const formData = await request.formData();
+  const actionName = stringFormValue(formData, "actionName");
+  if (!actionName) {
+    return runFormError("", "The selected action is missing.");
+  }
+
+  const catalogResult = await getRepositoryCatalog({
+    client: createServerAPIClient(),
+    path: { repositoryId: params.repositoryId },
+  });
+  const target = catalogResult.data?.targets.find(
+    (candidate) => candidate.metadata.name === params.targetName,
+  );
+  const actionDefinition = target?.spec.actions[actionName];
+  if (!target || !actionDefinition) {
+    return runFormError(actionName, "The selected action is no longer available.");
+  }
+
+  if (Object.keys(actionDefinition.inputs ?? {}).length > 0) {
+    return runFormError(
+      actionName,
+      "This action requires artifact inputs and must be started from a compatible producing Run.",
+    );
+  }
+
+  const submission = decodeParameters(formData, actionDefinition.parameters);
+  if (submission.error) {
+    return runFormError(actionName, submission.error, submission.values);
+  }
+
+  const result = await createRun({
+    body: {
+      action: actionName,
+      inputs: {},
+      parameters: submission.parameters,
+      repositoryId: params.repositoryId,
+      source: { type: "manual" },
+      target: params.targetName,
+    },
+    client: createServerAPIClient(),
+  });
+  if (result.data) {
+    return redirect(`/runs/${result.data.id}`);
+  }
+
+  return runFormError(
+    actionName,
+    result.error?.detail ?? result.error?.title ?? "The Run could not be created.",
+    submission.values,
+  );
+}
+
+export default function TargetDetail({ actionData, loaderData }: Route.ComponentProps) {
   if (!loaderData.apiAvailable) {
     return (
       <Alert color="red" title="API unavailable">
@@ -123,6 +182,13 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
             <Text c="dimmed" size="xs">
               Catalog <Code>{shortCommit(loaderData.catalog.commitSha)}</Code>
             </Text>
+            <Anchor
+              component={Link}
+              size="sm"
+              to={`/runs?repositoryId=${loaderData.repositoryId}&target=${encodeURIComponent(target.metadata.name)}`}
+            >
+              View Run history
+            </Anchor>
           </Stack>
         </Group>
       </Stack>
@@ -134,8 +200,10 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
         {actions.map(([name, actionDefinition]) => (
           <ActionDetail
             actionDefinition={actionDefinition}
+            error={actionData?.actionName === name ? actionData.error : undefined}
             key={name}
             name={name}
+            submittedValues={actionData?.actionName === name ? actionData.values : undefined}
             target={target}
           />
         ))}
@@ -196,9 +264,17 @@ function TargetDefaults({ target }: Readonly<{ target: Target }>) {
 
 function ActionDetail({
   actionDefinition,
+  error,
   name,
+  submittedValues,
   target,
-}: Readonly<{ actionDefinition: Action; name: string; target: Target }>) {
+}: Readonly<{
+  actionDefinition: Action;
+  error?: string;
+  name: string;
+  submittedValues?: Record<string, string>;
+  target: Target;
+}>) {
   const effective = resolveAction(target, actionDefinition);
   const parameters = sortedEntries(actionDefinition.parameters);
   const artifacts = sortedEntries(actionDefinition.artifacts);
@@ -249,6 +325,13 @@ function ActionDetail({
           requests={sortedEntries(effective.resources.requests)}
         />
 
+        <ActionRunForm
+          actionDefinition={actionDefinition}
+          error={error}
+          name={name}
+          submittedValues={submittedValues}
+        />
+
         <Divider />
         <DefinitionTable
           columns={["Parameter", "Type", "Required", "Delivery", "Allowed values"]}
@@ -273,6 +356,113 @@ function ActionDetail({
       </Stack>
     </Card>
   );
+}
+
+function ActionRunForm({
+  actionDefinition,
+  error,
+  name,
+  submittedValues,
+}: Readonly<{
+  actionDefinition: Action;
+  error?: string;
+  name: string;
+  submittedValues?: Record<string, string>;
+}>) {
+  const navigation = useNavigation();
+  const inputs = sortedEntries(actionDefinition.inputs);
+  const parameters = sortedEntries(actionDefinition.parameters);
+  const isSubmitting =
+    navigation.state === "submitting" && navigation.formData?.get("actionName") === name;
+
+  if (inputs.length > 0) {
+    return (
+      <Alert color="blue" title="Artifact input required">
+        Start this action from a compatible artifact on its producing Run.
+      </Alert>
+    );
+  }
+
+  return (
+    <Paper p="md" withBorder>
+      <Form method="post">
+        <Stack gap="md">
+          <Stack gap={2}>
+            <Title order={4}>Run action</Title>
+            <Text c="dimmed" size="sm">
+              Create a Run from the active catalog revision and its exact Git commit.
+            </Text>
+          </Stack>
+
+          {error ? (
+            <Alert color="red" title="Run not created">
+              {error}
+            </Alert>
+          ) : null}
+
+          <input name="actionName" type="hidden" value={name} />
+          {parameters.length === 0 ? (
+            <Text c="dimmed" size="sm">
+              This action has no parameters.
+            </Text>
+          ) : (
+            <SimpleGrid cols={{ base: 1, sm: 2 }}>
+              {parameters.map(([parameterName, parameter]) => (
+                <ParameterControl
+                  key={parameterName}
+                  name={parameterName}
+                  parameter={parameter}
+                  submittedValue={submittedValues?.[parameterName]}
+                />
+              ))}
+            </SimpleGrid>
+          )}
+
+          <Group justify="flex-end">
+            <Button loading={isSubmitting} type="submit">
+              Run {name}
+            </Button>
+          </Group>
+        </Stack>
+      </Form>
+    </Paper>
+  );
+}
+
+function ParameterControl({
+  name,
+  parameter,
+  submittedValue,
+}: Readonly<{ name: string; parameter: Parameter; submittedValue?: string }>) {
+  const common = {
+    description: parameter.required ? "Required" : "Optional",
+    label: name,
+    name: parameterFieldName(name),
+    required: parameter.required,
+  };
+
+  switch (parameter.type) {
+    case "boolean":
+      return (
+        <NativeSelect
+          {...common}
+          data={selectOptions(parameter.required, ["true", "false"])}
+          defaultValue={submittedValue ?? ""}
+        />
+      );
+    case "enum":
+      return (
+        <NativeSelect
+          {...common}
+          data={selectOptions(parameter.required, parameter.values ?? [])}
+          defaultValue={submittedValue ?? ""}
+        />
+      );
+    case "number":
+      return <NumberInput {...common} defaultValue={submittedValue ?? ""} />;
+    case "string":
+      return <TextInput {...common} defaultValue={submittedValue ?? ""} />;
+  }
 }
 
 function DefinitionValue({ label, value }: Readonly<{ label: string; value: string }>) {
@@ -451,6 +641,92 @@ function inputRow(name: string, input: ArtifactInput) {
     input.mountPath,
     input.artifact.compatibility ?? "exact-catalog-revision",
   ];
+}
+
+function decodeParameters(formData: FormData, declarations: Record<string, Parameter> | undefined) {
+  const parameters: Record<string, ParameterValue> = {};
+  const values: Record<string, string> = {};
+
+  for (const [name, declaration] of sortedEntries(declarations)) {
+    const value = stringFormValue(formData, parameterFieldName(name));
+    values[name] = value;
+
+    if (value === "") {
+      if (declaration.required) {
+        return {
+          error: `Parameter “${name}” is required.`,
+          parameters,
+          values,
+        };
+      }
+
+      continue;
+    }
+
+    switch (declaration.type) {
+      case "boolean":
+        if (value !== "true" && value !== "false") {
+          return {
+            error: `Parameter “${name}” must be true or false.`,
+            parameters,
+            values,
+          };
+        }
+        parameters[name] = value === "true";
+        break;
+      case "enum":
+        if (!declaration.values?.includes(value)) {
+          return {
+            error: `Parameter “${name}” must be one of its allowed values.`,
+            parameters,
+            values,
+          };
+        }
+        parameters[name] = value;
+        break;
+      case "number": {
+        const number = Number(value);
+        if (!Number.isFinite(number)) {
+          return {
+            error: `Parameter “${name}” must be a number.`,
+            parameters,
+            values,
+          };
+        }
+        parameters[name] = number;
+        break;
+      }
+      case "string":
+        parameters[name] = value;
+        break;
+    }
+  }
+
+  return { error: undefined, parameters, values };
+}
+
+function runFormError(actionName: string, error: string, values: Record<string, string> = {}) {
+  return { actionName, error, values };
+}
+
+function parameterFieldName(name: string) {
+  return `parameter:${name}`;
+}
+
+function selectOptions(required: boolean | undefined, values: string[]) {
+  return [
+    {
+      disabled: required,
+      label: required ? "Select a value" : "Not set",
+      value: "",
+    },
+    ...values.map((value) => ({ label: value, value })),
+  ];
+}
+
+function stringFormValue(formData: FormData, name: string) {
+  const value = formData.get(name);
+  return typeof value === "string" ? value : "";
 }
 
 function sortedEntries<T>(values: Record<string, T> | undefined) {

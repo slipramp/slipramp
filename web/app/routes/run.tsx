@@ -119,6 +119,13 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
+      {run.observationState === "unknown" ? (
+        <Alert color="yellow" title="Execution observation unavailable">
+          The cluster controller is unreachable or has not reported this Run recently. Its durable
+          phase remains {run.phase} until observations resume.
+        </Alert>
+      ) : null}
+
       <InputTable inputs={run.inputs} />
       <LiveLog runId={run.id} />
       <ArtifactTable

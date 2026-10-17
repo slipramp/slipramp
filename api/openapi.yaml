@@ -82,6 +82,8 @@ components:
       $ref: ./components/controllers.yaml#/ControllerEnrollment
     Run:
       $ref: ./components/runs.yaml#/Run
+    RunList:
+      $ref: ./components/runs.yaml#/RunList
     RunCreate:
       $ref: ./components/runs.yaml#/RunCreate
     Artifact:

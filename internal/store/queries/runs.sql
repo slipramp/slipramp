@@ -48,6 +48,20 @@ SELECT *
 FROM runs
 WHERE id = sqlc.arg(id);
 
+-- name: ListRuns :many
+SELECT *
+FROM runs
+WHERE (
+    sqlc.narg(repository_id)::uuid IS NULL
+    OR repository_id = sqlc.narg(repository_id)
+)
+AND (
+    sqlc.narg(target_name)::text IS NULL
+    OR target_name = sqlc.narg(target_name)
+)
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(result_limit);
+
 -- name: CreateRunArtifactInput :exec
 INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)
 VALUES (sqlc.arg(run_id), sqlc.arg(input_name), sqlc.arg(artifact_id));

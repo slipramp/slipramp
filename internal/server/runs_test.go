@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -165,6 +166,94 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 	}
 }
 
+func TestListRunsReturnsFilteredHistory(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	newestID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	olderID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
+	observedAt := time.Now().UTC()
+	succeeded := run.OutcomeSucceeded
+	runs := &recordingRunService{
+		listed: []run.Run{
+			{
+				ID: newestID, Phase: run.PhaseRunning, RepositoryID: repositoryID,
+				TargetName: "network", ActionName: "apply", ClusterName: "colo",
+				Parameters: map[string]any{}, LastObservedAt: &observedAt,
+			},
+			{
+				ID: olderID, Phase: run.PhaseFinished, Outcome: &succeeded,
+				RepositoryID: repositoryID, TargetName: "network", ActionName: "preview",
+				ClusterName: "colo", Parameters: map[string]any{},
+			},
+		},
+	}
+	clusterStatus := cluster.Status{
+		Name:            "colo",
+		ConnectionState: cluster.ConnectionStateConnected,
+	}
+	clusters := &recordingClusterService{clusters: []cluster.Status{clusterStatus}}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/runs?repositoryId="+repositoryID.String()+"&target=network&limit=12",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newHandler(clusters, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	if runs.listFilter.RepositoryID == nil ||
+		*runs.listFilter.RepositoryID != repositoryID ||
+		runs.listFilter.TargetName != "network" ||
+		runs.listFilter.Limit != 12 {
+		t.Errorf("list filter = %#v", runs.listFilter)
+	}
+
+	var result api.RunList
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(result.Items) != 2 || result.Items[0].ID != newestID || result.Items[1].ID != olderID {
+		t.Fatalf("Run list = %#v", result.Items)
+	}
+	if result.Items[0].ObservationState == nil ||
+		*result.Items[0].ObservationState != api.RunObservationStateCurrent {
+		t.Errorf("newest observation state = %v", result.Items[0].ObservationState)
+	}
+	if result.Items[1].Outcome == nil ||
+		*result.Items[1].Outcome != api.RunOutcomeSucceeded {
+		t.Errorf("older outcome = %v", result.Items[1].Outcome)
+	}
+}
+
+func TestListRunsRejectsInvalidLimit(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/runs?limit=101",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newHandler(
+		&recordingClusterService{},
+		nil,
+		nil,
+		nil,
+		&recordingRunService{},
+		nil,
+		nil,
+	).ServeHTTP(response, request)
+
+	assertProblem(t, response, http.StatusBadRequest)
+}
+
 func TestCancelRun(t *testing.T) {
 	t.Parallel()
 
@@ -214,6 +303,64 @@ func TestCancelRun(t *testing.T) {
 	}
 }
 
+func TestGetRunReportsDerivedObservationState(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	observedAt := time.Now().UTC()
+	runs := &recordingRunService{
+		loaded: run.Run{
+			ID:             runID,
+			Phase:          run.PhaseRunning,
+			ClusterName:    "colo",
+			Parameters:     map[string]any{},
+			LastObservedAt: &observedAt,
+		},
+	}
+	clusterObservation := cluster.Observation{Name: "colo"}
+	connectedCluster := cluster.Status{
+		Observation:     clusterObservation,
+		ConnectionState: cluster.ConnectionStateConnected,
+	}
+	clusters := &recordingClusterService{
+		clusters: []cluster.Status{connectedCluster},
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/runs/"+runID.String(),
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newHandler(
+		clusters,
+		nil,
+		nil,
+		nil,
+		runs,
+		nil,
+		nil,
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+
+	var result api.Run
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.ObservationState == nil ||
+		*result.ObservationState != api.RunObservationStateCurrent {
+		t.Errorf(
+			"observation state = %v, want %q",
+			result.ObservationState,
+			api.RunObservationStateCurrent,
+		)
+	}
+}
+
 func TestCancelRunMapsExpectedFailures(t *testing.T) {
 	t.Parallel()
 
@@ -260,6 +407,8 @@ type recordingRunService struct {
 	request         run.CreateRequest
 	created         run.Run
 	err             error
+	loaded          run.Run
+	loadError       error
 	nextClusterName string
 	next            run.Run
 	nextError       error
@@ -274,6 +423,25 @@ type recordingRunService struct {
 	nextCancel      run.Run
 	nextCancelError error
 	nextCancelCalls int
+	listFilter      run.ListFilter
+	listed          []run.Run
+	listError       error
+}
+
+func (s *recordingRunService) ListRuns(
+	_ context.Context,
+	filter run.ListFilter,
+) ([]run.Run, error) {
+	s.listFilter = filter
+
+	return s.listed, s.listError
+}
+
+func (s *recordingRunService) GetRun(
+	_ context.Context,
+	_ uuid.UUID,
+) (run.Run, error) {
+	return s.loaded, s.loadError
 }
 
 func (s *recordingRunService) CancelRun(

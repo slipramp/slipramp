@@ -317,6 +317,61 @@ func TestCreateRunRejectsIncompatibleArtifactInput(t *testing.T) {
 	}
 }
 
+func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
+	t.Parallel()
+
+	service, runs := testService(t)
+	want := []Run{{ID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1400")}}
+	runs.listed = want
+	repositoryID := testRepositoryID
+
+	listed, err := service.ListRuns(
+		context.Background(),
+		ListFilter{
+			RepositoryID: &repositoryID,
+			TargetName:   "network",
+		},
+	)
+	if err != nil {
+		t.Fatalf("ListRuns() error = %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != want[0].ID {
+		t.Errorf("ListRuns() = %#v, want %#v", listed, want)
+	}
+	if runs.listFilter.RepositoryID == nil ||
+		*runs.listFilter.RepositoryID != repositoryID ||
+		runs.listFilter.TargetName != "network" ||
+		runs.listFilter.Limit != DefaultListLimit {
+		t.Errorf("ListRuns() filter = %#v", runs.listFilter)
+	}
+}
+
+func TestListRunsRejectsInvalidLimit(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(
+		context.Background(),
+		ListFilter{Limit: MaximumListLimit + 1},
+	)
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
+	}
+}
+
+func TestListRunsRejectsTargetWithoutRepository(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(
+		context.Background(),
+		ListFilter{TargetName: "network"},
+	)
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
+	}
+}
+
 const testCommitSHA = "0123456789abcdef0123456789abcdef01234567"
 
 var (
@@ -434,6 +489,18 @@ type recordingRuns struct {
 	nextCancel        Run
 	nextCancelError   error
 	artifacts         map[uuid.UUID]ArtifactInput
+	listFilter        ListFilter
+	listed            []Run
+	listError         error
+}
+
+func (s *recordingRuns) ListRuns(
+	_ context.Context,
+	filter ListFilter,
+) ([]Run, error) {
+	s.listFilter = filter
+
+	return s.listed, s.listError
 }
 
 func (s *recordingRuns) GetArtifactInputCandidate(

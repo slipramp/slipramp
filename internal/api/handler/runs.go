@@ -13,6 +13,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -26,6 +27,61 @@ type RunService interface {
 
 type runReader interface {
 	GetRun(context.Context, uuid.UUID) (run.Run, error)
+}
+
+type runLister interface {
+	ListRuns(context.Context, run.ListFilter) ([]run.Run, error)
+}
+
+func (h *Handler) ListRuns(
+	ctx context.Context,
+	request api.ListRunsRequestObject,
+) (api.ListRunsResponseObject, error) {
+	lister, ok := h.runs.(runLister)
+	if !ok {
+		return nil, errors.New("run service cannot list Runs")
+	}
+
+	limit := int32(run.DefaultListLimit)
+	if request.Params.Limit != nil {
+		if *request.Params.Limit < 1 || *request.Params.Limit > run.MaximumListLimit {
+			problem := NewProblem(
+				http.StatusBadRequest,
+				fmt.Sprintf("limit must be between 1 and %d", run.MaximumListLimit),
+			)
+
+			return api.ListRuns400ApplicationProblemPlusJSONResponse(problem), nil
+		}
+		limit = int32(*request.Params.Limit)
+	}
+	targetName := ""
+	if request.Params.Target != nil {
+		targetName = string(*request.Params.Target)
+	}
+
+	records, err := lister.ListRuns(
+		ctx,
+		run.ListFilter{
+			RepositoryID: request.Params.RepositoryID,
+			TargetName:   targetName,
+			Limit:        limit,
+		},
+	)
+	if errors.Is(err, run.ErrInvalidRequest) {
+		problem := NewProblem(http.StatusBadRequest, err.Error())
+
+		return api.ListRuns400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	items, err := h.runResponses(ctx, records)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.ListRuns200JSONResponse{Items: items}, nil
 }
 
 func (h *Handler) CreateRun(
@@ -86,7 +142,7 @@ func (h *Handler) CreateRun(
 		}
 	}
 
-	body, err := runResponse(created)
+	body, err := h.runResponse(ctx, created)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +168,7 @@ func (h *Handler) GetRun(
 		return nil, err
 	}
 
-	body, err := runResponse(record)
+	body, err := h.runResponse(ctx, record)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +210,7 @@ func (h *Handler) CancelRun(
 		}
 	}
 
-	body, err := runResponse(record)
+	body, err := h.runResponse(ctx, record)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +278,60 @@ func runResponse(record run.Run) (api.Run, error) {
 		OutcomeMessage:          record.OutcomeMessage,
 		ExitCode:                record.ExitCode,
 	}, nil
+}
+
+func (h *Handler) runResponse(ctx context.Context, record run.Run) (api.Run, error) {
+	items, err := h.runResponses(ctx, []run.Run{record})
+	if err != nil {
+		return api.Run{}, err
+	}
+
+	return items[0], nil
+}
+
+func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Run, error) {
+	needsClusterStatus := false
+	for _, record := range records {
+		if record.Phase != run.PhaseQueued && record.Phase != run.PhaseFinished {
+			needsClusterStatus = true
+			break
+		}
+	}
+
+	connectedClusters := make(map[string]bool)
+	if needsClusterStatus {
+		clusters, err := h.clusters.ListClusters(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("load cluster status for Runs: %w", err)
+		}
+		for _, status := range clusters {
+			connectedClusters[status.Name] =
+				status.ConnectionState == cluster.ConnectionStateConnected
+		}
+	}
+
+	items := make([]api.Run, 0, len(records))
+	now := h.now().UTC()
+	for _, record := range records {
+		body, err := runResponse(record)
+		if err != nil {
+			return nil, err
+		}
+
+		state, present := run.DeriveObservationState(
+			record,
+			connectedClusters[record.ClusterName],
+			now,
+		)
+		if present {
+			value := api.RunObservationState(state)
+			body.ObservationState = &value
+		}
+
+		items = append(items, body)
+	}
+
+	return items, nil
 }
 
 func runArtifactConsumers(snapshot run.Snapshot) map[string][]api.RunArtifactConsumer {

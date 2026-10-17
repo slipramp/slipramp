@@ -1,4 +1,63 @@
 runs:
+  get:
+    operationId: listRuns
+    summary: List recent Runs
+    description: >-
+      Lists the most recent Runs in descending creation order. Repository and
+      target filters expose history at both catalog levels.
+    security: []
+    tags:
+      - Runs
+    parameters:
+      - name: repositoryId
+        in: query
+        required: false
+        description: Limit results to one repository.
+        schema:
+          type: string
+          format: uuid
+      - name: target
+        in: query
+        required: false
+        description: >-
+          Limit results to a target name within the selected repository.
+          Requires repositoryId.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: limit
+        in: query
+        required: false
+        description: Maximum number of recent Runs to return.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+    responses:
+      "200":
+        description: Recent Runs matching the requested filters.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/runs.yaml#/RunList
+      "400":
+        description: A filter or limit is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Run history could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
   post:
     operationId: createRun
     summary: Create an action run

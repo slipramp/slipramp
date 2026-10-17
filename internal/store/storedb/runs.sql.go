@@ -604,6 +604,74 @@ func (q *Queries) GetRunToCancelForCluster(ctx context.Context, clusterName stri
 	return i, err
 }
 
+const listRuns = `-- name: ListRuns :many
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
+FROM runs
+WHERE (
+    $1::uuid IS NULL
+    OR repository_id = $1
+)
+AND (
+    $2::text IS NULL
+    OR target_name = $2
+)
+ORDER BY created_at DESC, id DESC
+LIMIT $3
+`
+
+type ListRunsParams struct {
+	RepositoryID pgtype.UUID
+	TargetName   *string
+	ResultLimit  int32
+}
+
+func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
+	rows, err := q.db.Query(ctx, listRuns, arg.RepositoryID, arg.TargetName, arg.ResultLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Run
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.Phase,
+			&i.Outcome,
+			&i.RepositoryID,
+			&i.CatalogRevisionID,
+			&i.CommitSha,
+			&i.TargetName,
+			&i.ActionName,
+			&i.Parameters,
+			&i.PlacementName,
+			&i.ClusterName,
+			&i.SourceType,
+			&i.IdempotencyKey,
+			&i.RequestDigest,
+			&i.Snapshot,
+			&i.CreatedAt,
+			&i.AssignedAt,
+			&i.PreparingAt,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.LastObservedAt,
+			&i.CancellationRequestedAt,
+			&i.JobUid,
+			&i.OutcomeReason,
+			&i.OutcomeMessage,
+			&i.ExitCode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateRunObservation = `-- name: UpdateRunObservation :exec
 UPDATE runs
 SET phase = $1,

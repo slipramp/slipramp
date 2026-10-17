@@ -203,6 +203,10 @@ export type Run = {
    */
   phase: "queued" | "assigned" | "preparing" | "running" | "finished";
   /**
+   * Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Unknown means the controller is unreachable, has not observed the Run, or its observation is stale; it does not change the durable lifecycle phase.
+   */
+  observationState?: "current" | "unknown";
+  /**
    * Terminal result, present only when phase is finished.
    */
   outcome?: "succeeded" | "failed" | "canceled" | "timed-out";
@@ -243,6 +247,10 @@ export type Run = {
   outcomeReason?: string;
   outcomeMessage?: string;
   exitCode?: number;
+};
+
+export type RunList = {
+  items: Array<Run>;
 };
 
 export type RunCreate = {
@@ -1173,6 +1181,52 @@ export type DownloadRunInputResponses = {
 };
 
 export type DownloadRunInputResponse = DownloadRunInputResponses[keyof DownloadRunInputResponses];
+
+export type ListRunsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Limit results to one repository.
+     */
+    repositoryId?: string;
+    /**
+     * Limit results to a target name within the selected repository. Requires repositoryId.
+     */
+    target?: CatalogName;
+    /**
+     * Maximum number of recent Runs to return.
+     */
+    limit?: number;
+  };
+  url: "/api/v1/runs";
+};
+
+export type ListRunsErrors = {
+  /**
+   * A filter or limit is invalid.
+   */
+  400: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Run history could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListRunsError = ListRunsErrors[keyof ListRunsErrors];
+
+export type ListRunsResponses = {
+  /**
+   * Recent Runs matching the requested filters.
+   */
+  200: RunList;
+};
+
+export type ListRunsResponse = ListRunsResponses[keyof ListRunsResponses];
 
 export type CreateRunData = {
   body: RunCreate;

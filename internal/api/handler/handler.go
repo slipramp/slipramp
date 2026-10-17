@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"time"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
@@ -26,6 +27,7 @@ type Handler struct {
 	catalogs     CatalogService
 	runs         RunService
 	artifacts    ArtifactService
+	now          func() time.Time
 }
 
 var _ api.StrictServerInterface = (*Handler)(nil)
@@ -45,5 +47,6 @@ func New(
 		catalogs:     catalogs,
 		runs:         runs,
 		artifacts:    artifacts,
+		now:          time.Now,
 	}
 }

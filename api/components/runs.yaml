@@ -31,6 +31,16 @@ RunCreate:
     source:
       $ref: "#/RunSource"
 
+RunList:
+  type: object
+  required:
+    - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/Run"
+
 Run:
   type: object
   required:
@@ -62,6 +72,19 @@ Run:
         - running
         - finished
       description: Durable lifecycle position of the Run.
+    observationState:
+      type: string
+      enum:
+        - current
+        - unknown
+      x-enum-varnames:
+        - RunObservationStateCurrent
+        - RunObservationStateUnknown
+      description: >-
+        Derived freshness of the execution observation. Present only while the
+        Run is assigned, preparing, or running. Unknown means the controller is
+        unreachable, has not observed the Run, or its observation is stale; it
+        does not change the durable lifecycle phase.
     outcome:
       type: string
       enum:

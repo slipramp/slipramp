@@ -82,6 +82,16 @@ Job UID and `preparing` phase. Lifecycle phase, terminal outcome, cancellation
 intent, Job identity, observation freshness, diagnostics, and exit code remain
 separate persisted facts.
 
+Target detail screens provide manual Run forms for actions without artifact
+inputs. The forms render string, boolean, number, and enum controls from the
+catalog declarations, omit unset optional parameters, and submit through the
+same Run-creation API used by programmatic clients. Actions requiring artifact
+inputs are started from a compatible retained artifact on its producing Run.
+The Run history screen lists up to 50 recent Runs and links back to their
+repository, target, and detail views. `GET /api/v1/runs` exposes the same
+latest-first history with optional repository and repository-scoped target
+filters and a bounded result limit.
+
 Authenticated controllers can append raw action output at
 `POST /controller/v1/runs/{runId}/log-chunks?offsetBytes=N`. Each chunk is
 limited to 256 KiB, written to S3-compatible storage before its digest and

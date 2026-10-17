@@ -326,6 +326,12 @@ func newHandlerWithLogger(
 	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
 	registerMethodNotAllowed(
 		mux,
+		"/api/v1/runs",
+		http.MethodGet,
+		http.MethodPost,
+	)
+	registerMethodNotAllowed(
+		mux,
 		"/controller/v1/enroll",
 		http.MethodPost,
 	)

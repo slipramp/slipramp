@@ -13,6 +13,9 @@ import (
 )
 
 const (
+	DefaultListLimit = 50
+	MaximumListLimit = 100
+
 	PhaseQueued    Phase = "queued"
 	PhaseAssigned  Phase = "assigned"
 	PhasePreparing Phase = "preparing"
@@ -55,6 +58,13 @@ type Outcome string
 
 type SourceType string
 
+type ObservationState string
+
+const (
+	ObservationStateCurrent ObservationState = "current"
+	ObservationStateUnknown ObservationState = "unknown"
+)
+
 type Source struct {
 	Type SourceType `json:"type"`
 }
@@ -67,6 +77,12 @@ type CreateRequest struct {
 	Inputs         map[string]uuid.UUID
 	Source         Source
 	IdempotencyKey *string
+}
+
+type ListFilter struct {
+	RepositoryID *uuid.UUID
+	TargetName   string
+	Limit        int32
 }
 
 type Observation struct {

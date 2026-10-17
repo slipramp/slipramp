@@ -114,6 +114,41 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Fatalf("create second Run: %v", err)
 	}
 
+	listed, err := database.ListRuns(ctx, run.ListFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("ListRuns() error = %v", err)
+	}
+	if len(listed) != 2 || listed[0].ID != second.ID || listed[1].ID != record.ID {
+		t.Errorf("ListRuns() = %#v, want second then first", listed)
+	}
+
+	repositoryFilter := repositoryID
+	listed, err = database.ListRuns(
+		ctx,
+		run.ListFilter{
+			RepositoryID: &repositoryFilter,
+			TargetName:   "network",
+			Limit:        1,
+		},
+	)
+	if err != nil {
+		t.Fatalf("filtered ListRuns() error = %v", err)
+	}
+	if len(listed) != 1 || listed[0].ID != second.ID {
+		t.Errorf("filtered ListRuns() = %#v, want second", listed)
+	}
+
+	listed, err = database.ListRuns(
+		ctx,
+		run.ListFilter{TargetName: "missing", Limit: 10},
+	)
+	if err != nil {
+		t.Fatalf("empty ListRuns() error = %v", err)
+	}
+	if len(listed) != 0 {
+		t.Errorf("empty ListRuns() = %#v, want no Runs", listed)
+	}
+
 	claimedAt := second.CreatedAt.Add(time.Minute)
 	claimed, err := database.ClaimQueuedRun(ctx, "colo", claimedAt)
 	if err != nil {

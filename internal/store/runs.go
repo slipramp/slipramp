@@ -40,6 +40,45 @@ func (d *Database) GetRun(
 	return record, nil
 }
 
+func (d *Database) ListRuns(
+	ctx context.Context,
+	filter run.ListFilter,
+) ([]run.Run, error) {
+	var repositoryID pgtype.UUID
+	if filter.RepositoryID != nil {
+		repositoryID = databaseUUID(*filter.RepositoryID)
+	}
+
+	var targetName *string
+	if filter.TargetName != "" {
+		targetName = &filter.TargetName
+	}
+
+	rows, err := d.queries.ListRuns(
+		ctx,
+		storedb.ListRunsParams{
+			RepositoryID: repositoryID,
+			TargetName:   targetName,
+			ResultLimit:  filter.Limit,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list Runs: %w", err)
+	}
+
+	records := make([]run.Run, 0, len(rows))
+	for _, row := range rows {
+		record, err := runFromRow(row)
+		if err != nil {
+			return nil, err
+		}
+
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
 func (d *Database) GetArtifactInputCandidate(
 	ctx context.Context,
 	artifactID uuid.UUID,

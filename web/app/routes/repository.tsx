@@ -102,7 +102,14 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
               </Text>
             ) : null}
           </Stack>
-          {repository ? <RefreshBadge repository={repository} /> : null}
+          {repository ? (
+            <Stack align="flex-end" gap="xs">
+              <RefreshBadge repository={repository} />
+              <Anchor component={Link} size="sm" to={`/runs?repositoryId=${repository.id}`}>
+                View Run history
+              </Anchor>
+            </Stack>
+          ) : null}
         </Group>
       </Stack>
 
