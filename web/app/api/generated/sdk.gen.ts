@@ -3,6 +3,9 @@
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from "./client";
 import { client } from "./client.gen";
 import type {
+  CancelRunData,
+  CancelRunErrors,
+  CancelRunResponses,
   CreateRepositoryData,
   CreateRepositoryErrors,
   CreateRepositoryResponses,
@@ -137,7 +140,7 @@ export const listClusters = <ThrowOnError extends boolean = false>(
 /**
  * Poll for a controller command
  *
- * Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
+ * Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
  */
 export const pollForControllerCommand = <ThrowOnError extends boolean = false>(
   options: Options<PollForControllerCommandData, ThrowOnError>,
@@ -189,4 +192,17 @@ export const createRun = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Cancel a Run
+ *
+ * Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+ */
+export const cancelRun = <ThrowOnError extends boolean = false>(
+  options: Options<CancelRunData, ThrowOnError>,
+): RequestResult<CancelRunResponses, CancelRunErrors, ThrowOnError> =>
+  (options.client ?? client).post<CancelRunResponses, CancelRunErrors, ThrowOnError>({
+    url: "/api/v1/runs/{runId}/cancel",
+    ...options,
   });

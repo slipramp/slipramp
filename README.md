@@ -71,6 +71,12 @@ Job UID and `preparing` phase. Lifecycle phase, terminal outcome, cancellation
 intent, Job identity, observation freshness, diagnostics, and exit code remain
 separate persisted facts.
 
+`POST /api/v1/runs/{runId}/cancel` records a cancel request idempotently.
+Queued Runs finish as canceled immediately. Controllers receive cancel commands
+ahead of new assignments, stop local observation, and
+delete the deterministic Job with identity and UID checks before reporting the
+Run as canceled. Repeated delivery and an already-missing Job are safe.
+
 [`examples/kcloud-ops`](./examples/kcloud-ops) contains a larger catalog
 example with a pyinfra deployment and a Terraform stack, including runtime
 credentials, placement configuration, a canary action, and a saved-plan
@@ -166,7 +172,9 @@ the controller scans labeled Jobs across the cluster and resumes their
 observers. It derives `preparing` and `running` from the action container,
 records Job completion reasons and exit codes, maps deadline failures to the
 `timed-out` outcome, and reports a permanent rendering or admission failure as
-a terminal failed Run instead of blocking later assignments.
+a terminal failed Run instead of blocking later assignments. Cancel commands
+stop an active observer before deleting its Job so deletion cannot be
+misreported as an unexpected missing Job.
 
 The controller requires in-cluster Kubernetes configuration and these
 environment variables:

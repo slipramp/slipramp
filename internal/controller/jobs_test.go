@@ -55,6 +55,74 @@ func TestKubernetesRunJobsCreatesAndReusesJob(t *testing.T) {
 	}
 }
 
+func TestKubernetesRunJobsCancelsJobIdempotently(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	job, err := renderJob(validConfig(), assignment)
+	if err != nil {
+		t.Fatalf("renderJob() error = %v", err)
+	}
+	job.UID = types.UID("job-uid")
+	client := fake.NewClientset(job)
+	jobs := newKubernetesRunJobs(
+		validConfig(),
+		client.BatchV1(),
+		client.CoreV1(),
+	)
+	command := api.CancelRunCommand{
+		ID:           assignment.ID,
+		JobNamespace: assignment.Placement.JobNamespace,
+		JobUID:       new("job-uid"),
+	}
+
+	jobUID, err := jobs.Cancel(context.Background(), command)
+	if err != nil {
+		t.Fatalf("first Cancel() error = %v", err)
+	}
+	if jobUID == nil || *jobUID != "job-uid" {
+		t.Errorf("first Cancel() Job UID = %v", jobUID)
+	}
+	if _, err := client.BatchV1().Jobs(job.Namespace).Get(
+		context.Background(),
+		job.Name,
+		metav1.GetOptions{},
+	); err == nil {
+		t.Error("execution Job still exists after cancel")
+	}
+
+	jobUID, err = jobs.Cancel(context.Background(), command)
+	if err != nil {
+		t.Fatalf("repeated Cancel() error = %v", err)
+	}
+	if jobUID == nil || *jobUID != "job-uid" {
+		t.Errorf("repeated Cancel() Job UID = %v", jobUID)
+	}
+}
+
+func TestKubernetesRunJobsRejectsCancelOfConflictingJob(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	job := &batchv1.Job{}
+	job.Name = runJobName(runID)
+	job.Namespace = "slipramp-runs"
+	client := fake.NewClientset(job)
+	jobs := newKubernetesRunJobs(
+		validConfig(),
+		client.BatchV1(),
+		client.CoreV1(),
+	)
+
+	_, err := jobs.Cancel(context.Background(), api.CancelRunCommand{
+		ID:           runID,
+		JobNamespace: "slipramp-runs",
+	})
+	if err == nil || !strings.Contains(err.Error(), "expected Run identity") {
+		t.Fatalf("Cancel() error = %v", err)
+	}
+}
+
 func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 	t.Parallel()
 

@@ -314,23 +314,32 @@ func testRevision() catalog.Revision {
 }
 
 type recordingRuns struct {
-	calls            int
-	created          Run
-	err              error
-	existing         Run
-	getError         error
-	assignedCalls    int
-	assigned         Run
-	assignedError    error
-	claimCalls       int
-	claimClusterName string
-	claimedAt        time.Time
-	claimed          Run
-	claimError       error
-	observationCalls int
-	observation      Observation
-	observationFrom  []Phase
-	observationError error
+	calls             int
+	created           Run
+	err               error
+	existing          Run
+	getError          error
+	assignedCalls     int
+	assigned          Run
+	assignedError     error
+	claimCalls        int
+	claimClusterName  string
+	claimedAt         time.Time
+	claimed           Run
+	claimError        error
+	observationCalls  int
+	observation       Observation
+	observationFrom   []Phase
+	observationError  error
+	cancelCalls       int
+	cancelID          uuid.UUID
+	cancelAt          time.Time
+	canceled          Run
+	cancelError       error
+	nextCancelCalls   int
+	nextCancelCluster string
+	nextCancel        Run
+	nextCancelError   error
 }
 
 func (s *recordingRuns) CreateRun(_ context.Context, record Run) (Run, error) {
@@ -355,6 +364,18 @@ func (s *recordingRuns) GetRunByIdempotencyKey(
 	return Run{}, ErrRunNotFound
 }
 
+func (s *recordingRuns) CancelRun(
+	_ context.Context,
+	runID uuid.UUID,
+	requestedAt time.Time,
+) (Run, error) {
+	s.cancelCalls++
+	s.cancelID = runID
+	s.cancelAt = requestedAt
+
+	return s.canceled, s.cancelError
+}
+
 func (s *recordingRuns) GetAssignedRunForCluster(
 	_ context.Context,
 	_ string,
@@ -374,6 +395,16 @@ func (s *recordingRuns) ClaimQueuedRun(
 	s.claimedAt = claimedAt
 
 	return s.claimed, s.claimError
+}
+
+func (s *recordingRuns) GetRunToCancelForCluster(
+	_ context.Context,
+	clusterName string,
+) (Run, error) {
+	s.nextCancelCalls++
+	s.nextCancelCluster = clusterName
+
+	return s.nextCancel, s.nextCancelError
 }
 
 func (s *recordingRuns) ApplyRunObservation(

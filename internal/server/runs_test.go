@@ -161,6 +161,93 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 	}
 }
 
+func TestCancelRun(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	requestedAt := time.Date(2026, time.October, 17, 18, 0, 0, 0, time.UTC)
+	runs := &recordingRunService{
+		canceled: run.Run{
+			ID:                      runID,
+			Phase:                   run.PhaseRunning,
+			CancellationRequestedAt: &requestedAt,
+			Parameters:              map[string]any{},
+		},
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/api/v1/runs/"+runID.String()+"/cancel",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newHandler(
+		&recordingClusterService{},
+		nil,
+		nil,
+		runs,
+		nil,
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	if runs.cancelID != runID || runs.cancelCalls != 1 {
+		t.Errorf("cancel request = %s (%d calls)", runs.cancelID, runs.cancelCalls)
+	}
+
+	var result api.Run
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.ID != runID || result.Phase != api.RunPhaseRunning ||
+		result.CancellationRequestedAt == nil ||
+		!result.CancellationRequestedAt.Equal(requestedAt) {
+		t.Errorf("Run response = %#v", result)
+	}
+}
+
+func TestCancelRunMapsExpectedFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "missing Run", err: run.ErrRunNotFound, wantStatus: http.StatusNotFound},
+		{name: "finished Run", err: run.ErrRunFinished, wantStatus: http.StatusConflict},
+		{name: "persistence failure", err: errors.New("database unavailable"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/api/v1/runs/018f90ff-9fd8-7b5f-b7e1-f32ff54c1202/cancel",
+				nil,
+			)
+			response := httptest.NewRecorder()
+			newHandler(
+				&recordingClusterService{},
+				nil,
+				nil,
+				&recordingRunService{cancelError: test.err},
+				nil,
+			).ServeHTTP(response, request)
+
+			assertProblem(t, response, test.wantStatus)
+			if strings.Contains(response.Body.String(), "database unavailable") {
+				t.Error("internal error details were exposed in the problem response")
+			}
+		})
+	}
+}
+
 type recordingRunService struct {
 	request         run.CreateRequest
 	created         run.Run
@@ -172,6 +259,38 @@ type recordingRunService struct {
 	observation     run.Observation
 	reportError     error
 	reportCalls     int
+	cancelID        uuid.UUID
+	canceled        run.Run
+	cancelError     error
+	cancelCalls     int
+	nextCancel      run.Run
+	nextCancelError error
+	nextCancelCalls int
+}
+
+func (s *recordingRunService) CancelRun(
+	_ context.Context,
+	runID uuid.UUID,
+) (run.Run, error) {
+	s.cancelCalls++
+	s.cancelID = runID
+
+	return s.canceled, s.cancelError
+}
+
+func (s *recordingRunService) NextRunToCancel(
+	_ context.Context,
+	_ string,
+) (run.Run, error) {
+	s.nextCancelCalls++
+	if s.nextCancelError != nil {
+		return run.Run{}, s.nextCancelError
+	}
+	if s.nextCancel.ID == uuid.Nil {
+		return run.Run{}, run.ErrNoRunToCancel
+	}
+
+	return s.nextCancel, nil
 }
 
 func (s *recordingRunService) NextRunAssignment(

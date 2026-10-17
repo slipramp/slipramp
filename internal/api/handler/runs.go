@@ -7,13 +7,17 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
 type RunService interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
+	CancelRun(ctx context.Context, runID uuid.UUID) (run.Run, error)
 	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
+	NextRunToCancel(ctx context.Context, clusterName string) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
 }
 
@@ -78,6 +82,37 @@ func (h *Handler) CreateRun(
 	}
 
 	return api.CreateRun201JSONResponse(body), nil
+}
+
+func (h *Handler) CancelRun(
+	ctx context.Context,
+	request api.CancelRunRequestObject,
+) (api.CancelRunResponseObject, error) {
+	record, err := h.runs.CancelRun(ctx, request.RunID)
+	if err != nil {
+		switch {
+		case errors.Is(err, run.ErrRunNotFound):
+			problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
+
+			return api.CancelRun404ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrRunFinished):
+			problem := NewProblem(
+				http.StatusConflict,
+				"The Run already finished and cannot be canceled.",
+			)
+
+			return api.CancelRun409ApplicationProblemPlusJSONResponse(problem), nil
+		default:
+			return nil, err
+		}
+	}
+
+	body, err := runResponse(record)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.CancelRun200JSONResponse(body), nil
 }
 
 func runParameters(

@@ -8,6 +8,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Artifact struct {
+	ID               pgtype.UUID
+	RunID            pgtype.UUID
+	Name             string
+	Kind             string
+	State            string
+	MediaType        string
+	SizeBytes        int64
+	Sha256           *string
+	Sensitive        bool
+	ContentObjectKey *string
+	RetentionState   string
+	CreatedAt        pgtype.Timestamptz
+	SealedAt         pgtype.Timestamptz
+}
+
+type ArtifactLogChunk struct {
+	ArtifactID  pgtype.UUID
+	OffsetBytes int64
+	SizeBytes   int64
+	Sha256      string
+	ObjectKey   string
+	CreatedAt   pgtype.Timestamptz
+}
+
 type CatalogRevision struct {
 	ID           pgtype.UUID
 	RepositoryID pgtype.UUID

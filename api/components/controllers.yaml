@@ -81,14 +81,35 @@ ControllerCommand:
   type: object
   required:
     - type
-    - assignment
   properties:
     type:
       type: string
       enum:
         - run-assignment
+        - cancel-run
     assignment:
       $ref: "#/RunAssignment"
+      description: Present when type is run-assignment.
+    cancel:
+      $ref: "#/CancelRunCommand"
+      description: Present when type is cancel-run.
+
+CancelRunCommand:
+  type: object
+  required:
+    - id
+    - jobNamespace
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Stable Run identity used to derive the Kubernetes Job name.
+    jobNamespace:
+      $ref: ./runs.yaml#/CatalogName
+    jobUid:
+      type: string
+      minLength: 1
+      description: Kubernetes UID already recorded for the execution Job, if known.
 
 RunAssignment:
   type: object

@@ -73,12 +73,12 @@ func (h *Handler) PollForControllerCommand(
 		return nil, err
 	}
 
-	assignment, err := h.nextRunAssignment(ctx, request.ClusterName)
-	if err == nil {
-		return runAssignmentCommand(assignment), nil
-	}
-	if !errors.Is(err, run.ErrNoRunAssignment) {
+	command, err := h.nextControllerCommand(ctx, request.ClusterName)
+	if err != nil {
 		return nil, err
+	}
+	if command != nil {
+		return api.PollForControllerCommand200JSONResponse(*command), nil
 	}
 
 	if timeoutSeconds == 0 {
@@ -94,15 +94,15 @@ func (h *Handler) PollForControllerCommand(
 	case <-timer.C:
 	}
 
-	assignment, err = h.nextRunAssignment(ctx, request.ClusterName)
-	if errors.Is(err, run.ErrNoRunAssignment) {
-		return api.PollForControllerCommand204Response{}, nil
-	}
+	command, err = h.nextControllerCommand(ctx, request.ClusterName)
 	if err != nil {
 		return nil, err
 	}
+	if command == nil {
+		return api.PollForControllerCommand204Response{}, nil
+	}
 
-	return runAssignmentCommand(assignment), nil
+	return api.PollForControllerCommand200JSONResponse(*command), nil
 }
 
 func (h *Handler) ReportRunObservation(
@@ -171,11 +171,49 @@ func runObservationOutcome(value *api.RunObservationOutcome) *run.Outcome {
 
 func runAssignmentCommand(
 	assignment api.RunAssignment,
-) api.PollForControllerCommand200JSONResponse {
-	return api.PollForControllerCommand200JSONResponse{
+) api.ControllerCommand {
+	return api.ControllerCommand{
 		Type:       api.ControllerCommandTypeRunAssignment,
-		Assignment: assignment,
+		Assignment: &assignment,
 	}
+}
+
+func cancelRunCommand(record run.Run) api.ControllerCommand {
+	return api.ControllerCommand{
+		Type: api.ControllerCommandTypeCancelRun,
+		Cancel: &api.CancelRunCommand{
+			ID:           record.ID,
+			JobNamespace: api.CatalogName(record.Snapshot.Placement.JobNamespace),
+			JobUID:       record.JobUID,
+		},
+	}
+}
+
+func (h *Handler) nextControllerCommand(
+	ctx context.Context,
+	clusterName string,
+) (*api.ControllerCommand, error) {
+	record, err := h.runs.NextRunToCancel(ctx, clusterName)
+	if err == nil {
+		command := cancelRunCommand(record)
+
+		return &command, nil
+	}
+	if !errors.Is(err, run.ErrNoRunToCancel) {
+		return nil, err
+	}
+
+	assignment, err := h.nextRunAssignment(ctx, clusterName)
+	if errors.Is(err, run.ErrNoRunAssignment) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	command := runAssignmentCommand(assignment)
+
+	return &command, nil
 }
 
 func (h *Handler) nextRunAssignment(

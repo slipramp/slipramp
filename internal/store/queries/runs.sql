@@ -43,6 +43,37 @@ FROM runs
 WHERE source_type = sqlc.arg(source_type)
   AND idempotency_key = sqlc.arg(idempotency_key);
 
+-- name: GetRunForCancel :one
+SELECT *
+FROM runs
+WHERE id = sqlc.arg(id)
+FOR UPDATE;
+
+-- name: CancelRun :one
+UPDATE runs
+SET cancellation_requested_at = sqlc.arg(requested_at),
+    phase = CASE WHEN phase = 'queued' THEN 'finished' ELSE phase END,
+    outcome = CASE WHEN phase = 'queued' THEN 'canceled' ELSE outcome END,
+    finished_at = CASE
+        WHEN phase = 'queued' THEN sqlc.arg(requested_at)
+        ELSE finished_at
+    END,
+    outcome_reason = CASE
+        WHEN phase = 'queued' THEN 'CancelRequested'
+        ELSE outcome_reason
+    END
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: GetRunToCancelForCluster :one
+SELECT *
+FROM runs
+WHERE cluster_name = sqlc.arg(cluster_name)
+  AND cancellation_requested_at IS NOT NULL
+  AND phase IN ('assigned', 'preparing', 'running')
+ORDER BY cancellation_requested_at, id
+LIMIT 1;
+
 -- name: CreateRunPhaseTransition :exec
 INSERT INTO run_phase_transitions (
     run_id,
@@ -63,7 +94,7 @@ INSERT INTO run_phase_transitions (
 );
 
 -- name: GetRunObservationStateForUpdate :one
-SELECT phase, outcome, job_uid
+SELECT phase, outcome, job_uid, cancellation_requested_at
 FROM runs
 WHERE id = sqlc.arg(id)
   AND cluster_name = sqlc.arg(cluster_name)

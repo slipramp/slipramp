@@ -158,8 +158,50 @@ func TestServerClientPollParsesRunAssignment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Poll() error = %v", err)
 	}
-	if command == nil || command.Assignment.ID != runID ||
+	if command == nil || command.Assignment == nil ||
+		command.Assignment.ID != runID ||
 		command.Assignment.Action.Name != "sync" {
+		t.Fatalf("Poll() command = %#v", command)
+	}
+}
+
+func TestServerClientPollParsesCancelRun(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	body := `{
+		"type":"cancel-run",
+		"cancel":{
+			"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
+			"jobNamespace":"slipramp-runs",
+			"jobUid":"job-uid"
+		}
+	}`
+	client, err := newServerClientWithHTTPClient(
+		validConfig(),
+		httpDoerFunc(func(_ *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+				},
+				Body: io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+	}
+
+	command, err := client.Poll(context.Background())
+	if err != nil {
+		t.Fatalf("Poll() error = %v", err)
+	}
+	if command == nil || command.Cancel == nil ||
+		command.Cancel.ID != runID ||
+		command.Cancel.JobNamespace != "slipramp-runs" ||
+		command.Cancel.JobUID == nil ||
+		*command.Cancel.JobUID != "job-uid" {
 		t.Fatalf("Poll() command = %#v", command)
 	}
 }

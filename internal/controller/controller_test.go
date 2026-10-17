@@ -39,9 +39,21 @@ func (f runObservationReporterFunc) ReportObservation(
 }
 
 type scriptedRunJobs struct {
-	ensureError  error
-	observations []runObservation
-	index        int
+	ensureError    error
+	cancelError    error
+	cancelCommand  api.CancelRunCommand
+	canceledJobUID *string
+	observations   []runObservation
+	index          int
+}
+
+func (s *scriptedRunJobs) Cancel(
+	_ context.Context,
+	command api.CancelRunCommand,
+) (*string, error) {
+	s.cancelCommand = command
+
+	return s.canceledJobUID, s.cancelError
 }
 
 func (s *scriptedRunJobs) Ensure(
@@ -179,7 +191,7 @@ func TestControllerReportsChangedObservationsThroughCompletion(t *testing.T) {
 		},
 		observeEvery:   time.Millisecond,
 		heartbeatEvery: time.Hour,
-		observedRuns:   make(map[uuid.UUID]struct{}),
+		observedRuns:   make(map[uuid.UUID]*activeObserver),
 	}
 
 	app.startObservation(context.Background(), jobHandle{runID: runID})
@@ -228,7 +240,7 @@ func TestControllerReportsPermanentMaterializationFailure(t *testing.T) {
 
 	err := app.handleCommand(context.Background(), api.ControllerCommand{
 		Type:       api.ControllerCommandTypeRunAssignment,
-		Assignment: api.RunAssignment{ID: runID},
+		Assignment: &api.RunAssignment{ID: runID},
 	})
 	if err != nil {
 		t.Fatalf("handleCommand() error = %v", err)
@@ -238,5 +250,51 @@ func TestControllerReportsPermanentMaterializationFailure(t *testing.T) {
 		*reported.Outcome != api.RunObservationOutcomeFailed ||
 		reported.Reason == nil || *reported.Reason != "MaterializationFailed" {
 		t.Fatalf("reported observation = %#v", reported)
+	}
+}
+
+func TestControllerCancelsRunAndReportsOutcome(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	jobUID := "job-uid"
+	jobs := &scriptedRunJobs{canceledJobUID: &jobUID}
+	var reported api.RunObservation
+	app := &Controller{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		reports: runObservationReporterFunc(func(
+			_ context.Context,
+			_ uuid.UUID,
+			observation api.RunObservation,
+		) error {
+			reported = observation
+
+			return nil
+		}),
+		jobs:         jobs,
+		observedRuns: make(map[uuid.UUID]*activeObserver),
+	}
+	command := api.CancelRunCommand{
+		ID:           runID,
+		JobNamespace: "slipramp-runs",
+		JobUID:       &jobUID,
+	}
+
+	err := app.handleCommand(context.Background(), api.ControllerCommand{
+		Type:   api.ControllerCommandTypeCancelRun,
+		Cancel: &command,
+	})
+	if err != nil {
+		t.Fatalf("handleCommand() error = %v", err)
+	}
+	if jobs.cancelCommand.ID != runID {
+		t.Errorf("cancel command = %#v", jobs.cancelCommand)
+	}
+	if reported.Phase != api.RunObservationPhaseFinished ||
+		reported.Outcome == nil ||
+		*reported.Outcome != api.RunObservationOutcomeCanceled ||
+		reported.JobUID == nil || *reported.JobUID != jobUID ||
+		reported.Reason == nil || *reported.Reason != "CancelRequested" {
+		t.Errorf("reported observation = %#v", reported)
 	}
 }

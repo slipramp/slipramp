@@ -20,8 +20,61 @@ import (
 
 type runJobs interface {
 	Ensure(ctx context.Context, assignment api.RunAssignment) (ensuredRunJob, error)
+	Cancel(ctx context.Context, command api.CancelRunCommand) (*string, error)
 	Recover(ctx context.Context) ([]jobHandle, error)
 	Observe(ctx context.Context, handle jobHandle) (runObservation, error)
+}
+
+// Cancel removes the deterministic execution Job. A missing Job is success so
+// repeated cancel commands and assignments canceled before
+// materialization remain idempotent.
+func (r *kubernetesRunJobs) Cancel(
+	ctx context.Context,
+	command api.CancelRunCommand,
+) (*string, error) {
+	jobs := r.jobs.Jobs(string(command.JobNamespace))
+	name := runJobName(command.ID)
+	job, err := jobs.Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return command.JobUID, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get execution Job to cancel: %w", err)
+	}
+
+	if job.Labels[managedByLabel] != managedByLabelValue ||
+		job.Labels[runIDLabel] != command.ID.String() ||
+		job.Labels[clusterLabel] != r.config.ClusterName {
+		return nil, fmt.Errorf(
+			"execution Job %q does not have the expected Run identity",
+			name,
+		)
+	}
+
+	jobUID := string(job.UID)
+	if command.JobUID != nil && jobUID != *command.JobUID {
+		return nil, fmt.Errorf(
+			"execution Job %q UID %q does not match recorded UID %q",
+			name,
+			jobUID,
+			*command.JobUID,
+		)
+	}
+
+	propagation := metav1.DeletePropagationBackground
+	options := metav1.DeleteOptions{PropagationPolicy: &propagation}
+	if job.UID != "" {
+		options.Preconditions = &metav1.Preconditions{UID: &job.UID}
+	}
+	if err := jobs.Delete(ctx, name, options); err != nil && !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("delete execution Job to cancel Run: %w", err)
+	}
+
+	if jobUID == "" {
+		return command.JobUID, nil
+	}
+
+	return &jobUID, nil
 }
 
 type runObservation struct {

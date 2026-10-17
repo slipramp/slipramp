@@ -130,6 +130,90 @@ func (d *Database) CreateRun(
 	return created, nil
 }
 
+func (d *Database) CancelRun(
+	ctx context.Context,
+	runID uuid.UUID,
+	requestedAt time.Time,
+) (run.Run, error) {
+	transaction, err := d.pool.Begin(ctx)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("begin cancel Run transaction: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+
+	queries := d.queries.WithTx(transaction)
+	current, err := queries.GetRunForCancel(ctx, databaseUUID(runID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return run.Run{}, run.ErrRunNotFound
+	}
+	if err != nil {
+		return run.Run{}, fmt.Errorf("get Run to cancel: %w", err)
+	}
+
+	if current.Phase == string(run.PhaseFinished) {
+		if !current.CancellationRequestedAt.Valid {
+			return run.Run{}, run.ErrRunFinished
+		}
+
+		return commitCancelResult(ctx, transaction, current)
+	}
+	if current.CancellationRequestedAt.Valid {
+		return commitCancelResult(ctx, transaction, current)
+	}
+
+	updated, err := queries.CancelRun(
+		ctx,
+		storedb.CancelRunParams{
+			RequestedAt: databaseTime(requestedAt),
+			ID:          databaseUUID(runID),
+		},
+	)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("cancel Run: %w", err)
+	}
+
+	if current.Phase == string(run.PhaseQueued) {
+		outcome := string(run.OutcomeCanceled)
+		reason := run.ReasonCancelRequested
+		if err := queries.CreateRunPhaseTransition(
+			ctx,
+			storedb.CreateRunPhaseTransitionParams{
+				RunID:      databaseUUID(runID),
+				Phase:      string(run.PhaseFinished),
+				Outcome:    &outcome,
+				Reason:     &reason,
+				RecordedAt: databaseTime(requestedAt),
+			},
+		); err != nil {
+			return run.Run{}, fmt.Errorf("record canceled Run phase: %w", err)
+		}
+	}
+
+	return commitCancelResult(ctx, transaction, updated)
+}
+
+func (d *Database) GetRunToCancelForCluster(
+	ctx context.Context,
+	clusterName string,
+) (run.Run, error) {
+	row, err := d.queries.GetRunToCancelForCluster(ctx, clusterName)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return run.Run{}, run.ErrNoRunToCancel
+	}
+	if err != nil {
+		return run.Run{}, fmt.Errorf("get Run to cancel for cluster: %w", err)
+	}
+
+	record, err := runFromRow(row)
+	if err != nil {
+		return run.Run{}, err
+	}
+
+	return record, nil
+}
+
 func (d *Database) GetAssignedRunForCluster(
 	ctx context.Context,
 	clusterName string,
@@ -232,7 +316,11 @@ func (d *Database) ApplyRunObservation(
 	currentPhase := run.Phase(current.Phase)
 	if !slices.Contains(allowedCurrentPhases, currentPhase) ||
 		!sameJob(current.JobUid, observation.JobUID) ||
-		!sameFinishedOutcome(currentPhase, current.Outcome, observation.Outcome) {
+		!sameFinishedOutcome(currentPhase, current.Outcome, observation.Outcome) ||
+		!validCanceledObservation(
+			current.CancellationRequestedAt.Valid,
+			observation.Outcome,
+		) {
 		return run.ErrObservationConflict
 	}
 
@@ -278,6 +366,23 @@ func (d *Database) ApplyRunObservation(
 	return nil
 }
 
+func commitCancelResult(
+	ctx context.Context,
+	transaction pgx.Tx,
+	row storedb.Run,
+) (run.Run, error) {
+	if err := transaction.Commit(ctx); err != nil {
+		return run.Run{}, fmt.Errorf("commit cancel Run transaction: %w", err)
+	}
+
+	record, err := runFromRow(row)
+	if err != nil {
+		return run.Run{}, err
+	}
+
+	return record, nil
+}
+
 func sameJob(current, observed *string) bool {
 	return current == nil || observed != nil && *current == *observed
 }
@@ -293,6 +398,14 @@ func sameFinishedOutcome(
 
 	return currentOutcome != nil && observedOutcome != nil &&
 		*currentOutcome == string(*observedOutcome)
+}
+
+func validCanceledObservation(
+	cancellationRequested bool,
+	observedOutcome *run.Outcome,
+) bool {
+	return observedOutcome == nil || *observedOutcome != run.OutcomeCanceled ||
+		cancellationRequested
 }
 
 func outcomeString(value *run.Outcome) *string {

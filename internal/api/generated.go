@@ -56,12 +56,15 @@ func (e ClusterConnectionState) Valid() bool {
 
 // Defines values for ControllerCommandType.
 const (
+	ControllerCommandTypeCancelRun     ControllerCommandType = "cancel-run"
 	ControllerCommandTypeRunAssignment ControllerCommandType = "run-assignment"
 )
 
 // Valid indicates whether the value is a known member of the ControllerCommandType enum.
 func (e ControllerCommandType) Valid() bool {
 	switch e {
+	case ControllerCommandTypeCancelRun:
+		return true
 	case ControllerCommandTypeRunAssignment:
 		return true
 	default:
@@ -339,6 +342,16 @@ type ArtifactInputSource struct {
 // ArtifactInputSourceCompatibility defines model for ArtifactInputSource.Compatibility.
 type ArtifactInputSourceCompatibility string
 
+// CancelRunCommand defines model for CancelRunCommand.
+type CancelRunCommand struct {
+	// ID Stable Run identity used to derive the Kubernetes Job name.
+	ID           openapi_types.UUID `json:"id"`
+	JobNamespace CatalogName        `json:"jobNamespace"`
+
+	// JobUID Kubernetes UID already recorded for the execution Job, if known.
+	JobUID *string `json:"jobUid,omitempty"`
+}
+
 // CatalogName defines model for CatalogName.
 type CatalogName = string
 
@@ -387,8 +400,12 @@ type ClusterList struct {
 
 // ControllerCommand defines model for ControllerCommand.
 type ControllerCommand struct {
-	Assignment RunAssignment         `json:"assignment"`
-	Type       ControllerCommandType `json:"type"`
+	// Assignment Present when type is run-assignment.
+	Assignment *RunAssignment `json:"assignment,omitempty"`
+
+	// Cancel Present when type is cancel-run.
+	Cancel *CancelRunCommand     `json:"cancel,omitempty"`
+	Type   ControllerCommandType `json:"type"`
 }
 
 // ControllerCommandType defines model for ControllerCommand.Type.
@@ -1026,9 +1043,16 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRun(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CancelRun Cancel a Run
+	//
+	// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
+	CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PollForControllerCommand Poll for a controller command
 	//
-	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
 	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
 	PollForControllerCommand(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1203,9 +1227,26 @@ func (c *Client) CreateRun(ctx context.Context, params *CreateRunParams, body Cr
 	return c.Client.Do(req)
 }
 
+// CancelRun Cancel a Run
+//
+// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+//
+// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
+func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCancelRunRequest(c.Server, runID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PollForControllerCommand Poll for a controller command
 //
-// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
+// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
 //
 // Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
 func (c *Client) PollForControllerCommand(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1492,6 +1533,40 @@ func NewCreateRunRequestWithBody(server string, params *CreateRunParams, content
 	return req, nil
 }
 
+// NewCancelRunRequest constructs an http.Request for the CancelRun method
+func NewCancelRunRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/cancel", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPollForControllerCommandRequest constructs an http.Request for the PollForControllerCommand method
 func NewPollForControllerCommandRequest(server string, clusterName string, params *PollForControllerCommandParams) (*http.Request, error) {
 	var err error
@@ -1750,9 +1825,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRunWithResponse(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRunResponse, error)
 
+	// CancelRunWithResponse Cancel a Run
+	//
+	// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
+	CancelRunWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelRunResponse, error)
+
 	// PollForControllerCommandWithResponse Poll for a controller command
 	//
-	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -2180,6 +2264,75 @@ func (r CreateRunResponse) ContentType() string {
 	return ""
 }
 
+type CancelRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Run
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r CancelRunResponse) GetJSON200() *Run {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CancelRunResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r CancelRunResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CancelRunResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CancelRunResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CancelRunResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CancelRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CancelRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CancelRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PollForControllerCommandResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2493,9 +2646,24 @@ func (c *ClientWithResponses) CreateRunWithResponse(ctx context.Context, params 
 	return ParseCreateRunResponse(rsp)
 }
 
+// CancelRunWithResponse Cancel a Run
+//
+// Records a cancel request idempotently. A queued Run finishes as canceled immediately; an active Run remains active until its cluster controller removes the execution Job and reports the canceled outcome.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
+func (c *ClientWithResponses) CancelRunWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelRunResponse, error) {
+	rsp, err := c.CancelRun(ctx, runID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCancelRunResponse(rsp)
+}
+
 // PollForControllerCommandWithResponse Poll for a controller command
 //
-// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
+// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -2865,6 +3033,60 @@ func ParseCreateRunResponse(rsp *http.Response) (*CreateRunResponse, error) {
 	return response, nil
 }
 
+// ParseCancelRunResponse parses an HTTP response from a CancelRunWithResponse call
+func ParseCancelRunResponse(rsp *http.Response) (*CancelRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CancelRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Run
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePollForControllerCommandResponse parses an HTTP response from a PollForControllerCommandWithResponse call
 func ParsePollForControllerCommandResponse(rsp *http.Response) (*PollForControllerCommandResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3039,6 +3261,9 @@ type ServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams)
+	// CancelRun Cancel a Run
+	// (POST /api/v1/runs/{runId}/cancel)
+	CancelRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
 	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/controllers/{clusterName}/poll)
 	PollForControllerCommand(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerCommandParams)
@@ -3185,6 +3410,32 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRun(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelRun operation middleware
+func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelRun(w, r, runID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3414,6 +3665,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/poll", wrapper.PollForControllerCommand)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/runs/{runId}/observations", wrapper.ReportRunObservation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/cancel", wrapper.CancelRun)
 
 	return m
 }
@@ -3847,6 +4099,84 @@ func (response CreateRun500ApplicationProblemPlusJSONResponse) VisitCreateRunRes
 	return err
 }
 
+type CancelRunRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+}
+
+type CancelRunResponseObject interface {
+	VisitCancelRunResponse(w http.ResponseWriter) error
+}
+
+type CancelRun200JSONResponse Run
+
+func (response CancelRun200JSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun404ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun405ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun405ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun409ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun409ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun500ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun500ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PollForControllerCommandRequestObject struct {
 	ClusterName string `json:"clusterName"`
 	Params      PollForControllerCommandParams
@@ -4091,6 +4421,9 @@ type StrictServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(ctx context.Context, request CreateRunRequestObject) (CreateRunResponseObject, error)
+	// CancelRun Cancel a Run
+	// (POST /api/v1/runs/{runId}/cancel)
+	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
 	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/controllers/{clusterName}/poll)
 	PollForControllerCommand(ctx context.Context, request PollForControllerCommandRequestObject) (PollForControllerCommandResponseObject, error)
@@ -4298,6 +4631,32 @@ func (sh *strictHandler) CreateRun(w http.ResponseWriter, r *http.Request, param
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateRunResponseObject); ok {
 		if err := validResponse.VisitCreateRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelRun operation middleware
+func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request CancelRunRequestObject
+
+	request.RunID = runID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelRun(ctx, request.(CancelRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelRunResponseObject); ok {
+		if err := validResponse.VisitCancelRunResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

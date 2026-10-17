@@ -22,6 +22,8 @@ paths:
     $ref: ./paths/controllers.yaml#/runObservations
   /api/v1/runs:
     $ref: ./paths/runs.yaml#/runs
+  /api/v1/runs/{runId}/cancel:
+    $ref: ./paths/runs.yaml#/cancelRun
 components:
   securitySchemes:
     ControllerBearer:
@@ -46,6 +48,8 @@ components:
       $ref: ./components/controllers.yaml#/ClusterList
     RunAssignment:
       $ref: ./components/controllers.yaml#/RunAssignment
+    CancelRunCommand:
+      $ref: ./components/controllers.yaml#/CancelRunCommand
     ControllerCommand:
       $ref: ./components/controllers.yaml#/ControllerCommand
     RunObservation:

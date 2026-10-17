@@ -11,6 +11,62 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const cancelRun = `-- name: CancelRun :one
+UPDATE runs
+SET cancellation_requested_at = $1,
+    phase = CASE WHEN phase = 'queued' THEN 'finished' ELSE phase END,
+    outcome = CASE WHEN phase = 'queued' THEN 'canceled' ELSE outcome END,
+    finished_at = CASE
+        WHEN phase = 'queued' THEN $1
+        ELSE finished_at
+    END,
+    outcome_reason = CASE
+        WHEN phase = 'queued' THEN 'CancelRequested'
+        ELSE outcome_reason
+    END
+WHERE id = $2
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
+`
+
+type CancelRunParams struct {
+	RequestedAt pgtype.Timestamptz
+	ID          pgtype.UUID
+}
+
+func (q *Queries) CancelRun(ctx context.Context, arg CancelRunParams) (Run, error) {
+	row := q.db.QueryRow(ctx, cancelRun, arg.RequestedAt, arg.ID)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.Phase,
+		&i.Outcome,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+		&i.Parameters,
+		&i.PlacementName,
+		&i.ClusterName,
+		&i.SourceType,
+		&i.IdempotencyKey,
+		&i.RequestDigest,
+		&i.Snapshot,
+		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
+	)
+	return i, err
+}
+
 const claimQueuedRun = `-- name: ClaimQueuedRun :one
 WITH candidate AS (
     SELECT queued.id
@@ -315,8 +371,49 @@ func (q *Queries) GetRunByIdempotencyKey(ctx context.Context, arg GetRunByIdempo
 	return i, err
 }
 
+const getRunForCancel = `-- name: GetRunForCancel :one
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
+FROM runs
+WHERE id = $1
+FOR UPDATE
+`
+
+func (q *Queries) GetRunForCancel(ctx context.Context, id pgtype.UUID) (Run, error) {
+	row := q.db.QueryRow(ctx, getRunForCancel, id)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.Phase,
+		&i.Outcome,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+		&i.Parameters,
+		&i.PlacementName,
+		&i.ClusterName,
+		&i.SourceType,
+		&i.IdempotencyKey,
+		&i.RequestDigest,
+		&i.Snapshot,
+		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
+	)
+	return i, err
+}
+
 const getRunObservationStateForUpdate = `-- name: GetRunObservationStateForUpdate :one
-SELECT phase, outcome, job_uid
+SELECT phase, outcome, job_uid, cancellation_requested_at
 FROM runs
 WHERE id = $1
   AND cluster_name = $2
@@ -329,15 +426,65 @@ type GetRunObservationStateForUpdateParams struct {
 }
 
 type GetRunObservationStateForUpdateRow struct {
-	Phase   string
-	Outcome *string
-	JobUid  *string
+	Phase                   string
+	Outcome                 *string
+	JobUid                  *string
+	CancellationRequestedAt pgtype.Timestamptz
 }
 
 func (q *Queries) GetRunObservationStateForUpdate(ctx context.Context, arg GetRunObservationStateForUpdateParams) (GetRunObservationStateForUpdateRow, error) {
 	row := q.db.QueryRow(ctx, getRunObservationStateForUpdate, arg.ID, arg.ClusterName)
 	var i GetRunObservationStateForUpdateRow
-	err := row.Scan(&i.Phase, &i.Outcome, &i.JobUid)
+	err := row.Scan(
+		&i.Phase,
+		&i.Outcome,
+		&i.JobUid,
+		&i.CancellationRequestedAt,
+	)
+	return i, err
+}
+
+const getRunToCancelForCluster = `-- name: GetRunToCancelForCluster :one
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
+FROM runs
+WHERE cluster_name = $1
+  AND cancellation_requested_at IS NOT NULL
+  AND phase IN ('assigned', 'preparing', 'running')
+ORDER BY cancellation_requested_at, id
+LIMIT 1
+`
+
+func (q *Queries) GetRunToCancelForCluster(ctx context.Context, clusterName string) (Run, error) {
+	row := q.db.QueryRow(ctx, getRunToCancelForCluster, clusterName)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.Phase,
+		&i.Outcome,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+		&i.Parameters,
+		&i.PlacementName,
+		&i.ClusterName,
+		&i.SourceType,
+		&i.IdempotencyKey,
+		&i.RequestDigest,
+		&i.Snapshot,
+		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
+	)
 	return i, err
 }
 

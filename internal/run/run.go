@@ -26,6 +26,8 @@ const (
 
 	SourceTypeManual SourceType = "manual"
 	SourceTypeAPI    SourceType = "api"
+
+	ReasonCancelRequested = "CancelRequested"
 )
 
 var (
@@ -38,7 +40,9 @@ var (
 	ErrRuntimeNotFound     = errors.New("run runtime not found")
 	ErrPlacementNotFound   = errors.New("run placement not found")
 	ErrRunNotFound         = errors.New("run not found")
+	ErrRunFinished         = errors.New("run already finished")
 	ErrNoRunAssignment     = errors.New("no run assignment available")
+	ErrNoRunToCancel       = errors.New("no run to cancel")
 	ErrObservationConflict = errors.New("run observation conflict")
 	ErrIdempotencyConflict = errors.New("run idempotency key conflict")
 )

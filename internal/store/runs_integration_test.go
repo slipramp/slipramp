@@ -292,7 +292,107 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if claimed.ID != second.ID || claimed.Phase != run.PhaseAssigned {
 		t.Errorf("unblocked claimed Run = %#v", claimed)
 	}
-	assertRunCounts(t, database, 2, 7)
+
+	canceled := run.OutcomeCanceled
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: second.ID, ClusterName: "colo", Phase: run.PhaseFinished,
+			Outcome: &canceled, ObservedAt: completedAt.Add(2 * time.Minute),
+		},
+		[]run.Phase{run.PhaseAssigned},
+	); !errors.Is(err, run.ErrObservationConflict) {
+		t.Fatalf("unrequested cancel error = %v, want observation conflict", err)
+	}
+
+	cancelAt := completedAt.Add(3 * time.Minute)
+	canceling, err := database.CancelRun(ctx, second.ID, cancelAt)
+	if err != nil {
+		t.Fatalf("CancelRun() error = %v", err)
+	}
+	if canceling.Phase != run.PhaseAssigned ||
+		canceling.CancellationRequestedAt == nil ||
+		!canceling.CancellationRequestedAt.Equal(cancelAt) {
+		t.Errorf("canceling Run = %#v", canceling)
+	}
+	pendingCancel, err := database.GetRunToCancelForCluster(ctx, "colo")
+	if err != nil {
+		t.Fatalf("GetRunToCancelForCluster() error = %v", err)
+	}
+	if pendingCancel.ID != second.ID {
+		t.Errorf("pending cancel ID = %s, want %s", pendingCancel.ID, second.ID)
+	}
+	repeated, err := database.CancelRun(
+		ctx,
+		second.ID,
+		cancelAt.Add(time.Minute),
+	)
+	if err != nil {
+		t.Fatalf("repeat CancelRun() error = %v", err)
+	}
+	if repeated.CancellationRequestedAt == nil ||
+		!repeated.CancellationRequestedAt.Equal(cancelAt) {
+		t.Errorf("repeated cancel = %#v", repeated)
+	}
+
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: second.ID, ClusterName: "colo", Phase: run.PhaseFinished,
+			Outcome: &canceled, ObservedAt: cancelAt.Add(time.Minute),
+		},
+		[]run.Phase{run.PhaseAssigned},
+	); err != nil {
+		t.Fatalf("complete canceled Run: %v", err)
+	}
+	if _, err := database.GetRunToCancelForCluster(ctx, "colo"); !errors.Is(err, run.ErrNoRunToCancel) {
+		t.Errorf("completed cancel lookup error = %v, want no Run to cancel", err)
+	}
+	if _, err := database.CancelRun(
+		ctx,
+		record.ID,
+		cancelAt,
+	); !errors.Is(err, run.ErrRunFinished) {
+		t.Errorf("finished Run cancel error = %v, want Run finished", err)
+	}
+
+	third := record
+	third.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1205")
+	third.IdempotencyKey = nil
+	third.RequestDigest = strings.Repeat("d", 64)
+	third.CreatedAt = cancelAt.Add(2 * time.Minute)
+	if _, err := database.CreateRun(ctx, third); err != nil {
+		t.Fatalf("create third Run: %v", err)
+	}
+	queuedCancelAt := third.CreatedAt.Add(time.Minute)
+	canceledQueued, err := database.CancelRun(
+		ctx,
+		third.ID,
+		queuedCancelAt,
+	)
+	if err != nil {
+		t.Fatalf("cancel queued Run: %v", err)
+	}
+	if canceledQueued.Phase != run.PhaseFinished ||
+		canceledQueued.Outcome == nil ||
+		*canceledQueued.Outcome != run.OutcomeCanceled ||
+		canceledQueued.FinishedAt == nil ||
+		!canceledQueued.FinishedAt.Equal(queuedCancelAt) ||
+		canceledQueued.CancellationRequestedAt == nil ||
+		!canceledQueued.CancellationRequestedAt.Equal(queuedCancelAt) ||
+		canceledQueued.OutcomeReason == nil ||
+		*canceledQueued.OutcomeReason != run.ReasonCancelRequested {
+		t.Errorf("canceled queued Run = %#v", canceledQueued)
+	}
+	if _, err := database.CancelRun(
+		ctx,
+		third.ID,
+		queuedCancelAt.Add(time.Minute),
+	); err != nil {
+		t.Fatalf("repeat queued Run cancel: %v", err)
+	}
+
+	assertRunCounts(t, database, 3, 10)
 }
 
 func assertRunCounts(

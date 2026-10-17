@@ -34,9 +34,9 @@ poll:
     operationId: pollForControllerCommand
     summary: Poll for a controller command
     description: >-
-      Records the cluster controller as healthy and waits for a Run assigned to
-      its cluster. An empty response means no command became available before
-      the requested wait elapsed.
+      Records the cluster controller as healthy and waits to assign or cancel a
+      Run for its cluster. An empty response means no command
+      became available before the requested wait elapsed.
     security:
       - ControllerBearer: []
     tags:
@@ -63,14 +63,14 @@ poll:
     responses:
       "200":
         description: >-
-          A command for this cluster. Run assignments may be returned again
-          until the controller reports that the Job was materialized.
+          A command for this cluster. Commands may be returned again until the
+          controller reports that the requested state was materialized.
         content:
           application/json:
             schema:
               $ref: ../components/controllers.yaml#/ControllerCommand
       "204":
-        description: No run assignment became available before the poll completed.
+        description: No controller command became available before the poll completed.
       "400":
         description: The poll timeout is invalid.
         content:

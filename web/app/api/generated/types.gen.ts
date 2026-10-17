@@ -139,9 +139,28 @@ export type RunAssignment = {
   placement: RunAssignmentPlacement;
 };
 
+export type CancelRunCommand = {
+  /**
+   * Stable Run identity used to derive the Kubernetes Job name.
+   */
+  id: string;
+  jobNamespace: CatalogName;
+  /**
+   * Kubernetes UID already recorded for the execution Job, if known.
+   */
+  jobUid?: string;
+};
+
 export type ControllerCommand = {
-  type: "run-assignment";
-  assignment: RunAssignment;
+  type: "run-assignment" | "cancel-run";
+  /**
+   * Present when type is run-assignment.
+   */
+  assignment?: RunAssignment;
+  /**
+   * Present when type is cancel-run.
+   */
+  cancel?: CancelRunCommand;
 };
 
 export type RunObservation = {
@@ -711,11 +730,11 @@ export type PollForControllerCommandError =
 
 export type PollForControllerCommandResponses = {
   /**
-   * A command for this cluster. Run assignments may be returned again until the controller reports that the Job was materialized.
+   * A command for this cluster. Commands may be returned again until the controller reports that the requested state was materialized.
    */
   200: ControllerCommand;
   /**
-   * No run assignment became available before the poll completed.
+   * No controller command became available before the poll completed.
    */
   204: void;
 };
@@ -825,3 +844,45 @@ export type CreateRunResponses = {
 };
 
 export type CreateRunResponse = CreateRunResponses[keyof CreateRunResponses];
+
+export type CancelRunData = {
+  body?: never;
+  path: {
+    /**
+     * Run to cancel.
+     */
+    runId: string;
+  };
+  query?: never;
+  url: "/api/v1/runs/{runId}/cancel";
+};
+
+export type CancelRunErrors = {
+  /**
+   * The Run does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The Run already finished without a cancel request.
+   */
+  409: Problem;
+  /**
+   * The Run could not be canceled.
+   */
+  500: Problem;
+};
+
+export type CancelRunError = CancelRunErrors[keyof CancelRunErrors];
+
+export type CancelRunResponses = {
+  /**
+   * Cancel was requested or had already been requested.
+   */
+  200: Run;
+};
+
+export type CancelRunResponse = CancelRunResponses[keyof CancelRunResponses];

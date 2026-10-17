@@ -182,7 +182,10 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 	if command.Type != api.ControllerCommandTypeRunAssignment {
 		t.Errorf("command type = %q", command.Type)
 	}
-	assignment := command.Assignment
+	if command.Assignment == nil {
+		t.Fatal("command assignment is nil")
+	}
+	assignment := *command.Assignment
 	if assignment.ID != record.ID ||
 		assignment.CatalogRevisionID != record.CatalogRevisionID ||
 		assignment.CommitSha != record.CommitSHA {
@@ -214,6 +217,58 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 	}
 	if runs.nextCalls != 1 {
 		t.Errorf("next assignment calls = %d, want 1", runs.nextCalls)
+	}
+}
+
+func TestControllerPollPrioritizesCancelRun(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	jobUID := "job-uid"
+	runs := &recordingRunService{
+		nextCancel: run.Run{
+			ID:     runID,
+			Phase:  run.PhaseRunning,
+			JobUID: &jobUID,
+			Snapshot: run.Snapshot{Placement: run.PlacementSnapshot{
+				JobNamespace: "slipramp-runs",
+			}},
+		},
+		next: runAssignmentRecord(),
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/controllers/colo/poll?timeoutSeconds=0",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	response := httptest.NewRecorder()
+
+	newHandler(
+		&recordingClusterService{},
+		nil,
+		nil,
+		runs,
+		map[string]string{"colo": "controller-token"},
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+
+	var command api.ControllerCommand
+	if err := json.NewDecoder(response.Body).Decode(&command); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if command.Type != api.ControllerCommandTypeCancelRun ||
+		command.Cancel == nil || command.Cancel.ID != runID ||
+		command.Cancel.JobNamespace != "slipramp-runs" ||
+		command.Cancel.JobUID == nil || *command.Cancel.JobUID != jobUID {
+		t.Errorf("command = %#v", command)
+	}
+	if runs.nextCalls != 0 {
+		t.Errorf("next assignment calls = %d, want 0", runs.nextCalls)
 	}
 }
 

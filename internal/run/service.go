@@ -24,6 +24,11 @@ const maximumIdempotencyKeyLength = 128
 
 type Store interface {
 	CreateRun(ctx context.Context, record Run) (Run, error)
+	CancelRun(
+		ctx context.Context,
+		runID uuid.UUID,
+		requestedAt time.Time,
+	) (Run, error)
 	GetRunByIdempotencyKey(
 		ctx context.Context,
 		sourceType SourceType,
@@ -37,6 +42,10 @@ type Store interface {
 		ctx context.Context,
 		clusterName string,
 		claimedAt time.Time,
+	) (Run, error)
+	GetRunToCancelForCluster(
+		ctx context.Context,
+		clusterName string,
 	) (Run, error)
 	ApplyRunObservation(
 		ctx context.Context,

@@ -66,3 +66,54 @@ runs:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+cancelRun:
+  post:
+    operationId: cancelRun
+    summary: Cancel a Run
+    description: >-
+      Records a cancel request idempotently. A queued Run finishes as canceled
+      immediately; an active Run remains active until its cluster controller
+      removes the execution Job and reports the canceled outcome.
+    security: []
+    tags:
+      - Runs
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        description: Run to cancel.
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: Cancel was requested or had already been requested.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/runs.yaml#/Run
+      "404":
+        description: The Run does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The Run already finished without a cancel request.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Run could not be canceled.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

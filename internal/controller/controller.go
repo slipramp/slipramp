@@ -38,6 +38,11 @@ type runObservationReporter interface {
 	) error
 }
 
+type activeObserver struct {
+	cancel context.CancelFunc
+	done   chan struct{}
+}
+
 type Controller struct {
 	clusterName    string
 	serverURL      string
@@ -49,7 +54,7 @@ type Controller struct {
 	observeEvery   time.Duration
 	heartbeatEvery time.Duration
 	observerMutex  sync.Mutex
-	observedRuns   map[uuid.UUID]struct{}
+	observedRuns   map[uuid.UUID]*activeObserver
 	observers      sync.WaitGroup
 }
 
@@ -84,7 +89,7 @@ func New(
 		retryDelay:     pollRetryDelay,
 		observeEvery:   jobObservationPeriod,
 		heartbeatEvery: observationHeartbeatPeriod,
-		observedRuns:   make(map[uuid.UUID]struct{}),
+		observedRuns:   make(map[uuid.UUID]*activeObserver),
 	}, nil
 }
 
@@ -170,13 +175,34 @@ func (c *Controller) handleCommand(
 	ctx context.Context,
 	command api.ControllerCommand,
 ) error {
-	if command.Type != api.ControllerCommandTypeRunAssignment {
+	switch command.Type {
+	case api.ControllerCommandTypeRunAssignment:
+		if command.Assignment == nil {
+			c.logger.Warn("run assignment command has no assignment")
+
+			return nil
+		}
+
+		return c.handleAssignment(ctx, *command.Assignment)
+	case api.ControllerCommandTypeCancelRun:
+		if command.Cancel == nil {
+			c.logger.Warn("cancel-run command has no payload")
+
+			return nil
+		}
+
+		return c.handleCancel(ctx, *command.Cancel)
+	default:
 		c.logger.Warn("unsupported controller command", "type", command.Type)
 
 		return nil
 	}
+}
 
-	assignment := command.Assignment
+func (c *Controller) handleAssignment(
+	ctx context.Context,
+	assignment api.RunAssignment,
+) error {
 	ensured, err := c.jobs.Ensure(ctx, assignment)
 	if err != nil {
 		c.logger.Warn(
@@ -225,6 +251,61 @@ func (c *Controller) handleCommand(
 	return nil
 }
 
+func (c *Controller) handleCancel(
+	ctx context.Context,
+	command api.CancelRunCommand,
+) error {
+	c.stopObservation(command.ID)
+
+	jobUID, err := c.jobs.Cancel(ctx, command)
+	if err != nil {
+		c.logger.Warn(
+			"cancel execution Job",
+			"run_id", command.ID,
+			"error", err,
+		)
+
+		return nil
+	}
+
+	outcome := api.RunObservationOutcomeCanceled
+	reason := "CancelRequested"
+	err = c.reports.ReportObservation(
+		ctx,
+		command.ID,
+		api.RunObservation{
+			Phase:   api.RunObservationPhaseFinished,
+			Outcome: &outcome,
+			JobUID:  jobUID,
+			Reason:  &reason,
+		},
+	)
+	if errors.Is(err, errControllerCredentialRejected) {
+		return err
+	}
+	if errors.Is(err, errRunObservationRejected) {
+		c.logger.Info(
+			"Run cancel no longer applies",
+			"run_id", command.ID,
+		)
+
+		return nil
+	}
+	if err != nil {
+		c.logger.Warn(
+			"report canceled Run",
+			"run_id", command.ID,
+			"error", err,
+		)
+
+		return nil
+	}
+
+	c.logger.Info("Run canceled", "run_id", command.ID)
+
+	return nil
+}
+
 func (c *Controller) startObservation(ctx context.Context, handle jobHandle) {
 	c.observerMutex.Lock()
 	if _, observing := c.observedRuns[handle.runID]; observing {
@@ -232,18 +313,40 @@ func (c *Controller) startObservation(ctx context.Context, handle jobHandle) {
 
 		return
 	}
-	c.observedRuns[handle.runID] = struct{}{}
+	observerContext, cancel := context.WithCancel(ctx)
+	observer := &activeObserver{cancel: cancel, done: make(chan struct{})}
+	c.observedRuns[handle.runID] = observer
 	c.observers.Add(1)
 	c.observerMutex.Unlock()
 
-	go c.observeRun(ctx, handle)
+	go c.observeRun(observerContext, handle, observer)
 }
 
-func (c *Controller) observeRun(ctx context.Context, handle jobHandle) {
+func (c *Controller) stopObservation(runID uuid.UUID) {
+	c.observerMutex.Lock()
+	observer := c.observedRuns[runID]
+	if observer != nil {
+		observer.cancel()
+	}
+	c.observerMutex.Unlock()
+
+	if observer != nil {
+		<-observer.done
+	}
+}
+
+func (c *Controller) observeRun(
+	ctx context.Context,
+	handle jobHandle,
+	observer *activeObserver,
+) {
 	defer func() {
 		c.observerMutex.Lock()
-		delete(c.observedRuns, handle.runID)
+		if c.observedRuns[handle.runID] == observer {
+			delete(c.observedRuns, handle.runID)
+		}
 		c.observerMutex.Unlock()
+		close(observer.done)
 		c.observers.Done()
 	}()
 
