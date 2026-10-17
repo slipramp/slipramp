@@ -9,17 +9,20 @@ import (
 )
 
 const (
-	serverAddressEnvironment                = "SLIPRAMP_SERVER_ADDRESS"
-	serverShutdownTimeoutEnvironment        = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
-	serverControllerTokensEnvironment       = "SLIPRAMP_CONTROLLER_TOKENS"
-	serverDatabaseURLEnvironment            = "SLIPRAMP_DATABASE_URL"
-	serverDatabaseConnectTimeoutEnvironment = "SLIPRAMP_DATABASE_CONNECT_TIMEOUT"
-	serverS3EndpointEnvironment             = "SLIPRAMP_S3_ENDPOINT"
-	serverS3RegionEnvironment               = "SLIPRAMP_S3_REGION"
-	serverS3BucketEnvironment               = "SLIPRAMP_S3_BUCKET"
-	serverS3AccessKeyIDEnvironment          = "SLIPRAMP_S3_ACCESS_KEY_ID"
-	serverS3SecretAccessKeyEnvironment      = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
-	serverS3StartupTimeoutEnvironment       = "SLIPRAMP_S3_STARTUP_TIMEOUT"
+	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
+	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
+	serverControllerTokensEnvironment             = "SLIPRAMP_CONTROLLER_TOKENS"
+	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
+	serverRepositoryRefreshIntervalEnvironment    = "SLIPRAMP_REPOSITORY_REFRESH_INTERVAL"
+	serverRepositoryFetchTimeoutEnvironment       = "SLIPRAMP_REPOSITORY_FETCH_TIMEOUT"
+	serverDatabaseURLEnvironment                  = "SLIPRAMP_DATABASE_URL"
+	serverDatabaseConnectTimeoutEnvironment       = "SLIPRAMP_DATABASE_CONNECT_TIMEOUT"
+	serverS3EndpointEnvironment                   = "SLIPRAMP_S3_ENDPOINT"
+	serverS3RegionEnvironment                     = "SLIPRAMP_S3_REGION"
+	serverS3BucketEnvironment                     = "SLIPRAMP_S3_BUCKET"
+	serverS3AccessKeyIDEnvironment                = "SLIPRAMP_S3_ACCESS_KEY_ID"
+	serverS3SecretAccessKeyEnvironment            = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
+	serverS3StartupTimeoutEnvironment             = "SLIPRAMP_S3_STARTUP_TIMEOUT"
 )
 
 func TestLoadServerUsesDefaults(t *testing.T) {
@@ -42,6 +45,22 @@ func TestLoadServerUsesDefaults(t *testing.T) {
 		)
 	}
 
+	if cfg.RepositoryRefreshInterval != time.Minute {
+		t.Errorf(
+			"RepositoryRefreshInterval = %s, want %s",
+			cfg.RepositoryRefreshInterval,
+			time.Minute,
+		)
+	}
+
+	if cfg.RepositoryFetchTimeout != 30*time.Second {
+		t.Errorf(
+			"RepositoryFetchTimeout = %s, want %s",
+			cfg.RepositoryFetchTimeout,
+			30*time.Second,
+		)
+	}
+
 	if cfg.Database.URL == "" {
 		t.Error("Database.URL is empty")
 	}
@@ -59,17 +78,20 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	t.Parallel()
 
 	environment := map[string]string{
-		serverAddressEnvironment:                "127.0.0.1:9000",
-		serverShutdownTimeoutEnvironment:        "25s",
-		serverControllerTokensEnvironment:       `{"colo":"controller-token"}`,
-		serverDatabaseURLEnvironment:            "postgres://user:pass@db/slipramp",
-		serverDatabaseConnectTimeoutEnvironment: "8s",
-		serverS3EndpointEnvironment:             "https://objects.example.com",
-		serverS3RegionEnvironment:               "us-west-2",
-		serverS3BucketEnvironment:               "slipramp-artifacts",
-		serverS3AccessKeyIDEnvironment:          "access-key",
-		serverS3SecretAccessKeyEnvironment:      "secret-key",
-		serverS3StartupTimeoutEnvironment:       "9s",
+		serverAddressEnvironment:                      "127.0.0.1:9000",
+		serverShutdownTimeoutEnvironment:              "25s",
+		serverControllerTokensEnvironment:             `{"colo":"controller-token"}`,
+		serverRepositoryRefreshCredentialsEnvironment: `{"github-server":"/var/run/secrets/slipramp/github.gitconfig"}`,
+		serverRepositoryRefreshIntervalEnvironment:    "2m",
+		serverRepositoryFetchTimeoutEnvironment:       "45s",
+		serverDatabaseURLEnvironment:                  "postgres://user:pass@db/slipramp",
+		serverDatabaseConnectTimeoutEnvironment:       "8s",
+		serverS3EndpointEnvironment:                   "https://objects.example.com",
+		serverS3RegionEnvironment:                     "us-west-2",
+		serverS3BucketEnvironment:                     "slipramp-artifacts",
+		serverS3AccessKeyIDEnvironment:                "access-key",
+		serverS3SecretAccessKeyEnvironment:            "secret-key",
+		serverS3StartupTimeoutEnvironment:             "9s",
 	}
 
 	cfg, err := config.LoadServer(mapEnvironment(environment))
@@ -95,6 +117,27 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 
 	if cfg.ControllerTokens["colo"] != "controller-token" {
 		t.Error("ControllerTokens does not contain the configured credential")
+	}
+
+	if cfg.RepositoryRefreshCredentials["github-server"] !=
+		"/var/run/secrets/slipramp/github.gitconfig" {
+		t.Error("RepositoryRefreshCredentials does not contain github-server")
+	}
+
+	if cfg.RepositoryRefreshInterval != 2*time.Minute {
+		t.Errorf(
+			"RepositoryRefreshInterval = %s, want %s",
+			cfg.RepositoryRefreshInterval,
+			2*time.Minute,
+		)
+	}
+
+	if cfg.RepositoryFetchTimeout != 45*time.Second {
+		t.Errorf(
+			"RepositoryFetchTimeout = %s, want %s",
+			cfg.RepositoryFetchTimeout,
+			45*time.Second,
+		)
 	}
 
 	if cfg.Database.URL != environment[serverDatabaseURLEnvironment] {
@@ -154,7 +197,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadServerRejectsInvalidConfiguration(t *testing.T) {
+func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -195,6 +238,34 @@ func TestLoadServerRejectsInvalidConfiguration(t *testing.T) {
 			name: "invalid controller token",
 			environment: map[string]string{
 				serverControllerTokensEnvironment: `{"colo":""}`,
+			},
+			wantError: "validate server configuration",
+		},
+		{
+			name: "malformed repository refresh credentials",
+			environment: map[string]string{
+				serverRepositoryRefreshCredentialsEnvironment: "not-json",
+			},
+			wantError: serverRepositoryRefreshCredentialsEnvironment,
+		},
+		{
+			name: "invalid repository refresh credential",
+			environment: map[string]string{
+				serverRepositoryRefreshCredentialsEnvironment: `{"github":"relative"}`,
+			},
+			wantError: "validate server configuration",
+		},
+		{
+			name: "malformed repository refresh interval",
+			environment: map[string]string{
+				serverRepositoryRefreshIntervalEnvironment: "often",
+			},
+			wantError: serverRepositoryRefreshIntervalEnvironment,
+		},
+		{
+			name: "invalid repository fetch timeout",
+			environment: map[string]string{
+				serverRepositoryFetchTimeoutEnvironment: "0s",
 			},
 			wantError: "validate server configuration",
 		},

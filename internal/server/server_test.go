@@ -58,13 +58,14 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 		_ = clientConnection.Close()
 	}()
 
-	controllerWork := &blockingControllerWorkWaiter{
+	controllers := &blockingClusterService{
 		started: make(chan struct{}),
 	}
 	settings := DefaultConfig()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	httpHandler := newHandler(
-		controllerWork,
+		controllers,
+		nil,
 		map[string]string{"colo": "controller-token"},
 	)
 	app := newServer(settings, logger, httpHandler)
@@ -113,7 +114,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	}()
 
 	select {
-	case <-controllerWork.started:
+	case <-controllers.started:
 	case <-time.After(2 * time.Second):
 		t.Fatal("controller poll did not start")
 	}
@@ -136,11 +137,11 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	}
 }
 
-type blockingControllerWorkWaiter struct {
+type blockingClusterService struct {
 	started chan struct{}
 }
 
-func (p *blockingControllerWorkWaiter) WaitForControllerWork(
+func (p *blockingClusterService) WaitForControllerWork(
 	ctx context.Context,
 	_ string,
 	_ time.Duration,
@@ -151,7 +152,7 @@ func (p *blockingControllerWorkWaiter) WaitForControllerWork(
 	return ctx.Err()
 }
 
-func (*blockingControllerWorkWaiter) ListClusters(
+func (*blockingClusterService) ListClusters(
 	context.Context,
 ) ([]cluster.Status, error) {
 	return nil, nil

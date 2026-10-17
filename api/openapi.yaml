@@ -8,6 +8,10 @@ servers:
 paths:
   /healthz:
     $ref: ./paths/system.yaml#/health
+  /api/v1/repositories:
+    $ref: ./paths/repositories.yaml#/repositories
+  /api/v1/repositories/{repositoryId}:
+    $ref: ./paths/repositories.yaml#/repository
   /api/v1/clusters:
     $ref: ./paths/controllers.yaml#/clusters
   /api/v1/controllers/{clusterName}/poll:
@@ -22,6 +26,12 @@ components:
       $ref: ./components/common.yaml#/HealthResponse
     Problem:
       $ref: ./components/common.yaml#/Problem
+    Repository:
+      $ref: ./components/repositories.yaml#/Repository
+    RepositoryList:
+      $ref: ./components/repositories.yaml#/RepositoryList
+    RepositoryConfig:
+      $ref: ./components/repositories.yaml#/RepositoryConfig
     Cluster:
       $ref: ./components/controllers.yaml#/Cluster
     ClusterList:

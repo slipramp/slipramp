@@ -25,6 +25,22 @@ func TestDefaultConfig(t *testing.T) {
 		)
 	}
 
+	if settings.RepositoryRefreshInterval != time.Minute {
+		t.Errorf(
+			"RepositoryRefreshInterval = %s, want %s",
+			settings.RepositoryRefreshInterval,
+			time.Minute,
+		)
+	}
+
+	if settings.RepositoryFetchTimeout != 30*time.Second {
+		t.Errorf(
+			"RepositoryFetchTimeout = %s, want %s",
+			settings.RepositoryFetchTimeout,
+			30*time.Second,
+		)
+	}
+
 	if err := settings.Database.Validate(); err != nil {
 		t.Errorf("Database.Validate() error = %v", err)
 	}
@@ -86,6 +102,27 @@ func TestConfigValidate(t *testing.T) {
 				settings.ShutdownTimeout = -1 * time.Second
 			},
 			wantError: "shutdown timeout",
+		},
+		{
+			name: "invalid repository credential",
+			configure: func(settings *Config) {
+				settings.RepositoryRefreshCredentials["github"] = "relative"
+			},
+			wantError: "repository refresh credentials",
+		},
+		{
+			name: "invalid repository refresh interval",
+			configure: func(settings *Config) {
+				settings.RepositoryRefreshInterval = 0
+			},
+			wantError: "repository refresh interval",
+		},
+		{
+			name: "invalid repository fetch timeout",
+			configure: func(settings *Config) {
+				settings.RepositoryFetchTimeout = 0
+			},
+			wantError: "repository fetch timeout",
 		},
 		{
 			name: "invalid controller cluster name",

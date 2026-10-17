@@ -10,10 +10,13 @@ The current foundation establishes the four Slipramp processes: the Server,
 cluster controller, harness, and web application. The split OpenAPI contract
 defines the Server's JSON liveness probe at `GET /healthz`, the read-only
 cluster health endpoint at `GET /api/v1/clusters`, and the authenticated
-controller long poll at `POST /api/v1/controllers/{clusterName}/poll`. Go
-request and response types, Server interfaces, the controller client, and the
-TypeScript frontend client are generated together from that contract. API
-errors use RFC 9457 problem details with the
+controller long poll at `POST /api/v1/controllers/{clusterName}/poll`.
+Repository registrations can be listed and created at
+`GET|POST /api/v1/repositories` and removed at
+`DELETE /api/v1/repositories/{repositoryId}`. Go request and response types,
+Server interfaces, the controller client, and the TypeScript frontend client
+are generated together from that contract. API errors use RFC 9457 problem
+details with the
 `application/problem+json` media type.
 
 The Server connects to PostgreSQL through pgxpool, applies embedded Goose
@@ -23,6 +26,33 @@ configured bucket is provisioned separately and checked at startup so the
 Server does not require bucket-administration permissions. PostgreSQL remains
 authoritative for product state and artifact metadata.
 
+Repository registrations persist an HTTPS, SSH, or SCP-style Git clone URL,
+one tracked branch, and optional names for two distinct credential paths. The
+refresh credential name refers to a secret source available to the Server,
+while the checkout credential name is resolved to a Kubernetes Secret by each
+execution cluster. Secret values and URL-embedded HTTPS credentials are not
+accepted. Removing a repository hides it from the active list while retaining
+its stable identity for future catalog and run history references.
+
+The Server fetches each active repository when it starts and on the configured
+interval. It records the exact commit SHA and the latest attempt, success, or
+failure without storing repository contents in PostgreSQL or S3. Repository API
+responses include this refresh state. Catalog discovery remains a separate
+follow-on slice.
+
+`SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS` maps logical credential names to
+absolute paths of administrator-mounted Git config files. Each isolated fetch
+uses only its selected config file and disables interactive prompts. The file
+can use standard Git configuration such as a scoped credential helper for
+HTTPS or `core.sshCommand` for SSH; any referenced credential and known-hosts
+files should be mounted separately. For example:
+
+```json
+{
+  "github-server": "/var/run/secrets/slipramp/github.gitconfig"
+}
+```
+
 The Server accepts these environment variables:
 
 | Variable | Default | Purpose |
@@ -31,6 +61,9 @@ The Server accepts these environment variables:
 | `SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT` | `10s` | Graceful shutdown deadline |
 | `SLIPRAMP_CONTROLLER_TOKENS` | `{}` | JSON object mapping registered cluster names to static bearer credentials |
 | `SLIPRAMP_PLACEMENTS_FILE` | Unset | Path to the versioned YAML placement configuration |
+| `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS` | `{}` | JSON object mapping refresh credential names to mounted Git config files |
+| `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL` | `1m` | Interval between repository branch refreshes |
+| `SLIPRAMP_REPOSITORY_FETCH_TIMEOUT` | `30s` | Deadline for fetching one repository branch |
 | `SLIPRAMP_DATABASE_URL` | Local development PostgreSQL URL | PostgreSQL connection URL |
 | `SLIPRAMP_DATABASE_CONNECT_TIMEOUT` | `10s` | PostgreSQL startup deadline |
 | `SLIPRAMP_S3_ENDPOINT` | `http://127.0.0.1:9000` | S3-compatible endpoint URL |
@@ -48,7 +81,7 @@ placements file may contain:
 
 ```yaml
 apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements:
   infrastructure-admin:
     cluster: colo
@@ -113,7 +146,7 @@ execution clusters. The web process accepts these environment variables:
 
 ## Development
 
-Go 1.27.2, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
+Go 1.27.2, Git, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
 required. Docker is required for the local PostgreSQL and RustFS services.
 Development tool and package versions are pinned by `Taskfile.yml`, `go.mod`,
 `package.json`, and `pnpm-lock.yaml`; `task deps` installs the pinned Go tools

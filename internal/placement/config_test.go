@@ -6,7 +6,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestValidateName(t *testing.T) {
@@ -169,13 +168,11 @@ func TestConfigValidate(t *testing.T) {
 			name: "pod template",
 			configure: func(cfg *Config) {
 				cfg.PodTemplate = &corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"azure.workload.identity/use": "true",
-						},
+					Labels: map[string]string{
+						"azure.workload.identity/use": "true",
 					},
 					Spec: corev1.PodSpec{
-						RuntimeClassName: pointer("kata"),
+						RuntimeClassName: new("kata"),
 					},
 				}
 			},
@@ -184,9 +181,7 @@ func TestConfigValidate(t *testing.T) {
 			name: "invalid pod template label",
 			configure: func(cfg *Config) {
 				cfg.PodTemplate = &corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{"invalid key": "value"},
-					},
+					Labels: map[string]string{"invalid key": "value"},
 				}
 			},
 			wantError: "pod template label key",
@@ -261,8 +256,4 @@ func validConfig() Config {
 		ClusterName:  "colo",
 		JobNamespace: "slipramp-runs",
 	}
-}
-
-func pointer[Value any](value Value) *Value {
-	return &value
 }

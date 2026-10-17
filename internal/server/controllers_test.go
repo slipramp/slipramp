@@ -19,14 +19,12 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 
 	firstSeenAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	lastSeenAt := firstSeenAt.Add(time.Hour)
-	controllers := &recordingControllerWorkWaiter{
+	controllers := &recordingClusterService{
 		clusters: []cluster.Status{
 			{
-				Observation: cluster.Observation{
-					Name:        "colo",
-					FirstSeenAt: firstSeenAt,
-					LastSeenAt:  lastSeenAt,
-				},
+				Name:            "colo",
+				FirstSeenAt:     firstSeenAt,
+				LastSeenAt:      lastSeenAt,
 				ConnectionState: cluster.ConnectionStateConnected,
 			},
 		},
@@ -39,7 +37,7 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil).ServeHTTP(response, request)
+	newHandler(controllers, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -81,7 +79,7 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	t.Parallel()
 
-	controllers := &recordingControllerWorkWaiter{
+	controllers := &recordingClusterService{
 		listError: errors.New("database unavailable"),
 	}
 	request := httptest.NewRequestWithContext(
@@ -92,7 +90,7 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil).ServeHTTP(response, request)
+	newHandler(controllers, nil, nil).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusInternalServerError)
 	if strings.Contains(response.Body.String(), "database unavailable") {
@@ -103,7 +101,7 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 func TestControllerPollAuthenticatesAndDelegates(t *testing.T) {
 	t.Parallel()
 
-	controllerWork := &recordingControllerWorkWaiter{}
+	controllers := &recordingClusterService{}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -114,7 +112,8 @@ func TestControllerPollAuthenticatesAndDelegates(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	newHandler(
-		controllerWork,
+		controllers,
+		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)
 
@@ -126,19 +125,19 @@ func TestControllerPollAuthenticatesAndDelegates(t *testing.T) {
 		)
 	}
 
-	if controllerWork.clusterName != "colo" {
-		t.Errorf("cluster name = %q, want %q", controllerWork.clusterName, "colo")
+	if controllers.clusterName != "colo" {
+		t.Errorf("cluster name = %q, want %q", controllers.clusterName, "colo")
 	}
 
-	if controllerWork.wait != 0 {
-		t.Errorf("wait = %s, want 0", controllerWork.wait)
+	if controllers.wait != 0 {
+		t.Errorf("wait = %s, want 0", controllers.wait)
 	}
 }
 
 func TestControllerPollUsesDefaultWait(t *testing.T) {
 	t.Parallel()
 
-	controllerWork := &recordingControllerWorkWaiter{}
+	controllers := &recordingClusterService{}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -149,7 +148,8 @@ func TestControllerPollUsesDefaultWait(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	newHandler(
-		controllerWork,
+		controllers,
+		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)
 
@@ -161,8 +161,8 @@ func TestControllerPollUsesDefaultWait(t *testing.T) {
 		)
 	}
 
-	if controllerWork.wait != 25*time.Second {
-		t.Errorf("wait = %s, want %s", controllerWork.wait, 25*time.Second)
+	if controllers.wait != 25*time.Second {
+		t.Errorf("wait = %s, want %s", controllers.wait, 25*time.Second)
 	}
 }
 
@@ -207,7 +207,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			controllerWork := &recordingControllerWorkWaiter{}
+			controllers := &recordingClusterService{}
 			request := httptest.NewRequestWithContext(
 				context.Background(),
 				http.MethodPost,
@@ -221,7 +221,8 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 
 			response := httptest.NewRecorder()
 			newHandler(
-				controllerWork,
+				controllers,
+				nil,
 				map[string]string{"colo": "controller-token"},
 			).ServeHTTP(response, request)
 
@@ -234,8 +235,8 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 				)
 			}
 
-			if controllerWork.calls != 0 {
-				t.Errorf("work wait calls = %d, want 0", controllerWork.calls)
+			if controllers.calls != 0 {
+				t.Errorf("work wait calls = %d, want 0", controllers.calls)
 			}
 		})
 	}
@@ -244,7 +245,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 func TestControllerPollRejectsInvalidTimeout(t *testing.T) {
 	t.Parallel()
 
-	controllerWork := &recordingControllerWorkWaiter{}
+	controllers := &recordingClusterService{}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -255,21 +256,22 @@ func TestControllerPollRejectsInvalidTimeout(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	newHandler(
-		controllerWork,
+		controllers,
+		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusBadRequest)
 
-	if controllerWork.calls != 0 {
-		t.Errorf("work wait calls = %d, want 0", controllerWork.calls)
+	if controllers.calls != 0 {
+		t.Errorf("work wait calls = %d, want 0", controllers.calls)
 	}
 }
 
 func TestControllerPollReturnsProblemWhenServiceFails(t *testing.T) {
 	t.Parallel()
 
-	controllerWork := &recordingControllerWorkWaiter{
+	controllers := &recordingClusterService{
 		err: errors.New("database unavailable"),
 	}
 	request := httptest.NewRequestWithContext(
@@ -282,7 +284,8 @@ func TestControllerPollReturnsProblemWhenServiceFails(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	newHandler(
-		controllerWork,
+		controllers,
+		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)
 
@@ -293,125 +296,7 @@ func TestControllerPollReturnsProblemWhenServiceFails(t *testing.T) {
 	}
 }
 
-func TestControllerServiceRecordsClusterObservation(t *testing.T) {
-	t.Parallel()
-
-	observations := &recordingClusterObservations{}
-	service := newControllerService(observations)
-	location := time.FixedZone("test", -6*60*60)
-	observedAt := time.Date(
-		2026,
-		time.October,
-		16,
-		12,
-		0,
-		0,
-		0,
-		location,
-	)
-	service.now = func() time.Time {
-		return observedAt
-	}
-
-	if err := service.WaitForControllerWork(
-		context.Background(),
-		"colo",
-		0,
-	); err != nil {
-		t.Fatalf("WaitForControllerWork() error = %v", err)
-	}
-
-	if observations.clusterName != "colo" {
-		t.Errorf(
-			"cluster name = %q, want %q",
-			observations.clusterName,
-			"colo",
-		)
-	}
-
-	if !observations.observedAt.Equal(observedAt) {
-		t.Errorf(
-			"observed at = %s, want %s",
-			observations.observedAt,
-			observedAt,
-		)
-	}
-
-	if observations.observedAt.Location() != time.UTC {
-		t.Errorf(
-			"observation location = %s, want UTC",
-			observations.observedAt.Location(),
-		)
-	}
-}
-
-func TestControllerServiceStopsWaitingWhenRequestIsCanceled(t *testing.T) {
-	t.Parallel()
-
-	service := newControllerService(&recordingClusterObservations{})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	err := service.WaitForControllerWork(ctx, "colo", time.Minute)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf(
-			"WaitForControllerWork() error = %v, want %v",
-			err,
-			context.Canceled,
-		)
-	}
-}
-
-func TestControllerServiceReportsConnectionState(t *testing.T) {
-	t.Parallel()
-
-	now := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
-	observations := &recordingClusterObservations{
-		clusters: []cluster.Observation{
-			{
-				Name:        "connected",
-				FirstSeenAt: now.Add(-time.Hour),
-				LastSeenAt:  now.Add(-clusterConnectionWindow),
-			},
-			{
-				Name:        "unreachable",
-				FirstSeenAt: now.Add(-time.Hour),
-				LastSeenAt:  now.Add(-clusterConnectionWindow - time.Nanosecond),
-			},
-		},
-	}
-	service := newControllerService(observations)
-	service.now = func() time.Time {
-		return now
-	}
-
-	statuses, err := service.ListClusters(context.Background())
-	if err != nil {
-		t.Fatalf("ListClusters() error = %v", err)
-	}
-
-	if len(statuses) != 2 {
-		t.Fatalf("cluster count = %d, want 2", len(statuses))
-	}
-
-	if statuses[0].ConnectionState != cluster.ConnectionStateConnected {
-		t.Errorf(
-			"connected state = %q, want %q",
-			statuses[0].ConnectionState,
-			cluster.ConnectionStateConnected,
-		)
-	}
-
-	if statuses[1].ConnectionState != cluster.ConnectionStateUnreachable {
-		t.Errorf(
-			"unreachable state = %q, want %q",
-			statuses[1].ConnectionState,
-			cluster.ConnectionStateUnreachable,
-		)
-	}
-}
-
-type recordingControllerWorkWaiter struct {
+type recordingClusterService struct {
 	calls       int
 	clusterName string
 	wait        time.Duration
@@ -420,7 +305,7 @@ type recordingControllerWorkWaiter struct {
 	listError   error
 }
 
-func (r *recordingControllerWorkWaiter) WaitForControllerWork(
+func (r *recordingClusterService) WaitForControllerWork(
 	_ context.Context,
 	clusterName string,
 	wait time.Duration,
@@ -432,31 +317,8 @@ func (r *recordingControllerWorkWaiter) WaitForControllerWork(
 	return r.err
 }
 
-func (r *recordingControllerWorkWaiter) ListClusters(
+func (r *recordingClusterService) ListClusters(
 	context.Context,
 ) ([]cluster.Status, error) {
 	return r.clusters, r.listError
-}
-
-type recordingClusterObservations struct {
-	clusterName string
-	observedAt  time.Time
-	clusters    []cluster.Observation
-}
-
-func (r *recordingClusterObservations) RecordClusterObservation(
-	_ context.Context,
-	clusterName string,
-	observedAt time.Time,
-) error {
-	r.clusterName = clusterName
-	r.observedAt = observedAt
-
-	return nil
-}
-
-func (r *recordingClusterObservations) ListClusterObservations(
-	context.Context,
-) ([]cluster.Observation, error) {
-	return r.clusters, nil
 }

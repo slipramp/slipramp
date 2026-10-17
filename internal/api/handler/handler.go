@@ -3,18 +3,18 @@ package handler
 import "github.com/slipramp/slipramp/internal/api"
 
 type Handler struct {
-	controllerWork ControllerWorkWaiter
-	clusters       ClusterLister
+	clusters     ClusterService
+	repositories RepositoryService
 }
 
 var _ api.StrictServerInterface = (*Handler)(nil)
 
 func New(
-	controllerWork ControllerWorkWaiter,
-	clusters ClusterLister,
+	clusters ClusterService,
+	repositories RepositoryService,
 ) *Handler {
 	return &Handler{
-		controllerWork: controllerWork,
-		clusters:       clusters,
+		clusters:     clusters,
+		repositories: repositories,
 	}
 }

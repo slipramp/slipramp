@@ -10,17 +10,20 @@ import (
 )
 
 const (
-	serverAddressEnvironment                = "SLIPRAMP_SERVER_ADDRESS"
-	serverShutdownTimeoutEnvironment        = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
-	serverControllerTokensEnvironment       = "SLIPRAMP_CONTROLLER_TOKENS"
-	serverDatabaseURLEnvironment            = "SLIPRAMP_DATABASE_URL"
-	serverDatabaseConnectTimeoutEnvironment = "SLIPRAMP_DATABASE_CONNECT_TIMEOUT"
-	serverS3EndpointEnvironment             = "SLIPRAMP_S3_ENDPOINT"
-	serverS3RegionEnvironment               = "SLIPRAMP_S3_REGION"
-	serverS3BucketEnvironment               = "SLIPRAMP_S3_BUCKET"
-	serverS3AccessKeyIDEnvironment          = "SLIPRAMP_S3_ACCESS_KEY_ID"
-	serverS3SecretAccessKeyEnvironment      = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
-	serverS3StartupTimeoutEnvironment       = "SLIPRAMP_S3_STARTUP_TIMEOUT"
+	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
+	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
+	serverControllerTokensEnvironment             = "SLIPRAMP_CONTROLLER_TOKENS"
+	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
+	serverRepositoryRefreshIntervalEnvironment    = "SLIPRAMP_REPOSITORY_REFRESH_INTERVAL"
+	serverRepositoryFetchTimeoutEnvironment       = "SLIPRAMP_REPOSITORY_FETCH_TIMEOUT"
+	serverDatabaseURLEnvironment                  = "SLIPRAMP_DATABASE_URL"
+	serverDatabaseConnectTimeoutEnvironment       = "SLIPRAMP_DATABASE_CONNECT_TIMEOUT"
+	serverS3EndpointEnvironment                   = "SLIPRAMP_S3_ENDPOINT"
+	serverS3RegionEnvironment                     = "SLIPRAMP_S3_REGION"
+	serverS3BucketEnvironment                     = "SLIPRAMP_S3_BUCKET"
+	serverS3AccessKeyIDEnvironment                = "SLIPRAMP_S3_ACCESS_KEY_ID"
+	serverS3SecretAccessKeyEnvironment            = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
+	serverS3StartupTimeoutEnvironment             = "SLIPRAMP_S3_STARTUP_TIMEOUT"
 )
 
 func LoadServer(
@@ -63,6 +66,53 @@ func LoadServer(
 		}
 
 		cfg.ControllerTokens = controllerTokens
+	}
+
+	if value, ok := lookupEnvironment(
+		serverRepositoryRefreshCredentialsEnvironment,
+	); ok {
+		var credentials map[string]string
+		if err := json.Unmarshal([]byte(value), &credentials); err != nil {
+			return server.Config{}, fmt.Errorf(
+				"parse %s: %w",
+				serverRepositoryRefreshCredentialsEnvironment,
+				err,
+			)
+		}
+
+		if credentials == nil {
+			credentials = map[string]string{}
+		}
+
+		cfg.RepositoryRefreshCredentials = credentials
+	}
+
+	if value, ok := lookupEnvironment(
+		serverRepositoryRefreshIntervalEnvironment,
+	); ok {
+		interval, err := parseDurationEnvironment(
+			serverRepositoryRefreshIntervalEnvironment,
+			value,
+		)
+		if err != nil {
+			return server.Config{}, err
+		}
+
+		cfg.RepositoryRefreshInterval = interval
+	}
+
+	if value, ok := lookupEnvironment(
+		serverRepositoryFetchTimeoutEnvironment,
+	); ok {
+		timeout, err := parseDurationEnvironment(
+			serverRepositoryFetchTimeoutEnvironment,
+			value,
+		)
+		if err != nil {
+			return server.Config{}, err
+		}
+
+		cfg.RepositoryFetchTimeout = timeout
 	}
 
 	if value, ok := lookupEnvironment(serverPlacementsFileEnvironment); ok {

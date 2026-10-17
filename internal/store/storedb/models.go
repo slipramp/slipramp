@@ -13,3 +13,19 @@ type Cluster struct {
 	FirstSeenAt pgtype.Timestamptz
 	LastSeenAt  pgtype.Timestamptz
 }
+
+type Repository struct {
+	ID                     pgtype.UUID
+	Name                   string
+	CloneUrl               string
+	Branch                 string
+	RefreshCredentialName  *string
+	CheckoutCredentialName *string
+	CreatedAt              pgtype.Timestamptz
+	RemovedAt              pgtype.Timestamptz
+	RefreshStatus          string
+	ObservedCommitSha      *string
+	LastRefreshAttemptedAt pgtype.Timestamptz
+	LastRefreshSucceededAt pgtype.Timestamptz
+	LastRefreshError       *string
+}

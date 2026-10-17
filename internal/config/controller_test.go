@@ -44,7 +44,7 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadControllerRejectsInvalidConfiguration(t *testing.T) {
+func TestLoadControllerRejectsInvalidConfig(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {

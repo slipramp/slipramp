@@ -9,9 +9,19 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 )
 
-type ClusterLister interface {
+type ClusterService interface {
 	ListClusters(ctx context.Context) ([]cluster.Status, error)
+	WaitForControllerWork(
+		ctx context.Context,
+		clusterName string,
+		wait time.Duration,
+	) error
 }
+
+const (
+	defaultControllerPollWaitSeconds = 25
+	maximumControllerPollWaitSeconds = 30
+)
 
 func (h *Handler) ListClusters(
 	ctx context.Context,
@@ -35,19 +45,6 @@ func (h *Handler) ListClusters(
 	return api.ListClusters200JSONResponse{Items: items}, nil
 }
 
-const (
-	defaultControllerPollWaitSeconds = 25
-	maximumControllerPollWaitSeconds = 30
-)
-
-type ControllerWorkWaiter interface {
-	WaitForControllerWork(
-		ctx context.Context,
-		clusterName string,
-		wait time.Duration,
-	) error
-}
-
 func (h *Handler) PollForControllerWork(
 	ctx context.Context,
 	request api.PollForControllerWorkRequestObject,
@@ -67,7 +64,7 @@ func (h *Handler) PollForControllerWork(
 	}
 
 	wait := time.Duration(timeoutSeconds) * time.Second
-	if err := h.controllerWork.WaitForControllerWork(
+	if err := h.clusters.WaitForControllerWork(
 		ctx,
 		request.ClusterName,
 		wait,

@@ -3,15 +3,24 @@
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from "./client";
 import { client } from "./client.gen";
 import type {
+  CreateRepositoryData,
+  CreateRepositoryErrors,
+  CreateRepositoryResponses,
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
   ListClustersData,
   ListClustersErrors,
   ListClustersResponses,
+  ListRepositoriesData,
+  ListRepositoriesErrors,
+  ListRepositoriesResponses,
   PollForControllerWorkData,
   PollForControllerWorkErrors,
   PollForControllerWorkResponses,
+  RemoveRepositoryData,
+  RemoveRepositoryErrors,
+  RemoveRepositoryResponses,
 } from "./types.gen";
 
 export type Options<
@@ -44,6 +53,50 @@ export const getHealth = <ThrowOnError extends boolean = false>(
     url: "/healthz",
     ...options,
   });
+
+/**
+ * List repositories
+ *
+ * Lists active repository registrations ordered by name.
+ */
+export const listRepositories = <ThrowOnError extends boolean = false>(
+  options?: Options<ListRepositoriesData, ThrowOnError>,
+): RequestResult<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError>({
+    url: "/api/v1/repositories",
+    ...options,
+  });
+
+/**
+ * Register a repository
+ *
+ * Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+ */
+export const createRepository = <ThrowOnError extends boolean = false>(
+  options: Options<CreateRepositoryData, ThrowOnError>,
+): RequestResult<CreateRepositoryResponses, CreateRepositoryErrors, ThrowOnError> =>
+  (options.client ?? client).post<CreateRepositoryResponses, CreateRepositoryErrors, ThrowOnError>({
+    url: "/api/v1/repositories",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove a repository
+ *
+ * Removes a repository from the active set without erasing its durable identity or future historical references.
+ */
+export const removeRepository = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveRepositoryData, ThrowOnError>,
+): RequestResult<RemoveRepositoryResponses, RemoveRepositoryErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RemoveRepositoryResponses,
+    RemoveRepositoryErrors,
+    ThrowOnError
+  >({ url: "/api/v1/repositories/{repositoryId}", ...options });
 
 /**
  * List execution clusters

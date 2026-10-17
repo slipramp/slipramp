@@ -11,25 +11,32 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/store"
 )
 
 type Config struct {
-	Address          string
-	ShutdownTimeout  time.Duration
-	ControllerTokens map[string]string
-	Placements       placement.Set
-	Database         store.Config
-	ObjectStore      objectstore.Config
+	Address                      string
+	ShutdownTimeout              time.Duration
+	ControllerTokens             map[string]string
+	Placements                   placement.Set
+	RepositoryRefreshCredentials repository.RefreshCredentials
+	RepositoryRefreshInterval    time.Duration
+	RepositoryFetchTimeout       time.Duration
+	Database                     store.Config
+	ObjectStore                  objectstore.Config
 }
 
 func DefaultConfig() Config {
 	return Config{
-		Address:          ":8080",
-		ShutdownTimeout:  10 * time.Second,
-		ControllerTokens: map[string]string{},
-		Database:         store.DefaultConfig(),
-		ObjectStore:      objectstore.DefaultConfig(),
+		Address:                      ":8080",
+		ShutdownTimeout:              10 * time.Second,
+		ControllerTokens:             map[string]string{},
+		RepositoryRefreshCredentials: repository.RefreshCredentials{},
+		RepositoryRefreshInterval:    time.Minute,
+		RepositoryFetchTimeout:       30 * time.Second,
+		Database:                     store.DefaultConfig(),
+		ObjectStore:                  objectstore.DefaultConfig(),
 	}
 }
 
@@ -52,6 +59,18 @@ func (c Config) Validate() error {
 
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("shutdown timeout must be positive")
+	}
+
+	if err := c.RepositoryRefreshCredentials.Validate(); err != nil {
+		return fmt.Errorf("validate repository refresh credentials: %w", err)
+	}
+
+	if c.RepositoryRefreshInterval <= 0 {
+		return fmt.Errorf("repository refresh interval must be positive")
+	}
+
+	if c.RepositoryFetchTimeout <= 0 {
+		return fmt.Errorf("repository fetch timeout must be positive")
 	}
 
 	for clusterName, token := range c.ControllerTokens {

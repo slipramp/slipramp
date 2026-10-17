@@ -7,11 +7,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/api/handler"
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 const (
@@ -21,12 +24,13 @@ const (
 )
 
 type Server struct {
-	address         string
-	shutdownTimeout time.Duration
-	placements      placement.Set
-	logger          *slog.Logger
-	httpServer      *http.Server
-	persistence     *persistence
+	address             string
+	shutdownTimeout     time.Duration
+	placements          placement.Set
+	logger              *slog.Logger
+	httpServer          *http.Server
+	persistence         *persistence
+	repositoryRefresher *repository.Refresher
 }
 
 func New(
@@ -47,14 +51,27 @@ func New(
 		return nil, err
 	}
 
-	controllers := newControllerService(persistence.database)
+	clusters := cluster.NewService(persistence.database)
+	repositories := repository.NewService(
+		persistence.database,
+		cfg.RepositoryRefreshCredentials,
+	)
+	repositoryRefresher := repository.NewRefresher(
+		persistence.database,
+		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
+		cfg.RepositoryRefreshInterval,
+		cfg.RepositoryFetchTimeout,
+		logger,
+	)
 	httpHandler := newHandlerWithLogger(
-		controllers,
+		clusters,
+		repositories,
 		cfg.ControllerTokens,
 		logger,
 	)
 	server := newServer(cfg, logger, httpHandler)
 	server.persistence = persistence
+	server.repositoryRefresher = repositoryRefresher
 
 	return server, nil
 }
@@ -90,7 +107,24 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("listen on %s: %w", s.address, err)
 	}
 
-	return s.serve(ctx, listener)
+	if s.repositoryRefresher == nil {
+		return s.serve(ctx, listener)
+	}
+
+	runContext, stop := context.WithCancel(ctx)
+	defer stop()
+
+	refreshStopped := make(chan struct{})
+	go func() {
+		defer close(refreshStopped)
+		s.repositoryRefresher.Run(runContext)
+	}()
+
+	serveErr := s.serve(runContext, listener)
+	stop()
+	<-refreshStopped
+
+	return serveErr
 }
 
 func (s *Server) serve(ctx context.Context, listener net.Listener) error {
@@ -156,20 +190,27 @@ func (s *Server) shutdown(ctx context.Context) error {
 }
 
 func newHandler(
-	controllers controllerOperations,
+	clusters handler.ClusterService,
+	repositories handler.RepositoryService,
 	controllerTokens map[string]string,
 ) http.Handler {
-	return newHandlerWithLogger(controllers, controllerTokens, nil)
+	return newHandlerWithLogger(
+		clusters,
+		repositories,
+		controllerTokens,
+		nil,
+	)
 }
 
 func newHandlerWithLogger(
-	controllers controllerOperations,
+	clusters handler.ClusterService,
+	repositories handler.RepositoryService,
 	controllerTokens map[string]string,
 	logger *slog.Logger,
 ) http.Handler {
 	authenticator := newControllerAuthenticator(controllerTokens)
 	strictHandler := api.NewStrictHandlerWithOptions(
-		handler.New(controllers, controllers),
+		handler.New(clusters, repositories),
 		[]api.StrictMiddlewareFunc{
 			handler.ControllerAuthentication(authenticator),
 		},
@@ -219,6 +260,17 @@ func newHandlerWithLogger(
 	api.HandlerFromMux(strictHandler, mux)
 
 	registerMethodNotAllowed(mux, "/healthz", http.MethodGet)
+	registerMethodNotAllowed(
+		mux,
+		"/api/v1/repositories",
+		http.MethodGet,
+		http.MethodPost,
+	)
+	registerMethodNotAllowed(
+		mux,
+		"/api/v1/repositories/{repositoryId}",
+		http.MethodDelete,
+	)
 	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
 	registerMethodNotAllowed(
 		mux,
@@ -239,13 +291,13 @@ func newHandlerWithLogger(
 func registerMethodNotAllowed(
 	mux *http.ServeMux,
 	pattern string,
-	allowedMethod string,
+	allowedMethods ...string,
 ) {
 	mux.HandleFunc(pattern, func(
 		writer http.ResponseWriter,
 		_ *http.Request,
 	) {
-		writer.Header().Set("Allow", allowedMethod)
+		writer.Header().Set("Allow", strings.Join(allowedMethods, ", "))
 		handler.WriteProblem(
 			writer,
 			http.StatusMethodNotAllowed,

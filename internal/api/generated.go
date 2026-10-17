@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for ClusterConnectionState.
@@ -47,6 +48,27 @@ const (
 func (e HealthResponseStatus) Valid() bool {
 	switch e {
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryRefreshStatus.
+const (
+	RepositoryRefreshStatusFailed    RepositoryRefreshStatus = "failed"
+	RepositoryRefreshStatusPending   RepositoryRefreshStatus = "pending"
+	RepositoryRefreshStatusSucceeded RepositoryRefreshStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryRefreshStatus enum.
+func (e RepositoryRefreshStatus) Valid() bool {
+	switch e {
+	case RepositoryRefreshStatusFailed:
+		return true
+	case RepositoryRefreshStatusPending:
+		return true
+	case RepositoryRefreshStatusSucceeded:
 		return true
 	default:
 		return false
@@ -102,11 +124,83 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// Repository defines model for Repository.
+type Repository struct {
+	// Branch Git branch tracked by repository refresh.
+	Branch string `json:"branch"`
+
+	// CheckoutCredentialName Optional logical credential name resolved by each execution cluster to a cluster-local Kubernetes Secret.
+	CheckoutCredentialName *string `json:"checkoutCredentialName,omitempty"`
+
+	// CloneURL HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
+	CloneURL string `json:"cloneUrl"`
+
+	// CreatedAt Time at which the repository was registered.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ID Stable identity of the repository registration.
+	ID openapi_types.UUID `json:"id"`
+
+	// Name Unique human-readable name of the active repository.
+	Name    string            `json:"name"`
+	Refresh RepositoryRefresh `json:"refresh"`
+
+	// RefreshCredentialName Optional name of a Server credential source used to refresh this repository. The referenced secret value is never persisted in PostgreSQL.
+	RefreshCredentialName *string `json:"refreshCredentialName,omitempty"`
+}
+
+// RepositoryConfig defines model for RepositoryConfig.
+type RepositoryConfig struct {
+	// Branch Git branch tracked by repository refresh.
+	Branch string `json:"branch"`
+
+	// CheckoutCredentialName Optional logical credential name resolved by each execution cluster to a cluster-local Kubernetes Secret.
+	CheckoutCredentialName *string `json:"checkoutCredentialName,omitempty"`
+
+	// CloneURL HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
+	CloneURL string `json:"cloneUrl"`
+
+	// Name Unique human-readable name of the active repository.
+	Name string `json:"name"`
+
+	// RefreshCredentialName Optional name of a Server credential source used to refresh this repository. The referenced secret value is never persisted in PostgreSQL.
+	RefreshCredentialName *string `json:"refreshCredentialName,omitempty"`
+}
+
+// RepositoryList defines model for RepositoryList.
+type RepositoryList struct {
+	Items []Repository `json:"items"`
+}
+
+// RepositoryRefresh defines model for RepositoryRefresh.
+type RepositoryRefresh struct {
+	// AttemptedAt Time of the most recent refresh attempt.
+	AttemptedAt *time.Time `json:"attemptedAt,omitempty"`
+
+	// CommitSha Most recently fetched commit, retained when a later refresh fails.
+	CommitSha *string `json:"commitSha,omitempty"`
+
+	// FailureReason Diagnostic from the most recent failed refresh attempt.
+	FailureReason *string `json:"failureReason,omitempty"`
+
+	// Status Result of the most recent branch refresh attempt.
+	Status RepositoryRefreshStatus `json:"status"`
+
+	// SucceededAt Time of the most recent successful refresh.
+	SucceededAt *time.Time `json:"succeededAt,omitempty"`
+}
+
+// RepositoryRefreshStatus Result of the most recent branch refresh attempt.
+type RepositoryRefreshStatus string
+
 // PollForControllerWorkParams defines parameters for PollForControllerWork.
 type PollForControllerWorkParams struct {
 	// TimeoutSeconds Maximum time to wait for assigned work.
 	TimeoutSeconds *int `form:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
 }
+
+// CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
+type CreateRepositoryJSONRequestBody = RepositoryConfig
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -196,6 +290,38 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/controllers/{clusterName}/poll (the `PollForControllerWork` operationId).
 	PollForControllerWork(ctx context.Context, clusterName string, params *PollForControllerWorkParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListRepositories List repositories
+	//
+	// Lists active repository registrations ordered by name.
+	//
+	// Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
+	ListRepositories(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRepositoryWithBody Register a repository
+	//
+	// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+	CreateRepositoryWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRepository Register a repository
+	//
+	// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+	CreateRepository(ctx context.Context, body CreateRepositoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RemoveRepository Remove a repository
+	//
+	// Removes a repository from the active set without erasing its durable identity or future historical references.
+	//
+	// Corresponds with DELETE /api/v1/repositories/{repositoryId} (the `RemoveRepository` operationId).
+	RemoveRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHealth Check server health
 	//
 	// Reports whether the Slipramp Server process is serving HTTP requests.
@@ -228,6 +354,78 @@ func (c *Client) ListClusters(ctx context.Context, reqEditors ...RequestEditorFn
 // Corresponds with POST /api/v1/controllers/{clusterName}/poll (the `PollForControllerWork` operationId).
 func (c *Client) PollForControllerWork(ctx context.Context, clusterName string, params *PollForControllerWorkParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPollForControllerWorkRequest(c.Server, clusterName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRepositories List repositories
+//
+// Lists active repository registrations ordered by name.
+//
+// Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
+func (c *Client) ListRepositories(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRepositoriesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRepositoryWithBody Register a repository
+//
+// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+func (c *Client) CreateRepositoryWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRepositoryRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRepository Register a repository
+//
+// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+func (c *Client) CreateRepository(ctx context.Context, body CreateRepositoryJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRepositoryRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RemoveRepository Remove a repository
+//
+// Removes a repository from the active set without erasing its durable identity or future historical references.
+//
+// Corresponds with DELETE /api/v1/repositories/{repositoryId} (the `RemoveRepository` operationId).
+func (c *Client) RemoveRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRemoveRepositoryRequest(c.Server, repositoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +541,107 @@ func NewPollForControllerWorkRequest(server string, clusterName string, params *
 	return req, nil
 }
 
+// NewListRepositoriesRequest constructs an http.Request for the ListRepositories method
+func NewListRepositoriesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateRepositoryRequest calls the generic CreateRepository builder with application/json body
+func NewCreateRepositoryRequest(server string, body CreateRepositoryJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRepositoryRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewCreateRepositoryRequestWithBody constructs an http.Request for the CreateRepository method, with any body, and a specified content type
+func NewCreateRepositoryRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRemoveRepositoryRequest constructs an http.Request for the RemoveRepository method
+func NewRemoveRepositoryRequest(server string, repositoryID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "repositoryId", repositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetHealthRequest constructs an http.Request for the GetHealth method
 func NewGetHealthRequest(server string) (*http.Request, error) {
 	var err error
@@ -431,6 +730,42 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/controllers/{clusterName}/poll (the `PollForControllerWork` operationId).
 	PollForControllerWorkWithResponse(ctx context.Context, clusterName string, params *PollForControllerWorkParams, reqEditors ...RequestEditorFn) (*PollForControllerWorkResponse, error)
+
+	// ListRepositoriesWithResponse List repositories
+	//
+	// Lists active repository registrations ordered by name.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
+	ListRepositoriesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRepositoriesResponse, error)
+
+	// CreateRepositoryWithBodyWithResponse Register a repository
+	//
+	// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+	CreateRepositoryWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRepositoryResponse, error)
+
+	// CreateRepositoryWithResponse Register a repository
+	//
+	// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+	CreateRepositoryWithResponse(ctx context.Context, body CreateRepositoryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRepositoryResponse, error)
+
+	// RemoveRepositoryWithResponse Remove a repository
+	//
+	// Removes a repository from the active set without erasing its durable identity or future historical references.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/repositories/{repositoryId} (the `RemoveRepository` operationId).
+	RemoveRepositoryWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveRepositoryResponse, error)
 
 	// GetHealthWithResponse Check server health
 	//
@@ -559,6 +894,199 @@ func (r PollForControllerWorkResponse) ContentType() string {
 	return ""
 }
 
+type ListRepositoriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RepositoryList
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRepositoriesResponse) GetJSON200() *RepositoryList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListRepositoriesResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListRepositoriesResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRepositoriesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRepositoriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRepositoriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRepositoriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreateRepositoryResponse201Headers the declared response headers of an HTTP 201 response for CreateRepository
+type CreateRepositoryResponse201Headers struct {
+	Location *string
+}
+
+type CreateRepositoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Repository
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreateRepositoryResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateRepositoryResponse) GetJSON201() *Repository {
+	return r.JSON201
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CreateRepositoryResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r CreateRepositoryResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CreateRepositoryResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CreateRepositoryResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateRepositoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRepositoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRepositoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateRepositoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RemoveRepositoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RemoveRepositoryResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RemoveRepositoryResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r RemoveRepositoryResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RemoveRepositoryResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RemoveRepositoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RemoveRepositoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RemoveRepositoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RemoveRepositoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -635,6 +1163,66 @@ func (c *ClientWithResponses) PollForControllerWorkWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParsePollForControllerWorkResponse(rsp)
+}
+
+// ListRepositoriesWithResponse List repositories
+//
+// Lists active repository registrations ordered by name.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
+func (c *ClientWithResponses) ListRepositoriesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRepositoriesResponse, error) {
+	rsp, err := c.ListRepositories(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRepositoriesResponse(rsp)
+}
+
+// CreateRepositoryWithBodyWithResponse Register a repository
+//
+// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+func (c *ClientWithResponses) CreateRepositoryWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRepositoryResponse, error) {
+	rsp, err := c.CreateRepositoryWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRepositoryResponse(rsp)
+}
+
+// CreateRepositoryWithResponse Register a repository
+//
+// Registers one Git repository and branch for later refresh. Credential name fields refer to configured secret sources; secret values are not accepted.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/repositories (the `CreateRepository` operationId).
+func (c *ClientWithResponses) CreateRepositoryWithResponse(ctx context.Context, body CreateRepositoryJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRepositoryResponse, error) {
+	rsp, err := c.CreateRepository(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRepositoryResponse(rsp)
+}
+
+// RemoveRepositoryWithResponse Remove a repository
+//
+// Removes a repository from the active set without erasing its durable identity or future historical references.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/repositories/{repositoryId} (the `RemoveRepository` operationId).
+func (c *ClientWithResponses) RemoveRepositoryWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveRepositoryResponse, error) {
+	rsp, err := c.RemoveRepository(ctx, repositoryID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRemoveRepositoryResponse(rsp)
 }
 
 // GetHealthWithResponse Check server health
@@ -742,6 +1330,163 @@ func ParsePollForControllerWorkResponse(rsp *http.Response) (*PollForControllerW
 	return response, nil
 }
 
+// ParseListRepositoriesResponse parses an HTTP response from a ListRepositoriesWithResponse call
+func ParseListRepositoriesResponse(rsp *http.Response) (*ListRepositoriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRepositoriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RepositoryList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateRepositoryResponse parses an HTTP response from a CreateRepositoryWithResponse call
+func ParseCreateRepositoryResponse(rsp *http.Response) (*CreateRepositoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRepositoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Repository
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreateRepositoryResponse201Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseRemoveRepositoryResponse parses an HTTP response from a RemoveRepositoryWithResponse call
+func ParseRemoveRepositoryResponse(rsp *http.Response) (*RemoveRepositoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RemoveRepositoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -783,6 +1528,15 @@ type ServerInterface interface {
 	// PollForControllerWork Poll for controller work
 	// (POST /api/v1/controllers/{clusterName}/poll)
 	PollForControllerWork(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerWorkParams)
+	// ListRepositories List repositories
+	// (GET /api/v1/repositories)
+	ListRepositories(w http.ResponseWriter, r *http.Request)
+	// CreateRepository Register a repository
+	// (POST /api/v1/repositories)
+	CreateRepository(w http.ResponseWriter, r *http.Request)
+	// RemoveRepository Remove a repository
+	// (DELETE /api/v1/repositories/{repositoryId})
+	RemoveRepository(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -844,6 +1598,60 @@ func (siw *ServerInterfaceWrapper) PollForControllerWork(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PollForControllerWork(w, r, clusterName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositories operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositories(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositories(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRepository operation middleware
+func (siw *ServerInterfaceWrapper) CreateRepository(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRepository(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveRepository operation middleware
+func (siw *ServerInterfaceWrapper) RemoveRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveRepository(w, r, repositoryID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -988,6 +1796,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/healthz", wrapper.GetHealth)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories", wrapper.ListRepositories)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/controllers/{clusterName}/poll", wrapper.PollForControllerWork)
 
@@ -1116,6 +1927,215 @@ func (response PollForControllerWork500ApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type ListRepositoriesRequestObject struct {
+}
+
+type ListRepositoriesResponseObject interface {
+	VisitListRepositoriesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositories200JSONResponse RepositoryList
+
+func (response ListRepositories200JSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositories405ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositories500ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryRequestObject struct {
+	Body *CreateRepositoryJSONRequestBody
+}
+
+type CreateRepositoryResponseObject interface {
+	VisitCreateRepositoryResponse(w http.ResponseWriter) error
+}
+
+type CreateRepository201ResponseHeaders struct {
+	Location *string
+}
+
+type CreateRepository201JSONResponse struct {
+	Body    Repository
+	Headers CreateRepository201ResponseHeaders
+}
+
+func (response CreateRepository201JSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository400ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository400ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository405ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository405ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository409ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository500ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository500ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRepositoryRequestObject struct {
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+}
+
+type RemoveRepositoryResponseObject interface {
+	VisitRemoveRepositoryResponse(w http.ResponseWriter) error
+}
+
+type RemoveRepository204Response struct {
+}
+
+func (response RemoveRepository204Response) VisitRemoveRepositoryResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveRepository400ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveRepository400ApplicationProblemPlusJSONResponse) VisitRemoveRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRepository404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveRepository404ApplicationProblemPlusJSONResponse) VisitRemoveRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRepository405ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveRepository405ApplicationProblemPlusJSONResponse) VisitRemoveRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRepository500ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveRepository500ApplicationProblemPlusJSONResponse) VisitRemoveRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -1159,6 +2179,15 @@ type StrictServerInterface interface {
 	// PollForControllerWork Poll for controller work
 	// (POST /api/v1/controllers/{clusterName}/poll)
 	PollForControllerWork(ctx context.Context, request PollForControllerWorkRequestObject) (PollForControllerWorkResponseObject, error)
+	// ListRepositories List repositories
+	// (GET /api/v1/repositories)
+	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
+	// CreateRepository Register a repository
+	// (POST /api/v1/repositories)
+	CreateRepository(ctx context.Context, request CreateRepositoryRequestObject) (CreateRepositoryResponseObject, error)
+	// RemoveRepository Remove a repository
+	// (DELETE /api/v1/repositories/{repositoryId})
+	RemoveRepository(ctx context.Context, request RemoveRepositoryRequestObject) (RemoveRepositoryResponseObject, error)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -1247,6 +2276,87 @@ func (sh *strictHandler) PollForControllerWork(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PollForControllerWorkResponseObject); ok {
 		if err := validResponse.VisitPollForControllerWorkResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositories operation middleware
+func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request) {
+	var request ListRepositoriesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositories(ctx, request.(ListRepositoriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositories")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoriesResponseObject); ok {
+		if err := validResponse.VisitListRepositoriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRepository operation middleware
+func (sh *strictHandler) CreateRepository(w http.ResponseWriter, r *http.Request) {
+	var request CreateRepositoryRequestObject
+
+	var body CreateRepositoryJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRepository(ctx, request.(CreateRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRepositoryResponseObject); ok {
+		if err := validResponse.VisitCreateRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveRepository operation middleware
+func (sh *strictHandler) RemoveRepository(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID) {
+	var request RemoveRepositoryRequestObject
+
+	request.RepositoryID = repositoryID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveRepository(ctx, request.(RemoveRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveRepositoryResponseObject); ok {
+		if err := validResponse.VisitRemoveRepositoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

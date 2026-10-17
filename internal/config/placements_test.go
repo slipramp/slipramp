@@ -17,7 +17,7 @@ func TestLoadServerPlacementsFile(t *testing.T) {
 
 	path := writePlacementsFile(t, `
 apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements:
   infrastructure-admin:
     cluster: colo
@@ -154,7 +154,7 @@ func TestLoadServerRejectsInvalidPlacementsFile(t *testing.T) {
 			name: "duplicate placement",
 			contents: `
 apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements:
   infrastructure:
     cluster: colo
@@ -168,7 +168,7 @@ placements:
 		{
 			name: "missing API version",
 			contents: `
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements: {}
 `,
 			wantError: "apiVersion",
@@ -177,7 +177,7 @@ placements: {}
 			name: "unsupported API version",
 			contents: `
 apiVersion: slipramp.com/v2
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements: {}
 `,
 			wantError: "apiVersion",
@@ -195,7 +195,7 @@ placements: {}
 			name: "missing placements",
 			contents: `
 apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfiguration
+kind: PlacementConfig
 `,
 			wantError: "must define placements",
 		},
@@ -221,7 +221,7 @@ placements: {}
 			name: "invalid placement name",
 			contents: `
 apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements:
   Infrastructure:
     cluster: colo
@@ -317,7 +317,7 @@ func TestLoadServerRejectsUnreadablePlacementsFile(t *testing.T) {
 func validPlacementsFile(extra string) string {
 	return `
 apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements:
   infrastructure:
     cluster: colo

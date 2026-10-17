@@ -19,7 +19,7 @@ import (
 const (
 	serverPlacementsFileEnvironment = "SLIPRAMP_PLACEMENTS_FILE"
 	placementsAPIVersion            = "slipramp.com/v1alpha1"
-	placementsKind                  = "PlacementConfiguration"
+	placementsKind                  = "PlacementConfig"
 )
 
 type placementsDocument struct {

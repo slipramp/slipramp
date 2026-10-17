@@ -4,10 +4,9 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestSetOwnsConfiguration(t *testing.T) {
+func TestSetOwnsConfig(t *testing.T) {
 	t.Parallel()
 
 	configured := map[string]Config{
@@ -19,9 +18,7 @@ func TestSetOwnsConfiguration(t *testing.T) {
 				Requests: map[string]string{"cpu": "100m"},
 			},
 			PodTemplate: &corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"identity": "enabled"},
-				},
+				Labels: map[string]string{"identity": "enabled"},
 			},
 		},
 	}

@@ -34,6 +34,45 @@ export type Problem = {
   instance?: string;
 };
 
+export type Repository = RepositoryConfig & {
+  /**
+   * Stable identity of the repository registration.
+   */
+  id: string;
+  /**
+   * Time at which the repository was registered.
+   */
+  createdAt: string;
+  refresh: RepositoryRefresh;
+};
+
+export type RepositoryList = {
+  items: Array<Repository>;
+};
+
+export type RepositoryConfig = {
+  /**
+   * Unique human-readable name of the active repository.
+   */
+  name: string;
+  /**
+   * HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
+   */
+  cloneUrl: string;
+  /**
+   * Git branch tracked by repository refresh.
+   */
+  branch: string;
+  /**
+   * Optional name of a Server credential source used to refresh this repository. The referenced secret value is never persisted in PostgreSQL.
+   */
+  refreshCredentialName?: string;
+  /**
+   * Optional logical credential name resolved by each execution cluster to a cluster-local Kubernetes Secret.
+   */
+  checkoutCredentialName?: string;
+};
+
 export type Cluster = {
   /**
    * Stable logical name of the execution cluster.
@@ -55,6 +94,29 @@ export type Cluster = {
 
 export type ClusterList = {
   items: Array<Cluster>;
+};
+
+export type RepositoryRefresh = {
+  /**
+   * Result of the most recent branch refresh attempt.
+   */
+  status: "pending" | "succeeded" | "failed";
+  /**
+   * Most recently fetched commit, retained when a later refresh fails.
+   */
+  commitSha?: string;
+  /**
+   * Time of the most recent refresh attempt.
+   */
+  attemptedAt?: string;
+  /**
+   * Time of the most recent successful refresh.
+   */
+  succeededAt?: string;
+  /**
+   * Diagnostic from the most recent failed refresh attempt.
+   */
+  failureReason?: string;
 };
 
 export type GetHealthData = {
@@ -81,6 +143,114 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type ListRepositoriesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/repositories";
+};
+
+export type ListRepositoriesErrors = {
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Repository registrations could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListRepositoriesError = ListRepositoriesErrors[keyof ListRepositoriesErrors];
+
+export type ListRepositoriesResponses = {
+  /**
+   * Active repository registrations.
+   */
+  200: RepositoryList;
+};
+
+export type ListRepositoriesResponse = ListRepositoriesResponses[keyof ListRepositoriesResponses];
+
+export type CreateRepositoryData = {
+  body: RepositoryConfig;
+  path?: never;
+  query?: never;
+  url: "/api/v1/repositories";
+};
+
+export type CreateRepositoryErrors = {
+  /**
+   * The repository configuration is invalid.
+   */
+  400: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * An active repository already uses the requested name.
+   */
+  409: Problem;
+  /**
+   * The repository could not be registered.
+   */
+  500: Problem;
+};
+
+export type CreateRepositoryError = CreateRepositoryErrors[keyof CreateRepositoryErrors];
+
+export type CreateRepositoryResponses = {
+  /**
+   * Repository registered.
+   */
+  201: Repository;
+};
+
+export type CreateRepositoryResponse = CreateRepositoryResponses[keyof CreateRepositoryResponses];
+
+export type RemoveRepositoryData = {
+  body?: never;
+  path: {
+    /**
+     * Stable identity of the repository registration.
+     */
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/api/v1/repositories/{repositoryId}";
+};
+
+export type RemoveRepositoryErrors = {
+  /**
+   * The repository identity is not a valid UUID.
+   */
+  400: Problem;
+  /**
+   * The active repository does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The repository could not be removed.
+   */
+  500: Problem;
+};
+
+export type RemoveRepositoryError = RemoveRepositoryErrors[keyof RemoveRepositoryErrors];
+
+export type RemoveRepositoryResponses = {
+  /**
+   * Repository removed.
+   */
+  204: void;
+};
+
+export type RemoveRepositoryResponse = RemoveRepositoryResponses[keyof RemoveRepositoryResponses];
 
 export type ListClustersData = {
   body?: never;

@@ -27,7 +27,7 @@ The initial environment is trusted and single-operator, but the core model shoul
 
 ### Repository
 
-A repository contains versioned target, runtime, and action definitions. Slipramp tracks a configured branch or Git ref and validates the repository as a unit. Each accepted Git commit produces an immutable catalog revision, and the repository exposes its latest valid catalog revision.
+A repository contains versioned target, runtime, and action definitions. Slipramp tracks a configured branch and validates the repository as a unit. Each accepted Git commit produces an immutable catalog revision, and the repository exposes its latest valid catalog revision.
 
 Repositories are accessed through generic Git over SSH or HTTPS. Repository refresh credentials used by the Slipramp Server are named sources mounted into its deployment, such as files or environment variables populated from Kubernetes Secrets; the Server does not read the Kubernetes API to resolve them. Execution-side checkout credentials use logical names that each controller maps to cluster-local Kubernetes Secrets. Each repository tracks one configured branch and is refreshed periodically. Every fetched Git commit is indexed atomically so an invalid commit cannot partially replace the active catalog.
 
@@ -286,7 +286,7 @@ controller:
 
 # Slipramp Server configuration.
 apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfiguration
+kind: PlacementConfig
 placements:
   infrastructure-admin:
     cluster: colo

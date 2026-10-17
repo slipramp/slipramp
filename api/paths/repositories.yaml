@@ -1,0 +1,125 @@
+repositories:
+  get:
+    operationId: listRepositories
+    summary: List repositories
+    description: Lists active repository registrations ordered by name.
+    security: []
+    tags:
+      - Repositories
+    responses:
+      "200":
+        description: Active repository registrations.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/RepositoryList
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Repository registrations could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
+    operationId: createRepository
+    summary: Register a repository
+    description: >-
+      Registers one Git repository and branch for later refresh. Credential
+      name fields refer to configured secret sources; secret values are not
+      accepted.
+    security: []
+    tags:
+      - Repositories
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/repositories.yaml#/RepositoryConfig
+    responses:
+      "201":
+        description: Repository registered.
+        headers:
+          Location:
+            description: URL of the repository registration.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/Repository
+      "400":
+        description: The repository configuration is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: An active repository already uses the requested name.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The repository could not be registered.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+repository:
+  delete:
+    operationId: removeRepository
+    summary: Remove a repository
+    description: >-
+      Removes a repository from the active set without erasing its durable
+      identity or future historical references.
+    security: []
+    tags:
+      - Repositories
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        description: Stable identity of the repository registration.
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "204":
+        description: Repository removed.
+      "400":
+        description: The repository identity is not a valid UUID.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The active repository does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The repository could not be removed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

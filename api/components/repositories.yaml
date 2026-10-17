@@ -1,0 +1,103 @@
+RepositoryConfig:
+  type: object
+  required:
+    - name
+    - cloneUrl
+    - branch
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: Unique human-readable name of the active repository.
+    cloneUrl:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
+    branch:
+      type: string
+      minLength: 1
+      maxLength: 255
+      description: Git branch tracked by repository refresh.
+    refreshCredentialName:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: >-
+        Optional name of a Server credential source used to refresh this
+        repository. The referenced secret value is never persisted in
+        PostgreSQL.
+    checkoutCredentialName:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: >-
+        Optional logical credential name resolved by each execution cluster to
+        a cluster-local Kubernetes Secret.
+
+Repository:
+  allOf:
+    - $ref: "#/RepositoryConfig"
+    - type: object
+      required:
+        - id
+        - createdAt
+        - refresh
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable identity of the repository registration.
+        createdAt:
+          type: string
+          format: date-time
+          description: Time at which the repository was registered.
+        refresh:
+          $ref: "#/RepositoryRefresh"
+
+RepositoryRefresh:
+  type: object
+  required:
+    - status
+  properties:
+    status:
+      type: string
+      enum:
+        - pending
+        - succeeded
+        - failed
+      x-enum-varnames:
+        - RepositoryRefreshStatusPending
+        - RepositoryRefreshStatusSucceeded
+        - RepositoryRefreshStatusFailed
+      description: Result of the most recent branch refresh attempt.
+    commitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+      description: Most recently fetched commit, retained when a later refresh fails.
+    attemptedAt:
+      type: string
+      format: date-time
+      description: Time of the most recent refresh attempt.
+    succeededAt:
+      type: string
+      format: date-time
+      description: Time of the most recent successful refresh.
+    failureReason:
+      type: string
+      minLength: 1
+      description: Diagnostic from the most recent failed refresh attempt.
+
+RepositoryList:
+  type: object
+  required:
+    - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/Repository"

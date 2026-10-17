@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+var _ cluster.Store = (*Database)(nil)
+
 func (d *Database) RecordClusterObservation(
 	ctx context.Context,
 	clusterName string,
