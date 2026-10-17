@@ -64,6 +64,7 @@ Target:
     - metadata
     - spec
     - source
+    - status
   properties:
     apiVersion:
       type: string
@@ -83,6 +84,21 @@ Target:
       $ref: "#/TargetSpec"
     source:
       $ref: "#/CatalogSource"
+    status:
+      $ref: "#/TargetStatus"
+
+TargetStatus:
+  type: object
+  required:
+    - desiredCommitSha
+  properties:
+    desiredCommitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+      description: >-
+        Latest accepted Git commit whose changed paths matched this target's
+        watch patterns, or the commit where the target most recently became
+        active.
 
 ResourceMetadata:
   type: object

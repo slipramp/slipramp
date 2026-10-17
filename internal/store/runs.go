@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -18,6 +19,61 @@ import (
 )
 
 var _ run.Store = (*Database)(nil)
+
+func (d *Database) GetRun(
+	ctx context.Context,
+	runID uuid.UUID,
+) (run.Run, error) {
+	row, err := d.queries.GetRun(ctx, databaseUUID(runID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return run.Run{}, run.ErrRunNotFound
+	}
+	if err != nil {
+		return run.Run{}, fmt.Errorf("get Run: %w", err)
+	}
+
+	record, err := runFromRow(row)
+	if err != nil {
+		return run.Run{}, err
+	}
+
+	return record, nil
+}
+
+func (d *Database) GetArtifactInputCandidate(
+	ctx context.Context,
+	artifactID uuid.UUID,
+) (run.ArtifactInput, error) {
+	row, err := d.queries.GetArtifactInputCandidate(ctx, databaseUUID(artifactID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return run.ArtifactInput{}, run.ErrArtifactNotFound
+	}
+	if err != nil {
+		return run.ArtifactInput{}, fmt.Errorf("get artifact input candidate: %w", err)
+	}
+	if row.State != "sealed" || row.Sha256 == nil {
+		return run.ArtifactInput{}, fmt.Errorf(
+			"%w: artifact is not sealed",
+			run.ErrInvalidInputs,
+		)
+	}
+
+	return run.ArtifactInput{
+		ArtifactID:        uuid.UUID(row.ArtifactID.Bytes),
+		ProducerRunID:     uuid.UUID(row.ProducerRunID.Bytes),
+		Name:              row.Name,
+		MediaType:         row.MediaType,
+		SizeBytes:         row.SizeBytes,
+		SHA256:            *row.Sha256,
+		Sensitive:         row.Sensitive,
+		RetentionState:    row.RetentionState,
+		RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
+		CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
+		CommitSHA:         row.CommitSha,
+		TargetName:        row.TargetName,
+		ActionName:        row.ActionName,
+	}, nil
+}
 
 func (d *Database) GetRunByIdempotencyKey(
 	ctx context.Context,
@@ -102,6 +158,20 @@ func (d *Database) CreateRun(
 	}
 	if err != nil {
 		return run.Run{}, fmt.Errorf("insert run: %w", err)
+	}
+
+	for _, inputName := range slices.Sorted(maps.Keys(record.Snapshot.Inputs)) {
+		input := record.Snapshot.Inputs[inputName]
+		if err := queries.CreateRunArtifactInput(
+			ctx,
+			storedb.CreateRunArtifactInputParams{
+				RunID:      databaseUUID(record.ID),
+				InputName:  inputName,
+				ArtifactID: databaseUUID(input.ArtifactID),
+			},
+		); err != nil {
+			return run.Run{}, fmt.Errorf("record Run artifact input %q: %w", inputName, err)
+		}
 	}
 
 	if err := queries.CreateRunPhaseTransition(

@@ -61,7 +61,9 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		&recordingClusterService{},
 		nil,
 		nil,
+		nil,
 		runs,
+		nil,
 		nil,
 	).ServeHTTP(response, request)
 
@@ -148,7 +150,9 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 				&recordingClusterService{},
 				nil,
 				nil,
+				nil,
 				&recordingRunService{err: test.err},
+				nil,
 				nil,
 			).ServeHTTP(response, request)
 
@@ -186,7 +190,9 @@ func TestCancelRun(t *testing.T) {
 		&recordingClusterService{},
 		nil,
 		nil,
+		nil,
 		runs,
+		nil,
 		nil,
 	).ServeHTTP(response, request)
 
@@ -236,7 +242,9 @@ func TestCancelRunMapsExpectedFailures(t *testing.T) {
 				&recordingClusterService{},
 				nil,
 				nil,
+				nil,
 				&recordingRunService{cancelError: test.err},
+				nil,
 				nil,
 			).ServeHTTP(response, request)
 

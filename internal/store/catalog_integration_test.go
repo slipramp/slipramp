@@ -99,6 +99,11 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 
 	assertActiveCatalog(t, database, repositoryID, revisionAID, commitA)
 	assertCatalogCounts(t, database, repositoryID, 1, 1, 1)
+	activeAfterRejection, err := database.GetActiveCatalogRevision(ctx, repositoryID)
+	if err != nil {
+		t.Fatalf("load catalog after rejection: %v", err)
+	}
+	assertDesiredCommit(t, activeAfterRejection, "network", commitA)
 
 	repositories, err := database.ListRepositories(ctx)
 	if err != nil {
@@ -143,6 +148,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 		recoveredAt.Add(time.Minute),
 		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203"),
 	)
+	duplicate.Revision.Catalog = persistedCatalog("2")
 	if err := database.RecordRepositoryRefresh(
 		ctx,
 		repositoryID,
@@ -234,6 +240,127 @@ func TestGetActiveCatalogRevisionRequiresActiveAcceptedCatalog(
 	}
 }
 
+func TestCatalogRefreshTracksTargetDesiredCommitsIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1300")
+	createdAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
+	_, err := database.CreateRepository(ctx, repository.Repository{
+		Name:      "desired-commits",
+		CloneURL:  "https://github.com/example/desired-commits.git",
+		Branch:    "main",
+		ID:        repositoryID,
+		CreatedAt: createdAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateRepository() error = %v", err)
+	}
+
+	commitA := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	first := successfulCatalogRefresh(
+		commitA,
+		createdAt.Add(time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1301"),
+	)
+	first.Revision.Catalog.Targets = []catalog.Target{
+		testCatalogTarget("network", "infrastructure/network/**"),
+		testCatalogTarget("operations", "operations/**"),
+	}
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, first); err != nil {
+		t.Fatalf("record first catalog: %v", err)
+	}
+
+	active, err := database.GetActiveCatalogRevision(ctx, repositoryID)
+	if err != nil {
+		t.Fatalf("load first catalog: %v", err)
+	}
+	assertDesiredCommit(t, active, "network", commitA)
+	assertDesiredCommit(t, active, "operations", commitA)
+
+	commitB := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	second := successfulCatalogRefresh(
+		commitB,
+		createdAt.Add(2*time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1302"),
+	)
+	second.ChangedPaths = []string{"docs/README.md"}
+	second.Revision.Catalog.Targets = []catalog.Target{
+		testCatalogTarget("network", "infrastructure/network/**"),
+		testCatalogTarget("operations", "operations/**"),
+	}
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, second); err != nil {
+		t.Fatalf("record unrelated catalog change: %v", err)
+	}
+
+	active, err = database.GetActiveCatalogRevision(ctx, repositoryID)
+	if err != nil {
+		t.Fatalf("load second catalog: %v", err)
+	}
+	assertDesiredCommit(t, active, "network", commitA)
+	assertDesiredCommit(t, active, "operations", commitA)
+
+	commitC := "cccccccccccccccccccccccccccccccccccccccc"
+	third := successfulCatalogRefresh(
+		commitC,
+		createdAt.Add(3*time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1303"),
+	)
+	third.ChangedPaths = []string{"infrastructure/network/main.tf"}
+	third.Revision.Catalog.Targets = []catalog.Target{
+		testCatalogTarget("network", "infrastructure/network/**"),
+		testCatalogTarget("operations", "operations/**"),
+	}
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, third); err != nil {
+		t.Fatalf("record matching catalog change: %v", err)
+	}
+
+	active, err = database.GetActiveCatalogRevision(ctx, repositoryID)
+	if err != nil {
+		t.Fatalf("load third catalog: %v", err)
+	}
+	assertDesiredCommit(t, active, "network", commitC)
+	assertDesiredCommit(t, active, "operations", commitA)
+
+	commitD := "dddddddddddddddddddddddddddddddddddddddd"
+	fourth := successfulCatalogRefresh(
+		commitD,
+		createdAt.Add(4*time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1304"),
+	)
+	fourth.Revision.Catalog.Targets = []catalog.Target{
+		testCatalogTarget("operations", "operations/**"),
+	}
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, fourth); err != nil {
+		t.Fatalf("record removed target catalog: %v", err)
+	}
+
+	var (
+		archivedRevision pgtype.UUID
+		archivedAt       pgtype.Timestamptz
+		desiredCommit    string
+	)
+	err = database.pool.QueryRow(
+		ctx,
+		`SELECT catalog_revision_id, archived_at, desired_commit_sha
+         FROM targets
+         WHERE repository_id = $1 AND name = 'network'`,
+		repositoryID,
+	).Scan(&archivedRevision, &archivedAt, &desiredCommit)
+	if err != nil {
+		t.Fatalf("load archived target: %v", err)
+	}
+	if archivedRevision.Valid || !archivedAt.Valid || desiredCommit != commitC {
+		t.Errorf(
+			"archived target = (%#v, %#v, %q), want archived at %q",
+			archivedRevision,
+			archivedAt,
+			desiredCommit,
+			commitC,
+		)
+	}
+}
+
 func successfulCatalogRefresh(
 	commitSHA string,
 	attemptedAt time.Time,
@@ -271,6 +398,7 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 			Spec: catalog.TargetSpec{
 				Runtime:   "terraform",
 				Placement: "infrastructure",
+				Watch:     []string{"infrastructure/network/**"},
 				Actions: map[string]catalog.Action{
 					"preview": {Command: []string{"terraform", "plan"}},
 				},
@@ -280,6 +408,43 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 				Document: 2,
 			},
 		}},
+	}
+}
+
+func testCatalogTarget(name, watch string) catalog.Target {
+	return catalog.Target{
+		APIVersion: catalog.APIVersion,
+		Kind:       catalog.TargetKind,
+		Metadata:   catalog.Metadata{Name: name},
+		Spec: catalog.TargetSpec{
+			Watch: []string{watch},
+			Actions: map[string]catalog.Action{
+				"inspect": {Command: []string{"inspect"}},
+			},
+		},
+		Source: catalog.Source{Path: ".slipramp/targets.yaml", Document: 1},
+	}
+}
+
+func assertDesiredCommit(
+	t *testing.T,
+	revision catalog.Revision,
+	targetName string,
+	want string,
+) {
+	t.Helper()
+
+	state, found := revision.TargetStates[targetName]
+	if !found {
+		t.Fatalf("target state %q was not loaded", targetName)
+	}
+	if state.DesiredCommitSHA != want {
+		t.Errorf(
+			"target %q desired commit = %q, want %q",
+			targetName,
+			state.DesiredCommitSHA,
+			want,
+		)
 	}
 }
 

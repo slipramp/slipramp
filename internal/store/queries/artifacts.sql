@@ -1,3 +1,8 @@
+-- name: GetArtifactRunClusterName :one
+SELECT cluster_name
+FROM runs
+WHERE id = sqlc.arg(run_id);
+
 -- name: CreateArtifact :one
 INSERT INTO artifacts (
     id,
@@ -47,6 +52,28 @@ FROM artifacts
 WHERE run_id = sqlc.arg(run_id)
 ORDER BY created_at, id;
 
+-- name: GetArtifactProvenance :one
+SELECT
+    repository_id,
+    catalog_revision_id,
+    commit_sha,
+    target_name,
+    action_name
+FROM runs
+WHERE id = sqlc.arg(run_id);
+
+-- name: GetRunArtifactContext :one
+SELECT cluster_name, snapshot
+FROM runs
+WHERE id = sqlc.arg(run_id);
+
+-- name: GetRunInputArtifact :one
+SELECT artifacts.*
+FROM run_artifact_inputs
+JOIN artifacts ON artifacts.id = run_artifact_inputs.artifact_id
+WHERE run_artifact_inputs.run_id = sqlc.arg(run_id)
+  AND run_artifact_inputs.input_name = sqlc.arg(input_name);
+
 -- name: CreateArtifactLogChunk :one
 INSERT INTO artifact_log_chunks (
     artifact_id,
@@ -67,6 +94,27 @@ WHERE id = sqlc.arg(artifact_id)
   AND kind = 'log'
 RETURNING *;
 
+-- name: LockArtifactForLogAppend :one
+SELECT *
+FROM artifacts
+WHERE id = sqlc.arg(id)
+  AND kind = 'log'
+FOR UPDATE;
+
+-- name: AdvanceArtifactLogSize :exec
+UPDATE artifacts
+SET size_bytes = sqlc.arg(next_offset_bytes)
+WHERE id = sqlc.arg(id);
+
+-- name: SealArtifact :one
+UPDATE artifacts
+SET state = 'sealed',
+    size_bytes = sqlc.arg(size_bytes),
+    sha256 = sqlc.arg(sha256),
+    sealed_at = sqlc.arg(sealed_at)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
 -- name: GetArtifactLogChunk :one
 SELECT *
 FROM artifact_log_chunks
@@ -77,5 +125,5 @@ WHERE artifact_id = sqlc.arg(artifact_id)
 SELECT *
 FROM artifact_log_chunks
 WHERE artifact_id = sqlc.arg(artifact_id)
-  AND offset_bytes >= sqlc.arg(from_offset_bytes)
+  AND offset_bytes + size_bytes > sqlc.arg(from_offset_bytes)
 ORDER BY offset_bytes;

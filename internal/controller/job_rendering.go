@@ -35,6 +35,11 @@ const (
 	managedByLabelValue         = "slipramp-controller"
 	runIDLabel                  = "slipramp.com/run-id"
 	clusterLabel                = "slipramp.com/cluster"
+	serverURLEnvironment        = "SLIPRAMP_SERVER_URL"
+	runIDEnvironment            = "SLIPRAMP_RUN_ID"
+	artifactTokenEnvironment    = "SLIPRAMP_ARTIFACT_TOKEN"
+	artifactsEnvironment        = "SLIPRAMP_ARTIFACTS"
+	artifactInputsEnvironment   = "SLIPRAMP_ARTIFACT_INPUTS"
 )
 
 //go:embed scripts/checkout.sh
@@ -81,7 +86,7 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 	}
 	volumes = append(volumes, checkoutVolumes...)
 
-	action, credentialVolumes, err := actionContainer(assignment)
+	action, credentialVolumes, err := actionContainer(config, assignment)
 	if err != nil {
 		return nil, err
 	}
@@ -224,10 +229,16 @@ func checkoutContainer(
 }
 
 func actionContainer(
+	config Config,
 	assignment api.RunAssignment,
 ) (corev1.Container, []corev1.Volume, error) {
 	arguments := append([]string(nil), assignment.Action.Command...)
 	environment := make([]corev1.EnvVar, 0)
+	artifactEnvironment, err := assignmentArtifactEnvironment(config, assignment)
+	if err != nil {
+		return corev1.Container{}, nil, err
+	}
+	environment = append(environment, artifactEnvironment...)
 
 	if assignment.Runtime.Environment != nil {
 		for _, name := range slices.Sorted(maps.Keys(*assignment.Runtime.Environment)) {
@@ -284,6 +295,28 @@ func actionContainer(
 		Resources:    resources,
 		VolumeMounts: volumeMounts,
 	}, credentials.volumes, nil
+}
+
+func assignmentArtifactEnvironment(
+	config Config,
+	assignment api.RunAssignment,
+) ([]corev1.EnvVar, error) {
+	artifacts, err := json.Marshal(assignment.Action.Artifacts)
+	if err != nil {
+		return nil, fmt.Errorf("encode artifact declarations: %w", err)
+	}
+	inputs, err := json.Marshal(assignment.Action.Inputs)
+	if err != nil {
+		return nil, fmt.Errorf("encode artifact input declarations: %w", err)
+	}
+
+	return []corev1.EnvVar{
+		{Name: serverURLEnvironment, Value: config.ServerURL},
+		{Name: runIDEnvironment, Value: assignment.ID.String()},
+		{Name: artifactTokenEnvironment, Value: assignment.ArtifactAccess.Token},
+		{Name: artifactsEnvironment, Value: string(artifacts)},
+		{Name: artifactInputsEnvironment, Value: string(inputs)},
+	}, nil
 }
 
 func assignmentParameters(

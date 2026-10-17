@@ -118,6 +118,9 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
               {actions.length} actions
             </Badge>
             <Text c="dimmed" size="xs">
+              Desired <Code>{shortCommit(target.status.desiredCommitSha)}</Code>
+            </Text>
+            <Text c="dimmed" size="xs">
               Catalog <Code>{shortCommit(loaderData.catalog.commitSha)}</Code>
             </Text>
           </Stack>

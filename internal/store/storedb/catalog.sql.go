@@ -40,6 +40,27 @@ func (q *Queries) ActivateCatalogRevision(ctx context.Context, arg ActivateCatal
 	return err
 }
 
+const archiveMissingTargets = `-- name: ArchiveMissingTargets :exec
+UPDATE targets
+SET catalog_revision_id = NULL,
+    updated_at = $1,
+    archived_at = $1
+WHERE repository_id = $2
+  AND archived_at IS NULL
+  AND NOT (name = ANY($3::text[]))
+`
+
+type ArchiveMissingTargetsParams struct {
+	UpdatedAt    pgtype.Timestamptz
+	RepositoryID pgtype.UUID
+	ActiveNames  []string
+}
+
+func (q *Queries) ArchiveMissingTargets(ctx context.Context, arg ArchiveMissingTargetsParams) error {
+	_, err := q.db.Exec(ctx, archiveMissingTargets, arg.UpdatedAt, arg.RepositoryID, arg.ActiveNames)
+	return err
+}
+
 const createCatalogRevision = `-- name: CreateCatalogRevision :exec
 INSERT INTO catalog_revisions (
     id,
@@ -185,6 +206,31 @@ func (q *Queries) GetActiveCatalogRevision(ctx context.Context, repositoryID pgt
 	return i, err
 }
 
+const getCatalogRevision = `-- name: GetCatalogRevision :one
+SELECT id, commit_sha, created_at
+FROM catalog_revisions
+WHERE id = $1
+  AND repository_id = $2
+`
+
+type GetCatalogRevisionParams struct {
+	ID           pgtype.UUID
+	RepositoryID pgtype.UUID
+}
+
+type GetCatalogRevisionRow struct {
+	ID        pgtype.UUID
+	CommitSha string
+	CreatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) GetCatalogRevision(ctx context.Context, arg GetCatalogRevisionParams) (GetCatalogRevisionRow, error) {
+	row := q.db.QueryRow(ctx, getCatalogRevision, arg.ID, arg.RepositoryID)
+	var i GetCatalogRevisionRow
+	err := row.Scan(&i.ID, &i.CommitSha, &i.CreatedAt)
+	return i, err
+}
+
 const listCatalogRuntimes = `-- name: ListCatalogRuntimes :many
 SELECT definition
 FROM catalog_runtimes
@@ -212,6 +258,39 @@ func (q *Queries) ListCatalogRuntimes(ctx context.Context, catalogRevisionID pgt
 	return items, nil
 }
 
+const listCatalogTargetStates = `-- name: ListCatalogTargetStates :many
+SELECT name, desired_commit_sha
+FROM targets
+WHERE catalog_revision_id = $1
+  AND archived_at IS NULL
+ORDER BY name
+`
+
+type ListCatalogTargetStatesRow struct {
+	Name             string
+	DesiredCommitSha string
+}
+
+func (q *Queries) ListCatalogTargetStates(ctx context.Context, catalogRevisionID pgtype.UUID) ([]ListCatalogTargetStatesRow, error) {
+	rows, err := q.db.Query(ctx, listCatalogTargetStates, catalogRevisionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCatalogTargetStatesRow
+	for rows.Next() {
+		var i ListCatalogTargetStatesRow
+		if err := rows.Scan(&i.Name, &i.DesiredCommitSha); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCatalogTargets = `-- name: ListCatalogTargets :many
 SELECT definition
 FROM catalog_targets
@@ -232,6 +311,39 @@ func (q *Queries) ListCatalogTargets(ctx context.Context, catalogRevisionID pgty
 			return nil, err
 		}
 		items = append(items, definition)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRepositoryTargetStates = `-- name: ListRepositoryTargetStates :many
+SELECT name, desired_commit_sha, archived_at
+FROM targets
+WHERE repository_id = $1
+ORDER BY name
+`
+
+type ListRepositoryTargetStatesRow struct {
+	Name             string
+	DesiredCommitSha string
+	ArchivedAt       pgtype.Timestamptz
+}
+
+func (q *Queries) ListRepositoryTargetStates(ctx context.Context, repositoryID pgtype.UUID) ([]ListRepositoryTargetStatesRow, error) {
+	rows, err := q.db.Query(ctx, listRepositoryTargetStates, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRepositoryTargetStatesRow
+	for rows.Next() {
+		var i ListRepositoryTargetStatesRow
+		if err := rows.Scan(&i.Name, &i.DesiredCommitSha, &i.ArchivedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -282,6 +394,50 @@ func (q *Queries) RecordCatalogValidationFailure(ctx context.Context, arg Record
 		arg.CommitSha,
 		arg.RecordedAt,
 		arg.FailureReason,
+	)
+	return err
+}
+
+const upsertTargetState = `-- name: UpsertTargetState :exec
+INSERT INTO targets (
+    repository_id,
+    name,
+    catalog_revision_id,
+    desired_commit_sha,
+    created_at,
+    updated_at,
+    archived_at
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $5,
+    NULL
+)
+ON CONFLICT (repository_id, name) DO UPDATE
+SET catalog_revision_id = EXCLUDED.catalog_revision_id,
+    desired_commit_sha = EXCLUDED.desired_commit_sha,
+    updated_at = EXCLUDED.updated_at,
+    archived_at = NULL
+`
+
+type UpsertTargetStateParams struct {
+	RepositoryID      pgtype.UUID
+	Name              string
+	CatalogRevisionID pgtype.UUID
+	DesiredCommitSha  string
+	UpdatedAt         pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertTargetState(ctx context.Context, arg UpsertTargetStateParams) error {
+	_, err := q.db.Exec(ctx, upsertTargetState,
+		arg.RepositoryID,
+		arg.Name,
+		arg.CatalogRevisionID,
+		arg.DesiredCommitSha,
+		arg.UpdatedAt,
 	)
 	return err
 }

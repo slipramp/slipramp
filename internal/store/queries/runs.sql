@@ -43,6 +43,35 @@ FROM runs
 WHERE source_type = sqlc.arg(source_type)
   AND idempotency_key = sqlc.arg(idempotency_key);
 
+-- name: GetRun :one
+SELECT *
+FROM runs
+WHERE id = sqlc.arg(id);
+
+-- name: CreateRunArtifactInput :exec
+INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)
+VALUES (sqlc.arg(run_id), sqlc.arg(input_name), sqlc.arg(artifact_id));
+
+-- name: GetArtifactInputCandidate :one
+SELECT
+    artifacts.id AS artifact_id,
+    artifacts.run_id AS producer_run_id,
+    artifacts.name,
+    artifacts.state,
+    artifacts.media_type,
+    artifacts.size_bytes,
+    artifacts.sha256,
+    artifacts.sensitive,
+    artifacts.retention_state,
+    runs.repository_id,
+    runs.catalog_revision_id,
+    runs.commit_sha,
+    runs.target_name,
+    runs.action_name
+FROM artifacts
+JOIN runs ON runs.id = artifacts.run_id
+WHERE artifacts.id = sqlc.arg(artifact_id);
+
 -- name: GetRunForCancel :one
 SELECT *
 FROM runs

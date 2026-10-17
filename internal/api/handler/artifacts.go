@@ -1,0 +1,366 @@
+package handler
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+
+	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/artifact"
+)
+
+type ArtifactService interface {
+	AppendLogChunk(context.Context, artifact.AppendLogChunkRequest) error
+}
+
+type artifactFeatures interface {
+	GetLogCursor(context.Context, uuid.UUID, string) (artifact.LogCursor, error)
+	SealLog(context.Context, artifact.SealLogRequest) error
+	RunToken(uuid.UUID) string
+	AuthenticateRunToken(uuid.UUID, string) bool
+	Upload(context.Context, artifact.UploadRequest) error
+	List(context.Context, uuid.UUID) ([]artifact.Record, error)
+	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
+	OpenInput(context.Context, uuid.UUID, string) (artifact.Content, error)
+	StreamLog(context.Context, uuid.UUID, int64) (io.ReadCloser, error)
+}
+
+func (h *Handler) artifactFeatures() (artifactFeatures, error) {
+	features, ok := h.artifacts.(artifactFeatures)
+	if !ok {
+		return nil, errors.New("artifact service does not provide artifact transfers")
+	}
+
+	return features, nil
+}
+
+func (h *Handler) AppendRunLogChunk(
+	ctx context.Context,
+	request api.AppendRunLogChunkRequestObject,
+) (api.AppendRunLogChunkResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "A log chunk body is required.")
+		return api.AppendRunLogChunk400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	contents, err := io.ReadAll(io.LimitReader(request.Body, artifact.MaxLogChunkSizeBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read log chunk body: %w", err)
+	}
+	if len(contents) > artifact.MaxLogChunkSizeBytes {
+		problem := NewProblem(http.StatusRequestEntityTooLarge, "The log chunk exceeds the 256 KiB limit.")
+		return api.AppendRunLogChunk413ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	err = h.artifacts.AppendLogChunk(ctx, artifact.AppendLogChunkRequest{
+		RunID:       request.RunID,
+		ClusterName: principal.ClusterName,
+		OffsetBytes: request.Params.OffsetBytes,
+		Contents:    contents,
+	})
+	if err != nil {
+		return appendLogError(err)
+	}
+	if err := h.clusters.RecordControllerContact(ctx, principal.ClusterName); err != nil {
+		return nil, err
+	}
+
+	return api.AppendRunLogChunk204Response{}, nil
+}
+
+func appendLogError(err error) (api.AppendRunLogChunkResponseObject, error) {
+	switch {
+	case errors.Is(err, artifact.ErrInvalid):
+		problem := NewProblem(http.StatusBadRequest, err.Error())
+		return api.AppendRunLogChunk400ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrChunkTooLarge):
+		problem := NewProblem(http.StatusRequestEntityTooLarge, "The log chunk exceeds the 256 KiB limit.")
+		return api.AppendRunLogChunk413ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrNotFound):
+		problem := NewProblem(http.StatusNotFound, "The Run does not exist for this controller.")
+		return api.AppendRunLogChunk404ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrChunkConflict), errors.Is(err, artifact.ErrLogClosed):
+		problem := NewProblem(http.StatusConflict, "The log chunk conflicts with the durable Run log.")
+		return api.AppendRunLogChunk409ApplicationProblemPlusJSONResponse(problem), nil
+	default:
+		return nil, err
+	}
+}
+
+func (h *Handler) GetRunLogCursor(
+	ctx context.Context,
+	request api.GetRunLogCursorRequestObject,
+) (api.GetRunLogCursorResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	features, err := h.artifactFeatures()
+	if err != nil {
+		return nil, err
+	}
+	cursor, err := features.GetLogCursor(ctx, request.RunID, principal.ClusterName)
+	if errors.Is(err, artifact.ErrNotFound) {
+		problem := NewProblem(http.StatusNotFound, "The Run does not exist for this controller.")
+		return api.GetRunLogCursor404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetRunLogCursor200JSONResponse{
+		NextOffsetBytes: cursor.NextOffsetBytes,
+		State:           api.LogCursorState(cursor.State),
+		Sha256:          cursor.SHA256,
+	}, nil
+}
+
+func (h *Handler) SealRunLog(
+	ctx context.Context,
+	request api.SealRunLogRequestObject,
+) (api.SealRunLogResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "A log seal is required.")
+		return api.SealRunLog400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	features, err := h.artifactFeatures()
+	if err != nil {
+		return nil, err
+	}
+	err = features.SealLog(ctx, artifact.SealLogRequest{
+		RunID:       request.RunID,
+		ClusterName: principal.ClusterName,
+		SizeBytes:   request.Body.SizeBytes,
+		SHA256:      request.Body.Sha256,
+	})
+	switch {
+	case err == nil:
+		return api.SealRunLog204Response{}, nil
+	case errors.Is(err, artifact.ErrInvalid):
+		problem := NewProblem(http.StatusBadRequest, err.Error())
+		return api.SealRunLog400ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrNotFound):
+		problem := NewProblem(http.StatusNotFound, "The Run does not exist for this controller.")
+		return api.SealRunLog404ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrSealConflict):
+		problem := NewProblem(http.StatusConflict, "The log seal conflicts with durable bytes.")
+		return api.SealRunLog409ApplicationProblemPlusJSONResponse(problem), nil
+	default:
+		return nil, err
+	}
+}
+
+func (h *Handler) UploadRunArtifact(
+	ctx context.Context,
+	request api.UploadRunArtifactRequestObject,
+) (api.UploadRunArtifactResponseObject, error) {
+	execution, err := currentExecutionRequest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	features, err := h.artifactFeatures()
+	if err != nil {
+		return nil, err
+	}
+	if !features.AuthenticateRunToken(request.RunID, execution.BearerToken) {
+		problem := NewProblem(http.StatusUnauthorized, "The Run artifact credential is invalid.")
+		return api.UploadRunArtifact401ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if request.Body == nil || execution.ContentLength < 0 {
+		problem := NewProblem(http.StatusBadRequest, "A body with Content-Length is required.")
+		return api.UploadRunArtifact400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	err = features.Upload(ctx, artifact.UploadRequest{
+		RunID:     request.RunID,
+		Name:      string(request.ArtifactName),
+		Body:      request.Body,
+		SizeBytes: execution.ContentLength,
+		SHA256:    request.Params.XSliprampContentSHA256,
+	})
+	switch {
+	case err == nil:
+		return api.UploadRunArtifact204Response{}, nil
+	case errors.Is(err, artifact.ErrInvalid):
+		problem := NewProblem(http.StatusBadRequest, err.Error())
+		return api.UploadRunArtifact400ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrNotFound):
+		problem := NewProblem(http.StatusNotFound, "The Run or artifact declaration does not exist.")
+		return api.UploadRunArtifact404ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrChunkConflict):
+		problem := NewProblem(http.StatusConflict, "The artifact already contains different bytes.")
+		return api.UploadRunArtifact409ApplicationProblemPlusJSONResponse(problem), nil
+	default:
+		return nil, err
+	}
+}
+
+func (h *Handler) ListRunArtifacts(
+	ctx context.Context,
+	request api.ListRunArtifactsRequestObject,
+) (api.ListRunArtifactsResponseObject, error) {
+	features, err := h.artifactFeatures()
+	if err != nil {
+		return nil, err
+	}
+	records, err := features.List(ctx, request.RunID)
+	if errors.Is(err, artifact.ErrNotFound) {
+		problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
+		return api.ListRunArtifacts404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]api.Artifact, 0, len(records))
+	for _, record := range records {
+		items = append(items, artifactResponse(record))
+	}
+
+	return api.ListRunArtifacts200JSONResponse{Items: items}, nil
+}
+
+func (h *Handler) DownloadArtifact(
+	ctx context.Context,
+	request api.DownloadArtifactRequestObject,
+) (api.DownloadArtifactResponseObject, error) {
+	features, err := h.artifactFeatures()
+	if err != nil {
+		return nil, err
+	}
+	content, err := features.OpenArtifact(ctx, request.ArtifactID)
+	if errors.Is(err, artifact.ErrNotFound) {
+		problem := NewProblem(http.StatusNotFound, "The artifact does not exist.")
+		return api.DownloadArtifact404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if errors.Is(err, artifact.ErrNotSealed) {
+		problem := NewProblem(http.StatusConflict, "The artifact is not sealed.")
+		return api.DownloadArtifact409ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	disposition := fmt.Sprintf("attachment; filename=%q", content.Artifact.Name)
+	digest := "sha-256=" + *content.Artifact.SHA256
+	return api.DownloadArtifact200ApplicationOctetStreamResponse{
+		Body:          content.Body,
+		ContentLength: content.Artifact.SizeBytes,
+		Headers: api.DownloadArtifact200ResponseHeaders{
+			ContentDisposition: &disposition,
+			Digest:             &digest,
+		},
+	}, nil
+}
+
+func (h *Handler) DownloadRunInput(
+	ctx context.Context,
+	request api.DownloadRunInputRequestObject,
+) (api.DownloadRunInputResponseObject, error) {
+	execution, err := currentExecutionRequest(ctx)
+	if err != nil {
+		return nil, err
+	}
+	features, err := h.artifactFeatures()
+	if err != nil {
+		return nil, err
+	}
+	if !features.AuthenticateRunToken(request.RunID, execution.BearerToken) {
+		problem := NewProblem(http.StatusUnauthorized, "The Run artifact credential is invalid.")
+		return api.DownloadRunInput401ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	content, err := features.OpenInput(ctx, request.RunID, string(request.InputName))
+	if errors.Is(err, artifact.ErrNotFound) || errors.Is(err, artifact.ErrNotSealed) {
+		problem := NewProblem(http.StatusNotFound, "The Run input does not exist.")
+		return api.DownloadRunInput404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	digest := "sha-256=" + *content.Artifact.SHA256
+	return api.DownloadRunInput200ApplicationOctetStreamResponse{
+		Body:          content.Body,
+		ContentLength: content.Artifact.SizeBytes,
+		Headers:       api.DownloadRunInput200ResponseHeaders{Digest: &digest},
+	}, nil
+}
+
+func (h *Handler) StreamRunLog(
+	ctx context.Context,
+	request api.StreamRunLogRequestObject,
+) (api.StreamRunLogResponseObject, error) {
+	offset := int64(0)
+	if request.Params.OffsetBytes != nil {
+		offset = *request.Params.OffsetBytes
+	}
+	if request.Params.LastEventID != nil {
+		parsed, err := strconv.ParseInt(*request.Params.LastEventID, 10, 64)
+		if err != nil || parsed < 0 {
+			problem := NewProblem(http.StatusBadRequest, "Last-Event-ID must be a nonnegative byte offset.")
+			return api.StreamRunLog400ApplicationProblemPlusJSONResponse(problem), nil
+		}
+		if request.Params.OffsetBytes == nil {
+			offset = parsed
+		}
+	}
+
+	features, err := h.artifactFeatures()
+	if err != nil {
+		return nil, err
+	}
+	stream, err := features.StreamLog(ctx, request.RunID, offset)
+	if errors.Is(err, artifact.ErrInvalid) {
+		problem := NewProblem(http.StatusBadRequest, err.Error())
+		return api.StreamRunLog400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if errors.Is(err, artifact.ErrNotFound) {
+		problem := NewProblem(http.StatusNotFound, "The Run log does not exist.")
+		return api.StreamRunLog404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.StreamRunLog200TextEventStreamResponse{Body: stream}, nil
+}
+
+func artifactResponse(record artifact.Record) api.Artifact {
+	return api.Artifact{
+		ID:             record.ID,
+		RunID:          record.RunID,
+		Name:           api.CatalogName(record.Name),
+		Kind:           api.ArtifactKind(record.Kind),
+		State:          api.ArtifactState(record.State),
+		MediaType:      record.MediaType,
+		SizeBytes:      record.SizeBytes,
+		Sha256:         record.SHA256,
+		Sensitive:      record.Sensitive,
+		RetentionState: api.ArtifactRetentionState(record.RetentionState),
+		CreatedAt:      record.CreatedAt,
+		SealedAt:       record.SealedAt,
+		Provenance: api.ArtifactProvenance{
+			ProducerRunID:     record.Provenance.ProducerRunID,
+			RepositoryID:      record.Provenance.RepositoryID,
+			CatalogRevisionID: record.Provenance.CatalogRevisionID,
+			CommitSha:         record.Provenance.CommitSHA,
+			Target:            api.CatalogName(record.Provenance.TargetName),
+			Action:            api.CatalogName(record.Provenance.ActionName),
+		},
+	}
+}

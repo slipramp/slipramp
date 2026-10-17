@@ -21,6 +21,66 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ArtifactKind.
+const (
+	Log    ArtifactKind = "log"
+	Output ArtifactKind = "output"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactKind enum.
+func (e ArtifactKind) Valid() bool {
+	switch e {
+	case Log:
+		return true
+	case Output:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactRetentionState.
+const (
+	ArtifactRetentionStateDeleted  ArtifactRetentionState = "deleted"
+	ArtifactRetentionStateExpired  ArtifactRetentionState = "expired"
+	ArtifactRetentionStateRetained ArtifactRetentionState = "retained"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactRetentionState enum.
+func (e ArtifactRetentionState) Valid() bool {
+	switch e {
+	case ArtifactRetentionStateDeleted:
+		return true
+	case ArtifactRetentionStateExpired:
+		return true
+	case ArtifactRetentionStateRetained:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactState.
+const (
+	ArtifactStateFailed ArtifactState = "failed"
+	ArtifactStateOpen   ArtifactState = "open"
+	ArtifactStateSealed ArtifactState = "sealed"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactState enum.
+func (e ArtifactState) Valid() bool {
+	switch e {
+	case ArtifactStateFailed:
+		return true
+	case ArtifactStateOpen:
+		return true
+	case ArtifactStateSealed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactInputSourceCompatibility.
 const (
 	ArtifactCompatibilityExactCatalogRevision ArtifactInputSourceCompatibility = "exact-catalog-revision"
@@ -81,6 +141,27 @@ const (
 func (e HealthResponseStatus) Valid() bool {
 	switch e {
 	case Ok:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LogCursorState.
+const (
+	LogCursorStateFailed LogCursorState = "failed"
+	LogCursorStateOpen   LogCursorState = "open"
+	LogCursorStateSealed LogCursorState = "sealed"
+)
+
+// Valid indicates whether the value is a known member of the LogCursorState enum.
+func (e LogCursorState) Valid() bool {
+	switch e {
+	case LogCursorStateFailed:
+		return true
+	case LogCursorStateOpen:
+		return true
+	case LogCursorStateSealed:
 		return true
 	default:
 		return false
@@ -177,6 +258,27 @@ func (e RunPhase) Valid() bool {
 	case RunPhaseQueued:
 		return true
 	case RunPhaseRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunArtifactInputRetentionState.
+const (
+	RunArtifactInputRetentionStateDeleted  RunArtifactInputRetentionState = "deleted"
+	RunArtifactInputRetentionStateExpired  RunArtifactInputRetentionState = "expired"
+	RunArtifactInputRetentionStateRetained RunArtifactInputRetentionState = "retained"
+)
+
+// Valid indicates whether the value is a known member of the RunArtifactInputRetentionState enum.
+func (e RunArtifactInputRetentionState) Valid() bool {
+	switch e {
+	case RunArtifactInputRetentionStateDeleted:
+		return true
+	case RunArtifactInputRetentionStateExpired:
+		return true
+	case RunArtifactInputRetentionStateRetained:
 		return true
 	default:
 		return false
@@ -320,6 +422,32 @@ type Action struct {
 	Timeout     *string                         `json:"timeout,omitempty"`
 }
 
+// Artifact defines model for Artifact.
+type Artifact struct {
+	CreatedAt      time.Time              `json:"createdAt"`
+	ID             openapi_types.UUID     `json:"id"`
+	Kind           ArtifactKind           `json:"kind"`
+	MediaType      string                 `json:"mediaType"`
+	Name           CatalogName            `json:"name"`
+	Provenance     ArtifactProvenance     `json:"provenance"`
+	RetentionState ArtifactRetentionState `json:"retentionState"`
+	RunID          openapi_types.UUID     `json:"runId"`
+	SealedAt       *time.Time             `json:"sealedAt,omitempty"`
+	Sensitive      bool                   `json:"sensitive"`
+	Sha256         *string                `json:"sha256,omitempty"`
+	SizeBytes      int64                  `json:"sizeBytes"`
+	State          ArtifactState          `json:"state"`
+}
+
+// ArtifactKind defines model for Artifact.Kind.
+type ArtifactKind string
+
+// ArtifactRetentionState defines model for Artifact.RetentionState.
+type ArtifactRetentionState string
+
+// ArtifactState defines model for Artifact.State.
+type ArtifactState string
+
 // ArtifactDeclaration defines model for ArtifactDeclaration.
 type ArtifactDeclaration struct {
 	MediaType *string `json:"mediaType,omitempty"`
@@ -341,6 +469,21 @@ type ArtifactInputSource struct {
 
 // ArtifactInputSourceCompatibility defines model for ArtifactInputSource.Compatibility.
 type ArtifactInputSourceCompatibility string
+
+// ArtifactList defines model for ArtifactList.
+type ArtifactList struct {
+	Items []Artifact `json:"items"`
+}
+
+// ArtifactProvenance defines model for ArtifactProvenance.
+type ArtifactProvenance struct {
+	Action            CatalogName        `json:"action"`
+	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
+	CommitSha         string             `json:"commitSha"`
+	ProducerRunID     openapi_types.UUID `json:"producerRunId"`
+	RepositoryID      openapi_types.UUID `json:"repositoryId"`
+	Target            CatalogName        `json:"target"`
+}
 
 // CancelRunCommand defines model for CancelRunCommand.
 type CancelRunCommand struct {
@@ -411,6 +554,15 @@ type ControllerCommand struct {
 // ControllerCommandType defines model for ControllerCommand.Type.
 type ControllerCommandType string
 
+// ControllerEnrollment defines model for ControllerEnrollment.
+type ControllerEnrollment struct {
+	// ClusterName Cluster identity authorized by the enrollment credential.
+	ClusterName string `json:"clusterName"`
+
+	// CredentialSha256 SHA-256 digest of the controller-generated bearer credential that will identify this cluster after enrollment.
+	CredentialSha256 string `json:"credentialSha256"`
+}
+
 // CredentialDirectory defines model for CredentialDirectory.
 type CredentialDirectory struct {
 	Mode *uint32 `json:"mode,omitempty"`
@@ -444,6 +596,22 @@ type HealthResponse struct {
 
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
+
+// LogCursor defines model for LogCursor.
+type LogCursor struct {
+	NextOffsetBytes int64          `json:"nextOffsetBytes"`
+	Sha256          *string        `json:"sha256,omitempty"`
+	State           LogCursorState `json:"state"`
+}
+
+// LogCursorState defines model for LogCursor.State.
+type LogCursorState string
+
+// LogSeal defines model for LogSeal.
+type LogSeal struct {
+	Sha256    string `json:"sha256"`
+	SizeBytes int64  `json:"sizeBytes"`
+}
 
 // Parameter defines model for Parameter.
 type Parameter struct {
@@ -577,18 +745,22 @@ type ResourceRequirements struct {
 
 // Run defines model for Run.
 type Run struct {
-	Action                  CatalogName        `json:"action"`
-	AssignedAt              *time.Time         `json:"assignedAt,omitempty"`
-	CancellationRequestedAt *time.Time         `json:"cancellationRequestedAt,omitempty"`
-	CatalogRevisionID       openapi_types.UUID `json:"catalogRevisionId"`
-	Cluster                 CatalogName        `json:"cluster"`
-	CommitSha               string             `json:"commitSha"`
-	CreatedAt               time.Time          `json:"createdAt"`
-	ExitCode                *int32             `json:"exitCode,omitempty"`
-	FinishedAt              *time.Time         `json:"finishedAt,omitempty"`
+	Action CatalogName `json:"action"`
+
+	// ArtifactConsumers Directly runnable actions, grouped by produced artifact name, that can consume that one artifact without other required inputs or parameters.
+	ArtifactConsumers       map[string][]RunArtifactConsumer `json:"artifactConsumers"`
+	AssignedAt              *time.Time                       `json:"assignedAt,omitempty"`
+	CancellationRequestedAt *time.Time                       `json:"cancellationRequestedAt,omitempty"`
+	CatalogRevisionID       openapi_types.UUID               `json:"catalogRevisionId"`
+	Cluster                 CatalogName                      `json:"cluster"`
+	CommitSha               string                           `json:"commitSha"`
+	CreatedAt               time.Time                        `json:"createdAt"`
+	ExitCode                *int32                           `json:"exitCode,omitempty"`
+	FinishedAt              *time.Time                       `json:"finishedAt,omitempty"`
 
 	// ID Stable identity of the immutable action execution.
-	ID openapi_types.UUID `json:"id"`
+	ID     openapi_types.UUID          `json:"id"`
+	Inputs map[string]RunArtifactInput `json:"inputs"`
 
 	// JobUID Kubernetes UID of the materialized Job.
 	JobUID *string `json:"jobUid,omitempty"`
@@ -618,9 +790,39 @@ type RunOutcome string
 // RunPhase Durable lifecycle position of the Run.
 type RunPhase string
 
+// RunArtifactAccess defines model for RunArtifactAccess.
+type RunArtifactAccess struct {
+	// Token Run-scoped bearer credential for declared outputs and inputs.
+	Token string `json:"token"`
+}
+
+// RunArtifactConsumer defines model for RunArtifactConsumer.
+type RunArtifactConsumer struct {
+	Action CatalogName `json:"action"`
+	Input  CatalogName `json:"input"`
+}
+
+// RunArtifactInput defines model for RunArtifactInput.
+type RunArtifactInput struct {
+	ArtifactID        openapi_types.UUID             `json:"artifactId"`
+	CatalogRevisionID openapi_types.UUID             `json:"catalogRevisionId"`
+	CommitSha         string                         `json:"commitSha"`
+	MediaType         string                         `json:"mediaType"`
+	Name              CatalogName                    `json:"name"`
+	ProducerRunID     openapi_types.UUID             `json:"producerRunId"`
+	RetentionState    RunArtifactInputRetentionState `json:"retentionState"`
+	Sensitive         bool                           `json:"sensitive"`
+	Sha256            string                         `json:"sha256"`
+	SizeBytes         int64                          `json:"sizeBytes"`
+}
+
+// RunArtifactInputRetentionState defines model for RunArtifactInput.RetentionState.
+type RunArtifactInputRetentionState string
+
 // RunAssignment defines model for RunAssignment.
 type RunAssignment struct {
-	Action RunAssignmentAction `json:"action"`
+	Action         RunAssignmentAction `json:"action"`
+	ArtifactAccess RunArtifactAccess   `json:"artifactAccess"`
 
 	// CatalogRevisionID Immutable catalog revision against which the Run was resolved.
 	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
@@ -701,6 +903,9 @@ type RunAssignmentTarget struct {
 type RunCreate struct {
 	Action CatalogName `json:"action"`
 
+	// Inputs Explicit bindings from declared input names to sealed artifacts. Exact catalog compatibility pins the new Run to the producer's commit and catalog revision.
+	Inputs *map[string]openapi_types.UUID `json:"inputs,omitempty"`
+
 	// Parameters Values for parameters declared by the selected action.
 	Parameters *map[string]ParameterValue `json:"parameters,omitempty"`
 
@@ -776,6 +981,7 @@ type Target struct {
 	Metadata   ResourceMetadata `json:"metadata"`
 	Source     CatalogSource    `json:"source"`
 	Spec       TargetSpec       `json:"spec"`
+	Status     TargetStatus     `json:"status"`
 }
 
 // TargetAPIVersion defines model for Target.APIVersion.
@@ -796,10 +1002,22 @@ type TargetSpec struct {
 	Watch       *[]string             `json:"watch,omitempty"`
 }
 
+// TargetStatus defines model for TargetStatus.
+type TargetStatus struct {
+	// DesiredCommitSha Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
+	DesiredCommitSha string `json:"desiredCommitSha"`
+}
+
 // CreateRunParams defines parameters for CreateRun.
 type CreateRunParams struct {
 	// IdempotencyKey Optional key that makes retries of the same run request return the originally created Run. Reusing a key for a different request is a conflict.
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
+}
+
+// StreamRunLogParams defines parameters for StreamRunLog.
+type StreamRunLogParams struct {
+	OffsetBytes *int64  `form:"offsetBytes,omitempty" json:"offsetBytes,omitempty"`
+	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
 // PollForControllerCommandParams defines parameters for PollForControllerCommand.
@@ -808,11 +1026,28 @@ type PollForControllerCommandParams struct {
 	TimeoutSeconds *int `form:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
 }
 
+// AppendRunLogChunkParams defines parameters for AppendRunLogChunk.
+type AppendRunLogChunkParams struct {
+	// OffsetBytes Zero-based byte offset of the chunk in the complete log.
+	OffsetBytes int64 `form:"offsetBytes" json:"offsetBytes"`
+}
+
+// UploadRunArtifactParams defines parameters for UploadRunArtifact.
+type UploadRunArtifactParams struct {
+	XSliprampContentSHA256 string `json:"X-Slipramp-Content-SHA256"`
+}
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = RepositoryConfig
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = RunCreate
+
+// EnrollControllerJSONRequestBody defines body for EnrollController for application/json ContentType.
+type EnrollControllerJSONRequestBody = ControllerEnrollment
+
+// SealRunLogJSONRequestBody defines body for SealRunLog for application/json ContentType.
+type SealRunLogJSONRequestBody = LogSeal
 
 // ReportRunObservationJSONRequestBody defines body for ReportRunObservation for application/json ContentType.
 type ReportRunObservationJSONRequestBody = RunObservation
@@ -979,6 +1214,11 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// DownloadArtifact Download a sealed artifact
+	//
+	// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
+	DownloadArtifact(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListClusters List execution clusters
 	//
 	// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
@@ -1027,7 +1267,7 @@ type ClientInterface interface {
 
 	// CreateRunWithBody Create an action run
 	//
-	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -1036,12 +1276,22 @@ type ClientInterface interface {
 
 	// CreateRun Create an action run
 	//
-	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRun(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRun Get a Run
+	//
+	// Corresponds with GET /api/v1/runs/{runId} (the `GetRun` operationId).
+	GetRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListRunArtifacts List a Run's artifacts
+	//
+	// Corresponds with GET /api/v1/runs/{runId}/artifacts (the `ListRunArtifacts` operationId).
+	ListRunArtifacts(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CancelRun Cancel a Run
 	//
@@ -1050,30 +1300,95 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 	CancelRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PollForControllerCommand Poll for a controller command
+	// StreamRunLog Stream retained and live Run log bytes
 	//
-	// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
-	PollForControllerCommand(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
+	StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReportRunObservationWithBody Report a Run observation
+	// EnrollControllerWithBody Enroll a cluster controller
 	//
-	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-	ReportRunObservationWithBody(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+	EnrollControllerWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReportRunObservation Report a Run observation
+	// EnrollController Enroll a cluster controller
 	//
-	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-	ReportRunObservation(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+	EnrollController(ctx context.Context, body EnrollControllerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PollForControllerCommand Poll for a controller command
+	//
+	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+	//
+	// Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
+	PollForControllerCommand(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRunLogCursor Get the durable Run log cursor
+	//
+	// Corresponds with GET /controller/v1/runs/{runId}/log (the `GetRunLogCursor` operationId).
+	GetRunLogCursor(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SealRunLogWithBody Seal the durable Run log
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+	SealRunLogWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SealRunLog Seal the durable Run log
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+	SealRunLog(ctx context.Context, runID openapi_types.UUID, body SealRunLogJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AppendRunLogChunkWithBody Append a Run log chunk
+	//
+	// Durably stores a log chunk for a Run managed by the authenticated controller. Repeating the same bytes at the same offset is idempotent.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log-chunks (the `AppendRunLogChunk` operationId).
+	AppendRunLogChunkWithBody(ctx context.Context, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportRunObservationWithBody Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservationWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportRunObservation Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservation(ctx context.Context, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UploadRunArtifactWithBody Upload one declared artifact from the Run harness
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /execution/v1/runs/{runId}/artifacts/{artifactName} (the `UploadRunArtifact` operationId).
+	UploadRunArtifactWithBody(ctx context.Context, runID openapi_types.UUID, artifactName CatalogName, params *UploadRunArtifactParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DownloadRunInput Download one explicitly bound input for the Run harness
+	//
+	// Corresponds with GET /execution/v1/runs/{runId}/inputs/{inputName} (the `DownloadRunInput` operationId).
+	DownloadRunInput(ctx context.Context, runID openapi_types.UUID, inputName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth Check server health
 	//
@@ -1081,6 +1396,21 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /healthz (the `GetHealth` operationId).
 	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// DownloadArtifact Download a sealed artifact
+//
+// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
+func (c *Client) DownloadArtifact(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadArtifactRequest(c.Server, artifactID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // ListClusters List execution clusters
@@ -1191,7 +1521,7 @@ func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_
 
 // CreateRunWithBody Create an action run
 //
-// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 //
 // Takes any type of body and a specified content type.
 //
@@ -1210,13 +1540,43 @@ func (c *Client) CreateRunWithBody(ctx context.Context, params *CreateRunParams,
 
 // CreateRun Create an action run
 //
-// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 func (c *Client) CreateRun(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateRunRequest(c.Server, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRun Get a Run
+//
+// Corresponds with GET /api/v1/runs/{runId} (the `GetRun` operationId).
+func (c *Client) GetRun(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRunRequest(c.Server, runID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListRunArtifacts List a Run's artifacts
+//
+// Corresponds with GET /api/v1/runs/{runId}/artifacts (the `ListRunArtifacts` operationId).
+func (c *Client) ListRunArtifacts(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRunArtifactsRequest(c.Server, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -1244,13 +1604,136 @@ func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEdi
 	return c.Client.Do(req)
 }
 
+// StreamRunLog Stream retained and live Run log bytes
+//
+// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
+//
+// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
+func (c *Client) StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStreamRunLogRequest(c.Server, runID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EnrollControllerWithBody Enroll a cluster controller
+//
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+func (c *Client) EnrollControllerWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEnrollControllerRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// EnrollController Enroll a cluster controller
+//
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+func (c *Client) EnrollController(ctx context.Context, body EnrollControllerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewEnrollControllerRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PollForControllerCommand Poll for a controller command
 //
-// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
-func (c *Client) PollForControllerCommand(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPollForControllerCommandRequest(c.Server, clusterName, params)
+// Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
+func (c *Client) PollForControllerCommand(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPollForControllerCommandRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRunLogCursor Get the durable Run log cursor
+//
+// Corresponds with GET /controller/v1/runs/{runId}/log (the `GetRunLogCursor` operationId).
+func (c *Client) GetRunLogCursor(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRunLogCursorRequest(c.Server, runID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SealRunLogWithBody Seal the durable Run log
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+func (c *Client) SealRunLogWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSealRunLogRequestWithBody(c.Server, runID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SealRunLog Seal the durable Run log
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+func (c *Client) SealRunLog(ctx context.Context, runID openapi_types.UUID, body SealRunLogJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSealRunLogRequest(c.Server, runID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AppendRunLogChunkWithBody Append a Run log chunk
+//
+// Durably stores a log chunk for a Run managed by the authenticated controller. Repeating the same bytes at the same offset is idempotent.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /controller/v1/runs/{runId}/log-chunks (the `AppendRunLogChunk` operationId).
+func (c *Client) AppendRunLogChunkWithBody(ctx context.Context, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAppendRunLogChunkRequestWithBody(c.Server, runID, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1263,13 +1746,13 @@ func (c *Client) PollForControllerCommand(ctx context.Context, clusterName strin
 
 // ReportRunObservationWithBody Report a Run observation
 //
-// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
 //
 // Takes any type of body and a specified content type.
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-func (c *Client) ReportRunObservationWithBody(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewReportRunObservationRequestWithBody(c.Server, clusterName, runID, contentType, body)
+// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *Client) ReportRunObservationWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportRunObservationRequestWithBody(c.Server, runID, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1282,13 +1765,45 @@ func (c *Client) ReportRunObservationWithBody(ctx context.Context, clusterName s
 
 // ReportRunObservation Report a Run observation
 //
-// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-func (c *Client) ReportRunObservation(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewReportRunObservationRequest(c.Server, clusterName, runID, body)
+// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *Client) ReportRunObservation(ctx context.Context, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportRunObservationRequest(c.Server, runID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UploadRunArtifactWithBody Upload one declared artifact from the Run harness
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /execution/v1/runs/{runId}/artifacts/{artifactName} (the `UploadRunArtifact` operationId).
+func (c *Client) UploadRunArtifactWithBody(ctx context.Context, runID openapi_types.UUID, artifactName CatalogName, params *UploadRunArtifactParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUploadRunArtifactRequestWithBody(c.Server, runID, artifactName, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DownloadRunInput Download one explicitly bound input for the Run harness
+//
+// Corresponds with GET /execution/v1/runs/{runId}/inputs/{inputName} (the `DownloadRunInput` operationId).
+func (c *Client) DownloadRunInput(ctx context.Context, runID openapi_types.UUID, inputName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDownloadRunInputRequest(c.Server, runID, inputName)
 	if err != nil {
 		return nil, err
 	}
@@ -1314,6 +1829,40 @@ func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewDownloadArtifactRequest constructs an http.Request for the DownloadArtifact method
+func NewDownloadArtifactRequest(server string, artifactID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "artifactId", artifactID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/artifacts/%s/download", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListClustersRequest constructs an http.Request for the ListClusters method
@@ -1533,6 +2082,74 @@ func NewCreateRunRequestWithBody(server string, params *CreateRunParams, content
 	return req, nil
 }
 
+// NewGetRunRequest constructs an http.Request for the GetRun method
+func NewGetRunRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListRunArtifactsRequest constructs an http.Request for the ListRunArtifacts method
+func NewListRunArtifactsRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/artifacts", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCancelRunRequest constructs an http.Request for the CancelRun method
 func NewCancelRunRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
 	var err error
@@ -1567,13 +2184,13 @@ func NewCancelRunRequest(server string, runID openapi_types.UUID) (*http.Request
 	return req, nil
 }
 
-// NewPollForControllerCommandRequest constructs an http.Request for the PollForControllerCommand method
-func NewPollForControllerCommandRequest(server string, clusterName string, params *PollForControllerCommandParams) (*http.Request, error) {
+// NewStreamRunLogRequest constructs an http.Request for the StreamRunLog method
+func NewStreamRunLogRequest(server string, runID openapi_types.UUID, params *StreamRunLogParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clusterName", clusterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
 	if err != nil {
 		return nil, err
 	}
@@ -1583,7 +2200,116 @@ func NewPollForControllerCommandRequest(server string, clusterName string, param
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/controller/v1/controllers/%s/poll", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/logs", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.OffsetBytes != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offsetBytes", *params.OffsetBytes, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.LastEventID != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Last-Event-ID", *params.LastEventID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Last-Event-ID", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewEnrollControllerRequest calls the generic EnrollController builder with application/json body
+func NewEnrollControllerRequest(server string, body EnrollControllerJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewEnrollControllerRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewEnrollControllerRequestWithBody constructs an http.Request for the EnrollController method, with any body, and a specified content type
+func NewEnrollControllerRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/enroll")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPollForControllerCommandRequest constructs an http.Request for the PollForControllerCommand method
+func NewPollForControllerCommandRequest(server string, params *PollForControllerCommandParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/poll")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1628,31 +2354,13 @@ func NewPollForControllerCommandRequest(server string, clusterName string, param
 	return req, nil
 }
 
-// NewReportRunObservationRequest calls the generic ReportRunObservation builder with application/json body
-func NewReportRunObservationRequest(server string, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewReportRunObservationRequestWithBody(server, clusterName, runID, "application/json", bodyReader)
-}
-
-// NewReportRunObservationRequestWithBody constructs an http.Request for the ReportRunObservation method, with any body, and a specified content type
-func NewReportRunObservationRequestWithBody(server string, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+// NewGetRunLogCursorRequest constructs an http.Request for the GetRunLogCursor method
+func NewGetRunLogCursorRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clusterName", clusterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
 	if err != nil {
 		return nil, err
 	}
@@ -1662,7 +2370,52 @@ func NewReportRunObservationRequestWithBody(server string, clusterName string, r
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/controller/v1/controllers/%s/runs/%s/observations", pathParam0, pathParam1)
+	operationPath := fmt.Sprintf("/controller/v1/runs/%s/log", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSealRunLogRequest calls the generic SealRunLog builder with application/json body
+func NewSealRunLogRequest(server string, runID openapi_types.UUID, body SealRunLogJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSealRunLogRequestWithBody(server, runID, "application/json", bodyReader)
+}
+
+// NewSealRunLogRequestWithBody constructs an http.Request for the SealRunLog method, with any body, and a specified content type
+func NewSealRunLogRequestWithBody(server string, runID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/runs/%s/log", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1678,6 +2431,209 @@ func NewReportRunObservationRequestWithBody(server string, clusterName string, r
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAppendRunLogChunkRequestWithBody constructs an http.Request for the AppendRunLogChunk method, with any body, and a specified content type
+func NewAppendRunLogChunkRequestWithBody(server string, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/runs/%s/log-chunks", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offsetBytes", params.OffsetBytes, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int64"}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewReportRunObservationRequest calls the generic ReportRunObservation builder with application/json body
+func NewReportRunObservationRequest(server string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportRunObservationRequestWithBody(server, runID, "application/json", bodyReader)
+}
+
+// NewReportRunObservationRequestWithBody constructs an http.Request for the ReportRunObservation method, with any body, and a specified content type
+func NewReportRunObservationRequestWithBody(server string, runID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/runs/%s/observations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUploadRunArtifactRequestWithBody constructs an http.Request for the UploadRunArtifact method, with any body, and a specified content type
+func NewUploadRunArtifactRequestWithBody(server string, runID openapi_types.UUID, artifactName CatalogName, params *UploadRunArtifactParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "artifactName", artifactName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/execution/v1/runs/%s/artifacts/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-Slipramp-Content-SHA256", params.XSliprampContentSHA256, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Slipramp-Content-SHA256", headerParam0)
+
+	}
+
+	return req, nil
+}
+
+// NewDownloadRunInputRequest constructs an http.Request for the DownloadRunInput method
+func NewDownloadRunInputRequest(server string, runID openapi_types.UUID, inputName CatalogName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "inputName", inputName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/execution/v1/runs/%s/inputs/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -1753,6 +2709,13 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// DownloadArtifactWithResponse Download a sealed artifact
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
+	DownloadArtifactWithResponse(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadArtifactResponse, error)
+
 	// ListClustersWithResponse List execution clusters
 	//
 	// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
@@ -1809,7 +2772,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateRunWithBodyWithResponse Create an action run
 	//
-	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -1818,12 +2781,26 @@ type ClientWithResponsesInterface interface {
 
 	// CreateRunWithResponse Create an action run
 	//
-	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRunWithResponse(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRunResponse, error)
+
+	// GetRunWithResponse Get a Run
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/runs/{runId} (the `GetRun` operationId).
+	GetRunWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRunResponse, error)
+
+	// ListRunArtifactsWithResponse List a Run's artifacts
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/runs/{runId}/artifacts (the `ListRunArtifacts` operationId).
+	ListRunArtifactsWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListRunArtifactsResponse, error)
 
 	// CancelRunWithResponse Cancel a Run
 	//
@@ -1834,32 +2811,103 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/runs/{runId}/cancel (the `CancelRun` operationId).
 	CancelRunWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*CancelRunResponse, error)
 
-	// PollForControllerCommandWithResponse Poll for a controller command
+	// StreamRunLogWithResponse Stream retained and live Run log bytes
 	//
-	// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
-	PollForControllerCommandWithResponse(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*PollForControllerCommandResponse, error)
+	// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
+	StreamRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*StreamRunLogResponse, error)
 
-	// ReportRunObservationWithBodyWithResponse Report a Run observation
+	// EnrollControllerWithBodyWithResponse Enroll a cluster controller
 	//
-	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-	ReportRunObservationWithBodyWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error)
+	// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+	EnrollControllerWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EnrollControllerResponse, error)
 
-	// ReportRunObservationWithResponse Report a Run observation
+	// EnrollControllerWithResponse Enroll a cluster controller
 	//
-	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-	ReportRunObservationWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error)
+	// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+	EnrollControllerWithResponse(ctx context.Context, body EnrollControllerJSONRequestBody, reqEditors ...RequestEditorFn) (*EnrollControllerResponse, error)
+
+	// PollForControllerCommandWithResponse Poll for a controller command
+	//
+	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
+	PollForControllerCommandWithResponse(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*PollForControllerCommandResponse, error)
+
+	// GetRunLogCursorWithResponse Get the durable Run log cursor
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /controller/v1/runs/{runId}/log (the `GetRunLogCursor` operationId).
+	GetRunLogCursorWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRunLogCursorResponse, error)
+
+	// SealRunLogWithBodyWithResponse Seal the durable Run log
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+	SealRunLogWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SealRunLogResponse, error)
+
+	// SealRunLogWithResponse Seal the durable Run log
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+	SealRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, body SealRunLogJSONRequestBody, reqEditors ...RequestEditorFn) (*SealRunLogResponse, error)
+
+	// AppendRunLogChunkWithBodyWithResponse Append a Run log chunk
+	//
+	// Durably stores a log chunk for a Run managed by the authenticated controller. Repeating the same bytes at the same offset is idempotent.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log-chunks (the `AppendRunLogChunk` operationId).
+	AppendRunLogChunkWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AppendRunLogChunkResponse, error)
+
+	// ReportRunObservationWithBodyWithResponse Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservationWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error)
+
+	// ReportRunObservationWithResponse Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservationWithResponse(ctx context.Context, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error)
+
+	// UploadRunArtifactWithBodyWithResponse Upload one declared artifact from the Run harness
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /execution/v1/runs/{runId}/artifacts/{artifactName} (the `UploadRunArtifact` operationId).
+	UploadRunArtifactWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, artifactName CatalogName, params *UploadRunArtifactParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadRunArtifactResponse, error)
+
+	// DownloadRunInputWithResponse Download one explicitly bound input for the Run harness
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /execution/v1/runs/{runId}/inputs/{inputName} (the `DownloadRunInput` operationId).
+	DownloadRunInputWithResponse(ctx context.Context, runID openapi_types.UUID, inputName CatalogName, reqEditors ...RequestEditorFn) (*DownloadRunInputResponse, error)
 
 	// GetHealthWithResponse Check server health
 	//
@@ -1869,6 +2917,76 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /healthz (the `GetHealth` operationId).
 	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+}
+
+// DownloadArtifactResponse200Headers the declared response headers of an HTTP 200 response for DownloadArtifact
+type DownloadArtifactResponse200Headers struct {
+	ContentDisposition *string
+	Digest             *string
+}
+
+type DownloadArtifactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *DownloadArtifactResponse200Headers
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DownloadArtifactResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r DownloadArtifactResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DownloadArtifactResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r DownloadArtifactResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DownloadArtifactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadArtifactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadArtifactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadArtifactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type ListClustersResponse struct {
@@ -2264,6 +3382,130 @@ func (r CreateRunResponse) ContentType() string {
 	return ""
 }
 
+type GetRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Run
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRunResponse) GetJSON200() *Run {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetRunResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetRunResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetRunResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRunResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListRunArtifactsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ArtifactList
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRunArtifactsResponse) GetJSON200() *ArtifactList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListRunArtifactsResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListRunArtifactsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListRunArtifactsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRunArtifactsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRunArtifactsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRunArtifactsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRunArtifactsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CancelRunResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2333,6 +3575,137 @@ func (r CancelRunResponse) ContentType() string {
 	return ""
 }
 
+type StreamRunLogResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r StreamRunLogResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r StreamRunLogResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r StreamRunLogResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r StreamRunLogResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r StreamRunLogResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r StreamRunLogResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StreamRunLogResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r StreamRunLogResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type EnrollControllerResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r EnrollControllerResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r EnrollControllerResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r EnrollControllerResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r EnrollControllerResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r EnrollControllerResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r EnrollControllerResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r EnrollControllerResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r EnrollControllerResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r EnrollControllerResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PollForControllerCommandResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2396,6 +3769,234 @@ func (r PollForControllerCommandResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PollForControllerCommandResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetRunLogCursorResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LogCursor
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRunLogCursorResponse) GetJSON200() *LogCursor {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetRunLogCursorResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetRunLogCursorResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetRunLogCursorResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetRunLogCursorResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRunLogCursorResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRunLogCursorResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRunLogCursorResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRunLogCursorResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type SealRunLogResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SealRunLogResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r SealRunLogResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SealRunLogResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r SealRunLogResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r SealRunLogResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r SealRunLogResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r SealRunLogResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SealRunLogResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SealRunLogResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SealRunLogResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AppendRunLogChunkResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AppendRunLogChunkResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AppendRunLogChunkResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AppendRunLogChunkResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r AppendRunLogChunkResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AppendRunLogChunkResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AppendRunLogChunkResponse) GetApplicationProblemJSON413() *Problem {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r AppendRunLogChunkResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r AppendRunLogChunkResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AppendRunLogChunkResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AppendRunLogChunkResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AppendRunLogChunkResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2478,6 +4079,151 @@ func (r ReportRunObservationResponse) ContentType() string {
 	return ""
 }
 
+type UploadRunArtifactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r UploadRunArtifactResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r UploadRunArtifactResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r UploadRunArtifactResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r UploadRunArtifactResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r UploadRunArtifactResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r UploadRunArtifactResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UploadRunArtifactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UploadRunArtifactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UploadRunArtifactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UploadRunArtifactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// DownloadRunInputResponse200Headers the declared response headers of an HTTP 200 response for DownloadRunInput
+type DownloadRunInputResponse200Headers struct {
+	Digest *string
+}
+
+type DownloadRunInputResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *DownloadRunInputResponse200Headers
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DownloadRunInputResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DownloadRunInputResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r DownloadRunInputResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r DownloadRunInputResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DownloadRunInputResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DownloadRunInputResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DownloadRunInputResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DownloadRunInputResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2524,6 +4270,19 @@ func (r GetHealthResponse) ContentType() string {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
+}
+
+// DownloadArtifactWithResponse Download a sealed artifact
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
+func (c *ClientWithResponses) DownloadArtifactWithResponse(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadArtifactResponse, error) {
+	rsp, err := c.DownloadArtifact(ctx, artifactID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadArtifactResponse(rsp)
 }
 
 // ListClustersWithResponse List execution clusters
@@ -2618,7 +4377,7 @@ func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Conte
 
 // CreateRunWithBodyWithResponse Create an action run
 //
-// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -2633,7 +4392,7 @@ func (c *ClientWithResponses) CreateRunWithBodyWithResponse(ctx context.Context,
 
 // CreateRunWithResponse Create an action run
 //
-// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -2644,6 +4403,32 @@ func (c *ClientWithResponses) CreateRunWithResponse(ctx context.Context, params 
 		return nil, err
 	}
 	return ParseCreateRunResponse(rsp)
+}
+
+// GetRunWithResponse Get a Run
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/runs/{runId} (the `GetRun` operationId).
+func (c *ClientWithResponses) GetRunWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRunResponse, error) {
+	rsp, err := c.GetRun(ctx, runID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRunResponse(rsp)
+}
+
+// ListRunArtifactsWithResponse List a Run's artifacts
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/runs/{runId}/artifacts (the `ListRunArtifacts` operationId).
+func (c *ClientWithResponses) ListRunArtifactsWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListRunArtifactsResponse, error) {
+	rsp, err := c.ListRunArtifacts(ctx, runID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRunArtifactsResponse(rsp)
 }
 
 // CancelRunWithResponse Cancel a Run
@@ -2661,30 +4446,129 @@ func (c *ClientWithResponses) CancelRunWithResponse(ctx context.Context, runID o
 	return ParseCancelRunResponse(rsp)
 }
 
-// PollForControllerCommandWithResponse Poll for a controller command
+// StreamRunLogWithResponse Stream retained and live Run log bytes
 //
-// Records the cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
-func (c *ClientWithResponses) PollForControllerCommandWithResponse(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*PollForControllerCommandResponse, error) {
-	rsp, err := c.PollForControllerCommand(ctx, clusterName, params, reqEditors...)
+// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
+func (c *ClientWithResponses) StreamRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*StreamRunLogResponse, error) {
+	rsp, err := c.StreamRunLog(ctx, runID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStreamRunLogResponse(rsp)
+}
+
+// EnrollControllerWithBodyWithResponse Enroll a cluster controller
+//
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+func (c *ClientWithResponses) EnrollControllerWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*EnrollControllerResponse, error) {
+	rsp, err := c.EnrollControllerWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEnrollControllerResponse(rsp)
+}
+
+// EnrollControllerWithResponse Enroll a cluster controller
+//
+// Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/enroll (the `EnrollController` operationId).
+func (c *ClientWithResponses) EnrollControllerWithResponse(ctx context.Context, body EnrollControllerJSONRequestBody, reqEditors ...RequestEditorFn) (*EnrollControllerResponse, error) {
+	rsp, err := c.EnrollController(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseEnrollControllerResponse(rsp)
+}
+
+// PollForControllerCommandWithResponse Poll for a controller command
+//
+// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
+func (c *ClientWithResponses) PollForControllerCommandWithResponse(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*PollForControllerCommandResponse, error) {
+	rsp, err := c.PollForControllerCommand(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParsePollForControllerCommandResponse(rsp)
 }
 
-// ReportRunObservationWithBodyWithResponse Report a Run observation
+// GetRunLogCursorWithResponse Get the durable Run log cursor
 //
-// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /controller/v1/runs/{runId}/log (the `GetRunLogCursor` operationId).
+func (c *ClientWithResponses) GetRunLogCursorWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRunLogCursorResponse, error) {
+	rsp, err := c.GetRunLogCursor(ctx, runID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRunLogCursorResponse(rsp)
+}
+
+// SealRunLogWithBodyWithResponse Seal the durable Run log
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-func (c *ClientWithResponses) ReportRunObservationWithBodyWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error) {
-	rsp, err := c.ReportRunObservationWithBody(ctx, clusterName, runID, contentType, body, reqEditors...)
+// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+func (c *ClientWithResponses) SealRunLogWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SealRunLogResponse, error) {
+	rsp, err := c.SealRunLogWithBody(ctx, runID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSealRunLogResponse(rsp)
+}
+
+// SealRunLogWithResponse Seal the durable Run log
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/runs/{runId}/log (the `SealRunLog` operationId).
+func (c *ClientWithResponses) SealRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, body SealRunLogJSONRequestBody, reqEditors ...RequestEditorFn) (*SealRunLogResponse, error) {
+	rsp, err := c.SealRunLog(ctx, runID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSealRunLogResponse(rsp)
+}
+
+// AppendRunLogChunkWithBodyWithResponse Append a Run log chunk
+//
+// Durably stores a log chunk for a Run managed by the authenticated controller. Repeating the same bytes at the same offset is idempotent.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/runs/{runId}/log-chunks (the `AppendRunLogChunk` operationId).
+func (c *ClientWithResponses) AppendRunLogChunkWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AppendRunLogChunkResponse, error) {
+	rsp, err := c.AppendRunLogChunkWithBody(ctx, runID, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAppendRunLogChunkResponse(rsp)
+}
+
+// ReportRunObservationWithBodyWithResponse Report a Run observation
+//
+// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *ClientWithResponses) ReportRunObservationWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error) {
+	rsp, err := c.ReportRunObservationWithBody(ctx, runID, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -2693,17 +4577,43 @@ func (c *ClientWithResponses) ReportRunObservationWithBodyWithResponse(ctx conte
 
 // ReportRunObservationWithResponse Report a Run observation
 //
-// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+// Records the phase, terminal outcome, and diagnostic details observed by the authenticated controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
-func (c *ClientWithResponses) ReportRunObservationWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error) {
-	rsp, err := c.ReportRunObservation(ctx, clusterName, runID, body, reqEditors...)
+// Corresponds with POST /controller/v1/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *ClientWithResponses) ReportRunObservationWithResponse(ctx context.Context, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error) {
+	rsp, err := c.ReportRunObservation(ctx, runID, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseReportRunObservationResponse(rsp)
+}
+
+// UploadRunArtifactWithBodyWithResponse Upload one declared artifact from the Run harness
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /execution/v1/runs/{runId}/artifacts/{artifactName} (the `UploadRunArtifact` operationId).
+func (c *ClientWithResponses) UploadRunArtifactWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, artifactName CatalogName, params *UploadRunArtifactParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UploadRunArtifactResponse, error) {
+	rsp, err := c.UploadRunArtifactWithBody(ctx, runID, artifactName, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUploadRunArtifactResponse(rsp)
+}
+
+// DownloadRunInputWithResponse Download one explicitly bound input for the Run harness
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /execution/v1/runs/{runId}/inputs/{inputName} (the `DownloadRunInput` operationId).
+func (c *ClientWithResponses) DownloadRunInputWithResponse(ctx context.Context, runID openapi_types.UUID, inputName CatalogName, reqEditors ...RequestEditorFn) (*DownloadRunInputResponse, error) {
+	rsp, err := c.DownloadRunInput(ctx, runID, inputName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDownloadRunInputResponse(rsp)
 }
 
 // GetHealthWithResponse Check server health
@@ -2719,6 +4629,73 @@ func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEdit
 		return nil, err
 	}
 	return ParseGetHealthResponse(rsp)
+}
+
+// ParseDownloadArtifactResponse parses an HTTP response from a DownloadArtifactWithResponse call
+func ParseDownloadArtifactResponse(rsp *http.Response) (*DownloadArtifactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadArtifactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers DownloadArtifactResponse200Headers
+		if values := rsp.Header.Values("Content-Disposition"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Content-Disposition", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ContentDisposition = &value
+		}
+		if values := rsp.Header.Values("Digest"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Digest", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Digest = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
 }
 
 // ParseListClustersResponse parses an HTTP response from a ListClustersWithResponse call
@@ -3033,6 +5010,100 @@ func ParseCreateRunResponse(rsp *http.Response) (*CreateRunResponse, error) {
 	return response, nil
 }
 
+// ParseGetRunResponse parses an HTTP response from a GetRunWithResponse call
+func ParseGetRunResponse(rsp *http.Response) (*GetRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Run
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListRunArtifactsResponse parses an HTTP response from a ListRunArtifactsWithResponse call
+func ParseListRunArtifactsResponse(rsp *http.Response) (*ListRunArtifactsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRunArtifactsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ArtifactList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseCancelRunResponse parses an HTTP response from a CancelRunWithResponse call
 func ParseCancelRunResponse(rsp *http.Response) (*CancelRunResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3060,6 +5131,110 @@ func ParseCancelRunResponse(rsp *http.Response) (*CancelRunResponse, error) {
 			return nil, err
 		}
 		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStreamRunLogResponse parses an HTTP response from a StreamRunLogWithResponse call
+func ParseStreamRunLogResponse(rsp *http.Response) (*StreamRunLogResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StreamRunLogResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseEnrollControllerResponse parses an HTTP response from a EnrollControllerWithResponse call
+func ParseEnrollControllerResponse(rsp *http.Response) (*EnrollControllerResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &EnrollControllerResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -3144,6 +5319,195 @@ func ParsePollForControllerCommandResponse(rsp *http.Response) (*PollForControll
 	return response, nil
 }
 
+// ParseGetRunLogCursorResponse parses an HTTP response from a GetRunLogCursorWithResponse call
+func ParseGetRunLogCursorResponse(rsp *http.Response) (*GetRunLogCursorResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRunLogCursorResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LogCursor
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSealRunLogResponse parses an HTTP response from a SealRunLogWithResponse call
+func ParseSealRunLogResponse(rsp *http.Response) (*SealRunLogResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SealRunLogResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAppendRunLogChunkResponse parses an HTTP response from a AppendRunLogChunkWithResponse call
+func ParseAppendRunLogChunkResponse(rsp *http.Response) (*AppendRunLogChunkResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AppendRunLogChunkResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseReportRunObservationResponse parses an HTTP response from a ReportRunObservationWithResponse call
 func ParseReportRunObservationResponse(rsp *http.Response) (*ReportRunObservationResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3208,6 +5572,130 @@ func ParseReportRunObservationResponse(rsp *http.Response) (*ReportRunObservatio
 	return response, nil
 }
 
+// ParseUploadRunArtifactResponse parses an HTTP response from a UploadRunArtifactWithResponse call
+func ParseUploadRunArtifactResponse(rsp *http.Response) (*UploadRunArtifactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UploadRunArtifactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDownloadRunInputResponse parses an HTTP response from a DownloadRunInputWithResponse call
+func ParseDownloadRunInputResponse(rsp *http.Response) (*DownloadRunInputResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DownloadRunInputResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers DownloadRunInputResponse200Headers
+		if values := rsp.Header.Values("Digest"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Digest", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Digest = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -3243,6 +5731,9 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// DownloadArtifact Download a sealed artifact
+	// (GET /api/v1/artifacts/{artifactId}/download)
+	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID)
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(w http.ResponseWriter, r *http.Request)
@@ -3261,15 +5752,42 @@ type ServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams)
+	// GetRun Get a Run
+	// (GET /api/v1/runs/{runId})
+	GetRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// ListRunArtifacts List a Run's artifacts
+	// (GET /api/v1/runs/{runId}/artifacts)
+	ListRunArtifacts(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
 	// CancelRun Cancel a Run
 	// (POST /api/v1/runs/{runId}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// StreamRunLog Stream retained and live Run log bytes
+	// (GET /api/v1/runs/{runId}/logs)
+	StreamRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params StreamRunLogParams)
+	// EnrollController Enroll a cluster controller
+	// (POST /controller/v1/enroll)
+	EnrollController(w http.ResponseWriter, r *http.Request)
 	// PollForControllerCommand Poll for a controller command
-	// (POST /controller/v1/controllers/{clusterName}/poll)
-	PollForControllerCommand(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerCommandParams)
+	// (POST /controller/v1/poll)
+	PollForControllerCommand(w http.ResponseWriter, r *http.Request, params PollForControllerCommandParams)
+	// GetRunLogCursor Get the durable Run log cursor
+	// (GET /controller/v1/runs/{runId}/log)
+	GetRunLogCursor(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// SealRunLog Seal the durable Run log
+	// (POST /controller/v1/runs/{runId}/log)
+	SealRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// AppendRunLogChunk Append a Run log chunk
+	// (POST /controller/v1/runs/{runId}/log-chunks)
+	AppendRunLogChunk(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params AppendRunLogChunkParams)
 	// ReportRunObservation Report a Run observation
-	// (POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations)
-	ReportRunObservation(w http.ResponseWriter, r *http.Request, clusterName string, runID openapi_types.UUID)
+	// (POST /controller/v1/runs/{runId}/observations)
+	ReportRunObservation(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
+	// UploadRunArtifact Upload one declared artifact from the Run harness
+	// (PUT /execution/v1/runs/{runId}/artifacts/{artifactName})
+	UploadRunArtifact(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, artifactName CatalogName, params UploadRunArtifactParams)
+	// DownloadRunInput Download one explicitly bound input for the Run harness
+	// (GET /execution/v1/runs/{runId}/inputs/{inputName})
+	DownloadRunInput(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, inputName CatalogName)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -3283,6 +5801,32 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// DownloadArtifact operation middleware
+func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactId" -------------
+	var artifactID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactId", r.PathValue("artifactId"), &artifactID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadArtifact(w, r, artifactID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListClusters operation middleware
 func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.Request) {
@@ -3419,6 +5963,58 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetRun operation middleware
+func (siw *ServerInterfaceWrapper) GetRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRun(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRunArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListRunArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRunArtifacts(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CancelRun operation middleware
 func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Request) {
 
@@ -3445,20 +6041,88 @@ func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// StreamRunLog operation middleware
+func (siw *ServerInterfaceWrapper) StreamRunLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params StreamRunLogParams
+
+	// ------------- Optional query parameter "offsetBytes" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offsetBytes", r.URL.Query(), &params.OffsetBytes, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offsetBytes"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offsetBytes", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Last-Event-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Last-Event-ID")]; found {
+		var LastEventID string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Last-Event-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Last-Event-ID", valueList[0], &LastEventID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Last-Event-ID", Err: err})
+			return
+		}
+
+		params.LastEventID = &LastEventID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StreamRunLog(w, r, runID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EnrollController operation middleware
+func (siw *ServerInterfaceWrapper) EnrollController(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnrollController(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PollForControllerCommand operation middleware
 func (siw *ServerInterfaceWrapper) PollForControllerCommand(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
-
-	// ------------- Path parameter "clusterName" -------------
-	var clusterName string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "clusterName", r.PathValue("clusterName"), &clusterName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clusterName", Err: err})
-		return
-	}
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params PollForControllerCommandParams
@@ -3477,7 +6141,101 @@ func (siw *ServerInterfaceWrapper) PollForControllerCommand(w http.ResponseWrite
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PollForControllerCommand(w, r, clusterName, params)
+		siw.Handler.PollForControllerCommand(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRunLogCursor operation middleware
+func (siw *ServerInterfaceWrapper) GetRunLogCursor(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRunLogCursor(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SealRunLog operation middleware
+func (siw *ServerInterfaceWrapper) SealRunLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SealRunLog(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AppendRunLogChunk operation middleware
+func (siw *ServerInterfaceWrapper) AppendRunLogChunk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AppendRunLogChunkParams
+
+	// ------------- Required query parameter "offsetBytes" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "offsetBytes", r.URL.Query(), &params.OffsetBytes, runtime.BindQueryParameterOptions{Type: "integer", Format: "int64"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offsetBytes"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offsetBytes", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AppendRunLogChunk(w, r, runID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3493,15 +6251,6 @@ func (siw *ServerInterfaceWrapper) ReportRunObservation(w http.ResponseWriter, r
 	var err error
 	_ = err
 
-	// ------------- Path parameter "clusterName" -------------
-	var clusterName string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "clusterName", r.PathValue("clusterName"), &clusterName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clusterName", Err: err})
-		return
-	}
-
 	// ------------- Path parameter "runId" -------------
 	var runID openapi_types.UUID
 
@@ -3512,7 +6261,105 @@ func (siw *ServerInterfaceWrapper) ReportRunObservation(w http.ResponseWriter, r
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ReportRunObservation(w, r, clusterName, runID)
+		siw.Handler.ReportRunObservation(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UploadRunArtifact operation middleware
+func (siw *ServerInterfaceWrapper) UploadRunArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactName" -------------
+	var artifactName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactName", r.PathValue("artifactName"), &artifactName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactName", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UploadRunArtifactParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Slipramp-Content-SHA256" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Slipramp-Content-SHA256")]; found {
+		var XSliprampContentSHA256 string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Slipramp-Content-SHA256", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Slipramp-Content-SHA256", valueList[0], &XSliprampContentSHA256, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Slipramp-Content-SHA256", Err: err})
+			return
+		}
+
+		params.XSliprampContentSHA256 = XSliprampContentSHA256
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Slipramp-Content-SHA256 is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Slipramp-Content-SHA256", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadRunArtifact(w, r, runID, artifactName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadRunInput operation middleware
+func (siw *ServerInterfaceWrapper) DownloadRunInput(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "inputName" -------------
+	var inputName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "inputName", r.PathValue("inputName"), &inputName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "inputName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadRunInput(w, r, runID, inputName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3662,12 +6509,118 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/poll", wrapper.PollForControllerCommand)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/runs/{runId}/observations", wrapper.ReportRunObservation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/observations", wrapper.ReportRunObservation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log-chunks", wrapper.AppendRunLogChunk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.GetRunLogCursor)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.SealRunLog)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/execution/v1/runs/{runId}/artifacts/{artifactName}", wrapper.UploadRunArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/execution/v1/runs/{runId}/inputs/{inputName}", wrapper.DownloadRunInput)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}", wrapper.GetRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/cancel", wrapper.CancelRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/artifacts", wrapper.ListRunArtifacts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/logs", wrapper.StreamRunLog)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/download", wrapper.DownloadArtifact)
 
 	return m
+}
+
+type DownloadArtifactRequestObject struct {
+	ArtifactID openapi_types.UUID `json:"artifactId"`
+}
+
+type DownloadArtifactResponseObject interface {
+	VisitDownloadArtifactResponse(w http.ResponseWriter) error
+}
+
+type DownloadArtifact200ResponseHeaders struct {
+	ContentDisposition *string
+	Digest             *string
+}
+
+type DownloadArtifact200ApplicationOctetStreamResponse struct {
+	Body          io.Reader
+	Headers       DownloadArtifact200ResponseHeaders
+	ContentLength int64
+}
+
+func (response DownloadArtifact200ApplicationOctetStreamResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.ContentDisposition != nil {
+		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
+	}
+	if response.Headers.Digest != nil {
+		w.Header().Set("Digest", fmt.Sprint(*response.Headers.Digest))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type DownloadArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadArtifact404ApplicationProblemPlusJSONResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadArtifact405ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadArtifact405ApplicationProblemPlusJSONResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadArtifact409ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadArtifact409ApplicationProblemPlusJSONResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadArtifact500ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadArtifact500ApplicationProblemPlusJSONResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
 }
 
 type ListClustersRequestObject struct {
@@ -4099,6 +7052,134 @@ func (response CreateRun500ApplicationProblemPlusJSONResponse) VisitCreateRunRes
 	return err
 }
 
+type GetRunRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+}
+
+type GetRunResponseObject interface {
+	VisitGetRunResponse(w http.ResponseWriter) error
+}
+
+type GetRun200JSONResponse Run
+
+func (response GetRun200JSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRun404ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRun405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRun405ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRun500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRun500ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunArtifactsRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+}
+
+type ListRunArtifactsResponseObject interface {
+	VisitListRunArtifactsResponse(w http.ResponseWriter) error
+}
+
+type ListRunArtifacts200JSONResponse ArtifactList
+
+func (response ListRunArtifacts200JSONResponse) VisitListRunArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunArtifacts404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunArtifacts404ApplicationProblemPlusJSONResponse) VisitListRunArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunArtifacts405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunArtifacts405ApplicationProblemPlusJSONResponse) VisitListRunArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunArtifacts500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunArtifacts500ApplicationProblemPlusJSONResponse) VisitListRunArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CancelRunRequestObject struct {
 	RunID openapi_types.UUID `json:"runId"`
 }
@@ -4177,9 +7258,202 @@ func (response CancelRun500ApplicationProblemPlusJSONResponse) VisitCancelRunRes
 	return err
 }
 
+type StreamRunLogRequestObject struct {
+	RunID  openapi_types.UUID `json:"runId"`
+	Params StreamRunLogParams
+}
+
+type StreamRunLogResponseObject interface {
+	VisitStreamRunLogResponse(w http.ResponseWriter) error
+}
+
+type StreamRunLog200TextEventStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response StreamRunLog200TextEventStreamResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// If w doesn't support flushing, fall back to io.Copy.
+		_, err := io.Copy(w, response.Body)
+		return err
+	}
+	// text/event-stream messages are typically small; use a
+	// modest buffer and flush after each chunk so clients see
+	// events immediately instead of waiting on OS buffering.
+	buf := make([]byte, 4096)
+	for {
+		n, err := response.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+type StreamRunLog400ApplicationProblemPlusJSONResponse Problem
+
+func (response StreamRunLog400ApplicationProblemPlusJSONResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamRunLog404ApplicationProblemPlusJSONResponse Problem
+
+func (response StreamRunLog404ApplicationProblemPlusJSONResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamRunLog405ApplicationProblemPlusJSONResponse Problem
+
+func (response StreamRunLog405ApplicationProblemPlusJSONResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamRunLog500ApplicationProblemPlusJSONResponse Problem
+
+func (response StreamRunLog500ApplicationProblemPlusJSONResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnrollControllerRequestObject struct {
+	Body *EnrollControllerJSONRequestBody
+}
+
+type EnrollControllerResponseObject interface {
+	VisitEnrollControllerResponse(w http.ResponseWriter) error
+}
+
+type EnrollController204Response struct {
+}
+
+func (response EnrollController204Response) VisitEnrollControllerResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type EnrollController400ApplicationProblemPlusJSONResponse Problem
+
+func (response EnrollController400ApplicationProblemPlusJSONResponse) VisitEnrollControllerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnrollController401ApplicationProblemPlusJSONResponse Problem
+
+func (response EnrollController401ApplicationProblemPlusJSONResponse) VisitEnrollControllerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnrollController405ApplicationProblemPlusJSONResponse Problem
+
+func (response EnrollController405ApplicationProblemPlusJSONResponse) VisitEnrollControllerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnrollController409ApplicationProblemPlusJSONResponse Problem
+
+func (response EnrollController409ApplicationProblemPlusJSONResponse) VisitEnrollControllerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EnrollController500ApplicationProblemPlusJSONResponse Problem
+
+func (response EnrollController500ApplicationProblemPlusJSONResponse) VisitEnrollControllerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PollForControllerCommandRequestObject struct {
-	ClusterName string `json:"clusterName"`
-	Params      PollForControllerCommandParams
+	Params PollForControllerCommandParams
 }
 
 type PollForControllerCommandResponseObject interface {
@@ -4264,10 +7538,304 @@ func (response PollForControllerCommand500ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type GetRunLogCursorRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+}
+
+type GetRunLogCursorResponseObject interface {
+	VisitGetRunLogCursorResponse(w http.ResponseWriter) error
+}
+
+type GetRunLogCursor200JSONResponse LogCursor
+
+func (response GetRunLogCursor200JSONResponse) VisitGetRunLogCursorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogCursor401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRunLogCursor401ApplicationProblemPlusJSONResponse) VisitGetRunLogCursorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogCursor404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRunLogCursor404ApplicationProblemPlusJSONResponse) VisitGetRunLogCursorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogCursor405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRunLogCursor405ApplicationProblemPlusJSONResponse) VisitGetRunLogCursorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogCursor500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRunLogCursor500ApplicationProblemPlusJSONResponse) VisitGetRunLogCursorResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SealRunLogRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+	Body  *SealRunLogJSONRequestBody
+}
+
+type SealRunLogResponseObject interface {
+	VisitSealRunLogResponse(w http.ResponseWriter) error
+}
+
+type SealRunLog204Response struct {
+}
+
+func (response SealRunLog204Response) VisitSealRunLogResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type SealRunLog400ApplicationProblemPlusJSONResponse Problem
+
+func (response SealRunLog400ApplicationProblemPlusJSONResponse) VisitSealRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SealRunLog401ApplicationProblemPlusJSONResponse Problem
+
+func (response SealRunLog401ApplicationProblemPlusJSONResponse) VisitSealRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SealRunLog404ApplicationProblemPlusJSONResponse Problem
+
+func (response SealRunLog404ApplicationProblemPlusJSONResponse) VisitSealRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SealRunLog405ApplicationProblemPlusJSONResponse Problem
+
+func (response SealRunLog405ApplicationProblemPlusJSONResponse) VisitSealRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SealRunLog409ApplicationProblemPlusJSONResponse Problem
+
+func (response SealRunLog409ApplicationProblemPlusJSONResponse) VisitSealRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SealRunLog500ApplicationProblemPlusJSONResponse Problem
+
+func (response SealRunLog500ApplicationProblemPlusJSONResponse) VisitSealRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendRunLogChunkRequestObject struct {
+	RunID  openapi_types.UUID `json:"runId"`
+	Params AppendRunLogChunkParams
+	Body   io.Reader
+}
+
+type AppendRunLogChunkResponseObject interface {
+	VisitAppendRunLogChunkResponse(w http.ResponseWriter) error
+}
+
+type AppendRunLogChunk204Response struct {
+}
+
+func (response AppendRunLogChunk204Response) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AppendRunLogChunk400ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendRunLogChunk400ApplicationProblemPlusJSONResponse) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendRunLogChunk401ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendRunLogChunk401ApplicationProblemPlusJSONResponse) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendRunLogChunk404ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendRunLogChunk404ApplicationProblemPlusJSONResponse) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendRunLogChunk405ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendRunLogChunk405ApplicationProblemPlusJSONResponse) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendRunLogChunk409ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendRunLogChunk409ApplicationProblemPlusJSONResponse) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendRunLogChunk413ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendRunLogChunk413ApplicationProblemPlusJSONResponse) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendRunLogChunk500ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendRunLogChunk500ApplicationProblemPlusJSONResponse) VisitAppendRunLogChunkResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReportRunObservationRequestObject struct {
-	ClusterName string             `json:"clusterName"`
-	RunID       openapi_types.UUID `json:"runId"`
-	Body        *ReportRunObservationJSONRequestBody
+	RunID openapi_types.UUID `json:"runId"`
+	Body  *ReportRunObservationJSONRequestBody
 }
 
 type ReportRunObservationResponseObject interface {
@@ -4366,6 +7934,202 @@ func (response ReportRunObservation500ApplicationProblemPlusJSONResponse) VisitR
 	return err
 }
 
+type UploadRunArtifactRequestObject struct {
+	RunID        openapi_types.UUID `json:"runId"`
+	ArtifactName CatalogName        `json:"artifactName"`
+	Params       UploadRunArtifactParams
+	Body         io.Reader
+}
+
+type UploadRunArtifactResponseObject interface {
+	VisitUploadRunArtifactResponse(w http.ResponseWriter) error
+}
+
+type UploadRunArtifact204Response struct {
+}
+
+func (response UploadRunArtifact204Response) VisitUploadRunArtifactResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UploadRunArtifact400ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadRunArtifact400ApplicationProblemPlusJSONResponse) VisitUploadRunArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadRunArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadRunArtifact401ApplicationProblemPlusJSONResponse) VisitUploadRunArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadRunArtifact404ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadRunArtifact404ApplicationProblemPlusJSONResponse) VisitUploadRunArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadRunArtifact405ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadRunArtifact405ApplicationProblemPlusJSONResponse) VisitUploadRunArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadRunArtifact409ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadRunArtifact409ApplicationProblemPlusJSONResponse) VisitUploadRunArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadRunArtifact500ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadRunArtifact500ApplicationProblemPlusJSONResponse) VisitUploadRunArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadRunInputRequestObject struct {
+	RunID     openapi_types.UUID `json:"runId"`
+	InputName CatalogName        `json:"inputName"`
+}
+
+type DownloadRunInputResponseObject interface {
+	VisitDownloadRunInputResponse(w http.ResponseWriter) error
+}
+
+type DownloadRunInput200ResponseHeaders struct {
+	Digest *string
+}
+
+type DownloadRunInput200ApplicationOctetStreamResponse struct {
+	Body          io.Reader
+	Headers       DownloadRunInput200ResponseHeaders
+	ContentLength int64
+}
+
+func (response DownloadRunInput200ApplicationOctetStreamResponse) VisitDownloadRunInputResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	if response.Headers.Digest != nil {
+		w.Header().Set("Digest", fmt.Sprint(*response.Headers.Digest))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type DownloadRunInput401ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadRunInput401ApplicationProblemPlusJSONResponse) VisitDownloadRunInputResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadRunInput404ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadRunInput404ApplicationProblemPlusJSONResponse) VisitDownloadRunInputResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadRunInput405ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadRunInput405ApplicationProblemPlusJSONResponse) VisitDownloadRunInputResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadRunInput500ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadRunInput500ApplicationProblemPlusJSONResponse) VisitDownloadRunInputResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -4403,6 +8167,9 @@ func (response GetHealth405ApplicationProblemPlusJSONResponse) VisitGetHealthRes
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// DownloadArtifact Download a sealed artifact
+	// (GET /api/v1/artifacts/{artifactId}/download)
+	DownloadArtifact(ctx context.Context, request DownloadArtifactRequestObject) (DownloadArtifactResponseObject, error)
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(ctx context.Context, request ListClustersRequestObject) (ListClustersResponseObject, error)
@@ -4421,15 +8188,42 @@ type StrictServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(ctx context.Context, request CreateRunRequestObject) (CreateRunResponseObject, error)
+	// GetRun Get a Run
+	// (GET /api/v1/runs/{runId})
+	GetRun(ctx context.Context, request GetRunRequestObject) (GetRunResponseObject, error)
+	// ListRunArtifacts List a Run's artifacts
+	// (GET /api/v1/runs/{runId}/artifacts)
+	ListRunArtifacts(ctx context.Context, request ListRunArtifactsRequestObject) (ListRunArtifactsResponseObject, error)
 	// CancelRun Cancel a Run
 	// (POST /api/v1/runs/{runId}/cancel)
 	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
+	// StreamRunLog Stream retained and live Run log bytes
+	// (GET /api/v1/runs/{runId}/logs)
+	StreamRunLog(ctx context.Context, request StreamRunLogRequestObject) (StreamRunLogResponseObject, error)
+	// EnrollController Enroll a cluster controller
+	// (POST /controller/v1/enroll)
+	EnrollController(ctx context.Context, request EnrollControllerRequestObject) (EnrollControllerResponseObject, error)
 	// PollForControllerCommand Poll for a controller command
-	// (POST /controller/v1/controllers/{clusterName}/poll)
+	// (POST /controller/v1/poll)
 	PollForControllerCommand(ctx context.Context, request PollForControllerCommandRequestObject) (PollForControllerCommandResponseObject, error)
+	// GetRunLogCursor Get the durable Run log cursor
+	// (GET /controller/v1/runs/{runId}/log)
+	GetRunLogCursor(ctx context.Context, request GetRunLogCursorRequestObject) (GetRunLogCursorResponseObject, error)
+	// SealRunLog Seal the durable Run log
+	// (POST /controller/v1/runs/{runId}/log)
+	SealRunLog(ctx context.Context, request SealRunLogRequestObject) (SealRunLogResponseObject, error)
+	// AppendRunLogChunk Append a Run log chunk
+	// (POST /controller/v1/runs/{runId}/log-chunks)
+	AppendRunLogChunk(ctx context.Context, request AppendRunLogChunkRequestObject) (AppendRunLogChunkResponseObject, error)
 	// ReportRunObservation Report a Run observation
-	// (POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations)
+	// (POST /controller/v1/runs/{runId}/observations)
 	ReportRunObservation(ctx context.Context, request ReportRunObservationRequestObject) (ReportRunObservationResponseObject, error)
+	// UploadRunArtifact Upload one declared artifact from the Run harness
+	// (PUT /execution/v1/runs/{runId}/artifacts/{artifactName})
+	UploadRunArtifact(ctx context.Context, request UploadRunArtifactRequestObject) (UploadRunArtifactResponseObject, error)
+	// DownloadRunInput Download one explicitly bound input for the Run harness
+	// (GET /execution/v1/runs/{runId}/inputs/{inputName})
+	DownloadRunInput(ctx context.Context, request DownloadRunInputRequestObject) (DownloadRunInputResponseObject, error)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -4472,6 +8266,32 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// DownloadArtifact operation middleware
+func (sh *strictHandler) DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID) {
+	var request DownloadArtifactRequestObject
+
+	request.ArtifactID = artifactID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DownloadArtifact(ctx, request.(DownloadArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DownloadArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DownloadArtifactResponseObject); ok {
+		if err := validResponse.VisitDownloadArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListClusters operation middleware
@@ -4638,6 +8458,58 @@ func (sh *strictHandler) CreateRun(w http.ResponseWriter, r *http.Request, param
 	}
 }
 
+// GetRun operation middleware
+func (sh *strictHandler) GetRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request GetRunRequestObject
+
+	request.RunID = runID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRun(ctx, request.(GetRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRunResponseObject); ok {
+		if err := validResponse.VisitGetRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRunArtifacts operation middleware
+func (sh *strictHandler) ListRunArtifacts(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request ListRunArtifactsRequestObject
+
+	request.RunID = runID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRunArtifacts(ctx, request.(ListRunArtifactsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRunArtifacts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRunArtifactsResponseObject); ok {
+		if err := validResponse.VisitListRunArtifactsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // CancelRun operation middleware
 func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
 	var request CancelRunRequestObject
@@ -4664,11 +8536,68 @@ func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, runID
 	}
 }
 
+// StreamRunLog operation middleware
+func (sh *strictHandler) StreamRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params StreamRunLogParams) {
+	var request StreamRunLogRequestObject
+
+	request.RunID = runID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StreamRunLog(ctx, request.(StreamRunLogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StreamRunLog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StreamRunLogResponseObject); ok {
+		if err := validResponse.VisitStreamRunLogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EnrollController operation middleware
+func (sh *strictHandler) EnrollController(w http.ResponseWriter, r *http.Request) {
+	var request EnrollControllerRequestObject
+
+	var body EnrollControllerJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EnrollController(ctx, request.(EnrollControllerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EnrollController")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EnrollControllerResponseObject); ok {
+		if err := validResponse.VisitEnrollControllerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // PollForControllerCommand operation middleware
-func (sh *strictHandler) PollForControllerCommand(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerCommandParams) {
+func (sh *strictHandler) PollForControllerCommand(w http.ResponseWriter, r *http.Request, params PollForControllerCommandParams) {
 	var request PollForControllerCommandRequestObject
 
-	request.ClusterName = clusterName
 	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
@@ -4691,11 +8620,98 @@ func (sh *strictHandler) PollForControllerCommand(w http.ResponseWriter, r *http
 	}
 }
 
+// GetRunLogCursor operation middleware
+func (sh *strictHandler) GetRunLogCursor(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request GetRunLogCursorRequestObject
+
+	request.RunID = runID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRunLogCursor(ctx, request.(GetRunLogCursorRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRunLogCursor")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRunLogCursorResponseObject); ok {
+		if err := validResponse.VisitGetRunLogCursorResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SealRunLog operation middleware
+func (sh *strictHandler) SealRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request SealRunLogRequestObject
+
+	request.RunID = runID
+
+	var body SealRunLogJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SealRunLog(ctx, request.(SealRunLogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SealRunLog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SealRunLogResponseObject); ok {
+		if err := validResponse.VisitSealRunLogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AppendRunLogChunk operation middleware
+func (sh *strictHandler) AppendRunLogChunk(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params AppendRunLogChunkParams) {
+	var request AppendRunLogChunkRequestObject
+
+	request.RunID = runID
+	request.Params = params
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AppendRunLogChunk(ctx, request.(AppendRunLogChunkRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AppendRunLogChunk")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AppendRunLogChunkResponseObject); ok {
+		if err := validResponse.VisitAppendRunLogChunkResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ReportRunObservation operation middleware
-func (sh *strictHandler) ReportRunObservation(w http.ResponseWriter, r *http.Request, clusterName string, runID openapi_types.UUID) {
+func (sh *strictHandler) ReportRunObservation(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
 	var request ReportRunObservationRequestObject
 
-	request.ClusterName = clusterName
 	request.RunID = runID
 
 	var body ReportRunObservationJSONRequestBody
@@ -4718,6 +8734,63 @@ func (sh *strictHandler) ReportRunObservation(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReportRunObservationResponseObject); ok {
 		if err := validResponse.VisitReportRunObservationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadRunArtifact operation middleware
+func (sh *strictHandler) UploadRunArtifact(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, artifactName CatalogName, params UploadRunArtifactParams) {
+	var request UploadRunArtifactRequestObject
+
+	request.RunID = runID
+	request.ArtifactName = artifactName
+	request.Params = params
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadRunArtifact(ctx, request.(UploadRunArtifactRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadRunArtifact")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadRunArtifactResponseObject); ok {
+		if err := validResponse.VisitUploadRunArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DownloadRunInput operation middleware
+func (sh *strictHandler) DownloadRunInput(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, inputName CatalogName) {
+	var request DownloadRunInputRequestObject
+
+	request.RunID = runID
+	request.InputName = inputName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DownloadRunInput(ctx, request.(DownloadRunInputRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DownloadRunInput")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DownloadRunInputResponseObject); ok {
+		if err := validResponse.VisitDownloadRunInputResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -14,12 +14,13 @@ import (
 )
 
 type Config struct {
-	ClusterName    string
-	ServerURL      string
-	BearerToken    string
-	CheckoutImage  string
-	HarnessImage   string
-	GitCredentials map[string]string
+	ClusterName     string
+	ServerURL       string
+	EnrollmentToken string
+	BearerToken     string
+	CheckoutImage   string
+	HarnessImage    string
+	GitCredentials  map[string]string
 }
 
 func (c Config) Validate() error {
@@ -46,6 +47,10 @@ func (c Config) Validate() error {
 
 	if err := auth.ValidateBearerToken(c.BearerToken); err != nil {
 		return fmt.Errorf("validate controller credential: %w", err)
+	}
+
+	if err := auth.ValidateBearerToken(c.EnrollmentToken); err != nil {
+		return fmt.Errorf("validate controller enrollment credential: %w", err)
 	}
 
 	if err := validateImage("checkout image", c.CheckoutImage); err != nil {

@@ -10,7 +10,10 @@ The current foundation establishes the four Slipramp processes: the Server,
 cluster controller, harness, and web application. The split OpenAPI contract
 defines the Server's JSON liveness probe at `GET /healthz`, the read-only
 cluster health endpoint at `GET /api/v1/clusters`, and the authenticated
-controller long poll at `POST /controller/v1/controllers/{clusterName}/poll`.
+controller enrollment and long poll at `POST /controller/v1/enroll` and
+`POST /controller/v1/poll`. Ongoing controller routes derive the cluster
+identity from the enrolled bearer credential rather than repeating it in every
+path.
 Repository registrations can be listed and created at
 `GET|POST /api/v1/repositories` and removed at
 `DELETE /api/v1/repositories/{repositoryId}`. Go request and response types,
@@ -60,6 +63,14 @@ definitions. The web application lists repository refresh health and provides
 a repository detail screen for browsing the active revision's targets and
 actions.
 
+Each successful refresh compares the newly accepted commit with the previous
+active catalog commit. Changed repository paths are matched against every
+target's `watch` patterns, including recursive `**` segments. Slipramp stores
+the resulting desired commit in a durable target projection and shows it in
+the repository catalog and target detail screens. New and reactivated targets
+start at the commit where they become active, removed targets are archived,
+and invalid catalogs do not change target state or initiate Runs.
+
 `POST /api/v1/runs` resolves a requested action against the active catalog and
 persists an immutable queued Run with validated parameters, an optional
 idempotency key, and a frozen repository, target, action, runtime, and placement
@@ -70,6 +81,34 @@ redelivered with the same identity until the controller reports the materialized
 Job UID and `preparing` phase. Lifecycle phase, terminal outcome, cancellation
 intent, Job identity, observation freshness, diagnostics, and exit code remain
 separate persisted facts.
+
+Authenticated controllers can append raw action output at
+`POST /controller/v1/runs/{runId}/log-chunks?offsetBytes=N`. Each chunk is
+limited to 256 KiB, written to S3-compatible storage before its digest and
+offset metadata become visible in PostgreSQL, and accepted idempotently when
+the same bytes are retried at the same offset. The enrolled credential must
+identify the Run's assigned cluster. The controller first reads the durable
+cursor, so a restarted controller replays only bytes the Server has not
+accepted. Before reporting a terminal observation it seals the log with the
+verified final byte size and SHA-256 digest.
+
+Run logs stream as reconnectable SSE from
+`GET /api/v1/runs/{runId}/logs`; the event ID is the next durable byte offset.
+Run detail and artifact metadata are available at `GET /api/v1/runs/{runId}`
+and `GET /api/v1/runs/{runId}/artifacts`, and sealed contents download from
+`GET /api/v1/artifacts/{artifactId}/download`. The web Run screen consumes the
+same stream and exposes retained downloads.
+
+Assignments carry a narrowly scoped, deterministic Run artifact credential that
+the harness uses only with the Server's execution artifact endpoints. Before
+starting the action the harness downloads every explicitly selected input to
+its declared `mountPath`; afterward it uploads each declared output path with
+its size and digest. Retries are idempotent. Input selection is explicit in
+the Run request and compatible consumers are pinned to the producing Run's
+commit and catalog revision. PostgreSQL stores bindings, provenance,
+sensitivity, and retention metadata while S3-compatible storage holds bytes.
+Successful preview Runs expose an **Apply this plan** action when the frozen
+catalog contains a directly runnable consumer for the retained plan.
 
 `POST /api/v1/runs/{runId}/cancel` records a cancel request idempotently.
 Queued Runs finish as canceled immediately. Controllers receive cancel commands
@@ -101,7 +140,7 @@ The Server accepts these environment variables:
 | --- | --- | --- |
 | `SLIPRAMP_SERVER_ADDRESS` | `:8080` | TCP address on which the Server listens |
 | `SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT` | `10s` | Graceful shutdown deadline |
-| `SLIPRAMP_CONTROLLER_TOKENS` | `{}` | JSON object mapping registered cluster names to static bearer credentials |
+| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS` | `{}` | JSON object mapping cluster names to their bootstrap enrollment credentials |
 | `SLIPRAMP_PLACEMENTS_FILE` | Unset | Path to the versioned YAML placement configuration |
 | `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS` | `{}` | JSON object mapping refresh credential names to mounted Git config files |
 | `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL` | `1m` | Interval between repository branch refreshes |
@@ -114,10 +153,11 @@ The Server accepts these environment variables:
 | `SLIPRAMP_S3_ACCESS_KEY_ID` | `slipramp` | S3 access key ID |
 | `SLIPRAMP_S3_SECRET_ACCESS_KEY` | `slipramp-development` | S3 secret access key |
 | `SLIPRAMP_S3_STARTUP_TIMEOUT` | `10s` | S3 bucket availability check deadline |
+| `SLIPRAMP_ARTIFACT_TOKEN_SECRET` | Local development secret | HMAC key for Run-scoped harness artifact credentials; use at least 32 characters |
 
 Placements are loaded from the file named by `SLIPRAMP_PLACEMENTS_FILE` when the
 Server starts. Each placement selects a cluster registered in
-`SLIPRAMP_CONTROLLER_TOKENS` and may define Kubernetes execution defaults
+`SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS` and may define Kubernetes execution defaults
 without giving the Server access to the Kubernetes API. For example, a
 placements file may contain:
 
@@ -160,8 +200,12 @@ node selector, or run deadline.
 The Server emits structured JSON logs and shuts down gracefully on `SIGINT` or
 `SIGTERM`.
 
-The controller process runs inside its execution cluster, authenticates to the
-Server, and continuously long-polls for controller commands. Successful polls
+The controller process runs inside its execution cluster. At startup it uses a
+cluster-scoped enrollment credential to register the SHA-256 digest of its
+separate controller-owned bearer credential. Repeating enrollment with the
+same credential is idempotent; replacing an enrolled credential is rejected.
+The controller then authenticates with that enrolled credential and
+continuously long-polls for controller commands. Successful polls
 and Run observation reports upsert the cluster's first-seen and last-seen
 timestamps in PostgreSQL. The Server reports a cluster as unreachable after one
 minute without either request, and the web index shows the resulting cluster
@@ -183,7 +227,8 @@ environment variables:
 | --- | --- |
 | `SLIPRAMP_CONTROLLER_CLUSTER` | Stable logical name of this execution cluster |
 | `SLIPRAMP_CONTROLLER_SERVER_URL` | Absolute HTTPS URL of the Slipramp Server |
-| `SLIPRAMP_CONTROLLER_TOKEN` | Static bearer credential used with the Server |
+| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN` | Cluster-scoped bootstrap credential used only to enroll the controller |
+| `SLIPRAMP_CONTROLLER_TOKEN` | Controller-owned bearer credential registered during enrollment and used for ongoing requests |
 | `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE` | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container |
 | `SLIPRAMP_CONTROLLER_HARNESS_IMAGE` | Pinned image whose entrypoint is `slipramp-harness` |
 | `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS` | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
@@ -199,9 +244,13 @@ runtime image does not need Slipramp tooling. A checkout credential Secret may
 provide `gitconfig`, `ssh-privatekey`, and `known_hosts` keys; it is mounted only
 in the checkout init container.
 
-The harness executes an action from an explicit argument array without an
-implicit shell. It connects the action to its standard streams, forwards
-`SIGHUP`, `SIGINT`, and `SIGTERM`, and exits with the action's exit status.
+The harness materializes selected inputs, executes an action from an explicit
+argument array without an implicit shell, and uploads declared output files.
+It removes its Run-scoped artifact credential from the child process
+environment, connects the action to its standard streams, forwards `SIGHUP`,
+`SIGINT`, and `SIGTERM`, and preserves the action's exit status. An artifact
+transfer failure changes an otherwise successful harness execution to failure;
+it never hides a nonzero action exit code.
 
 The web process is a React Router v8 Framework Mode application with server-side
 rendering and a Mantine v9 application shell. Its index route uses the generated
@@ -227,7 +276,7 @@ task local:up
 task generate
 task check
 task integration
-SLIPRAMP_CONTROLLER_TOKENS='{"colo":"development-token"}' \
+SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS='{"colo":"development-enrollment-token"}' \
   go run ./cmd/slipramp-server
 go run ./cmd/slipramp-harness command argument
 task web:dev

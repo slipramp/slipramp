@@ -69,6 +69,12 @@ type Cluster struct {
 	LastSeenAt  pgtype.Timestamptz
 }
 
+type ControllerCredential struct {
+	ClusterName string
+	Sha256      string
+	EnrolledAt  pgtype.Timestamptz
+}
+
 type Repository struct {
 	ID                      pgtype.UUID
 	Name                    string
@@ -115,6 +121,12 @@ type Run struct {
 	ExitCode                *int32
 }
 
+type RunArtifactInput struct {
+	RunID      pgtype.UUID
+	InputName  string
+	ArtifactID pgtype.UUID
+}
+
 type RunPhaseTransition struct {
 	ID         int64
 	RunID      pgtype.UUID
@@ -124,4 +136,14 @@ type RunPhaseTransition struct {
 	Message    *string
 	ExitCode   *int32
 	RecordedAt pgtype.Timestamptz
+}
+
+type Target struct {
+	RepositoryID      pgtype.UUID
+	Name              string
+	CatalogRevisionID pgtype.UUID
+	DesiredCommitSha  string
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	ArchivedAt        pgtype.Timestamptz
 }

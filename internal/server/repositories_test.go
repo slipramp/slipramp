@@ -49,7 +49,9 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 
 	newHandler(
 		&recordingClusterService{},
+		nil,
 		repositories,
+		nil,
 		nil,
 		nil,
 		nil,
@@ -163,7 +165,9 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 
 			newHandler(
 				&recordingClusterService{},
+				nil,
 				test.repositories,
+				nil,
 				nil,
 				nil,
 				nil,
@@ -203,7 +207,9 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 	}
 	httpHandler := newHandler(
 		&recordingClusterService{},
+		nil,
 		repositories,
+		nil,
 		nil,
 		nil,
 		nil,

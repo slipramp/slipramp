@@ -54,6 +54,14 @@ type Store interface {
 	) error
 }
 
+type runReader interface {
+	GetRun(context.Context, uuid.UUID) (Run, error)
+}
+
+type artifactInputStore interface {
+	GetArtifactInputCandidate(context.Context, uuid.UUID) (ArtifactInput, error)
+}
+
 type RepositoryService interface {
 	GetRepository(
 		ctx context.Context,
@@ -66,6 +74,10 @@ type CatalogService interface {
 		ctx context.Context,
 		repositoryID uuid.UUID,
 	) (catalog.Revision, error)
+}
+
+type catalogRevisionService interface {
+	GetRevision(context.Context, uuid.UUID, uuid.UUID) (catalog.Revision, error)
 }
 
 type Service struct {
@@ -97,6 +109,9 @@ func (s *Service) CreateRun(
 	ctx context.Context,
 	request CreateRequest,
 ) (Run, error) {
+	if request.Inputs == nil {
+		request.Inputs = map[string]uuid.UUID{}
+	}
 	if err := validateRequest(request); err != nil {
 		return Run{}, err
 	}
@@ -140,7 +155,25 @@ func (s *Service) CreateRun(
 		return Run{}, fmt.Errorf("get run repository: %w", err)
 	}
 
-	revision, err := s.catalogs.GetActiveRevision(ctx, request.RepositoryID)
+	inputs, pinnedRevisionID, err := s.resolveInputCandidates(ctx, request)
+	if err != nil {
+		return Run{}, err
+	}
+
+	var revision catalog.Revision
+	if pinnedRevisionID == uuid.Nil {
+		revision, err = s.catalogs.GetActiveRevision(ctx, request.RepositoryID)
+	} else {
+		revisions, ok := s.catalogs.(catalogRevisionService)
+		if !ok {
+			return Run{}, errors.New("catalog service cannot load pinned revisions")
+		}
+		revision, err = revisions.GetRevision(
+			ctx,
+			request.RepositoryID,
+			pinnedRevisionID,
+		)
+	}
 	if errors.Is(err, catalog.ErrNotFound) {
 		return Run{}, ErrCatalogNotFound
 	}
@@ -156,6 +189,10 @@ func (s *Service) CreateRun(
 	action, found := target.EffectiveAction(request.ActionName)
 	if !found {
 		return Run{}, ErrActionNotFound
+	}
+
+	if err := validateArtifactInputs(action, inputs); err != nil {
+		return Run{}, err
 	}
 
 	runtime, found := findRuntime(revision.Catalog.Runtimes, action.Runtime)
@@ -201,6 +238,7 @@ func (s *Service) CreateRun(
 			Action:    action,
 			Runtime:   runtime,
 			Placement: placementSnapshot(action.Placement, placementConfig),
+			Inputs:    inputs,
 		},
 		CreatedAt: createdAt,
 	}
@@ -211,6 +249,132 @@ func (s *Service) CreateRun(
 	}
 
 	return created, nil
+}
+
+func (s *Service) GetRun(ctx context.Context, runID uuid.UUID) (Run, error) {
+	if runID == uuid.Nil {
+		return Run{}, fmt.Errorf("%w: Run ID is required", ErrInvalidRequest)
+	}
+
+	reader, ok := s.runs.(runReader)
+	if !ok {
+		return Run{}, errors.New("Run store cannot load Runs")
+	}
+	record, err := reader.GetRun(ctx, runID)
+	if err != nil {
+		return Run{}, err
+	}
+
+	return record, nil
+}
+
+func (s *Service) resolveInputCandidates(
+	ctx context.Context,
+	request CreateRequest,
+) (map[string]ArtifactInput, uuid.UUID, error) {
+	result := make(map[string]ArtifactInput, len(request.Inputs))
+	var revisionID uuid.UUID
+	artifacts, ok := s.runs.(artifactInputStore)
+	if len(request.Inputs) > 0 && !ok {
+		return nil, uuid.Nil, errors.New("Run store cannot resolve artifact inputs")
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(request.Inputs)) {
+		if strings.TrimSpace(name) == "" {
+			return nil, uuid.Nil, fmt.Errorf(
+				"%w: input name must not be blank",
+				ErrInvalidInputs,
+			)
+		}
+
+		artifactID := request.Inputs[name]
+		if artifactID == uuid.Nil {
+			return nil, uuid.Nil, fmt.Errorf(
+				"%w: input %q artifact ID is required",
+				ErrInvalidInputs,
+				name,
+			)
+		}
+
+		candidate, err := artifacts.GetArtifactInputCandidate(ctx, artifactID)
+		if errors.Is(err, ErrArtifactNotFound) {
+			return nil, uuid.Nil, ErrArtifactNotFound
+		}
+		if err != nil {
+			return nil, uuid.Nil, fmt.Errorf("get artifact input %q: %w", name, err)
+		}
+
+		if candidate.RepositoryID != request.RepositoryID ||
+			candidate.TargetName != request.TargetName ||
+			candidate.SHA256 == "" ||
+			candidate.RetentionState != "retained" {
+			return nil, uuid.Nil, fmt.Errorf(
+				"%w: artifact for input %q is not a retained, sealed artifact from this target",
+				ErrInvalidInputs,
+				name,
+			)
+		}
+
+		if revisionID == uuid.Nil {
+			revisionID = candidate.CatalogRevisionID
+		} else if revisionID != candidate.CatalogRevisionID {
+			return nil, uuid.Nil, fmt.Errorf(
+				"%w: all inputs must come from the same catalog revision",
+				ErrInvalidInputs,
+			)
+		}
+
+		result[name] = candidate
+	}
+
+	return result, revisionID, nil
+}
+
+func validateArtifactInputs(
+	action catalog.EffectiveAction,
+	inputs map[string]ArtifactInput,
+) error {
+	if len(inputs) != len(action.Inputs) {
+		return fmt.Errorf(
+			"%w: action requires %d explicit input bindings",
+			ErrInvalidInputs,
+			len(action.Inputs),
+		)
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(action.Inputs)) {
+		declaration := action.Inputs[name]
+		input, found := inputs[name]
+		if !found {
+			return fmt.Errorf(
+				"%w: required input %q was not supplied",
+				ErrInvalidInputs,
+				name,
+			)
+		}
+
+		if input.Name != name || input.ActionName != declaration.Artifact.FromAction {
+			return fmt.Errorf(
+				"%w: input %q must select artifact %q from action %q",
+				ErrInvalidInputs,
+				name,
+				name,
+				declaration.Artifact.FromAction,
+			)
+		}
+	}
+
+	for name := range inputs {
+		if _, declared := action.Inputs[name]; !declared {
+			return fmt.Errorf(
+				"%w: input %q is not declared by the action",
+				ErrInvalidInputs,
+				name,
+			)
+		}
+	}
+
+	return nil
 }
 
 func validateRequest(request CreateRequest) error {
@@ -387,17 +551,23 @@ func numberValue(value any) (float64, bool) {
 }
 
 func requestDigest(request CreateRequest, parameters map[string]any) (string, error) {
+	inputs := request.Inputs
+	if inputs == nil {
+		inputs = map[string]uuid.UUID{}
+	}
 	payload := struct {
-		RepositoryID uuid.UUID      `json:"repositoryId"`
-		Target       string         `json:"target"`
-		Action       string         `json:"action"`
-		Parameters   map[string]any `json:"parameters"`
-		Source       Source         `json:"source"`
+		RepositoryID uuid.UUID            `json:"repositoryId"`
+		Target       string               `json:"target"`
+		Action       string               `json:"action"`
+		Parameters   map[string]any       `json:"parameters"`
+		Inputs       map[string]uuid.UUID `json:"inputs"`
+		Source       Source               `json:"source"`
 	}{
 		RepositoryID: request.RepositoryID,
 		Target:       request.TargetName,
 		Action:       request.ActionName,
 		Parameters:   parameters,
+		Inputs:       inputs,
 		Source:       request.Source,
 	}
 

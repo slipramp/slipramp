@@ -90,6 +90,12 @@ JOIN catalog_revisions
 WHERE repositories.id = sqlc.arg(repository_id)
   AND repositories.removed_at IS NULL;
 
+-- name: GetCatalogRevision :one
+SELECT id, commit_sha, created_at
+FROM catalog_revisions
+WHERE id = sqlc.arg(id)
+  AND repository_id = sqlc.arg(repository_id);
+
 -- name: ListCatalogRuntimes :many
 SELECT definition
 FROM catalog_runtimes
@@ -100,4 +106,50 @@ ORDER BY name;
 SELECT definition
 FROM catalog_targets
 WHERE catalog_revision_id = sqlc.arg(catalog_revision_id)
+ORDER BY name;
+
+-- name: ListRepositoryTargetStates :many
+SELECT name, desired_commit_sha, archived_at
+FROM targets
+WHERE repository_id = sqlc.arg(repository_id)
+ORDER BY name;
+
+-- name: ArchiveMissingTargets :exec
+UPDATE targets
+SET catalog_revision_id = NULL,
+    updated_at = sqlc.arg(updated_at),
+    archived_at = sqlc.arg(updated_at)
+WHERE repository_id = sqlc.arg(repository_id)
+  AND archived_at IS NULL
+  AND NOT (name = ANY(sqlc.arg(active_names)::text[]));
+
+-- name: UpsertTargetState :exec
+INSERT INTO targets (
+    repository_id,
+    name,
+    catalog_revision_id,
+    desired_commit_sha,
+    created_at,
+    updated_at,
+    archived_at
+) VALUES (
+    sqlc.arg(repository_id),
+    sqlc.arg(name),
+    sqlc.arg(catalog_revision_id),
+    sqlc.arg(desired_commit_sha),
+    sqlc.arg(updated_at),
+    sqlc.arg(updated_at),
+    NULL
+)
+ON CONFLICT (repository_id, name) DO UPDATE
+SET catalog_revision_id = EXCLUDED.catalog_revision_id,
+    desired_commit_sha = EXCLUDED.desired_commit_sha,
+    updated_at = EXCLUDED.updated_at,
+    archived_at = NULL;
+
+-- name: ListCatalogTargetStates :many
+SELECT name, desired_commit_sha
+FROM targets
+WHERE catalog_revision_id = sqlc.arg(catalog_revision_id)
+  AND archived_at IS NULL
 ORDER BY name;

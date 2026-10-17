@@ -2,7 +2,9 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -20,9 +22,25 @@ type receivedPoll struct {
 	authorization string
 }
 
+type receivedEnrollment struct {
+	method        string
+	path          string
+	authorization string
+	body          string
+}
+
 type receivedReport struct {
 	method        string
 	path          string
+	authorization string
+	body          string
+}
+
+type receivedLogChunk struct {
+	method        string
+	path          string
+	offset        string
+	contentType   string
 	authorization string
 	body          string
 }
@@ -31,6 +49,50 @@ type httpDoerFunc func(request *http.Request) (*http.Response, error)
 
 func (f httpDoerFunc) Do(request *http.Request) (*http.Response, error) {
 	return f(request)
+}
+
+func TestServerClientEnrollsControllerCredential(t *testing.T) {
+	t.Parallel()
+
+	var enrollment receivedEnrollment
+	cfg := validConfig()
+	cfg.ServerURL = "https://slipramp.example.com/slipramp"
+	client, err := newServerClientWithHTTPClient(
+		cfg,
+		httpDoerFunc(func(request *http.Request) (*http.Response, error) {
+			body, readErr := io.ReadAll(request.Body)
+			if readErr != nil {
+				t.Fatalf("read request body: %v", readErr)
+			}
+			enrollment = receivedEnrollment{
+				method:        request.Method,
+				path:          request.URL.Path,
+				authorization: request.Header.Get("Authorization"),
+				body:          string(body),
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+	}
+
+	if err := client.Enroll(context.Background()); err != nil {
+		t.Fatalf("Enroll() error = %v", err)
+	}
+
+	digest := sha256.Sum256([]byte(cfg.BearerToken))
+	if enrollment.method != http.MethodPost ||
+		enrollment.path != "/slipramp/controller/v1/enroll" ||
+		enrollment.authorization != "Bearer enrollment-token" ||
+		!strings.Contains(enrollment.body, `"clusterName":"colo"`) ||
+		!strings.Contains(enrollment.body, `"credentialSha256":"`+fmt.Sprintf("%x", digest)+`"`) {
+		t.Errorf("enrollment = %#v", enrollment)
+	}
 }
 
 func TestServerClientPollSendsAuthenticatedRequest(t *testing.T) {
@@ -74,11 +136,11 @@ func TestServerClientPollSendsAuthenticatedRequest(t *testing.T) {
 		t.Errorf("method = %q, want %q", poll.method, http.MethodPost)
 	}
 
-	if poll.path != "/slipramp/controller/v1/controllers/colo/poll" {
+	if poll.path != "/slipramp/controller/v1/poll" {
 		t.Errorf(
 			"path = %q, want %q",
 			poll.path,
-			"/slipramp/controller/v1/controllers/colo/poll",
+			"/slipramp/controller/v1/poll",
 		)
 	}
 
@@ -206,6 +268,58 @@ func TestServerClientPollParsesCancelRun(t *testing.T) {
 	}
 }
 
+func TestServerClientAppendsAuthenticatedRunLogChunk(t *testing.T) {
+	t.Parallel()
+
+	var chunk receivedLogChunk
+	cfg := validConfig()
+	cfg.ServerURL = "https://slipramp.example.com/slipramp"
+	client, err := newServerClientWithHTTPClient(
+		cfg,
+		httpDoerFunc(func(request *http.Request) (*http.Response, error) {
+			body, readErr := io.ReadAll(request.Body)
+			if readErr != nil {
+				t.Fatalf("read request body: %v", readErr)
+			}
+			chunk = receivedLogChunk{
+				method:        request.Method,
+				path:          request.URL.Path,
+				offset:        request.URL.Query().Get("offsetBytes"),
+				contentType:   request.Header.Get("Content-Type"),
+				authorization: request.Header.Get("Authorization"),
+				body:          string(body),
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+	}
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	if err := client.AppendLogChunk(
+		context.Background(),
+		runID,
+		12,
+		[]byte("hello logs\n"),
+	); err != nil {
+		t.Fatalf("AppendLogChunk() error = %v", err)
+	}
+	if chunk.method != http.MethodPost ||
+		chunk.path != "/slipramp/controller/v1/runs/"+
+			runID.String()+"/log-chunks" ||
+		chunk.offset != "12" ||
+		chunk.contentType != "application/octet-stream" ||
+		chunk.authorization != "Bearer controller-token" ||
+		chunk.body != "hello logs\n" {
+		t.Errorf("chunk = %#v", chunk)
+	}
+}
+
 func TestServerClientReportsAuthenticatedRunObservation(t *testing.T) {
 	t.Parallel()
 
@@ -245,7 +359,7 @@ func TestServerClientReportsAuthenticatedRunObservation(t *testing.T) {
 		t.Fatalf("ReportObservation() error = %v", err)
 	}
 	if report.method != http.MethodPost ||
-		report.path != "/slipramp/controller/v1/controllers/colo/runs/"+
+		report.path != "/slipramp/controller/v1/runs/"+
 			runID.String()+"/observations" ||
 		report.authorization != "Bearer controller-token" ||
 		!strings.Contains(report.body, `"phase":"running"`) {

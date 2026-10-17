@@ -39,6 +39,25 @@ ClusterList:
       items:
         $ref: "#/Cluster"
 
+ControllerEnrollment:
+  type: object
+  required:
+    - clusterName
+    - credentialSha256
+  properties:
+    clusterName:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: Cluster identity authorized by the enrollment credential.
+    credentialSha256:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+      description: >-
+        SHA-256 digest of the controller-generated bearer credential that will
+        identify this cluster after enrollment.
+
 RunObservation:
   type: object
   required:
@@ -123,6 +142,7 @@ RunAssignment:
     - action
     - runtime
     - placement
+    - artifactAccess
   properties:
     id:
       type: string
@@ -151,6 +171,8 @@ RunAssignment:
       $ref: "#/RunAssignmentRuntime"
     placement:
       $ref: "#/RunAssignmentPlacement"
+    artifactAccess:
+      $ref: "#/RunArtifactAccess"
 
 RunAssignmentRepository:
   type: object
@@ -290,3 +312,13 @@ RunAssignmentCredential:
     secretName:
       type: string
       minLength: 1
+
+RunArtifactAccess:
+  type: object
+  required:
+    - token
+  properties:
+    token:
+      type: string
+      minLength: 1
+      description: Run-scoped bearer credential for declared outputs and inputs.

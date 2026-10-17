@@ -4,6 +4,8 @@ package controller
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"sync"
@@ -22,9 +24,16 @@ const (
 )
 
 var (
-	errControllerCredentialRejected = errors.New("controller credential was rejected")
-	errRunObservationRejected       = errors.New("run observation was rejected")
+	errControllerCredentialRejected           = errors.New("controller credential was rejected")
+	errControllerEnrollmentCredentialRejected = errors.New("controller enrollment credential was rejected")
+	errControllerEnrollmentConflict           = errors.New("controller enrollment conflicts with an existing identity")
+	errRunLogChunkRejected                    = errors.New("run log chunk was rejected")
+	errRunObservationRejected                 = errors.New("run observation was rejected")
 )
+
+type controllerEnroller interface {
+	Enroll(ctx context.Context) error
+}
 
 type commandPoller interface {
 	Poll(ctx context.Context) (*api.ControllerCommand, error)
@@ -38,6 +47,17 @@ type runObservationReporter interface {
 	) error
 }
 
+type runLogReporter interface {
+	GetLogCursor(context.Context, uuid.UUID) (logCursor, error)
+	AppendLogChunk(context.Context, uuid.UUID, int64, []byte) error
+	SealLog(context.Context, uuid.UUID, int64, string) error
+}
+
+type logCursor struct {
+	nextOffsetBytes int64
+	sealed          bool
+}
+
 type activeObserver struct {
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -48,7 +68,9 @@ type Controller struct {
 	serverURL      string
 	logger         *slog.Logger
 	server         commandPoller
+	enrollment     controllerEnroller
 	reports        runObservationReporter
+	logs           runLogReporter
 	jobs           runJobs
 	retryDelay     time.Duration
 	observeEvery   time.Duration
@@ -84,7 +106,9 @@ func New(
 		serverURL:      cfg.ServerURL,
 		logger:         logger.With("component", "controller"),
 		server:         server,
+		enrollment:     server,
 		reports:        server,
+		logs:           server,
 		jobs:           newKubernetesRunJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
 		retryDelay:     pollRetryDelay,
 		observeEvery:   jobObservationPeriod,
@@ -106,6 +130,10 @@ func (c *Controller) Run(ctx context.Context) error {
 		"server_url", c.serverURL,
 	)
 	defer c.logger.Info("controller stopped", "cluster", c.clusterName)
+
+	if err := c.enroll(ctx); err != nil {
+		return err
+	}
 
 	if !c.recoverObservations(observeContext) {
 		return nil
@@ -141,6 +169,33 @@ func (c *Controller) Run(ctx context.Context) error {
 
 		c.logger.Warn(
 			"controller poll failed",
+			"cluster", c.clusterName,
+			"error", err,
+		)
+		if !waitForRetry(ctx, c.retryDelay) {
+			return nil
+		}
+	}
+}
+
+func (c *Controller) enroll(ctx context.Context) error {
+	for {
+		err := c.enrollment.Enroll(ctx)
+		if err == nil {
+			c.logger.Info("controller enrolled", "cluster", c.clusterName)
+
+			return nil
+		}
+		if ctx.Err() != nil {
+			return nil
+		}
+		if errors.Is(err, errControllerEnrollmentCredentialRejected) ||
+			errors.Is(err, errControllerEnrollmentConflict) {
+			return err
+		}
+
+		c.logger.Warn(
+			"controller enrollment failed",
 			"cluster", c.clusterName,
 			"error", err,
 		)
@@ -257,6 +312,24 @@ func (c *Controller) handleCancel(
 ) error {
 	c.stopObservation(command.ID)
 
+	handle := jobHandle{
+		runID:     command.ID,
+		namespace: string(command.JobNamespace),
+		name:      runJobName(command.ID),
+	}
+	if command.JobUID != nil {
+		handle.uid = *command.JobUID
+	}
+	if err := c.syncLog(ctx, handle, true); err != nil {
+		c.logger.Warn(
+			"finalize canceled Run log",
+			"run_id", command.ID,
+			"error", err,
+		)
+
+		return nil
+	}
+
 	jobUID, err := c.jobs.Cancel(ctx, command)
 	if err != nil {
 		c.logger.Warn(
@@ -363,7 +436,28 @@ func (c *Controller) observeRun(
 				"run_id", handle.runID,
 				"error", err,
 			)
-		} else if shouldReport(observation, reported, reportedAt, c.heartbeatEvery) {
+		} else {
+			logErr := c.syncLog(ctx, handle, observation.terminal())
+			if logErr != nil && observation.terminal() {
+				c.logger.Warn(
+					"finalize Run log",
+					"run_id", handle.runID,
+					"error", logErr,
+				)
+				if !waitForRetry(ctx, c.observeEvery) {
+					return
+				}
+				continue
+			}
+			if logErr != nil && !errors.Is(logErr, errLogNotReady) {
+				c.logger.Warn(
+					"forward Run log",
+					"run_id", handle.runID,
+					"error", logErr,
+				)
+			}
+		}
+		if err == nil && shouldReport(observation, reported, reportedAt, c.heartbeatEvery) {
 			err = c.reports.ReportObservation(
 				ctx,
 				handle.runID,
@@ -408,6 +502,64 @@ func (c *Controller) observeRun(
 			return
 		}
 	}
+}
+
+func (c *Controller) syncLog(
+	ctx context.Context,
+	handle jobHandle,
+	seal bool,
+) error {
+	reader, ok := c.jobs.(runLogReader)
+	if !ok || c.logs == nil {
+		return nil
+	}
+
+	cursor, err := c.logs.GetLogCursor(ctx, handle.runID)
+	if err != nil {
+		return err
+	}
+	if cursor.sealed {
+		return nil
+	}
+
+	contents, err := reader.ReadLog(ctx, handle)
+	if errors.Is(err, errLogNotReady) && seal && handle.uid == "" {
+		contents = []byte{}
+		err = nil
+	}
+	if err != nil {
+		return err
+	}
+	if int64(len(contents)) < cursor.nextOffsetBytes {
+		return errors.New("kubernetes log is shorter than the durable cursor")
+	}
+
+	const maximumChunkBytes = 256 * 1024
+	offset := cursor.nextOffsetBytes
+	for offset < int64(len(contents)) {
+		end := min(offset+maximumChunkBytes, int64(len(contents)))
+		if err := c.logs.AppendLogChunk(
+			ctx,
+			handle.runID,
+			offset,
+			contents[offset:end],
+		); err != nil {
+			return err
+		}
+		offset = end
+	}
+
+	if seal {
+		digest := sha256.Sum256(contents)
+		return c.logs.SealLog(
+			ctx,
+			handle.runID,
+			int64(len(contents)),
+			hex.EncodeToString(digest[:]),
+		)
+	}
+
+	return nil
 }
 
 func observationRequest(observation runObservation) api.RunObservation {

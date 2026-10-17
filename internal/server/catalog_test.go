@@ -28,6 +28,9 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 			ID:        revisionID,
 			CommitSHA: commitSHA,
 			CreatedAt: createdAt,
+			TargetStates: map[string]catalog.TargetState{
+				"network": {DesiredCommitSHA: commitSHA},
+			},
 			Catalog: catalog.Catalog{
 				Runtimes: []catalog.Runtime{{
 					APIVersion: catalog.APIVersion,
@@ -85,7 +88,9 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	newHandler(
 		&recordingClusterService{},
 		nil,
+		nil,
 		catalogs,
+		nil,
 		nil,
 		nil,
 	).ServeHTTP(response, request)
@@ -117,6 +122,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	}
 	if len(body.Targets) != 1 ||
 		body.Targets[0].Metadata.Name != "network" ||
+		body.Targets[0].Status.DesiredCommitSha != commitSHA ||
 		len(body.Targets[0].Spec.Actions["preview"].Command) != 2 ||
 		body.Targets[0].Spec.Actions["preview"].Artifacts == nil {
 		t.Errorf("catalog targets = %#v", body.Targets)
@@ -173,7 +179,9 @@ func TestGetRepositoryCatalogMapsExpectedFailures(t *testing.T) {
 			newHandler(
 				&recordingClusterService{},
 				nil,
+				nil,
 				catalogs,
+				nil,
 				nil,
 				nil,
 			).ServeHTTP(response, request)

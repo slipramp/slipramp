@@ -31,11 +31,13 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 		},
 	}
 	cleanupCount := 0
+	changedPaths := []string{"infrastructure/network/main.tf"}
 	fetcher := &recordingFetcher{
 		commits: map[RepositoryID]FetchedCommit{
 			succeededID: {
-				CommitSHA: "0123456789abcdef0123456789abcdef01234567",
-				Files:     validCatalogFiles(),
+				CommitSHA:    "0123456789abcdef0123456789abcdef01234567",
+				ChangedPaths: changedPaths,
+				Files:        validCatalogFiles(),
 				cleanup: func() error {
 					cleanupCount++
 
@@ -74,6 +76,9 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 		!succeeded.AttemptedAt.Equal(attemptedAt) ||
 		succeeded.Revision == nil {
 		t.Errorf("successful refresh = %#v", succeeded)
+	}
+	if strings.Join(succeeded.ChangedPaths, "\n") != strings.Join(changedPaths, "\n") {
+		t.Errorf("successful refresh changed paths = %#v", succeeded.ChangedPaths)
 	}
 	if succeeded.Revision != nil &&
 		(succeeded.Revision.ID != revisionID ||

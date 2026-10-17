@@ -239,6 +239,22 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 	return i, err
 }
 
+const createRunArtifactInput = `-- name: CreateRunArtifactInput :exec
+INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)
+VALUES ($1, $2, $3)
+`
+
+type CreateRunArtifactInputParams struct {
+	RunID      pgtype.UUID
+	InputName  string
+	ArtifactID pgtype.UUID
+}
+
+func (q *Queries) CreateRunArtifactInput(ctx context.Context, arg CreateRunArtifactInputParams) error {
+	_, err := q.db.Exec(ctx, createRunArtifactInput, arg.RunID, arg.InputName, arg.ArtifactID)
+	return err
+}
+
 const createRunPhaseTransition = `-- name: CreateRunPhaseTransition :exec
 INSERT INTO run_phase_transitions (
     run_id,
@@ -282,6 +298,66 @@ func (q *Queries) CreateRunPhaseTransition(ctx context.Context, arg CreateRunPha
 	return err
 }
 
+const getArtifactInputCandidate = `-- name: GetArtifactInputCandidate :one
+SELECT
+    artifacts.id AS artifact_id,
+    artifacts.run_id AS producer_run_id,
+    artifacts.name,
+    artifacts.state,
+    artifacts.media_type,
+    artifacts.size_bytes,
+    artifacts.sha256,
+    artifacts.sensitive,
+    artifacts.retention_state,
+    runs.repository_id,
+    runs.catalog_revision_id,
+    runs.commit_sha,
+    runs.target_name,
+    runs.action_name
+FROM artifacts
+JOIN runs ON runs.id = artifacts.run_id
+WHERE artifacts.id = $1
+`
+
+type GetArtifactInputCandidateRow struct {
+	ArtifactID        pgtype.UUID
+	ProducerRunID     pgtype.UUID
+	Name              string
+	State             string
+	MediaType         string
+	SizeBytes         int64
+	Sha256            *string
+	Sensitive         bool
+	RetentionState    string
+	RepositoryID      pgtype.UUID
+	CatalogRevisionID pgtype.UUID
+	CommitSha         string
+	TargetName        string
+	ActionName        string
+}
+
+func (q *Queries) GetArtifactInputCandidate(ctx context.Context, artifactID pgtype.UUID) (GetArtifactInputCandidateRow, error) {
+	row := q.db.QueryRow(ctx, getArtifactInputCandidate, artifactID)
+	var i GetArtifactInputCandidateRow
+	err := row.Scan(
+		&i.ArtifactID,
+		&i.ProducerRunID,
+		&i.Name,
+		&i.State,
+		&i.MediaType,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.Sensitive,
+		&i.RetentionState,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+	)
+	return i, err
+}
+
 const getAssignedRunForCluster = `-- name: GetAssignedRunForCluster :one
 SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
 FROM runs
@@ -293,6 +369,46 @@ LIMIT 1
 
 func (q *Queries) GetAssignedRunForCluster(ctx context.Context, clusterName string) (Run, error) {
 	row := q.db.QueryRow(ctx, getAssignedRunForCluster, clusterName)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.Phase,
+		&i.Outcome,
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+		&i.Parameters,
+		&i.PlacementName,
+		&i.ClusterName,
+		&i.SourceType,
+		&i.IdempotencyKey,
+		&i.RequestDigest,
+		&i.Snapshot,
+		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
+	)
+	return i, err
+}
+
+const getRun = `-- name: GetRun :one
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
+FROM runs
+WHERE id = $1
+`
+
+func (q *Queries) GetRun(ctx context.Context, id pgtype.UUID) (Run, error) {
+	row := q.db.QueryRow(ctx, getRun, id)
 	var i Run
 	err := row.Scan(
 		&i.ID,

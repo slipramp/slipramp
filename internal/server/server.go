@@ -12,8 +12,10 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/api/handler"
+	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -54,6 +56,7 @@ func New(
 	}
 
 	clusters := cluster.NewService(persistence.database)
+	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database)
 	repositories := repository.NewService(
 		persistence.database,
@@ -65,6 +68,11 @@ func New(
 		catalogs,
 		cfg.Placements,
 	)
+	artifacts := artifact.NewService(
+		persistence.database,
+		persistence.artifactContents,
+		[]byte(cfg.ArtifactTokenSecret),
+	)
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
 		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
@@ -75,10 +83,12 @@ func New(
 	)
 	httpHandler := newHandlerWithLogger(
 		clusters,
+		identities,
 		repositories,
 		catalogs,
 		runs,
-		cfg.ControllerTokens,
+		artifacts,
+		cfg.ControllerEnrollmentTokens,
 		logger,
 	)
 	server := newServer(cfg, logger, httpHandler)
@@ -200,32 +210,41 @@ func (s *Server) shutdown(ctx context.Context) error {
 
 func newHandler(
 	clusters handler.ClusterService,
+	identities handler.ControllerIdentityService,
 	repositories handler.RepositoryService,
 	catalogs handler.CatalogService,
 	runs handler.RunService,
-	controllerTokens map[string]string,
+	artifacts handler.ArtifactService,
+	controllerEnrollmentTokens map[string]string,
 ) http.Handler {
 	return newHandlerWithLogger(
 		clusters,
+		identities,
 		repositories,
 		catalogs,
 		runs,
-		controllerTokens,
+		artifacts,
+		controllerEnrollmentTokens,
 		nil,
 	)
 }
 
 func newHandlerWithLogger(
 	clusters handler.ClusterService,
+	identities handler.ControllerIdentityService,
 	repositories handler.RepositoryService,
 	catalogs handler.CatalogService,
 	runs handler.RunService,
-	controllerTokens map[string]string,
+	artifacts handler.ArtifactService,
+	controllerEnrollmentTokens map[string]string,
 	logger *slog.Logger,
 ) http.Handler {
-	authenticator := newControllerAuthenticator(controllerTokens)
+	authenticator := newControllerAuthenticator(
+		identities,
+		controllerEnrollmentTokens,
+	)
 	strictHandler := api.NewStrictHandlerWithOptions(
-		handler.New(clusters, repositories, catalogs, runs),
+		handler.New(clusters, identities, repositories, catalogs, runs, artifacts),
 		[]api.StrictMiddlewareFunc{
 			handler.ControllerAuthentication(authenticator),
 		},
@@ -307,12 +326,22 @@ func newHandlerWithLogger(
 	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
 	registerMethodNotAllowed(
 		mux,
-		"/controller/v1/controllers/{clusterName}/poll",
+		"/controller/v1/enroll",
 		http.MethodPost,
 	)
 	registerMethodNotAllowed(
 		mux,
-		"/controller/v1/controllers/{clusterName}/runs/{runId}/observations",
+		"/controller/v1/poll",
+		http.MethodPost,
+	)
+	registerMethodNotAllowed(
+		mux,
+		"/controller/v1/runs/{runId}/log-chunks",
+		http.MethodPost,
+	)
+	registerMethodNotAllowed(
+		mux,
+		"/controller/v1/runs/{runId}/observations",
 		http.MethodPost,
 	)
 	mux.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {

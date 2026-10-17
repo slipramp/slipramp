@@ -12,7 +12,7 @@ import (
 const (
 	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
 	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
-	serverControllerTokensEnvironment             = "SLIPRAMP_CONTROLLER_TOKENS"
+	serverControllerEnrollmentTokensEnvironment   = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS"
 	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
 	serverRepositoryRefreshIntervalEnvironment    = "SLIPRAMP_REPOSITORY_REFRESH_INTERVAL"
 	serverRepositoryFetchTimeoutEnvironment       = "SLIPRAMP_REPOSITORY_FETCH_TIMEOUT"
@@ -24,6 +24,7 @@ const (
 	serverS3AccessKeyIDEnvironment                = "SLIPRAMP_S3_ACCESS_KEY_ID"
 	serverS3SecretAccessKeyEnvironment            = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
 	serverS3StartupTimeoutEnvironment             = "SLIPRAMP_S3_STARTUP_TIMEOUT"
+	serverArtifactTokenSecretEnvironment          = "SLIPRAMP_ARTIFACT_TOKEN_SECRET"
 )
 
 func LoadServer(
@@ -51,21 +52,21 @@ func LoadServer(
 		cfg.ShutdownTimeout = timeout
 	}
 
-	if value, ok := lookupEnvironment(serverControllerTokensEnvironment); ok {
-		var controllerTokens map[string]string
-		if err := json.Unmarshal([]byte(value), &controllerTokens); err != nil {
+	if value, ok := lookupEnvironment(serverControllerEnrollmentTokensEnvironment); ok {
+		var enrollmentTokens map[string]string
+		if err := json.Unmarshal([]byte(value), &enrollmentTokens); err != nil {
 			return server.Config{}, fmt.Errorf(
 				"parse %s: %w",
-				serverControllerTokensEnvironment,
+				serverControllerEnrollmentTokensEnvironment,
 				err,
 			)
 		}
 
-		if controllerTokens == nil {
-			controllerTokens = map[string]string{}
+		if enrollmentTokens == nil {
+			enrollmentTokens = map[string]string{}
 		}
 
-		cfg.ControllerTokens = controllerTokens
+		cfg.ControllerEnrollmentTokens = enrollmentTokens
 	}
 
 	if value, ok := lookupEnvironment(
@@ -175,6 +176,10 @@ func LoadServer(
 		}
 
 		cfg.ObjectStore.StartupTimeout = timeout
+	}
+
+	if value, ok := lookupEnvironment(serverArtifactTokenSecretEnvironment); ok {
+		cfg.ArtifactTokenSecret = value
 	}
 
 	if err := cfg.Validate(); err != nil {

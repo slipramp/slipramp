@@ -66,10 +66,12 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	httpHandler := newHandler(
 		controllers,
+		controllerIdentityFor("controller-token", "colo"),
 		nil,
 		nil,
 		&recordingRunService{nextError: run.ErrNoRunAssignment},
-		map[string]string{"colo": "controller-token"},
+		nil,
+		nil,
 	)
 	app := newServer(settings, logger, httpHandler)
 
@@ -83,7 +85,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	request, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		"http://slipramp.test/controller/v1/controllers/colo/poll",
+		"http://slipramp.test/controller/v1/poll",
 		nil,
 	)
 	if err != nil {

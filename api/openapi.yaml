@@ -16,17 +16,41 @@ paths:
     $ref: ./paths/catalog.yaml#/repositoryCatalog
   /api/v1/clusters:
     $ref: ./paths/controllers.yaml#/clusters
-  /controller/v1/controllers/{clusterName}/poll:
+  /controller/v1/enroll:
+    $ref: ./paths/controllers.yaml#/enroll
+  /controller/v1/poll:
     $ref: ./paths/controllers.yaml#/poll
-  /controller/v1/controllers/{clusterName}/runs/{runId}/observations:
+  /controller/v1/runs/{runId}/observations:
     $ref: ./paths/controllers.yaml#/runObservations
+  /controller/v1/runs/{runId}/log-chunks:
+    $ref: ./paths/controllers.yaml#/runLogChunks
+  /controller/v1/runs/{runId}/log:
+    $ref: ./paths/controllers.yaml#/runLog
+  /execution/v1/runs/{runId}/artifacts/{artifactName}:
+    $ref: ./paths/artifacts.yaml#/executionArtifact
+  /execution/v1/runs/{runId}/inputs/{inputName}:
+    $ref: ./paths/artifacts.yaml#/executionInput
   /api/v1/runs:
     $ref: ./paths/runs.yaml#/runs
+  /api/v1/runs/{runId}:
+    $ref: ./paths/runs.yaml#/run
   /api/v1/runs/{runId}/cancel:
     $ref: ./paths/runs.yaml#/cancelRun
+  /api/v1/runs/{runId}/artifacts:
+    $ref: ./paths/artifacts.yaml#/runArtifacts
+  /api/v1/runs/{runId}/logs:
+    $ref: ./paths/artifacts.yaml#/runLogs
+  /api/v1/artifacts/{artifactId}/download:
+    $ref: ./paths/artifacts.yaml#/artifactDownload
 components:
   securitySchemes:
     ControllerBearer:
+      type: http
+      scheme: bearer
+    ControllerEnrollmentBearer:
+      type: http
+      scheme: bearer
+    RunArtifactBearer:
       type: http
       scheme: bearer
   schemas:
@@ -54,7 +78,17 @@ components:
       $ref: ./components/controllers.yaml#/ControllerCommand
     RunObservation:
       $ref: ./components/controllers.yaml#/RunObservation
+    ControllerEnrollment:
+      $ref: ./components/controllers.yaml#/ControllerEnrollment
     Run:
       $ref: ./components/runs.yaml#/Run
     RunCreate:
       $ref: ./components/runs.yaml#/RunCreate
+    Artifact:
+      $ref: ./components/artifacts.yaml#/Artifact
+    ArtifactList:
+      $ref: ./components/artifacts.yaml#/ArtifactList
+    LogCursor:
+      $ref: ./components/artifacts.yaml#/LogCursor
+    LogEvent:
+      $ref: ./components/artifacts.yaml#/LogEvent

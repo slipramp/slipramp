@@ -9,12 +9,13 @@ import (
 )
 
 const (
-	controllerClusterEnvironment        = "SLIPRAMP_CONTROLLER_CLUSTER"
-	controllerServerEnvironment         = "SLIPRAMP_CONTROLLER_SERVER_URL"
-	controllerTokenEnvironment          = "SLIPRAMP_CONTROLLER_TOKEN"
-	controllerCheckoutImageEnvironment  = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
-	controllerHarnessImageEnvironment   = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
-	controllerGitCredentialsEnvironment = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
+	controllerClusterEnvironment         = "SLIPRAMP_CONTROLLER_CLUSTER"
+	controllerServerEnvironment          = "SLIPRAMP_CONTROLLER_SERVER_URL"
+	controllerEnrollmentTokenEnvironment = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
+	controllerTokenEnvironment           = "SLIPRAMP_CONTROLLER_TOKEN"
+	controllerCheckoutImageEnvironment   = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
+	controllerHarnessImageEnvironment    = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
+	controllerGitCredentialsEnvironment  = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
 )
 
 func LoadController(
@@ -27,6 +28,7 @@ func LoadController(
 	cfg := controller.Config{}
 	cfg.ClusterName, _ = lookupEnvironment(controllerClusterEnvironment)
 	cfg.ServerURL, _ = lookupEnvironment(controllerServerEnvironment)
+	cfg.EnrollmentToken, _ = lookupEnvironment(controllerEnrollmentTokenEnvironment)
 	cfg.BearerToken, _ = lookupEnvironment(controllerTokenEnvironment)
 	cfg.CheckoutImage, _ = lookupEnvironment(controllerCheckoutImageEnvironment)
 	cfg.HarnessImage, _ = lookupEnvironment(controllerHarnessImageEnvironment)

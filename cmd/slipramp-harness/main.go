@@ -47,8 +47,19 @@ func run(
 	)
 	defer signal.Stop(signals)
 
+	ctx := context.Background()
+	artifactConfig, err := harness.LoadArtifactConfig(os.Getenv)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
+		return 1
+	}
+	if err := artifactConfig.MaterializeInputs(ctx); err != nil {
+		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
+		return 1
+	}
+
 	exitCode, err := harness.Run(
-		context.Background(),
+		ctx,
 		command,
 		harness.Streams{
 			Stdin:  stdin,
@@ -60,6 +71,12 @@ func run(
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
 		return 1
+	}
+	if err := artifactConfig.UploadArtifacts(ctx); err != nil {
+		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
+		if exitCode == 0 {
+			return 1
+		}
 	}
 
 	return exitCode

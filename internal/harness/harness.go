@@ -39,6 +39,7 @@ func Run(
 	process.Stdin = streams.Stdin
 	process.Stdout = streams.Stdout
 	process.Stderr = streams.Stderr
+	process.Env = actionEnvironment(os.Environ())
 
 	if err := process.Start(); err != nil {
 		return 0, fmt.Errorf("start action: %w", err)

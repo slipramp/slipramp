@@ -127,32 +127,32 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "invalid controller cluster name",
 			configure: func(settings *Config) {
-				settings.ControllerTokens = map[string]string{
-					"Invalid Cluster": "controller-token",
+				settings.ControllerEnrollmentTokens = map[string]string{
+					"Invalid Cluster": "enrollment-token",
 				}
 			},
 			wantError: "cluster name",
 		},
 		{
-			name: "empty controller token",
+			name: "empty controller enrollment token",
 			configure: func(settings *Config) {
-				settings.ControllerTokens = map[string]string{"colo": ""}
+				settings.ControllerEnrollmentTokens = map[string]string{"colo": ""}
 			},
-			wantError: "controller token",
+			wantError: "controller enrollment token",
 		},
 		{
-			name: "invalid controller token",
+			name: "invalid controller enrollment token",
 			configure: func(settings *Config) {
-				settings.ControllerTokens = map[string]string{
-					"colo": "controller token",
+				settings.ControllerEnrollmentTokens = map[string]string{
+					"colo": "enrollment token",
 				}
 			},
-			wantError: "controller token",
+			wantError: "controller enrollment token",
 		},
 		{
 			name: "valid placement",
 			configure: func(settings *Config) {
-				settings.ControllerTokens["colo"] = "controller-token"
+				settings.ControllerEnrollmentTokens["colo"] = "enrollment-token"
 				settings.Placements = configuredPlacements
 			},
 		},

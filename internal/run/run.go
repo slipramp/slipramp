@@ -33,6 +33,8 @@ const (
 var (
 	ErrInvalidRequest      = errors.New("invalid run request")
 	ErrInvalidParameters   = errors.New("invalid run parameters")
+	ErrInvalidInputs       = errors.New("invalid run artifact inputs")
+	ErrArtifactNotFound    = errors.New("run artifact input not found")
 	ErrRepositoryNotFound  = errors.New("run repository not found")
 	ErrCatalogNotFound     = errors.New("active run catalog not found")
 	ErrTargetNotFound      = errors.New("run target not found")
@@ -62,6 +64,7 @@ type CreateRequest struct {
 	TargetName     string
 	ActionName     string
 	Parameters     map[string]any
+	Inputs         map[string]uuid.UUID
 	Source         Source
 	IdempotencyKey *string
 }
@@ -108,11 +111,28 @@ type Run struct {
 }
 
 type Snapshot struct {
-	Repository RepositorySnapshot      `json:"repository"`
-	Target     catalog.Target          `json:"target"`
-	Action     catalog.EffectiveAction `json:"action"`
-	Runtime    catalog.Runtime         `json:"runtime"`
-	Placement  PlacementSnapshot       `json:"placement"`
+	Repository RepositorySnapshot       `json:"repository"`
+	Target     catalog.Target           `json:"target"`
+	Action     catalog.EffectiveAction  `json:"action"`
+	Runtime    catalog.Runtime          `json:"runtime"`
+	Placement  PlacementSnapshot        `json:"placement"`
+	Inputs     map[string]ArtifactInput `json:"inputs"`
+}
+
+type ArtifactInput struct {
+	ArtifactID        uuid.UUID `json:"artifactId"`
+	ProducerRunID     uuid.UUID `json:"producerRunId"`
+	Name              string    `json:"name"`
+	MediaType         string    `json:"mediaType"`
+	SizeBytes         int64     `json:"sizeBytes"`
+	SHA256            string    `json:"sha256"`
+	Sensitive         bool      `json:"sensitive"`
+	RetentionState    string    `json:"retentionState"`
+	RepositoryID      uuid.UUID `json:"repositoryId"`
+	CatalogRevisionID uuid.UUID `json:"catalogRevisionId"`
+	CommitSHA         string    `json:"commitSha"`
+	TargetName        string    `json:"targetName"`
+	ActionName        string    `json:"actionName"`
 }
 
 type RepositorySnapshot struct {

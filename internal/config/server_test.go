@@ -11,7 +11,7 @@ import (
 const (
 	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
 	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
-	serverControllerTokensEnvironment             = "SLIPRAMP_CONTROLLER_TOKENS"
+	serverControllerEnrollmentTokensEnvironment   = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS"
 	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
 	serverRepositoryRefreshIntervalEnvironment    = "SLIPRAMP_REPOSITORY_REFRESH_INTERVAL"
 	serverRepositoryFetchTimeoutEnvironment       = "SLIPRAMP_REPOSITORY_FETCH_TIMEOUT"
@@ -31,7 +31,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	environment := map[string]string{
 		serverAddressEnvironment:                      "127.0.0.1:9000",
 		serverShutdownTimeoutEnvironment:              "25s",
-		serverControllerTokensEnvironment:             `{"colo":"controller-token"}`,
+		serverControllerEnrollmentTokensEnvironment:   `{"colo":"enrollment-token"}`,
 		serverRepositoryRefreshCredentialsEnvironment: `{"github-server":"/var/run/secrets/slipramp/github.gitconfig"}`,
 		serverRepositoryRefreshIntervalEnvironment:    "2m",
 		serverRepositoryFetchTimeoutEnvironment:       "45s",
@@ -66,8 +66,8 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		)
 	}
 
-	if cfg.ControllerTokens["colo"] != "controller-token" {
-		t.Error("ControllerTokens does not contain the configured credential")
+	if cfg.ControllerEnrollmentTokens["colo"] != "enrollment-token" {
+		t.Error("ControllerEnrollmentTokens does not contain the configured credential")
 	}
 
 	if cfg.RepositoryRefreshCredentials["github-server"] !=
@@ -179,16 +179,16 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 			wantError: serverShutdownTimeoutEnvironment,
 		},
 		{
-			name: "malformed controller tokens",
+			name: "malformed controller enrollment tokens",
 			environment: map[string]string{
-				serverControllerTokensEnvironment: "not-json",
+				serverControllerEnrollmentTokensEnvironment: "not-json",
 			},
-			wantError: serverControllerTokensEnvironment,
+			wantError: serverControllerEnrollmentTokensEnvironment,
 		},
 		{
-			name: "invalid controller token",
+			name: "invalid controller enrollment token",
 			environment: map[string]string{
-				serverControllerTokensEnvironment: `{"colo":""}`,
+				serverControllerEnrollmentTokensEnvironment: `{"colo":""}`,
 			},
 			wantError: "validate server configuration",
 		},

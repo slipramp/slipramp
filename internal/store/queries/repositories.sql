@@ -32,39 +32,45 @@ RETURNING
 
 -- name: ListRepositories :many
 SELECT
-    id,
-    name,
-    clone_url,
-    branch,
-    refresh_credential_name,
-    checkout_credential_name,
-    created_at,
-    refresh_status,
-    observed_commit_sha,
-    last_refresh_attempted_at,
-    last_refresh_succeeded_at,
-    last_refresh_error
+    repositories.id,
+    repositories.name,
+    repositories.clone_url,
+    repositories.branch,
+    repositories.refresh_credential_name,
+    repositories.checkout_credential_name,
+    repositories.created_at,
+    repositories.refresh_status,
+    repositories.observed_commit_sha,
+    repositories.last_refresh_attempted_at,
+    repositories.last_refresh_succeeded_at,
+    repositories.last_refresh_error,
+    catalog_revisions.commit_sha AS active_catalog_commit_sha
 FROM repositories
-WHERE removed_at IS NULL
-ORDER BY name;
+LEFT JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+WHERE repositories.removed_at IS NULL
+ORDER BY repositories.name;
 
 -- name: GetActiveRepository :one
 SELECT
-    id,
-    name,
-    clone_url,
-    branch,
-    refresh_credential_name,
-    checkout_credential_name,
-    created_at,
-    refresh_status,
-    observed_commit_sha,
-    last_refresh_attempted_at,
-    last_refresh_succeeded_at,
-    last_refresh_error
+    repositories.id,
+    repositories.name,
+    repositories.clone_url,
+    repositories.branch,
+    repositories.refresh_credential_name,
+    repositories.checkout_credential_name,
+    repositories.created_at,
+    repositories.refresh_status,
+    repositories.observed_commit_sha,
+    repositories.last_refresh_attempted_at,
+    repositories.last_refresh_succeeded_at,
+    repositories.last_refresh_error,
+    catalog_revisions.commit_sha AS active_catalog_commit_sha
 FROM repositories
-WHERE id = sqlc.arg(id)
-  AND removed_at IS NULL;
+LEFT JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+WHERE repositories.id = sqlc.arg(id)
+  AND repositories.removed_at IS NULL;
 
 -- name: RecordRepositoryRefreshFailure :exec
 UPDATE repositories

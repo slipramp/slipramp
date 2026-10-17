@@ -24,6 +24,12 @@ func (f commandPollerFunc) Poll(ctx context.Context) (*api.ControllerCommand, er
 	return f(ctx)
 }
 
+type controllerEnrollerFunc func(ctx context.Context) error
+
+func (f controllerEnrollerFunc) Enroll(ctx context.Context) error {
+	return f(ctx)
+}
+
 type runObservationReporterFunc func(
 	ctx context.Context,
 	runID uuid.UUID,
@@ -157,10 +163,140 @@ func TestControllerStopsAfterAuthenticationIsRejected(t *testing.T) {
 	app.server = commandPollerFunc(func(context.Context) (*api.ControllerCommand, error) {
 		return nil, errControllerCredentialRejected
 	})
+	app.enrollment = controllerEnrollerFunc(func(context.Context) error {
+		return nil
+	})
 
 	err = app.Run(context.Background())
 	if !errors.Is(err, errControllerCredentialRejected) {
 		t.Fatalf("Run() error = %v, want %v", err, errControllerCredentialRejected)
+	}
+}
+
+func TestControllerStopsAfterEnrollmentIsRejected(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app, err := New(validConfig(), logger, fake.NewClientset())
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	app.enrollment = controllerEnrollerFunc(func(context.Context) error {
+		return errControllerEnrollmentCredentialRejected
+	})
+
+	err = app.Run(context.Background())
+	if !errors.Is(err, errControllerEnrollmentCredentialRejected) {
+		t.Fatalf(
+			"Run() error = %v, want %v",
+			err,
+			errControllerEnrollmentCredentialRejected,
+		)
+	}
+}
+
+func TestControllerRecoversRunBeforePollingAfterRestart(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	finishJob := make(chan struct{})
+	jobs := &recoveryRunJobs{
+		handle: jobHandle{
+			runID:     runID,
+			namespace: "slipramp-runs",
+			name:      runJobName(runID),
+			uid:       "job-uid",
+		},
+		finish:   finishJob,
+		contents: []byte("already durable\n"),
+	}
+	logs := &memoryLogReporter{contents: []byte("already ")}
+	pollStarted := make(chan int, 1)
+	reported := make(chan api.RunObservation, 2)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	app := &Controller{
+		clusterName: "colo",
+		logger:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		enrollment: controllerEnrollerFunc(func(context.Context) error {
+			return nil
+		}),
+		server: commandPollerFunc(func(ctx context.Context) (*api.ControllerCommand, error) {
+			pollStarted <- jobs.recoverCalls
+			<-ctx.Done()
+
+			return nil, ctx.Err()
+		}),
+		reports: runObservationReporterFunc(func(
+			_ context.Context,
+			gotRunID uuid.UUID,
+			observation api.RunObservation,
+		) error {
+			if gotRunID != runID {
+				t.Errorf("reported Run ID = %s, want %s", gotRunID, runID)
+			}
+			reported <- observation
+			if observation.Phase == api.RunObservationPhaseFinished {
+				cancel()
+			}
+
+			return nil
+		}),
+		jobs:           jobs,
+		logs:           logs,
+		retryDelay:     time.Millisecond,
+		observeEvery:   time.Millisecond,
+		heartbeatEvery: time.Hour,
+		observedRuns:   make(map[uuid.UUID]*activeObserver),
+	}
+
+	result := make(chan error, 1)
+	go func() { result <- app.Run(ctx) }()
+
+	select {
+	case recoverCalls := <-pollStarted:
+		if recoverCalls != 1 {
+			t.Errorf("poll began after %d recovery calls, want 1", recoverCalls)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller did not begin polling after recovery")
+	}
+
+	first := receiveObservation(t, reported)
+	if first.Phase != api.RunObservationPhaseRunning {
+		t.Fatalf("first recovered phase = %q, want running", first.Phase)
+	}
+
+	close(finishJob)
+	second := receiveObservation(t, reported)
+	if second.Phase != api.RunObservationPhaseFinished ||
+		second.Outcome == nil ||
+		*second.Outcome != api.RunObservationOutcomeSucceeded {
+		t.Fatalf("final recovered observation = %#v", second)
+	}
+
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("Run() error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller did not stop after the recovered Run finished")
+	}
+
+	if jobs.ensureCalls != 0 {
+		t.Errorf("assignment materializations = %d, want 0", jobs.ensureCalls)
+	}
+	if logs.appendCalls != 1 || len(logs.appendOffsets) != 1 || logs.appendOffsets[0] != 8 {
+		t.Errorf(
+			"log appends = %d at %v, want one at durable offset 8",
+			logs.appendCalls,
+			logs.appendOffsets,
+		)
+	}
+	if string(logs.contents) != "already durable\n" || !logs.sealed {
+		t.Errorf("recovered log = %q, sealed = %t", logs.contents, logs.sealed)
 	}
 }
 
@@ -215,6 +351,92 @@ func TestControllerReportsChangedObservationsThroughCompletion(t *testing.T) {
 			t.Errorf("reported phases = %v, want %v", got, want)
 		}
 	}
+}
+
+func receiveObservation(
+	t *testing.T,
+	reported <-chan api.RunObservation,
+) api.RunObservation {
+	t.Helper()
+
+	select {
+	case observation := <-reported:
+		return observation
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller did not report a recovered observation")
+
+		return api.RunObservation{}
+	}
+}
+
+type recoveryRunJobs struct {
+	handle       jobHandle
+	finish       <-chan struct{}
+	contents     []byte
+	recoverCalls int
+	ensureCalls  int
+	observeCalls int
+}
+
+func (r *recoveryRunJobs) Ensure(
+	context.Context,
+	api.RunAssignment,
+) (ensuredRunJob, error) {
+	r.ensureCalls++
+
+	return ensuredRunJob{}, nil
+}
+
+func (*recoveryRunJobs) Cancel(
+	context.Context,
+	api.CancelRunCommand,
+) (*string, error) {
+	return nil, nil
+}
+
+func (r *recoveryRunJobs) Recover(context.Context) ([]jobHandle, error) {
+	r.recoverCalls++
+
+	return []jobHandle{r.handle}, nil
+}
+
+func (r *recoveryRunJobs) Observe(
+	ctx context.Context,
+	_ jobHandle,
+) (runObservation, error) {
+	r.observeCalls++
+	if r.observeCalls == 1 {
+		jobUID := r.handle.uid
+
+		return runObservation{
+			phase:  api.RunObservationPhaseRunning,
+			jobUID: &jobUID,
+		}, nil
+	}
+
+	select {
+	case <-ctx.Done():
+		return runObservation{}, ctx.Err()
+	case <-r.finish:
+	}
+
+	jobUID := r.handle.uid
+	succeeded := api.RunObservationOutcomeSucceeded
+	exitCode := int32(0)
+
+	return runObservation{
+		phase:    api.RunObservationPhaseFinished,
+		outcome:  &succeeded,
+		jobUID:   &jobUID,
+		exitCode: &exitCode,
+	}, nil
+}
+
+func (r *recoveryRunJobs) ReadLog(
+	context.Context,
+	jobHandle,
+) ([]byte, error) {
+	return append([]byte(nil), r.contents...), nil
 }
 
 func TestControllerReportsPermanentMaterializationFailure(t *testing.T) {

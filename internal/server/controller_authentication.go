@@ -1,30 +1,52 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
+
+	"github.com/slipramp/slipramp/internal/controlleridentity"
 )
 
 type controllerAuthenticator struct {
-	tokenDigests map[string][sha256.Size]byte
+	identities             controllerIdentityService
+	enrollmentTokenDigests map[string][sha256.Size]byte
+}
+
+type controllerIdentityService interface {
+	AuthenticateController(
+		ctx context.Context,
+		bearerToken string,
+	) (controlleridentity.Principal, error)
 }
 
 func newControllerAuthenticator(
-	tokens map[string]string,
+	identities controllerIdentityService,
+	enrollmentTokens map[string]string,
 ) *controllerAuthenticator {
-	tokenDigests := make(map[string][sha256.Size]byte, len(tokens))
-	for clusterName, token := range tokens {
+	tokenDigests := make(map[string][sha256.Size]byte, len(enrollmentTokens))
+	for clusterName, token := range enrollmentTokens {
 		tokenDigests[clusterName] = sha256.Sum256([]byte(token))
 	}
 
-	return &controllerAuthenticator{tokenDigests: tokenDigests}
+	return &controllerAuthenticator{
+		identities:             identities,
+		enrollmentTokenDigests: tokenDigests,
+	}
 }
 
 func (a *controllerAuthenticator) AuthenticateController(
+	ctx context.Context,
+	bearerToken string,
+) (controlleridentity.Principal, error) {
+	return a.identities.AuthenticateController(ctx, bearerToken)
+}
+
+func (a *controllerAuthenticator) AuthorizeControllerEnrollment(
 	clusterName string,
 	bearerToken string,
 ) bool {
-	expectedDigest, configured := a.tokenDigests[clusterName]
+	expectedDigest, configured := a.enrollmentTokenDigests[clusterName]
 	providedDigest := sha256.Sum256([]byte(bearerToken))
 	digestsMatch := subtle.ConstantTimeCompare(
 		providedDigest[:],

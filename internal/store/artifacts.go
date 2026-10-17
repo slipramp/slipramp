@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/slipramp/slipramp/internal/artifact"
+	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
@@ -27,6 +29,24 @@ const (
 )
 
 var _ artifact.Store = (*Database)(nil)
+
+func (d *Database) GetRunClusterName(
+	ctx context.Context,
+	runID uuid.UUID,
+) (string, error) {
+	clusterName, err := d.queries.GetArtifactRunClusterName(
+		ctx,
+		databaseUUID(runID),
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", artifact.ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("get artifact Run cluster: %w", err)
+	}
+
+	return clusterName, nil
+}
 
 func (d *Database) CreateArtifact(
 	ctx context.Context,
@@ -127,6 +147,83 @@ func (d *Database) ListArtifactsForRun(
 	return result, nil
 }
 
+func (d *Database) GetArtifactProvenance(
+	ctx context.Context,
+	runID uuid.UUID,
+) (artifact.Provenance, error) {
+	row, err := d.queries.GetArtifactProvenance(ctx, databaseUUID(runID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return artifact.Provenance{}, artifact.ErrNotFound
+	}
+	if err != nil {
+		return artifact.Provenance{}, fmt.Errorf("get artifact provenance: %w", err)
+	}
+
+	return artifact.Provenance{
+		ProducerRunID:     runID,
+		RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
+		CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
+		CommitSHA:         row.CommitSha,
+		TargetName:        row.TargetName,
+		ActionName:        row.ActionName,
+	}, nil
+}
+
+func (d *Database) GetRunArtifactContext(
+	ctx context.Context,
+	runID uuid.UUID,
+) (artifact.RunContext, error) {
+	row, err := d.queries.GetRunArtifactContext(ctx, databaseUUID(runID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return artifact.RunContext{}, artifact.ErrNotFound
+	}
+	if err != nil {
+		return artifact.RunContext{}, fmt.Errorf("get Run artifact context: %w", err)
+	}
+
+	var snapshot run.Snapshot
+	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil {
+		return artifact.RunContext{}, fmt.Errorf("decode Run artifact context: %w", err)
+	}
+	declarations := make(
+		map[string]artifact.Declaration,
+		len(snapshot.Action.Artifacts),
+	)
+	for name, declaration := range snapshot.Action.Artifacts {
+		declarations[name] = artifact.Declaration{
+			MediaType: declaration.MediaType,
+			Sensitive: declaration.Sensitive,
+		}
+	}
+
+	return artifact.RunContext{
+		ClusterName: row.ClusterName,
+		Artifacts:   declarations,
+	}, nil
+}
+
+func (d *Database) GetRunInputArtifact(
+	ctx context.Context,
+	runID uuid.UUID,
+	inputName string,
+) (artifact.Artifact, error) {
+	row, err := d.queries.GetRunInputArtifact(
+		ctx,
+		storedb.GetRunInputArtifactParams{
+			RunID:     databaseUUID(runID),
+			InputName: inputName,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return artifact.Artifact{}, artifact.ErrNotFound
+	}
+	if err != nil {
+		return artifact.Artifact{}, fmt.Errorf("get Run input artifact: %w", err)
+	}
+
+	return artifactFromRow(row), nil
+}
+
 func (d *Database) CreateLogChunk(
 	ctx context.Context,
 	chunk artifact.LogChunk,
@@ -135,7 +232,36 @@ func (d *Database) CreateLogChunk(
 		return artifact.LogChunk{}, err
 	}
 
-	row, err := d.queries.CreateArtifactLogChunk(
+	transaction, err := d.pool.Begin(ctx)
+	if err != nil {
+		return artifact.LogChunk{}, fmt.Errorf("begin log chunk transaction: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+	queries := d.queries.WithTx(transaction)
+
+	record, err := queries.LockArtifactForLogAppend(
+		ctx,
+		databaseUUID(chunk.ArtifactID),
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return artifact.LogChunk{}, artifact.ErrNotFound
+	}
+	if err != nil {
+		return artifact.LogChunk{}, fmt.Errorf("lock log artifact: %w", err)
+	}
+	if record.State != string(artifact.StateOpen) {
+		return artifact.LogChunk{}, artifact.ErrLogClosed
+	}
+	if record.SizeBytes > chunk.OffsetBytes {
+		return artifact.LogChunk{}, artifact.ErrAlreadyExists
+	}
+	if record.SizeBytes != chunk.OffsetBytes {
+		return artifact.LogChunk{}, artifact.ErrChunkConflict
+	}
+
+	row, err := queries.CreateArtifactLogChunk(
 		ctx,
 		storedb.CreateArtifactLogChunkParams{
 			ArtifactID:  databaseUUID(chunk.ArtifactID),
@@ -163,8 +289,77 @@ func (d *Database) CreateLogChunk(
 
 		return artifact.LogChunk{}, fmt.Errorf("create artifact log chunk: %w", err)
 	}
+	if err := queries.AdvanceArtifactLogSize(
+		ctx,
+		storedb.AdvanceArtifactLogSizeParams{
+			NextOffsetBytes: chunk.EndOffset(),
+			ID:              databaseUUID(chunk.ArtifactID),
+		},
+	); err != nil {
+		return artifact.LogChunk{}, fmt.Errorf("advance log artifact size: %w", err)
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return artifact.LogChunk{}, fmt.Errorf("commit log chunk: %w", err)
+	}
 
 	return logChunkFromRow(row), nil
+}
+
+func (d *Database) SealArtifact(
+	ctx context.Context,
+	artifactID uuid.UUID,
+	sizeBytes int64,
+	sha256 string,
+	sealedAt time.Time,
+) (artifact.Artifact, error) {
+	transaction, err := d.pool.Begin(ctx)
+	if err != nil {
+		return artifact.Artifact{}, fmt.Errorf("begin artifact seal transaction: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+	queries := d.queries.WithTx(transaction)
+	record, err := queries.LockArtifactForLogAppend(ctx, databaseUUID(artifactID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return artifact.Artifact{}, artifact.ErrNotFound
+	}
+	if err != nil {
+		return artifact.Artifact{}, fmt.Errorf("lock artifact to seal: %w", err)
+	}
+	if record.State == string(artifact.StateSealed) {
+		if record.SizeBytes == sizeBytes && record.Sha256 != nil &&
+			*record.Sha256 == sha256 {
+			if err := transaction.Commit(ctx); err != nil {
+				return artifact.Artifact{}, fmt.Errorf("commit repeated artifact seal: %w", err)
+			}
+
+			return artifactFromRow(record), nil
+		}
+
+		return artifact.Artifact{}, artifact.ErrSealConflict
+	}
+	if record.State != string(artifact.StateOpen) || record.SizeBytes != sizeBytes {
+		return artifact.Artifact{}, artifact.ErrSealConflict
+	}
+
+	sealed, err := queries.SealArtifact(
+		ctx,
+		storedb.SealArtifactParams{
+			SizeBytes: sizeBytes,
+			Sha256:    &sha256,
+			SealedAt:  databaseTime(sealedAt),
+			ID:        databaseUUID(artifactID),
+		},
+	)
+	if err != nil {
+		return artifact.Artifact{}, fmt.Errorf("seal artifact: %w", err)
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return artifact.Artifact{}, fmt.Errorf("commit artifact seal: %w", err)
+	}
+
+	return artifactFromRow(sealed), nil
 }
 
 func (d *Database) GetLogChunk(

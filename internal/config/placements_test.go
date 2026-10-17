@@ -52,8 +52,8 @@ placements:
                     path: token
 `)
 	environment := map[string]string{
-		serverControllerTokensEnvironment: `{"colo":"controller-token"}`,
-		serverPlacementsFileEnvironment:   path,
+		serverControllerEnrollmentTokensEnvironment: `{"colo":"enrollment-token"}`,
+		serverPlacementsFileEnvironment:             path,
 	}
 
 	cfg, err := config.LoadServer(mapEnvironment(environment))
@@ -272,8 +272,8 @@ placements:
 				),
 			}
 			if test.registered {
-				environment[serverControllerTokensEnvironment] =
-					`{"colo":"controller-token"}`
+				environment[serverControllerEnrollmentTokensEnvironment] =
+					`{"colo":"enrollment-token"}`
 			}
 
 			_, err := config.LoadServer(mapEnvironment(environment))

@@ -88,6 +88,20 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "bearer token",
 		},
 		{
+			name: "empty enrollment token",
+			configure: func(settings *Config) {
+				settings.EnrollmentToken = ""
+			},
+			wantError: "enrollment credential",
+		},
+		{
+			name: "invalid enrollment token",
+			configure: func(settings *Config) {
+				settings.EnrollmentToken = "enrollment token"
+			},
+			wantError: "enrollment credential",
+		},
+		{
 			name: "empty checkout image",
 			configure: func(settings *Config) {
 				settings.CheckoutImage = ""
@@ -137,11 +151,12 @@ func TestConfigValidate(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		ClusterName:   "colo",
-		ServerURL:     "https://slipramp.example.com",
-		BearerToken:   "controller-token",
-		CheckoutImage: "registry.example.com/slipramp-checkout:1",
-		HarnessImage:  "registry.example.com/slipramp-harness:1",
+		ClusterName:     "colo",
+		ServerURL:       "https://slipramp.example.com",
+		EnrollmentToken: "enrollment-token",
+		BearerToken:     "controller-token",
+		CheckoutImage:   "registry.example.com/slipramp-checkout:1",
+		HarnessImage:    "registry.example.com/slipramp-harness:1",
 		GitCredentials: map[string]string{
 			"github-readonly": "github-readonly",
 		},

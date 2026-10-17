@@ -99,21 +99,24 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 
 const getActiveRepository = `-- name: GetActiveRepository :one
 SELECT
-    id,
-    name,
-    clone_url,
-    branch,
-    refresh_credential_name,
-    checkout_credential_name,
-    created_at,
-    refresh_status,
-    observed_commit_sha,
-    last_refresh_attempted_at,
-    last_refresh_succeeded_at,
-    last_refresh_error
+    repositories.id,
+    repositories.name,
+    repositories.clone_url,
+    repositories.branch,
+    repositories.refresh_credential_name,
+    repositories.checkout_credential_name,
+    repositories.created_at,
+    repositories.refresh_status,
+    repositories.observed_commit_sha,
+    repositories.last_refresh_attempted_at,
+    repositories.last_refresh_succeeded_at,
+    repositories.last_refresh_error,
+    catalog_revisions.commit_sha AS active_catalog_commit_sha
 FROM repositories
-WHERE id = $1
-  AND removed_at IS NULL
+LEFT JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+WHERE repositories.id = $1
+  AND repositories.removed_at IS NULL
 `
 
 type GetActiveRepositoryRow struct {
@@ -129,6 +132,7 @@ type GetActiveRepositoryRow struct {
 	LastRefreshAttemptedAt pgtype.Timestamptz
 	LastRefreshSucceededAt pgtype.Timestamptz
 	LastRefreshError       *string
+	ActiveCatalogCommitSha *string
 }
 
 func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetActiveRepositoryRow, error) {
@@ -147,27 +151,31 @@ func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetA
 		&i.LastRefreshAttemptedAt,
 		&i.LastRefreshSucceededAt,
 		&i.LastRefreshError,
+		&i.ActiveCatalogCommitSha,
 	)
 	return i, err
 }
 
 const listRepositories = `-- name: ListRepositories :many
 SELECT
-    id,
-    name,
-    clone_url,
-    branch,
-    refresh_credential_name,
-    checkout_credential_name,
-    created_at,
-    refresh_status,
-    observed_commit_sha,
-    last_refresh_attempted_at,
-    last_refresh_succeeded_at,
-    last_refresh_error
+    repositories.id,
+    repositories.name,
+    repositories.clone_url,
+    repositories.branch,
+    repositories.refresh_credential_name,
+    repositories.checkout_credential_name,
+    repositories.created_at,
+    repositories.refresh_status,
+    repositories.observed_commit_sha,
+    repositories.last_refresh_attempted_at,
+    repositories.last_refresh_succeeded_at,
+    repositories.last_refresh_error,
+    catalog_revisions.commit_sha AS active_catalog_commit_sha
 FROM repositories
-WHERE removed_at IS NULL
-ORDER BY name
+LEFT JOIN catalog_revisions
+  ON catalog_revisions.id = repositories.active_catalog_revision_id
+WHERE repositories.removed_at IS NULL
+ORDER BY repositories.name
 `
 
 type ListRepositoriesRow struct {
@@ -183,6 +191,7 @@ type ListRepositoriesRow struct {
 	LastRefreshAttemptedAt pgtype.Timestamptz
 	LastRefreshSucceededAt pgtype.Timestamptz
 	LastRefreshError       *string
+	ActiveCatalogCommitSha *string
 }
 
 func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, error) {
@@ -207,6 +216,7 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 			&i.LastRefreshAttemptedAt,
 			&i.LastRefreshSucceededAt,
 			&i.LastRefreshError,
+			&i.ActiveCatalogCommitSha,
 		); err != nil {
 			return nil, err
 		}

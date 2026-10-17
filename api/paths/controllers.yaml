@@ -29,28 +29,71 @@ clusters:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+enroll:
+  post:
+    operationId: enrollController
+    summary: Enroll a cluster controller
+    description: >-
+      Uses a cluster-scoped enrollment credential to bind a
+      controller-generated bearer credential to its cluster. Repeating an
+      enrollment with the same credential digest is idempotent.
+    security:
+      - ControllerEnrollmentBearer: []
+    tags:
+      - Controllers
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/controllers.yaml#/ControllerEnrollment
+    responses:
+      "204":
+        description: The controller credential is enrolled.
+      "400":
+        description: The enrollment request is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The enrollment credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The cluster is already enrolled with another credential.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The controller could not be enrolled.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 poll:
   post:
     operationId: pollForControllerCommand
     summary: Poll for a controller command
     description: >-
-      Records the cluster controller as healthy and waits to assign or cancel a
-      Run for its cluster. An empty response means no command
+      Records the authenticated cluster controller as healthy and waits to
+      assign or cancel a Run for its cluster. An empty response means no command
       became available before the requested wait elapsed.
     security:
       - ControllerBearer: []
     tags:
       - Controllers
     parameters:
-      - name: clusterName
-        in: path
-        required: true
-        description: Stable name of the controller's execution cluster.
-        schema:
-          type: string
-          minLength: 1
-          maxLength: 63
-          pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
       - name: timeoutSeconds
         in: query
         required: false
@@ -102,23 +145,14 @@ runObservations:
     summary: Report a Run observation
     description: >-
       Records the phase, terminal outcome, and diagnostic details observed by
-      the controller managing the Run's execution cluster. Repeating the
-      current observation refreshes its freshness timestamp. An accepted
-      observation also refreshes the cluster's connection status.
+      the authenticated controller managing the Run's execution cluster.
+      Repeating the current observation refreshes its freshness timestamp. An
+      accepted observation also refreshes the cluster's connection status.
     security:
       - ControllerBearer: []
     tags:
       - Controllers
     parameters:
-      - name: clusterName
-        in: path
-        required: true
-        description: Stable name of the controller's execution cluster.
-        schema:
-          type: string
-          minLength: 1
-          maxLength: 63
-          pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
       - name: runId
         in: path
         required: true
@@ -167,6 +201,187 @@ runObservations:
               $ref: ../components/common.yaml#/Problem
       "500":
         description: The Run observation could not be recorded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+runLogChunks:
+  post:
+    operationId: appendRunLogChunk
+    summary: Append a Run log chunk
+    description: >-
+      Durably stores a log chunk for a Run managed by the authenticated
+      controller. Repeating the same bytes at the same offset is idempotent.
+    security:
+      - ControllerBearer: []
+    tags:
+      - Controllers
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        description: Run whose action output produced this chunk.
+        schema:
+          type: string
+          format: uuid
+      - name: offsetBytes
+        in: query
+        required: true
+        description: Zero-based byte offset of the chunk in the complete log.
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+            minLength: 1
+            maxLength: 262144
+    responses:
+      "204":
+        description: The chunk was durably accepted or had already been accepted.
+      "400":
+        description: The chunk offset or body is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run does not belong to the authenticated controller.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The offset is already occupied by different bytes or the log is closed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "413":
+        description: The chunk exceeds the maximum accepted size.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The chunk could not be stored durably.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+runLog:
+  get:
+    operationId: getRunLogCursor
+    summary: Get the durable Run log cursor
+    security:
+      - ControllerBearer: []
+    tags: [Controllers]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: The next durable byte offset and lifecycle state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/artifacts.yaml#/LogCursor
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run does not belong to this controller.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The cursor could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
+    operationId: sealRunLog
+    summary: Seal the durable Run log
+    security:
+      - ControllerBearer: []
+    tags: [Controllers]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/artifacts.yaml#/LogSeal
+    responses:
+      "204": { description: The log was sealed or already matched the seal. }
+      "400":
+        description: The seal is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run does not belong to this controller.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The seal conflicts with the durable bytes.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The log could not be sealed.
         content:
           application/problem+json:
             schema:

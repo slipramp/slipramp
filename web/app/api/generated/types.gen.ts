@@ -137,6 +137,7 @@ export type RunAssignment = {
   action: RunAssignmentAction;
   runtime: RunAssignmentRuntime;
   placement: RunAssignmentPlacement;
+  artifactAccess: RunArtifactAccess;
 };
 
 export type CancelRunCommand = {
@@ -181,6 +182,17 @@ export type RunObservation = {
   exitCode?: number;
 };
 
+export type ControllerEnrollment = {
+  /**
+   * Cluster identity authorized by the enrollment credential.
+   */
+  clusterName: string;
+  /**
+   * SHA-256 digest of the controller-generated bearer credential that will identify this cluster after enrollment.
+   */
+  credentialSha256: string;
+};
+
 export type Run = {
   /**
    * Stable identity of the immutable action execution.
@@ -205,6 +217,15 @@ export type Run = {
   placement: CatalogName;
   cluster: CatalogName;
   source: RunSource;
+  inputs: {
+    [key: string]: RunArtifactInput;
+  };
+  /**
+   * Directly runnable actions, grouped by produced artifact name, that can consume that one artifact without other required inputs or parameters.
+   */
+  artifactConsumers: {
+    [key: string]: Array<RunArtifactConsumer>;
+  };
   createdAt: string;
   assignedAt?: string;
   preparingAt?: string;
@@ -237,7 +258,45 @@ export type RunCreate = {
   parameters?: {
     [key: string]: ParameterValue;
   };
+  /**
+   * Explicit bindings from declared input names to sealed artifacts. Exact catalog compatibility pins the new Run to the producer's commit and catalog revision.
+   */
+  inputs?: {
+    [key: string]: string;
+  };
   source: RunSource;
+};
+
+export type Artifact = {
+  id: string;
+  runId: string;
+  name: CatalogName;
+  kind: "log" | "output";
+  state: "open" | "sealed" | "failed";
+  mediaType: string;
+  sizeBytes: number;
+  sha256?: string;
+  sensitive: boolean;
+  retentionState: "retained" | "expired" | "deleted";
+  provenance: ArtifactProvenance;
+  createdAt: string;
+  sealedAt?: string;
+};
+
+export type ArtifactList = {
+  items: Array<Artifact>;
+};
+
+export type LogCursor = {
+  nextOffsetBytes: number;
+  state: "open" | "sealed" | "failed";
+  sha256?: string;
+};
+
+export type LogEvent = {
+  offsetBytes: number;
+  nextOffsetBytes: number;
+  contentsBase64: string;
 };
 
 export type RepositoryRefresh = {
@@ -393,12 +452,20 @@ export type TargetSpec = {
   };
 };
 
+export type TargetStatus = {
+  /**
+   * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
+   */
+  desiredCommitSha: string;
+};
+
 export type Target = {
   apiVersion: "slipramp.com/v1alpha1";
   kind: "Target";
   metadata: ResourceMetadata;
   spec: TargetSpec;
   source: CatalogSource;
+  status: TargetStatus;
 };
 
 export type ParameterValue = string | boolean | number;
@@ -476,11 +543,50 @@ export type RunAssignmentPlacement = {
   };
 };
 
+export type RunArtifactAccess = {
+  /**
+   * Run-scoped bearer credential for declared outputs and inputs.
+   */
+  token: string;
+};
+
+export type LogSeal = {
+  sizeBytes: number;
+  sha256: string;
+};
+
 export type RunSource = {
   /**
    * Boundary that submitted the Run.
    */
   type: "manual" | "api";
+};
+
+export type RunArtifactInput = {
+  artifactId: string;
+  producerRunId: string;
+  name: CatalogName;
+  mediaType: string;
+  sizeBytes: number;
+  sha256: string;
+  sensitive: boolean;
+  retentionState: "retained" | "expired" | "deleted";
+  commitSha: string;
+  catalogRevisionId: string;
+};
+
+export type RunArtifactConsumer = {
+  action: CatalogName;
+  input: CatalogName;
+};
+
+export type ArtifactProvenance = {
+  producerRunId: string;
+  repositoryId: string;
+  target: CatalogName;
+  action: CatalogName;
+  commitSha: string;
+  catalogRevisionId: string;
 };
 
 export type GetHealthData = {
@@ -689,21 +795,57 @@ export type ListClustersResponses = {
 
 export type ListClustersResponse = ListClustersResponses[keyof ListClustersResponses];
 
+export type EnrollControllerData = {
+  body: ControllerEnrollment;
+  path?: never;
+  query?: never;
+  url: "/controller/v1/enroll";
+};
+
+export type EnrollControllerErrors = {
+  /**
+   * The enrollment request is invalid.
+   */
+  400: Problem;
+  /**
+   * The enrollment credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The cluster is already enrolled with another credential.
+   */
+  409: Problem;
+  /**
+   * The controller could not be enrolled.
+   */
+  500: Problem;
+};
+
+export type EnrollControllerError = EnrollControllerErrors[keyof EnrollControllerErrors];
+
+export type EnrollControllerResponses = {
+  /**
+   * The controller credential is enrolled.
+   */
+  204: void;
+};
+
+export type EnrollControllerResponse = EnrollControllerResponses[keyof EnrollControllerResponses];
+
 export type PollForControllerCommandData = {
   body?: never;
-  path: {
-    /**
-     * Stable name of the controller's execution cluster.
-     */
-    clusterName: string;
-  };
+  path?: never;
   query?: {
     /**
      * Maximum time to wait for a controller command.
      */
     timeoutSeconds?: number;
   };
-  url: "/controller/v1/controllers/{clusterName}/poll";
+  url: "/controller/v1/poll";
 };
 
 export type PollForControllerCommandErrors = {
@@ -746,16 +888,12 @@ export type ReportRunObservationData = {
   body: RunObservation;
   path: {
     /**
-     * Stable name of the controller's execution cluster.
-     */
-    clusterName: string;
-    /**
      * Run observed by this controller.
      */
     runId: string;
   };
   query?: never;
-  url: "/controller/v1/controllers/{clusterName}/runs/{runId}/observations";
+  url: "/controller/v1/runs/{runId}/observations";
 };
 
 export type ReportRunObservationErrors = {
@@ -797,6 +935,244 @@ export type ReportRunObservationResponses = {
 
 export type ReportRunObservationResponse =
   ReportRunObservationResponses[keyof ReportRunObservationResponses];
+
+export type AppendRunLogChunkData = {
+  body: Blob | File;
+  path: {
+    /**
+     * Run whose action output produced this chunk.
+     */
+    runId: string;
+  };
+  query: {
+    /**
+     * Zero-based byte offset of the chunk in the complete log.
+     */
+    offsetBytes: number;
+  };
+  url: "/controller/v1/runs/{runId}/log-chunks";
+};
+
+export type AppendRunLogChunkErrors = {
+  /**
+   * The chunk offset or body is invalid.
+   */
+  400: Problem;
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The Run does not belong to the authenticated controller.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The offset is already occupied by different bytes or the log is closed.
+   */
+  409: Problem;
+  /**
+   * The chunk exceeds the maximum accepted size.
+   */
+  413: Problem;
+  /**
+   * The chunk could not be stored durably.
+   */
+  500: Problem;
+};
+
+export type AppendRunLogChunkError = AppendRunLogChunkErrors[keyof AppendRunLogChunkErrors];
+
+export type AppendRunLogChunkResponses = {
+  /**
+   * The chunk was durably accepted or had already been accepted.
+   */
+  204: void;
+};
+
+export type AppendRunLogChunkResponse =
+  AppendRunLogChunkResponses[keyof AppendRunLogChunkResponses];
+
+export type GetRunLogCursorData = {
+  body?: never;
+  path: {
+    runId: string;
+  };
+  query?: never;
+  url: "/controller/v1/runs/{runId}/log";
+};
+
+export type GetRunLogCursorErrors = {
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The Run does not belong to this controller.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The cursor could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetRunLogCursorError = GetRunLogCursorErrors[keyof GetRunLogCursorErrors];
+
+export type GetRunLogCursorResponses = {
+  /**
+   * The next durable byte offset and lifecycle state.
+   */
+  200: LogCursor;
+};
+
+export type GetRunLogCursorResponse = GetRunLogCursorResponses[keyof GetRunLogCursorResponses];
+
+export type SealRunLogData = {
+  body: LogSeal;
+  path: {
+    runId: string;
+  };
+  query?: never;
+  url: "/controller/v1/runs/{runId}/log";
+};
+
+export type SealRunLogErrors = {
+  /**
+   * The seal is invalid.
+   */
+  400: Problem;
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The Run does not belong to this controller.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The seal conflicts with the durable bytes.
+   */
+  409: Problem;
+  /**
+   * The log could not be sealed.
+   */
+  500: Problem;
+};
+
+export type SealRunLogError = SealRunLogErrors[keyof SealRunLogErrors];
+
+export type SealRunLogResponses = {
+  /**
+   * The log was sealed or already matched the seal.
+   */
+  204: void;
+};
+
+export type SealRunLogResponse = SealRunLogResponses[keyof SealRunLogResponses];
+
+export type UploadRunArtifactData = {
+  body: Blob | File;
+  headers: {
+    "X-Slipramp-Content-SHA256": string;
+  };
+  path: {
+    runId: string;
+    artifactName: CatalogName;
+  };
+  query?: never;
+  url: "/execution/v1/runs/{runId}/artifacts/{artifactName}";
+};
+
+export type UploadRunArtifactErrors = {
+  /**
+   * The upload metadata is invalid.
+   */
+  400: Problem;
+  /**
+   * The run-scoped credential is invalid.
+   */
+  401: Problem;
+  /**
+   * The Run or declaration does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The artifact name already contains different bytes.
+   */
+  409: Problem;
+  /**
+   * The upload could not be stored.
+   */
+  500: Problem;
+};
+
+export type UploadRunArtifactError = UploadRunArtifactErrors[keyof UploadRunArtifactErrors];
+
+export type UploadRunArtifactResponses = {
+  /**
+   * The artifact was stored or already existed identically.
+   */
+  204: void;
+};
+
+export type UploadRunArtifactResponse =
+  UploadRunArtifactResponses[keyof UploadRunArtifactResponses];
+
+export type DownloadRunInputData = {
+  body?: never;
+  path: {
+    runId: string;
+    inputName: CatalogName;
+  };
+  query?: never;
+  url: "/execution/v1/runs/{runId}/inputs/{inputName}";
+};
+
+export type DownloadRunInputErrors = {
+  /**
+   * The run-scoped credential is invalid.
+   */
+  401: Problem;
+  /**
+   * The input binding or artifact does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The input could not be downloaded.
+   */
+  500: Problem;
+};
+
+export type DownloadRunInputError = DownloadRunInputErrors[keyof DownloadRunInputErrors];
+
+export type DownloadRunInputResponses = {
+  /**
+   * The exact selected artifact bytes.
+   */
+  200: Blob | File;
+};
+
+export type DownloadRunInputResponse = DownloadRunInputResponses[keyof DownloadRunInputResponses];
 
 export type CreateRunData = {
   body: RunCreate;
@@ -845,6 +1221,41 @@ export type CreateRunResponses = {
 
 export type CreateRunResponse = CreateRunResponses[keyof CreateRunResponses];
 
+export type GetRunData = {
+  body?: never;
+  path: {
+    runId: string;
+  };
+  query?: never;
+  url: "/api/v1/runs/{runId}";
+};
+
+export type GetRunErrors = {
+  /**
+   * The Run does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The Run could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetRunError = GetRunErrors[keyof GetRunErrors];
+
+export type GetRunResponses = {
+  /**
+   * The immutable Run and its observed lifecycle state.
+   */
+  200: Run;
+};
+
+export type GetRunResponse = GetRunResponses[keyof GetRunResponses];
+
 export type CancelRunData = {
   body?: never;
   path: {
@@ -886,3 +1297,121 @@ export type CancelRunResponses = {
 };
 
 export type CancelRunResponse = CancelRunResponses[keyof CancelRunResponses];
+
+export type ListRunArtifactsData = {
+  body?: never;
+  path: {
+    runId: string;
+  };
+  query?: never;
+  url: "/api/v1/runs/{runId}/artifacts";
+};
+
+export type ListRunArtifactsErrors = {
+  /**
+   * The Run does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * Artifacts could not be listed.
+   */
+  500: Problem;
+};
+
+export type ListRunArtifactsError = ListRunArtifactsErrors[keyof ListRunArtifactsErrors];
+
+export type ListRunArtifactsResponses = {
+  /**
+   * Artifacts ordered by creation time.
+   */
+  200: ArtifactList;
+};
+
+export type ListRunArtifactsResponse = ListRunArtifactsResponses[keyof ListRunArtifactsResponses];
+
+export type StreamRunLogData = {
+  body?: never;
+  headers?: {
+    "Last-Event-ID"?: string;
+  };
+  path: {
+    runId: string;
+  };
+  query?: {
+    offsetBytes?: number;
+  };
+  url: "/api/v1/runs/{runId}/logs";
+};
+
+export type StreamRunLogErrors = {
+  /**
+   * The requested cursor is invalid.
+   */
+  400: Problem;
+  /**
+   * The Run or log artifact does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The log could not be streamed.
+   */
+  500: Problem;
+};
+
+export type StreamRunLogError = StreamRunLogErrors[keyof StreamRunLogErrors];
+
+export type StreamRunLogResponses = {
+  /**
+   * Reconnectable stream of durable log events.
+   */
+  200: Blob | File;
+};
+
+export type StreamRunLogResponse = StreamRunLogResponses[keyof StreamRunLogResponses];
+
+export type DownloadArtifactData = {
+  body?: never;
+  path: {
+    artifactId: string;
+  };
+  query?: never;
+  url: "/api/v1/artifacts/{artifactId}/download";
+};
+
+export type DownloadArtifactErrors = {
+  /**
+   * The artifact does not exist or is not retained.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The artifact is not sealed.
+   */
+  409: Problem;
+  /**
+   * The artifact could not be downloaded.
+   */
+  500: Problem;
+};
+
+export type DownloadArtifactError = DownloadArtifactErrors[keyof DownloadArtifactErrors];
+
+export type DownloadArtifactResponses = {
+  /**
+   * Immutable artifact bytes.
+   */
+  200: Blob | File;
+};
+
+export type DownloadArtifactResponse = DownloadArtifactResponses[keyof DownloadArtifactResponses];

@@ -16,6 +16,23 @@ type Store interface {
 	) (Revision, error)
 }
 
+type revisionStore interface {
+	GetCatalogRevision(context.Context, uuid.UUID, uuid.UUID) (Revision, error)
+}
+
+func (s *Service) GetRevision(
+	ctx context.Context,
+	repositoryID uuid.UUID,
+	revisionID uuid.UUID,
+) (Revision, error) {
+	store, ok := s.catalogs.(revisionStore)
+	if !ok {
+		return Revision{}, errors.New("catalog store cannot load immutable revisions")
+	}
+
+	return store.GetCatalogRevision(ctx, repositoryID, revisionID)
+}
+
 type Service struct {
 	catalogs Store
 }

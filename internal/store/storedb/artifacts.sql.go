@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const advanceArtifactLogSize = `-- name: AdvanceArtifactLogSize :exec
+UPDATE artifacts
+SET size_bytes = $1
+WHERE id = $2
+`
+
+type AdvanceArtifactLogSizeParams struct {
+	NextOffsetBytes int64
+	ID              pgtype.UUID
+}
+
+func (q *Queries) AdvanceArtifactLogSize(ctx context.Context, arg AdvanceArtifactLogSizeParams) error {
+	_, err := q.db.Exec(ctx, advanceArtifactLogSize, arg.NextOffsetBytes, arg.ID)
+	return err
+}
+
 const createArtifact = `-- name: CreateArtifact :one
 INSERT INTO artifacts (
     id,
@@ -232,11 +248,108 @@ func (q *Queries) GetArtifactLogChunk(ctx context.Context, arg GetArtifactLogChu
 	return i, err
 }
 
+const getArtifactProvenance = `-- name: GetArtifactProvenance :one
+SELECT
+    repository_id,
+    catalog_revision_id,
+    commit_sha,
+    target_name,
+    action_name
+FROM runs
+WHERE id = $1
+`
+
+type GetArtifactProvenanceRow struct {
+	RepositoryID      pgtype.UUID
+	CatalogRevisionID pgtype.UUID
+	CommitSha         string
+	TargetName        string
+	ActionName        string
+}
+
+func (q *Queries) GetArtifactProvenance(ctx context.Context, runID pgtype.UUID) (GetArtifactProvenanceRow, error) {
+	row := q.db.QueryRow(ctx, getArtifactProvenance, runID)
+	var i GetArtifactProvenanceRow
+	err := row.Scan(
+		&i.RepositoryID,
+		&i.CatalogRevisionID,
+		&i.CommitSha,
+		&i.TargetName,
+		&i.ActionName,
+	)
+	return i, err
+}
+
+const getArtifactRunClusterName = `-- name: GetArtifactRunClusterName :one
+SELECT cluster_name
+FROM runs
+WHERE id = $1
+`
+
+func (q *Queries) GetArtifactRunClusterName(ctx context.Context, runID pgtype.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, getArtifactRunClusterName, runID)
+	var cluster_name string
+	err := row.Scan(&cluster_name)
+	return cluster_name, err
+}
+
+const getRunArtifactContext = `-- name: GetRunArtifactContext :one
+SELECT cluster_name, snapshot
+FROM runs
+WHERE id = $1
+`
+
+type GetRunArtifactContextRow struct {
+	ClusterName string
+	Snapshot    []byte
+}
+
+func (q *Queries) GetRunArtifactContext(ctx context.Context, runID pgtype.UUID) (GetRunArtifactContextRow, error) {
+	row := q.db.QueryRow(ctx, getRunArtifactContext, runID)
+	var i GetRunArtifactContextRow
+	err := row.Scan(&i.ClusterName, &i.Snapshot)
+	return i, err
+}
+
+const getRunInputArtifact = `-- name: GetRunInputArtifact :one
+SELECT artifacts.id, artifacts.run_id, artifacts.name, artifacts.kind, artifacts.state, artifacts.media_type, artifacts.size_bytes, artifacts.sha256, artifacts.sensitive, artifacts.content_object_key, artifacts.retention_state, artifacts.created_at, artifacts.sealed_at
+FROM run_artifact_inputs
+JOIN artifacts ON artifacts.id = run_artifact_inputs.artifact_id
+WHERE run_artifact_inputs.run_id = $1
+  AND run_artifact_inputs.input_name = $2
+`
+
+type GetRunInputArtifactParams struct {
+	RunID     pgtype.UUID
+	InputName string
+}
+
+func (q *Queries) GetRunInputArtifact(ctx context.Context, arg GetRunInputArtifactParams) (Artifact, error) {
+	row := q.db.QueryRow(ctx, getRunInputArtifact, arg.RunID, arg.InputName)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Name,
+		&i.Kind,
+		&i.State,
+		&i.MediaType,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.Sensitive,
+		&i.ContentObjectKey,
+		&i.RetentionState,
+		&i.CreatedAt,
+		&i.SealedAt,
+	)
+	return i, err
+}
+
 const listArtifactLogChunks = `-- name: ListArtifactLogChunks :many
 SELECT artifact_id, offset_bytes, size_bytes, sha256, object_key, created_at
 FROM artifact_log_chunks
 WHERE artifact_id = $1
-  AND offset_bytes >= $2
+  AND offset_bytes + size_bytes > $2
 ORDER BY offset_bytes
 `
 
@@ -311,4 +424,76 @@ func (q *Queries) ListArtifactsForRun(ctx context.Context, runID pgtype.UUID) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockArtifactForLogAppend = `-- name: LockArtifactForLogAppend :one
+SELECT id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
+FROM artifacts
+WHERE id = $1
+  AND kind = 'log'
+FOR UPDATE
+`
+
+func (q *Queries) LockArtifactForLogAppend(ctx context.Context, id pgtype.UUID) (Artifact, error) {
+	row := q.db.QueryRow(ctx, lockArtifactForLogAppend, id)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Name,
+		&i.Kind,
+		&i.State,
+		&i.MediaType,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.Sensitive,
+		&i.ContentObjectKey,
+		&i.RetentionState,
+		&i.CreatedAt,
+		&i.SealedAt,
+	)
+	return i, err
+}
+
+const sealArtifact = `-- name: SealArtifact :one
+UPDATE artifacts
+SET state = 'sealed',
+    size_bytes = $1,
+    sha256 = $2,
+    sealed_at = $3
+WHERE id = $4
+RETURNING id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
+`
+
+type SealArtifactParams struct {
+	SizeBytes int64
+	Sha256    *string
+	SealedAt  pgtype.Timestamptz
+	ID        pgtype.UUID
+}
+
+func (q *Queries) SealArtifact(ctx context.Context, arg SealArtifactParams) (Artifact, error) {
+	row := q.db.QueryRow(ctx, sealArtifact,
+		arg.SizeBytes,
+		arg.Sha256,
+		arg.SealedAt,
+		arg.ID,
+	)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Name,
+		&i.Kind,
+		&i.State,
+		&i.MediaType,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.Sensitive,
+		&i.ContentObjectKey,
+		&i.RetentionState,
+		&i.CreatedAt,
+		&i.SealedAt,
+	)
+	return i, err
 }

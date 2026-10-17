@@ -1,0 +1,150 @@
+Artifact:
+  type: object
+  required:
+    - id
+    - runId
+    - name
+    - kind
+    - state
+    - mediaType
+    - sizeBytes
+    - sensitive
+    - retentionState
+    - provenance
+    - createdAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    runId:
+      type: string
+      format: uuid
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    kind:
+      type: string
+      enum:
+        - log
+        - output
+    state:
+      type: string
+      enum:
+        - open
+        - sealed
+        - failed
+    mediaType:
+      type: string
+      minLength: 1
+    sizeBytes:
+      type: integer
+      format: int64
+      minimum: 0
+    sha256:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+    sensitive:
+      type: boolean
+    retentionState:
+      type: string
+      enum:
+        - retained
+        - expired
+        - deleted
+    provenance:
+      $ref: "#/ArtifactProvenance"
+    createdAt:
+      type: string
+      format: date-time
+    sealedAt:
+      type: string
+      format: date-time
+
+ArtifactProvenance:
+  type: object
+  required:
+    - producerRunId
+    - repositoryId
+    - target
+    - action
+    - commitSha
+    - catalogRevisionId
+  properties:
+    producerRunId:
+      type: string
+      format: uuid
+    repositoryId:
+      type: string
+      format: uuid
+    target:
+      $ref: ./runs.yaml#/CatalogName
+    action:
+      $ref: ./runs.yaml#/CatalogName
+    commitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    catalogRevisionId:
+      type: string
+      format: uuid
+
+ArtifactList:
+  type: object
+  required:
+    - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/Artifact"
+
+LogCursor:
+  type: object
+  required:
+    - nextOffsetBytes
+    - state
+  properties:
+    nextOffsetBytes:
+      type: integer
+      format: int64
+      minimum: 0
+    state:
+      type: string
+      enum:
+        - open
+        - sealed
+        - failed
+    sha256:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+
+LogSeal:
+  type: object
+  required:
+    - sizeBytes
+    - sha256
+  properties:
+    sizeBytes:
+      type: integer
+      format: int64
+      minimum: 0
+    sha256:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+
+LogEvent:
+  type: object
+  required:
+    - offsetBytes
+    - nextOffsetBytes
+    - contentsBase64
+  properties:
+    offsetBytes:
+      type: integer
+      format: int64
+      minimum: 0
+    nextOffsetBytes:
+      type: integer
+      format: int64
+      minimum: 0
+    contentsBase64:
+      type: string
+      format: byte

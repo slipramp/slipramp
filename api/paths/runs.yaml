@@ -3,9 +3,10 @@ runs:
     operationId: createRun
     summary: Create an action run
     description: >-
-      Resolves an action against the repository's active catalog revision and
-      persists an immutable queued Run. The Run remains pinned to that catalog
-      revision and Git commit even if the repository refreshes later.
+      Resolves an action against the repository's active catalog revision, or
+      the producing revision when explicit artifact inputs are selected, and
+      persists an immutable queued Run. The Run remains pinned to the resolved
+      catalog revision and Git commit even if the repository refreshes later.
     security: []
     tags:
       - Runs
@@ -62,6 +63,43 @@ runs:
               $ref: ../components/common.yaml#/Problem
       "500":
         description: The Run could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+run:
+  get:
+    operationId: getRun
+    summary: Get a Run
+    security: []
+    tags: [Runs]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: The immutable Run and its observed lifecycle state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/runs.yaml#/Run
+      "404":
+        description: The Run does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Run could not be loaded.
         content:
           application/problem+json:
             schema:

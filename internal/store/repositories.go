@@ -79,6 +79,7 @@ func (d *Database) ListRepositories(
 				row.LastRefreshSucceededAt,
 				row.LastRefreshError,
 			),
+			ActiveCatalogCommitSHA: row.ActiveCatalogCommitSha,
 		})
 	}
 
@@ -115,6 +116,7 @@ func (d *Database) GetRepository(
 			row.LastRefreshSucceededAt,
 			row.LastRefreshError,
 		),
+		ActiveCatalogCommitSHA: row.ActiveCatalogCommitSha,
 	}, nil
 }
 

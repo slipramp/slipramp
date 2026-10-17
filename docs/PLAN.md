@@ -65,7 +65,7 @@ Cluster identity is part of every dispatched run and Kubernetes object reference
 
 ### Controller
 
-A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTPS API with a static bearer credential. It identifies its cluster, long-polls the Slipramp Server for command envelopes, creates and observes Jobs, and posts lifecycle observations, log chunks, and completion back through ordinary HTTP requests. Authenticated poll and report traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
+A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTPS API. At startup it presents a cluster-scoped enrollment credential to register the SHA-256 digest of a separate controller-owned bearer credential. The MVP auto-approves a valid enrollment credential; explicit approvals and credential rotation are deferred. The Server derives cluster identity from the enrolled bearer credential, so ordinary controller routes do not repeat a caller-supplied cluster name. The controller long-polls for command envelopes, creates and observes Jobs, and posts lifecycle observations, log chunks, and completion back through ordinary HTTP requests. Authenticated poll and report traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
 
 Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. A Run remains assigned until the controller reports the materialized Job UID and preparing phase. After restarting, the controller scans its labeled Jobs and reports their current observations before requesting more work. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica and a unique cluster name; duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
 
@@ -132,13 +132,21 @@ A schedule trigger includes an explicit time zone and records each intended occu
 
 The Slipramp Server queues a run for the cluster selected by the resolved placement. That cluster's controller claims the run and creates its Kubernetes Job. A checkout init container clones the repository directly from Git and checks out the exact commit recorded by the run. For private repositories, it uses the repository's logical checkout credential resolved to a Kubernetes Secret by the controller. The Job downloads any selected artifact inputs separately, then the Slipramp harness executes the action in its runtime image.
 
-Controllers require outbound access to the Slipramp Server, and execution Jobs require outbound access to their Git repositories and the configured S3-compatible endpoint through scoped or presigned requests. The Server requires no Kubernetes API access and no inbound network path into execution clusters.
+Controllers require outbound access to the Slipramp Server, and execution Jobs require outbound access to their Git repositories and the Server's run-scoped artifact transfer endpoints. Only the Server accesses S3-compatible storage. The Server requires no Kubernetes API access and no inbound network path into execution clusters.
 
 The controller tails Kubernetes Pod logs and posts chunks with monotonically increasing byte offsets to the Slipramp Server. Repeated chunks are accepted idempotently. The Server durably appends each new chunk to the run's log artifact before publishing it to connected clients. Kubernetes Pod logs are an execution source, not the retained record, and the loss or cleanup of a Pod must not remove already accepted output.
 
 Runs for the same target are serialized by default to avoid conflicting infrastructure operations. Automatic retries are explicit because transparently repeating a partially completed infrastructure command can be unsafe.
 
 The execution contract should remain small and stable: workspace layout and permissions, standard environment variables, parameters, credential injection, artifact input and output directories, streaming logs, and exit status.
+
+For artifact transfer, an assignment includes a Run-scoped credential derived
+from a Server-held HMAC key. The harness removes this credential from the child
+action environment. It downloads only the Run's explicit input bindings and
+uploads only output names declared by the frozen action. PostgreSQL remains
+authoritative for each binding and artifact's provenance, sensitivity,
+retention, size, and digest; the Server streams the corresponding bytes to and
+from S3-compatible storage.
 
 For the MVP, each Run becomes a Job named `slipramp-run-<run-id>` with stable
 Run and cluster labels, `restartPolicy: Never`, and `backoffLimit: 0`. A checkout
@@ -328,13 +336,17 @@ spec:
 
 ### Controller and Placements
 
-Each cluster runs one controller replica configured with its stable cluster name, Slipramp Server address, static bearer credential, and local Git credential mappings. Placements remain part of Slipramp Server configuration and select a registered cluster by name.
+Each cluster runs one controller replica configured with its stable cluster name, Slipramp Server address, bootstrap enrollment credential, controller-owned bearer credential, and local Git credential mappings. Placements remain part of Slipramp Server configuration and select a registered cluster by name.
 
 ```yaml
 # Controller configuration deployed into the colo cluster.
 controller:
   cluster: colo
   server: https://slipramp.com
+  enrollmentCredential:
+    secretRef:
+      name: slipramp-controller
+      key: enrollment-token
   credential:
     secretRef:
       name: slipramp-controller
@@ -526,11 +538,12 @@ source action must declare that output. The only MVP compatibility policy is
 Most architectural questions are settled above. These details still need decisions while planning or implementing the MVP:
 
 - Versioning and compatibility behavior after the MVP `v1alpha1` repository contract.
-- The remaining harness ABI for standard Slipramp environment variables, cancellation handling, and artifact transfer mechanics.
-- PostgreSQL history retention and archival, plus S3 object naming, log chunking, lifecycle, deletion, and orphan cleanup.
+- The remaining harness ABI for additional standard Slipramp environment variables and cancellation behavior.
+- PostgreSQL history retention and archival, plus artifact expiration, deletion, and orphan cleanup.
 
 The following questions are intentionally deferred and do not block the MVP:
 
 - Authentication, authorization, and human run attribution.
 - Git, schedule, and webhook trigger filtering, idempotency, missed-event, coalescing, and overlap semantics.
+- Explicit controller enrollment approvals and credential rotation workflows.
 - Controller high availability, fencing, leader election, and multiple active replicas for one cluster name.

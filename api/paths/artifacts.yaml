@@ -1,0 +1,252 @@
+runArtifacts:
+  get:
+    operationId: listRunArtifacts
+    summary: List a Run's artifacts
+    security: []
+    tags: [Artifacts]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: Artifacts ordered by creation time.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/artifacts.yaml#/ArtifactList
+      "404":
+        description: The Run does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Artifacts could not be listed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+artifactDownload:
+  get:
+    operationId: downloadArtifact
+    summary: Download a sealed artifact
+    security: []
+    tags: [Artifacts]
+    parameters:
+      - name: artifactId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: Immutable artifact bytes.
+        headers:
+          Content-Disposition:
+            schema: { type: string }
+          Digest:
+            schema: { type: string }
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      "404":
+        description: The artifact does not exist or is not retained.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The artifact is not sealed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The artifact could not be downloaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+runLogs:
+  get:
+    operationId: streamRunLog
+    summary: Stream retained and live Run log bytes
+    description: >-
+      Sends JSON log events over SSE. Reconnect with offsetBytes or the last
+      event ID; event IDs are the next durable byte offset.
+    security: []
+    tags: [Artifacts]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: offsetBytes
+        in: query
+        required: false
+        schema: { type: integer, format: int64, minimum: 0, default: 0 }
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema: { type: string, pattern: "^[0-9]+$" }
+    responses:
+      "200":
+        description: Reconnectable stream of durable log events.
+        content:
+          text/event-stream:
+            schema: { type: string, format: binary }
+      "400":
+        description: The requested cursor is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run or log artifact does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The log could not be streamed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+executionArtifact:
+  put:
+    operationId: uploadRunArtifact
+    summary: Upload one declared artifact from the Run harness
+    security:
+      - RunArtifactBearer: []
+    tags: [Artifacts]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: artifactName
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: X-Slipramp-Content-SHA256
+        in: header
+        required: true
+        schema: { type: string, pattern: "^[0-9a-f]{64}$" }
+    requestBody:
+      required: true
+      content:
+        application/octet-stream:
+          schema: { type: string, format: binary }
+    responses:
+      "204": { description: The artifact was stored or already existed identically. }
+      "400":
+        description: The upload metadata is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The run-scoped credential is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run or declaration does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The artifact name already contains different bytes.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The upload could not be stored.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+executionInput:
+  get:
+    operationId: downloadRunInput
+    summary: Download one explicitly bound input for the Run harness
+    security:
+      - RunArtifactBearer: []
+    tags: [Artifacts]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - name: inputName
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    responses:
+      "200":
+        description: The exact selected artifact bytes.
+        headers:
+          Digest:
+            schema: { type: string }
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      "401":
+        description: The run-scoped credential is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The input binding or artifact does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The input could not be downloaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

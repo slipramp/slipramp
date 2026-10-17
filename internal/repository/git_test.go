@@ -94,6 +94,73 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 	}
 }
 
+func TestGitFetcherComputesChangedPathsFromAcceptedCommit(t *testing.T) {
+	t.Parallel()
+
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("Git is not installed")
+	}
+
+	workingDirectory := filepath.Join(t.TempDir(), "working")
+	remoteDirectory := filepath.Join(t.TempDir(), "remote.git")
+	runTestGit(t, "init", "--initial-branch=main", workingDirectory)
+	runTestGit(t, "-C", workingDirectory, "config", "user.name", "Slipramp Test")
+	runTestGit(
+		t,
+		"-C",
+		workingDirectory,
+		"config",
+		"user.email",
+		"slipramp@example.com",
+	)
+
+	writeTestFile(t, workingDirectory, "docs/README.md", "unchanged\n")
+	writeTestFile(t, workingDirectory, "terraform/main.tf", "version = 1\n")
+	runTestGit(t, "-C", workingDirectory, "add", ".")
+	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-m", "initial")
+	acceptedCommit := strings.TrimSpace(
+		runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"),
+	)
+
+	writeTestFile(t, workingDirectory, "terraform/main.tf", "version = 2\n")
+	writeTestFile(t, workingDirectory, "terraform/modules/network/main.tf", "module {}\n")
+	runTestGit(t, "-C", workingDirectory, "add", ".")
+	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-m", "update")
+	wantCommit := strings.TrimSpace(
+		runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"),
+	)
+	runTestGit(t, "clone", "--quiet", "--bare", workingDirectory, remoteDirectory)
+
+	fetcher := NewGitFetcher(nil)
+	fetched, err := fetcher.Fetch(
+		context.Background(),
+		Repository{
+			CloneURL:               remoteDirectory,
+			Branch:                 "main",
+			ActiveCatalogCommitSHA: &acceptedCommit,
+		},
+	)
+	if err != nil {
+		t.Fatalf("Fetch() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := fetched.Close(); err != nil {
+			t.Errorf("FetchedCommit.Close() error = %v", err)
+		}
+	})
+
+	if fetched.CommitSHA != wantCommit {
+		t.Errorf("Fetch() commit = %q, want %q", fetched.CommitSHA, wantCommit)
+	}
+	wantPaths := []string{
+		"terraform/main.tf",
+		"terraform/modules/network/main.tf",
+	}
+	if strings.Join(fetched.ChangedPaths, "\n") != strings.Join(wantPaths, "\n") {
+		t.Errorf("Fetch() changed paths = %#v, want %#v", fetched.ChangedPaths, wantPaths)
+	}
+}
+
 func TestGitFetcherRejectsUnknownCredential(t *testing.T) {
 	t.Parallel()
 
@@ -167,4 +234,16 @@ func runTestGit(t *testing.T, arguments ...string) string {
 	}
 
 	return string(output)
+}
+
+func writeTestFile(t *testing.T, root, name, contents string) {
+	t.Helper()
+
+	filePath := filepath.Join(root, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o700); err != nil {
+		t.Fatalf("create test file directory: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte(contents), 0o600); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
 }

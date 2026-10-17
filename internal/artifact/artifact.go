@@ -33,6 +33,11 @@ var (
 	ErrInvalid       = errors.New("invalid artifact")
 	ErrNotFound      = errors.New("artifact not found")
 	ErrAlreadyExists = errors.New("artifact already exists")
+	ErrChunkConflict = errors.New("log chunk conflicts with stored contents")
+	ErrChunkTooLarge = errors.New("log chunk exceeds the maximum size")
+	ErrLogClosed     = errors.New("log artifact is closed")
+	ErrNotSealed     = errors.New("artifact is not sealed")
+	ErrSealConflict  = errors.New("log seal conflicts with durable contents")
 
 	sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
@@ -57,6 +62,30 @@ type Artifact struct {
 	RetentionState RetentionState
 	CreatedAt      time.Time
 	SealedAt       *time.Time
+}
+
+type Provenance struct {
+	ProducerRunID     uuid.UUID
+	RepositoryID      uuid.UUID
+	CatalogRevisionID uuid.UUID
+	CommitSHA         string
+	TargetName        string
+	ActionName        string
+}
+
+type Record struct {
+	Artifact
+	Provenance Provenance
+}
+
+type Declaration struct {
+	MediaType string
+	Sensitive bool
+}
+
+type RunContext struct {
+	ClusterName string
+	Artifacts   map[string]Declaration
 }
 
 func (a Artifact) Validate() error {
@@ -173,6 +202,7 @@ func (c LogChunk) EndOffset() int64 {
 }
 
 type Store interface {
+	GetRunClusterName(ctx context.Context, runID uuid.UUID) (string, error)
 	CreateArtifact(ctx context.Context, record Artifact) (Artifact, error)
 	GetArtifact(ctx context.Context, artifactID uuid.UUID) (Artifact, error)
 	GetArtifactByRunAndName(
@@ -181,6 +211,13 @@ type Store interface {
 		name string,
 	) (Artifact, error)
 	ListArtifactsForRun(ctx context.Context, runID uuid.UUID) ([]Artifact, error)
+	GetArtifactProvenance(ctx context.Context, runID uuid.UUID) (Provenance, error)
+	GetRunArtifactContext(ctx context.Context, runID uuid.UUID) (RunContext, error)
+	GetRunInputArtifact(
+		ctx context.Context,
+		runID uuid.UUID,
+		inputName string,
+	) (Artifact, error)
 	CreateLogChunk(ctx context.Context, chunk LogChunk) (LogChunk, error)
 	GetLogChunk(
 		ctx context.Context,
@@ -192,6 +229,13 @@ type Store interface {
 		artifactID uuid.UUID,
 		fromOffsetBytes int64,
 	) ([]LogChunk, error)
+	SealArtifact(
+		ctx context.Context,
+		artifactID uuid.UUID,
+		sizeBytes int64,
+		sha256 string,
+		sealedAt time.Time,
+	) (Artifact, error)
 }
 
 func validateObjectKey(value *string) error {

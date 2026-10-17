@@ -40,14 +40,49 @@ func (d *Database) GetActiveCatalogRevision(
 		)
 	}
 
-	runtimes, err := d.queries.ListCatalogRuntimes(ctx, row.ID)
+	return d.loadCatalogRevision(ctx, row.ID, row.CommitSha, row.CreatedAt)
+}
+
+func (d *Database) GetCatalogRevision(
+	ctx context.Context,
+	repositoryID uuid.UUID,
+	revisionID uuid.UUID,
+) (catalog.Revision, error) {
+	row, err := d.queries.GetCatalogRevision(
+		ctx,
+		storedb.GetCatalogRevisionParams{
+			ID:           databaseUUID(revisionID),
+			RepositoryID: databaseUUID(repositoryID),
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return catalog.Revision{}, catalog.ErrNotFound
+	}
+	if err != nil {
+		return catalog.Revision{}, fmt.Errorf("get catalog revision: %w", err)
+	}
+
+	return d.loadCatalogRevision(ctx, row.ID, row.CommitSha, row.CreatedAt)
+}
+
+func (d *Database) loadCatalogRevision(
+	ctx context.Context,
+	revisionID pgtype.UUID,
+	commitSHA string,
+	createdAt pgtype.Timestamptz,
+) (catalog.Revision, error) {
+	runtimes, err := d.queries.ListCatalogRuntimes(ctx, revisionID)
 	if err != nil {
 		return catalog.Revision{}, fmt.Errorf("list catalog runtimes: %w", err)
 	}
 
-	targets, err := d.queries.ListCatalogTargets(ctx, row.ID)
+	targets, err := d.queries.ListCatalogTargets(ctx, revisionID)
 	if err != nil {
 		return catalog.Revision{}, fmt.Errorf("list catalog targets: %w", err)
+	}
+	targetStates, err := d.queries.ListCatalogTargetStates(ctx, revisionID)
+	if err != nil {
+		return catalog.Revision{}, fmt.Errorf("list catalog target states: %w", err)
 	}
 
 	decodedRuntimes, err := decodeCatalogDefinitions[catalog.Runtime](
@@ -66,10 +101,18 @@ func (d *Database) GetActiveCatalogRevision(
 		return catalog.Revision{}, err
 	}
 
+	decodedTargetStates := make(map[string]catalog.TargetState, len(targetStates))
+	for _, state := range targetStates {
+		decodedTargetStates[state.Name] = catalog.TargetState{
+			DesiredCommitSHA: state.DesiredCommitSha,
+		}
+	}
+
 	return catalog.Revision{
-		ID:        uuid.UUID(row.ID.Bytes),
-		CommitSHA: row.CommitSha,
-		CreatedAt: row.CreatedAt.Time.UTC(),
+		ID:           uuid.UUID(revisionID.Bytes),
+		CommitSHA:    commitSHA,
+		CreatedAt:    createdAt.Time.UTC(),
+		TargetStates: decodedTargetStates,
 		Catalog: catalog.Catalog{
 			Runtimes: decodedRuntimes,
 			Targets:  decodedTargets,
@@ -178,6 +221,16 @@ func recordCatalogRevision(
 		}
 	}
 
+	if err := updateTargetStates(
+		ctx,
+		queries,
+		repositoryID,
+		revisionID,
+		result,
+	); err != nil {
+		return err
+	}
+
 	err = queries.ActivateCatalogRevision(
 		ctx,
 		storedb.ActivateCatalogRevisionParams{
@@ -192,6 +245,75 @@ func recordCatalogRevision(
 	)
 	if err != nil {
 		return fmt.Errorf("activate catalog revision: %w", err)
+	}
+
+	return nil
+}
+
+func updateTargetStates(
+	ctx context.Context,
+	queries *storedb.Queries,
+	repositoryID pgtype.UUID,
+	revisionID pgtype.UUID,
+	result repository.RefreshResult,
+) error {
+	existingRows, err := queries.ListRepositoryTargetStates(ctx, repositoryID)
+	if err != nil {
+		return fmt.Errorf("list repository target states: %w", err)
+	}
+
+	type existingTargetState struct {
+		desiredCommitSHA string
+		archived         bool
+	}
+	existing := make(map[string]existingTargetState, len(existingRows))
+	for _, row := range existingRows {
+		existing[row.Name] = existingTargetState{
+			desiredCommitSHA: row.DesiredCommitSha,
+			archived:         row.ArchivedAt.Valid,
+		}
+	}
+
+	revision := *result.Revision
+	activeNames := make([]string, 0, len(revision.Catalog.Targets))
+	for _, target := range revision.Catalog.Targets {
+		activeNames = append(activeNames, target.Metadata.Name)
+	}
+
+	updatedAt := pgtype.Timestamptz{Time: result.AttemptedAt, Valid: true}
+	if err := queries.ArchiveMissingTargets(
+		ctx,
+		storedb.ArchiveMissingTargetsParams{
+			UpdatedAt:    updatedAt,
+			RepositoryID: repositoryID,
+			ActiveNames:  activeNames,
+		},
+	); err != nil {
+		return fmt.Errorf("archive missing targets: %w", err)
+	}
+
+	for _, target := range revision.Catalog.Targets {
+		name := target.Metadata.Name
+		state, found := existing[name]
+		desiredCommitSHA := revision.CommitSHA
+		if found && !state.archived &&
+			!catalog.TargetAffected(target, result.ChangedPaths) {
+			desiredCommitSHA = state.desiredCommitSHA
+		}
+
+		err := queries.UpsertTargetState(
+			ctx,
+			storedb.UpsertTargetStateParams{
+				RepositoryID:      repositoryID,
+				Name:              name,
+				CatalogRevisionID: revisionID,
+				DesiredCommitSha:  desiredCommitSHA,
+				UpdatedAt:         updatedAt,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("upsert target state %q: %w", name, err)
+		}
 	}
 
 	return nil

@@ -131,6 +131,14 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		refresh.FailureReason == nil || *refresh.FailureReason != failureReason {
 		t.Errorf("refresh state after failure = %#v", refresh)
 	}
+	if repositories[1].ActiveCatalogCommitSHA == nil ||
+		*repositories[1].ActiveCatalogCommitSHA != commitSHA {
+		t.Errorf(
+			"active catalog commit = %v, want %q",
+			repositories[1].ActiveCatalogCommitSHA,
+			commitSHA,
+		)
+	}
 
 	if err := database.RemoveRepository(
 		ctx,

@@ -31,6 +31,7 @@ type RefreshState struct {
 
 type RefreshResult struct {
 	CommitSHA     *string
+	ChangedPaths  []string
 	AttemptedAt   time.Time
 	FailureReason *string
 	Revision      *catalog.Revision
@@ -142,6 +143,7 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 
 		loaded, loadErr := catalog.Load(fetched.Files, r.placements)
 		if loadErr == nil {
+			result.ChangedPaths = append([]string(nil), fetched.ChangedPaths...)
 			result.Revision = &catalog.Revision{
 				ID:        r.newID(),
 				CommitSHA: fetched.CommitSHA,

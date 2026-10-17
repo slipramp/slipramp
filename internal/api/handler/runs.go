@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -19,6 +22,10 @@ type RunService interface {
 	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
 	NextRunToCancel(ctx context.Context, clusterName string) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
+}
+
+type runReader interface {
+	GetRun(context.Context, uuid.UUID) (run.Run, error)
 }
 
 func (h *Handler) CreateRun(
@@ -39,6 +46,7 @@ func (h *Handler) CreateRun(
 			TargetName:   string(request.Body.Target),
 			ActionName:   string(request.Body.Action),
 			Parameters:   parameters,
+			Inputs:       runInputs(request.Body.Inputs),
 			Source: run.Source{
 				Type: run.SourceType(request.Body.Source.Type),
 			},
@@ -48,7 +56,8 @@ func (h *Handler) CreateRun(
 	if err != nil {
 		switch {
 		case errors.Is(err, run.ErrInvalidRequest),
-			errors.Is(err, run.ErrInvalidParameters):
+			errors.Is(err, run.ErrInvalidParameters),
+			errors.Is(err, run.ErrInvalidInputs):
 			problem := NewProblem(http.StatusBadRequest, err.Error())
 
 			return api.CreateRun400ApplicationProblemPlusJSONResponse(problem), nil
@@ -57,7 +66,8 @@ func (h *Handler) CreateRun(
 			errors.Is(err, run.ErrTargetNotFound),
 			errors.Is(err, run.ErrActionNotFound),
 			errors.Is(err, run.ErrRuntimeNotFound),
-			errors.Is(err, run.ErrPlacementNotFound):
+			errors.Is(err, run.ErrPlacementNotFound),
+			errors.Is(err, run.ErrArtifactNotFound):
 			problem := NewProblem(
 				http.StatusNotFound,
 				"The requested action could not be resolved from the active catalog.",
@@ -82,6 +92,43 @@ func (h *Handler) CreateRun(
 	}
 
 	return api.CreateRun201JSONResponse(body), nil
+}
+
+func (h *Handler) GetRun(
+	ctx context.Context,
+	request api.GetRunRequestObject,
+) (api.GetRunResponseObject, error) {
+	reader, ok := h.runs.(runReader)
+	if !ok {
+		return nil, errors.New("run service cannot load Runs")
+	}
+	record, err := reader.GetRun(ctx, request.RunID)
+	if errors.Is(err, run.ErrRunNotFound) {
+		problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
+
+		return api.GetRun404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := runResponse(record)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetRun200JSONResponse(body), nil
+}
+
+func runInputs(values *map[string]uuid.UUID) map[string]uuid.UUID {
+	if values == nil {
+		return map[string]uuid.UUID{}
+	}
+
+	result := make(map[string]uuid.UUID, len(*values))
+	maps.Copy(result, *values)
+
+	return result
 }
 
 func (h *Handler) CancelRun(
@@ -161,6 +208,8 @@ func runResponse(record run.Run) (api.Run, error) {
 		Source: api.RunSource{
 			Type: api.RunSourceType(record.Source.Type),
 		},
+		Inputs:                  runInputResponse(record.Snapshot.Inputs),
+		ArtifactConsumers:       runArtifactConsumers(record.Snapshot),
 		CreatedAt:               record.CreatedAt,
 		AssignedAt:              record.AssignedAt,
 		PreparingAt:             record.PreparingAt,
@@ -173,6 +222,62 @@ func runResponse(record run.Run) (api.Run, error) {
 		OutcomeMessage:          record.OutcomeMessage,
 		ExitCode:                record.ExitCode,
 	}, nil
+}
+
+func runArtifactConsumers(snapshot run.Snapshot) map[string][]api.RunArtifactConsumer {
+	result := make(map[string][]api.RunArtifactConsumer)
+	for _, actionName := range slices.Sorted(maps.Keys(snapshot.Target.Spec.Actions)) {
+		action := snapshot.Target.Spec.Actions[actionName]
+		if len(action.Inputs) != 1 || hasRequiredParameters(action) {
+			continue
+		}
+
+		for inputName, input := range action.Inputs {
+			if input.Artifact.FromAction != snapshot.Action.Name {
+				continue
+			}
+			if _, declared := snapshot.Action.Artifacts[inputName]; !declared {
+				continue
+			}
+
+			result[inputName] = append(result[inputName], api.RunArtifactConsumer{
+				Action: api.CatalogName(actionName),
+				Input:  api.CatalogName(inputName),
+			})
+		}
+	}
+
+	return result
+}
+
+func hasRequiredParameters(action catalog.Action) bool {
+	for _, parameter := range action.Parameters {
+		if parameter.Required {
+			return true
+		}
+	}
+
+	return false
+}
+
+func runInputResponse(values map[string]run.ArtifactInput) map[string]api.RunArtifactInput {
+	result := make(map[string]api.RunArtifactInput, len(values))
+	for name, value := range values {
+		result[name] = api.RunArtifactInput{
+			ArtifactID:        value.ArtifactID,
+			ProducerRunID:     value.ProducerRunID,
+			Name:              api.CatalogName(value.Name),
+			MediaType:         value.MediaType,
+			SizeBytes:         value.SizeBytes,
+			Sha256:            value.SHA256,
+			Sensitive:         value.Sensitive,
+			RetentionState:    api.RunArtifactInputRetentionState(value.RetentionState),
+			CommitSha:         value.CommitSHA,
+			CatalogRevisionID: value.CatalogRevisionID,
+		}
+	}
+
+	return result
 }
 
 func apiRunOutcome(value *run.Outcome) *api.RunOutcome {

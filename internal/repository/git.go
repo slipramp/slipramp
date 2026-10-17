@@ -17,9 +17,10 @@ type GitFetcher struct {
 }
 
 type FetchedCommit struct {
-	CommitSHA string
-	Files     fs.FS
-	cleanup   func() error
+	CommitSHA    string
+	ChangedPaths []string
+	Files        fs.FS
+	cleanup      func() error
 }
 
 func (c FetchedCommit) Close() error {
@@ -112,6 +113,18 @@ func (f *GitFetcher) Fetch(
 		)
 	}
 
+	changedPaths, err := changedRepositoryPaths(
+		ctx,
+		environment,
+		checkoutDirectory,
+		repository.CloneURL,
+		repository.ActiveCatalogCommitSHA,
+		commitSHA,
+	)
+	if err != nil {
+		return FetchedCommit{}, err
+	}
+
 	if _, err := runGit(
 		ctx,
 		environment,
@@ -131,12 +144,74 @@ func (f *GitFetcher) Fetch(
 	keepCheckout = true
 
 	return FetchedCommit{
-		CommitSHA: commitSHA,
-		Files:     os.DirFS(checkoutDirectory),
+		CommitSHA:    commitSHA,
+		ChangedPaths: changedPaths,
+		Files:        os.DirFS(checkoutDirectory),
 		cleanup: func() error {
 			return os.RemoveAll(checkoutDirectory)
 		},
 	}, nil
+}
+
+func changedRepositoryPaths(
+	ctx context.Context,
+	environment []string,
+	checkoutDirectory string,
+	cloneURL string,
+	previousCommitSHA *string,
+	commitSHA string,
+) ([]string, error) {
+	if previousCommitSHA == nil || *previousCommitSHA == commitSHA {
+		return nil, nil
+	}
+
+	if _, err := runGit(
+		ctx,
+		environment,
+		"-C",
+		checkoutDirectory,
+		"fetch",
+		"--quiet",
+		"--no-tags",
+		"--depth=1",
+		"--",
+		cloneURL,
+		*previousCommitSHA,
+	); err != nil {
+		return nil, fmt.Errorf("fetch previous accepted commit: %w", err)
+	}
+
+	output, err := runGit(
+		ctx,
+		environment,
+		"-C",
+		checkoutDirectory,
+		"diff",
+		"--name-only",
+		"--no-renames",
+		"-z",
+		*previousCommitSHA,
+		commitSHA,
+		"--",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("compare indexed commits: %w", err)
+	}
+
+	return splitNullTerminatedPaths(output), nil
+}
+
+func splitNullTerminatedPaths(output string) []string {
+	if output == "" {
+		return nil
+	}
+
+	paths := strings.Split(output, "\x00")
+	if paths[len(paths)-1] == "" {
+		paths = paths[:len(paths)-1]
+	}
+
+	return paths
 }
 
 func runGit(

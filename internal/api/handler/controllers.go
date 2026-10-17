@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -25,6 +27,42 @@ const (
 	defaultControllerPollWaitSeconds = 25
 	maximumControllerPollWaitSeconds = 30
 )
+
+func (h *Handler) EnrollController(
+	ctx context.Context,
+	request api.EnrollControllerRequestObject,
+) (api.EnrollControllerResponseObject, error) {
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "An enrollment request is required.")
+
+		return api.EnrollController400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	err := h.identities.EnrollController(
+		ctx,
+		request.Body.ClusterName,
+		request.Body.CredentialSha256,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, controlleridentity.ErrInvalid):
+			problem := NewProblem(http.StatusBadRequest, err.Error())
+
+			return api.EnrollController400ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, controlleridentity.ErrEnrollmentConflict):
+			problem := NewProblem(
+				http.StatusConflict,
+				"The cluster is already enrolled with another credential.",
+			)
+
+			return api.EnrollController409ApplicationProblemPlusJSONResponse(problem), nil
+		default:
+			return nil, err
+		}
+	}
+
+	return api.EnrollController204Response{}, nil
+}
 
 func (h *Handler) ListClusters(
 	ctx context.Context,
@@ -52,6 +90,11 @@ func (h *Handler) PollForControllerCommand(
 	ctx context.Context,
 	request api.PollForControllerCommandRequestObject,
 ) (api.PollForControllerCommandResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	timeoutSeconds := defaultControllerPollWaitSeconds
 	if request.Params.TimeoutSeconds != nil {
 		timeoutSeconds = *request.Params.TimeoutSeconds
@@ -68,12 +111,12 @@ func (h *Handler) PollForControllerCommand(
 
 	if err := h.clusters.RecordControllerContact(
 		ctx,
-		request.ClusterName,
+		principal.ClusterName,
 	); err != nil {
 		return nil, err
 	}
 
-	command, err := h.nextControllerCommand(ctx, request.ClusterName)
+	command, err := h.nextControllerCommand(ctx, principal.ClusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +137,7 @@ func (h *Handler) PollForControllerCommand(
 	case <-timer.C:
 	}
 
-	command, err = h.nextControllerCommand(ctx, request.ClusterName)
+	command, err = h.nextControllerCommand(ctx, principal.ClusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -109,17 +152,22 @@ func (h *Handler) ReportRunObservation(
 	ctx context.Context,
 	request api.ReportRunObservationRequestObject,
 ) (api.ReportRunObservationResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	if request.Body == nil {
 		problem := NewProblem(http.StatusBadRequest, "A Run observation is required.")
 
 		return api.ReportRunObservation400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	err := h.runs.ReportObservation(
+	err = h.runs.ReportObservation(
 		ctx,
 		run.Observation{
 			ID:          request.RunID,
-			ClusterName: request.ClusterName,
+			ClusterName: principal.ClusterName,
 			Phase:       run.Phase(request.Body.Phase),
 			Outcome:     runObservationOutcome(request.Body.Outcome),
 			JobUID:      request.Body.JobUID,
@@ -152,7 +200,7 @@ func (h *Handler) ReportRunObservation(
 			return nil, err
 		}
 	}
-	if err := h.clusters.RecordControllerContact(ctx, request.ClusterName); err != nil {
+	if err := h.clusters.RecordControllerContact(ctx, principal.ClusterName); err != nil {
 		return nil, err
 	}
 
@@ -225,13 +273,17 @@ func (h *Handler) nextRunAssignment(
 		return api.RunAssignment{}, err
 	}
 
-	return runAssignmentResponse(record)
+	return h.runAssignmentResponse(record)
 }
 
-func runAssignmentResponse(record run.Run) (api.RunAssignment, error) {
+func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, error) {
 	parameters, err := runParameterResponse(record.Parameters)
 	if err != nil {
 		return api.RunAssignment{}, err
+	}
+	token := ""
+	if issuer, ok := h.artifacts.(interface{ RunToken(uuid.UUID) string }); ok {
+		token = issuer.RunToken(record.ID)
 	}
 
 	podTemplate, err := assignmentPodTemplateResponse(
@@ -256,6 +308,9 @@ func runAssignmentResponse(record run.Run) (api.RunAssignment, error) {
 		Action:    assignmentActionResponse(record.Snapshot.Action),
 		Runtime:   assignmentRuntimeResponse(record.Snapshot.Runtime),
 		Placement: assignmentPlacementResponse(record.Snapshot.Placement, podTemplate),
+		ArtifactAccess: api.RunArtifactAccess{
+			Token: token,
+		},
 	}, nil
 }
 

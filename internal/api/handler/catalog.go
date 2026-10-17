@@ -52,7 +52,13 @@ func catalogRevisionResponse(revision catalog.Revision) api.CatalogRevision {
 
 	targets := make([]api.Target, 0, len(revision.Catalog.Targets))
 	for _, target := range revision.Catalog.Targets {
-		targets = append(targets, catalogTargetResponse(target))
+		targets = append(
+			targets,
+			catalogTargetResponse(
+				target,
+				revision.TargetStates[target.Metadata.Name],
+			),
+		)
 	}
 
 	return api.CatalogRevision{
@@ -123,7 +129,10 @@ func catalogCredentialInjectionResponse(
 	}
 }
 
-func catalogTargetResponse(target catalog.Target) api.Target {
+func catalogTargetResponse(
+	target catalog.Target,
+	state catalog.TargetState,
+) api.Target {
 	return api.Target{
 		APIVersion: api.TargetAPIVersion(target.APIVersion),
 		Kind:       api.TargetKind(target.Kind),
@@ -141,6 +150,9 @@ func catalogTargetResponse(target catalog.Target) api.Target {
 			Actions: catalogActionsResponse(target.Spec.Actions),
 		},
 		Source: catalogSourceResponse(target.Source),
+		Status: api.TargetStatus{
+			DesiredCommitSha: state.DesiredCommitSHA,
+		},
 	}
 }
 

@@ -18,25 +18,27 @@ import (
 type Config struct {
 	Address                      string
 	ShutdownTimeout              time.Duration
-	ControllerTokens             map[string]string
+	ControllerEnrollmentTokens   map[string]string
 	Placements                   placement.Set
 	RepositoryRefreshCredentials repository.RefreshCredentials
 	RepositoryRefreshInterval    time.Duration
 	RepositoryFetchTimeout       time.Duration
 	Database                     store.Config
 	ObjectStore                  objectstore.Config
+	ArtifactTokenSecret          string
 }
 
 func DefaultConfig() Config {
 	return Config{
 		Address:                      ":8080",
 		ShutdownTimeout:              10 * time.Second,
-		ControllerTokens:             map[string]string{},
+		ControllerEnrollmentTokens:   map[string]string{},
 		RepositoryRefreshCredentials: repository.RefreshCredentials{},
 		RepositoryRefreshInterval:    time.Minute,
 		RepositoryFetchTimeout:       30 * time.Second,
 		Database:                     store.DefaultConfig(),
 		ObjectStore:                  objectstore.DefaultConfig(),
+		ArtifactTokenSecret:          "slipramp-development-artifact-token-secret",
 	}
 }
 
@@ -73,17 +75,17 @@ func (c Config) Validate() error {
 		return fmt.Errorf("repository fetch timeout must be positive")
 	}
 
-	for clusterName, token := range c.ControllerTokens {
+	for clusterName, token := range c.ControllerEnrollmentTokens {
 		if err := cluster.ValidateName(clusterName); err != nil {
 			return fmt.Errorf(
-				"validate controller credential: %w",
+				"validate controller enrollment credential: %w",
 				err,
 			)
 		}
 
 		if err := auth.ValidateBearerToken(token); err != nil {
 			return fmt.Errorf(
-				"controller token for cluster %q is invalid: %w",
+				"controller enrollment token for cluster %q is invalid: %w",
 				clusterName,
 				err,
 			)
@@ -92,7 +94,7 @@ func (c Config) Validate() error {
 
 	for _, placementName := range c.Placements.Names() {
 		placementConfig, _ := c.Placements.Lookup(placementName)
-		if _, ok := c.ControllerTokens[placementConfig.ClusterName]; !ok {
+		if _, ok := c.ControllerEnrollmentTokens[placementConfig.ClusterName]; !ok {
 			return fmt.Errorf(
 				"placement %q selects unregistered cluster %q",
 				placementName,
@@ -107,6 +109,10 @@ func (c Config) Validate() error {
 
 	if err := c.ObjectStore.Validate(); err != nil {
 		return fmt.Errorf("validate object store: %w", err)
+	}
+
+	if len(c.ArtifactTokenSecret) < 32 {
+		return fmt.Errorf("artifact token secret must be at least 32 characters")
 	}
 
 	return nil

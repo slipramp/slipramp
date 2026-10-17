@@ -19,6 +19,15 @@ RunCreate:
       additionalProperties:
         $ref: "#/ParameterValue"
       description: Values for parameters declared by the selected action.
+    inputs:
+      type: object
+      additionalProperties:
+        type: string
+        format: uuid
+      description: >-
+        Explicit bindings from declared input names to sealed artifacts. Exact
+        catalog compatibility pins the new Run to the producer's commit and
+        catalog revision.
     source:
       $ref: "#/RunSource"
 
@@ -36,6 +45,8 @@ Run:
     - placement
     - cluster
     - source
+    - inputs
+    - artifactConsumers
     - createdAt
   properties:
     id:
@@ -82,6 +93,19 @@ Run:
       $ref: "#/CatalogName"
     source:
       $ref: "#/RunSource"
+    inputs:
+      type: object
+      additionalProperties:
+        $ref: "#/RunArtifactInput"
+    artifactConsumers:
+      type: object
+      additionalProperties:
+        type: array
+        items:
+          $ref: "#/RunArtifactConsumer"
+      description: >-
+        Directly runnable actions, grouped by produced artifact name, that can
+        consume that one artifact without other required inputs or parameters.
     createdAt:
       type: string
       format: date-time
@@ -118,6 +142,64 @@ Run:
       type: integer
       format: int32
       minimum: 0
+
+RunArtifactInput:
+  type: object
+  required:
+    - artifactId
+    - producerRunId
+    - name
+    - mediaType
+    - sizeBytes
+    - sha256
+    - sensitive
+    - retentionState
+    - commitSha
+    - catalogRevisionId
+  properties:
+    artifactId:
+      type: string
+      format: uuid
+    producerRunId:
+      type: string
+      format: uuid
+    name:
+      $ref: "#/CatalogName"
+    mediaType:
+      type: string
+      minLength: 1
+    sizeBytes:
+      type: integer
+      format: int64
+      minimum: 0
+    sha256:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+    sensitive:
+      type: boolean
+    retentionState:
+      type: string
+      enum:
+        - retained
+        - expired
+        - deleted
+    commitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    catalogRevisionId:
+      type: string
+      format: uuid
+
+RunArtifactConsumer:
+  type: object
+  required:
+    - action
+    - input
+  properties:
+    action:
+      $ref: "#/CatalogName"
+    input:
+      $ref: "#/CatalogName"
 
 RunSource:
   type: object

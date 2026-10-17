@@ -44,13 +44,16 @@ The intended deployment is a single trusted Slipramp installation executing work
 ### Controllers, placements, and credentials
 
 - Run a Slipramp controller inside every execution cluster.
-- Run one controller replica per execution cluster with a stable cluster name and static bearer credential.
+- Run one controller replica per execution cluster with a stable cluster name, a cluster-scoped bootstrap enrollment credential, and a separate controller-owned bearer credential.
+- Enroll the controller-owned credential at startup, persist only its SHA-256 digest in PostgreSQL, and derive cluster identity from that credential on all ongoing controller routes.
+- Auto-approve a controller presenting the configured enrollment credential for the MVP; defer explicit enrollment approvals and credential rotation workflows.
 - Have controllers use a small versioned HTTPS API and long-poll the Slipramp Server for command envelopes carrying a run assignment or cancellation.
 - Treat ordinary authenticated controller request traffic as the cluster heartbeat and store only a last-seen time; do not introduce a separate heartbeat protocol.
 - Keep all Kubernetes clients, RBAC, Job creation, observation, and cancellation inside the corresponding cluster controller.
 - Require no kubeconfig or Kubernetes API access on the Slipramp Server.
 - Report controller and cluster health from the last successful poll or report.
-- Require each execution cluster to reach the configured S3-compatible endpoint.
+- Require controllers and execution Jobs to reach the Slipramp Server; only the
+  Server needs access to the configured S3-compatible endpoint.
 - Require execution clusters to reach configured Git repositories directly.
 - Support per-cluster mappings from logical Git credential names to checkout-only Kubernetes Secrets.
 - Load named placements from Slipramp Server configuration.
@@ -100,6 +103,8 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Use RustFS as the documented local S3-compatible service.
 - Let the harness upload declared files using run-scoped upload authorization.
 - Let artifact-consuming runs download selected inputs into declared paths before execution.
+- Keep run-scoped artifact credentials out of the child action environment and
+  authorize only the Run's declared outputs and explicit input bindings.
 - Expose artifact metadata, download, sensitivity, provenance, and retention state through the API and UI.
 
 ### Preview and apply
@@ -151,7 +156,7 @@ The repository remains a single project with a Go module at `github.com/slipramp
 - **Cluster controller:** Go process deployed into each execution cluster; it claims work outbound, manages local Jobs, and reports state and logs.
 - **Harness:** statically linked Go executable injected into runtime Jobs.
 - **Web:** React Router v8 SSR server and browser application using Mantine UI and the generated TypeScript API client.
-- **PostgreSQL:** repositories, catalog revisions, targets, cluster observations, runs, phase transitions, run request idempotency, artifact metadata, and scheduler coordination.
+- **PostgreSQL:** repositories, catalog revisions, targets, controller credential digests, cluster observations, runs, phase transitions, run request idempotency, artifact metadata, and scheduler coordination.
 - **S3-compatible storage:** log chunks and declared artifact contents only; RustFS is used locally.
 - **Kubernetes clusters:** controllers, execution Jobs, Secrets, ServiceAccounts, and workload placement in each registered destination.
 
@@ -162,7 +167,7 @@ The initial PostgreSQL schema should center on these records:
 - repositories and repository refresh state
 - immutable catalog revisions and validation results
 - current target and runtime projections
-- clusters, controller last-seen observations, and run assignments
+- clusters, enrolled controller credential digests, last-seen observations, and run assignments
 - runs and run phase transitions
 - run request idempotency keys
 - target concurrency leases
@@ -180,7 +185,7 @@ Catalog revisions retain the resolved definitions needed to explain or reproduce
 - Add PostgreSQL migrations and S3 client boundaries.
 - Add local PostgreSQL and RustFS dependencies.
 - Add versioned configuration loading for the Server, controllers, and placements.
-- Establish the authenticated controller HTTPS API, cluster last-seen tracking, long polling, and idempotent work delivery.
+- Establish controller enrollment, the authenticated controller HTTPS API, cluster last-seen tracking, long polling, and idempotent work delivery.
 - Establish structured logging, configuration validation, and graceful shutdown.
 - Add the shared local and CI quality commands.
 
@@ -282,6 +287,7 @@ The MVP is complete when a fresh installation can:
 - Git-change, scheduled, and webhook triggers
 - High-availability Server and web deployments
 - Controller high availability, leader election, and multiple active replicas for one cluster name
+- Explicit controller enrollment approvals and credential rotation workflows
 - Pull-request and ephemeral environments
 - Standalone actions outside targets
 - Tool-specific output parsing or provider integrations

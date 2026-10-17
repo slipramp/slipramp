@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -23,6 +24,12 @@ type runJobs interface {
 	Cancel(ctx context.Context, command api.CancelRunCommand) (*string, error)
 	Recover(ctx context.Context) ([]jobHandle, error)
 	Observe(ctx context.Context, handle jobHandle) (runObservation, error)
+}
+
+var errLogNotReady = errors.New("execution log is not ready")
+
+type runLogReader interface {
+	ReadLog(ctx context.Context, handle jobHandle) ([]byte, error)
 }
 
 // Cancel removes the deterministic execution Job. A missing Job is success so
@@ -298,6 +305,46 @@ func (r *kubernetesRunJobs) Observe(
 		phase:  api.RunObservationPhasePreparing,
 		jobUID: uid,
 	}, nil
+}
+
+func (r *kubernetesRunJobs) ReadLog(
+	ctx context.Context,
+	handle jobHandle,
+) ([]byte, error) {
+	pods, err := r.pods.Pods(handle.namespace).List(
+		ctx,
+		metav1.ListOptions{
+			LabelSelector: labels.Set{batchv1.JobNameLabel: handle.name}.String(),
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list execution Pods for logs: %w", err)
+	}
+	if len(pods.Items) == 0 {
+		return nil, errLogNotReady
+	}
+	sort.Slice(pods.Items, func(left, right int) bool {
+		return pods.Items[left].CreationTimestamp.Before(
+			&pods.Items[right].CreationTimestamp,
+		)
+	})
+	pod := pods.Items[0]
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.Name == actionContainerName &&
+			status.State.Waiting != nil {
+			return nil, errLogNotReady
+		}
+	}
+
+	contents, err := r.pods.Pods(handle.namespace).GetLogs(
+		pod.Name,
+		&corev1.PodLogOptions{Container: actionContainerName},
+	).DoRaw(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read execution Pod log: %w", err)
+	}
+
+	return contents, nil
 }
 
 func terminalJobObservation(

@@ -85,6 +85,7 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
   }
 
   const repository = loaderData.repository;
+  const catalog = loaderData.catalog;
 
   return (
     <Stack gap="lg">
@@ -117,7 +118,7 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         </Alert>
       ) : null}
 
-      {!loaderData.catalog ? (
+      {!catalog ? (
         <Paper p="lg" withBorder>
           <Stack gap="xs">
             <Title order={2}>No active catalog</Title>
@@ -129,17 +130,18 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         </Paper>
       ) : (
         <>
-          <CatalogSummary catalog={loaderData.catalog} />
+          <CatalogSummary catalog={catalog} />
           <Stack gap="md">
             <Title order={2}>Targets</Title>
-            {loaderData.catalog.targets.length === 0 ? (
+            {catalog.targets.length === 0 ? (
               <Paper p="md" withBorder>
                 <Text c="dimmed">This catalog contains no targets.</Text>
               </Paper>
             ) : (
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
-                {loaderData.catalog.targets.map((target) => (
+                {catalog.targets.map((target) => (
                   <TargetCard
+                    catalogCommitSha={catalog.commitSha}
                     key={target.metadata.name}
                     repositoryId={loaderData.repositoryId}
                     target={target}
@@ -237,7 +239,11 @@ function CatalogSummary({ catalog }: Readonly<{ catalog: CatalogRevision }>) {
   );
 }
 
-function TargetCard({ repositoryId, target }: Readonly<{ repositoryId: string; target: Target }>) {
+function TargetCard({
+  catalogCommitSha,
+  repositoryId,
+  target,
+}: Readonly<{ catalogCommitSha: string; repositoryId: string; target: Target }>) {
   const actions = Object.entries(target.spec.actions).toSorted(([left], [right]) =>
     left.localeCompare(right),
   );
@@ -269,6 +275,12 @@ function TargetCard({ repositoryId, target }: Readonly<{ repositoryId: string; t
         </Stack>
 
         <Group gap="xs">
+          <Badge
+            color={target.status.desiredCommitSha === catalogCommitSha ? "green" : "gray"}
+            variant="light"
+          >
+            Desired: {shortCommit(target.status.desiredCommitSha)}
+          </Badge>
           {target.spec.runtime ? (
             <Badge variant="light">Runtime: {target.spec.runtime}</Badge>
           ) : null}

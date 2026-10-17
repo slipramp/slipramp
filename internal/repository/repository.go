@@ -26,9 +26,10 @@ var (
 
 type Repository struct {
 	Config
-	ID        RepositoryID
-	CreatedAt time.Time
-	Refresh   RefreshState
+	ID                     RepositoryID
+	CreatedAt              time.Time
+	Refresh                RefreshState
+	ActiveCatalogCommitSHA *string
 }
 
 type RepositoryID = uuid.UUID
