@@ -11,6 +11,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/api/handler"
+	"github.com/slipramp/slipramp/internal/placement"
 )
 
 const (
@@ -22,6 +23,7 @@ const (
 type Server struct {
 	address         string
 	shutdownTimeout time.Duration
+	placements      placement.Set
 	logger          *slog.Logger
 	httpServer      *http.Server
 	persistence     *persistence
@@ -45,7 +47,13 @@ func New(
 		return nil, err
 	}
 
-	server := newServer(cfg, logger)
+	controllers := newControllerService(persistence.database)
+	httpHandler := newHandlerWithLogger(
+		controllers,
+		cfg.ControllerTokens,
+		logger,
+	)
+	server := newServer(cfg, logger, httpHandler)
 	server.persistence = persistence
 
 	return server, nil
@@ -54,13 +62,15 @@ func New(
 func newServer(
 	cfg Config,
 	logger *slog.Logger,
+	handler http.Handler,
 ) *Server {
 	return &Server{
 		address:         cfg.Address,
 		shutdownTimeout: cfg.ShutdownTimeout,
+		placements:      cfg.Placements,
 		logger:          logger,
 		httpServer: &http.Server{
-			Handler:           newHandler(),
+			Handler:           handler,
 			ReadHeaderTimeout: readHeaderTimeout,
 			IdleTimeout:       idleTimeout,
 			MaxHeaderBytes:    maxHeaderBytes,
@@ -86,6 +96,9 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) serve(ctx context.Context, listener net.Listener) error {
 	lifecycleContext, stop := context.WithCancel(ctx)
 	defer stop()
+	s.httpServer.BaseContext = func(net.Listener) context.Context {
+		return lifecycleContext
+	}
 
 	shutdownResult := make(chan error, 1)
 
@@ -142,10 +155,103 @@ func (s *Server) shutdown(ctx context.Context) error {
 	return nil
 }
 
-func newHandler() http.Handler {
-	strictHandler := api.NewStrictHandler(handler.New(), nil)
+func newHandler(
+	controllers controllerOperations,
+	controllerTokens map[string]string,
+) http.Handler {
+	return newHandlerWithLogger(controllers, controllerTokens, nil)
+}
 
-	return api.Handler(strictHandler)
+func newHandlerWithLogger(
+	controllers controllerOperations,
+	controllerTokens map[string]string,
+	logger *slog.Logger,
+) http.Handler {
+	authenticator := newControllerAuthenticator(controllerTokens)
+	strictHandler := api.NewStrictHandlerWithOptions(
+		handler.New(controllers, controllers),
+		[]api.StrictMiddlewareFunc{
+			handler.ControllerAuthentication(authenticator),
+		},
+		api.StrictHTTPServerOptions{
+			RequestErrorHandlerFunc: func(
+				writer http.ResponseWriter,
+				_ *http.Request,
+				err error,
+			) {
+				handler.WriteProblem(
+					writer,
+					http.StatusBadRequest,
+					err.Error(),
+				)
+			},
+			ResponseErrorHandlerFunc: func(
+				writer http.ResponseWriter,
+				request *http.Request,
+				err error,
+			) {
+				if request.Context().Err() != nil {
+					return
+				}
+
+				if logger != nil {
+					logger.Error(
+						"handle API request",
+						"method",
+						request.Method,
+						"path",
+						request.URL.Path,
+						"error",
+						err,
+					)
+				}
+
+				handler.WriteProblem(
+					writer,
+					http.StatusInternalServerError,
+					"The server could not complete the request.",
+				)
+			},
+		},
+	)
+
+	mux := http.NewServeMux()
+	api.HandlerFromMux(strictHandler, mux)
+
+	registerMethodNotAllowed(mux, "/healthz", http.MethodGet)
+	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
+	registerMethodNotAllowed(
+		mux,
+		"/api/v1/controllers/{clusterName}/poll",
+		http.MethodPost,
+	)
+	mux.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {
+		handler.WriteProblem(
+			writer,
+			http.StatusNotFound,
+			"The requested resource does not exist.",
+		)
+	})
+
+	return mux
+}
+
+func registerMethodNotAllowed(
+	mux *http.ServeMux,
+	pattern string,
+	allowedMethod string,
+) {
+	mux.HandleFunc(pattern, func(
+		writer http.ResponseWriter,
+		_ *http.Request,
+	) {
+		writer.Header().Set("Allow", allowedMethod)
+		handler.WriteProblem(
+			writer,
+			http.StatusMethodNotAllowed,
+			"The HTTP method is not supported for this resource.",
+		)
+	})
 }
 
 func normalizeServeError(err error) error {

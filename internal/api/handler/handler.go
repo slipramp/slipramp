@@ -1,24 +1,20 @@
 package handler
 
-import (
-	"context"
+import "github.com/slipramp/slipramp/internal/api"
 
-	"github.com/slipramp/slipramp/internal/api"
-)
-
-type Handler struct{}
+type Handler struct {
+	controllerWork ControllerWorkWaiter
+	clusters       ClusterLister
+}
 
 var _ api.StrictServerInterface = (*Handler)(nil)
 
-func New() *Handler {
-	return &Handler{}
-}
-
-func (*Handler) GetHealth(
-	context.Context,
-	api.GetHealthRequestObject,
-) (api.GetHealthResponseObject, error) {
-	return api.GetHealth200JSONResponse{
-		Status: api.Ok,
-	}, nil
+func New(
+	controllerWork ControllerWorkWaiter,
+	clusters ClusterLister,
+) *Handler {
+	return &Handler{
+		controllerWork: controllerWork,
+		clusters:       clusters,
+	}
 }

@@ -15,3 +15,7 @@ health:
               $ref: ../components/common.yaml#/HealthResponse
       "405":
         description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

@@ -122,7 +122,7 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Define the complete Slipramp Server HTTP API in OpenAPI, including web and controller endpoints.
 - Keep a small root OpenAPI document with domain-sized path and component files for repositories, catalog, runs, artifacts, and controllers; do not split individual endpoints or models into separate files.
 - Bundle and validate the referenced files as one versioned API contract.
-- Generate Go request and response types plus Server interfaces from the contract.
+- Generate Go request and response types, Server interfaces, and the controller client from the contract.
 - Generate TypeScript types and the standard frontend API client from the same contract.
 - Keep handwritten business logic behind generated Server interfaces and never edit generated code directly.
 - Expose the generated versioned JSON API from the Slipramp Server.

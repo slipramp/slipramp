@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -11,6 +12,7 @@ import (
 const (
 	serverAddressEnvironment                = "SLIPRAMP_SERVER_ADDRESS"
 	serverShutdownTimeoutEnvironment        = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
+	serverControllerTokensEnvironment       = "SLIPRAMP_CONTROLLER_TOKENS"
 	serverDatabaseURLEnvironment            = "SLIPRAMP_DATABASE_URL"
 	serverDatabaseConnectTimeoutEnvironment = "SLIPRAMP_DATABASE_CONNECT_TIMEOUT"
 	serverS3EndpointEnvironment             = "SLIPRAMP_S3_ENDPOINT"
@@ -44,6 +46,37 @@ func LoadServer(
 		}
 
 		cfg.ShutdownTimeout = timeout
+	}
+
+	if value, ok := lookupEnvironment(serverControllerTokensEnvironment); ok {
+		var controllerTokens map[string]string
+		if err := json.Unmarshal([]byte(value), &controllerTokens); err != nil {
+			return server.Config{}, fmt.Errorf(
+				"parse %s: %w",
+				serverControllerTokensEnvironment,
+				err,
+			)
+		}
+
+		if controllerTokens == nil {
+			controllerTokens = map[string]string{}
+		}
+
+		cfg.ControllerTokens = controllerTokens
+	}
+
+	if value, ok := lookupEnvironment(serverPlacementsFileEnvironment); ok {
+		placements, err := loadPlacementsFile(value)
+		if err != nil {
+			return server.Config{}, fmt.Errorf(
+				"load %s from %q: %w",
+				serverPlacementsFileEnvironment,
+				value,
+				err,
+			)
+		}
+
+		cfg.Placements = placements
 	}
 
 	if value, ok := lookupEnvironment(serverDatabaseURLEnvironment); ok {

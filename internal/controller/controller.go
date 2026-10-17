@@ -6,13 +6,23 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 )
+
+const pollRetryDelay = 5 * time.Second
+
+var errControllerCredentialRejected = errors.New("controller credential was rejected")
+
+type serverPoller interface {
+	Poll(ctx context.Context) error
+}
 
 type Controller struct {
 	clusterName string
 	serverURL   string
-	bearerToken string
 	logger      *slog.Logger
+	server      serverPoller
+	retryDelay  time.Duration
 }
 
 func New(cfg Config, logger *slog.Logger) (*Controller, error) {
@@ -24,16 +34,20 @@ func New(cfg Config, logger *slog.Logger) (*Controller, error) {
 		return nil, errors.New("logger is required")
 	}
 
+	server, err := newServerClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Controller{
 		clusterName: cfg.ClusterName,
 		serverURL:   cfg.ServerURL,
-		bearerToken: cfg.BearerToken,
 		logger:      logger,
+		server:      server,
+		retryDelay:  pollRetryDelay,
 	}, nil
 }
 
-// Run owns the controller process lifecycle. Polling and Kubernetes
-// reconciliation will be added behind this boundary with the generated API.
 func (c *Controller) Run(ctx context.Context) error {
 	c.logger.Info(
 		"controller started",
@@ -45,9 +59,7 @@ func (c *Controller) Run(ctx context.Context) error {
 		c.serverURL,
 	)
 
-	<-ctx.Done()
-
-	c.logger.Info(
+	defer c.logger.Info(
 		"controller stopped",
 		"component",
 		"controller",
@@ -55,5 +67,48 @@ func (c *Controller) Run(ctx context.Context) error {
 		c.clusterName,
 	)
 
-	return nil
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil
+		}
+
+		err := c.server.Poll(ctx)
+		if err == nil {
+			continue
+		}
+
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		if errors.Is(err, errControllerCredentialRejected) {
+			return err
+		}
+
+		c.logger.Warn(
+			"controller poll failed",
+			"component",
+			"controller",
+			"cluster",
+			c.clusterName,
+			"error",
+			err,
+		)
+
+		if !waitForRetry(ctx, c.retryDelay) {
+			return nil
+		}
+	}
+}
+
+func waitForRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }

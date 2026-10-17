@@ -188,7 +188,7 @@ Go linting and formatting run through golangci-lint v2 using `golangci-lint run`
 
 ## API Contract
 
-OpenAPI is the source of truth for the Slipramp Server HTTP API, including the endpoints used by the web application and cluster controllers. The contract generates Go request and response types plus server interfaces, and TypeScript types plus the frontend client. Handwritten Server code implements the generated interfaces and keeps domain behavior outside generated files.
+OpenAPI is the source of truth for the Slipramp Server HTTP API, including the endpoints used by the web application and cluster controllers. The contract generates Go request and response types, Server interfaces, and the controller client, plus TypeScript types and the frontend client. Handwritten Server code implements the generated interfaces and keeps domain behavior outside generated files.
 
 The specification is assembled from a small number of domain-sized files rather than one large document or one file per endpoint. A root document owns API metadata, versioning, tags, and security, then references grouped path and component files such as:
 
@@ -285,6 +285,8 @@ controller:
         name: github-readonly
 
 # Slipramp Server configuration.
+apiVersion: slipramp.com/v1alpha1
+kind: PlacementConfiguration
 placements:
   infrastructure-admin:
     cluster: colo
@@ -304,6 +306,12 @@ placements:
       limits:
         cpu: "2"
         memory: 2Gi
+    podTemplate:
+      metadata:
+        labels:
+          azure.workload.identity/use: "true"
+      spec:
+        runtimeClassName: kata
 ```
 
 ### Terraform Target

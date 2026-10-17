@@ -24,6 +24,20 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "cluster name",
 		},
 		{
+			name: "invalid cluster name",
+			configure: func(settings *Config) {
+				settings.ClusterName = "Invalid Cluster"
+			},
+			wantError: "cluster name",
+		},
+		{
+			name: "cluster name ending in hyphen",
+			configure: func(settings *Config) {
+				settings.ClusterName = "colo-"
+			},
+			wantError: "cluster name",
+		},
+		{
 			name: "relative server URL",
 			configure: func(settings *Config) {
 				settings.ServerURL = "/api"
@@ -52,9 +66,23 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "user information",
 		},
 		{
+			name: "server URL with query",
+			configure: func(settings *Config) {
+				settings.ServerURL = "https://slipramp.example.com?debug=true"
+			},
+			wantError: "query or fragment",
+		},
+		{
 			name: "empty bearer token",
 			configure: func(settings *Config) {
 				settings.BearerToken = ""
+			},
+			wantError: "bearer token",
+		},
+		{
+			name: "invalid bearer token",
+			configure: func(settings *Config) {
+				settings.BearerToken = "controller token"
 			},
 			wantError: "bearer token",
 		},

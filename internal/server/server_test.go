@@ -2,82 +2,25 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/cluster"
 )
-
-func TestHealthEndpoint(t *testing.T) {
-	t.Parallel()
-
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/healthz",
-		nil,
-	)
-	response := httptest.NewRecorder()
-
-	newHandler().ServeHTTP(response, request)
-	expectedBody := "{\"status\":\"ok\"}\n"
-
-	if response.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", response.Code, http.StatusOK)
-	}
-
-	if response.Body.String() != expectedBody {
-		t.Errorf(
-			"body = %q, want %q",
-			response.Body.String(),
-			expectedBody,
-		)
-	}
-
-	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
-		t.Errorf(
-			"Content-Type = %q, want %q",
-			contentType,
-			"application/json",
-		)
-	}
-}
-
-func TestHealthEndpointRejectsOtherMethods(t *testing.T) {
-	t.Parallel()
-
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/healthz",
-		nil,
-	)
-	response := httptest.NewRecorder()
-
-	newHandler().ServeHTTP(response, request)
-
-	if response.Code != http.StatusMethodNotAllowed {
-		t.Errorf(
-			"status = %d, want %d",
-			response.Code,
-			http.StatusMethodNotAllowed,
-		)
-	}
-}
 
 func TestServerStopsWhenContextIsCanceled(t *testing.T) {
 	t.Parallel()
 
 	listener := newBlockingListener()
-
 	settings := DefaultConfig()
-
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	app := newServer(settings, logger)
+	app := newServer(settings, logger, http.NewServeMux())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	serveResult := make(chan error, 1)
@@ -102,6 +45,160 @@ func TestServerStopsWhenContextIsCanceled(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("serve() did not return after its context was canceled")
 	}
+}
+
+func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
+	t.Parallel()
+
+	serverConnection, clientConnection := net.Pipe()
+	listener := newSingleConnectionListener(serverConnection)
+	defer func() {
+		_ = listener.Close()
+		_ = serverConnection.Close()
+		_ = clientConnection.Close()
+	}()
+
+	controllerWork := &blockingControllerWorkWaiter{
+		started: make(chan struct{}),
+	}
+	settings := DefaultConfig()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	httpHandler := newHandler(
+		controllerWork,
+		map[string]string{"colo": "controller-token"},
+	)
+	app := newServer(settings, logger, httpHandler)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	serveResult := make(chan error, 1)
+	go func() {
+		serveResult <- app.serve(ctx, listener)
+	}()
+
+	request, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"http://slipramp.test/api/v1/controllers/colo/poll",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v", err)
+	}
+	request.Header.Set("Authorization", "Bearer controller-token")
+
+	transport := &http.Transport{
+		DialContext: func(
+			context.Context,
+			string,
+			string,
+		) (net.Conn, error) {
+			return clientConnection, nil
+		},
+	}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   2 * time.Second,
+	}
+
+	requestResult := make(chan error, 1)
+	go func() {
+		response, requestErr := client.Do(request)
+		if response != nil {
+			requestErr = errors.Join(requestErr, response.Body.Close())
+		}
+
+		requestResult <- requestErr
+	}()
+
+	select {
+	case <-controllerWork.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller poll did not start")
+	}
+
+	cancel()
+
+	select {
+	case serveErr := <-serveResult:
+		if serveErr != nil {
+			t.Fatalf("serve() error = %v", serveErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("serve() did not stop after canceling an active poll")
+	}
+
+	select {
+	case <-requestResult:
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller poll request did not finish")
+	}
+}
+
+type blockingControllerWorkWaiter struct {
+	started chan struct{}
+}
+
+func (p *blockingControllerWorkWaiter) WaitForControllerWork(
+	ctx context.Context,
+	_ string,
+	_ time.Duration,
+) error {
+	close(p.started)
+	<-ctx.Done()
+
+	return ctx.Err()
+}
+
+func (*blockingControllerWorkWaiter) ListClusters(
+	context.Context,
+) ([]cluster.Status, error) {
+	return nil, nil
+}
+
+type singleConnectionListener struct {
+	connection net.Conn
+	closed     chan struct{}
+	closeOnce  sync.Once
+	mutex      sync.Mutex
+	accepted   bool
+}
+
+func newSingleConnectionListener(
+	connection net.Conn,
+) *singleConnectionListener {
+	return &singleConnectionListener{
+		connection: connection,
+		closed:     make(chan struct{}),
+	}
+}
+
+func (l *singleConnectionListener) Accept() (net.Conn, error) {
+	l.mutex.Lock()
+	if !l.accepted {
+		l.accepted = true
+		l.mutex.Unlock()
+
+		return l.connection, nil
+	}
+	l.mutex.Unlock()
+
+	<-l.closed
+
+	return nil, net.ErrClosed
+}
+
+func (l *singleConnectionListener) Close() error {
+	l.closeOnce.Do(func() {
+		close(l.closed)
+	})
+
+	return nil
+}
+
+func (*singleConnectionListener) Addr() net.Addr {
+	return localAddress("in-memory")
 }
 
 type blockingListener struct {

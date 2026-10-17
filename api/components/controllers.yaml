@@ -1,0 +1,40 @@
+Cluster:
+  type: object
+  required:
+    - name
+    - connectionState
+    - firstSeenAt
+    - lastSeenAt
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: Stable logical name of the execution cluster.
+    connectionState:
+      type: string
+      enum:
+        - connected
+        - unreachable
+      description: >-
+        Whether the cluster controller has completed a poll within the Server's
+        connection window.
+    firstSeenAt:
+      type: string
+      format: date-time
+      description: Time at which this Server first observed the controller.
+    lastSeenAt:
+      type: string
+      format: date-time
+      description: Time at which the controller most recently started a poll.
+
+ClusterList:
+  type: object
+  required:
+    - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/Cluster"

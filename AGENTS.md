@@ -48,7 +48,7 @@ Use the established names consistently:
 
 - OpenAPI is the source of truth for every Slipramp Server HTTP endpoint used by the web application or Controllers.
 - Keep `api/openapi.yaml` small and split paths and schemas into a handful of domain-sized files. Group related operations and models; do not create one huge file or one file per endpoint or schema.
-- Generate Go request/response types and Server interfaces, plus TypeScript types and the frontend client, from the same bundled contract.
+- Generate Go request/response types, Server interfaces, and the controller client, plus TypeScript types and the frontend client, from the same bundled contract.
 - Never edit generated files by hand. Change the OpenAPI sources and regenerate all targets with the repository command.
 - Pin generator versions, validate and bundle the specification in CI, and fail CI when generated output is stale.
 - Standard requests use the generated frontend client. A small handwritten SSE transport may handle live-log reconnection while using generated event payload types.
@@ -64,3 +64,11 @@ Use the established names consistently:
 - Pin tool and dependency versions. Treat warnings as failures.
 - Keep generated output reproducible and include proportionate unit and integration tests with changes.
 - Prefer explicit argument arrays over an implicit shell. Shell behavior must be requested explicitly by the definition.
+
+## Go Package Layout
+
+- Organize packages that will accumulate many product capabilities by feature or domain, not by appending every operation to the package's main file.
+- Keep component-named files such as `handler.go`, `postgres.go`, and `server.go` focused on shared construction, dependencies, and lifecycle. Put feature types and behavior in focused files such as `controllers.go`, `clusters.go`, `repositories.go`, and `runs.go`.
+- Keep a feature's narrow interfaces, domain types, and methods together when that makes the ownership clear. Split them further only when the feature itself becomes large.
+- Mirror the production grouping in test filenames and keep SQL queries grouped by the same domain names.
+- Give cross-feature helpers a specific purpose-revealing name; do not create catch-all files such as `utils.go` or `helpers.go`.

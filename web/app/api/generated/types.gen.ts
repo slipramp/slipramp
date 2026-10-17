@@ -8,6 +8,55 @@ export type HealthResponse = {
   status: "ok";
 };
 
+/**
+ * An RFC 9457 problem detail.
+ */
+export type Problem = {
+  /**
+   * URI reference identifying the problem type.
+   */
+  type: string;
+  /**
+   * Short, human-readable summary of the problem type.
+   */
+  title: string;
+  /**
+   * HTTP status code generated for this occurrence.
+   */
+  status: number;
+  /**
+   * Human-readable explanation specific to this occurrence.
+   */
+  detail?: string;
+  /**
+   * URI reference identifying this occurrence.
+   */
+  instance?: string;
+};
+
+export type Cluster = {
+  /**
+   * Stable logical name of the execution cluster.
+   */
+  name: string;
+  /**
+   * Whether the cluster controller has completed a poll within the Server's connection window.
+   */
+  connectionState: "connected" | "unreachable";
+  /**
+   * Time at which this Server first observed the controller.
+   */
+  firstSeenAt: string;
+  /**
+   * Time at which the controller most recently started a poll.
+   */
+  lastSeenAt: string;
+};
+
+export type ClusterList = {
+  items: Array<Cluster>;
+};
+
 export type GetHealthData = {
   body?: never;
   path?: never;
@@ -19,8 +68,10 @@ export type GetHealthErrors = {
   /**
    * The HTTP method is not supported for this resource.
    */
-  405: unknown;
+  405: Problem;
 };
+
+export type GetHealthError = GetHealthErrors[keyof GetHealthErrors];
 
 export type GetHealthResponses = {
   /**
@@ -30,3 +81,81 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type ListClustersData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/clusters";
+};
+
+export type ListClustersErrors = {
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Cluster observations could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListClustersError = ListClustersErrors[keyof ListClustersErrors];
+
+export type ListClustersResponses = {
+  /**
+   * Execution clusters ordered by name.
+   */
+  200: ClusterList;
+};
+
+export type ListClustersResponse = ListClustersResponses[keyof ListClustersResponses];
+
+export type PollForControllerWorkData = {
+  body?: never;
+  path: {
+    /**
+     * Stable name of the controller's execution cluster.
+     */
+    clusterName: string;
+  };
+  query?: {
+    /**
+     * Maximum time to wait for assigned work.
+     */
+    timeoutSeconds?: number;
+  };
+  url: "/api/v1/controllers/{clusterName}/poll";
+};
+
+export type PollForControllerWorkErrors = {
+  /**
+   * The poll timeout is invalid.
+   */
+  400: Problem;
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The controller poll could not be completed.
+   */
+  500: Problem;
+};
+
+export type PollForControllerWorkError =
+  PollForControllerWorkErrors[keyof PollForControllerWorkErrors];
+
+export type PollForControllerWorkResponses = {
+  /**
+   * No work became available before the poll completed.
+   */
+  204: void;
+};
+
+export type PollForControllerWorkResponse =
+  PollForControllerWorkResponses[keyof PollForControllerWorkResponses];

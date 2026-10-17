@@ -11,6 +11,7 @@ import (
 const (
 	serverAddressEnvironment                = "SLIPRAMP_SERVER_ADDRESS"
 	serverShutdownTimeoutEnvironment        = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
+	serverControllerTokensEnvironment       = "SLIPRAMP_CONTROLLER_TOKENS"
 	serverDatabaseURLEnvironment            = "SLIPRAMP_DATABASE_URL"
 	serverDatabaseConnectTimeoutEnvironment = "SLIPRAMP_DATABASE_CONNECT_TIMEOUT"
 	serverS3EndpointEnvironment             = "SLIPRAMP_S3_ENDPOINT"
@@ -48,6 +49,10 @@ func TestLoadServerUsesDefaults(t *testing.T) {
 	if cfg.ObjectStore.Endpoint == "" {
 		t.Error("ObjectStore.Endpoint is empty")
 	}
+
+	if cfg.Placements.Len() != 0 {
+		t.Errorf("Placements.Len() = %d, want 0", cfg.Placements.Len())
+	}
 }
 
 func TestLoadServerFromEnvironment(t *testing.T) {
@@ -56,6 +61,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	environment := map[string]string{
 		serverAddressEnvironment:                "127.0.0.1:9000",
 		serverShutdownTimeoutEnvironment:        "25s",
+		serverControllerTokensEnvironment:       `{"colo":"controller-token"}`,
 		serverDatabaseURLEnvironment:            "postgres://user:pass@db/slipramp",
 		serverDatabaseConnectTimeoutEnvironment: "8s",
 		serverS3EndpointEnvironment:             "https://objects.example.com",
@@ -85,6 +91,10 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 			cfg.ShutdownTimeout,
 			25*time.Second,
 		)
+	}
+
+	if cfg.ControllerTokens["colo"] != "controller-token" {
+		t.Error("ControllerTokens does not contain the configured credential")
 	}
 
 	if cfg.Database.URL != environment[serverDatabaseURLEnvironment] {
@@ -173,6 +183,20 @@ func TestLoadServerRejectsInvalidConfiguration(t *testing.T) {
 				serverShutdownTimeoutEnvironment: "soon",
 			},
 			wantError: serverShutdownTimeoutEnvironment,
+		},
+		{
+			name: "malformed controller tokens",
+			environment: map[string]string{
+				serverControllerTokensEnvironment: "not-json",
+			},
+			wantError: serverControllerTokensEnvironment,
+		},
+		{
+			name: "invalid controller token",
+			environment: map[string]string{
+				serverControllerTokensEnvironment: `{"colo":""}`,
+			},
+			wantError: "validate server configuration",
 		},
 		{
 			name: "negative shutdown timeout",

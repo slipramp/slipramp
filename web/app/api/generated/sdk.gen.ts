@@ -2,7 +2,17 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from "./client";
 import { client } from "./client.gen";
-import type { GetHealthData, GetHealthErrors, GetHealthResponses } from "./types.gen";
+import type {
+  GetHealthData,
+  GetHealthErrors,
+  GetHealthResponses,
+  ListClustersData,
+  ListClustersErrors,
+  ListClustersResponses,
+  PollForControllerWorkData,
+  PollForControllerWorkErrors,
+  PollForControllerWorkResponses,
+} from "./types.gen";
 
 export type Options<
   TData extends TDataShape = TDataShape,
@@ -32,5 +42,36 @@ export const getHealth = <ThrowOnError extends boolean = false>(
 ): RequestResult<GetHealthResponses, GetHealthErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetHealthResponses, GetHealthErrors, ThrowOnError>({
     url: "/healthz",
+    ...options,
+  });
+
+/**
+ * List execution clusters
+ *
+ * Lists clusters observed through controller polling and reports whether each controller has checked in recently enough to be considered connected.
+ */
+export const listClusters = <ThrowOnError extends boolean = false>(
+  options?: Options<ListClustersData, ThrowOnError>,
+): RequestResult<ListClustersResponses, ListClustersErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListClustersResponses, ListClustersErrors, ThrowOnError>({
+    url: "/api/v1/clusters",
+    ...options,
+  });
+
+/**
+ * Poll for controller work
+ *
+ * Records the cluster controller as healthy and waits for work assigned to its cluster. An empty response means no work became available before the requested wait elapsed.
+ */
+export const pollForControllerWork = <ThrowOnError extends boolean = false>(
+  options: Options<PollForControllerWorkData, ThrowOnError>,
+): RequestResult<PollForControllerWorkResponses, PollForControllerWorkErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    PollForControllerWorkResponses,
+    PollForControllerWorkErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/api/v1/controllers/{clusterName}/poll",
     ...options,
   });

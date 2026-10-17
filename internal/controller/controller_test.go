@@ -3,12 +3,19 @@ package controller
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
 )
+
+type serverPollerFunc func(ctx context.Context) error
+
+func (f serverPollerFunc) Poll(ctx context.Context) error {
+	return f(ctx)
+}
 
 func TestNewValidatesDependencies(t *testing.T) {
 	t.Parallel()
@@ -90,5 +97,27 @@ func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 
 	if strings.Contains(output, validConfig().BearerToken) {
 		t.Errorf("logs contain bearer token: %q", output)
+	}
+}
+
+func TestControllerStopsAfterAuthenticationIsRejected(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app, err := New(validConfig(), logger)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	app.server = serverPollerFunc(func(context.Context) error {
+		return errControllerCredentialRejected
+	})
+
+	err = app.Run(context.Background())
+	if !errors.Is(err, errControllerCredentialRejected) {
+		t.Fatalf(
+			"Run() error = %v, want %v",
+			err,
+			errControllerCredentialRejected,
+		)
 	}
 }

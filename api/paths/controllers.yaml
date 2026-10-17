@@ -1,0 +1,89 @@
+clusters:
+  get:
+    operationId: listClusters
+    summary: List execution clusters
+    description: >-
+      Lists clusters observed through controller polling and reports whether
+      each controller has checked in recently enough to be considered
+      connected.
+    security: []
+    tags:
+      - Controllers
+    responses:
+      "200":
+        description: Execution clusters ordered by name.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/controllers.yaml#/ClusterList
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Cluster observations could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+poll:
+  post:
+    operationId: pollForControllerWork
+    summary: Poll for controller work
+    description: >-
+      Records the cluster controller as healthy and waits for work assigned to
+      its cluster. An empty response means no work became available before the
+      requested wait elapsed.
+    security:
+      - ControllerBearer: []
+    tags:
+      - Controllers
+    parameters:
+      - name: clusterName
+        in: path
+        required: true
+        description: Stable name of the controller's execution cluster.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 63
+          pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      - name: timeoutSeconds
+        in: query
+        required: false
+        description: Maximum time to wait for assigned work.
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 30
+          default: 25
+    responses:
+      "204":
+        description: No work became available before the poll completed.
+      "400":
+        description: The poll timeout is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The controller poll could not be completed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

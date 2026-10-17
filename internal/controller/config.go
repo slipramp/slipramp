@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
+
+	"github.com/slipramp/slipramp/internal/auth"
+	"github.com/slipramp/slipramp/internal/cluster"
 )
 
 type Config struct {
@@ -14,8 +16,8 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if strings.TrimSpace(c.ClusterName) == "" {
-		return errors.New("cluster name must not be empty")
+	if err := cluster.ValidateName(c.ClusterName); err != nil {
+		return err
 	}
 
 	serverURL, err := url.Parse(c.ServerURL)
@@ -31,8 +33,12 @@ func (c Config) Validate() error {
 		return errors.New("server URL must not contain user information")
 	}
 
-	if strings.TrimSpace(c.BearerToken) == "" {
-		return errors.New("bearer token must not be empty")
+	if serverURL.RawQuery != "" || serverURL.Fragment != "" {
+		return errors.New("server URL must not contain a query or fragment")
+	}
+
+	if err := auth.ValidateBearerToken(c.BearerToken); err != nil {
+		return fmt.Errorf("validate controller credential: %w", err)
 	}
 
 	return nil

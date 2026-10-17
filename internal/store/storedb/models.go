@@ -3,3 +3,13 @@
 //   sqlc v1.31.1
 
 package storedb
+
+import (
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type Cluster struct {
+	Name        string
+	FirstSeenAt pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
+}

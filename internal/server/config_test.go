@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/placement"
 )
 
 func TestDefaultConfig(t *testing.T) {
@@ -30,10 +32,24 @@ func TestDefaultConfig(t *testing.T) {
 	if err := settings.ObjectStore.Validate(); err != nil {
 		t.Errorf("ObjectStore.Validate() error = %v", err)
 	}
+
+	if settings.Placements.Len() != 0 {
+		t.Errorf("Placements.Len() = %d, want 0", settings.Placements.Len())
+	}
 }
 
 func TestConfigValidate(t *testing.T) {
 	t.Parallel()
+
+	configuredPlacements, err := placement.NewSet(map[string]placement.Config{
+		"infrastructure": {
+			ClusterName:  "colo",
+			JobNamespace: "slipramp-runs",
+		},
+	})
+	if err != nil {
+		t.Fatalf("placement.NewSet() error = %v", err)
+	}
 
 	tests := []struct {
 		name      string
@@ -70,6 +86,45 @@ func TestConfigValidate(t *testing.T) {
 				settings.ShutdownTimeout = -1 * time.Second
 			},
 			wantError: "shutdown timeout",
+		},
+		{
+			name: "invalid controller cluster name",
+			configure: func(settings *Config) {
+				settings.ControllerTokens = map[string]string{
+					"Invalid Cluster": "controller-token",
+				}
+			},
+			wantError: "cluster name",
+		},
+		{
+			name: "empty controller token",
+			configure: func(settings *Config) {
+				settings.ControllerTokens = map[string]string{"colo": ""}
+			},
+			wantError: "controller token",
+		},
+		{
+			name: "invalid controller token",
+			configure: func(settings *Config) {
+				settings.ControllerTokens = map[string]string{
+					"colo": "controller token",
+				}
+			},
+			wantError: "controller token",
+		},
+		{
+			name: "valid placement",
+			configure: func(settings *Config) {
+				settings.ControllerTokens["colo"] = "controller-token"
+				settings.Placements = configuredPlacements
+			},
+		},
+		{
+			name: "unregistered placement cluster",
+			configure: func(settings *Config) {
+				settings.Placements = configuredPlacements
+			},
+			wantError: "unregistered cluster",
 		},
 		{
 			name: "invalid database",

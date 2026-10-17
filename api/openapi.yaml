@@ -8,7 +8,21 @@ servers:
 paths:
   /healthz:
     $ref: ./paths/system.yaml#/health
+  /api/v1/clusters:
+    $ref: ./paths/controllers.yaml#/clusters
+  /api/v1/controllers/{clusterName}/poll:
+    $ref: ./paths/controllers.yaml#/poll
 components:
+  securitySchemes:
+    ControllerBearer:
+      type: http
+      scheme: bearer
   schemas:
     HealthResponse:
       $ref: ./components/common.yaml#/HealthResponse
+    Problem:
+      $ref: ./components/common.yaml#/Problem
+    Cluster:
+      $ref: ./components/controllers.yaml#/Cluster
+    ClusterList:
+      $ref: ./components/controllers.yaml#/ClusterList

@@ -7,3 +7,32 @@ HealthResponse:
       type: string
       enum:
         - ok
+
+Problem:
+  type: object
+  description: An RFC 9457 problem detail.
+  required:
+    - type
+    - title
+    - status
+  properties:
+    type:
+      type: string
+      format: uri-reference
+      description: URI reference identifying the problem type.
+      default: about:blank
+    title:
+      type: string
+      description: Short, human-readable summary of the problem type.
+    status:
+      type: integer
+      minimum: 400
+      maximum: 599
+      description: HTTP status code generated for this occurrence.
+    detail:
+      type: string
+      description: Human-readable explanation specific to this occurrence.
+    instance:
+      type: string
+      format: uri-reference
+      description: URI reference identifying this occurrence.

@@ -7,23 +7,29 @@ import (
 	"strings"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/auth"
+	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/objectstore"
+	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/store"
 )
 
 type Config struct {
-	Address         string
-	ShutdownTimeout time.Duration
-	Database        store.Config
-	ObjectStore     objectstore.Config
+	Address          string
+	ShutdownTimeout  time.Duration
+	ControllerTokens map[string]string
+	Placements       placement.Set
+	Database         store.Config
+	ObjectStore      objectstore.Config
 }
 
 func DefaultConfig() Config {
 	return Config{
-		Address:         ":8080",
-		ShutdownTimeout: 10 * time.Second,
-		Database:        store.DefaultConfig(),
-		ObjectStore:     objectstore.DefaultConfig(),
+		Address:          ":8080",
+		ShutdownTimeout:  10 * time.Second,
+		ControllerTokens: map[string]string{},
+		Database:         store.DefaultConfig(),
+		ObjectStore:      objectstore.DefaultConfig(),
 	}
 }
 
@@ -46,6 +52,34 @@ func (c Config) Validate() error {
 
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("shutdown timeout must be positive")
+	}
+
+	for clusterName, token := range c.ControllerTokens {
+		if err := cluster.ValidateName(clusterName); err != nil {
+			return fmt.Errorf(
+				"validate controller credential: %w",
+				err,
+			)
+		}
+
+		if err := auth.ValidateBearerToken(token); err != nil {
+			return fmt.Errorf(
+				"controller token for cluster %q is invalid: %w",
+				clusterName,
+				err,
+			)
+		}
+	}
+
+	for _, placementName := range c.Placements.Names() {
+		placementConfig, _ := c.Placements.Lookup(placementName)
+		if _, ok := c.ControllerTokens[placementConfig.ClusterName]; !ok {
+			return fmt.Errorf(
+				"placement %q selects unregistered cluster %q",
+				placementName,
+				placementConfig.ClusterName,
+			)
+		}
 	}
 
 	if err := c.Database.Validate(); err != nil {
