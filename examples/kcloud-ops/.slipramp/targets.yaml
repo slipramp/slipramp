@@ -1,0 +1,81 @@
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: homelab-node-exporter
+  title: Homelab node_exporter
+spec:
+  path: deploys
+  watch:
+    - deploys/inventory.py
+    - deploys/node_exporter/**
+    - deploys/slipramp/node-exporter.sh
+  runtime: pyinfra
+  placement: homelab-infrastructure
+  credentials:
+    ssh: homelab-ssh
+  timeout: 20m
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  actions:
+    preview:
+      intent: preview
+      command: [./slipramp/node-exporter.sh, preview, exporter_nodes]
+    canary:
+      intent: reconcile
+      command:
+        - ./slipramp/node-exporter.sh
+        - apply
+        - flows1.den1.kcloud.zone
+    sync:
+      intent: reconcile
+      command: [./slipramp/node-exporter.sh, apply, exporter_nodes]
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: rustfs-homelab
+  title: Homelab RustFS buckets
+spec:
+  path: terraform/environments/rustfs-homelab
+  watch:
+    - terraform/environments/rustfs-homelab/**
+    - terraform/modules/rustfs-bucket/**
+  runtime: terraform-rustfs
+  placement: homelab-infrastructure
+  credentials:
+    rustfs-admin: rustfs-admin
+    state-backend: rustfs-terraform-state
+  timeout: 45m
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  actions:
+    preview:
+      intent: preview
+      command: [./slipramp.sh, preview]
+      artifacts:
+        plan:
+          path: /slipramp/artifacts/plan.tfplan
+          mediaType: application/vnd.hashicorp.terraform.plan
+          sensitive: true
+    apply:
+      intent: reconcile
+      command: [./slipramp.sh, apply]
+      inputs:
+        plan:
+          artifact:
+            fromAction: preview
+            compatibility: exact-catalog-revision
+          mountPath: /slipramp/inputs/plan.tfplan
+    sync:
+      intent: reconcile
+      command: [./slipramp.sh, sync]

@@ -114,6 +114,63 @@ func (e RepositoryRefreshStatus) Valid() bool {
 	}
 }
 
+// Defines values for RunState.
+const (
+	Canceled  RunState = "canceled"
+	Canceling RunState = "canceling"
+	Failed    RunState = "failed"
+	Preparing RunState = "preparing"
+	Queued    RunState = "queued"
+	Running   RunState = "running"
+	Succeeded RunState = "succeeded"
+	TimedOut  RunState = "timed-out"
+	Unknown   RunState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the RunState enum.
+func (e RunState) Valid() bool {
+	switch e {
+	case Canceled:
+		return true
+	case Canceling:
+		return true
+	case Failed:
+		return true
+	case Preparing:
+		return true
+	case Queued:
+		return true
+	case Running:
+		return true
+	case Succeeded:
+		return true
+	case TimedOut:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSourceType.
+const (
+	API    RunSourceType = "api"
+	Manual RunSourceType = "manual"
+)
+
+// Valid indicates whether the value is a known member of the RunSourceType enum.
+func (e RunSourceType) Valid() bool {
+	switch e {
+	case API:
+		return true
+	case Manual:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RuntimeAPIVersion.
 const (
 	RuntimeAPIVersionV1Alpha1 RuntimeAPIVersion = "slipramp.com/v1alpha1"
@@ -210,6 +267,9 @@ type ArtifactInputSource struct {
 // ArtifactInputSourceCompatibility defines model for ArtifactInputSource.Compatibility.
 type ArtifactInputSourceCompatibility string
 
+// CatalogName defines model for CatalogName.
+type CatalogName = string
+
 // CatalogRevision defines model for CatalogRevision.
 type CatalogRevision struct {
 	// CommitSha Exact Git commit from which the catalog was accepted.
@@ -303,6 +363,20 @@ type ParameterType string
 type ParameterArgument struct {
 	Name *string `json:"name,omitempty"`
 }
+
+// ParameterValue defines model for ParameterValue.
+type ParameterValue struct {
+	union json.RawMessage
+}
+
+// ParameterValue0 defines model for ParameterValue.0.
+type ParameterValue0 = string
+
+// ParameterValue1 defines model for ParameterValue.1.
+type ParameterValue1 = bool
+
+// ParameterValue2 defines model for ParameterValue.2.
+type ParameterValue2 = float64
 
 // Problem An RFC 9457 problem detail.
 type Problem struct {
@@ -403,6 +477,49 @@ type ResourceRequirements struct {
 	Requests *map[string]string `json:"requests,omitempty"`
 }
 
+// Run defines model for Run.
+type Run struct {
+	Action            CatalogName        `json:"action"`
+	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
+	Cluster           CatalogName        `json:"cluster"`
+	CommitSha         string             `json:"commitSha"`
+	CreatedAt         time.Time          `json:"createdAt"`
+
+	// ID Stable identity of the immutable action execution.
+	ID           openapi_types.UUID        `json:"id"`
+	Parameters   map[string]ParameterValue `json:"parameters"`
+	Placement    CatalogName               `json:"placement"`
+	RepositoryID openapi_types.UUID        `json:"repositoryId"`
+	Source       RunSource                 `json:"source"`
+	State        RunState                  `json:"state"`
+	Target       CatalogName               `json:"target"`
+}
+
+// RunState defines model for Run.State.
+type RunState string
+
+// RunCreate defines model for RunCreate.
+type RunCreate struct {
+	Action CatalogName `json:"action"`
+
+	// Parameters Values for parameters declared by the selected action.
+	Parameters *map[string]ParameterValue `json:"parameters,omitempty"`
+
+	// RepositoryID Repository containing the target and action.
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+	Source       RunSource          `json:"source"`
+	Target       CatalogName        `json:"target"`
+}
+
+// RunSource defines model for RunSource.
+type RunSource struct {
+	// Type Boundary that submitted the Run.
+	Type RunSourceType `json:"type"`
+}
+
+// RunSourceType Boundary that submitted the Run.
+type RunSourceType string
+
 // Runtime defines model for Runtime.
 type Runtime struct {
 	APIVersion RuntimeAPIVersion `json:"apiVersion"`
@@ -464,8 +581,105 @@ type PollForControllerWorkParams struct {
 	TimeoutSeconds *int `form:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
 }
 
+// CreateRunParams defines parameters for CreateRun.
+type CreateRunParams struct {
+	// IdempotencyKey Optional key that makes retries of the same run request return the originally created Run. Reusing a key for a different request is a conflict.
+	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
+}
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = RepositoryConfig
+
+// CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
+type CreateRunJSONRequestBody = RunCreate
+
+// AsParameterValue0 returns the union data inside the ParameterValue as a ParameterValue0
+func (t ParameterValue) AsParameterValue0() (ParameterValue0, error) {
+	var body ParameterValue0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromParameterValue0 overwrites any union data inside the ParameterValue as the provided ParameterValue0
+func (t *ParameterValue) FromParameterValue0(v ParameterValue0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeParameterValue0 performs a merge with any union data inside the ParameterValue, using the provided ParameterValue0
+func (t *ParameterValue) MergeParameterValue0(v ParameterValue0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsParameterValue1 returns the union data inside the ParameterValue as a ParameterValue1
+func (t ParameterValue) AsParameterValue1() (ParameterValue1, error) {
+	var body ParameterValue1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromParameterValue1 overwrites any union data inside the ParameterValue as the provided ParameterValue1
+func (t *ParameterValue) FromParameterValue1(v ParameterValue1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeParameterValue1 performs a merge with any union data inside the ParameterValue, using the provided ParameterValue1
+func (t *ParameterValue) MergeParameterValue1(v ParameterValue1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsParameterValue2 returns the union data inside the ParameterValue as a ParameterValue2
+func (t ParameterValue) AsParameterValue2() (ParameterValue2, error) {
+	var body ParameterValue2
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromParameterValue2 overwrites any union data inside the ParameterValue as the provided ParameterValue2
+func (t *ParameterValue) FromParameterValue2(v ParameterValue2) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeParameterValue2 performs a merge with any union data inside the ParameterValue, using the provided ParameterValue2
+func (t *ParameterValue) MergeParameterValue2(v ParameterValue2) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t ParameterValue) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *ParameterValue) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -594,6 +808,24 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateRunWithBody Create an action run
+	//
+	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+	CreateRunWithBody(ctx context.Context, params *CreateRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateRun Create an action run
+	//
+	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+	CreateRun(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHealth Check server health
 	//
 	// Reports whether the Slipramp Server process is serving HTTP requests.
@@ -715,6 +947,44 @@ func (c *Client) RemoveRepository(ctx context.Context, repositoryID openapi_type
 // Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetRepositoryCatalogRequest(c.Server, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRunWithBody Create an action run
+//
+// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+func (c *Client) CreateRunWithBody(ctx context.Context, params *CreateRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRunRequestWithBody(c.Server, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreateRun Create an action run
+//
+// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+func (c *Client) CreateRun(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateRunRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -965,6 +1235,61 @@ func NewGetRepositoryCatalogRequest(server string, repositoryID openapi_types.UU
 	return req, nil
 }
 
+// NewCreateRunRequest calls the generic CreateRun builder with application/json body
+func NewCreateRunRequest(server string, params *CreateRunParams, body CreateRunJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateRunRequestWithBody(server, params, "application/json", bodyReader)
+}
+
+// NewCreateRunRequestWithBody constructs an http.Request for the CreateRun method, with any body, and a specified content type
+func NewCreateRunRequestWithBody(server string, params *CreateRunParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewGetHealthRequest constructs an http.Request for the GetHealth method
 func NewGetHealthRequest(server string) (*http.Request, error) {
 	var err error
@@ -1098,6 +1423,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalogWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRepositoryCatalogResponse, error)
+
+	// CreateRunWithBodyWithResponse Create an action run
+	//
+	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+	CreateRunWithBodyWithResponse(ctx context.Context, params *CreateRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRunResponse, error)
+
+	// CreateRunWithResponse Create an action run
+	//
+	// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+	CreateRunWithResponse(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRunResponse, error)
 
 	// GetHealthWithResponse Check server health
 	//
@@ -1488,6 +1831,82 @@ func (r GetRepositoryCatalogResponse) ContentType() string {
 	return ""
 }
 
+type CreateRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Run
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreateRunResponse) GetJSON201() *Run {
+	return r.JSON201
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CreateRunResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreateRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1639,6 +2058,36 @@ func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseGetRepositoryCatalogResponse(rsp)
+}
+
+// CreateRunWithBodyWithResponse Create an action run
+//
+// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+func (c *ClientWithResponses) CreateRunWithBodyWithResponse(ctx context.Context, params *CreateRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateRunResponse, error) {
+	rsp, err := c.CreateRunWithBody(ctx, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRunResponse(rsp)
+}
+
+// CreateRunWithResponse Create an action run
+//
+// Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
+func (c *ClientWithResponses) CreateRunWithResponse(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRunResponse, error) {
+	rsp, err := c.CreateRun(ctx, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateRunResponse(rsp)
 }
 
 // GetHealthWithResponse Check server health
@@ -1957,6 +2406,67 @@ func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalo
 	return response, nil
 }
 
+// ParseCreateRunResponse parses an HTTP response from a CreateRunWithResponse call
+func ParseCreateRunResponse(rsp *http.Response) (*CreateRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Run
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2010,6 +2520,9 @@ type ServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
+	// CreateRun Create an action run
+	// (POST /api/v1/runs)
+	CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -2160,6 +2673,47 @@ func (siw *ServerInterfaceWrapper) GetRepositoryCatalog(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// CreateRun operation middleware
+func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateRunParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRun(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetHealth operation middleware
 func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Request) {
 
@@ -2301,6 +2855,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/controllers/{clusterName}/poll", wrapper.PollForControllerWork)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 
 	return m
 }
@@ -2714,6 +3269,99 @@ func (response GetRepositoryCatalog500ApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type CreateRunRequestObject struct {
+	Params CreateRunParams
+	Body   *CreateRunJSONRequestBody
+}
+
+type CreateRunResponseObject interface {
+	VisitCreateRunResponse(w http.ResponseWriter) error
+}
+
+type CreateRun201JSONResponse Run
+
+func (response CreateRun201JSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun400ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRun400ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRun404ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun405ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRun405ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRun409ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun500ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRun500ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -2769,6 +3417,9 @@ type StrictServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(ctx context.Context, request GetRepositoryCatalogRequestObject) (GetRepositoryCatalogResponseObject, error)
+	// CreateRun Create an action run
+	// (POST /api/v1/runs)
+	CreateRun(ctx context.Context, request CreateRunRequestObject) (CreateRunResponseObject, error)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -2964,6 +3615,39 @@ func (sh *strictHandler) GetRepositoryCatalog(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryCatalogResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRun operation middleware
+func (sh *strictHandler) CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams) {
+	var request CreateRunRequestObject
+
+	request.Params = params
+
+	var body CreateRunJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRun(ctx, request.(CreateRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRunResponseObject); ok {
+		if err := validResponse.VisitCreateRunResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

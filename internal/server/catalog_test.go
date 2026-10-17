@@ -86,6 +86,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 		nil,
 		catalogs,
 		nil,
+		nil,
 	).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
@@ -172,6 +173,7 @@ func TestGetRepositoryCatalogMapsExpectedFailures(t *testing.T) {
 				&recordingClusterService{},
 				nil,
 				catalogs,
+				nil,
 				nil,
 			).ServeHTTP(response, request)
 

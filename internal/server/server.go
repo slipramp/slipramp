@@ -16,6 +16,7 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/repository"
+	"github.com/slipramp/slipramp/internal/run"
 )
 
 const (
@@ -58,6 +59,12 @@ func New(
 		persistence.database,
 		cfg.RepositoryRefreshCredentials,
 	)
+	runs := run.NewService(
+		persistence.database,
+		repositories,
+		catalogs,
+		cfg.Placements,
+	)
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
 		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
@@ -70,6 +77,7 @@ func New(
 		clusters,
 		repositories,
 		catalogs,
+		runs,
 		cfg.ControllerTokens,
 		logger,
 	)
@@ -197,12 +205,14 @@ func newHandler(
 	clusters handler.ClusterService,
 	repositories handler.RepositoryService,
 	catalogs handler.CatalogService,
+	runs handler.RunService,
 	controllerTokens map[string]string,
 ) http.Handler {
 	return newHandlerWithLogger(
 		clusters,
 		repositories,
 		catalogs,
+		runs,
 		controllerTokens,
 		nil,
 	)
@@ -212,12 +222,13 @@ func newHandlerWithLogger(
 	clusters handler.ClusterService,
 	repositories handler.RepositoryService,
 	catalogs handler.CatalogService,
+	runs handler.RunService,
 	controllerTokens map[string]string,
 	logger *slog.Logger,
 ) http.Handler {
 	authenticator := newControllerAuthenticator(controllerTokens)
 	strictHandler := api.NewStrictHandlerWithOptions(
-		handler.New(clusters, repositories, catalogs),
+		handler.New(clusters, repositories, catalogs, runs),
 		[]api.StrictMiddlewareFunc{
 			handler.ControllerAuthentication(authenticator),
 		},

@@ -51,6 +51,7 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 		repositories,
 		nil,
 		nil,
+		nil,
 	).ServeHTTP(response, request)
 
 	if response.Code != http.StatusCreated {
@@ -164,6 +165,7 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 				test.repositories,
 				nil,
 				nil,
+				nil,
 			).ServeHTTP(response, request)
 
 			assertProblem(t, response, test.wantStatus)
@@ -201,6 +203,7 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 	httpHandler := newHandler(
 		&recordingClusterService{},
 		repositories,
+		nil,
 		nil,
 		nil,
 	)

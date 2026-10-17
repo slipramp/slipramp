@@ -113,6 +113,51 @@ export type ClusterList = {
   items: Array<Cluster>;
 };
 
+export type Run = {
+  /**
+   * Stable identity of the immutable action execution.
+   */
+  id: string;
+  state:
+    | "queued"
+    | "preparing"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "canceling"
+    | "canceled"
+    | "timed-out"
+    | "unknown";
+  repositoryId: string;
+  catalogRevisionId: string;
+  commitSha: string;
+  target: CatalogName;
+  action: CatalogName;
+  parameters: {
+    [key: string]: ParameterValue;
+  };
+  placement: CatalogName;
+  cluster: CatalogName;
+  source: RunSource;
+  createdAt: string;
+};
+
+export type RunCreate = {
+  /**
+   * Repository containing the target and action.
+   */
+  repositoryId: string;
+  target: CatalogName;
+  action: CatalogName;
+  /**
+   * Values for parameters declared by the selected action.
+   */
+  parameters?: {
+    [key: string]: ParameterValue;
+  };
+  source: RunSource;
+};
+
 export type RepositoryRefresh = {
   /**
    * Result of the most recent branch refresh attempt.
@@ -272,6 +317,17 @@ export type Target = {
   metadata: ResourceMetadata;
   spec: TargetSpec;
   source: CatalogSource;
+};
+
+export type CatalogName = string;
+
+export type ParameterValue = string | boolean | number;
+
+export type RunSource = {
+  /**
+   * Boundary that submitted the Run.
+   */
+  type: "manual" | "api";
 };
 
 export type GetHealthData = {
@@ -528,3 +584,50 @@ export type PollForControllerWorkResponses = {
 
 export type PollForControllerWorkResponse =
   PollForControllerWorkResponses[keyof PollForControllerWorkResponses];
+
+export type CreateRunData = {
+  body: RunCreate;
+  headers?: {
+    /**
+     * Optional key that makes retries of the same run request return the originally created Run. Reusing a key for a different request is a conflict.
+     */
+    "Idempotency-Key"?: string;
+  };
+  path?: never;
+  query?: never;
+  url: "/api/v1/runs";
+};
+
+export type CreateRunErrors = {
+  /**
+   * The run request or supplied parameters are invalid.
+   */
+  400: Problem;
+  /**
+   * The repository, active catalog, target, action, runtime, or placement required by the request does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The idempotency key was already used for another request.
+   */
+  409: Problem;
+  /**
+   * The Run could not be created.
+   */
+  500: Problem;
+};
+
+export type CreateRunError = CreateRunErrors[keyof CreateRunErrors];
+
+export type CreateRunResponses = {
+  /**
+   * The queued Run was created or recovered by idempotency key.
+   */
+  201: Run;
+};
+
+export type CreateRunResponse = CreateRunResponses[keyof CreateRunResponses];

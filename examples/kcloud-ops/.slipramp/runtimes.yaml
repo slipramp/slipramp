@@ -1,0 +1,44 @@
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
+  name: pyinfra
+  title: pyinfra operations image
+spec:
+  image: ghcr.io/ianunruh/kcloud-ops@sha256:255cc6671085dda229fb3cc6d33953e43ad7da847c36dccf0b6caecf207c9cd3
+  workingDirectory: /workspace
+  environment:
+    PYTHONUNBUFFERED: "1"
+  credentials:
+    ssh:
+      inject:
+        files:
+          - key: private-key
+            path: /run/slipramp/credentials/ssh/id_ed25519
+            mode: 0400
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
+  name: terraform-rustfs
+  title: Terraform and RustFS operations image
+spec:
+  image: ghcr.io/ianunruh/kcloud-ops@sha256:255cc6671085dda229fb3cc6d33953e43ad7da847c36dccf0b6caecf207c9cd3
+  workingDirectory: /workspace
+  environment:
+    TF_IN_AUTOMATION: "true"
+    TF_INPUT: "false"
+  credentials:
+    rustfs-admin:
+      inject:
+        environment:
+          TF_VAR_access_key:
+            key: access-key
+          TF_VAR_secret_key:
+            key: secret-key
+    state-backend:
+      inject:
+        environment:
+          AWS_ACCESS_KEY_ID:
+            key: access-key
+          AWS_SECRET_ACCESS_KEY:
+            key: secret-key

@@ -14,6 +14,10 @@ type Store interface {
 		repository Repository,
 	) (Repository, error)
 	ListRepositories(ctx context.Context) ([]Repository, error)
+	GetRepository(
+		ctx context.Context,
+		repositoryID uuid.UUID,
+	) (Repository, error)
 	RemoveRepository(
 		ctx context.Context,
 		repositoryID uuid.UUID,
@@ -78,6 +82,13 @@ func (s *Service) ListRepositories(
 	ctx context.Context,
 ) ([]Repository, error) {
 	return s.repositories.ListRepositories(ctx)
+}
+
+func (s *Service) GetRepository(
+	ctx context.Context,
+	repositoryID uuid.UUID,
+) (Repository, error) {
+	return s.repositories.GetRepository(ctx, repositoryID)
 }
 
 func (s *Service) RemoveRepository(

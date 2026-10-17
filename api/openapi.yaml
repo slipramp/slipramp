@@ -18,6 +18,8 @@ paths:
     $ref: ./paths/controllers.yaml#/clusters
   /api/v1/controllers/{clusterName}/poll:
     $ref: ./paths/controllers.yaml#/poll
+  /api/v1/runs:
+    $ref: ./paths/runs.yaml#/runs
 components:
   securitySchemes:
     ControllerBearer:
@@ -40,3 +42,7 @@ components:
       $ref: ./components/controllers.yaml#/Cluster
     ClusterList:
       $ref: ./components/controllers.yaml#/ClusterList
+    Run:
+      $ref: ./components/runs.yaml#/Run
+    RunCreate:
+      $ref: ./components/runs.yaml#/RunCreate

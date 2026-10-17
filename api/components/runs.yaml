@@ -1,0 +1,107 @@
+RunCreate:
+  type: object
+  required:
+    - repositoryId
+    - target
+    - action
+    - source
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+      description: Repository containing the target and action.
+    target:
+      $ref: "#/CatalogName"
+    action:
+      $ref: "#/CatalogName"
+    parameters:
+      type: object
+      additionalProperties:
+        $ref: "#/ParameterValue"
+      description: Values for parameters declared by the selected action.
+    source:
+      $ref: "#/RunSource"
+
+Run:
+  type: object
+  required:
+    - id
+    - state
+    - repositoryId
+    - catalogRevisionId
+    - commitSha
+    - target
+    - action
+    - parameters
+    - placement
+    - cluster
+    - source
+    - createdAt
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Stable identity of the immutable action execution.
+    state:
+      type: string
+      enum:
+        - queued
+        - preparing
+        - running
+        - succeeded
+        - failed
+        - canceling
+        - canceled
+        - timed-out
+        - unknown
+    repositoryId:
+      type: string
+      format: uuid
+    catalogRevisionId:
+      type: string
+      format: uuid
+    commitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    target:
+      $ref: "#/CatalogName"
+    action:
+      $ref: "#/CatalogName"
+    parameters:
+      type: object
+      additionalProperties:
+        $ref: "#/ParameterValue"
+    placement:
+      $ref: "#/CatalogName"
+    cluster:
+      $ref: "#/CatalogName"
+    source:
+      $ref: "#/RunSource"
+    createdAt:
+      type: string
+      format: date-time
+
+RunSource:
+  type: object
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum:
+        - manual
+        - api
+      description: Boundary that submitted the Run.
+
+ParameterValue:
+  oneOf:
+    - type: string
+    - type: boolean
+    - type: number
+      format: double
+
+CatalogName:
+  type: string
+  minLength: 1
+  maxLength: 63
+  pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$

@@ -6,6 +6,9 @@ import type {
   CreateRepositoryData,
   CreateRepositoryErrors,
   CreateRepositoryResponses,
+  CreateRunData,
+  CreateRunErrors,
+  CreateRunResponses,
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
@@ -144,4 +147,21 @@ export const pollForControllerWork = <ThrowOnError extends boolean = false>(
     security: [{ scheme: "bearer", type: "http" }],
     url: "/api/v1/controllers/{clusterName}/poll",
     ...options,
+  });
+
+/**
+ * Create an action run
+ *
+ * Resolves an action against the repository's active catalog revision and persists an immutable queued Run. The Run remains pinned to that catalog revision and Git commit even if the repository refreshes later.
+ */
+export const createRun = <ThrowOnError extends boolean = false>(
+  options: Options<CreateRunData, ThrowOnError>,
+): RequestResult<CreateRunResponses, CreateRunErrors, ThrowOnError> =>
+  (options.client ?? client).post<CreateRunResponses, CreateRunErrors, ThrowOnError>({
+    url: "/api/v1/runs",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });

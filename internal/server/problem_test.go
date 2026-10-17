@@ -21,7 +21,7 @@ func TestUnknownRouteReturnsProblem(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(&recordingClusterService{}, nil, nil, nil).ServeHTTP(
+	newHandler(&recordingClusterService{}, nil, nil, nil, nil).ServeHTTP(
 		response,
 		request,
 	)

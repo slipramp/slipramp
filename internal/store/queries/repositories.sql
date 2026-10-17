@@ -48,6 +48,24 @@ FROM repositories
 WHERE removed_at IS NULL
 ORDER BY name;
 
+-- name: GetActiveRepository :one
+SELECT
+    id,
+    name,
+    clone_url,
+    branch,
+    refresh_credential_name,
+    checkout_credential_name,
+    created_at,
+    refresh_status,
+    observed_commit_sha,
+    last_refresh_attempted_at,
+    last_refresh_succeeded_at,
+    last_refresh_error
+FROM repositories
+WHERE id = sqlc.arg(id)
+  AND removed_at IS NULL;
+
 -- name: RecordRepositoryRefreshFailure :exec
 UPDATE repositories
 SET refresh_status = 'failed',

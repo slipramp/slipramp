@@ -97,6 +97,60 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 	return i, err
 }
 
+const getActiveRepository = `-- name: GetActiveRepository :one
+SELECT
+    id,
+    name,
+    clone_url,
+    branch,
+    refresh_credential_name,
+    checkout_credential_name,
+    created_at,
+    refresh_status,
+    observed_commit_sha,
+    last_refresh_attempted_at,
+    last_refresh_succeeded_at,
+    last_refresh_error
+FROM repositories
+WHERE id = $1
+  AND removed_at IS NULL
+`
+
+type GetActiveRepositoryRow struct {
+	ID                     pgtype.UUID
+	Name                   string
+	CloneUrl               string
+	Branch                 string
+	RefreshCredentialName  *string
+	CheckoutCredentialName *string
+	CreatedAt              pgtype.Timestamptz
+	RefreshStatus          string
+	ObservedCommitSha      *string
+	LastRefreshAttemptedAt pgtype.Timestamptz
+	LastRefreshSucceededAt pgtype.Timestamptz
+	LastRefreshError       *string
+}
+
+func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetActiveRepositoryRow, error) {
+	row := q.db.QueryRow(ctx, getActiveRepository, id)
+	var i GetActiveRepositoryRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CloneUrl,
+		&i.Branch,
+		&i.RefreshCredentialName,
+		&i.CheckoutCredentialName,
+		&i.CreatedAt,
+		&i.RefreshStatus,
+		&i.ObservedCommitSha,
+		&i.LastRefreshAttemptedAt,
+		&i.LastRefreshSucceededAt,
+		&i.LastRefreshError,
+	)
+	return i, err
+}
+
 const listRepositories = `-- name: ListRepositories :many
 SELECT
     id,

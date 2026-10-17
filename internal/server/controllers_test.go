@@ -37,7 +37,7 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil, nil, nil).ServeHTTP(response, request)
+	newHandler(controllers, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -90,7 +90,7 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil, nil, nil).ServeHTTP(response, request)
+	newHandler(controllers, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusInternalServerError)
 	if strings.Contains(response.Body.String(), "database unavailable") {
@@ -133,6 +133,7 @@ func TestControllerPollDelegatesWithConfiguredWait(t *testing.T) {
 
 			newHandler(
 				controllers,
+				nil,
 				nil,
 				nil,
 				map[string]string{"colo": "controller-token"},
@@ -221,6 +222,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 				controllers,
 				nil,
 				nil,
+				nil,
 				map[string]string{"colo": "controller-token"},
 			).ServeHTTP(response, request)
 
@@ -282,6 +284,7 @@ func TestControllerPollMapsFailures(t *testing.T) {
 
 			newHandler(
 				controllers,
+				nil,
 				nil,
 				nil,
 				map[string]string{"colo": "controller-token"},

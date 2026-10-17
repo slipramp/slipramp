@@ -1,0 +1,25 @@
+apiVersion: slipramp.com/v1alpha1
+kind: PlacementConfig
+placements:
+  homelab-infrastructure:
+    cluster: homelab
+    jobNamespace: slipramp-runs
+    serviceAccountName: infrastructure-admin
+    timeout: 45m
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    credentials:
+      homelab-ssh:
+        secretRef:
+          name: kcloud-ops-ssh
+      rustfs-admin:
+        secretRef:
+          name: rustfs-admin
+      rustfs-terraform-state:
+        secretRef:
+          name: rustfs-terraform-state

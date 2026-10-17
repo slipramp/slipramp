@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/store/storedb"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -81,6 +82,39 @@ func (d *Database) ListRepositories(
 	}
 
 	return repositories, nil
+}
+
+func (d *Database) GetRepository(
+	ctx context.Context,
+	repositoryID uuid.UUID,
+) (repository.Repository, error) {
+	row, err := d.queries.GetActiveRepository(
+		ctx,
+		pgtype.UUID{Bytes: repositoryID, Valid: true},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return repository.Repository{}, repository.ErrNotFound
+	}
+	if err != nil {
+		return repository.Repository{}, fmt.Errorf("get active repository: %w", err)
+	}
+
+	return repository.Repository{
+		Name:                   row.Name,
+		CloneURL:               row.CloneUrl,
+		Branch:                 row.Branch,
+		RefreshCredentialName:  row.RefreshCredentialName,
+		CheckoutCredentialName: row.CheckoutCredentialName,
+		ID:                     uuid.UUID(row.ID.Bytes),
+		CreatedAt:              row.CreatedAt.Time.UTC(),
+		Refresh: refreshState(
+			row.RefreshStatus,
+			row.ObservedCommitSha,
+			row.LastRefreshAttemptedAt,
+			row.LastRefreshSucceededAt,
+			row.LastRefreshError,
+		),
+	}, nil
 }
 
 func (d *Database) RemoveRepository(

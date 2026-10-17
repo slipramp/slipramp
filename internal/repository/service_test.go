@@ -123,6 +123,13 @@ func (*recordingStore) ListRepositories(context.Context) ([]Repository, error) {
 	return nil, nil
 }
 
+func (*recordingStore) GetRepository(
+	context.Context,
+	uuid.UUID,
+) (Repository, error) {
+	return Repository{}, nil
+}
+
 func (*recordingStore) RemoveRepository(
 	context.Context,
 	uuid.UUID,

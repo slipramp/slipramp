@@ -41,6 +41,15 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		t.Errorf("created repository = %#v, want %#v", created, first)
 	}
 
+	loaded, err := database.GetRepository(ctx, first.ID)
+	if err != nil {
+		t.Fatalf("GetRepository() error = %v", err)
+	}
+	if loaded.ID != first.ID || loaded.Name != first.Name ||
+		loaded.CloneURL != first.CloneURL {
+		t.Errorf("loaded repository = %#v, want %#v", loaded, first)
+	}
+
 	conflict := first
 	conflict.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
 	_, err = database.CreateRepository(ctx, conflict)
@@ -128,6 +137,13 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		createdAt.Add(2*time.Minute),
 	); err != nil {
 		t.Fatalf("RemoveRepository() error = %v", err)
+	}
+
+	if _, err := database.GetRepository(ctx, first.ID); !errors.Is(
+		err,
+		repository.ErrNotFound,
+	) {
+		t.Errorf("removed GetRepository() error = %v, want %v", err, repository.ErrNotFound)
 	}
 
 	if err := database.RecordRepositoryRefresh(

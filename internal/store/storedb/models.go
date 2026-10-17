@@ -60,3 +60,28 @@ type Repository struct {
 	LastRefreshError        *string
 	ActiveCatalogRevisionID pgtype.UUID
 }
+
+type Run struct {
+	ID                pgtype.UUID
+	State             string
+	RepositoryID      pgtype.UUID
+	CatalogRevisionID pgtype.UUID
+	CommitSha         string
+	TargetName        string
+	ActionName        string
+	Parameters        []byte
+	PlacementName     string
+	ClusterName       string
+	SourceType        string
+	IdempotencyKey    *string
+	RequestDigest     string
+	Snapshot          []byte
+	CreatedAt         pgtype.Timestamptz
+}
+
+type RunStateTransition struct {
+	ID         int64
+	RunID      pgtype.UUID
+	State      string
+	RecordedAt pgtype.Timestamptz
+}

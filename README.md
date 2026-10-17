@@ -60,6 +60,11 @@ definitions. The web application lists repository refresh health and provides
 a repository detail screen for browsing the active revision's targets and
 actions.
 
+[`examples/kcloud-ops`](./examples/kcloud-ops) contains a larger catalog
+example with a pyinfra deployment and a Terraform stack, including runtime
+credentials, placement configuration, a canary action, and a saved-plan
+artifact flow.
+
 `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS` maps logical credential names to
 absolute paths of administrator-mounted Git config files. Each isolated fetch
 uses only its selected config file and disables interactive prompts. The file

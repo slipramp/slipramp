@@ -1,0 +1,68 @@
+runs:
+  post:
+    operationId: createRun
+    summary: Create an action run
+    description: >-
+      Resolves an action against the repository's active catalog revision and
+      persists an immutable queued Run. The Run remains pinned to that catalog
+      revision and Git commit even if the repository refreshes later.
+    security: []
+    tags:
+      - Runs
+    parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: >-
+          Optional key that makes retries of the same run request return the
+          originally created Run. Reusing a key for a different request is a
+          conflict.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/runs.yaml#/RunCreate
+    responses:
+      "201":
+        description: The queued Run was created or recovered by idempotency key.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/runs.yaml#/Run
+      "400":
+        description: The run request or supplied parameters are invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: >-
+          The repository, active catalog, target, action, runtime, or placement
+          required by the request does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The idempotency key was already used for another request.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Run could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

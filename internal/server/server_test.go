@@ -67,6 +67,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 		controllers,
 		nil,
 		nil,
+		nil,
 		map[string]string{"colo": "controller-token"},
 	)
 	app := newServer(settings, logger, httpHandler)
