@@ -35,7 +35,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	app, err := controller.New(cfg, logger, kubeClient.BatchV1())
+	app, err := controller.New(cfg, logger, kubeClient)
 	if err != nil {
 		logger.Error("initialize controller", "error", err)
 		os.Exit(1)

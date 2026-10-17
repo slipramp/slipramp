@@ -27,7 +27,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	runs := &recordingRunService{
 		created: run.Run{
 			ID:                runID,
-			State:             run.StateQueued,
+			Phase:             run.PhaseQueued,
 			RepositoryID:      repositoryID,
 			CatalogRevisionID: revisionID,
 			CommitSHA:         "0123456789abcdef0123456789abcdef01234567",
@@ -83,7 +83,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if result.ID != runID || result.State != api.Queued ||
+	if result.ID != runID || result.Phase != api.RunPhaseQueued ||
 		result.CatalogRevisionID != revisionID || result.Cluster != "colo" ||
 		!result.CreatedAt.Equal(createdAt) {
 		t.Errorf("Run response = %#v", result)
@@ -169,6 +169,9 @@ type recordingRunService struct {
 	next            run.Run
 	nextError       error
 	nextCalls       int
+	observation     run.Observation
+	reportError     error
+	reportCalls     int
 }
 
 func (s *recordingRunService) NextRunAssignment(
@@ -188,4 +191,14 @@ func (s *recordingRunService) CreateRun(
 	s.request = request
 
 	return s.created, s.err
+}
+
+func (s *recordingRunService) ReportObservation(
+	_ context.Context,
+	observation run.Observation,
+) error {
+	s.reportCalls++
+	s.observation = observation
+
+	return s.reportError
 }

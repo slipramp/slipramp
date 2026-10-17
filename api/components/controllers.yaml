@@ -18,7 +18,7 @@ Cluster:
         - connected
         - unreachable
       description: >-
-        Whether the cluster controller has completed a poll within the Server's
+        Whether the cluster controller has contacted the Server within the
         connection window.
     firstSeenAt:
       type: string
@@ -27,7 +27,7 @@ Cluster:
     lastSeenAt:
       type: string
       format: date-time
-      description: Time at which the controller most recently started a poll.
+      description: Time at which the Server most recently heard from the controller.
 
 ClusterList:
   type: object
@@ -38,6 +38,57 @@ ClusterList:
       type: array
       items:
         $ref: "#/Cluster"
+
+RunObservation:
+  type: object
+  required:
+    - phase
+  properties:
+    phase:
+      type: string
+      enum:
+        - preparing
+        - running
+        - finished
+      description: Lifecycle phase observed from the Run's Kubernetes Job.
+    outcome:
+      type: string
+      enum:
+        - succeeded
+        - failed
+        - canceled
+        - timed-out
+      description: Terminal result; required when phase is finished.
+    jobUid:
+      type: string
+      minLength: 1
+      description: >-
+        Kubernetes UID of the materialized Job. Required for preparing and
+        running observations and for every observation after the Run is bound
+        to a Job.
+    reason:
+      type: string
+      minLength: 1
+    message:
+      type: string
+      minLength: 1
+    exitCode:
+      type: integer
+      format: int32
+      minimum: 0
+
+ControllerCommand:
+  type: object
+  required:
+    - type
+    - assignment
+  properties:
+    type:
+      type: string
+      enum:
+        - run-assignment
+    assignment:
+      $ref: "#/RunAssignment"
 
 RunAssignment:
   type: object

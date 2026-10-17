@@ -39,7 +39,7 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 		t.Fatalf("CreateRun() error = %v", err)
 	}
 
-	if created.ID != runID || created.State != StateQueued ||
+	if created.ID != runID || created.Phase != PhaseQueued ||
 		created.RepositoryID != testRepositoryID ||
 		created.CatalogRevisionID != testRevisionID ||
 		created.CommitSHA != testCommitSHA ||
@@ -319,14 +319,18 @@ type recordingRuns struct {
 	err              error
 	existing         Run
 	getError         error
-	preparingCalls   int
-	preparing        Run
-	preparingError   error
+	assignedCalls    int
+	assigned         Run
+	assignedError    error
 	claimCalls       int
 	claimClusterName string
 	claimedAt        time.Time
 	claimed          Run
 	claimError       error
+	observationCalls int
+	observation      Observation
+	observationFrom  []Phase
+	observationError error
 }
 
 func (s *recordingRuns) CreateRun(_ context.Context, record Run) (Run, error) {
@@ -351,13 +355,13 @@ func (s *recordingRuns) GetRunByIdempotencyKey(
 	return Run{}, ErrRunNotFound
 }
 
-func (s *recordingRuns) GetPreparingRunForCluster(
+func (s *recordingRuns) GetAssignedRunForCluster(
 	_ context.Context,
 	_ string,
 ) (Run, error) {
-	s.preparingCalls++
+	s.assignedCalls++
 
-	return s.preparing, s.preparingError
+	return s.assigned, s.assignedError
 }
 
 func (s *recordingRuns) ClaimQueuedRun(
@@ -370,6 +374,18 @@ func (s *recordingRuns) ClaimQueuedRun(
 	s.claimedAt = claimedAt
 
 	return s.claimed, s.claimError
+}
+
+func (s *recordingRuns) ApplyRunObservation(
+	_ context.Context,
+	observation Observation,
+	allowedCurrentPhases []Phase,
+) error {
+	s.observationCalls++
+	s.observation = observation
+	s.observationFrom = append([]Phase(nil), allowedCurrentPhases...)
+
+	return s.observationError
 }
 
 type recordingRepositories struct {

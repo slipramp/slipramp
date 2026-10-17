@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
@@ -132,6 +134,34 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 	}
 
 	runValidationTests(t, tests)
+}
+
+func TestValidateRejectsActionRequestAbovePlacementLimit(t *testing.T) {
+	t.Parallel()
+
+	input := validCatalog()
+	action := input.Targets[0].Spec.Actions["preview"]
+	action.Resources.Requests = map[string]string{"memory": "2Gi"}
+	input.Targets[0].Spec.Actions["preview"] = action
+
+	placements, err := placement.NewSet(map[string]placement.Config{
+		"infrastructure-admin": {
+			ClusterName:  "colo",
+			JobNamespace: "slipramp-runs",
+			Resources: placement.ResourceRequirements{
+				Limits: map[string]string{"memory": "1Gi"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("placement.NewSet() error = %v", err)
+	}
+
+	testcheck.ErrorContains(
+		t,
+		catalog.Validate(input, placements),
+		"action \"preview\" execution resource request \"memory\" must not exceed its limit",
+	)
 }
 
 func addPreviewAndApply(input *catalog.Catalog) {

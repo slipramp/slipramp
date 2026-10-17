@@ -62,26 +62,41 @@ type Repository struct {
 }
 
 type Run struct {
-	ID                pgtype.UUID
-	State             string
-	RepositoryID      pgtype.UUID
-	CatalogRevisionID pgtype.UUID
-	CommitSha         string
-	TargetName        string
-	ActionName        string
-	Parameters        []byte
-	PlacementName     string
-	ClusterName       string
-	SourceType        string
-	IdempotencyKey    *string
-	RequestDigest     string
-	Snapshot          []byte
-	CreatedAt         pgtype.Timestamptz
+	ID                      pgtype.UUID
+	Phase                   string
+	Outcome                 *string
+	RepositoryID            pgtype.UUID
+	CatalogRevisionID       pgtype.UUID
+	CommitSha               string
+	TargetName              string
+	ActionName              string
+	Parameters              []byte
+	PlacementName           string
+	ClusterName             string
+	SourceType              string
+	IdempotencyKey          *string
+	RequestDigest           string
+	Snapshot                []byte
+	CreatedAt               pgtype.Timestamptz
+	AssignedAt              pgtype.Timestamptz
+	PreparingAt             pgtype.Timestamptz
+	StartedAt               pgtype.Timestamptz
+	FinishedAt              pgtype.Timestamptz
+	LastObservedAt          pgtype.Timestamptz
+	CancellationRequestedAt pgtype.Timestamptz
+	JobUid                  *string
+	OutcomeReason           *string
+	OutcomeMessage          *string
+	ExitCode                *int32
 }
 
-type RunStateTransition struct {
+type RunPhaseTransition struct {
 	ID         int64
 	RunID      pgtype.UUID
-	State      string
+	Phase      string
+	Outcome    *string
+	Reason     *string
+	Message    *string
+	ExitCode   *int32
 	RecordedAt pgtype.Timestamptz
 }

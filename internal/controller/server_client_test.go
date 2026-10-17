@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/api"
 )
 
 type receivedPoll struct {
@@ -16,6 +18,13 @@ type receivedPoll struct {
 	path          string
 	timeout       string
 	authorization string
+}
+
+type receivedReport struct {
+	method        string
+	path          string
+	authorization string
+	body          string
 }
 
 type httpDoerFunc func(request *http.Request) (*http.Response, error)
@@ -115,6 +124,8 @@ func TestServerClientPollParsesRunAssignment(t *testing.T) {
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	body := `{
+		"type":"run-assignment",
+		"assignment":{
 		"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
 		"catalogRevisionId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1201",
 		"commitSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -123,7 +134,7 @@ func TestServerClientPollParsesRunAssignment(t *testing.T) {
 		"target":{"name":"network"},
 		"action":{"name":"sync","command":["terraform","apply"],"runtime":"terraform","placement":"admin"},
 		"runtime":{"name":"terraform","image":"terraform:1"},
-		"placement":{"name":"admin","cluster":"colo","jobNamespace":"slipramp-runs"}
+		"placement":{"name":"admin","cluster":"colo","jobNamespace":"slipramp-runs"}}
 	}`
 	client, err := newServerClientWithHTTPClient(
 		validConfig(),
@@ -143,11 +154,59 @@ func TestServerClientPollParsesRunAssignment(t *testing.T) {
 		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
 	}
 
-	assignment, err := client.Poll(context.Background())
+	command, err := client.Poll(context.Background())
 	if err != nil {
 		t.Fatalf("Poll() error = %v", err)
 	}
-	if assignment == nil || assignment.ID != runID || assignment.Action.Name != "sync" {
-		t.Fatalf("Poll() assignment = %#v", assignment)
+	if command == nil || command.Assignment.ID != runID ||
+		command.Assignment.Action.Name != "sync" {
+		t.Fatalf("Poll() command = %#v", command)
+	}
+}
+
+func TestServerClientReportsAuthenticatedRunObservation(t *testing.T) {
+	t.Parallel()
+
+	var report receivedReport
+	cfg := validConfig()
+	cfg.ServerURL = "https://slipramp.example.com/slipramp"
+	client, err := newServerClientWithHTTPClient(
+		cfg,
+		httpDoerFunc(func(request *http.Request) (*http.Response, error) {
+			body, readErr := io.ReadAll(request.Body)
+			if readErr != nil {
+				t.Fatalf("read request body: %v", readErr)
+			}
+			report = receivedReport{
+				method:        request.Method,
+				path:          request.URL.Path,
+				authorization: request.Header.Get("Authorization"),
+				body:          string(body),
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+	}
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	if err := client.ReportObservation(
+		context.Background(),
+		runID,
+		api.RunObservation{Phase: api.RunObservationPhaseRunning},
+	); err != nil {
+		t.Fatalf("ReportObservation() error = %v", err)
+	}
+	if report.method != http.MethodPost ||
+		report.path != "/slipramp/controller/v1/controllers/colo/runs/"+
+			runID.String()+"/observations" ||
+		report.authorization != "Bearer controller-token" ||
+		!strings.Contains(report.body, `"phase":"running"`) {
+		t.Errorf("report = %#v", report)
 	}
 }

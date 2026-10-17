@@ -64,9 +64,12 @@ actions.
 persists an immutable queued Run with validated parameters, an optional
 idempotency key, and a frozen repository, target, action, runtime, and placement
 snapshot. Controller polls claim the oldest eligible Run for their cluster,
-enforce one active Run per target, and return that frozen snapshot through the
-generated API contract. Preparing Runs are redelivered with the same identity
-until a later controller status report advances them.
+enforce one active Run per target, and return a run-assignment command containing
+that frozen snapshot through the generated API contract. Assigned Runs are
+redelivered with the same identity until the controller reports the materialized
+Job UID and `preparing` phase. Lifecycle phase, terminal outcome, cancellation
+intent, Job identity, observation freshness, diagnostics, and exit code remain
+separate persisted facts.
 
 [`examples/kcloud-ops`](./examples/kcloud-ops) contains a larger catalog
 example with a pyinfra deployment and a Terraform stack, including runtime
@@ -152,13 +155,18 @@ The Server emits structured JSON logs and shuts down gracefully on `SIGINT` or
 `SIGTERM`.
 
 The controller process runs inside its execution cluster, authenticates to the
-Server, and continuously long-polls for run assignments. Successful polls
-upsert the cluster's first-seen and last-seen observations in PostgreSQL. The
-Server reports a cluster as unreachable when it has not started a poll within
-one minute, and the web index shows the resulting cluster health. Each frozen
+Server, and continuously long-polls for controller commands. Successful polls
+and Run observation reports upsert the cluster's first-seen and last-seen
+timestamps in PostgreSQL. The Server reports a cluster as unreachable after one
+minute without either request, and the web index shows the resulting cluster
+health. Each frozen
 assignment is rendered as a deterministic `slipramp-run-<run-id>` Kubernetes
-Job. Repeated delivery creates the Job once and then reuses it. Job observation
-and state reporting are the next implementation slice.
+Job. Repeated delivery creates the Job once and then reuses it. Before polling,
+the controller scans labeled Jobs across the cluster and resumes their
+observers. It derives `preparing` and `running` from the action container,
+records Job completion reasons and exit codes, maps deadline failures to the
+`timed-out` outcome, and reports a permanent rendering or admission failure as
+a terminal failed Run instead of blocking later assignments.
 
 The controller requires in-cluster Kubernetes configuration and these
 environment variables:
@@ -175,6 +183,9 @@ environment variables:
 The checkout init container materializes the exact commit into an `emptyDir`.
 The action container mounts it at the runtime's `workingDirectory`, or
 `/workspace` by default, and runs from the target's repository-relative path.
+The checkout is made writable inside the execution Pod so checkout and runtime
+images need not share a numeric user. Placements can supply a Pod `fsGroup` for
+runtime access to restrictive Secret file modes.
 The harness image copies its static executable into a second `emptyDir`, so the
 runtime image does not need Slipramp tooling. A checkout credential Secret may
 provide `gitconfig`, `ssh-privatekey`, and `known_hosts` keys; it is mounted only
@@ -220,4 +231,6 @@ Kubernetes service account in a cluster.
 `task local:down` stops PostgreSQL and RustFS while retaining their named
 volumes. Database migrations live in `internal/store/migrations`, queries live
 in `internal/store/queries`, and `task generate` refreshes both sqlc output and
-the OpenAPI-generated clients.
+the OpenAPI-generated clients. During the MVP, schema baselines may be rewritten
+instead of migrated compatibly; recreate the local PostgreSQL volume after such
+a change.

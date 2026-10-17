@@ -15,37 +15,39 @@ const claimQueuedRun = `-- name: ClaimQueuedRun :one
 WITH candidate AS (
     SELECT queued.id
     FROM runs AS queued
-    WHERE queued.cluster_name = $1
-      AND queued.state = 'queued'
+    WHERE queued.cluster_name = $2
+      AND queued.phase = 'queued'
       AND NOT EXISTS (
           SELECT 1
           FROM runs AS active
           WHERE active.repository_id = queued.repository_id
             AND active.target_name = queued.target_name
-            AND active.state IN (
-                'preparing',
-                'running',
-                'canceling',
-                'unknown'
-            )
+            AND active.phase IN ('assigned', 'preparing', 'running')
       )
     ORDER BY queued.created_at, queued.id
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
 UPDATE runs
-SET state = 'preparing'
+SET phase = 'assigned',
+    assigned_at = $1
 FROM candidate
 WHERE runs.id = candidate.id
-RETURNING runs.id, runs.state, runs.repository_id, runs.catalog_revision_id, runs.commit_sha, runs.target_name, runs.action_name, runs.parameters, runs.placement_name, runs.cluster_name, runs.source_type, runs.idempotency_key, runs.request_digest, runs.snapshot, runs.created_at
+RETURNING runs.id, runs.phase, runs.outcome, runs.repository_id, runs.catalog_revision_id, runs.commit_sha, runs.target_name, runs.action_name, runs.parameters, runs.placement_name, runs.cluster_name, runs.source_type, runs.idempotency_key, runs.request_digest, runs.snapshot, runs.created_at, runs.assigned_at, runs.preparing_at, runs.started_at, runs.finished_at, runs.last_observed_at, runs.cancellation_requested_at, runs.job_uid, runs.outcome_reason, runs.outcome_message, runs.exit_code
 `
 
-func (q *Queries) ClaimQueuedRun(ctx context.Context, clusterName string) (Run, error) {
-	row := q.db.QueryRow(ctx, claimQueuedRun, clusterName)
+type ClaimQueuedRunParams struct {
+	AssignedAt  pgtype.Timestamptz
+	ClusterName string
+}
+
+func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) (Run, error) {
+	row := q.db.QueryRow(ctx, claimQueuedRun, arg.AssignedAt, arg.ClusterName)
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.State,
+		&i.Phase,
+		&i.Outcome,
 		&i.RepositoryID,
 		&i.CatalogRevisionID,
 		&i.CommitSha,
@@ -59,6 +61,16 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, clusterName string) (Run, 
 		&i.RequestDigest,
 		&i.Snapshot,
 		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
 	)
 	return i, err
 }
@@ -66,7 +78,7 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, clusterName string) (Run, 
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (
     id,
-    state,
+    phase,
     repository_id,
     catalog_revision_id,
     commit_sha,
@@ -100,12 +112,12 @@ INSERT INTO runs (
 ON CONFLICT (source_type, idempotency_key)
 WHERE idempotency_key IS NOT NULL
 DO NOTHING
-RETURNING id, state, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
 `
 
 type CreateRunParams struct {
 	ID                pgtype.UUID
-	State             string
+	Phase             string
 	RepositoryID      pgtype.UUID
 	CatalogRevisionID pgtype.UUID
 	CommitSha         string
@@ -124,7 +136,7 @@ type CreateRunParams struct {
 func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, error) {
 	row := q.db.QueryRow(ctx, createRun,
 		arg.ID,
-		arg.State,
+		arg.Phase,
 		arg.RepositoryID,
 		arg.CatalogRevisionID,
 		arg.CommitSha,
@@ -142,7 +154,8 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.State,
+		&i.Phase,
+		&i.Outcome,
 		&i.RepositoryID,
 		&i.CatalogRevisionID,
 		&i.CommitSha,
@@ -156,48 +169,79 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.RequestDigest,
 		&i.Snapshot,
 		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
 	)
 	return i, err
 }
 
-const createRunStateTransition = `-- name: CreateRunStateTransition :exec
-INSERT INTO run_state_transitions (
+const createRunPhaseTransition = `-- name: CreateRunPhaseTransition :exec
+INSERT INTO run_phase_transitions (
     run_id,
-    state,
+    phase,
+    outcome,
+    reason,
+    message,
+    exit_code,
     recorded_at
 ) VALUES (
     $1,
     $2,
-    $3
+    $3,
+    $4,
+    $5,
+    $6,
+    $7
 )
 `
 
-type CreateRunStateTransitionParams struct {
+type CreateRunPhaseTransitionParams struct {
 	RunID      pgtype.UUID
-	State      string
+	Phase      string
+	Outcome    *string
+	Reason     *string
+	Message    *string
+	ExitCode   *int32
 	RecordedAt pgtype.Timestamptz
 }
 
-func (q *Queries) CreateRunStateTransition(ctx context.Context, arg CreateRunStateTransitionParams) error {
-	_, err := q.db.Exec(ctx, createRunStateTransition, arg.RunID, arg.State, arg.RecordedAt)
+func (q *Queries) CreateRunPhaseTransition(ctx context.Context, arg CreateRunPhaseTransitionParams) error {
+	_, err := q.db.Exec(ctx, createRunPhaseTransition,
+		arg.RunID,
+		arg.Phase,
+		arg.Outcome,
+		arg.Reason,
+		arg.Message,
+		arg.ExitCode,
+		arg.RecordedAt,
+	)
 	return err
 }
 
-const getPreparingRunForCluster = `-- name: GetPreparingRunForCluster :one
-SELECT id, state, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at
+const getAssignedRunForCluster = `-- name: GetAssignedRunForCluster :one
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
 FROM runs
 WHERE cluster_name = $1
-  AND state = 'preparing'
-ORDER BY created_at, id
+  AND phase = 'assigned'
+ORDER BY assigned_at, id
 LIMIT 1
 `
 
-func (q *Queries) GetPreparingRunForCluster(ctx context.Context, clusterName string) (Run, error) {
-	row := q.db.QueryRow(ctx, getPreparingRunForCluster, clusterName)
+func (q *Queries) GetAssignedRunForCluster(ctx context.Context, clusterName string) (Run, error) {
+	row := q.db.QueryRow(ctx, getAssignedRunForCluster, clusterName)
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.State,
+		&i.Phase,
+		&i.Outcome,
 		&i.RepositoryID,
 		&i.CatalogRevisionID,
 		&i.CommitSha,
@@ -211,12 +255,22 @@ func (q *Queries) GetPreparingRunForCluster(ctx context.Context, clusterName str
 		&i.RequestDigest,
 		&i.Snapshot,
 		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
 	)
 	return i, err
 }
 
 const getRunByIdempotencyKey = `-- name: GetRunByIdempotencyKey :one
-SELECT id, state, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source_type, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code
 FROM runs
 WHERE source_type = $1
   AND idempotency_key = $2
@@ -232,7 +286,8 @@ func (q *Queries) GetRunByIdempotencyKey(ctx context.Context, arg GetRunByIdempo
 	var i Run
 	err := row.Scan(
 		&i.ID,
-		&i.State,
+		&i.Phase,
+		&i.Outcome,
 		&i.RepositoryID,
 		&i.CatalogRevisionID,
 		&i.CommitSha,
@@ -246,6 +301,107 @@ func (q *Queries) GetRunByIdempotencyKey(ctx context.Context, arg GetRunByIdempo
 		&i.RequestDigest,
 		&i.Snapshot,
 		&i.CreatedAt,
+		&i.AssignedAt,
+		&i.PreparingAt,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.LastObservedAt,
+		&i.CancellationRequestedAt,
+		&i.JobUid,
+		&i.OutcomeReason,
+		&i.OutcomeMessage,
+		&i.ExitCode,
 	)
 	return i, err
+}
+
+const getRunObservationStateForUpdate = `-- name: GetRunObservationStateForUpdate :one
+SELECT phase, outcome, job_uid
+FROM runs
+WHERE id = $1
+  AND cluster_name = $2
+FOR UPDATE
+`
+
+type GetRunObservationStateForUpdateParams struct {
+	ID          pgtype.UUID
+	ClusterName string
+}
+
+type GetRunObservationStateForUpdateRow struct {
+	Phase   string
+	Outcome *string
+	JobUid  *string
+}
+
+func (q *Queries) GetRunObservationStateForUpdate(ctx context.Context, arg GetRunObservationStateForUpdateParams) (GetRunObservationStateForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getRunObservationStateForUpdate, arg.ID, arg.ClusterName)
+	var i GetRunObservationStateForUpdateRow
+	err := row.Scan(&i.Phase, &i.Outcome, &i.JobUid)
+	return i, err
+}
+
+const updateRunObservation = `-- name: UpdateRunObservation :exec
+UPDATE runs
+SET phase = $1,
+    outcome = $2,
+    job_uid = COALESCE(job_uid, $3),
+    last_observed_at = GREATEST(last_observed_at, $4),
+    preparing_at = CASE
+        WHEN $1 IN ('preparing', 'running', 'finished')
+             AND (job_uid IS NOT NULL OR $3 IS NOT NULL)
+            THEN COALESCE(preparing_at, $4)
+        ELSE preparing_at
+    END,
+    started_at = CASE
+        WHEN $1 = 'running'
+            THEN COALESCE(started_at, $4)
+        ELSE started_at
+    END,
+    finished_at = CASE
+        WHEN $1 = 'finished'
+            THEN COALESCE(finished_at, $4)
+        ELSE finished_at
+    END,
+    outcome_reason = CASE
+        WHEN $1 = 'finished'
+            THEN COALESCE(outcome_reason, $5)
+        ELSE outcome_reason
+    END,
+    outcome_message = CASE
+        WHEN $1 = 'finished'
+            THEN COALESCE(outcome_message, $6)
+        ELSE outcome_message
+    END,
+    exit_code = CASE
+        WHEN $1 = 'finished'
+            THEN COALESCE(exit_code, $7)
+        ELSE exit_code
+    END
+WHERE id = $8
+`
+
+type UpdateRunObservationParams struct {
+	Phase      string
+	Outcome    *string
+	JobUid     *string
+	ObservedAt pgtype.Timestamptz
+	Reason     *string
+	Message    *string
+	ExitCode   *int32
+	ID         pgtype.UUID
+}
+
+func (q *Queries) UpdateRunObservation(ctx context.Context, arg UpdateRunObservationParams) error {
+	_, err := q.db.Exec(ctx, updateRunObservation,
+		arg.Phase,
+		arg.Outcome,
+		arg.JobUid,
+		arg.ObservedAt,
+		arg.Reason,
+		arg.Message,
+		arg.ExitCode,
+		arg.ID,
+	)
+	return err
 }

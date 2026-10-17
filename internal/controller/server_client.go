@@ -6,18 +6,27 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api"
 )
 
 const pollRequestTimeout = 35 * time.Second
 
 type controllerAPI interface {
-	PollForRunAssignmentWithResponse(
+	PollForControllerCommandWithResponse(
 		ctx context.Context,
 		clusterName string,
-		params *api.PollForRunAssignmentParams,
+		params *api.PollForControllerCommandParams,
 		reqEditors ...api.RequestEditorFn,
-	) (*api.PollForRunAssignmentResponse, error)
+	) (*api.PollForControllerCommandResponse, error)
+	ReportRunObservationWithResponse(
+		ctx context.Context,
+		clusterName string,
+		runID uuid.UUID,
+		body api.ReportRunObservationJSONRequestBody,
+		reqEditors ...api.RequestEditorFn,
+	) (*api.ReportRunObservationResponse, error)
 }
 
 type serverClient struct {
@@ -50,8 +59,8 @@ func newServerClientWithHTTPClient(
 	}, nil
 }
 
-func (c *serverClient) Poll(ctx context.Context) (*api.RunAssignment, error) {
-	response, err := c.api.PollForRunAssignmentWithResponse(
+func (c *serverClient) Poll(ctx context.Context) (*api.ControllerCommand, error) {
+	response, err := c.api.PollForControllerCommandWithResponse(
 		ctx,
 		c.clusterName,
 		nil,
@@ -63,7 +72,7 @@ func (c *serverClient) Poll(ctx context.Context) (*api.RunAssignment, error) {
 	switch response.StatusCode() {
 	case http.StatusOK:
 		if response.JSON200 == nil {
-			return nil, fmt.Errorf("controller poll returned an empty assignment response")
+			return nil, fmt.Errorf("controller poll returned an empty command response")
 		}
 
 		return response.JSON200, nil
@@ -74,6 +83,40 @@ func (c *serverClient) Poll(ctx context.Context) (*api.RunAssignment, error) {
 	default:
 		return nil, fmt.Errorf(
 			"controller poll returned HTTP %d",
+			response.StatusCode(),
+		)
+	}
+}
+
+func (c *serverClient) ReportObservation(
+	ctx context.Context,
+	runID uuid.UUID,
+	observation api.RunObservation,
+) error {
+	response, err := c.api.ReportRunObservationWithResponse(
+		ctx,
+		c.clusterName,
+		runID,
+		observation,
+	)
+	if err != nil {
+		return fmt.Errorf("report Run observation to Server: %w", err)
+	}
+
+	switch response.StatusCode() {
+	case http.StatusNoContent:
+		return nil
+	case http.StatusUnauthorized:
+		return errControllerCredentialRejected
+	case http.StatusNotFound, http.StatusConflict:
+		return fmt.Errorf(
+			"%w: Server returned HTTP %d",
+			errRunObservationRejected,
+			response.StatusCode(),
+		)
+	default:
+		return fmt.Errorf(
+			"report Run observation returned HTTP %d",
 			response.StatusCode(),
 		)
 	}

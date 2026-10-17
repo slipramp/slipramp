@@ -51,7 +51,7 @@ func (s *Service) ListClusters(ctx context.Context) ([]Status, error) {
 	return statuses, nil
 }
 
-func (s *Service) RecordControllerPoll(
+func (s *Service) RecordControllerContact(
 	ctx context.Context,
 	clusterName string,
 ) error {

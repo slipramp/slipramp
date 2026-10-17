@@ -18,6 +18,8 @@ paths:
     $ref: ./paths/controllers.yaml#/clusters
   /controller/v1/controllers/{clusterName}/poll:
     $ref: ./paths/controllers.yaml#/poll
+  /controller/v1/controllers/{clusterName}/runs/{runId}/observations:
+    $ref: ./paths/controllers.yaml#/runObservations
   /api/v1/runs:
     $ref: ./paths/runs.yaml#/runs
 components:
@@ -44,6 +46,10 @@ components:
       $ref: ./components/controllers.yaml#/ClusterList
     RunAssignment:
       $ref: ./components/controllers.yaml#/RunAssignment
+    ControllerCommand:
+      $ref: ./components/controllers.yaml#/ControllerCommand
+    RunObservation:
+      $ref: ./components/controllers.yaml#/RunObservation
     Run:
       $ref: ./components/runs.yaml#/Run
     RunCreate:

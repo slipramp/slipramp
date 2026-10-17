@@ -144,7 +144,7 @@ type blockingClusterService struct {
 	started chan struct{}
 }
 
-func (p *blockingClusterService) RecordControllerPoll(
+func (p *blockingClusterService) RecordControllerContact(
 	_ context.Context,
 	_ string,
 ) error {

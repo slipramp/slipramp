@@ -26,7 +26,7 @@ Run:
   type: object
   required:
     - id
-    - state
+    - phase
     - repositoryId
     - catalogRevisionId
     - commitSha
@@ -42,18 +42,23 @@ Run:
       type: string
       format: uuid
       description: Stable identity of the immutable action execution.
-    state:
+    phase:
       type: string
       enum:
         - queued
+        - assigned
         - preparing
         - running
+        - finished
+      description: Durable lifecycle position of the Run.
+    outcome:
+      type: string
+      enum:
         - succeeded
         - failed
-        - canceling
         - canceled
         - timed-out
-        - unknown
+      description: Terminal result, present only when phase is finished.
     repositoryId:
       type: string
       format: uuid
@@ -80,6 +85,39 @@ Run:
     createdAt:
       type: string
       format: date-time
+    assignedAt:
+      type: string
+      format: date-time
+    preparingAt:
+      type: string
+      format: date-time
+    startedAt:
+      type: string
+      format: date-time
+    finishedAt:
+      type: string
+      format: date-time
+    lastObservedAt:
+      type: string
+      format: date-time
+      description: Time the controller most recently confirmed execution state.
+    cancellationRequestedAt:
+      type: string
+      format: date-time
+    jobUid:
+      type: string
+      minLength: 1
+      description: Kubernetes UID of the materialized Job.
+    outcomeReason:
+      type: string
+      minLength: 1
+    outcomeMessage:
+      type: string
+      minLength: 1
+    exitCode:
+      type: integer
+      format: int32
+      minimum: 0
 
 RunSource:
   type: object

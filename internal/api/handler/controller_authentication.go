@@ -25,28 +25,46 @@ func ControllerAuthentication(
 			request *http.Request,
 			value any,
 		) (any, error) {
-			pollRequest, ok := value.(api.PollForRunAssignmentRequestObject)
-			if !ok {
-				return next(ctx, writer, request, value)
-			}
+			switch controllerRequest := value.(type) {
+			case api.PollForControllerCommandRequestObject:
+				token, ok := parseBearerToken(request.Header)
+				if ok && authenticator.AuthenticateController(
+					controllerRequest.ClusterName,
+					token,
+				) {
+					return next(ctx, writer, request, value)
+				}
 
-			token, ok := parseBearerToken(request.Header)
-			if !ok || !authenticator.AuthenticateController(
-				pollRequest.ClusterName,
-				token,
-			) {
 				writer.Header().Set("WWW-Authenticate", "Bearer")
 				problem := NewProblem(
 					http.StatusUnauthorized,
 					"The controller credential is missing or invalid.",
 				)
 
-				return api.PollForRunAssignment401ApplicationProblemPlusJSONResponse(
+				return api.PollForControllerCommand401ApplicationProblemPlusJSONResponse(
 					problem,
 				), nil
-			}
+			case api.ReportRunObservationRequestObject:
+				token, ok := parseBearerToken(request.Header)
+				if ok && authenticator.AuthenticateController(
+					controllerRequest.ClusterName,
+					token,
+				) {
+					return next(ctx, writer, request, value)
+				}
 
-			return next(ctx, writer, request, value)
+				writer.Header().Set("WWW-Authenticate", "Bearer")
+				problem := NewProblem(
+					http.StatusUnauthorized,
+					"The controller credential is missing or invalid.",
+				)
+
+				return api.ReportRunObservation401ApplicationProblemPlusJSONResponse(
+					problem,
+				), nil
+			default:
+				return next(ctx, writer, request, value)
+			}
 		}
 	}
 }

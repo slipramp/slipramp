@@ -13,15 +13,16 @@ import (
 )
 
 const (
-	StateQueued    State = "queued"
-	StatePreparing State = "preparing"
-	StateRunning   State = "running"
-	StateSucceeded State = "succeeded"
-	StateFailed    State = "failed"
-	StateCanceling State = "canceling"
-	StateCanceled  State = "canceled"
-	StateTimedOut  State = "timed-out"
-	StateUnknown   State = "unknown"
+	PhaseQueued    Phase = "queued"
+	PhaseAssigned  Phase = "assigned"
+	PhasePreparing Phase = "preparing"
+	PhaseRunning   Phase = "running"
+	PhaseFinished  Phase = "finished"
+
+	OutcomeSucceeded Outcome = "succeeded"
+	OutcomeFailed    Outcome = "failed"
+	OutcomeCanceled  Outcome = "canceled"
+	OutcomeTimedOut  Outcome = "timed-out"
 
 	SourceTypeManual SourceType = "manual"
 	SourceTypeAPI    SourceType = "api"
@@ -38,10 +39,13 @@ var (
 	ErrPlacementNotFound   = errors.New("run placement not found")
 	ErrRunNotFound         = errors.New("run not found")
 	ErrNoRunAssignment     = errors.New("no run assignment available")
+	ErrObservationConflict = errors.New("run observation conflict")
 	ErrIdempotencyConflict = errors.New("run idempotency key conflict")
 )
 
-type State string
+type Phase string
+
+type Outcome string
 
 type SourceType string
 
@@ -58,22 +62,45 @@ type CreateRequest struct {
 	IdempotencyKey *string
 }
 
+type Observation struct {
+	ID          uuid.UUID
+	ClusterName string
+	Phase       Phase
+	Outcome     *Outcome
+	JobUID      *string
+	Reason      *string
+	Message     *string
+	ExitCode    *int32
+	ObservedAt  time.Time
+}
+
 type Run struct {
-	ID                uuid.UUID
-	State             State
-	RepositoryID      uuid.UUID
-	CatalogRevisionID uuid.UUID
-	CommitSHA         string
-	TargetName        string
-	ActionName        string
-	Parameters        map[string]any
-	PlacementName     string
-	ClusterName       string
-	Source            Source
-	IdempotencyKey    *string
-	RequestDigest     string
-	Snapshot          Snapshot
-	CreatedAt         time.Time
+	ID                      uuid.UUID
+	Phase                   Phase
+	Outcome                 *Outcome
+	RepositoryID            uuid.UUID
+	CatalogRevisionID       uuid.UUID
+	CommitSHA               string
+	TargetName              string
+	ActionName              string
+	Parameters              map[string]any
+	PlacementName           string
+	ClusterName             string
+	Source                  Source
+	IdempotencyKey          *string
+	RequestDigest           string
+	Snapshot                Snapshot
+	CreatedAt               time.Time
+	AssignedAt              *time.Time
+	PreparingAt             *time.Time
+	StartedAt               *time.Time
+	FinishedAt              *time.Time
+	LastObservedAt          *time.Time
+	CancellationRequestedAt *time.Time
+	JobUID                  *string
+	OutcomeReason           *string
+	OutcomeMessage          *string
+	ExitCode                *int32
 }
 
 type Snapshot struct {

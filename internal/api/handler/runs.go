@@ -14,6 +14,7 @@ import (
 type RunService interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
 	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
+	ReportObservation(ctx context.Context, observation run.Observation) error
 }
 
 func (h *Handler) CreateRun(
@@ -112,7 +113,8 @@ func runResponse(record run.Run) (api.Run, error) {
 
 	return api.Run{
 		ID:                record.ID,
-		State:             api.RunState(record.State),
+		Phase:             api.RunPhase(record.Phase),
+		Outcome:           apiRunOutcome(record.Outcome),
 		RepositoryID:      record.RepositoryID,
 		CatalogRevisionID: record.CatalogRevisionID,
 		CommitSha:         record.CommitSHA,
@@ -124,8 +126,28 @@ func runResponse(record run.Run) (api.Run, error) {
 		Source: api.RunSource{
 			Type: api.RunSourceType(record.Source.Type),
 		},
-		CreatedAt: record.CreatedAt,
+		CreatedAt:               record.CreatedAt,
+		AssignedAt:              record.AssignedAt,
+		PreparingAt:             record.PreparingAt,
+		StartedAt:               record.StartedAt,
+		FinishedAt:              record.FinishedAt,
+		LastObservedAt:          record.LastObservedAt,
+		CancellationRequestedAt: record.CancellationRequestedAt,
+		JobUID:                  record.JobUID,
+		OutcomeReason:           record.OutcomeReason,
+		OutcomeMessage:          record.OutcomeMessage,
+		ExitCode:                record.ExitCode,
 	}, nil
+}
+
+func apiRunOutcome(value *run.Outcome) *api.RunOutcome {
+	if value == nil {
+		return nil
+	}
+
+	converted := api.RunOutcome(*value)
+
+	return &converted
 }
 
 func runParameterResponse(

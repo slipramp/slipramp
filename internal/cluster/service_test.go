@@ -27,11 +27,11 @@ func TestServiceRecordsClusterObservation(t *testing.T) {
 		return observedAt
 	}
 
-	if err := service.RecordControllerPoll(
+	if err := service.RecordControllerContact(
 		context.Background(),
 		"colo",
 	); err != nil {
-		t.Fatalf("RecordControllerPoll() error = %v", err)
+		t.Fatalf("RecordControllerContact() error = %v", err)
 	}
 
 	if clusters.clusterName != "colo" {
@@ -64,10 +64,10 @@ func TestServiceReturnsObservationFailure(t *testing.T) {
 	want := errors.New("database unavailable")
 	service := NewService(&recordingStore{err: want})
 
-	err := service.RecordControllerPoll(context.Background(), "colo")
+	err := service.RecordControllerContact(context.Background(), "colo")
 	if !errors.Is(err, want) {
 		t.Fatalf(
-			"RecordControllerPoll() error = %v, want %v",
+			"RecordControllerContact() error = %v, want %v",
 			err,
 			want,
 		)

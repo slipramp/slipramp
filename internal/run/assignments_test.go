@@ -9,14 +9,14 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestNextRunAssignmentRedeliversPreparingRun(t *testing.T) {
+func TestNextRunAssignmentRedeliversAssignedRun(t *testing.T) {
 	t.Parallel()
 
 	want := Run{
 		ID:    uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
-		State: StatePreparing,
+		Phase: PhaseAssigned,
 	}
-	runs := &recordingRuns{preparing: want}
+	runs := &recordingRuns{assigned: want}
 	service := &Service{runs: runs, now: time.Now}
 
 	assigned, err := service.NextRunAssignment(context.Background(), "colo")
@@ -36,11 +36,11 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 
 	want := Run{
 		ID:    uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
-		State: StatePreparing,
+		Phase: PhaseAssigned,
 	}
 	runs := &recordingRuns{
-		preparingError: ErrNoRunAssignment,
-		claimed:        want,
+		assignedError: ErrNoRunAssignment,
+		claimed:       want,
 	}
 	service := &Service{runs: runs}
 	location := time.FixedZone("test", -6*60*60)
@@ -66,8 +66,8 @@ func TestNextRunAssignmentReturnsNoAssignment(t *testing.T) {
 	t.Parallel()
 
 	runs := &recordingRuns{
-		preparingError: ErrNoRunAssignment,
-		claimError:     ErrNoRunAssignment,
+		assignedError: ErrNoRunAssignment,
+		claimError:    ErrNoRunAssignment,
 	}
 	service := &Service{runs: runs, now: time.Now}
 
@@ -87,10 +87,10 @@ func TestNextRunAssignmentRejectsBlankClusterName(t *testing.T) {
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("NextRunAssignment() error = %v, want %v", err, ErrInvalidRequest)
 	}
-	if runs.preparingCalls != 0 || runs.claimCalls != 0 {
+	if runs.assignedCalls != 0 || runs.claimCalls != 0 {
 		t.Errorf(
 			"store calls = (%d, %d), want (0, 0)",
-			runs.preparingCalls,
+			runs.assignedCalls,
 			runs.claimCalls,
 		)
 	}

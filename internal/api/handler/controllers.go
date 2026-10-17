@@ -18,7 +18,7 @@ import (
 
 type ClusterService interface {
 	ListClusters(ctx context.Context) ([]cluster.Status, error)
-	RecordControllerPoll(ctx context.Context, clusterName string) error
+	RecordControllerContact(ctx context.Context, clusterName string) error
 }
 
 const (
@@ -48,10 +48,10 @@ func (h *Handler) ListClusters(
 	return api.ListClusters200JSONResponse{Items: items}, nil
 }
 
-func (h *Handler) PollForRunAssignment(
+func (h *Handler) PollForControllerCommand(
 	ctx context.Context,
-	request api.PollForRunAssignmentRequestObject,
-) (api.PollForRunAssignmentResponseObject, error) {
+	request api.PollForControllerCommandRequestObject,
+) (api.PollForControllerCommandResponseObject, error) {
 	timeoutSeconds := defaultControllerPollWaitSeconds
 	if request.Params.TimeoutSeconds != nil {
 		timeoutSeconds = *request.Params.TimeoutSeconds
@@ -63,10 +63,10 @@ func (h *Handler) PollForRunAssignment(
 			"timeoutSeconds must be between 0 and 30",
 		)
 
-		return api.PollForRunAssignment400ApplicationProblemPlusJSONResponse(problem), nil
+		return api.PollForControllerCommand400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	if err := h.clusters.RecordControllerPoll(
+	if err := h.clusters.RecordControllerContact(
 		ctx,
 		request.ClusterName,
 	); err != nil {
@@ -75,14 +75,14 @@ func (h *Handler) PollForRunAssignment(
 
 	assignment, err := h.nextRunAssignment(ctx, request.ClusterName)
 	if err == nil {
-		return api.PollForRunAssignment200JSONResponse(assignment), nil
+		return runAssignmentCommand(assignment), nil
 	}
 	if !errors.Is(err, run.ErrNoRunAssignment) {
 		return nil, err
 	}
 
 	if timeoutSeconds == 0 {
-		return api.PollForRunAssignment204Response{}, nil
+		return api.PollForControllerCommand204Response{}, nil
 	}
 
 	timer := time.NewTimer(time.Duration(timeoutSeconds) * time.Second)
@@ -96,13 +96,86 @@ func (h *Handler) PollForRunAssignment(
 
 	assignment, err = h.nextRunAssignment(ctx, request.ClusterName)
 	if errors.Is(err, run.ErrNoRunAssignment) {
-		return api.PollForRunAssignment204Response{}, nil
+		return api.PollForControllerCommand204Response{}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return api.PollForRunAssignment200JSONResponse(assignment), nil
+	return runAssignmentCommand(assignment), nil
+}
+
+func (h *Handler) ReportRunObservation(
+	ctx context.Context,
+	request api.ReportRunObservationRequestObject,
+) (api.ReportRunObservationResponseObject, error) {
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "A Run observation is required.")
+
+		return api.ReportRunObservation400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	err := h.runs.ReportObservation(
+		ctx,
+		run.Observation{
+			ID:          request.RunID,
+			ClusterName: request.ClusterName,
+			Phase:       run.Phase(request.Body.Phase),
+			Outcome:     runObservationOutcome(request.Body.Outcome),
+			JobUID:      request.Body.JobUID,
+			Reason:      request.Body.Reason,
+			Message:     request.Body.Message,
+			ExitCode:    request.Body.ExitCode,
+		},
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, run.ErrInvalidRequest):
+			problem := NewProblem(http.StatusBadRequest, err.Error())
+
+			return api.ReportRunObservation400ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrRunNotFound):
+			problem := NewProblem(
+				http.StatusNotFound,
+				"The Run is not assigned to this controller's cluster.",
+			)
+
+			return api.ReportRunObservation404ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrObservationConflict):
+			problem := NewProblem(
+				http.StatusConflict,
+				"The observation conflicts with the Run or its Kubernetes Job.",
+			)
+
+			return api.ReportRunObservation409ApplicationProblemPlusJSONResponse(problem), nil
+		default:
+			return nil, err
+		}
+	}
+	if err := h.clusters.RecordControllerContact(ctx, request.ClusterName); err != nil {
+		return nil, err
+	}
+
+	return api.ReportRunObservation204Response{}, nil
+}
+
+func runObservationOutcome(value *api.RunObservationOutcome) *run.Outcome {
+	if value == nil {
+		return nil
+	}
+
+	converted := run.Outcome(*value)
+
+	return &converted
+}
+
+func runAssignmentCommand(
+	assignment api.RunAssignment,
+) api.PollForControllerCommand200JSONResponse {
+	return api.PollForControllerCommand200JSONResponse{
+		Type:       api.ControllerCommandTypeRunAssignment,
+		Assignment: assignment,
+	}
 }
 
 func (h *Handler) nextRunAssignment(

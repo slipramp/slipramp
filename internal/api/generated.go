@@ -54,6 +54,21 @@ func (e ClusterConnectionState) Valid() bool {
 	}
 }
 
+// Defines values for ControllerCommandType.
+const (
+	ControllerCommandTypeRunAssignment ControllerCommandType = "run-assignment"
+)
+
+// Valid indicates whether the value is a known member of the ControllerCommandType enum.
+func (e ControllerCommandType) Valid() bool {
+	switch e {
+	case ControllerCommandTypeRunAssignment:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthResponseStatus.
 const (
 	Ok HealthResponseStatus = "ok"
@@ -114,39 +129,96 @@ func (e RepositoryRefreshStatus) Valid() bool {
 	}
 }
 
-// Defines values for RunState.
+// Defines values for RunOutcome.
 const (
-	Canceled  RunState = "canceled"
-	Canceling RunState = "canceling"
-	Failed    RunState = "failed"
-	Preparing RunState = "preparing"
-	Queued    RunState = "queued"
-	Running   RunState = "running"
-	Succeeded RunState = "succeeded"
-	TimedOut  RunState = "timed-out"
-	Unknown   RunState = "unknown"
+	RunOutcomeCanceled  RunOutcome = "canceled"
+	RunOutcomeFailed    RunOutcome = "failed"
+	RunOutcomeSucceeded RunOutcome = "succeeded"
+	RunOutcomeTimedOut  RunOutcome = "timed-out"
 )
 
-// Valid indicates whether the value is a known member of the RunState enum.
-func (e RunState) Valid() bool {
+// Valid indicates whether the value is a known member of the RunOutcome enum.
+func (e RunOutcome) Valid() bool {
 	switch e {
-	case Canceled:
+	case RunOutcomeCanceled:
 		return true
-	case Canceling:
+	case RunOutcomeFailed:
 		return true
-	case Failed:
+	case RunOutcomeSucceeded:
 		return true
-	case Preparing:
+	case RunOutcomeTimedOut:
 		return true
-	case Queued:
+	default:
+		return false
+	}
+}
+
+// Defines values for RunPhase.
+const (
+	RunPhaseAssigned  RunPhase = "assigned"
+	RunPhaseFinished  RunPhase = "finished"
+	RunPhasePreparing RunPhase = "preparing"
+	RunPhaseQueued    RunPhase = "queued"
+	RunPhaseRunning   RunPhase = "running"
+)
+
+// Valid indicates whether the value is a known member of the RunPhase enum.
+func (e RunPhase) Valid() bool {
+	switch e {
+	case RunPhaseAssigned:
 		return true
-	case Running:
+	case RunPhaseFinished:
 		return true
-	case Succeeded:
+	case RunPhasePreparing:
 		return true
-	case TimedOut:
+	case RunPhaseQueued:
 		return true
-	case Unknown:
+	case RunPhaseRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunObservationOutcome.
+const (
+	RunObservationOutcomeCanceled  RunObservationOutcome = "canceled"
+	RunObservationOutcomeFailed    RunObservationOutcome = "failed"
+	RunObservationOutcomeSucceeded RunObservationOutcome = "succeeded"
+	RunObservationOutcomeTimedOut  RunObservationOutcome = "timed-out"
+)
+
+// Valid indicates whether the value is a known member of the RunObservationOutcome enum.
+func (e RunObservationOutcome) Valid() bool {
+	switch e {
+	case RunObservationOutcomeCanceled:
+		return true
+	case RunObservationOutcomeFailed:
+		return true
+	case RunObservationOutcomeSucceeded:
+		return true
+	case RunObservationOutcomeTimedOut:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunObservationPhase.
+const (
+	RunObservationPhaseFinished  RunObservationPhase = "finished"
+	RunObservationPhasePreparing RunObservationPhase = "preparing"
+	RunObservationPhaseRunning   RunObservationPhase = "running"
+)
+
+// Valid indicates whether the value is a known member of the RunObservationPhase enum.
+func (e RunObservationPhase) Valid() bool {
+	switch e {
+	case RunObservationPhaseFinished:
+		return true
+	case RunObservationPhasePreparing:
+		return true
+	case RunObservationPhaseRunning:
 		return true
 	default:
 		return false
@@ -292,26 +364,35 @@ type CatalogSource struct {
 
 // Cluster defines model for Cluster.
 type Cluster struct {
-	// ConnectionState Whether the cluster controller has completed a poll within the Server's connection window.
+	// ConnectionState Whether the cluster controller has contacted the Server within the connection window.
 	ConnectionState ClusterConnectionState `json:"connectionState"`
 
 	// FirstSeenAt Time at which this Server first observed the controller.
 	FirstSeenAt time.Time `json:"firstSeenAt"`
 
-	// LastSeenAt Time at which the controller most recently started a poll.
+	// LastSeenAt Time at which the Server most recently heard from the controller.
 	LastSeenAt time.Time `json:"lastSeenAt"`
 
 	// Name Stable logical name of the execution cluster.
 	Name string `json:"name"`
 }
 
-// ClusterConnectionState Whether the cluster controller has completed a poll within the Server's connection window.
+// ClusterConnectionState Whether the cluster controller has contacted the Server within the connection window.
 type ClusterConnectionState string
 
 // ClusterList defines model for ClusterList.
 type ClusterList struct {
 	Items []Cluster `json:"items"`
 }
+
+// ControllerCommand defines model for ControllerCommand.
+type ControllerCommand struct {
+	Assignment RunAssignment         `json:"assignment"`
+	Type       ControllerCommandType `json:"type"`
+}
+
+// ControllerCommandType defines model for ControllerCommand.Type.
+type ControllerCommandType string
 
 // CredentialDirectory defines model for CredentialDirectory.
 type CredentialDirectory struct {
@@ -479,24 +560,46 @@ type ResourceRequirements struct {
 
 // Run defines model for Run.
 type Run struct {
-	Action            CatalogName        `json:"action"`
-	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
-	Cluster           CatalogName        `json:"cluster"`
-	CommitSha         string             `json:"commitSha"`
-	CreatedAt         time.Time          `json:"createdAt"`
+	Action                  CatalogName        `json:"action"`
+	AssignedAt              *time.Time         `json:"assignedAt,omitempty"`
+	CancellationRequestedAt *time.Time         `json:"cancellationRequestedAt,omitempty"`
+	CatalogRevisionID       openapi_types.UUID `json:"catalogRevisionId"`
+	Cluster                 CatalogName        `json:"cluster"`
+	CommitSha               string             `json:"commitSha"`
+	CreatedAt               time.Time          `json:"createdAt"`
+	ExitCode                *int32             `json:"exitCode,omitempty"`
+	FinishedAt              *time.Time         `json:"finishedAt,omitempty"`
 
 	// ID Stable identity of the immutable action execution.
-	ID           openapi_types.UUID        `json:"id"`
-	Parameters   map[string]ParameterValue `json:"parameters"`
-	Placement    CatalogName               `json:"placement"`
-	RepositoryID openapi_types.UUID        `json:"repositoryId"`
-	Source       RunSource                 `json:"source"`
-	State        RunState                  `json:"state"`
-	Target       CatalogName               `json:"target"`
+	ID openapi_types.UUID `json:"id"`
+
+	// JobUID Kubernetes UID of the materialized Job.
+	JobUID *string `json:"jobUid,omitempty"`
+
+	// LastObservedAt Time the controller most recently confirmed execution state.
+	LastObservedAt *time.Time `json:"lastObservedAt,omitempty"`
+
+	// Outcome Terminal result, present only when phase is finished.
+	Outcome        *RunOutcome               `json:"outcome,omitempty"`
+	OutcomeMessage *string                   `json:"outcomeMessage,omitempty"`
+	OutcomeReason  *string                   `json:"outcomeReason,omitempty"`
+	Parameters     map[string]ParameterValue `json:"parameters"`
+
+	// Phase Durable lifecycle position of the Run.
+	Phase        RunPhase           `json:"phase"`
+	Placement    CatalogName        `json:"placement"`
+	PreparingAt  *time.Time         `json:"preparingAt,omitempty"`
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+	Source       RunSource          `json:"source"`
+	StartedAt    *time.Time         `json:"startedAt,omitempty"`
+	Target       CatalogName        `json:"target"`
 }
 
-// RunState defines model for Run.State.
-type RunState string
+// RunOutcome Terminal result, present only when phase is finished.
+type RunOutcome string
+
+// RunPhase Durable lifecycle position of the Run.
+type RunPhase string
 
 // RunAssignment defines model for RunAssignment.
 type RunAssignment struct {
@@ -590,6 +693,28 @@ type RunCreate struct {
 	Target       CatalogName        `json:"target"`
 }
 
+// RunObservation defines model for RunObservation.
+type RunObservation struct {
+	ExitCode *int32 `json:"exitCode,omitempty"`
+
+	// JobUID Kubernetes UID of the materialized Job. Required for preparing and running observations and for every observation after the Run is bound to a Job.
+	JobUID  *string `json:"jobUid,omitempty"`
+	Message *string `json:"message,omitempty"`
+
+	// Outcome Terminal result; required when phase is finished.
+	Outcome *RunObservationOutcome `json:"outcome,omitempty"`
+
+	// Phase Lifecycle phase observed from the Run's Kubernetes Job.
+	Phase  RunObservationPhase `json:"phase"`
+	Reason *string             `json:"reason,omitempty"`
+}
+
+// RunObservationOutcome Terminal result; required when phase is finished.
+type RunObservationOutcome string
+
+// RunObservationPhase Lifecycle phase observed from the Run's Kubernetes Job.
+type RunObservationPhase string
+
 // RunSource defines model for RunSource.
 type RunSource struct {
 	// Type Boundary that submitted the Run.
@@ -660,9 +785,9 @@ type CreateRunParams struct {
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 
-// PollForRunAssignmentParams defines parameters for PollForRunAssignment.
-type PollForRunAssignmentParams struct {
-	// TimeoutSeconds Maximum time to wait for a run assignment.
+// PollForControllerCommandParams defines parameters for PollForControllerCommand.
+type PollForControllerCommandParams struct {
+	// TimeoutSeconds Maximum time to wait for a controller command.
 	TimeoutSeconds *int `form:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
 }
 
@@ -671,6 +796,9 @@ type CreateRepositoryJSONRequestBody = RepositoryConfig
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = RunCreate
+
+// ReportRunObservationJSONRequestBody defines body for ReportRunObservation for application/json ContentType.
+type ReportRunObservationJSONRequestBody = RunObservation
 
 // AsParameterValue0 returns the union data inside the ParameterValue as a ParameterValue0
 func (t ParameterValue) AsParameterValue0() (ParameterValue0, error) {
@@ -836,7 +964,7 @@ type ClientInterface interface {
 
 	// ListClusters List execution clusters
 	//
-	// Lists clusters observed through controller polling and reports whether each controller has checked in recently enough to be considered connected.
+	// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
 	//
 	// Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 	ListClusters(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -898,12 +1026,30 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRun(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PollForRunAssignment Poll for a run assignment
+	// PollForControllerCommand Poll for a controller command
 	//
-	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
-	PollForRunAssignment(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
+	PollForControllerCommand(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportRunObservationWithBody Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservationWithBody(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportRunObservation Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservation(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth Check server health
 	//
@@ -915,7 +1061,7 @@ type ClientInterface interface {
 
 // ListClusters List execution clusters
 //
-// Lists clusters observed through controller polling and reports whether each controller has checked in recently enough to be considered connected.
+// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
 //
 // Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 func (c *Client) ListClusters(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1057,13 +1203,51 @@ func (c *Client) CreateRun(ctx context.Context, params *CreateRunParams, body Cr
 	return c.Client.Do(req)
 }
 
-// PollForRunAssignment Poll for a run assignment
+// PollForControllerCommand Poll for a controller command
 //
-// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
-func (c *Client) PollForRunAssignment(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPollForRunAssignmentRequest(c.Server, clusterName, params)
+// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
+func (c *Client) PollForControllerCommand(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPollForControllerCommandRequest(c.Server, clusterName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportRunObservationWithBody Report a Run observation
+//
+// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *Client) ReportRunObservationWithBody(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportRunObservationRequestWithBody(c.Server, clusterName, runID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportRunObservation Report a Run observation
+//
+// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *Client) ReportRunObservation(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportRunObservationRequest(c.Server, clusterName, runID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1308,8 +1492,8 @@ func NewCreateRunRequestWithBody(server string, params *CreateRunParams, content
 	return req, nil
 }
 
-// NewPollForRunAssignmentRequest constructs an http.Request for the PollForRunAssignment method
-func NewPollForRunAssignmentRequest(server string, clusterName string, params *PollForRunAssignmentParams) (*http.Request, error) {
+// NewPollForControllerCommandRequest constructs an http.Request for the PollForControllerCommand method
+func NewPollForControllerCommandRequest(server string, clusterName string, params *PollForControllerCommandParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -1365,6 +1549,60 @@ func NewPollForRunAssignmentRequest(server string, clusterName string, params *P
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewReportRunObservationRequest calls the generic ReportRunObservation builder with application/json body
+func NewReportRunObservationRequest(server string, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportRunObservationRequestWithBody(server, clusterName, runID, "application/json", bodyReader)
+}
+
+// NewReportRunObservationRequestWithBody constructs an http.Request for the ReportRunObservation method, with any body, and a specified content type
+func NewReportRunObservationRequestWithBody(server string, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clusterName", clusterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/controllers/%s/runs/%s/observations", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -1442,7 +1680,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListClustersWithResponse List execution clusters
 	//
-	// Lists clusters observed through controller polling and reports whether each controller has checked in recently enough to be considered connected.
+	// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -1512,14 +1750,32 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRunWithResponse(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRunResponse, error)
 
-	// PollForRunAssignmentWithResponse Poll for a run assignment
+	// PollForControllerCommandWithResponse Poll for a controller command
 	//
-	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
-	PollForRunAssignmentWithResponse(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*PollForRunAssignmentResponse, error)
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
+	PollForControllerCommandWithResponse(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*PollForControllerCommandResponse, error)
+
+	// ReportRunObservationWithBodyWithResponse Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservationWithBodyWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error)
+
+	// ReportRunObservationWithResponse Report a Run observation
+	//
+	// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+	ReportRunObservationWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error)
 
 	// GetHealthWithResponse Check server health
 	//
@@ -1924,11 +2180,11 @@ func (r CreateRunResponse) ContentType() string {
 	return ""
 }
 
-type PollForRunAssignmentResponse struct {
+type PollForControllerCommandResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *RunAssignment
+	JSON200 *ControllerCommand
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
@@ -1940,37 +2196,37 @@ type PollForRunAssignmentResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r PollForRunAssignmentResponse) GetJSON200() *RunAssignment {
+func (r PollForControllerCommandResponse) GetJSON200() *ControllerCommand {
 	return r.JSON200
 }
 
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r PollForRunAssignmentResponse) GetApplicationProblemJSON400() *Problem {
+func (r PollForControllerCommandResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
 }
 
 // GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r PollForRunAssignmentResponse) GetApplicationProblemJSON401() *Problem {
+func (r PollForControllerCommandResponse) GetApplicationProblemJSON401() *Problem {
 	return r.ApplicationProblemJSON401
 }
 
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
-func (r PollForRunAssignmentResponse) GetApplicationProblemJSON405() *Problem {
+func (r PollForControllerCommandResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r PollForRunAssignmentResponse) GetApplicationProblemJSON500() *Problem {
+func (r PollForControllerCommandResponse) GetApplicationProblemJSON500() *Problem {
 	return r.ApplicationProblemJSON500
 }
 
 // GetBody returns the raw response body bytes
-func (r PollForRunAssignmentResponse) GetBody() []byte {
+func (r PollForControllerCommandResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r PollForRunAssignmentResponse) Status() string {
+func (r PollForControllerCommandResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1978,7 +2234,7 @@ func (r PollForRunAssignmentResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r PollForRunAssignmentResponse) StatusCode() int {
+func (r PollForControllerCommandResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1986,7 +2242,83 @@ func (r PollForRunAssignmentResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PollForRunAssignmentResponse) ContentType() string {
+func (r PollForControllerCommandResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ReportRunObservationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ReportRunObservationResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ReportRunObservationResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ReportRunObservationResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ReportRunObservationResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ReportRunObservationResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ReportRunObservationResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ReportRunObservationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReportRunObservationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReportRunObservationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReportRunObservationResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2043,7 +2375,7 @@ func (r GetHealthResponse) ContentType() string {
 
 // ListClustersWithResponse List execution clusters
 //
-// Lists clusters observed through controller polling and reports whether each controller has checked in recently enough to be considered connected.
+// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -2161,19 +2493,49 @@ func (c *ClientWithResponses) CreateRunWithResponse(ctx context.Context, params 
 	return ParseCreateRunResponse(rsp)
 }
 
-// PollForRunAssignmentWithResponse Poll for a run assignment
+// PollForControllerCommandWithResponse Poll for a controller command
 //
-// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
 //
 // Returns a wrapper object for the known response body format(s).
 //
-// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
-func (c *ClientWithResponses) PollForRunAssignmentWithResponse(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*PollForRunAssignmentResponse, error) {
-	rsp, err := c.PollForRunAssignment(ctx, clusterName, params, reqEditors...)
+// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForControllerCommand` operationId).
+func (c *ClientWithResponses) PollForControllerCommandWithResponse(ctx context.Context, clusterName string, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*PollForControllerCommandResponse, error) {
+	rsp, err := c.PollForControllerCommand(ctx, clusterName, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParsePollForRunAssignmentResponse(rsp)
+	return ParsePollForControllerCommandResponse(rsp)
+}
+
+// ReportRunObservationWithBodyWithResponse Report a Run observation
+//
+// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *ClientWithResponses) ReportRunObservationWithBodyWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error) {
+	rsp, err := c.ReportRunObservationWithBody(ctx, clusterName, runID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportRunObservationResponse(rsp)
+}
+
+// ReportRunObservationWithResponse Report a Run observation
+//
+// Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations (the `ReportRunObservation` operationId).
+func (c *ClientWithResponses) ReportRunObservationWithResponse(ctx context.Context, clusterName string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportRunObservationResponse, error) {
+	rsp, err := c.ReportRunObservation(ctx, clusterName, runID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportRunObservationResponse(rsp)
 }
 
 // GetHealthWithResponse Check server health
@@ -2503,22 +2865,22 @@ func ParseCreateRunResponse(rsp *http.Response) (*CreateRunResponse, error) {
 	return response, nil
 }
 
-// ParsePollForRunAssignmentResponse parses an HTTP response from a PollForRunAssignmentWithResponse call
-func ParsePollForRunAssignmentResponse(rsp *http.Response) (*PollForRunAssignmentResponse, error) {
+// ParsePollForControllerCommandResponse parses an HTTP response from a PollForControllerCommandWithResponse call
+func ParsePollForControllerCommandResponse(rsp *http.Response) (*PollForControllerCommandResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &PollForRunAssignmentResponse{
+	response := &PollForControllerCommandResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest RunAssignment
+		var dest ControllerCommand
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -2547,6 +2909,70 @@ func ParsePollForRunAssignmentResponse(rsp *http.Response) (*PollForRunAssignmen
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseReportRunObservationResponse parses an HTTP response from a ReportRunObservationWithResponse call
+func ParseReportRunObservationResponse(rsp *http.Response) (*ReportRunObservationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReportRunObservationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -2613,9 +3039,12 @@ type ServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams)
-	// PollForRunAssignment Poll for a run assignment
+	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/controllers/{clusterName}/poll)
-	PollForRunAssignment(w http.ResponseWriter, r *http.Request, clusterName string, params PollForRunAssignmentParams)
+	PollForControllerCommand(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerCommandParams)
+	// ReportRunObservation Report a Run observation
+	// (POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations)
+	ReportRunObservation(w http.ResponseWriter, r *http.Request, clusterName string, runID openapi_types.UUID)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -2765,8 +3194,8 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
-// PollForRunAssignment operation middleware
-func (siw *ServerInterfaceWrapper) PollForRunAssignment(w http.ResponseWriter, r *http.Request) {
+// PollForControllerCommand operation middleware
+func (siw *ServerInterfaceWrapper) PollForControllerCommand(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 	_ = err
@@ -2781,7 +3210,7 @@ func (siw *ServerInterfaceWrapper) PollForRunAssignment(w http.ResponseWriter, r
 	}
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params PollForRunAssignmentParams
+	var params PollForControllerCommandParams
 
 	// ------------- Optional query parameter "timeoutSeconds" -------------
 
@@ -2797,7 +3226,42 @@ func (siw *ServerInterfaceWrapper) PollForRunAssignment(w http.ResponseWriter, r
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PollForRunAssignment(w, r, clusterName, params)
+		siw.Handler.PollForControllerCommand(w, r, clusterName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReportRunObservation operation middleware
+func (siw *ServerInterfaceWrapper) ReportRunObservation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clusterName" -------------
+	var clusterName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clusterName", r.PathValue("clusterName"), &clusterName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clusterName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportRunObservation(w, r, clusterName, runID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2947,7 +3411,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/poll", wrapper.PollForRunAssignment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/poll", wrapper.PollForControllerCommand)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/runs/{runId}/observations", wrapper.ReportRunObservation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 
 	return m
@@ -3382,18 +3847,18 @@ func (response CreateRun500ApplicationProblemPlusJSONResponse) VisitCreateRunRes
 	return err
 }
 
-type PollForRunAssignmentRequestObject struct {
+type PollForControllerCommandRequestObject struct {
 	ClusterName string `json:"clusterName"`
-	Params      PollForRunAssignmentParams
+	Params      PollForControllerCommandParams
 }
 
-type PollForRunAssignmentResponseObject interface {
-	VisitPollForRunAssignmentResponse(w http.ResponseWriter) error
+type PollForControllerCommandResponseObject interface {
+	VisitPollForControllerCommandResponse(w http.ResponseWriter) error
 }
 
-type PollForRunAssignment200JSONResponse RunAssignment
+type PollForControllerCommand200JSONResponse ControllerCommand
 
-func (response PollForRunAssignment200JSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+func (response PollForControllerCommand200JSONResponse) VisitPollForControllerCommandResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3405,17 +3870,17 @@ func (response PollForRunAssignment200JSONResponse) VisitPollForRunAssignmentRes
 	return err
 }
 
-type PollForRunAssignment204Response struct {
+type PollForControllerCommand204Response struct {
 }
 
-func (response PollForRunAssignment204Response) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+func (response PollForControllerCommand204Response) VisitPollForControllerCommandResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
 }
 
-type PollForRunAssignment400ApplicationProblemPlusJSONResponse Problem
+type PollForControllerCommand400ApplicationProblemPlusJSONResponse Problem
 
-func (response PollForRunAssignment400ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+func (response PollForControllerCommand400ApplicationProblemPlusJSONResponse) VisitPollForControllerCommandResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3427,9 +3892,9 @@ func (response PollForRunAssignment400ApplicationProblemPlusJSONResponse) VisitP
 	return err
 }
 
-type PollForRunAssignment401ApplicationProblemPlusJSONResponse Problem
+type PollForControllerCommand401ApplicationProblemPlusJSONResponse Problem
 
-func (response PollForRunAssignment401ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+func (response PollForControllerCommand401ApplicationProblemPlusJSONResponse) VisitPollForControllerCommandResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3441,9 +3906,9 @@ func (response PollForRunAssignment401ApplicationProblemPlusJSONResponse) VisitP
 	return err
 }
 
-type PollForRunAssignment405ApplicationProblemPlusJSONResponse Problem
+type PollForControllerCommand405ApplicationProblemPlusJSONResponse Problem
 
-func (response PollForRunAssignment405ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+func (response PollForControllerCommand405ApplicationProblemPlusJSONResponse) VisitPollForControllerCommandResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3455,9 +3920,111 @@ func (response PollForRunAssignment405ApplicationProblemPlusJSONResponse) VisitP
 	return err
 }
 
-type PollForRunAssignment500ApplicationProblemPlusJSONResponse Problem
+type PollForControllerCommand500ApplicationProblemPlusJSONResponse Problem
 
-func (response PollForRunAssignment500ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+func (response PollForControllerCommand500ApplicationProblemPlusJSONResponse) VisitPollForControllerCommandResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportRunObservationRequestObject struct {
+	ClusterName string             `json:"clusterName"`
+	RunID       openapi_types.UUID `json:"runId"`
+	Body        *ReportRunObservationJSONRequestBody
+}
+
+type ReportRunObservationResponseObject interface {
+	VisitReportRunObservationResponse(w http.ResponseWriter) error
+}
+
+type ReportRunObservation204Response struct {
+}
+
+func (response ReportRunObservation204Response) VisitReportRunObservationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportRunObservation400ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportRunObservation400ApplicationProblemPlusJSONResponse) VisitReportRunObservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportRunObservation401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportRunObservation401ApplicationProblemPlusJSONResponse) VisitReportRunObservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportRunObservation404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportRunObservation404ApplicationProblemPlusJSONResponse) VisitReportRunObservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportRunObservation405ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportRunObservation405ApplicationProblemPlusJSONResponse) VisitReportRunObservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportRunObservation409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportRunObservation409ApplicationProblemPlusJSONResponse) VisitReportRunObservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportRunObservation500ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportRunObservation500ApplicationProblemPlusJSONResponse) VisitReportRunObservationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3524,9 +4091,12 @@ type StrictServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(ctx context.Context, request CreateRunRequestObject) (CreateRunResponseObject, error)
-	// PollForRunAssignment Poll for a run assignment
+	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/controllers/{clusterName}/poll)
-	PollForRunAssignment(ctx context.Context, request PollForRunAssignmentRequestObject) (PollForRunAssignmentResponseObject, error)
+	PollForControllerCommand(ctx context.Context, request PollForControllerCommandRequestObject) (PollForControllerCommandResponseObject, error)
+	// ReportRunObservation Report a Run observation
+	// (POST /controller/v1/controllers/{clusterName}/runs/{runId}/observations)
+	ReportRunObservation(ctx context.Context, request ReportRunObservationRequestObject) (ReportRunObservationResponseObject, error)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -3735,26 +4305,60 @@ func (sh *strictHandler) CreateRun(w http.ResponseWriter, r *http.Request, param
 	}
 }
 
-// PollForRunAssignment operation middleware
-func (sh *strictHandler) PollForRunAssignment(w http.ResponseWriter, r *http.Request, clusterName string, params PollForRunAssignmentParams) {
-	var request PollForRunAssignmentRequestObject
+// PollForControllerCommand operation middleware
+func (sh *strictHandler) PollForControllerCommand(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerCommandParams) {
+	var request PollForControllerCommandRequestObject
 
 	request.ClusterName = clusterName
 	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.PollForRunAssignment(ctx, request.(PollForRunAssignmentRequestObject))
+		return sh.ssi.PollForControllerCommand(ctx, request.(PollForControllerCommandRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "PollForRunAssignment")
+		handler = middleware(handler, "PollForControllerCommand")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(PollForRunAssignmentResponseObject); ok {
-		if err := validResponse.VisitPollForRunAssignmentResponse(w); err != nil {
+	} else if validResponse, ok := response.(PollForControllerCommandResponseObject); ok {
+		if err := validResponse.VisitPollForControllerCommandResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportRunObservation operation middleware
+func (sh *strictHandler) ReportRunObservation(w http.ResponseWriter, r *http.Request, clusterName string, runID openapi_types.UUID) {
+	var request ReportRunObservationRequestObject
+
+	request.ClusterName = clusterName
+	request.RunID = runID
+
+	var body ReportRunObservationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportRunObservation(ctx, request.(ReportRunObservationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportRunObservation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportRunObservationResponseObject); ok {
+		if err := validResponse.VisitReportRunObservationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

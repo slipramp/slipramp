@@ -3,9 +3,9 @@ clusters:
     operationId: listClusters
     summary: List execution clusters
     description: >-
-      Lists clusters observed through controller polling and reports whether
-      each controller has checked in recently enough to be considered
-      connected.
+      Lists clusters observed through authenticated controller requests and
+      reports whether each controller has checked in recently enough to be
+      considered connected.
     security: []
     tags:
       - Controllers
@@ -31,11 +31,11 @@ clusters:
 
 poll:
   post:
-    operationId: pollForRunAssignment
-    summary: Poll for a run assignment
+    operationId: pollForControllerCommand
+    summary: Poll for a controller command
     description: >-
       Records the cluster controller as healthy and waits for a Run assigned to
-      its cluster. An empty response means no assignment became available before
+      its cluster. An empty response means no command became available before
       the requested wait elapsed.
     security:
       - ControllerBearer: []
@@ -54,7 +54,7 @@ poll:
       - name: timeoutSeconds
         in: query
         required: false
-        description: Maximum time to wait for a run assignment.
+        description: Maximum time to wait for a controller command.
         schema:
           type: integer
           minimum: 0
@@ -63,12 +63,12 @@ poll:
     responses:
       "200":
         description: >-
-          A frozen Run assignment for this cluster. The same assignment may be
-          returned again until the controller reports another Run state.
+          A command for this cluster. Run assignments may be returned again
+          until the controller reports that the Job was materialized.
         content:
           application/json:
             schema:
-              $ref: ../components/controllers.yaml#/RunAssignment
+              $ref: ../components/controllers.yaml#/ControllerCommand
       "204":
         description: No run assignment became available before the poll completed.
       "400":
@@ -91,6 +91,82 @@ poll:
               $ref: ../components/common.yaml#/Problem
       "500":
         description: The controller poll could not be completed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+runObservations:
+  post:
+    operationId: reportRunObservation
+    summary: Report a Run observation
+    description: >-
+      Records the phase, terminal outcome, and diagnostic details observed by
+      the controller managing the Run's execution cluster. Repeating the
+      current observation refreshes its freshness timestamp. An accepted
+      observation also refreshes the cluster's connection status.
+    security:
+      - ControllerBearer: []
+    tags:
+      - Controllers
+    parameters:
+      - name: clusterName
+        in: path
+        required: true
+        description: Stable name of the controller's execution cluster.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 63
+          pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      - name: runId
+        in: path
+        required: true
+        description: Run observed by this controller.
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/controllers.yaml#/RunObservation
+    responses:
+      "204":
+        description: The observation was recorded.
+      "400":
+        description: The reported observation is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run is not assigned to this controller's cluster.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The observation conflicts with the Run or its Job.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Run observation could not be recorded.
         content:
           application/problem+json:
             schema:

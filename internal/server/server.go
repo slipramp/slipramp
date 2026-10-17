@@ -310,6 +310,11 @@ func newHandlerWithLogger(
 		"/controller/v1/controllers/{clusterName}/poll",
 		http.MethodPost,
 	)
+	registerMethodNotAllowed(
+		mux,
+		"/controller/v1/controllers/{clusterName}/runs/{runId}/observations",
+		http.MethodPost,
+	)
 	mux.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {
 		handler.WriteProblem(
 			writer,

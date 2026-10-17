@@ -175,10 +175,14 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
 	}
 
-	var assignment api.RunAssignment
-	if err := json.NewDecoder(response.Body).Decode(&assignment); err != nil {
+	var command api.ControllerCommand
+	if err := json.NewDecoder(response.Body).Decode(&command); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
+	if command.Type != api.ControllerCommandTypeRunAssignment {
+		t.Errorf("command type = %q", command.Type)
+	}
+	assignment := command.Assignment
 	if assignment.ID != record.ID ||
 		assignment.CatalogRevisionID != record.CatalogRevisionID ||
 		assignment.CommitSha != record.CommitSHA {
@@ -355,6 +359,126 @@ func TestControllerPollMapsFailures(t *testing.T) {
 	}
 }
 
+func TestControllerReportsRunObservation(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	controllers := &recordingClusterService{}
+	runs := &recordingRunService{}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/controllers/colo/runs/"+runID.String()+"/observations",
+		strings.NewReader(`{"phase":"running","jobUid":"job-uid"}`),
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	newHandler(
+		controllers,
+		nil,
+		nil,
+		runs,
+		map[string]string{"colo": "controller-token"},
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
+	}
+	if runs.reportCalls != 1 || runs.observation.ID != runID ||
+		runs.observation.ClusterName != "colo" ||
+		runs.observation.Phase != run.PhaseRunning ||
+		runs.observation.JobUID == nil || *runs.observation.JobUID != "job-uid" {
+		t.Errorf("observation = %#v", runs.observation)
+	}
+	if controllers.calls != 1 || controllers.clusterName != "colo" {
+		t.Errorf(
+			"controller contacts = %d for %q, want 1 for colo",
+			controllers.calls,
+			controllers.clusterName,
+		)
+	}
+}
+
+func TestControllerRunObservationMapsFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		reportErr  error
+		token      string
+		wantStatus int
+		wantCalls  int
+	}{
+		{
+			name:       "missing credential",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "invalid observation",
+			reportErr:  run.ErrInvalidRequest,
+			token:      "controller-token",
+			wantStatus: http.StatusBadRequest,
+			wantCalls:  1,
+		},
+		{
+			name:       "wrong cluster",
+			reportErr:  run.ErrRunNotFound,
+			token:      "controller-token",
+			wantStatus: http.StatusNotFound,
+			wantCalls:  1,
+		},
+		{
+			name:       "conflicting observation",
+			reportErr:  run.ErrObservationConflict,
+			token:      "controller-token",
+			wantStatus: http.StatusConflict,
+			wantCalls:  1,
+		},
+		{
+			name:       "service failure",
+			reportErr:  errors.New("database unavailable"),
+			token:      "controller-token",
+			wantStatus: http.StatusInternalServerError,
+			wantCalls:  1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			runs := &recordingRunService{reportError: test.reportErr}
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/controller/v1/controllers/colo/runs/"+
+					"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200/observations",
+				strings.NewReader(`{"phase":"running"}`),
+			)
+			if test.token != "" {
+				request.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+
+			newHandler(
+				&recordingClusterService{},
+				nil,
+				nil,
+				runs,
+				map[string]string{"colo": "controller-token"},
+			).ServeHTTP(response, request)
+
+			assertProblem(t, response, test.wantStatus)
+			if runs.reportCalls != test.wantCalls {
+				t.Errorf("report calls = %d, want %d", runs.reportCalls, test.wantCalls)
+			}
+		})
+	}
+}
+
 type recordingClusterService struct {
 	calls       int
 	clusterName string
@@ -363,7 +487,7 @@ type recordingClusterService struct {
 	listError   error
 }
 
-func (r *recordingClusterService) RecordControllerPoll(
+func (r *recordingClusterService) RecordControllerContact(
 	_ context.Context,
 	clusterName string,
 ) error {

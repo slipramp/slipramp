@@ -28,3 +28,8 @@ git -C "$repository" remote add origin "$url"
 git -C "$repository" fetch --quiet --no-tags --depth=1 origin "$commit"
 git -C "$repository" checkout --quiet --detach FETCH_HEAD
 test "$(git -C "$repository" rev-parse HEAD)" = "$commit"
+
+# The checkout and action images need not use the same numeric user. The
+# workspace is private to this execution Pod, so make the frozen checkout
+# writable by the runtime without coupling portable images to cluster UIDs.
+chmod -R a+rwX "$repository"

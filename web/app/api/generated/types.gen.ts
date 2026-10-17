@@ -96,7 +96,7 @@ export type Cluster = {
    */
   name: string;
   /**
-   * Whether the cluster controller has completed a poll within the Server's connection window.
+   * Whether the cluster controller has contacted the Server within the connection window.
    */
   connectionState: "connected" | "unreachable";
   /**
@@ -104,7 +104,7 @@ export type Cluster = {
    */
   firstSeenAt: string;
   /**
-   * Time at which the controller most recently started a poll.
+   * Time at which the Server most recently heard from the controller.
    */
   lastSeenAt: string;
 };
@@ -139,21 +139,42 @@ export type RunAssignment = {
   placement: RunAssignmentPlacement;
 };
 
+export type ControllerCommand = {
+  type: "run-assignment";
+  assignment: RunAssignment;
+};
+
+export type RunObservation = {
+  /**
+   * Lifecycle phase observed from the Run's Kubernetes Job.
+   */
+  phase: "preparing" | "running" | "finished";
+  /**
+   * Terminal result; required when phase is finished.
+   */
+  outcome?: "succeeded" | "failed" | "canceled" | "timed-out";
+  /**
+   * Kubernetes UID of the materialized Job. Required for preparing and running observations and for every observation after the Run is bound to a Job.
+   */
+  jobUid?: string;
+  reason?: string;
+  message?: string;
+  exitCode?: number;
+};
+
 export type Run = {
   /**
    * Stable identity of the immutable action execution.
    */
   id: string;
-  state:
-    | "queued"
-    | "preparing"
-    | "running"
-    | "succeeded"
-    | "failed"
-    | "canceling"
-    | "canceled"
-    | "timed-out"
-    | "unknown";
+  /**
+   * Durable lifecycle position of the Run.
+   */
+  phase: "queued" | "assigned" | "preparing" | "running" | "finished";
+  /**
+   * Terminal result, present only when phase is finished.
+   */
+  outcome?: "succeeded" | "failed" | "canceled" | "timed-out";
   repositoryId: string;
   catalogRevisionId: string;
   commitSha: string;
@@ -166,6 +187,22 @@ export type Run = {
   cluster: CatalogName;
   source: RunSource;
   createdAt: string;
+  assignedAt?: string;
+  preparingAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  /**
+   * Time the controller most recently confirmed execution state.
+   */
+  lastObservedAt?: string;
+  cancellationRequestedAt?: string;
+  /**
+   * Kubernetes UID of the materialized Job.
+   */
+  jobUid?: string;
+  outcomeReason?: string;
+  outcomeMessage?: string;
+  exitCode?: number;
 };
 
 export type RunCreate = {
@@ -633,7 +670,7 @@ export type ListClustersResponses = {
 
 export type ListClustersResponse = ListClustersResponses[keyof ListClustersResponses];
 
-export type PollForRunAssignmentData = {
+export type PollForControllerCommandData = {
   body?: never;
   path: {
     /**
@@ -643,14 +680,14 @@ export type PollForRunAssignmentData = {
   };
   query?: {
     /**
-     * Maximum time to wait for a run assignment.
+     * Maximum time to wait for a controller command.
      */
     timeoutSeconds?: number;
   };
   url: "/controller/v1/controllers/{clusterName}/poll";
 };
 
-export type PollForRunAssignmentErrors = {
+export type PollForControllerCommandErrors = {
   /**
    * The poll timeout is invalid.
    */
@@ -669,22 +706,78 @@ export type PollForRunAssignmentErrors = {
   500: Problem;
 };
 
-export type PollForRunAssignmentError =
-  PollForRunAssignmentErrors[keyof PollForRunAssignmentErrors];
+export type PollForControllerCommandError =
+  PollForControllerCommandErrors[keyof PollForControllerCommandErrors];
 
-export type PollForRunAssignmentResponses = {
+export type PollForControllerCommandResponses = {
   /**
-   * A frozen Run assignment for this cluster. The same assignment may be returned again until the controller reports another Run state.
+   * A command for this cluster. Run assignments may be returned again until the controller reports that the Job was materialized.
    */
-  200: RunAssignment;
+  200: ControllerCommand;
   /**
    * No run assignment became available before the poll completed.
    */
   204: void;
 };
 
-export type PollForRunAssignmentResponse =
-  PollForRunAssignmentResponses[keyof PollForRunAssignmentResponses];
+export type PollForControllerCommandResponse =
+  PollForControllerCommandResponses[keyof PollForControllerCommandResponses];
+
+export type ReportRunObservationData = {
+  body: RunObservation;
+  path: {
+    /**
+     * Stable name of the controller's execution cluster.
+     */
+    clusterName: string;
+    /**
+     * Run observed by this controller.
+     */
+    runId: string;
+  };
+  query?: never;
+  url: "/controller/v1/controllers/{clusterName}/runs/{runId}/observations";
+};
+
+export type ReportRunObservationErrors = {
+  /**
+   * The reported observation is invalid.
+   */
+  400: Problem;
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The Run is not assigned to this controller's cluster.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The observation conflicts with the Run or its Job.
+   */
+  409: Problem;
+  /**
+   * The Run observation could not be recorded.
+   */
+  500: Problem;
+};
+
+export type ReportRunObservationError =
+  ReportRunObservationErrors[keyof ReportRunObservationErrors];
+
+export type ReportRunObservationResponses = {
+  /**
+   * The observation was recorded.
+   */
+  204: void;
+};
+
+export type ReportRunObservationResponse =
+  ReportRunObservationResponses[keyof ReportRunObservationResponses];
 
 export type CreateRunData = {
   body: RunCreate;

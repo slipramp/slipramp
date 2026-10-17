@@ -29,7 +29,7 @@ type Store interface {
 		sourceType SourceType,
 		idempotencyKey string,
 	) (Run, error)
-	GetPreparingRunForCluster(
+	GetAssignedRunForCluster(
 		ctx context.Context,
 		clusterName string,
 	) (Run, error)
@@ -38,6 +38,11 @@ type Store interface {
 		clusterName string,
 		claimedAt time.Time,
 	) (Run, error)
+	ApplyRunObservation(
+		ctx context.Context,
+		observation Observation,
+		allowedCurrentPhases []Phase,
+	) error
 }
 
 type RepositoryService interface {
@@ -162,7 +167,7 @@ func (s *Service) CreateRun(
 	createdAt := s.now().UTC()
 	record := Run{
 		ID:                s.newID(),
-		State:             StateQueued,
+		Phase:             PhaseQueued,
 		RepositoryID:      request.RepositoryID,
 		CatalogRevisionID: revision.ID,
 		CommitSHA:         revision.CommitSHA,

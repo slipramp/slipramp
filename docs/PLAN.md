@@ -57,17 +57,17 @@ Runtimes are resolved from the same catalog revision as their targets so related
 
 ### Cluster
 
-A cluster is a named Kubernetes execution destination reported by a Slipramp controller running inside that cluster. The Slipramp Server stores the cluster's logical identity and last-seen state but has no kubeconfig, Kubernetes client, or direct network access to its API.
+A cluster is a named Kubernetes execution destination reported by a Slipramp controller running inside that cluster. The Slipramp Server stores the cluster's logical identity and last-seen observation but has no kubeconfig, Kubernetes client, or direct network access to its API.
 
 Cluster-controller configuration may map logical Git credential names to cluster-local Kubernetes Secrets. Private-repository checkout Jobs resolve the repository's logical credential through their controller; public repositories require no mapping.
 
-Cluster identity is part of every dispatched run and Kubernetes object reference. A disconnected cluster makes its active runs temporarily unknown rather than failed; observation resumes when the connection recovers.
+Cluster identity is part of every dispatched run and Kubernetes object reference. A disconnected cluster makes the observation of its active runs temporarily unknown rather than changing their lifecycle phase or failing them; observation resumes when the connection recovers.
 
 ### Controller
 
-A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTPS API with a static bearer credential. It identifies its cluster, long-polls the Slipramp Server for a run or cancellation, creates and observes Jobs, and posts status, log chunks, and completion back through ordinary HTTP requests. Poll traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
+A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTPS API with a static bearer credential. It identifies its cluster, long-polls the Slipramp Server for command envelopes, creates and observes Jobs, and posts lifecycle observations, log chunks, and completion back through ordinary HTTP requests. Authenticated poll and report traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
 
-Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. After restarting, the controller scans its labeled Jobs and reports their current state before requesting more work. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica and a unique cluster name; duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
+Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. A Run remains assigned until the controller reports the materialized Job UID and preparing phase. After restarting, the controller scans its labeled Jobs and reports their current observations before requesting more work. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica and a unique cluster name; duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
 
 ### Placement
 
@@ -138,7 +138,7 @@ The controller tails Kubernetes Pod logs and posts chunks with monotonically inc
 
 Runs for the same target are serialized by default to avoid conflicting infrastructure operations. Automatic retries are explicit because transparently repeating a partially completed infrastructure command can be unsafe.
 
-The execution contract should remain small and stable: workspace layout, standard environment variables, parameters, credential injection, artifact input and output directories, streaming logs, and exit status.
+The execution contract should remain small and stable: workspace layout and permissions, standard environment variables, parameters, credential injection, artifact input and output directories, streaming logs, and exit status.
 
 For the MVP, each Run becomes a Job named `slipramp-run-<run-id>` with stable
 Run and cluster labels, `restartPolicy: Never`, and `backoffLimit: 0`. A checkout
@@ -147,7 +147,11 @@ Git, and SSH. It fetches the Run's exact commit into an `emptyDir`; it never
 copies repository contents through the Server or object storage. The action
 container mounts that repository at the runtime's `workingDirectory`, or
 `/workspace` when omitted, and uses the Target path as its process working
-directory.
+directory. Because checkout and runtime images may use unrelated numeric users,
+the checkout init container makes the Pod-private repository tree writable by
+the action container. A placement uses the Pod security context, including
+`fsGroup` when required, to make restrictive projected Secret files readable by
+the runtime user.
 
 A second init container uses a pinned controller-configured harness image whose
 entrypoint is `slipramp-harness`. It invokes `--install` to copy the static
@@ -192,7 +196,7 @@ Repository maintainers can execute code with the capabilities granted by a place
 
 The control plane owns repository refresh, catalog validation, run scheduling, controller coordination, artifacts, history, and the API/UI used to operate targets. The Slipramp Server is the central deployable process that implements these responsibilities; “control plane” refers to the overall central subsystem rather than a binary name.
 
-Kubernetes clusters are execution backends rather than the source of truth for Slipramp's product state. In-cluster controllers own Job observation and report it to the Server. After either side restarts, stable run labels and idempotent status reports allow central run state to be reconciled with Jobs that still exist in the cluster.
+Kubernetes clusters are execution backends rather than the source of truth for Slipramp's product state. In-cluster controllers own Job observation and report it to the Server. The Server stores lifecycle phase (`queued`, `assigned`, `preparing`, `running`, or `finished`), terminal outcome (`succeeded`, `failed`, `canceled`, or `timed-out`), cancellation intent, Job identity, diagnostic details, and observation freshness as separate facts. `unknown` is derived from stale observation and controller connectivity rather than stored as a phase. After either side restarts, stable run labels and idempotent observation reports allow central run state to be reconciled with Jobs that still exist in the cluster.
 
 PostgreSQL is the durable database for repositories, catalog revisions and current projections, triggers, run metadata, and scheduler state. S3-compatible object storage is used only for artifact contents, including live and completed logs. Artifact metadata and object references remain in PostgreSQL.
 
@@ -368,6 +372,8 @@ placements:
           azure.workload.identity/use: "true"
       spec:
         runtimeClassName: kata
+        securityContext:
+          fsGroup: 65532
 ```
 
 ### Terraform Target

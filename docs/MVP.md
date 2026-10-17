@@ -45,8 +45,8 @@ The intended deployment is a single trusted Slipramp installation executing work
 
 - Run a Slipramp controller inside every execution cluster.
 - Run one controller replica per execution cluster with a stable cluster name and static bearer credential.
-- Have controllers use a small versioned HTTPS API and long-poll the Slipramp Server for a run or cancellation.
-- Treat poll traffic as the cluster heartbeat and store only a last-seen time; do not introduce a separate heartbeat protocol.
+- Have controllers use a small versioned HTTPS API and long-poll the Slipramp Server for command envelopes carrying a run assignment or cancellation.
+- Treat ordinary authenticated controller request traffic as the cluster heartbeat and store only a last-seen time; do not introduce a separate heartbeat protocol.
 - Keep all Kubernetes clients, RBAC, Job creation, observation, and cancellation inside the corresponding cluster controller.
 - Require no kubeconfig or Kubernetes API access on the Slipramp Server.
 - Report controller and cluster health from the last successful poll or report.
@@ -66,25 +66,27 @@ The intended deployment is a single trusted Slipramp installation executing work
 ### Kubernetes execution
 
 - Queue each run for the cluster selected by its resolved placement.
-- Return a run assignment from the controller's long poll and create one local Kubernetes Job with a deterministic name and stable labels.
+- Return a run-assignment command from the controller's long poll and create one local Kubernetes Job with a deterministic name and stable labels.
 - Make delivery at least once and make repeated run assignments idempotent instead of introducing a distributed lease protocol.
+- Keep a run `assigned` until the controller reports the materialized Job UID and `preparing` phase. Reject permanent materialization failures as a terminal failed outcome so one bad assignment cannot block its cluster's delivery stream.
 - Clone the repository and check out the run's exact commit into a shared workspace through an init container.
+- Make the Pod-private checkout writable by the runtime container without requiring the checkout and runtime images to share a numeric user. Use placement pod security context, including `fsGroup` when needed, for restrictive Secret file modes.
 - Resolve private-repository checkout credentials from the selected cluster without persisting their values in PostgreSQL.
 - Inject a static Slipramp harness without requiring it in the runtime image.
 - Have the harness launch the configured process, forward signals, preserve its exit code, and collect artifacts.
 - Use `backoffLimit: 0` unless retry behavior is explicitly introduced later.
 - Apply a run deadline and return cancellation through the same long-poll API.
 - Serialize active runs for the same target by default.
-- Treat a temporarily unreachable cluster as an unknown observation state rather than immediately failing its active runs.
-- Recover active run state when either the Slipramp Server or a controller restarts by scanning labeled Jobs and posting their current state.
+- Derive an unknown observation from controller connectivity and stale `lastObservedAt`; do not persist `unknown` as a Run lifecycle phase or terminal outcome.
+- Recover active run observations when either the Slipramp Server or a controller restarts by scanning labeled Jobs before polling for more work.
 
 ### Runs and status
 
-- Persist run metadata and state transitions in PostgreSQL.
-- Use a small explicit state machine: queued, preparing, running, succeeded, failed, canceling, canceled, timed out, and unknown.
-- Record the repository, commit, catalog revision, target, action, parameters, artifact inputs, cluster, placement configuration, run source, timestamps, and outcome.
+- Persist run metadata and phase transitions in PostgreSQL.
+- Model lifecycle phase separately as `queued`, `assigned`, `preparing`, `running`, or `finished`. Record the terminal outcome separately as `succeeded`, `failed`, `canceled`, or `timed-out`, and record cancellation intent separately from both.
+- Record the repository, commit, catalog revision, target, action, parameters, artifact inputs, cluster, placement configuration, run source, timestamps, Job UID, observation freshness, outcome reason and message, and exit code.
 - Expose run history by repository and target.
-- Never mutate a run after dispatch except for its state, timestamps, and produced artifact metadata.
+- Never mutate a run after dispatch except for its lifecycle observations, cancellation request, timestamps, and produced artifact metadata.
 
 ### Logs and artifacts
 
@@ -149,7 +151,7 @@ The repository remains a single project with a Go module at `github.com/slipramp
 - **Cluster controller:** Go process deployed into each execution cluster; it claims work outbound, manages local Jobs, and reports state and logs.
 - **Harness:** statically linked Go executable injected into runtime Jobs.
 - **Web:** React Router v8 SSR server and browser application using Mantine UI and the generated TypeScript API client.
-- **PostgreSQL:** repositories, catalog revisions, targets, cluster observations, runs, state transitions, run request idempotency, artifact metadata, and scheduler coordination.
+- **PostgreSQL:** repositories, catalog revisions, targets, cluster observations, runs, phase transitions, run request idempotency, artifact metadata, and scheduler coordination.
 - **S3-compatible storage:** log chunks and declared artifact contents only; RustFS is used locally.
 - **Kubernetes clusters:** controllers, execution Jobs, Secrets, ServiceAccounts, and workload placement in each registered destination.
 
@@ -161,7 +163,7 @@ The initial PostgreSQL schema should center on these records:
 - immutable catalog revisions and validation results
 - current target and runtime projections
 - clusters, controller last-seen observations, and run assignments
-- runs and run state transitions
+- runs and run phase transitions
 - run request idempotency keys
 - target concurrency leases
 - artifacts and ordered log chunks
@@ -202,7 +204,7 @@ Exit condition: connecting a repository produces a browsable target/action catal
 - Resolve the placement's cluster and enqueue the frozen run for its controller.
 - Have the controller render credentials, parameters, and action overrides into a local Job.
 - Clone and materialize the exact Git commit directly inside that execution Job.
-- Observe Job and Pod state locally and report transitions through the controller HTTP API.
+- Observe Job conditions and the action container state locally, and report lifecycle phase, terminal outcome, reason, message, exit code, Job UID, and observation freshness through the controller HTTP API.
 - Implement cancellation, deadlines, restart recovery, and explicit no-retry behavior.
 - Build action-run and run-status screens.
 

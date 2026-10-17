@@ -21,12 +21,15 @@ import type {
   ListRepositoriesData,
   ListRepositoriesErrors,
   ListRepositoriesResponses,
-  PollForRunAssignmentData,
-  PollForRunAssignmentErrors,
-  PollForRunAssignmentResponses,
+  PollForControllerCommandData,
+  PollForControllerCommandErrors,
+  PollForControllerCommandResponses,
   RemoveRepositoryData,
   RemoveRepositoryErrors,
   RemoveRepositoryResponses,
+  ReportRunObservationData,
+  ReportRunObservationErrors,
+  ReportRunObservationResponses,
 } from "./types.gen";
 
 export type Options<
@@ -121,7 +124,7 @@ export const getRepositoryCatalog = <ThrowOnError extends boolean = false>(
 /**
  * List execution clusters
  *
- * Lists clusters observed through controller polling and reports whether each controller has checked in recently enough to be considered connected.
+ * Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
  */
 export const listClusters = <ThrowOnError extends boolean = false>(
   options?: Options<ListClustersData, ThrowOnError>,
@@ -132,21 +135,43 @@ export const listClusters = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Poll for a run assignment
+ * Poll for a controller command
  *
- * Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+ * Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no command became available before the requested wait elapsed.
  */
-export const pollForRunAssignment = <ThrowOnError extends boolean = false>(
-  options: Options<PollForRunAssignmentData, ThrowOnError>,
-): RequestResult<PollForRunAssignmentResponses, PollForRunAssignmentErrors, ThrowOnError> =>
+export const pollForControllerCommand = <ThrowOnError extends boolean = false>(
+  options: Options<PollForControllerCommandData, ThrowOnError>,
+): RequestResult<PollForControllerCommandResponses, PollForControllerCommandErrors, ThrowOnError> =>
   (options.client ?? client).post<
-    PollForRunAssignmentResponses,
-    PollForRunAssignmentErrors,
+    PollForControllerCommandResponses,
+    PollForControllerCommandErrors,
     ThrowOnError
   >({
     security: [{ scheme: "bearer", type: "http" }],
     url: "/controller/v1/controllers/{clusterName}/poll",
     ...options,
+  });
+
+/**
+ * Report a Run observation
+ *
+ * Records the phase, terminal outcome, and diagnostic details observed by the controller managing the Run's execution cluster. Repeating the current observation refreshes its freshness timestamp. An accepted observation also refreshes the cluster's connection status.
+ */
+export const reportRunObservation = <ThrowOnError extends boolean = false>(
+  options: Options<ReportRunObservationData, ThrowOnError>,
+): RequestResult<ReportRunObservationResponses, ReportRunObservationErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ReportRunObservationResponses,
+    ReportRunObservationErrors,
+    ThrowOnError
+  >({
+    security: [{ scheme: "bearer", type: "http" }],
+    url: "/controller/v1/controllers/{clusterName}/runs/{runId}/observations",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

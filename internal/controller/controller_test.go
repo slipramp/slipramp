@@ -11,31 +11,92 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
-type assignmentPollerFunc func(ctx context.Context) (*api.RunAssignment, error)
+type commandPollerFunc func(ctx context.Context) (*api.ControllerCommand, error)
 
-func (f assignmentPollerFunc) Poll(ctx context.Context) (*api.RunAssignment, error) {
+func (f commandPollerFunc) Poll(ctx context.Context) (*api.ControllerCommand, error) {
 	return f(ctx)
 }
 
-func TestNewRequiresLogger(t *testing.T) {
-	t.Parallel()
+type runObservationReporterFunc func(
+	ctx context.Context,
+	runID uuid.UUID,
+	observation api.RunObservation,
+) error
 
-	_, err := New(validConfig(), nil, fake.NewClientset().BatchV1())
-	testcheck.ErrorContains(t, err, "logger")
+func (f runObservationReporterFunc) ReportObservation(
+	ctx context.Context,
+	runID uuid.UUID,
+	observation api.RunObservation,
+) error {
+	return f(ctx, runID, observation)
 }
 
-func TestNewRequiresKubernetesJobClient(t *testing.T) {
+type scriptedRunJobs struct {
+	ensureError  error
+	observations []runObservation
+	index        int
+}
+
+func (s *scriptedRunJobs) Ensure(
+	context.Context,
+	api.RunAssignment,
+) (ensuredRunJob, error) {
+	return ensuredRunJob{}, s.ensureError
+}
+
+func (*scriptedRunJobs) Recover(
+	context.Context,
+) ([]jobHandle, error) {
+	return nil, nil
+}
+
+func (s *scriptedRunJobs) Observe(
+	context.Context,
+	jobHandle,
+) (runObservation, error) {
+	observation := s.observations[s.index]
+	s.index++
+
+	return observation, nil
+}
+
+func TestNewRequiresDependencies(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	_, err := New(validConfig(), logger, nil)
-	testcheck.ErrorContains(t, err, "kubernetes Job client")
+	tests := []struct {
+		name       string
+		logger     *slog.Logger
+		kubernetes kubernetes.Interface
+		want       string
+	}{
+		{
+			name:       "logger",
+			kubernetes: fake.NewClientset(),
+			want:       "logger",
+		},
+		{
+			name:   "Kubernetes client",
+			logger: logger,
+			want:   "kubernetes client",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := New(validConfig(), test.logger, test.kubernetes)
+			testcheck.ErrorContains(t, err, test.want)
+		})
+	}
 }
 
 func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
@@ -44,18 +105,14 @@ func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&logs, nil))
 
-	app, err := New(validConfig(), logger, fake.NewClientset().BatchV1())
+	app, err := New(validConfig(), logger, fake.NewClientset())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	result := make(chan error, 1)
-
-	go func() {
-		result <- app.Run(ctx)
-	}()
-
+	go func() { result <- app.Run(ctx) }()
 	cancel()
 
 	select {
@@ -68,14 +125,10 @@ func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 	}
 
 	output := logs.String()
-	if !strings.Contains(output, "controller started") {
-		t.Errorf("logs = %q, want start message", output)
+	if !strings.Contains(output, "controller started") ||
+		!strings.Contains(output, "controller stopped") {
+		t.Errorf("logs = %q, want lifecycle messages", output)
 	}
-
-	if !strings.Contains(output, "controller stopped") {
-		t.Errorf("logs = %q, want stop message", output)
-	}
-
 	if strings.Contains(output, validConfig().BearerToken) {
 		t.Errorf("logs contain bearer token: %q", output)
 	}
@@ -85,70 +138,105 @@ func TestControllerStopsAfterAuthenticationIsRejected(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	app, err := New(validConfig(), logger, fake.NewClientset().BatchV1())
+	app, err := New(validConfig(), logger, fake.NewClientset())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	app.server = assignmentPollerFunc(func(context.Context) (*api.RunAssignment, error) {
+	app.server = commandPollerFunc(func(context.Context) (*api.ControllerCommand, error) {
 		return nil, errControllerCredentialRejected
 	})
 
 	err = app.Run(context.Background())
 	if !errors.Is(err, errControllerCredentialRejected) {
-		t.Fatalf(
-			"Run() error = %v, want %v",
-			err,
-			errControllerCredentialRejected,
-		)
+		t.Fatalf("Run() error = %v, want %v", err, errControllerCredentialRejected)
 	}
 }
 
-func TestControllerBacksOffAfterReceivingWork(t *testing.T) {
+func TestControllerReportsChangedObservationsThroughCompletion(t *testing.T) {
 	t.Parallel()
 
-	var logs bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&logs, nil))
-	app, err := New(validConfig(), logger, fake.NewClientset().BatchV1())
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
+	observations := make(chan api.RunObservation, 3)
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	succeeded := api.RunObservationOutcomeSucceeded
+	app := &Controller{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		reports: runObservationReporterFunc(func(
+			_ context.Context,
+			_ uuid.UUID,
+			observation api.RunObservation,
+		) error {
+			observations <- observation
+
+			return nil
+		}),
+		jobs: &scriptedRunJobs{
+			observations: []runObservation{
+				{phase: api.RunObservationPhasePreparing},
+				{phase: api.RunObservationPhasePreparing},
+				{phase: api.RunObservationPhaseRunning},
+				{phase: api.RunObservationPhaseFinished, outcome: &succeeded},
+			},
+		},
+		observeEvery:   time.Millisecond,
+		heartbeatEvery: time.Hour,
+		observedRuns:   make(map[uuid.UUID]struct{}),
 	}
+
+	app.startObservation(context.Background(), jobHandle{runID: runID})
+	app.observers.Wait()
+	close(observations)
+
+	got := make([]api.RunObservationPhase, 0, len(observations))
+	for observation := range observations {
+		got = append(got, observation.Phase)
+	}
+	want := []api.RunObservationPhase{
+		api.RunObservationPhasePreparing,
+		api.RunObservationPhaseRunning,
+		api.RunObservationPhaseFinished,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("reported phases = %v, want %v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Errorf("reported phases = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestControllerReportsPermanentMaterializationFailure(t *testing.T) {
+	t.Parallel()
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
-	received := make(chan struct{})
-	app.server = assignmentPollerFunc(func(context.Context) (*api.RunAssignment, error) {
-		select {
-		case <-received:
-		default:
-			close(received)
-		}
+	var reported api.RunObservation
+	app := &Controller{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		reports: runObservationReporterFunc(func(
+			_ context.Context,
+			_ uuid.UUID,
+			observation api.RunObservation,
+		) error {
+			reported = observation
 
-		return &api.RunAssignment{ID: runID}, nil
+			return nil
+		}),
+		jobs: &scriptedRunJobs{
+			ensureError: permanentMaterialization(errors.New("invalid Job")),
+		},
+	}
+
+	err := app.handleCommand(context.Background(), api.ControllerCommand{
+		Type:       api.ControllerCommandTypeRunAssignment,
+		Assignment: api.RunAssignment{ID: runID},
 	})
-	app.retryDelay = time.Hour
-
-	ctx, cancel := context.WithCancel(context.Background())
-	result := make(chan error, 1)
-	go func() {
-		result <- app.Run(ctx)
-	}()
-
-	select {
-	case <-received:
-	case <-time.After(2 * time.Second):
-		t.Fatal("controller did not receive a run assignment")
+	if err != nil {
+		t.Fatalf("handleCommand() error = %v", err)
 	}
-	cancel()
-
-	select {
-	case err := <-result:
-		if err != nil {
-			t.Fatalf("Run() error = %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Run() did not stop while a run assignment was pending")
-	}
-
-	if !strings.Contains(logs.String(), runID.String()) {
-		t.Errorf("logs = %q, want Run ID", logs.String())
+	if reported.Phase != api.RunObservationPhaseFinished ||
+		reported.Outcome == nil ||
+		*reported.Outcome != api.RunObservationOutcomeFailed ||
+		reported.Reason == nil || *reported.Reason != "MaterializationFailed" {
+		t.Fatalf("reported observation = %#v", reported)
 	}
 }

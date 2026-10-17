@@ -45,7 +45,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	idempotencyKey := "manual-network-preview"
 	record := run.Run{
 		ID:                runID,
-		State:             run.StateQueued,
+		Phase:             run.PhaseQueued,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
 		CommitSHA:         *refresh.CommitSHA,
@@ -79,7 +79,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRun() error = %v", err)
 	}
-	if created.ID != record.ID || created.State != run.StateQueued ||
+	if created.ID != record.ID || created.Phase != run.PhaseQueued ||
 		created.CatalogRevisionID != revisionID ||
 		created.Parameters["refresh"] != true ||
 		created.Snapshot.Repository.CloneURL != record.Snapshot.Repository.CloneURL {
@@ -119,16 +119,75 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimQueuedRun() error = %v", err)
 	}
-	if claimed.ID != record.ID || claimed.State != run.StatePreparing {
+	if claimed.ID != record.ID || claimed.Phase != run.PhaseAssigned ||
+		claimed.AssignedAt == nil || !claimed.AssignedAt.Equal(claimedAt) {
 		t.Errorf("claimed Run = %#v", claimed)
 	}
 
-	redelivered, err := database.GetPreparingRunForCluster(ctx, "colo")
+	redelivered, err := database.GetAssignedRunForCluster(ctx, "colo")
 	if err != nil {
-		t.Fatalf("GetPreparingRunForCluster() error = %v", err)
+		t.Fatalf("GetAssignedRunForCluster() error = %v", err)
 	}
 	if redelivered.ID != record.ID {
 		t.Errorf("redelivered Run ID = %s, want %s", redelivered.ID, record.ID)
+	}
+
+	jobUID := "f6ef8cb8-a838-4644-a8ec-b2e92bac0e80"
+	preparingAt := claimedAt.Add(time.Minute)
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhasePreparing,
+			JobUID: &jobUID, ObservedAt: preparingAt,
+		},
+		[]run.Phase{run.PhaseAssigned, run.PhasePreparing},
+	); err != nil {
+		t.Fatalf("observe Run preparing: %v", err)
+	}
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhasePreparing,
+			JobUID: &jobUID, ObservedAt: preparingAt.Add(time.Second),
+		},
+		[]run.Phase{run.PhaseAssigned, run.PhasePreparing},
+	); err != nil {
+		t.Fatalf("repeat preparing observation: %v", err)
+	}
+	otherJobUID := "152e047f-3665-4763-94fe-4a2b5494ee6d"
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
+			JobUID: &otherJobUID, ObservedAt: preparingAt.Add(time.Second),
+		},
+		[]run.Phase{run.PhasePreparing},
+	); !errors.Is(err, run.ErrObservationConflict) {
+		t.Fatalf("mismatched Job observation error = %v, want observation conflict", err)
+	}
+
+	runningAt := preparingAt.Add(time.Minute)
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
+			JobUID: &jobUID, ObservedAt: runningAt,
+		},
+		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning},
+	); err != nil {
+		t.Fatalf("observe Run running: %v", err)
+	}
+
+	succeeded := run.OutcomeSucceeded
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "edge", Phase: run.PhaseFinished,
+			Outcome: &succeeded, JobUID: &jobUID, ObservedAt: runningAt.Add(time.Minute),
+		},
+		[]run.Phase{run.PhaseRunning},
+	); !errors.Is(err, run.ErrRunNotFound) {
+		t.Fatalf("wrong-cluster observation error = %v, want Run not found", err)
 	}
 
 	_, err = database.ClaimQueuedRun(ctx, "colo", claimedAt)
@@ -136,22 +195,90 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Errorf("second ClaimQueuedRun() error = %v, want no work", err)
 	}
 
-	completedAt := claimedAt.Add(time.Minute)
-	if _, err := database.pool.Exec(
+	completedAt := runningAt.Add(time.Minute)
+	completedReason := "Completed"
+	exitCode := int32(0)
+	if err := database.ApplyRunObservation(
 		ctx,
-		"UPDATE runs SET state = 'succeeded' WHERE id = $1",
-		databaseUUID(record.ID),
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhaseFinished,
+			Outcome: &succeeded, JobUID: &jobUID, Reason: &completedReason,
+			ExitCode: &exitCode, ObservedAt: completedAt,
+		},
+		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning, run.PhaseFinished},
 	); err != nil {
 		t.Fatalf("complete first Run: %v", err)
 	}
-	if _, err := database.pool.Exec(
+	if err := database.ApplyRunObservation(
 		ctx,
-		`INSERT INTO run_state_transitions (run_id, state, recorded_at)
-         VALUES ($1, 'succeeded', $2)`,
-		databaseUUID(record.ID),
-		completedAt,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
+			JobUID: &jobUID, ObservedAt: completedAt.Add(time.Minute),
+		},
+		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning},
+	); !errors.Is(err, run.ErrObservationConflict) {
+		t.Fatalf("backward transition error = %v, want observation conflict", err)
+	}
+	repeatedReason := "DifferentReason"
+	repeatedExitCode := int32(1)
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhaseFinished,
+			Outcome: &succeeded, JobUID: &jobUID, Reason: &repeatedReason,
+			ExitCode:   &repeatedExitCode,
+			ObservedAt: completedAt.Add(time.Second),
+		},
+		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning, run.PhaseFinished},
 	); err != nil {
-		t.Fatalf("record first Run completion: %v", err)
+		t.Fatalf("repeat finished observation: %v", err)
+	}
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhaseFinished,
+			Outcome: &succeeded, JobUID: &jobUID,
+			ObservedAt: completedAt.Add(-time.Second),
+		},
+		[]run.Phase{run.PhaseFinished},
+	); err != nil {
+		t.Fatalf("repeat stale finished observation: %v", err)
+	}
+	var phase string
+	var outcome *string
+	var storedJobUID *string
+	var storedReason *string
+	var storedExitCode *int32
+	var lastObservedAt time.Time
+	if err := database.pool.QueryRow(
+		ctx,
+		`SELECT phase, outcome, job_uid, outcome_reason, exit_code, last_observed_at
+		 FROM runs WHERE id = $1`,
+		record.ID,
+	).Scan(
+		&phase,
+		&outcome,
+		&storedJobUID,
+		&storedReason,
+		&storedExitCode,
+		&lastObservedAt,
+	); err != nil {
+		t.Fatalf("load completed Run: %v", err)
+	}
+	if phase != "finished" || outcome == nil || *outcome != "succeeded" ||
+		storedJobUID == nil || *storedJobUID != jobUID ||
+		storedReason == nil || *storedReason != completedReason ||
+		storedExitCode == nil || *storedExitCode != exitCode ||
+		!lastObservedAt.Equal(completedAt.Add(time.Second)) {
+		t.Errorf(
+			"completed Run = (%q, %v, %v, %v, %v, %s)",
+			phase,
+			outcome,
+			storedJobUID,
+			storedReason,
+			storedExitCode,
+			lastObservedAt,
+		)
 	}
 
 	claimed, err = database.ClaimQueuedRun(
@@ -162,10 +289,10 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("claim unblocked Run: %v", err)
 	}
-	if claimed.ID != second.ID || claimed.State != run.StatePreparing {
+	if claimed.ID != second.ID || claimed.Phase != run.PhaseAssigned {
 		t.Errorf("unblocked claimed Run = %#v", claimed)
 	}
-	assertRunCounts(t, database, 2, 5)
+	assertRunCounts(t, database, 2, 7)
 }
 
 func assertRunCounts(
@@ -181,7 +308,7 @@ func assertRunCounts(
 		t.Context(),
 		`SELECT
             (SELECT count(*) FROM runs),
-            (SELECT count(*) FROM run_state_transitions)`,
+			(SELECT count(*) FROM run_phase_transitions)`,
 	).Scan(&runCount, &transitionCount)
 	if err != nil {
 		t.Fatalf("count Runs: %v", err)
