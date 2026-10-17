@@ -15,6 +15,7 @@ func TestDeriveObservationState(t *testing.T) {
 	tests := []struct {
 		name             string
 		phase            Phase
+		assignedAt       *time.Time
 		lastObservedAt   *time.Time
 		clusterConnected bool
 		want             ObservationState
@@ -45,7 +46,23 @@ func TestDeriveObservationState(t *testing.T) {
 			wantPresent:      true,
 		},
 		{
-			name:             "not yet observed",
+			name:             "recent assignment awaiting first observation",
+			phase:            PhaseAssigned,
+			assignedAt:       &fresh,
+			clusterConnected: true,
+			want:             ObservationStatePending,
+			wantPresent:      true,
+		},
+		{
+			name:             "stale assignment never observed",
+			phase:            PhaseAssigned,
+			assignedAt:       &stale,
+			clusterConnected: true,
+			want:             ObservationStateUnknown,
+			wantPresent:      true,
+		},
+		{
+			name:             "assignment timestamp unavailable",
 			phase:            PhaseAssigned,
 			clusterConnected: true,
 			want:             ObservationStateUnknown,
@@ -69,6 +86,7 @@ func TestDeriveObservationState(t *testing.T) {
 
 			state, present := DeriveObservationState(
 				Run{
+					AssignedAt:     test.assignedAt,
 					Phase:          test.phase,
 					LastObservedAt: test.lastObservedAt,
 				},

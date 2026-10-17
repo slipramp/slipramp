@@ -47,7 +47,7 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Run one controller replica per execution cluster with a stable cluster name, a cluster-scoped bootstrap enrollment credential, and a separate controller-owned bearer credential.
 - Enroll the controller-owned credential at startup, persist only its SHA-256 digest in PostgreSQL, and derive cluster identity from that credential on all ongoing controller routes.
 - Auto-approve a controller presenting the configured enrollment credential for the MVP; defer explicit enrollment approvals and credential rotation workflows.
-- Have controllers use a small versioned HTTPS API and long-poll the Slipramp Server for command envelopes carrying a run assignment or cancellation.
+- Have controllers use a small versioned HTTP API and long-poll the Slipramp Server for command envelopes carrying a run assignment or cancellation. Require HTTPS across untrusted networks; allow plaintext HTTP when the transport is already protected by a trusted encrypted network such as a tailnet.
 - Treat ordinary authenticated controller request traffic as the cluster heartbeat and store only a last-seen time; do not introduce a separate heartbeat protocol.
 - Keep all Kubernetes clients, RBAC, Job creation, observation, and cancellation inside the corresponding cluster controller.
 - Require no kubeconfig or Kubernetes API access on the Slipramp Server.
@@ -185,7 +185,7 @@ Catalog revisions retain the resolved definitions needed to explain or reproduce
 - Add PostgreSQL migrations and S3 client boundaries.
 - Add local PostgreSQL and RustFS dependencies.
 - Add versioned configuration loading for the Server, controllers, and placements.
-- Establish controller enrollment, the authenticated controller HTTPS API, cluster last-seen tracking, long polling, and idempotent work delivery.
+- Establish controller enrollment, the authenticated controller HTTP API, cluster last-seen tracking, long polling, and idempotent work delivery, with HTTPS required unless a trusted encrypted network protects plaintext transport.
 - Establish structured logging, configuration validation, and graceful shutdown.
 - Add the shared local and CI quality commands.
 

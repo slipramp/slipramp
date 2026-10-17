@@ -24,7 +24,7 @@ spec:
   actions:
     preview:
       intent: preview
-      command: [./slipramp/node-exporter.sh, preview, exporter_nodes]
+      command: [./slipramp/node-exporter.sh, plan, exporter_nodes]
     canary:
       intent: reconcile
       command:

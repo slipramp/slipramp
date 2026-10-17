@@ -18,6 +18,12 @@ func TestConfigValidate(t *testing.T) {
 			name: "valid",
 		},
 		{
+			name: "valid plaintext HTTP",
+			configure: func(settings *Config) {
+				settings.ServerURL = "http://100.64.0.10:8080"
+			},
+		},
+		{
 			name: "empty cluster name",
 			configure: func(settings *Config) {
 				settings.ClusterName = ""
@@ -43,21 +49,21 @@ func TestConfigValidate(t *testing.T) {
 			configure: func(settings *Config) {
 				settings.ServerURL = "/api"
 			},
-			wantError: "HTTPS URL",
+			wantError: "HTTP or HTTPS URL",
 		},
 		{
-			name: "insecure server URL",
+			name: "unsupported server URL scheme",
 			configure: func(settings *Config) {
-				settings.ServerURL = "http://slipramp.example.com"
+				settings.ServerURL = "ftp://slipramp.example.com"
 			},
-			wantError: "HTTPS URL",
+			wantError: "HTTP or HTTPS URL",
 		},
 		{
 			name: "server URL without host",
 			configure: func(settings *Config) {
 				settings.ServerURL = "https:///api"
 			},
-			wantError: "HTTPS URL",
+			wantError: "HTTP or HTTPS URL",
 		},
 		{
 			name: "server URL with user information",

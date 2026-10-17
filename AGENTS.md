@@ -25,7 +25,7 @@ Use the established names consistently:
 ## Architecture Boundaries
 
 - The Slipramp Server must not have a kubeconfig, Kubernetes client, or direct Kubernetes API access.
-- Run one Controller replica in each execution cluster. It reaches out to the Server over a small authenticated HTTPS long-poll API, manages local Jobs, and reports status and logs.
+- Run one Controller replica in each execution cluster. It reaches out to the Server over a small authenticated HTTP API, manages local Jobs, and reports status and logs. Require HTTPS across untrusted networks; plaintext HTTP is valid only when a trusted encrypted network such as a tailnet already protects the transport.
 - Keep Controller delivery at least once and idempotent through deterministic Run and Job identifiers. Do not add message brokers, leader election, bidirectional RPC, or distributed leases for the MVP.
 - Treat multiple Kubernetes clusters as a first-class requirement. Never assume the Server and execution Jobs share a cluster.
 - Jobs clone their exact Git commit directly from the repository. Never copy repository contents, source bundles, or Git source archives into S3.

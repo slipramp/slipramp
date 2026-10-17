@@ -17,11 +17,19 @@ func DeriveObservationState(
 		return "", false
 	}
 
-	if !clusterConnected || record.LastObservedAt == nil {
+	if !clusterConnected {
 		return ObservationStateUnknown, true
 	}
 
 	staleBefore := now.Add(-observationFreshnessWindow)
+	if record.LastObservedAt == nil {
+		if record.AssignedAt != nil && !record.AssignedAt.Before(staleBefore) {
+			return ObservationStatePending, true
+		}
+
+		return ObservationStateUnknown, true
+	}
+
 	if record.LastObservedAt.Before(staleBefore) {
 		return ObservationStateUnknown, true
 	}

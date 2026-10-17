@@ -76,15 +76,18 @@ Run:
       type: string
       enum:
         - current
+        - pending
         - unknown
       x-enum-varnames:
         - RunObservationStateCurrent
+        - RunObservationStatePending
         - RunObservationStateUnknown
       description: >-
         Derived freshness of the execution observation. Present only while the
-        Run is assigned, preparing, or running. Unknown means the controller is
-        unreachable, has not observed the Run, or its observation is stale; it
-        does not change the durable lifecycle phase.
+        Run is assigned, preparing, or running. Pending means a connected
+        controller has not yet observed a recently assigned Run. Unknown means
+        the controller is unreachable or its observation is stale; neither
+        state changes the durable lifecycle phase.
     outcome:
       type: string
       enum:

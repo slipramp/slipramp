@@ -216,6 +216,7 @@ func (e RepositoryRefreshStatus) Valid() bool {
 // Defines values for RunObservationState.
 const (
 	RunObservationStateCurrent RunObservationState = "current"
+	RunObservationStatePending RunObservationState = "pending"
 	RunObservationStateUnknown RunObservationState = "unknown"
 )
 
@@ -223,6 +224,8 @@ const (
 func (e RunObservationState) Valid() bool {
 	switch e {
 	case RunObservationStateCurrent:
+		return true
+	case RunObservationStatePending:
 		return true
 	case RunObservationStateUnknown:
 		return true
@@ -786,7 +789,7 @@ type Run struct {
 	// LastObservedAt Time the controller most recently confirmed execution state.
 	LastObservedAt *time.Time `json:"lastObservedAt,omitempty"`
 
-	// ObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Unknown means the controller is unreachable, has not observed the Run, or its observation is stale; it does not change the durable lifecycle phase.
+	// ObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
 	ObservationState *RunObservationState `json:"observationState,omitempty"`
 
 	// Outcome Terminal result, present only when phase is finished.
@@ -805,7 +808,7 @@ type Run struct {
 	Target       CatalogName        `json:"target"`
 }
 
-// RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Unknown means the controller is unreachable, has not observed the Run, or its observation is stale; it does not change the durable lifecycle phase.
+// RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
 type RunObservationState string
 
 // RunOutcome Terminal result, present only when phase is finished.

@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
@@ -57,6 +58,19 @@ func TestKcloudOpsExample(t *testing.T) {
 		t.Errorf(
 			"node_exporter action count = %d, want 3",
 			len(nodeExporter.Spec.Actions),
+		)
+	}
+	preview := nodeExporter.Spec.Actions["preview"]
+	wantPreviewCommand := []string{
+		"./slipramp/node-exporter.sh",
+		"plan",
+		"exporter_nodes",
+	}
+	if !slices.Equal(preview.Command, wantPreviewCommand) {
+		t.Errorf(
+			"node_exporter preview command = %q, want %q",
+			preview.Command,
+			wantPreviewCommand,
 		)
 	}
 

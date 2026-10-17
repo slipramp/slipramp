@@ -62,6 +62,7 @@ type ObservationState string
 
 const (
 	ObservationStateCurrent ObservationState = "current"
+	ObservationStatePending ObservationState = "pending"
 	ObservationStateUnknown ObservationState = "unknown"
 )
 

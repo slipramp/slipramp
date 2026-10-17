@@ -14,7 +14,7 @@ spec:
         files:
           - key: private-key
             path: /run/slipramp/credentials/ssh/id_ed25519
-            mode: 0400
+            mode: 0444
 ---
 apiVersion: slipramp.com/v1alpha1
 kind: Runtime

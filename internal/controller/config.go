@@ -33,8 +33,9 @@ func (c Config) Validate() error {
 		return fmt.Errorf("parse server URL: %w", err)
 	}
 
-	if serverURL.Scheme != "https" || serverURL.Host == "" {
-		return errors.New("server URL must be an absolute HTTPS URL")
+	if (serverURL.Scheme != "http" && serverURL.Scheme != "https") ||
+		serverURL.Host == "" {
+		return errors.New("server URL must be an absolute HTTP or HTTPS URL")
 	}
 
 	if serverURL.User != nil {

@@ -11,8 +11,8 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { useEffect, useState } from "react";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { useEffect, useRef, useState } from "react";
+import { Form, Link, redirect, useNavigation, useRevalidator } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -25,6 +25,8 @@ import {
 } from "~/api/generated";
 
 import type { Route } from "./+types/run";
+
+const runRevalidationIntervalMs = 2000;
 
 export async function loader({ params }: Route.LoaderArgs) {
   const client = createServerAPIClient();
@@ -90,6 +92,16 @@ export async function action({ params, request }: Route.ActionArgs) {
 }
 
 export default function RunDetail({ actionData, loaderData }: Route.ComponentProps) {
+  const { revalidate, state: revalidationState } = useRevalidator();
+  const phase = loaderData.run?.phase;
+
+  useEffect(() => {
+    if (phase === undefined || phase === "finished" || revalidationState !== "idle") return;
+
+    const timer = window.setTimeout(() => void revalidate(), runRevalidationIntervalMs);
+    return () => window.clearTimeout(timer);
+  }, [phase, revalidate, revalidationState]);
+
   if (!loaderData.run) {
     return (
       <Alert color="red" title="Run not found">
@@ -198,27 +210,66 @@ function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInp
 function LiveLog({ runId }: Readonly<{ runId: string }>) {
   const [contents, setContents] = useState("");
   const [status, setStatus] = useState("Connecting");
+  const outputRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (contents.length === 0) return;
+
+    const output = outputRef.current;
+    if (output !== null) {
+      output.scrollTop = output.scrollHeight;
+    }
+  }, [contents]);
 
   useEffect(() => {
     const decoder = new TextDecoder();
-    const source = new EventSource(`/api/v1/runs/${runId}/logs`);
-    source.addEventListener("open", () => setStatus("Live"));
-    source.addEventListener("chunk", (event) => {
-      const payload = JSON.parse((event as MessageEvent<string>).data) as {
-        contentsBase64: string;
-      };
-      const binary = atob(payload.contentsBase64);
-      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-      setContents((current) => current + decoder.decode(bytes, { stream: true }));
-    });
-    source.addEventListener("sealed", () => {
-      setContents((current) => current + decoder.decode());
-      setStatus("Retained");
-      source.close();
-    });
-    source.addEventListener("error", () => setStatus("Reconnecting"));
+    let nextOffsetBytes = 0;
+    let reconnectTimer: number | undefined;
+    let source: EventSource | undefined;
+    let stopped = false;
 
-    return () => source.close();
+    const connect = () => {
+      const streamURL = new URL(`/api/v1/runs/${runId}/logs`, window.location.origin);
+      streamURL.searchParams.set("offsetBytes", String(nextOffsetBytes));
+      source = new EventSource(streamURL);
+      source.addEventListener("open", () => setStatus("Live"));
+      source.addEventListener("chunk", (event) => {
+        const payload = JSON.parse((event as MessageEvent<string>).data) as {
+          contentsBase64: string;
+          nextOffsetBytes: number;
+        };
+        const binary = atob(payload.contentsBase64);
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+        nextOffsetBytes = payload.nextOffsetBytes;
+        setContents((current) => current + decoder.decode(bytes, { stream: true }));
+      });
+      source.addEventListener("sealed", () => {
+        stopped = true;
+        setContents((current) => current + decoder.decode());
+        setStatus("Retained");
+        source?.close();
+      });
+      source.addEventListener("error", () => {
+        source?.close();
+        if (stopped || reconnectTimer !== undefined) return;
+
+        setStatus("Reconnecting");
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = undefined;
+          connect();
+        }, 1000);
+      });
+    };
+
+    connect();
+
+    return () => {
+      stopped = true;
+      source?.close();
+      if (reconnectTimer !== undefined) {
+        window.clearTimeout(reconnectTimer);
+      }
+    };
   }, [runId]);
 
   return (
@@ -228,7 +279,7 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
           <Title order={2}>Logs</Title>
           <Badge variant="light">{status}</Badge>
         </Group>
-        <Code block mah={480} style={{ overflow: "auto", whiteSpace: "pre-wrap" }}>
+        <Code ref={outputRef} block mah={480} style={{ overflow: "auto", whiteSpace: "pre-wrap" }}>
           {contents || "Waiting for durable log output…"}
         </Code>
       </Stack>

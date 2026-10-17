@@ -203,9 +203,9 @@ export type Run = {
    */
   phase: "queued" | "assigned" | "preparing" | "running" | "finished";
   /**
-   * Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Unknown means the controller is unreachable, has not observed the Run, or its observation is stale; it does not change the durable lifecycle phase.
+   * Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
    */
-  observationState?: "current" | "unknown";
+  observationState?: "current" | "pending" | "unknown";
   /**
    * Terminal result, present only when phase is finished.
    */

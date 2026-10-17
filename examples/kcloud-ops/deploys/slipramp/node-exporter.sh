@@ -5,9 +5,9 @@ readonly mode="${1:-}"
 readonly limit="${2:-}"
 
 case "$mode" in
-  preview | apply) ;;
+  plan | apply) ;;
   *)
-    echo "usage: $0 preview|apply exporter_nodes|flows1.den1.kcloud.zone" >&2
+    echo "usage: $0 plan|apply exporter_nodes|flows1.den1.kcloud.zone" >&2
     exit 64
     ;;
 esac
@@ -42,7 +42,7 @@ arguments=(
 )
 
 case "$mode" in
-  preview)
+  plan)
     arguments+=(--dry)
     ;;
   apply)

@@ -236,7 +236,7 @@ environment variables:
 | Variable | Purpose |
 | --- | --- |
 | `SLIPRAMP_CONTROLLER_CLUSTER` | Stable logical name of this execution cluster |
-| `SLIPRAMP_CONTROLLER_SERVER_URL` | Absolute HTTPS URL of the Slipramp Server |
+| `SLIPRAMP_CONTROLLER_SERVER_URL` | Absolute HTTP or HTTPS URL of the Slipramp Server; use plaintext HTTP only over a trusted encrypted network |
 | `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN` | Cluster-scoped bootstrap credential used only to enroll the controller |
 | `SLIPRAMP_CONTROLLER_TOKEN` | Controller-owned bearer credential registered during enrollment and used for ongoing requests |
 | `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE` | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container |
@@ -294,6 +294,11 @@ task web:dev
 
 The controller is exercised through unit tests locally and runs with a
 Kubernetes service account in a cluster.
+
+The first real-cluster walkthrough uses a laptop-hosted Server over the trusted
+tailnet and a controller in the homelab cluster. See
+[`deploy/e2e/README.md`](deploy/e2e/README.md) for the image, credential,
+deployment, and `kcloud-ops` preview sequence.
 
 `task local:down` stops PostgreSQL and RustFS while retaining their named
 volumes. Database migrations live in `internal/store/migrations`, queries live
