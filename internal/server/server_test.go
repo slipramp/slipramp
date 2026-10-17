@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/run"
 )
 
 func TestServerStopsWhenContextIsCanceled(t *testing.T) {
@@ -67,7 +68,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 		controllers,
 		nil,
 		nil,
-		nil,
+		&recordingRunService{nextError: run.ErrNoRunAssignment},
 		map[string]string{"colo": "controller-token"},
 	)
 	app := newServer(settings, logger, httpHandler)
@@ -82,7 +83,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	request, err := http.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
-		"http://slipramp.test/api/v1/controllers/colo/poll",
+		"http://slipramp.test/controller/v1/controllers/colo/poll",
 		nil,
 	)
 	if err != nil {
@@ -143,15 +144,13 @@ type blockingClusterService struct {
 	started chan struct{}
 }
 
-func (p *blockingClusterService) WaitForControllerWork(
-	ctx context.Context,
+func (p *blockingClusterService) RecordControllerPoll(
+	_ context.Context,
 	_ string,
-	_ time.Duration,
 ) error {
 	close(p.started)
-	<-ctx.Done()
 
-	return ctx.Err()
+	return nil
 }
 
 func (*blockingClusterService) ListClusters(

@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/slipramp/slipramp/internal/catalog"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/slipramp/slipramp/internal/catalog"
 )
 
 const (
@@ -36,7 +37,7 @@ var (
 	ErrRuntimeNotFound     = errors.New("run runtime not found")
 	ErrPlacementNotFound   = errors.New("run placement not found")
 	ErrRunNotFound         = errors.New("run not found")
-	ErrNoControllerWork    = errors.New("no controller work available")
+	ErrNoRunAssignment     = errors.New("no run assignment available")
 	ErrIdempotencyConflict = errors.New("run idempotency key conflict")
 )
 

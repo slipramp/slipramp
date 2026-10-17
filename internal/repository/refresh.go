@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
 )
@@ -73,7 +74,7 @@ func NewRefresher(
 		placements:   placements,
 		interval:     interval,
 		fetchTimeout: fetchTimeout,
-		logger:       logger,
+		logger:       logger.With("component", "repository_refresher"),
 		newID:        uuid.New,
 		now:          time.Now,
 	}
@@ -124,10 +125,8 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 			if err := fetched.Close(); err != nil {
 				r.logger.Warn(
 					"clean repository refresh directory",
-					"repository",
-					item.Name,
-					"error",
-					err,
+					"repository", item.Name,
+					"error", err,
 				)
 			}
 		}()
@@ -166,10 +165,8 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	if err != nil {
 		r.logger.Error(
 			"record repository refresh",
-			"repository",
-			item.Name,
-			"error",
-			err,
+			"repository", item.Name,
+			"error", err,
 		)
 
 		return
@@ -178,10 +175,8 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	if fetchErr != nil {
 		r.logger.Warn(
 			"repository refresh failed",
-			"repository",
-			item.Name,
-			"error",
-			fetchErr,
+			"repository", item.Name,
+			"error", fetchErr,
 		)
 
 		return
@@ -189,12 +184,9 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	if result.FailureReason != nil {
 		r.logger.Warn(
 			"repository catalog rejected",
-			"repository",
-			item.Name,
-			"commit",
-			fetched.CommitSHA,
-			"error",
-			*result.FailureReason,
+			"repository", item.Name,
+			"commit", fetched.CommitSHA,
+			"error", *result.FailureReason,
 		)
 
 		return
@@ -202,10 +194,8 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 
 	r.logger.Info(
 		"repository catalog indexed",
-		"repository",
-		item.Name,
-		"commit",
-		fetched.CommitSHA,
+		"repository", item.Name,
+		"commit", fetched.CommitSHA,
 	)
 }
 

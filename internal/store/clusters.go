@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
+
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/store/storedb"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var _ cluster.Store = (*Database)(nil)

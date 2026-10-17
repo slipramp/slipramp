@@ -25,7 +25,7 @@ func ControllerAuthentication(
 			request *http.Request,
 			value any,
 		) (any, error) {
-			pollRequest, ok := value.(api.PollForControllerWorkRequestObject)
+			pollRequest, ok := value.(api.PollForRunAssignmentRequestObject)
 			if !ok {
 				return next(ctx, writer, request, value)
 			}
@@ -41,7 +41,7 @@ func ControllerAuthentication(
 					"The controller credential is missing or invalid.",
 				)
 
-				return api.PollForControllerWork401ApplicationProblemPlusJSONResponse(
+				return api.PollForRunAssignment401ApplicationProblemPlusJSONResponse(
 					problem,
 				), nil
 			}

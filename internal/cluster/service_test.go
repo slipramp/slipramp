@@ -27,12 +27,11 @@ func TestServiceRecordsClusterObservation(t *testing.T) {
 		return observedAt
 	}
 
-	if err := service.WaitForControllerWork(
+	if err := service.RecordControllerPoll(
 		context.Background(),
 		"colo",
-		0,
 	); err != nil {
-		t.Fatalf("WaitForControllerWork() error = %v", err)
+		t.Fatalf("RecordControllerPoll() error = %v", err)
 	}
 
 	if clusters.clusterName != "colo" {
@@ -59,19 +58,18 @@ func TestServiceRecordsClusterObservation(t *testing.T) {
 	}
 }
 
-func TestServiceStopsWaitingWhenRequestIsCanceled(t *testing.T) {
+func TestServiceReturnsObservationFailure(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(&recordingStore{})
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	want := errors.New("database unavailable")
+	service := NewService(&recordingStore{err: want})
 
-	err := service.WaitForControllerWork(ctx, "colo", time.Minute)
-	if !errors.Is(err, context.Canceled) {
+	err := service.RecordControllerPoll(context.Background(), "colo")
+	if !errors.Is(err, want) {
 		t.Fatalf(
-			"WaitForControllerWork() error = %v, want %v",
+			"RecordControllerPoll() error = %v, want %v",
 			err,
-			context.Canceled,
+			want,
 		)
 	}
 }
@@ -129,6 +127,7 @@ type recordingStore struct {
 	clusterName string
 	observedAt  time.Time
 	clusters    []Observation
+	err         error
 }
 
 func (r *recordingStore) RecordClusterObservation(
@@ -139,7 +138,7 @@ func (r *recordingStore) RecordClusterObservation(
 	r.clusterName = clusterName
 	r.observedAt = observedAt
 
-	return nil
+	return r.err
 }
 
 func (r *recordingStore) ListClusterObservations(

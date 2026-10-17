@@ -10,7 +10,7 @@ The current foundation establishes the four Slipramp processes: the Server,
 cluster controller, harness, and web application. The split OpenAPI contract
 defines the Server's JSON liveness probe at `GET /healthz`, the read-only
 cluster health endpoint at `GET /api/v1/clusters`, and the authenticated
-controller long poll at `POST /api/v1/controllers/{clusterName}/poll`.
+controller long poll at `POST /controller/v1/controllers/{clusterName}/poll`.
 Repository registrations can be listed and created at
 `GET|POST /api/v1/repositories` and removed at
 `DELETE /api/v1/repositories/{repositoryId}`. Go request and response types,
@@ -59,6 +59,14 @@ active immutable revision and its complete typed Runtime and Target
 definitions. The web application lists repository refresh health and provides
 a repository detail screen for browsing the active revision's targets and
 actions.
+
+`POST /api/v1/runs` resolves a requested action against the active catalog and
+persists an immutable queued Run with validated parameters, an optional
+idempotency key, and a frozen repository, target, action, runtime, and placement
+snapshot. Controller polls claim the oldest eligible Run for their cluster,
+enforce one active Run per target, and return that frozen snapshot through the
+generated API contract. Preparing Runs are redelivered with the same identity
+until a later controller status report advances them.
 
 [`examples/kcloud-ops`](./examples/kcloud-ops) contains a larger catalog
 example with a pyinfra deployment and a Terraform stack, including runtime
@@ -143,18 +151,34 @@ node selector, or run deadline.
 The Server emits structured JSON logs and shuts down gracefully on `SIGINT` or
 `SIGTERM`.
 
-The controller process authenticates to the Server and continuously long-polls
-for cluster work. Successful polls upsert the cluster's first-seen and
-last-seen observations in PostgreSQL. The Server reports a cluster as
-unreachable when it has not started a poll within one minute, and the web index
-shows the resulting cluster health. Work delivery and Kubernetes reconciliation
-will be added behind this boundary. Its required environment variables are:
+The controller process runs inside its execution cluster, authenticates to the
+Server, and continuously long-polls for run assignments. Successful polls
+upsert the cluster's first-seen and last-seen observations in PostgreSQL. The
+Server reports a cluster as unreachable when it has not started a poll within
+one minute, and the web index shows the resulting cluster health. Each frozen
+assignment is rendered as a deterministic `slipramp-run-<run-id>` Kubernetes
+Job. Repeated delivery creates the Job once and then reuses it. Job observation
+and state reporting are the next implementation slice.
+
+The controller requires in-cluster Kubernetes configuration and these
+environment variables:
 
 | Variable | Purpose |
 | --- | --- |
 | `SLIPRAMP_CONTROLLER_CLUSTER` | Stable logical name of this execution cluster |
 | `SLIPRAMP_CONTROLLER_SERVER_URL` | Absolute HTTPS URL of the Slipramp Server |
 | `SLIPRAMP_CONTROLLER_TOKEN` | Static bearer credential used with the Server |
+| `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE` | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container |
+| `SLIPRAMP_CONTROLLER_HARNESS_IMAGE` | Pinned image whose entrypoint is `slipramp-harness` |
+| `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS` | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
+
+The checkout init container materializes the exact commit into an `emptyDir`.
+The action container mounts it at the runtime's `workingDirectory`, or
+`/workspace` by default, and runs from the target's repository-relative path.
+The harness image copies its static executable into a second `emptyDir`, so the
+runtime image does not need Slipramp tooling. A checkout credential Secret may
+provide `gitconfig`, `ssh-privatekey`, and `known_hosts` keys; it is mounted only
+in the checkout init container.
 
 The harness executes an action from an explicit argument array without an
 implicit shell. It connects the action to its standard streams, forwards
@@ -186,13 +210,12 @@ task check
 task integration
 SLIPRAMP_CONTROLLER_TOKENS='{"colo":"development-token"}' \
   go run ./cmd/slipramp-server
-SLIPRAMP_CONTROLLER_CLUSTER=colo \
-  SLIPRAMP_CONTROLLER_SERVER_URL=https://slipramp.example.com \
-  SLIPRAMP_CONTROLLER_TOKEN=development-token \
-  go run ./cmd/slipramp-controller
 go run ./cmd/slipramp-harness command argument
 task web:dev
 ```
+
+The controller is exercised through unit tests locally and runs with a
+Kubernetes service account in a cluster.
 
 `task local:down` stops PostgreSQL and RustFS while retaining their named
 volumes. Database migrations live in `internal/store/migrations`, queries live

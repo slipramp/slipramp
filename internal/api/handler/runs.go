@@ -13,6 +13,7 @@ import (
 
 type RunService interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
+	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
 }
 
 func (h *Handler) CreateRun(
@@ -104,19 +105,9 @@ func runParameters(
 }
 
 func runResponse(record run.Run) (api.Run, error) {
-	parameters := make(map[string]api.ParameterValue, len(record.Parameters))
-	for name, value := range record.Parameters {
-		encoded, err := json.Marshal(value)
-		if err != nil {
-			return api.Run{}, fmt.Errorf("encode Run parameter %q: %w", name, err)
-		}
-
-		var parameter api.ParameterValue
-		if err := parameter.UnmarshalJSON(encoded); err != nil {
-			return api.Run{}, fmt.Errorf("convert Run parameter %q: %w", name, err)
-		}
-
-		parameters[name] = parameter
+	parameters, err := runParameterResponse(record.Parameters)
+	if err != nil {
+		return api.Run{}, err
 	}
 
 	return api.Run{
@@ -135,4 +126,25 @@ func runResponse(record run.Run) (api.Run, error) {
 		},
 		CreatedAt: record.CreatedAt,
 	}, nil
+}
+
+func runParameterResponse(
+	values map[string]any,
+) (map[string]api.ParameterValue, error) {
+	parameters := make(map[string]api.ParameterValue, len(values))
+	for name, value := range values {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return nil, fmt.Errorf("encode Run parameter %q: %w", name, err)
+		}
+
+		var parameter api.ParameterValue
+		if err := parameter.UnmarshalJSON(encoded); err != nil {
+			return nil, fmt.Errorf("convert Run parameter %q: %w", name, err)
+		}
+
+		parameters[name] = parameter
+	}
+
+	return parameters, nil
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -131,7 +132,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 
 	_, err = database.ClaimQueuedRun(ctx, "colo", claimedAt)
-	if !errors.Is(err, run.ErrNoControllerWork) {
+	if !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Errorf("second ClaimQueuedRun() error = %v, want no work", err)
 	}
 

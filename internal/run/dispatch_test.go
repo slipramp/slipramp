@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestNextControllerWorkRedeliversPreparingRun(t *testing.T) {
+func TestNextRunAssignmentRedeliversPreparingRun(t *testing.T) {
 	t.Parallel()
 
 	want := Run{
@@ -19,9 +19,9 @@ func TestNextControllerWorkRedeliversPreparingRun(t *testing.T) {
 	runs := &recordingRuns{preparing: want}
 	service := &Service{runs: runs, now: time.Now}
 
-	assigned, err := service.NextControllerWork(context.Background(), "colo")
+	assigned, err := service.NextRunAssignment(context.Background(), "colo")
 	if err != nil {
-		t.Fatalf("NextControllerWork() error = %v", err)
+		t.Fatalf("NextRunAssignment() error = %v", err)
 	}
 	if assigned.ID != want.ID {
 		t.Errorf("assigned Run ID = %s, want %s", assigned.ID, want.ID)
@@ -31,7 +31,7 @@ func TestNextControllerWorkRedeliversPreparingRun(t *testing.T) {
 	}
 }
 
-func TestNextControllerWorkClaimsQueuedRun(t *testing.T) {
+func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 	t.Parallel()
 
 	want := Run{
@@ -39,7 +39,7 @@ func TestNextControllerWorkClaimsQueuedRun(t *testing.T) {
 		State: StatePreparing,
 	}
 	runs := &recordingRuns{
-		preparingError: ErrNoControllerWork,
+		preparingError: ErrNoRunAssignment,
 		claimed:        want,
 	}
 	service := &Service{runs: runs}
@@ -47,9 +47,9 @@ func TestNextControllerWorkClaimsQueuedRun(t *testing.T) {
 	claimedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, location)
 	service.now = func() time.Time { return claimedAt }
 
-	assigned, err := service.NextControllerWork(context.Background(), "colo")
+	assigned, err := service.NextRunAssignment(context.Background(), "colo")
 	if err != nil {
-		t.Fatalf("NextControllerWork() error = %v", err)
+		t.Fatalf("NextRunAssignment() error = %v", err)
 	}
 	if assigned.ID != want.ID {
 		t.Errorf("assigned Run ID = %s, want %s", assigned.ID, want.ID)
@@ -62,30 +62,30 @@ func TestNextControllerWorkClaimsQueuedRun(t *testing.T) {
 	}
 }
 
-func TestNextControllerWorkReturnsNoWork(t *testing.T) {
+func TestNextRunAssignmentReturnsNoAssignment(t *testing.T) {
 	t.Parallel()
 
 	runs := &recordingRuns{
-		preparingError: ErrNoControllerWork,
-		claimError:     ErrNoControllerWork,
+		preparingError: ErrNoRunAssignment,
+		claimError:     ErrNoRunAssignment,
 	}
 	service := &Service{runs: runs, now: time.Now}
 
-	_, err := service.NextControllerWork(context.Background(), "colo")
-	if !errors.Is(err, ErrNoControllerWork) {
-		t.Fatalf("NextControllerWork() error = %v, want %v", err, ErrNoControllerWork)
+	_, err := service.NextRunAssignment(context.Background(), "colo")
+	if !errors.Is(err, ErrNoRunAssignment) {
+		t.Fatalf("NextRunAssignment() error = %v, want %v", err, ErrNoRunAssignment)
 	}
 }
 
-func TestNextControllerWorkRejectsBlankClusterName(t *testing.T) {
+func TestNextRunAssignmentRejectsBlankClusterName(t *testing.T) {
 	t.Parallel()
 
 	runs := &recordingRuns{}
 	service := &Service{runs: runs, now: time.Now}
 
-	_, err := service.NextControllerWork(context.Background(), " ")
+	_, err := service.NextRunAssignment(context.Background(), " ")
 	if !errors.Is(err, ErrInvalidRequest) {
-		t.Fatalf("NextControllerWork() error = %v, want %v", err, ErrInvalidRequest)
+		t.Fatalf("NextRunAssignment() error = %v, want %v", err, ErrInvalidRequest)
 	}
 	if runs.preparingCalls != 0 || runs.claimCalls != 0 {
 		t.Errorf(

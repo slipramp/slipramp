@@ -51,31 +51,14 @@ func (s *Service) ListClusters(ctx context.Context) ([]Status, error) {
 	return statuses, nil
 }
 
-func (s *Service) WaitForControllerWork(
+func (s *Service) RecordControllerPoll(
 	ctx context.Context,
 	clusterName string,
-	wait time.Duration,
 ) error {
 	observedAt := s.now().UTC()
-	if err := s.clusters.RecordClusterObservation(
+	return s.clusters.RecordClusterObservation(
 		ctx,
 		clusterName,
 		observedAt,
-	); err != nil {
-		return err
-	}
-
-	if wait == 0 {
-		return nil
-	}
-
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
+	)
 }

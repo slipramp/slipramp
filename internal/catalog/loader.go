@@ -9,8 +9,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/slipramp/slipramp/internal/placement"
 	"go.yaml.in/yaml/v3"
+
+	"github.com/slipramp/slipramp/internal/placement"
 )
 
 type documentHeader struct {

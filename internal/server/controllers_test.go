@@ -10,8 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/run"
 )
 
 func TestListClustersReturnsObservedHealth(t *testing.T) {
@@ -98,69 +103,113 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	}
 }
 
-func TestControllerPollDelegatesWithConfiguredWait(t *testing.T) {
+func TestControllerPollReturnsNoContentWithoutWaiting(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name     string
-		path     string
-		wantWait time.Duration
-	}{
-		{
-			name: "explicit zero",
-			path: "/api/v1/controllers/colo/poll?timeoutSeconds=0",
-		},
-		{
-			name:     "default",
-			path:     "/api/v1/controllers/colo/poll",
-			wantWait: 25 * time.Second,
-		},
+	controllers := &recordingClusterService{}
+	runs := &recordingRunService{nextError: run.ErrNoRunAssignment}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/controllers/colo/poll?timeoutSeconds=0",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	response := httptest.NewRecorder()
+
+	newHandler(
+		controllers,
+		nil,
+		nil,
+		runs,
+		map[string]string{"colo": "controller-token"},
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Errorf(
+			"status = %d, want %d",
+			response.Code,
+			http.StatusNoContent,
+		)
+	}
+	if controllers.clusterName != "colo" {
+		t.Errorf(
+			"cluster name = %q, want %q",
+			controllers.clusterName,
+			"colo",
+		)
+	}
+	if runs.nextCalls != 1 || runs.nextClusterName != "colo" {
+		t.Errorf(
+			"next assignment calls = %d for %q, want 1 for colo",
+			runs.nextCalls,
+			runs.nextClusterName,
+		)
+	}
+}
+
+func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
+	t.Parallel()
+
+	record := runAssignmentRecord()
+	controllers := &recordingClusterService{}
+	runs := &recordingRunService{next: record}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/controllers/colo/poll",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	response := httptest.NewRecorder()
+
+	newHandler(
+		controllers,
+		nil,
+		nil,
+		runs,
+		map[string]string{"colo": "controller-token"},
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			controllers := &recordingClusterService{}
-			request := httptest.NewRequestWithContext(
-				context.Background(),
-				http.MethodPost,
-				test.path,
-				nil,
-			)
-			request.Header.Set("Authorization", "Bearer controller-token")
-			response := httptest.NewRecorder()
-
-			newHandler(
-				controllers,
-				nil,
-				nil,
-				nil,
-				map[string]string{"colo": "controller-token"},
-			).ServeHTTP(response, request)
-
-			if response.Code != http.StatusNoContent {
-				t.Errorf(
-					"status = %d, want %d",
-					response.Code,
-					http.StatusNoContent,
-				)
-			}
-			if controllers.clusterName != "colo" {
-				t.Errorf(
-					"cluster name = %q, want %q",
-					controllers.clusterName,
-					"colo",
-				)
-			}
-			if controllers.wait != test.wantWait {
-				t.Errorf(
-					"wait = %s, want %s",
-					controllers.wait,
-					test.wantWait,
-				)
-			}
-		})
+	var assignment api.RunAssignment
+	if err := json.NewDecoder(response.Body).Decode(&assignment); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if assignment.ID != record.ID ||
+		assignment.CatalogRevisionID != record.CatalogRevisionID ||
+		assignment.CommitSha != record.CommitSHA {
+		t.Errorf("assignment identity = %#v", assignment)
+	}
+	if assignment.Repository.CloneURL != "ssh://git@example.com/ops.git" ||
+		assignment.Repository.CheckoutCredentialName == nil ||
+		*assignment.Repository.CheckoutCredentialName != "github-readonly" {
+		t.Errorf("repository = %#v", assignment.Repository)
+	}
+	if assignment.Target.Name != "network" || assignment.Target.Path == nil ||
+		*assignment.Target.Path != "infrastructure/network" {
+		t.Errorf("target = %#v", assignment.Target)
+	}
+	if assignment.Action.Name != "preview" ||
+		assignment.Action.Runtime != "terraform" ||
+		len(assignment.Action.Command) != 3 ||
+		assignment.Action.ParameterDefinitions == nil {
+		t.Errorf("action = %#v", assignment.Action)
+	}
+	if assignment.Runtime.Image != "terraform:1" ||
+		assignment.Runtime.Credentials == nil {
+		t.Errorf("runtime = %#v", assignment.Runtime)
+	}
+	if assignment.Placement.JobNamespace != "slipramp-runs" ||
+		assignment.Placement.Credentials == nil ||
+		assignment.Placement.PodTemplate == nil {
+		t.Errorf("placement = %#v", assignment.Placement)
+	}
+	if runs.nextCalls != 1 {
+		t.Errorf("next assignment calls = %d, want 1", runs.nextCalls)
 	}
 }
 
@@ -209,7 +258,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 			request := httptest.NewRequestWithContext(
 				context.Background(),
 				http.MethodPost,
-				"/api/v1/controllers/"+test.clusterName+
+				"/controller/v1/controllers/"+test.clusterName+
 					"/poll?timeoutSeconds=0",
 				nil,
 			)
@@ -255,12 +304,12 @@ func TestControllerPollMapsFailures(t *testing.T) {
 	}{
 		{
 			name:       "invalid timeout",
-			path:       "/api/v1/controllers/colo/poll?timeoutSeconds=31",
+			path:       "/controller/v1/controllers/colo/poll?timeoutSeconds=31",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:          "service failure",
-			path:          "/api/v1/controllers/colo/poll?timeoutSeconds=0",
+			path:          "/controller/v1/controllers/colo/poll?timeoutSeconds=0",
 			serviceError:  errors.New("database unavailable"),
 			wantStatus:    http.StatusInternalServerError,
 			wantCalls:     1,
@@ -309,20 +358,17 @@ func TestControllerPollMapsFailures(t *testing.T) {
 type recordingClusterService struct {
 	calls       int
 	clusterName string
-	wait        time.Duration
 	err         error
 	clusters    []cluster.Status
 	listError   error
 }
 
-func (r *recordingClusterService) WaitForControllerWork(
+func (r *recordingClusterService) RecordControllerPoll(
 	_ context.Context,
 	clusterName string,
-	wait time.Duration,
 ) error {
 	r.calls++
 	r.clusterName = clusterName
-	r.wait = wait
 
 	return r.err
 }
@@ -331,4 +377,77 @@ func (r *recordingClusterService) ListClusters(
 	context.Context,
 ) ([]cluster.Status, error) {
 	return r.clusters, r.listError
+}
+
+func runAssignmentRecord() run.Run {
+	checkoutCredentialName := "github-readonly"
+	podTemplate := &corev1.PodTemplateSpec{}
+	podTemplate.Labels = map[string]string{"isolation": "sandboxed"}
+
+	return run.Run{
+		ID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200"),
+		CatalogRevisionID: uuid.MustParse(
+			"018f90ff-9fd8-7b5f-b7e1-f32ff54c1201",
+		),
+		CommitSHA: strings.Repeat("a", 40),
+		Parameters: map[string]any{
+			"refresh": true,
+		},
+		Snapshot: run.Snapshot{
+			Repository: run.RepositorySnapshot{
+				Name:                   "ops",
+				CloneURL:               "ssh://git@example.com/ops.git",
+				Branch:                 "main",
+				CheckoutCredentialName: &checkoutCredentialName,
+			},
+			Target: catalog.Target{
+				Metadata: catalog.Metadata{Name: "network"},
+				Spec: catalog.TargetSpec{
+					Path: "infrastructure/network",
+				},
+			},
+			Action: catalog.EffectiveAction{
+				Name:      "preview",
+				Intent:    "preview",
+				Command:   []string{"terraform", "plan", "-out=plan.tfplan"},
+				Runtime:   "terraform",
+				Placement: "infrastructure-admin",
+				Credentials: map[string]string{
+					"backend": "terraform-backend",
+				},
+				Timeout: "20m",
+				Parameters: map[string]catalog.Parameter{
+					"refresh": {
+						Type:        catalog.ParameterTypeBoolean,
+						Environment: "TF_REFRESH",
+					},
+				},
+				Artifacts: map[string]catalog.Artifact{
+					"plan": {Path: "/slipramp/artifacts/plan.tfplan"},
+				},
+			},
+			Runtime: catalog.Runtime{
+				Metadata: catalog.Metadata{Name: "terraform"},
+				Spec: catalog.RuntimeSpec{
+					Image: "terraform:1",
+					Credentials: map[string]catalog.RuntimeCredential{
+						"backend": {
+							Inject: catalog.CredentialInjection{
+								EnvironmentFrom: true,
+							},
+						},
+					},
+				},
+			},
+			Placement: run.PlacementSnapshot{
+				Name:         "infrastructure-admin",
+				ClusterName:  "colo",
+				JobNamespace: "slipramp-runs",
+				Credentials: map[string]run.CredentialSnapshot{
+					"terraform-backend": {SecretName: "terraform-backend"},
+				},
+				PodTemplate: podTemplate,
+			},
+		},
+	}
 }

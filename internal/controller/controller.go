@@ -7,31 +7,43 @@ import (
 	"errors"
 	"log/slog"
 	"time"
+
+	batchv1client "k8s.io/client-go/kubernetes/typed/batch/v1"
+
+	"github.com/slipramp/slipramp/internal/api"
 )
 
 const pollRetryDelay = 5 * time.Second
 
 var errControllerCredentialRejected = errors.New("controller credential was rejected")
 
-type serverPoller interface {
-	Poll(ctx context.Context) error
+type assignmentPoller interface {
+	Poll(ctx context.Context) (*api.RunAssignment, error)
 }
 
 type Controller struct {
 	clusterName string
 	serverURL   string
 	logger      *slog.Logger
-	server      serverPoller
+	server      assignmentPoller
+	assignments assignmentMaterializer
 	retryDelay  time.Duration
 }
 
-func New(cfg Config, logger *slog.Logger) (*Controller, error) {
+func New(
+	cfg Config,
+	logger *slog.Logger,
+	jobs batchv1client.BatchV1Interface,
+) (*Controller, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
 	if logger == nil {
 		return nil, errors.New("logger is required")
+	}
+	if jobs == nil {
+		return nil, errors.New("kubernetes Job client is required")
 	}
 
 	server, err := newServerClient(cfg)
@@ -42,8 +54,9 @@ func New(cfg Config, logger *slog.Logger) (*Controller, error) {
 	return &Controller{
 		clusterName: cfg.ClusterName,
 		serverURL:   cfg.ServerURL,
-		logger:      logger,
+		logger:      logger.With("component", "controller"),
 		server:      server,
+		assignments: newJobMaterializer(cfg, jobs),
 		retryDelay:  pollRetryDelay,
 	}, nil
 }
@@ -51,20 +64,13 @@ func New(cfg Config, logger *slog.Logger) (*Controller, error) {
 func (c *Controller) Run(ctx context.Context) error {
 	c.logger.Info(
 		"controller started",
-		"component",
-		"controller",
-		"cluster",
-		c.clusterName,
-		"server_url",
-		c.serverURL,
+		"cluster", c.clusterName,
+		"server_url", c.serverURL,
 	)
 
 	defer c.logger.Info(
 		"controller stopped",
-		"component",
-		"controller",
-		"cluster",
-		c.clusterName,
+		"cluster", c.clusterName,
 	)
 
 	for {
@@ -72,8 +78,36 @@ func (c *Controller) Run(ctx context.Context) error {
 			return nil
 		}
 
-		err := c.server.Poll(ctx)
+		assignment, err := c.server.Poll(ctx)
+		if err == nil && assignment == nil {
+			continue
+		}
 		if err == nil {
+			created, ensureErr := c.assignments.Ensure(ctx, *assignment)
+			if ensureErr != nil {
+				c.logger.Warn(
+					"run assignment failed",
+					"run_id", assignment.ID,
+					"error", ensureErr,
+				)
+
+				if !waitForRetry(ctx, c.retryDelay) {
+					return nil
+				}
+
+				continue
+			}
+
+			c.logger.Info(
+				"run assignment materialized",
+				"run_id", assignment.ID,
+				"job_created", created,
+			)
+
+			if !waitForRetry(ctx, c.retryDelay) {
+				return nil
+			}
+
 			continue
 		}
 
@@ -87,12 +121,8 @@ func (c *Controller) Run(ctx context.Context) error {
 
 		c.logger.Warn(
 			"controller poll failed",
-			"component",
-			"controller",
-			"cluster",
-			c.clusterName,
-			"error",
-			err,
+			"cluster", c.clusterName,
+			"error", err,
 		)
 
 		if !waitForRetry(ctx, c.retryDelay) {

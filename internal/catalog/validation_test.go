@@ -3,10 +3,11 @@ package catalog_test
 import (
 	"testing"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/testcheck"
-	"go.yaml.in/yaml/v3"
 )
 
 type validationTest struct {

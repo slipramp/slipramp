@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/slipramp/slipramp/internal/store/storedb"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
 const defaultConnectTimeout = 10 * time.Second

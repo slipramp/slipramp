@@ -16,7 +16,7 @@ paths:
     $ref: ./paths/catalog.yaml#/repositoryCatalog
   /api/v1/clusters:
     $ref: ./paths/controllers.yaml#/clusters
-  /api/v1/controllers/{clusterName}/poll:
+  /controller/v1/controllers/{clusterName}/poll:
     $ref: ./paths/controllers.yaml#/poll
   /api/v1/runs:
     $ref: ./paths/runs.yaml#/runs
@@ -42,6 +42,8 @@ components:
       $ref: ./components/controllers.yaml#/Cluster
     ClusterList:
       $ref: ./components/controllers.yaml#/ClusterList
+    RunAssignment:
+      $ref: ./components/controllers.yaml#/RunAssignment
     Run:
       $ref: ./components/runs.yaml#/Run
     RunCreate:

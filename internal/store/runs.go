@@ -8,11 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/slipramp/slipramp/internal/run"
-	"github.com/slipramp/slipramp/internal/store/storedb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/slipramp/slipramp/internal/run"
+	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
 var _ run.Store = (*Database)(nil)
@@ -134,7 +135,7 @@ func (d *Database) GetPreparingRunForCluster(
 ) (run.Run, error) {
 	row, err := d.queries.GetPreparingRunForCluster(ctx, clusterName)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return run.Run{}, run.ErrNoControllerWork
+		return run.Run{}, run.ErrNoRunAssignment
 	}
 	if err != nil {
 		return run.Run{}, fmt.Errorf("get preparing Run for cluster: %w", err)
@@ -164,7 +165,7 @@ func (d *Database) ClaimQueuedRun(
 	queries := d.queries.WithTx(transaction)
 	row, err := queries.ClaimQueuedRun(ctx, clusterName)
 	if errors.Is(err, pgx.ErrNoRows) || isTargetConcurrencyConflict(err) {
-		return run.Run{}, run.ErrNoControllerWork
+		return run.Run{}, run.ErrNoRunAssignment
 	}
 	if err != nil {
 		return run.Run{}, fmt.Errorf("claim queued Run: %w", err)

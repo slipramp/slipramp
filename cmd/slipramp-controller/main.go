@@ -7,6 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
 	"github.com/slipramp/slipramp/internal/config"
 	"github.com/slipramp/slipramp/internal/controller"
 )
@@ -20,7 +23,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	app, err := controller.New(cfg, logger)
+	kubeConfig, err := rest.InClusterConfig()
+	if err != nil {
+		logger.Error("load in-cluster Kubernetes configuration", "error", err)
+		os.Exit(1)
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		logger.Error("initialize Kubernetes client", "error", err)
+		os.Exit(1)
+	}
+
+	app, err := controller.New(cfg, logger, kubeClient.BatchV1())
 	if err != nil {
 		logger.Error("initialize controller", "error", err)
 		os.Exit(1)

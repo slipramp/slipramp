@@ -87,6 +87,38 @@ func TestConfigValidate(t *testing.T) {
 			},
 			wantError: "bearer token",
 		},
+		{
+			name: "empty checkout image",
+			configure: func(settings *Config) {
+				settings.CheckoutImage = ""
+			},
+			wantError: "checkout image",
+		},
+		{
+			name: "empty harness image",
+			configure: func(settings *Config) {
+				settings.HarnessImage = ""
+			},
+			wantError: "harness image",
+		},
+		{
+			name: "invalid Git credential name",
+			configure: func(settings *Config) {
+				settings.GitCredentials = map[string]string{
+					"GitHub": "github-readonly",
+				}
+			},
+			wantError: "Git credential name",
+		},
+		{
+			name: "invalid Git credential secret name",
+			configure: func(settings *Config) {
+				settings.GitCredentials = map[string]string{
+					"github": "GitHub Secret",
+				}
+			},
+			wantError: "secret name",
+		},
 	}
 
 	for _, test := range tests {
@@ -105,8 +137,13 @@ func TestConfigValidate(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		ClusterName: "colo",
-		ServerURL:   "https://slipramp.example.com",
-		BearerToken: "controller-token",
+		ClusterName:   "colo",
+		ServerURL:     "https://slipramp.example.com",
+		BearerToken:   "controller-token",
+		CheckoutImage: "registry.example.com/slipramp-checkout:1",
+		HarnessImage:  "registry.example.com/slipramp-harness:1",
+		GitCredentials: map[string]string{
+			"github-readonly": "github-readonly",
+		},
 	}
 }

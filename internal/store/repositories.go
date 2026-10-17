@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/slipramp/slipramp/internal/repository"
-	"github.com/slipramp/slipramp/internal/store/storedb"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/slipramp/slipramp/internal/repository"
+	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
 const activeRepositoryNameConstraint = "repositories_active_name_key"

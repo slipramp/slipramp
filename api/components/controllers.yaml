@@ -38,3 +38,183 @@ ClusterList:
       type: array
       items:
         $ref: "#/Cluster"
+
+RunAssignment:
+  type: object
+  required:
+    - id
+    - catalogRevisionId
+    - commitSha
+    - parameters
+    - repository
+    - target
+    - action
+    - runtime
+    - placement
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Stable Run identity used to derive Kubernetes object names.
+    catalogRevisionId:
+      type: string
+      format: uuid
+      description: Immutable catalog revision against which the Run was resolved.
+    commitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+      description: Exact Git commit the execution Job must check out.
+    parameters:
+      type: object
+      additionalProperties:
+        $ref: ./runs.yaml#/ParameterValue
+      description: Validated values for the action's declared parameters.
+    repository:
+      $ref: "#/RunAssignmentRepository"
+    target:
+      $ref: "#/RunAssignmentTarget"
+    action:
+      $ref: "#/RunAssignmentAction"
+    runtime:
+      $ref: "#/RunAssignmentRuntime"
+    placement:
+      $ref: "#/RunAssignmentPlacement"
+
+RunAssignmentRepository:
+  type: object
+  required:
+    - name
+    - cloneUrl
+    - branch
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    cloneUrl:
+      type: string
+      minLength: 1
+    branch:
+      type: string
+      minLength: 1
+    checkoutCredentialName:
+      $ref: ./runs.yaml#/CatalogName
+
+RunAssignmentTarget:
+  type: object
+  required:
+    - name
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    path:
+      type: string
+      minLength: 1
+
+RunAssignmentAction:
+  type: object
+  required:
+    - name
+    - command
+    - runtime
+    - placement
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    intent:
+      type: string
+      minLength: 1
+    command:
+      type: array
+      minItems: 1
+      items:
+        type: string
+    runtime:
+      $ref: ./runs.yaml#/CatalogName
+    placement:
+      $ref: ./runs.yaml#/CatalogName
+    credentials:
+      type: object
+      additionalProperties:
+        $ref: ./runs.yaml#/CatalogName
+    timeout:
+      type: string
+      minLength: 1
+    resources:
+      $ref: ./catalog.yaml#/ResourceRequirements
+    parameterDefinitions:
+      type: object
+      additionalProperties:
+        $ref: ./catalog.yaml#/Parameter
+    artifacts:
+      type: object
+      additionalProperties:
+        $ref: ./catalog.yaml#/ArtifactDeclaration
+    inputs:
+      type: object
+      additionalProperties:
+        $ref: ./catalog.yaml#/ArtifactInput
+
+RunAssignmentRuntime:
+  type: object
+  required:
+    - name
+    - image
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    image:
+      type: string
+      minLength: 1
+    workingDirectory:
+      type: string
+      minLength: 1
+    environment:
+      type: object
+      additionalProperties:
+        type: string
+    credentials:
+      type: object
+      additionalProperties:
+        $ref: ./catalog.yaml#/RuntimeCredential
+
+RunAssignmentPlacement:
+  type: object
+  required:
+    - name
+    - cluster
+    - jobNamespace
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    jobNamespace:
+      $ref: ./runs.yaml#/CatalogName
+    serviceAccountName:
+      type: string
+      minLength: 1
+    timeout:
+      type: string
+      minLength: 1
+    resources:
+      $ref: ./catalog.yaml#/ResourceRequirements
+    nodeSelector:
+      type: object
+      additionalProperties:
+        type: string
+    credentials:
+      type: object
+      additionalProperties:
+        $ref: "#/RunAssignmentCredential"
+    podTemplate:
+      type: object
+      additionalProperties: true
+      description: Validated placement PodTemplateSpec extensions.
+
+RunAssignmentCredential:
+  type: object
+  required:
+    - secretName
+  properties:
+    secretName:
+      type: string
+      minLength: 1

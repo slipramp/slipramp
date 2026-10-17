@@ -97,7 +97,7 @@ func newServer(
 		address:         cfg.Address,
 		shutdownTimeout: cfg.ShutdownTimeout,
 		placements:      cfg.Placements,
-		logger:          logger,
+		logger:          logger.With("component", "server"),
 		httpServer: &http.Server{
 			Handler:           handler,
 			ReadHeaderTimeout: readHeaderTimeout,
@@ -161,10 +161,7 @@ func (s *Server) serve(ctx context.Context, listener net.Listener) error {
 
 	s.logger.Info(
 		"server listening",
-		"component",
-		"server",
-		"address",
-		listener.Addr().String(),
+		"address", listener.Addr().String(),
 	)
 
 	serveError := s.httpServer.Serve(listener)
@@ -178,7 +175,7 @@ func (s *Server) serve(ctx context.Context, listener net.Listener) error {
 		return err
 	}
 
-	s.logger.Info("server stopped", "component", "server")
+	s.logger.Info("server stopped")
 
 	return nil
 }
@@ -256,12 +253,9 @@ func newHandlerWithLogger(
 				if logger != nil {
 					logger.Error(
 						"handle API request",
-						"method",
-						request.Method,
-						"path",
-						request.URL.Path,
-						"error",
-						err,
+						"method", request.Method,
+						"path", request.URL.Path,
+						"error", err,
 					)
 				}
 
@@ -313,7 +307,7 @@ func newHandlerWithLogger(
 	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
 	registerMethodNotAllowed(
 		mux,
-		"/api/v1/controllers/{clusterName}/poll",
+		"/controller/v1/controllers/{clusterName}/poll",
 		http.MethodPost,
 	)
 	mux.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {

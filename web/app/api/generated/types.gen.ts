@@ -113,6 +113,32 @@ export type ClusterList = {
   items: Array<Cluster>;
 };
 
+export type RunAssignment = {
+  /**
+   * Stable Run identity used to derive Kubernetes object names.
+   */
+  id: string;
+  /**
+   * Immutable catalog revision against which the Run was resolved.
+   */
+  catalogRevisionId: string;
+  /**
+   * Exact Git commit the execution Job must check out.
+   */
+  commitSha: string;
+  /**
+   * Validated values for the action's declared parameters.
+   */
+  parameters: {
+    [key: string]: ParameterValue;
+  };
+  repository: RunAssignmentRepository;
+  target: RunAssignmentTarget;
+  action: RunAssignmentAction;
+  runtime: RunAssignmentRuntime;
+  placement: RunAssignmentPlacement;
+};
+
 export type Run = {
   /**
    * Stable identity of the immutable action execution.
@@ -319,9 +345,80 @@ export type Target = {
   source: CatalogSource;
 };
 
+export type ParameterValue = string | boolean | number;
+
 export type CatalogName = string;
 
-export type ParameterValue = string | boolean | number;
+export type RunAssignmentRepository = {
+  name: CatalogName;
+  cloneUrl: string;
+  branch: string;
+  checkoutCredentialName?: CatalogName;
+};
+
+export type RunAssignmentTarget = {
+  name: CatalogName;
+  path?: string;
+};
+
+export type RunAssignmentAction = {
+  name: CatalogName;
+  intent?: string;
+  command: Array<string>;
+  runtime: CatalogName;
+  placement: CatalogName;
+  credentials?: {
+    [key: string]: CatalogName;
+  };
+  timeout?: string;
+  resources?: ResourceRequirements;
+  parameterDefinitions?: {
+    [key: string]: Parameter;
+  };
+  artifacts?: {
+    [key: string]: ArtifactDeclaration;
+  };
+  inputs?: {
+    [key: string]: ArtifactInput;
+  };
+};
+
+export type RunAssignmentRuntime = {
+  name: CatalogName;
+  image: string;
+  workingDirectory?: string;
+  environment?: {
+    [key: string]: string;
+  };
+  credentials?: {
+    [key: string]: RuntimeCredential;
+  };
+};
+
+export type RunAssignmentCredential = {
+  secretName: string;
+};
+
+export type RunAssignmentPlacement = {
+  name: CatalogName;
+  cluster: CatalogName;
+  jobNamespace: CatalogName;
+  serviceAccountName?: string;
+  timeout?: string;
+  resources?: ResourceRequirements;
+  nodeSelector?: {
+    [key: string]: string;
+  };
+  credentials?: {
+    [key: string]: RunAssignmentCredential;
+  };
+  /**
+   * Validated placement PodTemplateSpec extensions.
+   */
+  podTemplate?: {
+    [key: string]: unknown;
+  };
+};
 
 export type RunSource = {
   /**
@@ -536,7 +633,7 @@ export type ListClustersResponses = {
 
 export type ListClustersResponse = ListClustersResponses[keyof ListClustersResponses];
 
-export type PollForControllerWorkData = {
+export type PollForRunAssignmentData = {
   body?: never;
   path: {
     /**
@@ -546,14 +643,14 @@ export type PollForControllerWorkData = {
   };
   query?: {
     /**
-     * Maximum time to wait for assigned work.
+     * Maximum time to wait for a run assignment.
      */
     timeoutSeconds?: number;
   };
-  url: "/api/v1/controllers/{clusterName}/poll";
+  url: "/controller/v1/controllers/{clusterName}/poll";
 };
 
-export type PollForControllerWorkErrors = {
+export type PollForRunAssignmentErrors = {
   /**
    * The poll timeout is invalid.
    */
@@ -572,18 +669,22 @@ export type PollForControllerWorkErrors = {
   500: Problem;
 };
 
-export type PollForControllerWorkError =
-  PollForControllerWorkErrors[keyof PollForControllerWorkErrors];
+export type PollForRunAssignmentError =
+  PollForRunAssignmentErrors[keyof PollForRunAssignmentErrors];
 
-export type PollForControllerWorkResponses = {
+export type PollForRunAssignmentResponses = {
   /**
-   * No work became available before the poll completed.
+   * A frozen Run assignment for this cluster. The same assignment may be returned again until the controller reports another Run state.
+   */
+  200: RunAssignment;
+  /**
+   * No run assignment became available before the poll completed.
    */
   204: void;
 };
 
-export type PollForControllerWorkResponse =
-  PollForControllerWorkResponses[keyof PollForControllerWorkResponses];
+export type PollForRunAssignmentResponse =
+  PollForRunAssignmentResponses[keyof PollForRunAssignmentResponses];
 
 export type CreateRunData = {
   body: RunCreate;

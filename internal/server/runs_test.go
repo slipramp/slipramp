@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -161,9 +162,23 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 }
 
 type recordingRunService struct {
-	request run.CreateRequest
-	created run.Run
-	err     error
+	request         run.CreateRequest
+	created         run.Run
+	err             error
+	nextClusterName string
+	next            run.Run
+	nextError       error
+	nextCalls       int
+}
+
+func (s *recordingRunService) NextRunAssignment(
+	_ context.Context,
+	clusterName string,
+) (run.Run, error) {
+	s.nextCalls++
+	s.nextClusterName = clusterName
+
+	return s.next, s.nextError
 }
 
 func (s *recordingRunService) CreateRun(

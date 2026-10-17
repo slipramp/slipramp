@@ -140,6 +140,28 @@ Runs for the same target are serialized by default to avoid conflicting infrastr
 
 The execution contract should remain small and stable: workspace layout, standard environment variables, parameters, credential injection, artifact input and output directories, streaming logs, and exit status.
 
+For the MVP, each Run becomes a Job named `slipramp-run-<run-id>` with stable
+Run and cluster labels, `restartPolicy: Never`, and `backoffLimit: 0`. A checkout
+init container uses a pinned controller-configured image containing `/bin/sh`,
+Git, and SSH. It fetches the Run's exact commit into an `emptyDir`; it never
+copies repository contents through the Server or object storage. The action
+container mounts that repository at the runtime's `workingDirectory`, or
+`/workspace` when omitted, and uses the Target path as its process working
+directory.
+
+A second init container uses a pinned controller-configured harness image whose
+entrypoint is `slipramp-harness`. It invokes `--install` to copy the static
+harness into `/slipramp/bin` on an `emptyDir`. The action container starts that
+copy with the resolved explicit command and parameter arguments, preserving the
+rule that repository actions do not receive an implicit shell.
+
+Cluster-controller Git credential mappings resolve a logical checkout
+credential to a Kubernetes Secret name. The checkout container mounts that
+Secret read-only and recognizes the conventional `gitconfig`,
+`ssh-privatekey`, and `known_hosts` keys. Runtime credentials continue to use
+their declared environment, `envFrom`, file, or directory injection directly
+from placement-selected Secrets.
+
 ## Credentials and Injection
 
 Tools should not need Slipramp-specific credential support. Slipramp maps credentials into the conventional environment variables, files, volumes, or workload identity mechanisms already understood by each tool.
@@ -498,7 +520,7 @@ source action must declare that output. The only MVP compatibility policy is
 Most architectural questions are settled above. These details still need decisions while planning or implementing the MVP:
 
 - Versioning and compatibility behavior after the MVP `v1alpha1` repository contract.
-- The exact Job and harness ABI: workspace roots, standard Slipramp environment variables, harness injection, signal and cancellation handling, and artifact transfer mechanics.
+- The remaining harness ABI for standard Slipramp environment variables, cancellation handling, and artifact transfer mechanics.
 - PostgreSQL history retention and archival, plus S3 object naming, log chunking, lifecycle, deletion, and orphan cleanup.
 
 The following questions are intentionally deferred and do not block the MVP:

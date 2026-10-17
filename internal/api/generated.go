@@ -498,6 +498,85 @@ type Run struct {
 // RunState defines model for Run.State.
 type RunState string
 
+// RunAssignment defines model for RunAssignment.
+type RunAssignment struct {
+	Action RunAssignmentAction `json:"action"`
+
+	// CatalogRevisionID Immutable catalog revision against which the Run was resolved.
+	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
+
+	// CommitSha Exact Git commit the execution Job must check out.
+	CommitSha string `json:"commitSha"`
+
+	// ID Stable Run identity used to derive Kubernetes object names.
+	ID openapi_types.UUID `json:"id"`
+
+	// Parameters Validated values for the action's declared parameters.
+	Parameters map[string]ParameterValue `json:"parameters"`
+	Placement  RunAssignmentPlacement    `json:"placement"`
+	Repository RunAssignmentRepository   `json:"repository"`
+	Runtime    RunAssignmentRuntime      `json:"runtime"`
+	Target     RunAssignmentTarget       `json:"target"`
+}
+
+// RunAssignmentAction defines model for RunAssignmentAction.
+type RunAssignmentAction struct {
+	Artifacts            *map[string]ArtifactDeclaration `json:"artifacts,omitempty"`
+	Command              []string                        `json:"command"`
+	Credentials          *map[string]CatalogName         `json:"credentials,omitempty"`
+	Inputs               *map[string]ArtifactInput       `json:"inputs,omitempty"`
+	Intent               *string                         `json:"intent,omitempty"`
+	Name                 CatalogName                     `json:"name"`
+	ParameterDefinitions *map[string]Parameter           `json:"parameterDefinitions,omitempty"`
+	Placement            CatalogName                     `json:"placement"`
+	Resources            *ResourceRequirements           `json:"resources,omitempty"`
+	Runtime              CatalogName                     `json:"runtime"`
+	Timeout              *string                         `json:"timeout,omitempty"`
+}
+
+// RunAssignmentCredential defines model for RunAssignmentCredential.
+type RunAssignmentCredential struct {
+	SecretName string `json:"secretName"`
+}
+
+// RunAssignmentPlacement defines model for RunAssignmentPlacement.
+type RunAssignmentPlacement struct {
+	Cluster      CatalogName                         `json:"cluster"`
+	Credentials  *map[string]RunAssignmentCredential `json:"credentials,omitempty"`
+	JobNamespace CatalogName                         `json:"jobNamespace"`
+	Name         CatalogName                         `json:"name"`
+	NodeSelector *map[string]string                  `json:"nodeSelector,omitempty"`
+
+	// PodTemplate Validated placement PodTemplateSpec extensions.
+	PodTemplate        *map[string]interface{} `json:"podTemplate,omitempty"`
+	Resources          *ResourceRequirements   `json:"resources,omitempty"`
+	ServiceAccountName *string                 `json:"serviceAccountName,omitempty"`
+	Timeout            *string                 `json:"timeout,omitempty"`
+}
+
+// RunAssignmentRepository defines model for RunAssignmentRepository.
+type RunAssignmentRepository struct {
+	Branch                 string       `json:"branch"`
+	CheckoutCredentialName *CatalogName `json:"checkoutCredentialName,omitempty"`
+	CloneURL               string       `json:"cloneUrl"`
+	Name                   CatalogName  `json:"name"`
+}
+
+// RunAssignmentRuntime defines model for RunAssignmentRuntime.
+type RunAssignmentRuntime struct {
+	Credentials      *map[string]RuntimeCredential `json:"credentials,omitempty"`
+	Environment      *map[string]string            `json:"environment,omitempty"`
+	Image            string                        `json:"image"`
+	Name             CatalogName                   `json:"name"`
+	WorkingDirectory *string                       `json:"workingDirectory,omitempty"`
+}
+
+// RunAssignmentTarget defines model for RunAssignmentTarget.
+type RunAssignmentTarget struct {
+	Name CatalogName `json:"name"`
+	Path *string     `json:"path,omitempty"`
+}
+
 // RunCreate defines model for RunCreate.
 type RunCreate struct {
 	Action CatalogName `json:"action"`
@@ -575,16 +654,16 @@ type TargetSpec struct {
 	Watch       *[]string             `json:"watch,omitempty"`
 }
 
-// PollForControllerWorkParams defines parameters for PollForControllerWork.
-type PollForControllerWorkParams struct {
-	// TimeoutSeconds Maximum time to wait for assigned work.
-	TimeoutSeconds *int `form:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
-}
-
 // CreateRunParams defines parameters for CreateRun.
 type CreateRunParams struct {
 	// IdempotencyKey Optional key that makes retries of the same run request return the originally created Run. Reusing a key for a different request is a conflict.
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
+}
+
+// PollForRunAssignmentParams defines parameters for PollForRunAssignment.
+type PollForRunAssignmentParams struct {
+	// TimeoutSeconds Maximum time to wait for a run assignment.
+	TimeoutSeconds *int `form:"timeoutSeconds,omitempty" json:"timeoutSeconds,omitempty"`
 }
 
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
@@ -762,13 +841,6 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 	ListClusters(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PollForControllerWork Poll for controller work
-	//
-	// Records the cluster controller as healthy and waits for work assigned to its cluster. An empty response means no work became available before the requested wait elapsed.
-	//
-	// Corresponds with POST /api/v1/controllers/{clusterName}/poll (the `PollForControllerWork` operationId).
-	PollForControllerWork(ctx context.Context, clusterName string, params *PollForControllerWorkParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListRepositories List repositories
 	//
 	// Lists active repository registrations ordered by name.
@@ -826,6 +898,13 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRun(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PollForRunAssignment Poll for a run assignment
+	//
+	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+	//
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
+	PollForRunAssignment(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHealth Check server health
 	//
 	// Reports whether the Slipramp Server process is serving HTTP requests.
@@ -841,23 +920,6 @@ type ClientInterface interface {
 // Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 func (c *Client) ListClusters(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListClustersRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// PollForControllerWork Poll for controller work
-//
-// Records the cluster controller as healthy and waits for work assigned to its cluster. An empty response means no work became available before the requested wait elapsed.
-//
-// Corresponds with POST /api/v1/controllers/{clusterName}/poll (the `PollForControllerWork` operationId).
-func (c *Client) PollForControllerWork(ctx context.Context, clusterName string, params *PollForControllerWorkParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPollForControllerWorkRequest(c.Server, clusterName, params)
 	if err != nil {
 		return nil, err
 	}
@@ -995,6 +1057,23 @@ func (c *Client) CreateRun(ctx context.Context, params *CreateRunParams, body Cr
 	return c.Client.Do(req)
 }
 
+// PollForRunAssignment Poll for a run assignment
+//
+// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+//
+// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
+func (c *Client) PollForRunAssignment(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPollForRunAssignmentRequest(c.Server, clusterName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetHealth Check server health
 //
 // Reports whether the Slipramp Server process is serving HTTP requests.
@@ -1032,67 +1111,6 @@ func NewListClustersRequest(server string) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewPollForControllerWorkRequest constructs an http.Request for the PollForControllerWork method
-func NewPollForControllerWorkRequest(server string, clusterName string, params *PollForControllerWorkParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clusterName", clusterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/controllers/%s/poll", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.TimeoutSeconds != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "timeoutSeconds", *params.TimeoutSeconds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1290,6 +1308,67 @@ func NewCreateRunRequestWithBody(server string, params *CreateRunParams, content
 	return req, nil
 }
 
+// NewPollForRunAssignmentRequest constructs an http.Request for the PollForRunAssignment method
+func NewPollForRunAssignmentRequest(server string, clusterName string, params *PollForRunAssignmentParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "clusterName", clusterName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/controllers/%s/poll", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.TimeoutSeconds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "timeoutSeconds", *params.TimeoutSeconds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetHealthRequest constructs an http.Request for the GetHealth method
 func NewGetHealthRequest(server string) (*http.Request, error) {
 	var err error
@@ -1370,15 +1449,6 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
 	ListClustersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListClustersResponse, error)
 
-	// PollForControllerWorkWithResponse Poll for controller work
-	//
-	// Records the cluster controller as healthy and waits for work assigned to its cluster. An empty response means no work became available before the requested wait elapsed.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /api/v1/controllers/{clusterName}/poll (the `PollForControllerWork` operationId).
-	PollForControllerWorkWithResponse(ctx context.Context, clusterName string, params *PollForControllerWorkParams, reqEditors ...RequestEditorFn) (*PollForControllerWorkResponse, error)
-
 	// ListRepositoriesWithResponse List repositories
 	//
 	// Lists active repository registrations ordered by name.
@@ -1442,6 +1512,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/runs (the `CreateRun` operationId).
 	CreateRunWithResponse(ctx context.Context, params *CreateRunParams, body CreateRunJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateRunResponse, error)
 
+	// PollForRunAssignmentWithResponse Poll for a run assignment
+	//
+	// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
+	PollForRunAssignmentWithResponse(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*PollForRunAssignmentResponse, error)
+
 	// GetHealthWithResponse Check server health
 	//
 	// Reports whether the Slipramp Server process is serving HTTP requests.
@@ -1501,68 +1580,6 @@ func (r ListClustersResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListClustersResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type PollForControllerWorkResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationProblemJSON400 *Problem
-	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationProblemJSON401 *Problem
-	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
-	ApplicationProblemJSON405 *Problem
-	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationProblemJSON500 *Problem
-}
-
-// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r PollForControllerWorkResponse) GetApplicationProblemJSON400() *Problem {
-	return r.ApplicationProblemJSON400
-}
-
-// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r PollForControllerWorkResponse) GetApplicationProblemJSON401() *Problem {
-	return r.ApplicationProblemJSON401
-}
-
-// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
-func (r PollForControllerWorkResponse) GetApplicationProblemJSON405() *Problem {
-	return r.ApplicationProblemJSON405
-}
-
-// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r PollForControllerWorkResponse) GetApplicationProblemJSON500() *Problem {
-	return r.ApplicationProblemJSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r PollForControllerWorkResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r PollForControllerWorkResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PollForControllerWorkResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PollForControllerWorkResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -1907,6 +1924,75 @@ func (r CreateRunResponse) ContentType() string {
 	return ""
 }
 
+type PollForRunAssignmentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RunAssignment
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PollForRunAssignmentResponse) GetJSON200() *RunAssignment {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PollForRunAssignmentResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PollForRunAssignmentResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r PollForRunAssignmentResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r PollForRunAssignmentResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PollForRunAssignmentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PollForRunAssignmentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PollForRunAssignmentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PollForRunAssignmentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1968,21 +2054,6 @@ func (c *ClientWithResponses) ListClustersWithResponse(ctx context.Context, reqE
 		return nil, err
 	}
 	return ParseListClustersResponse(rsp)
-}
-
-// PollForControllerWorkWithResponse Poll for controller work
-//
-// Records the cluster controller as healthy and waits for work assigned to its cluster. An empty response means no work became available before the requested wait elapsed.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /api/v1/controllers/{clusterName}/poll (the `PollForControllerWork` operationId).
-func (c *ClientWithResponses) PollForControllerWorkWithResponse(ctx context.Context, clusterName string, params *PollForControllerWorkParams, reqEditors ...RequestEditorFn) (*PollForControllerWorkResponse, error) {
-	rsp, err := c.PollForControllerWork(ctx, clusterName, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePollForControllerWorkResponse(rsp)
 }
 
 // ListRepositoriesWithResponse List repositories
@@ -2090,6 +2161,21 @@ func (c *ClientWithResponses) CreateRunWithResponse(ctx context.Context, params 
 	return ParseCreateRunResponse(rsp)
 }
 
+// PollForRunAssignmentWithResponse Poll for a run assignment
+//
+// Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/controllers/{clusterName}/poll (the `PollForRunAssignment` operationId).
+func (c *ClientWithResponses) PollForRunAssignmentWithResponse(ctx context.Context, clusterName string, params *PollForRunAssignmentParams, reqEditors ...RequestEditorFn) (*PollForRunAssignmentResponse, error) {
+	rsp, err := c.PollForRunAssignment(ctx, clusterName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePollForRunAssignmentResponse(rsp)
+}
+
 // GetHealthWithResponse Check server health
 //
 // Reports whether the Slipramp Server process is serving HTTP requests.
@@ -2125,56 +2211,6 @@ func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON405 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParsePollForControllerWorkResponse parses an HTTP response from a PollForControllerWorkWithResponse call
-func ParsePollForControllerWorkResponse(rsp *http.Response) (*PollForControllerWorkResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PollForControllerWorkResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case rsp.StatusCode == 204:
-		break // No content-type
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -2467,6 +2503,63 @@ func ParseCreateRunResponse(rsp *http.Response) (*CreateRunResponse, error) {
 	return response, nil
 }
 
+// ParsePollForRunAssignmentResponse parses an HTTP response from a PollForRunAssignmentWithResponse call
+func ParsePollForRunAssignmentResponse(rsp *http.Response) (*PollForRunAssignmentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PollForRunAssignmentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RunAssignment
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2505,9 +2598,6 @@ type ServerInterface interface {
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(w http.ResponseWriter, r *http.Request)
-	// PollForControllerWork Poll for controller work
-	// (POST /api/v1/controllers/{clusterName}/poll)
-	PollForControllerWork(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerWorkParams)
 	// ListRepositories List repositories
 	// (GET /api/v1/repositories)
 	ListRepositories(w http.ResponseWriter, r *http.Request)
@@ -2523,6 +2613,9 @@ type ServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(w http.ResponseWriter, r *http.Request, params CreateRunParams)
+	// PollForRunAssignment Poll for a run assignment
+	// (POST /controller/v1/controllers/{clusterName}/poll)
+	PollForRunAssignment(w http.ResponseWriter, r *http.Request, clusterName string, params PollForRunAssignmentParams)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -2542,48 +2635,6 @@ func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListClusters(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// PollForControllerWork operation middleware
-func (siw *ServerInterfaceWrapper) PollForControllerWork(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "clusterName" -------------
-	var clusterName string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "clusterName", r.PathValue("clusterName"), &clusterName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clusterName", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params PollForControllerWorkParams
-
-	// ------------- Optional query parameter "timeoutSeconds" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "timeoutSeconds", r.URL.Query(), &params.TimeoutSeconds, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "timeoutSeconds"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "timeoutSeconds", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.PollForControllerWork(w, r, clusterName, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2705,6 +2756,48 @@ func (siw *ServerInterfaceWrapper) CreateRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateRun(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PollForRunAssignment operation middleware
+func (siw *ServerInterfaceWrapper) PollForRunAssignment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "clusterName" -------------
+	var clusterName string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "clusterName", r.PathValue("clusterName"), &clusterName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "clusterName", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PollForRunAssignmentParams
+
+	// ------------- Optional query parameter "timeoutSeconds" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "timeoutSeconds", r.URL.Query(), &params.TimeoutSeconds, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "timeoutSeconds"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "timeoutSeconds", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PollForRunAssignment(w, r, clusterName, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2854,7 +2947,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/controllers/{clusterName}/poll", wrapper.PollForControllerWork)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/controllers/{clusterName}/poll", wrapper.PollForRunAssignment)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 
 	return m
@@ -2898,79 +2991,6 @@ func (response ListClusters405ApplicationProblemPlusJSONResponse) VisitListClust
 type ListClusters500ApplicationProblemPlusJSONResponse Problem
 
 func (response ListClusters500ApplicationProblemPlusJSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type PollForControllerWorkRequestObject struct {
-	ClusterName string `json:"clusterName"`
-	Params      PollForControllerWorkParams
-}
-
-type PollForControllerWorkResponseObject interface {
-	VisitPollForControllerWorkResponse(w http.ResponseWriter) error
-}
-
-type PollForControllerWork204Response struct {
-}
-
-func (response PollForControllerWork204Response) VisitPollForControllerWorkResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type PollForControllerWork400ApplicationProblemPlusJSONResponse Problem
-
-func (response PollForControllerWork400ApplicationProblemPlusJSONResponse) VisitPollForControllerWorkResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type PollForControllerWork401ApplicationProblemPlusJSONResponse Problem
-
-func (response PollForControllerWork401ApplicationProblemPlusJSONResponse) VisitPollForControllerWorkResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type PollForControllerWork405ApplicationProblemPlusJSONResponse Problem
-
-func (response PollForControllerWork405ApplicationProblemPlusJSONResponse) VisitPollForControllerWorkResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(405)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type PollForControllerWork500ApplicationProblemPlusJSONResponse Problem
-
-func (response PollForControllerWork500ApplicationProblemPlusJSONResponse) VisitPollForControllerWorkResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -3362,6 +3382,93 @@ func (response CreateRun500ApplicationProblemPlusJSONResponse) VisitCreateRunRes
 	return err
 }
 
+type PollForRunAssignmentRequestObject struct {
+	ClusterName string `json:"clusterName"`
+	Params      PollForRunAssignmentParams
+}
+
+type PollForRunAssignmentResponseObject interface {
+	VisitPollForRunAssignmentResponse(w http.ResponseWriter) error
+}
+
+type PollForRunAssignment200JSONResponse RunAssignment
+
+func (response PollForRunAssignment200JSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollForRunAssignment204Response struct {
+}
+
+func (response PollForRunAssignment204Response) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type PollForRunAssignment400ApplicationProblemPlusJSONResponse Problem
+
+func (response PollForRunAssignment400ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollForRunAssignment401ApplicationProblemPlusJSONResponse Problem
+
+func (response PollForRunAssignment401ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollForRunAssignment405ApplicationProblemPlusJSONResponse Problem
+
+func (response PollForRunAssignment405ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PollForRunAssignment500ApplicationProblemPlusJSONResponse Problem
+
+func (response PollForRunAssignment500ApplicationProblemPlusJSONResponse) VisitPollForRunAssignmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -3402,9 +3509,6 @@ type StrictServerInterface interface {
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(ctx context.Context, request ListClustersRequestObject) (ListClustersResponseObject, error)
-	// PollForControllerWork Poll for controller work
-	// (POST /api/v1/controllers/{clusterName}/poll)
-	PollForControllerWork(ctx context.Context, request PollForControllerWorkRequestObject) (PollForControllerWorkResponseObject, error)
 	// ListRepositories List repositories
 	// (GET /api/v1/repositories)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
@@ -3420,6 +3524,9 @@ type StrictServerInterface interface {
 	// CreateRun Create an action run
 	// (POST /api/v1/runs)
 	CreateRun(ctx context.Context, request CreateRunRequestObject) (CreateRunResponseObject, error)
+	// PollForRunAssignment Poll for a run assignment
+	// (POST /controller/v1/controllers/{clusterName}/poll)
+	PollForRunAssignment(ctx context.Context, request PollForRunAssignmentRequestObject) (PollForRunAssignmentResponseObject, error)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -3481,33 +3588,6 @@ func (sh *strictHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListClustersResponseObject); ok {
 		if err := validResponse.VisitListClustersResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// PollForControllerWork operation middleware
-func (sh *strictHandler) PollForControllerWork(w http.ResponseWriter, r *http.Request, clusterName string, params PollForControllerWorkParams) {
-	var request PollForControllerWorkRequestObject
-
-	request.ClusterName = clusterName
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.PollForControllerWork(ctx, request.(PollForControllerWorkRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "PollForControllerWork")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(PollForControllerWorkResponseObject); ok {
-		if err := validResponse.VisitPollForControllerWorkResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -3648,6 +3728,33 @@ func (sh *strictHandler) CreateRun(w http.ResponseWriter, r *http.Request, param
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateRunResponseObject); ok {
 		if err := validResponse.VisitCreateRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PollForRunAssignment operation middleware
+func (sh *strictHandler) PollForRunAssignment(w http.ResponseWriter, r *http.Request, clusterName string, params PollForRunAssignmentParams) {
+	var request PollForRunAssignmentRequestObject
+
+	request.ClusterName = clusterName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PollForRunAssignment(ctx, request.(PollForRunAssignmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PollForRunAssignment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PollForRunAssignmentResponseObject); ok {
+		if err := validResponse.VisitPollForRunAssignmentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

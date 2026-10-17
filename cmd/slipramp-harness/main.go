@@ -21,10 +21,19 @@ func run(
 	stdout io.Writer,
 	stderr io.Writer,
 ) int {
+	if len(command) == 2 && command[0] == "--install" {
+		if err := harness.Install(command[1]); err != nil {
+			_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
+			return 1
+		}
+
+		return 0
+	}
+
 	if len(command) == 0 {
 		_, _ = fmt.Fprintln(
 			stderr,
-			"usage: slipramp-harness <command> [argument ...]",
+			"usage: slipramp-harness <command> [argument ...] | --install <path>",
 		)
 		return 2
 	}

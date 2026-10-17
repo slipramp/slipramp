@@ -12,12 +12,12 @@ import (
 const pollRequestTimeout = 35 * time.Second
 
 type controllerAPI interface {
-	PollForControllerWorkWithResponse(
+	PollForRunAssignmentWithResponse(
 		ctx context.Context,
 		clusterName string,
-		params *api.PollForControllerWorkParams,
+		params *api.PollForRunAssignmentParams,
 		reqEditors ...api.RequestEditorFn,
-	) (*api.PollForControllerWorkResponse, error)
+	) (*api.PollForRunAssignmentResponse, error)
 }
 
 type serverClient struct {
@@ -50,23 +50,29 @@ func newServerClientWithHTTPClient(
 	}, nil
 }
 
-func (c *serverClient) Poll(ctx context.Context) error {
-	response, err := c.api.PollForControllerWorkWithResponse(
+func (c *serverClient) Poll(ctx context.Context) (*api.RunAssignment, error) {
+	response, err := c.api.PollForRunAssignmentWithResponse(
 		ctx,
 		c.clusterName,
 		nil,
 	)
 	if err != nil {
-		return fmt.Errorf("poll Server for controller work: %w", err)
+		return nil, fmt.Errorf("poll Server for run assignment: %w", err)
 	}
 
 	switch response.StatusCode() {
+	case http.StatusOK:
+		if response.JSON200 == nil {
+			return nil, fmt.Errorf("controller poll returned an empty assignment response")
+		}
+
+		return response.JSON200, nil
 	case http.StatusNoContent:
-		return nil
+		return nil, nil
 	case http.StatusUnauthorized:
-		return errControllerCredentialRejected
+		return nil, errControllerCredentialRejected
 	default:
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"controller poll returned HTTP %d",
 			response.StatusCode(),
 		)

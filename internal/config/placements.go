@@ -11,9 +11,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/slipramp/slipramp/internal/placement"
 	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/slipramp/slipramp/internal/placement"
 )
 
 const (

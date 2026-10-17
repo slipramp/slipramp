@@ -31,12 +31,12 @@ clusters:
 
 poll:
   post:
-    operationId: pollForControllerWork
-    summary: Poll for controller work
+    operationId: pollForRunAssignment
+    summary: Poll for a run assignment
     description: >-
-      Records the cluster controller as healthy and waits for work assigned to
-      its cluster. An empty response means no work became available before the
-      requested wait elapsed.
+      Records the cluster controller as healthy and waits for a Run assigned to
+      its cluster. An empty response means no assignment became available before
+      the requested wait elapsed.
     security:
       - ControllerBearer: []
     tags:
@@ -54,15 +54,23 @@ poll:
       - name: timeoutSeconds
         in: query
         required: false
-        description: Maximum time to wait for assigned work.
+        description: Maximum time to wait for a run assignment.
         schema:
           type: integer
           minimum: 0
           maximum: 30
           default: 25
     responses:
+      "200":
+        description: >-
+          A frozen Run assignment for this cluster. The same assignment may be
+          returned again until the controller reports another Run state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/controllers.yaml#/RunAssignment
       "204":
-        description: No work became available before the poll completed.
+        description: No run assignment became available before the poll completed.
       "400":
         description: The poll timeout is invalid.
         content:

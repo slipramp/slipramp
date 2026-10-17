@@ -66,8 +66,8 @@ The intended deployment is a single trusted Slipramp installation executing work
 ### Kubernetes execution
 
 - Queue each run for the cluster selected by its resolved placement.
-- Return assigned work from the controller's long poll and create one local Kubernetes Job with a deterministic name and stable labels.
-- Make delivery at least once and make repeated work responses idempotent instead of introducing a distributed lease protocol.
+- Return a run assignment from the controller's long poll and create one local Kubernetes Job with a deterministic name and stable labels.
+- Make delivery at least once and make repeated run assignments idempotent instead of introducing a distributed lease protocol.
 - Clone the repository and check out the run's exact commit into a shared workspace through an init container.
 - Resolve private-repository checkout credentials from the selected cluster without persisting their values in PostgreSQL.
 - Inject a static Slipramp harness without requiring it in the runtime image.
@@ -160,7 +160,7 @@ The initial PostgreSQL schema should center on these records:
 - repositories and repository refresh state
 - immutable catalog revisions and validation results
 - current target and runtime projections
-- clusters, controller last-seen observations, and assigned work
+- clusters, controller last-seen observations, and run assignments
 - runs and run state transitions
 - run request idempotency keys
 - target concurrency leases

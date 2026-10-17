@@ -60,6 +60,7 @@ Use the established names consistently:
 - Use PostgreSQL directly for durable state and S3-compatible storage for artifact contents.
 - Format and lint Go through golangci-lint v2 (`golangci-lint fmt` and `golangci-lint run`).
 - Keep Go code spacious and readable rather than dense. Prefer short lines, focused functions, named intermediate values, and distinct chunks of logic over compressed expressions or large functions that mash unrelated work together.
+- Keep structured log calls compact: put each key/value pair on one line, and attach stable fields such as `component` to the component logger with `logger.With`.
 - Use strict TypeScript, Oxlint, and Oxfmt. Do not add ESLint, Prettier, or Stylelint.
 - Pin tool and dependency versions. Treat warnings as failures.
 - Keep generated output reproducible and include proportionate unit and integration tests with changes.

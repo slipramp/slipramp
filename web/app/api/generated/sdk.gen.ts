@@ -21,9 +21,9 @@ import type {
   ListRepositoriesData,
   ListRepositoriesErrors,
   ListRepositoriesResponses,
-  PollForControllerWorkData,
-  PollForControllerWorkErrors,
-  PollForControllerWorkResponses,
+  PollForRunAssignmentData,
+  PollForRunAssignmentErrors,
+  PollForRunAssignmentResponses,
   RemoveRepositoryData,
   RemoveRepositoryErrors,
   RemoveRepositoryResponses,
@@ -132,20 +132,20 @@ export const listClusters = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Poll for controller work
+ * Poll for a run assignment
  *
- * Records the cluster controller as healthy and waits for work assigned to its cluster. An empty response means no work became available before the requested wait elapsed.
+ * Records the cluster controller as healthy and waits for a Run assigned to its cluster. An empty response means no assignment became available before the requested wait elapsed.
  */
-export const pollForControllerWork = <ThrowOnError extends boolean = false>(
-  options: Options<PollForControllerWorkData, ThrowOnError>,
-): RequestResult<PollForControllerWorkResponses, PollForControllerWorkErrors, ThrowOnError> =>
+export const pollForRunAssignment = <ThrowOnError extends boolean = false>(
+  options: Options<PollForRunAssignmentData, ThrowOnError>,
+): RequestResult<PollForRunAssignmentResponses, PollForRunAssignmentErrors, ThrowOnError> =>
   (options.client ?? client).post<
-    PollForControllerWorkResponses,
-    PollForControllerWorkErrors,
+    PollForRunAssignmentResponses,
+    PollForRunAssignmentErrors,
     ThrowOnError
   >({
     security: [{ scheme: "bearer", type: "http" }],
-    url: "/api/v1/controllers/{clusterName}/poll",
+    url: "/controller/v1/controllers/{clusterName}/poll",
     ...options,
   });
 
