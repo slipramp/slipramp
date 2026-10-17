@@ -1,0 +1,8 @@
+apis:
+  slipramp@v1:
+    root: ./api/openapi.yaml
+extends:
+  - recommended-strict
+rules:
+  info-license: off
+  no-server-example.com: off

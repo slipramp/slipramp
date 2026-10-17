@@ -22,6 +22,14 @@ func TestDefaultConfig(t *testing.T) {
 			10*time.Second,
 		)
 	}
+
+	if err := settings.Database.Validate(); err != nil {
+		t.Errorf("Database.Validate() error = %v", err)
+	}
+
+	if err := settings.ObjectStore.Validate(); err != nil {
+		t.Errorf("ObjectStore.Validate() error = %v", err)
+	}
 }
 
 func TestConfigValidate(t *testing.T) {
@@ -62,6 +70,20 @@ func TestConfigValidate(t *testing.T) {
 				settings.ShutdownTimeout = -1 * time.Second
 			},
 			wantError: "shutdown timeout",
+		},
+		{
+			name: "invalid database",
+			configure: func(settings *Config) {
+				settings.Database.URL = ""
+			},
+			wantError: "database",
+		},
+		{
+			name: "invalid object store",
+			configure: func(settings *Config) {
+				settings.ObjectStore.Endpoint = ""
+			},
+			wantError: "object store",
 		},
 	}
 

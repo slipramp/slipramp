@@ -24,20 +24,25 @@ func TestHealthEndpoint(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	newHandler().ServeHTTP(response, request)
+	expectedBody := "{\"status\":\"ok\"}\n"
 
 	if response.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", response.Code, http.StatusOK)
 	}
 
-	if response.Body.String() != "ok\n" {
-		t.Errorf("body = %q, want %q", response.Body.String(), "ok\n")
+	if response.Body.String() != expectedBody {
+		t.Errorf(
+			"body = %q, want %q",
+			response.Body.String(),
+			expectedBody,
+		)
 	}
 
-	if contentType := response.Header().Get("Content-Type"); contentType != "text/plain; charset=utf-8" {
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
 		t.Errorf(
 			"Content-Type = %q, want %q",
 			contentType,
-			"text/plain; charset=utf-8",
+			"application/json",
 		)
 	}
 }
@@ -72,10 +77,7 @@ func TestServerStopsWhenContextIsCanceled(t *testing.T) {
 	settings := DefaultConfig()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	app, err := New(settings, logger)
-	if err != nil {
-		t.Fatalf("New() error = %v", err)
-	}
+	app := newServer(settings, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	serveResult := make(chan error, 1)

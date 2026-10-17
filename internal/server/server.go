@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/api/handler"
 )
 
 const (
@@ -22,9 +24,14 @@ type Server struct {
 	shutdownTimeout time.Duration
 	logger          *slog.Logger
 	httpServer      *http.Server
+	persistence     *persistence
 }
 
-func New(cfg Config, logger *slog.Logger) (*Server, error) {
+func New(
+	ctx context.Context,
+	cfg Config,
+	logger *slog.Logger,
+) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -33,6 +40,21 @@ func New(cfg Config, logger *slog.Logger) (*Server, error) {
 		return nil, errors.New("logger is required")
 	}
 
+	persistence, err := openPersistence(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	server := newServer(cfg, logger)
+	server.persistence = persistence
+
+	return server, nil
+}
+
+func newServer(
+	cfg Config,
+	logger *slog.Logger,
+) *Server {
 	return &Server{
 		address:         cfg.Address,
 		shutdownTimeout: cfg.ShutdownTimeout,
@@ -43,7 +65,11 @@ func New(cfg Config, logger *slog.Logger) (*Server, error) {
 			IdleTimeout:       idleTimeout,
 			MaxHeaderBytes:    maxHeaderBytes,
 		},
-	}, nil
+	}
+}
+
+func (s *Server) Close() {
+	s.persistence.Close()
 }
 
 func (s *Server) Run(ctx context.Context) error {
@@ -117,14 +143,9 @@ func (s *Server) shutdown(ctx context.Context) error {
 }
 
 func newHandler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", func(writer http.ResponseWriter, _ *http.Request) {
-		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		writer.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(writer, "ok\n")
-	})
+	strictHandler := api.NewStrictHandler(handler.New(), nil)
 
-	return mux
+	return api.Handler(strictHandler)
 }
 
 func normalizeServeError(err error) error {

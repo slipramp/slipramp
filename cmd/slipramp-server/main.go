@@ -12,20 +12,11 @@ import (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-
-	cfg, err := config.LoadServer(os.LookupEnv)
-	if err != nil {
-		logger.Error("invalid server configuration", "error", err)
-		os.Exit(1)
-	}
-
-	app, err := server.New(cfg, logger)
-	if err != nil {
-		logger.Error("initialize server", "error", err)
-		os.Exit(1)
-	}
-
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
@@ -33,8 +24,26 @@ func main() {
 	)
 	defer stop()
 
+	cfg, err := config.LoadServer(os.LookupEnv)
+	if err != nil {
+		logger.Error("invalid server configuration", "error", err)
+
+		return 1
+	}
+
+	app, err := server.New(ctx, cfg, logger)
+	if err != nil {
+		logger.Error("initialize server", "error", err)
+
+		return 1
+	}
+	defer app.Close()
+
 	if err := app.Run(ctx); err != nil {
 		logger.Error("run server", "error", err)
-		os.Exit(1)
+
+		return 1
 	}
+
+	return 0
 }

@@ -1,0 +1,14 @@
+openapi: 3.1.0
+info:
+  title: Slipramp API
+  version: 0.1.0
+  description: HTTP API for the Slipramp Server.
+servers:
+  - url: /
+paths:
+  /healthz:
+    $ref: ./paths/system.yaml#/health
+components:
+  schemas:
+    HealthResponse:
+      $ref: ./components/common.yaml#/HealthResponse

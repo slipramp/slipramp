@@ -3,6 +3,16 @@ version: "3"
 vars:
   GOLANGCI_LINT: "{{.ROOT_DIR}}/.bin/golangci-lint"
   GOLANGCI_LINT_VERSION: v2.14.0
+  OAPI_CODEGEN: "{{.ROOT_DIR}}/.bin/oapi-codegen"
+  OAPI_CODEGEN_VERSION: v2.8.0
+  OPENAPI_BUNDLE: "{{.ROOT_DIR}}/.cache/openapi.yaml"
+  OPENAPI_TS: "{{.ROOT_DIR}}/node_modules/.bin/openapi-ts"
+  PNPM: "{{.ROOT_DIR}}/.cache/pnpm/node_modules/.bin/pnpm"
+  PNPM_STORE: "{{.ROOT_DIR}}/.cache/pnpm-store"
+  PNPM_VERSION: 12.14.0
+  REDOCLY: "{{.ROOT_DIR}}/node_modules/.bin/redocly"
+  SQLC: "{{.ROOT_DIR}}/.bin/sqlc"
+  SQLC_VERSION: v1.31.1
 
 env:
   GOCACHE: "{{.ROOT_DIR}}/.cache/go-build"
@@ -11,46 +21,145 @@ env:
 tasks:
   deps:
     desc: Install pinned development tools
+    deps: [deps:go, deps:web]
+
+  deps:go:
+    internal: true
     cmds:
       - mkdir -p "{{.ROOT_DIR}}/.bin"
       - GOBIN="{{.ROOT_DIR}}/.bin" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GOLANGCI_LINT_VERSION}}
+      - GOBIN="{{.ROOT_DIR}}/.bin" go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@{{.OAPI_CODEGEN_VERSION}}
+      - GOBIN="{{.ROOT_DIR}}/.bin" go install github.com/sqlc-dev/sqlc/cmd/sqlc@{{.SQLC_VERSION}}
     status:
       - test -x "{{.GOLANGCI_LINT}}"
       - test "$("{{.GOLANGCI_LINT}}" version --short)" = "{{trimPrefix "v" .GOLANGCI_LINT_VERSION}}"
+      - test -x "{{.OAPI_CODEGEN}}"
+      - '"{{.OAPI_CODEGEN}}" -version | rg -q "^{{.OAPI_CODEGEN_VERSION}}$"'
+      - test -x "{{.SQLC}}"
+      - test "$("{{.SQLC}}" version)" = "{{.SQLC_VERSION}}"
+
+  deps:pnpm:
+    internal: true
+    cmds:
+      - npm install --prefix "{{.ROOT_DIR}}/.cache/pnpm" --no-save --ignore-scripts pnpm@{{.PNPM_VERSION}}
+    status:
+      - test -x "{{.PNPM}}"
+      - test "$("{{.PNPM}}" --version)" = "{{.PNPM_VERSION}}"
+
+  deps:web:
+    internal: true
+    deps: [deps:pnpm]
+    cmds:
+      - '"{{.PNPM}}" install --frozen-lockfile --store-dir "{{.PNPM_STORE}}"'
+
+  web:dev:
+    desc: Run the web development server
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/web run dev'
+
+  local:up:
+    desc: Start local PostgreSQL and RustFS dependencies
+    cmds:
+      - docker compose -f deploy/compose.yaml up -d --wait postgres rustfs
+      - docker compose -f deploy/compose.yaml run --rm rustfs-init
+
+  local:down:
+    desc: Stop local dependencies without deleting their data
+    cmds:
+      - docker compose -f deploy/compose.yaml stop
+
+  generate:
+    desc: Generate API and database code
+    cmds:
+      - task: api:generate
+      - task: store:generate
+
+  store:generate:
+    desc: Generate typed PostgreSQL queries
+    deps: [deps:go]
+    cmds:
+      - '"{{.SQLC}}" generate'
+
+  api:generate:
+    desc: Validate and generate all API artifacts
+    deps: [deps]
+    cmds:
+      - '"{{.REDOCLY}}" lint api/openapi.yaml'
+      - '"{{.REDOCLY}}" bundle api/openapi.yaml --output "{{.OPENAPI_BUNDLE}}"'
+      - '"{{.OAPI_CODEGEN}}" --config api/oapi-codegen.yaml "{{.OPENAPI_BUNDLE}}"'
+      - '"{{.OPENAPI_TS}}" --file openapi-ts.config.ts'
+      - '"{{.PNPM}}" --filter @slipramp/web exec oxfmt --write app/api/generated'
+
+  api:check:
+    desc: Check generated API artifacts are current
+    deps: [deps]
+    cmds:
+      - ./scripts/check-generated.sh
+
+  store:check:
+    desc: Check generated PostgreSQL queries are current
+    deps: [deps:go]
+    cmds:
+      - ./scripts/check-sqlc-generated.sh
 
   format:
-    desc: Format Go source
+    desc: Format source
     deps: [deps]
     cmds:
       - '"{{.GOLANGCI_LINT}}" fmt'
+      - '"{{.PNPM}}" --filter @slipramp/web run format'
 
   format:check:
-    desc: Check Go formatting without changing files
+    desc: Check formatting without changing files
     deps: [deps]
     cmds:
       - '"{{.GOLANGCI_LINT}}" fmt --diff'
+      - '"{{.PNPM}}" --filter @slipramp/web run format:check'
 
   lint:
-    desc: Run Go linters
+    desc: Run linters
     deps: [deps]
     cmds:
       - '"{{.GOLANGCI_LINT}}" run'
+      - '"{{.PNPM}}" --filter @slipramp/web run lint'
 
   test:
     desc: Run Go tests with the race detector
     cmds:
       - go test -race ./...
 
+  integration:
+    desc: Run PostgreSQL and S3 integration tests against local dependencies
+    deps: [local:up]
+    env:
+      TEST_DATABASE_URL: postgres://slipramp:slipramp-development@127.0.0.1:5432/slipramp?sslmode=disable
+      TEST_S3_ACCESS_KEY_ID: slipramp
+      TEST_S3_BUCKET: slipramp
+      TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      TEST_S3_REGION: us-east-1
+      TEST_S3_SECRET_ACCESS_KEY: slipramp-development
+    cmds:
+      - go test -race -count=1 ./internal/store ./internal/objectstore ./internal/server
+
   build:
-    desc: Build all Go commands
+    desc: Build all processes
+    deps: [deps]
     cmds:
       - go build ./...
+      - '"{{.PNPM}}" --filter @slipramp/web run build'
 
   check:
     desc: Run all local quality checks
     deps: [deps]
     cmds:
+      - task: api:check
+      - task: store:check
       - '"{{.GOLANGCI_LINT}}" fmt --diff'
       - '"{{.GOLANGCI_LINT}}" run'
       - go test -race ./...
       - go build ./...
+      - '"{{.PNPM}}" --filter @slipramp/web run lint'
+      - '"{{.PNPM}}" --filter @slipramp/web run format:check'
+      - '"{{.PNPM}}" --filter @slipramp/web run typecheck'
+      - '"{{.PNPM}}" --filter @slipramp/web run build'

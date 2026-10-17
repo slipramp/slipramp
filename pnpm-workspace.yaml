@@ -1,0 +1,4 @@
+packages:
+  - web
+minimumReleaseAgeExclude:
+  - '@redocly/cli@2.64.1'

@@ -1,0 +1,17 @@
+health:
+  get:
+    operationId: getHealth
+    summary: Check server health
+    description: Reports whether the Slipramp Server process is serving HTTP requests.
+    security: []
+    tags:
+      - System
+    responses:
+      "200":
+        description: The server is healthy.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/common.yaml#/HealthResponse
+      "405":
+        description: The HTTP method is not supported for this resource.
