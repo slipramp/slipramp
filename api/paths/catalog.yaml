@@ -1,0 +1,52 @@
+repositoryCatalog:
+  get:
+    operationId: getRepositoryCatalog
+    summary: Get the active repository catalog
+    description: >-
+      Returns the immutable catalog revision currently active for an existing
+      repository. A repository without an accepted catalog does not have this
+      resource yet.
+    security: []
+    tags:
+      - Catalog
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        description: Stable identity of the repository registration.
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: The repository's active catalog revision.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/catalog.yaml#/CatalogRevision
+      "400":
+        description: The repository identity is not a valid UUID.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: >-
+          The active repository does not exist or does not have an accepted
+          catalog revision.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The active catalog could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

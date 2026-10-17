@@ -37,7 +37,7 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil, nil).ServeHTTP(response, request)
+	newHandler(controllers, nil, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -90,7 +90,7 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil, nil).ServeHTTP(response, request)
+	newHandler(controllers, nil, nil, nil).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusInternalServerError)
 	if strings.Contains(response.Body.String(), "database unavailable") {
@@ -113,6 +113,7 @@ func TestControllerPollAuthenticatesAndDelegates(t *testing.T) {
 
 	newHandler(
 		controllers,
+		nil,
 		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)
@@ -149,6 +150,7 @@ func TestControllerPollUsesDefaultWait(t *testing.T) {
 
 	newHandler(
 		controllers,
+		nil,
 		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)
@@ -223,6 +225,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 			newHandler(
 				controllers,
 				nil,
+				nil,
 				map[string]string{"colo": "controller-token"},
 			).ServeHTTP(response, request)
 
@@ -258,6 +261,7 @@ func TestControllerPollRejectsInvalidTimeout(t *testing.T) {
 	newHandler(
 		controllers,
 		nil,
+		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)
 
@@ -285,6 +289,7 @@ func TestControllerPollReturnsProblemWhenServiceFails(t *testing.T) {
 
 	newHandler(
 		controllers,
+		nil,
 		nil,
 		map[string]string{"colo": "controller-token"},
 	).ServeHTTP(response, request)

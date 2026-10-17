@@ -73,6 +73,23 @@ export type RepositoryConfig = {
   checkoutCredentialName?: string;
 };
 
+export type CatalogRevision = {
+  /**
+   * Stable identity of the immutable catalog revision.
+   */
+  id: string;
+  /**
+   * Exact Git commit from which the catalog was accepted.
+   */
+  commitSha: string;
+  /**
+   * Time at which the catalog revision was first accepted.
+   */
+  createdAt: string;
+  runtimes: Array<Runtime>;
+  targets: Array<Target>;
+};
+
 export type Cluster = {
   /**
    * Stable logical name of the execution cluster.
@@ -117,6 +134,144 @@ export type RepositoryRefresh = {
    * Diagnostic from the most recent failed refresh attempt.
    */
   failureReason?: string;
+};
+
+export type ResourceMetadata = {
+  name: string;
+  title?: string;
+};
+
+export type CredentialEnvironmentVariable = {
+  key: string;
+};
+
+export type CredentialFile = {
+  key: string;
+  path: string;
+  mode?: number;
+};
+
+export type CredentialDirectory = {
+  path: string;
+  mode?: number;
+};
+
+export type CredentialInjection = {
+  environment?: {
+    [key: string]: CredentialEnvironmentVariable;
+  };
+  environmentFrom?: boolean;
+  files?: Array<CredentialFile>;
+  directory?: CredentialDirectory;
+};
+
+export type RuntimeCredential = {
+  inject: CredentialInjection;
+};
+
+export type RuntimeSpec = {
+  image: string;
+  workingDirectory?: string;
+  environment?: {
+    [key: string]: string;
+  };
+  credentials?: {
+    [key: string]: RuntimeCredential;
+  };
+};
+
+export type CatalogSource = {
+  path: string;
+  document: number;
+};
+
+export type Runtime = {
+  apiVersion: "slipramp.com/v1alpha1";
+  kind: "Runtime";
+  metadata: ResourceMetadata;
+  spec: RuntimeSpec;
+  source: CatalogSource;
+};
+
+export type ResourceRequirements = {
+  requests?: {
+    [key: string]: string;
+  };
+  limits?: {
+    [key: string]: string;
+  };
+};
+
+export type ParameterArgument = {
+  name?: string;
+};
+
+export type Parameter = {
+  type: "string" | "boolean" | "number" | "enum";
+  required?: boolean;
+  values?: Array<string>;
+  environment?: string;
+  argument?: ParameterArgument;
+};
+
+export type ArtifactDeclaration = {
+  path: string;
+  mediaType?: string;
+  sensitive?: boolean;
+};
+
+export type ArtifactInputSource = {
+  fromAction: string;
+  compatibility?: "exact-catalog-revision";
+};
+
+export type ArtifactInput = {
+  artifact: ArtifactInputSource;
+  mountPath: string;
+};
+
+export type Action = {
+  intent?: string;
+  command: Array<string>;
+  runtime?: string;
+  placement?: string;
+  credentials?: {
+    [key: string]: string;
+  };
+  timeout?: string;
+  resources?: ResourceRequirements;
+  parameters?: {
+    [key: string]: Parameter;
+  };
+  artifacts?: {
+    [key: string]: ArtifactDeclaration;
+  };
+  inputs?: {
+    [key: string]: ArtifactInput;
+  };
+};
+
+export type TargetSpec = {
+  path?: string;
+  watch?: Array<string>;
+  runtime?: string;
+  placement?: string;
+  credentials?: {
+    [key: string]: string;
+  };
+  timeout?: string;
+  resources?: ResourceRequirements;
+  actions: {
+    [key: string]: Action;
+  };
+};
+
+export type Target = {
+  apiVersion: "slipramp.com/v1alpha1";
+  kind: "Target";
+  metadata: ResourceMetadata;
+  spec: TargetSpec;
+  source: CatalogSource;
 };
 
 export type GetHealthData = {
@@ -251,6 +406,50 @@ export type RemoveRepositoryResponses = {
 };
 
 export type RemoveRepositoryResponse = RemoveRepositoryResponses[keyof RemoveRepositoryResponses];
+
+export type GetRepositoryCatalogData = {
+  body?: never;
+  path: {
+    /**
+     * Stable identity of the repository registration.
+     */
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/api/v1/repositories/{repositoryId}/catalog";
+};
+
+export type GetRepositoryCatalogErrors = {
+  /**
+   * The repository identity is not a valid UUID.
+   */
+  400: Problem;
+  /**
+   * The active repository does not exist or does not have an accepted catalog revision.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The active catalog could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetRepositoryCatalogError =
+  GetRepositoryCatalogErrors[keyof GetRepositoryCatalogErrors];
+
+export type GetRepositoryCatalogResponses = {
+  /**
+   * The repository's active catalog revision.
+   */
+  200: CatalogRevision;
+};
+
+export type GetRepositoryCatalogResponse =
+  GetRepositoryCatalogResponses[keyof GetRepositoryCatalogResponses];
 
 export type ListClustersData = {
   body?: never;

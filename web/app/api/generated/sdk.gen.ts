@@ -9,6 +9,9 @@ import type {
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
+  GetRepositoryCatalogData,
+  GetRepositoryCatalogErrors,
+  GetRepositoryCatalogResponses,
   ListClustersData,
   ListClustersErrors,
   ListClustersResponses,
@@ -97,6 +100,20 @@ export const removeRepository = <ThrowOnError extends boolean = false>(
     RemoveRepositoryErrors,
     ThrowOnError
   >({ url: "/api/v1/repositories/{repositoryId}", ...options });
+
+/**
+ * Get the active repository catalog
+ *
+ * Returns the immutable catalog revision currently active for an existing repository. A repository without an accepted catalog does not have this resource yet.
+ */
+export const getRepositoryCatalog = <ThrowOnError extends boolean = false>(
+  options: Options<GetRepositoryCatalogData, ThrowOnError>,
+): RequestResult<GetRepositoryCatalogResponses, GetRepositoryCatalogErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetRepositoryCatalogResponses,
+    GetRepositoryCatalogErrors,
+    ThrowOnError
+  >({ url: "/api/v1/repositories/{repositoryId}/catalog", ...options });
 
 /**
  * List execution clusters

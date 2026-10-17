@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"regexp"
@@ -15,6 +16,20 @@ type GitFetcher struct {
 	credentials RefreshCredentials
 }
 
+type FetchedCommit struct {
+	CommitSHA string
+	Files     fs.FS
+	cleanup   func() error
+}
+
+func (c FetchedCommit) Close() error {
+	if c.cleanup == nil {
+		return nil
+	}
+
+	return c.cleanup()
+}
+
 func NewGitFetcher(credentials RefreshCredentials) *GitFetcher {
 	return &GitFetcher{credentials: credentials}
 }
@@ -22,20 +37,26 @@ func NewGitFetcher(credentials RefreshCredentials) *GitFetcher {
 func (f *GitFetcher) Fetch(
 	ctx context.Context,
 	repository Repository,
-) (string, error) {
+) (FetchedCommit, error) {
 	gitConfigFile, err := f.credentials.gitConfigFile(
 		repository.RefreshCredentialName,
 	)
 	if err != nil {
-		return "", err
+		return FetchedCommit{}, err
 	}
 
 	checkoutDirectory, err := os.MkdirTemp("", "slipramp-repository-*")
 	if err != nil {
-		return "", fmt.Errorf("create repository refresh directory: %w", err)
+		return FetchedCommit{}, fmt.Errorf(
+			"create repository refresh directory: %w",
+			err,
+		)
 	}
+	keepCheckout := false
 	defer func() {
-		_ = os.RemoveAll(checkoutDirectory)
+		if !keepCheckout {
+			_ = os.RemoveAll(checkoutDirectory)
+		}
 	}()
 
 	environment := gitEnvironment(gitConfigFile)
@@ -43,18 +64,17 @@ func (f *GitFetcher) Fetch(
 		ctx,
 		environment,
 		"init",
-		"--bare",
 		"--quiet",
 		checkoutDirectory,
 	); err != nil {
-		return "", err
+		return FetchedCommit{}, err
 	}
 
 	branchReference := "refs/heads/" + repository.Branch
 	if _, err := runGit(
 		ctx,
 		environment,
-		"--git-dir",
+		"-C",
 		checkoutDirectory,
 		"fetch",
 		"--quiet",
@@ -64,7 +84,7 @@ func (f *GitFetcher) Fetch(
 		repository.CloneURL,
 		branchReference,
 	); err != nil {
-		return "", fmt.Errorf(
+		return FetchedCommit{}, fmt.Errorf(
 			"fetch branch %q: %w",
 			repository.Branch,
 			err,
@@ -74,22 +94,49 @@ func (f *GitFetcher) Fetch(
 	output, err := runGit(
 		ctx,
 		environment,
-		"--git-dir",
+		"-C",
 		checkoutDirectory,
 		"rev-parse",
 		"--verify",
 		"FETCH_HEAD^{commit}",
 	)
 	if err != nil {
-		return "", fmt.Errorf("resolve fetched commit: %w", err)
+		return FetchedCommit{}, fmt.Errorf("resolve fetched commit: %w", err)
 	}
 
 	commitSHA := strings.TrimSpace(output)
 	if !validCommitSHA(commitSHA) {
-		return "", fmt.Errorf("git returned invalid commit %q", commitSHA)
+		return FetchedCommit{}, fmt.Errorf(
+			"git returned invalid commit %q",
+			commitSHA,
+		)
 	}
 
-	return commitSHA, nil
+	if _, err := runGit(
+		ctx,
+		environment,
+		"-C",
+		checkoutDirectory,
+		"checkout",
+		"--quiet",
+		"--detach",
+		commitSHA,
+	); err != nil {
+		return FetchedCommit{}, fmt.Errorf(
+			"materialize fetched commit: %w",
+			err,
+		)
+	}
+
+	keepCheckout = true
+
+	return FetchedCommit{
+		CommitSHA: commitSHA,
+		Files:     os.DirFS(checkoutDirectory),
+		cleanup: func() error {
+			return os.RemoveAll(checkoutDirectory)
+		},
+	}, nil
 }
 
 func runGit(

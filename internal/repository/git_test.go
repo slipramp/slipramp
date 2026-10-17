@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,7 +64,7 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 		Branch:                "main",
 		RefreshCredentialName: &credentialName,
 	}
-	commitSHA, err := fetcher.Fetch(
+	fetched, err := fetcher.Fetch(
 		context.Background(),
 		Repository{
 			Config: cfg,
@@ -73,8 +74,23 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
-	if commitSHA != mainCommit {
-		t.Errorf("Fetch() commit = %q, want %q", commitSHA, mainCommit)
+	if fetched.CommitSHA != mainCommit {
+		t.Errorf("Fetch() commit = %q, want %q", fetched.CommitSHA, mainCommit)
+	}
+
+	contents, err := fs.ReadFile(fetched.Files, "tracked.txt")
+	if err != nil {
+		t.Fatalf("read fetched file: %v", err)
+	}
+	if string(contents) != "main\n" {
+		t.Errorf("fetched file = %q, want %q", contents, "main\\n")
+	}
+
+	if err := fetched.Close(); err != nil {
+		t.Fatalf("FetchedCommit.Close() error = %v", err)
+	}
+	if _, err := fs.ReadFile(fetched.Files, "tracked.txt"); err == nil {
+		t.Fatal("read fetched file after Close() error = nil")
 	}
 }
 

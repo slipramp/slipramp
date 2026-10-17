@@ -12,6 +12,8 @@ paths:
     $ref: ./paths/repositories.yaml#/repositories
   /api/v1/repositories/{repositoryId}:
     $ref: ./paths/repositories.yaml#/repository
+  /api/v1/repositories/{repositoryId}/catalog:
+    $ref: ./paths/catalog.yaml#/repositoryCatalog
   /api/v1/clusters:
     $ref: ./paths/controllers.yaml#/clusters
   /api/v1/controllers/{clusterName}/poll:
@@ -32,6 +34,8 @@ components:
       $ref: ./components/repositories.yaml#/RepositoryList
     RepositoryConfig:
       $ref: ./components/repositories.yaml#/RepositoryConfig
+    CatalogRevision:
+      $ref: ./components/catalog.yaml#/CatalogRevision
     Cluster:
       $ref: ./components/controllers.yaml#/Cluster
     ClusterList:

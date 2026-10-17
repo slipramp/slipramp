@@ -21,6 +21,21 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ArtifactInputSourceCompatibility.
+const (
+	ArtifactCompatibilityExactCatalogRevision ArtifactInputSourceCompatibility = "exact-catalog-revision"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactInputSourceCompatibility enum.
+func (e ArtifactInputSourceCompatibility) Valid() bool {
+	switch e {
+	case ArtifactCompatibilityExactCatalogRevision:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClusterConnectionState.
 const (
 	Connected   ClusterConnectionState = "connected"
@@ -54,6 +69,30 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for ParameterType.
+const (
+	ParameterTypeBoolean ParameterType = "boolean"
+	ParameterTypeEnum    ParameterType = "enum"
+	ParameterTypeNumber  ParameterType = "number"
+	ParameterTypeString  ParameterType = "string"
+)
+
+// Valid indicates whether the value is a known member of the ParameterType enum.
+func (e ParameterType) Valid() bool {
+	switch e {
+	case ParameterTypeBoolean:
+		return true
+	case ParameterTypeEnum:
+		return true
+	case ParameterTypeNumber:
+		return true
+	case ParameterTypeString:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RepositoryRefreshStatus.
 const (
 	RepositoryRefreshStatusFailed    RepositoryRefreshStatus = "failed"
@@ -73,6 +112,122 @@ func (e RepositoryRefreshStatus) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Defines values for RuntimeAPIVersion.
+const (
+	RuntimeAPIVersionV1Alpha1 RuntimeAPIVersion = "slipramp.com/v1alpha1"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeAPIVersion enum.
+func (e RuntimeAPIVersion) Valid() bool {
+	switch e {
+	case RuntimeAPIVersionV1Alpha1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeKind.
+const (
+	RuntimeKindRuntime RuntimeKind = "Runtime"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeKind enum.
+func (e RuntimeKind) Valid() bool {
+	switch e {
+	case RuntimeKindRuntime:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TargetAPIVersion.
+const (
+	TargetAPIVersionV1Alpha1 TargetAPIVersion = "slipramp.com/v1alpha1"
+)
+
+// Valid indicates whether the value is a known member of the TargetAPIVersion enum.
+func (e TargetAPIVersion) Valid() bool {
+	switch e {
+	case TargetAPIVersionV1Alpha1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TargetKind.
+const (
+	TargetKindTarget TargetKind = "Target"
+)
+
+// Valid indicates whether the value is a known member of the TargetKind enum.
+func (e TargetKind) Valid() bool {
+	switch e {
+	case TargetKindTarget:
+		return true
+	default:
+		return false
+	}
+}
+
+// Action defines model for Action.
+type Action struct {
+	Artifacts   *map[string]ArtifactDeclaration `json:"artifacts,omitempty"`
+	Command     []string                        `json:"command"`
+	Credentials *map[string]string              `json:"credentials,omitempty"`
+	Inputs      *map[string]ArtifactInput       `json:"inputs,omitempty"`
+	Intent      *string                         `json:"intent,omitempty"`
+	Parameters  *map[string]Parameter           `json:"parameters,omitempty"`
+	Placement   *string                         `json:"placement,omitempty"`
+	Resources   *ResourceRequirements           `json:"resources,omitempty"`
+	Runtime     *string                         `json:"runtime,omitempty"`
+	Timeout     *string                         `json:"timeout,omitempty"`
+}
+
+// ArtifactDeclaration defines model for ArtifactDeclaration.
+type ArtifactDeclaration struct {
+	MediaType *string `json:"mediaType,omitempty"`
+	Path      string  `json:"path"`
+	Sensitive *bool   `json:"sensitive,omitempty"`
+}
+
+// ArtifactInput defines model for ArtifactInput.
+type ArtifactInput struct {
+	Artifact  ArtifactInputSource `json:"artifact"`
+	MountPath string              `json:"mountPath"`
+}
+
+// ArtifactInputSource defines model for ArtifactInputSource.
+type ArtifactInputSource struct {
+	Compatibility *ArtifactInputSourceCompatibility `json:"compatibility,omitempty"`
+	FromAction    string                            `json:"fromAction"`
+}
+
+// ArtifactInputSourceCompatibility defines model for ArtifactInputSource.Compatibility.
+type ArtifactInputSourceCompatibility string
+
+// CatalogRevision defines model for CatalogRevision.
+type CatalogRevision struct {
+	// CommitSha Exact Git commit from which the catalog was accepted.
+	CommitSha string `json:"commitSha"`
+
+	// CreatedAt Time at which the catalog revision was first accepted.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ID Stable identity of the immutable catalog revision.
+	ID       openapi_types.UUID `json:"id"`
+	Runtimes []Runtime          `json:"runtimes"`
+	Targets  []Target           `json:"targets"`
+}
+
+// CatalogSource defines model for CatalogSource.
+type CatalogSource struct {
+	Document int    `json:"document"`
+	Path     string `json:"path"`
 }
 
 // Cluster defines model for Cluster.
@@ -98,6 +253,32 @@ type ClusterList struct {
 	Items []Cluster `json:"items"`
 }
 
+// CredentialDirectory defines model for CredentialDirectory.
+type CredentialDirectory struct {
+	Mode *uint32 `json:"mode,omitempty"`
+	Path string  `json:"path"`
+}
+
+// CredentialEnvironmentVariable defines model for CredentialEnvironmentVariable.
+type CredentialEnvironmentVariable struct {
+	Key string `json:"key"`
+}
+
+// CredentialFile defines model for CredentialFile.
+type CredentialFile struct {
+	Key  string  `json:"key"`
+	Mode *uint32 `json:"mode,omitempty"`
+	Path string  `json:"path"`
+}
+
+// CredentialInjection defines model for CredentialInjection.
+type CredentialInjection struct {
+	Directory       *CredentialDirectory                      `json:"directory,omitempty"`
+	Environment     *map[string]CredentialEnvironmentVariable `json:"environment,omitempty"`
+	EnvironmentFrom *bool                                     `json:"environmentFrom,omitempty"`
+	Files           *[]CredentialFile                         `json:"files,omitempty"`
+}
+
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
 	Status HealthResponseStatus `json:"status"`
@@ -105,6 +286,23 @@ type HealthResponse struct {
 
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
+
+// Parameter defines model for Parameter.
+type Parameter struct {
+	Argument    *ParameterArgument `json:"argument,omitempty"`
+	Environment *string            `json:"environment,omitempty"`
+	Required    *bool              `json:"required,omitempty"`
+	Type        ParameterType      `json:"type"`
+	Values      *[]string          `json:"values,omitempty"`
+}
+
+// ParameterType defines model for Parameter.Type.
+type ParameterType string
+
+// ParameterArgument defines model for ParameterArgument.
+type ParameterArgument struct {
+	Name *string `json:"name,omitempty"`
+}
 
 // Problem An RFC 9457 problem detail.
 type Problem struct {
@@ -192,6 +390,73 @@ type RepositoryRefresh struct {
 
 // RepositoryRefreshStatus Result of the most recent branch refresh attempt.
 type RepositoryRefreshStatus string
+
+// ResourceMetadata defines model for ResourceMetadata.
+type ResourceMetadata struct {
+	Name  string  `json:"name"`
+	Title *string `json:"title,omitempty"`
+}
+
+// ResourceRequirements defines model for ResourceRequirements.
+type ResourceRequirements struct {
+	Limits   *map[string]string `json:"limits,omitempty"`
+	Requests *map[string]string `json:"requests,omitempty"`
+}
+
+// Runtime defines model for Runtime.
+type Runtime struct {
+	APIVersion RuntimeAPIVersion `json:"apiVersion"`
+	Kind       RuntimeKind       `json:"kind"`
+	Metadata   ResourceMetadata  `json:"metadata"`
+	Source     CatalogSource     `json:"source"`
+	Spec       RuntimeSpec       `json:"spec"`
+}
+
+// RuntimeAPIVersion defines model for Runtime.APIVersion.
+type RuntimeAPIVersion string
+
+// RuntimeKind defines model for Runtime.Kind.
+type RuntimeKind string
+
+// RuntimeCredential defines model for RuntimeCredential.
+type RuntimeCredential struct {
+	Inject CredentialInjection `json:"inject"`
+}
+
+// RuntimeSpec defines model for RuntimeSpec.
+type RuntimeSpec struct {
+	Credentials      *map[string]RuntimeCredential `json:"credentials,omitempty"`
+	Environment      *map[string]string            `json:"environment,omitempty"`
+	Image            string                        `json:"image"`
+	WorkingDirectory *string                       `json:"workingDirectory,omitempty"`
+}
+
+// Target defines model for Target.
+type Target struct {
+	APIVersion TargetAPIVersion `json:"apiVersion"`
+	Kind       TargetKind       `json:"kind"`
+	Metadata   ResourceMetadata `json:"metadata"`
+	Source     CatalogSource    `json:"source"`
+	Spec       TargetSpec       `json:"spec"`
+}
+
+// TargetAPIVersion defines model for Target.APIVersion.
+type TargetAPIVersion string
+
+// TargetKind defines model for Target.Kind.
+type TargetKind string
+
+// TargetSpec defines model for TargetSpec.
+type TargetSpec struct {
+	Actions     map[string]Action     `json:"actions"`
+	Credentials *map[string]string    `json:"credentials,omitempty"`
+	Path        *string               `json:"path,omitempty"`
+	Placement   *string               `json:"placement,omitempty"`
+	Resources   *ResourceRequirements `json:"resources,omitempty"`
+	Runtime     *string               `json:"runtime,omitempty"`
+	Timeout     *string               `json:"timeout,omitempty"`
+	Watch       *[]string             `json:"watch,omitempty"`
+}
 
 // PollForControllerWorkParams defines parameters for PollForControllerWork.
 type PollForControllerWorkParams struct {
@@ -322,6 +587,13 @@ type ClientInterface interface {
 	// Corresponds with DELETE /api/v1/repositories/{repositoryId} (the `RemoveRepository` operationId).
 	RemoveRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetRepositoryCatalog Get the active repository catalog
+	//
+	// Returns the immutable catalog revision currently active for an existing repository. A repository without an accepted catalog does not have this resource yet.
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
+	GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHealth Check server health
 	//
 	// Reports whether the Slipramp Server process is serving HTTP requests.
@@ -426,6 +698,23 @@ func (c *Client) CreateRepository(ctx context.Context, body CreateRepositoryJSON
 // Corresponds with DELETE /api/v1/repositories/{repositoryId} (the `RemoveRepository` operationId).
 func (c *Client) RemoveRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRemoveRepositoryRequest(c.Server, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRepositoryCatalog Get the active repository catalog
+//
+// Returns the immutable catalog revision currently active for an existing repository. A repository without an accepted catalog does not have this resource yet.
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
+func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRepositoryCatalogRequest(c.Server, repositoryID)
 	if err != nil {
 		return nil, err
 	}
@@ -642,6 +931,40 @@ func NewRemoveRepositoryRequest(server string, repositoryID openapi_types.UUID) 
 	return req, nil
 }
 
+// NewGetRepositoryCatalogRequest constructs an http.Request for the GetRepositoryCatalog method
+func NewGetRepositoryCatalogRequest(server string, repositoryID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "repositoryId", repositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories/%s/catalog", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetHealthRequest constructs an http.Request for the GetHealth method
 func NewGetHealthRequest(server string) (*http.Request, error) {
 	var err error
@@ -766,6 +1089,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /api/v1/repositories/{repositoryId} (the `RemoveRepository` operationId).
 	RemoveRepositoryWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RemoveRepositoryResponse, error)
+
+	// GetRepositoryCatalogWithResponse Get the active repository catalog
+	//
+	// Returns the immutable catalog revision currently active for an existing repository. A repository without an accepted catalog does not have this resource yet.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
+	GetRepositoryCatalogWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRepositoryCatalogResponse, error)
 
 	// GetHealthWithResponse Check server health
 	//
@@ -1087,6 +1419,75 @@ func (r RemoveRepositoryResponse) ContentType() string {
 	return ""
 }
 
+type GetRepositoryCatalogResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *CatalogRevision
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRepositoryCatalogResponse) GetJSON200() *CatalogRevision {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRepositoryCatalogResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRepositoryCatalogResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRepositoryCatalogResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRepositoryCatalogResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1223,6 +1624,21 @@ func (c *ClientWithResponses) RemoveRepositoryWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseRemoveRepositoryResponse(rsp)
+}
+
+// GetRepositoryCatalogWithResponse Get the active repository catalog
+//
+// Returns the immutable catalog revision currently active for an existing repository. A repository without an accepted catalog does not have this resource yet.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
+func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRepositoryCatalogResponse, error) {
+	rsp, err := c.GetRepositoryCatalog(ctx, repositoryID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRepositoryCatalogResponse(rsp)
 }
 
 // GetHealthWithResponse Check server health
@@ -1487,6 +1903,60 @@ func ParseRemoveRepositoryResponse(rsp *http.Response) (*RemoveRepositoryRespons
 	return response, nil
 }
 
+// ParseGetRepositoryCatalogResponse parses an HTTP response from a GetRepositoryCatalogWithResponse call
+func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalogResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRepositoryCatalogResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CatalogRevision
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
 func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -1537,6 +2007,9 @@ type ServerInterface interface {
 	// RemoveRepository Remove a repository
 	// (DELETE /api/v1/repositories/{repositoryId})
 	RemoveRepository(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
+	// GetRepositoryCatalog Get the active repository catalog
+	// (GET /api/v1/repositories/{repositoryId}/catalog)
+	GetRepositoryCatalog(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -1652,6 +2125,32 @@ func (siw *ServerInterfaceWrapper) RemoveRepository(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveRepository(w, r, repositoryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRepositoryCatalog operation middleware
+func (siw *ServerInterfaceWrapper) GetRepositoryCatalog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepositoryCatalog(w, r, repositoryID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1799,6 +2298,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/controllers/{clusterName}/poll", wrapper.PollForControllerWork)
 
@@ -2136,6 +2636,84 @@ func (response RemoveRepository500ApplicationProblemPlusJSONResponse) VisitRemov
 	return err
 }
 
+type GetRepositoryCatalogRequestObject struct {
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+}
+
+type GetRepositoryCatalogResponseObject interface {
+	VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error
+}
+
+type GetRepositoryCatalog200JSONResponse CatalogRevision
+
+func (response GetRepositoryCatalog200JSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCatalog400ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryCatalog400ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCatalog404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryCatalog404ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCatalog405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryCatalog405ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCatalog500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryCatalog500ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetHealthRequestObject struct {
 }
 
@@ -2188,6 +2766,9 @@ type StrictServerInterface interface {
 	// RemoveRepository Remove a repository
 	// (DELETE /api/v1/repositories/{repositoryId})
 	RemoveRepository(ctx context.Context, request RemoveRepositoryRequestObject) (RemoveRepositoryResponseObject, error)
+	// GetRepositoryCatalog Get the active repository catalog
+	// (GET /api/v1/repositories/{repositoryId}/catalog)
+	GetRepositoryCatalog(ctx context.Context, request GetRepositoryCatalogRequestObject) (GetRepositoryCatalogResponseObject, error)
 	// GetHealth Check server health
 	// (GET /healthz)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -2357,6 +2938,32 @@ func (sh *strictHandler) RemoveRepository(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RemoveRepositoryResponseObject); ok {
 		if err := validResponse.VisitRemoveRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepositoryCatalog operation middleware
+func (sh *strictHandler) GetRepositoryCatalog(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID) {
+	var request GetRepositoryCatalogRequestObject
+
+	request.RepositoryID = repositoryID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepositoryCatalog(ctx, request.(GetRepositoryCatalogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepositoryCatalog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryCatalogResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryCatalogResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

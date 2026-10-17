@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/placement"
 )
 
 type RefreshStatus string
@@ -28,6 +32,7 @@ type RefreshResult struct {
 	CommitSHA     *string
 	AttemptedAt   time.Time
 	FailureReason *string
+	Revision      *catalog.Revision
 }
 
 type RefreshStore interface {
@@ -40,21 +45,24 @@ type RefreshStore interface {
 }
 
 type Fetcher interface {
-	Fetch(ctx context.Context, repository Repository) (string, error)
+	Fetch(ctx context.Context, repository Repository) (FetchedCommit, error)
 }
 
 type Refresher struct {
 	repositories RefreshStore
 	fetcher      Fetcher
+	placements   placement.Set
 	interval     time.Duration
 	fetchTimeout time.Duration
 	logger       *slog.Logger
+	newID        func() uuid.UUID
 	now          func() time.Time
 }
 
 func NewRefresher(
 	repositories RefreshStore,
 	fetcher Fetcher,
+	placements placement.Set,
 	interval time.Duration,
 	fetchTimeout time.Duration,
 	logger *slog.Logger,
@@ -62,9 +70,11 @@ func NewRefresher(
 	return &Refresher{
 		repositories: repositories,
 		fetcher:      fetcher,
+		placements:   placements,
 		interval:     interval,
 		fetchTimeout: fetchTimeout,
 		logger:       logger,
+		newID:        uuid.New,
 		now:          time.Now,
 	}
 }
@@ -107,8 +117,21 @@ func (r *Refresher) refreshAll(ctx context.Context) {
 func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	attemptedAt := r.now().UTC()
 	fetchContext, cancel := context.WithTimeout(ctx, r.fetchTimeout)
-	commitSHA, fetchErr := r.fetcher.Fetch(fetchContext, item)
+	fetched, fetchErr := r.fetcher.Fetch(fetchContext, item)
 	cancel()
+	if fetchErr == nil {
+		defer func() {
+			if err := fetched.Close(); err != nil {
+				r.logger.Warn(
+					"clean repository refresh directory",
+					"repository",
+					item.Name,
+					"error",
+					err,
+				)
+			}
+		}()
+	}
 
 	if ctx.Err() != nil {
 		return
@@ -116,7 +139,20 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 
 	result := RefreshResult{AttemptedAt: attemptedAt}
 	if fetchErr == nil {
-		result.CommitSHA = &commitSHA
+		result.CommitSHA = &fetched.CommitSHA
+
+		loaded, loadErr := catalog.Load(fetched.Files, r.placements)
+		if loadErr == nil {
+			result.Revision = &catalog.Revision{
+				ID:        r.newID(),
+				CommitSHA: fetched.CommitSHA,
+				CreatedAt: attemptedAt,
+				Catalog:   loaded,
+			}
+		} else {
+			failureReason := loadErr.Error()
+			result.FailureReason = &failureReason
+		}
 	} else {
 		failureReason := fetchErr.Error()
 		result.FailureReason = &failureReason
@@ -150,13 +186,26 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 
 		return
 	}
+	if result.FailureReason != nil {
+		r.logger.Warn(
+			"repository catalog rejected",
+			"repository",
+			item.Name,
+			"commit",
+			fetched.CommitSHA,
+			"error",
+			*result.FailureReason,
+		)
+
+		return
+	}
 
 	r.logger.Info(
-		"repository refreshed",
+		"repository catalog indexed",
 		"repository",
 		item.Name,
 		"commit",
-		commitSHA,
+		fetched.CommitSHA,
 	)
 }
 
@@ -165,8 +214,8 @@ func ValidateRefreshResult(result RefreshResult) error {
 		return errors.New("refresh attempted time is required")
 	}
 
-	if (result.CommitSHA == nil) == (result.FailureReason == nil) {
-		return errors.New("refresh result must contain either a commit or a failure")
+	if result.CommitSHA == nil && result.FailureReason == nil {
+		return errors.New("refresh result must contain a commit or a failure")
 	}
 
 	if result.CommitSHA != nil && !validCommitSHA(*result.CommitSHA) {
@@ -175,6 +224,29 @@ func ValidateRefreshResult(result RefreshResult) error {
 
 	if result.FailureReason != nil && *result.FailureReason == "" {
 		return errors.New("refresh failure reason must not be empty")
+	}
+	if result.Revision == nil {
+		if result.FailureReason == nil {
+			return errors.New("successful refresh must contain a catalog revision")
+		}
+
+		return nil
+	}
+
+	if result.FailureReason != nil {
+		return errors.New("failed refresh must not contain a catalog revision")
+	}
+	if result.CommitSHA == nil {
+		return errors.New("catalog revision requires a fetched commit")
+	}
+	if result.Revision.ID == uuid.Nil {
+		return errors.New("catalog revision ID is required")
+	}
+	if result.Revision.CommitSHA != *result.CommitSHA {
+		return errors.New("catalog revision commit must match fetched commit")
+	}
+	if !result.Revision.CreatedAt.Equal(result.AttemptedAt) {
+		return errors.New("catalog revision time must match refresh attempt")
 	}
 
 	return nil

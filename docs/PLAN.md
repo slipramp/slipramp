@@ -215,11 +215,42 @@ Generated Go and TypeScript code is never edited by hand. Generator versions and
 
 ## Illustrative YAML
 
-These examples describe the intended relationships between resources. Their exact field names and file layout are not yet settled.
+These examples use the `slipramp.com/v1alpha1` repository contract selected for
+the MVP. Catalog documents reject unknown fields and duplicate mapping keys so
+misspelled execution settings cannot be accepted silently.
+
+### Repository Catalog Layout
+
+Catalog resources live under the `.slipramp` directory at the repository root.
+Slipramp recursively reads files ending in `.yaml` or `.yml` from that
+directory in lexical path order and ignores YAML elsewhere in the repository.
+Each file may contain one or more YAML documents, and every non-empty document
+defines one `Runtime` or `Target`. Resources may therefore be grouped into one
+file or split across directories without changing their meaning.
+
+Target paths and `watch` patterns are clean, slash-separated,
+repository-relative paths. Runtime working directories, credential mount
+paths, artifact paths, and input mount paths are clean, non-root absolute
+container paths. Resource names and quantities use Kubernetes syntax, and
+configured timeouts are positive Go duration strings such as `30m`.
+
+Targets provide defaults for runtime, placement, timeout, credentials, and
+resource requests and limits. An action's scalar values replace target
+defaults, while credential and resource maps merge by key. The resolved action
+is copied from the catalog so freezing it for a Run cannot mutate the catalog
+revision. Every effective placement must exist in Server configuration, and
+each credential required by the effective runtime must bind to a source that
+the placement offers.
 
 ### Runtimes
 
 Runtimes live with the repository content and define portable tool environments. Targets can share them while supplying their own paths and commands.
+
+Each named runtime credential must declare at least one injection. Individual
+Secret keys can become environment variables or files. `environmentFrom: true`
+exposes every key using Kubernetes `envFrom`, while `directory` mounts every
+key below one directory. File modes may use permission bits through `0777`.
+Environment names and mount paths must not collide within a runtime.
 
 ```yaml
 apiVersion: slipramp.com/v1alpha1
@@ -257,6 +288,9 @@ spec:
           - key: knownHosts
             path: /home/ops/.ssh/known_hosts
             mode: 0444
+        directory:
+          path: /var/run/ssh-extensions
+          mode: 0444
 ---
 apiVersion: slipramp.com/v1alpha1
 kind: Runtime
@@ -431,15 +465,40 @@ spec:
           type: string
           required: true
           environment: UPGRADE_VERSION
+        strategy:
+          type: enum
+          values: [rolling, immediate]
+          argument:
+            name: --strategy
+        max-unavailable:
+          type: number
+          argument:
+            name: --max-unavailable
+        force:
+          type: boolean
+          argument:
+            name: --force
 ```
+
+Parameters use the `string`, `boolean`, `number`, or `enum` type. Enum
+parameters declare their allowed `values`. Every parameter maps to exactly one
+environment variable or argument. An empty `argument: {}` is positional. A
+named string, number, or enum argument emits the name followed by its value; a
+named boolean argument is a flag emitted only when true. Positional and
+environment boolean values use `true` or `false`. Supplied arguments are
+appended to the action command in lexical parameter-name order, and omitted
+optional parameters emit nothing.
+
+Artifact inputs use the input name as the artifact name on `fromAction`. The
+source action must declare that output. The only MVP compatibility policy is
+`exact-catalog-revision`, and it is the default when `compatibility` is omitted.
 
 ## Remaining Design Questions
 
 Most architectural questions are settled above. These details still need decisions while planning or implementing the MVP:
 
-- The repository directory layout, document discovery rules, and whether definitions may be split across files.
-- The final `v1alpha1` YAML fields, validation and defaulting rules, and compatibility behavior for future schema versions.
-- The exact Job and harness ABI: workspace paths, standard environment variables, parameter encoding, harness injection, signal and cancellation handling, and artifact input/output transfer.
+- Versioning and compatibility behavior after the MVP `v1alpha1` repository contract.
+- The exact Job and harness ABI: workspace roots, standard Slipramp environment variables, harness injection, signal and cancellation handling, and artifact transfer mechanics.
 - PostgreSQL history retention and archival, plus S3 object naming, log chunking, lifecycle, deletion, and orphan cleanup.
 
 The following questions are intentionally deferred and do not block the MVP:

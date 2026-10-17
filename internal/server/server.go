@@ -12,6 +12,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/api/handler"
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/repository"
@@ -52,6 +53,7 @@ func New(
 	}
 
 	clusters := cluster.NewService(persistence.database)
+	catalogs := catalog.NewService(persistence.database)
 	repositories := repository.NewService(
 		persistence.database,
 		cfg.RepositoryRefreshCredentials,
@@ -59,6 +61,7 @@ func New(
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
 		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
+		cfg.Placements,
 		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
 		logger,
@@ -66,6 +69,7 @@ func New(
 	httpHandler := newHandlerWithLogger(
 		clusters,
 		repositories,
+		catalogs,
 		cfg.ControllerTokens,
 		logger,
 	)
@@ -192,11 +196,13 @@ func (s *Server) shutdown(ctx context.Context) error {
 func newHandler(
 	clusters handler.ClusterService,
 	repositories handler.RepositoryService,
+	catalogs handler.CatalogService,
 	controllerTokens map[string]string,
 ) http.Handler {
 	return newHandlerWithLogger(
 		clusters,
 		repositories,
+		catalogs,
 		controllerTokens,
 		nil,
 	)
@@ -205,12 +211,13 @@ func newHandler(
 func newHandlerWithLogger(
 	clusters handler.ClusterService,
 	repositories handler.RepositoryService,
+	catalogs handler.CatalogService,
 	controllerTokens map[string]string,
 	logger *slog.Logger,
 ) http.Handler {
 	authenticator := newControllerAuthenticator(controllerTokens)
 	strictHandler := api.NewStrictHandlerWithOptions(
-		handler.New(clusters, repositories),
+		handler.New(clusters, repositories, catalogs),
 		[]api.StrictMiddlewareFunc{
 			handler.ControllerAuthentication(authenticator),
 		},
@@ -257,7 +264,23 @@ func newHandlerWithLogger(
 	)
 
 	mux := http.NewServeMux()
-	api.HandlerFromMux(strictHandler, mux)
+	api.HandlerWithOptions(
+		strictHandler,
+		api.StdHTTPServerOptions{
+			BaseRouter: mux,
+			ErrorHandlerFunc: func(
+				writer http.ResponseWriter,
+				_ *http.Request,
+				err error,
+			) {
+				handler.WriteProblem(
+					writer,
+					http.StatusBadRequest,
+					err.Error(),
+				)
+			},
+		},
+	)
 
 	registerMethodNotAllowed(mux, "/healthz", http.MethodGet)
 	registerMethodNotAllowed(
@@ -270,6 +293,11 @@ func newHandlerWithLogger(
 		mux,
 		"/api/v1/repositories/{repositoryId}",
 		http.MethodDelete,
+	)
+	registerMethodNotAllowed(
+		mux,
+		"/api/v1/repositories/{repositoryId}/catalog",
+		http.MethodGet,
 	)
 	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
 	registerMethodNotAllowed(

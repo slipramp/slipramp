@@ -18,7 +18,10 @@ func TestHealthEndpoint(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(&recordingClusterService{}, nil, nil).ServeHTTP(response, request)
+	newHandler(&recordingClusterService{}, nil, nil, nil).ServeHTTP(
+		response,
+		request,
+	)
 	expectedBody := "{\"status\":\"ok\"}\n"
 
 	if response.Code != http.StatusOK {
@@ -53,7 +56,10 @@ func TestHealthEndpointRejectsOtherMethods(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(&recordingClusterService{}, nil, nil).ServeHTTP(response, request)
+	newHandler(&recordingClusterService{}, nil, nil, nil).ServeHTTP(
+		response,
+		request,
+	)
 
 	assertProblem(t, response, http.StatusMethodNotAllowed)
 }

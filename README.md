@@ -35,10 +35,30 @@ accepted. Removing a repository hides it from the active list while retaining
 its stable identity for future catalog and run history references.
 
 The Server fetches each active repository when it starts and on the configured
-interval. It records the exact commit SHA and the latest attempt, success, or
-failure without storing repository contents in PostgreSQL or S3. Repository API
-responses include this refresh state. Catalog discovery remains a separate
-follow-on slice.
+interval. It materializes the exact commit in an isolated temporary checkout,
+loads the catalog, and removes the checkout after indexing. Repository contents
+are never stored in PostgreSQL or S3.
+
+Repository catalog definitions live below `.slipramp` in the tracked Git tree.
+Files ending in `.yaml` or `.yml` are discovered recursively and may each
+contain one or more versioned `Runtime` or `Target` documents. The catalog
+loader decodes these documents independently of repository refresh and rejects
+unknown fields and duplicate mapping keys. It validates repository and
+container paths, runtime credential injection, target defaults, Kubernetes
+resource quantities, timeouts, action intents and commands, typed parameter
+mapping, configured placement and credential-source references, artifact
+declarations, and artifact input provenance. Deferred trigger declarations are
+rejected. Effective actions deterministically merge target credential and
+resource defaults without mutating the source catalog. A valid commit produces
+one immutable PostgreSQL catalog revision containing its runtime and target
+definitions. Repeated refreshes reuse that revision. A rejected commit records
+its SHA and validation diagnostic while leaving the previous valid revision
+active. Repository API responses include the latest refresh state; catalog read
+access through `GET /api/v1/repositories/{repositoryId}/catalog` returns the
+active immutable revision and its complete typed Runtime and Target
+definitions. The web application lists repository refresh health and provides
+a repository detail screen for browsing the active revision's targets and
+actions.
 
 `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS` maps logical credential names to
 absolute paths of administrator-mounted Git config files. Each isolated fetch

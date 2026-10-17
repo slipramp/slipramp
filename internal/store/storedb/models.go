@@ -8,6 +8,36 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type CatalogRevision struct {
+	ID           pgtype.UUID
+	RepositoryID pgtype.UUID
+	CommitSha    string
+	CreatedAt    pgtype.Timestamptz
+}
+
+type CatalogRuntime struct {
+	CatalogRevisionID pgtype.UUID
+	Name              string
+	SourcePath        string
+	SourceDocument    int32
+	Definition        []byte
+}
+
+type CatalogTarget struct {
+	CatalogRevisionID pgtype.UUID
+	Name              string
+	SourcePath        string
+	SourceDocument    int32
+	Definition        []byte
+}
+
+type CatalogValidationFailure struct {
+	RepositoryID  pgtype.UUID
+	CommitSha     string
+	RecordedAt    pgtype.Timestamptz
+	FailureReason string
+}
+
 type Cluster struct {
 	Name        string
 	FirstSeenAt pgtype.Timestamptz
@@ -15,17 +45,18 @@ type Cluster struct {
 }
 
 type Repository struct {
-	ID                     pgtype.UUID
-	Name                   string
-	CloneUrl               string
-	Branch                 string
-	RefreshCredentialName  *string
-	CheckoutCredentialName *string
-	CreatedAt              pgtype.Timestamptz
-	RemovedAt              pgtype.Timestamptz
-	RefreshStatus          string
-	ObservedCommitSha      *string
-	LastRefreshAttemptedAt pgtype.Timestamptz
-	LastRefreshSucceededAt pgtype.Timestamptz
-	LastRefreshError       *string
+	ID                      pgtype.UUID
+	Name                    string
+	CloneUrl                string
+	Branch                  string
+	RefreshCredentialName   *string
+	CheckoutCredentialName  *string
+	CreatedAt               pgtype.Timestamptz
+	RemovedAt               pgtype.Timestamptz
+	RefreshStatus           string
+	ObservedCommitSha       *string
+	LastRefreshAttemptedAt  pgtype.Timestamptz
+	LastRefreshSucceededAt  pgtype.Timestamptz
+	LastRefreshError        *string
+	ActiveCatalogRevisionID pgtype.UUID
 }

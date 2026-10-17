@@ -1,8 +1,8 @@
 import "@mantine/core/styles.css";
 
-import { AppShell, ColorSchemeScript, Group, MantineProvider, Text } from "@mantine/core";
+import { Anchor, AppShell, ColorSchemeScript, Group, MantineProvider, Text } from "@mantine/core";
 import type { ReactNode } from "react";
-import { Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { Link, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
 
 export function Layout({ children }: Readonly<{ children: ReactNode }>) {
   return (
@@ -27,8 +27,16 @@ export default function App() {
   return (
     <AppShell header={{ height: 60 }} padding="md">
       <AppShell.Header>
-        <Group h="100%" px="md">
+        <Group h="100%" justify="space-between" px="md">
           <Text fw={700}>Slipramp</Text>
+          <Group gap="lg">
+            <Anchor component={Link} to="/">
+              Overview
+            </Anchor>
+            <Anchor component={Link} to="/repositories">
+              Repositories
+            </Anchor>
+          </Group>
         </Group>
       </AppShell.Header>
       <AppShell.Main>

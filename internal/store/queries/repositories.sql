@@ -48,19 +48,13 @@ FROM repositories
 WHERE removed_at IS NULL
 ORDER BY name;
 
--- name: RecordRepositoryRefreshSuccess :execrows
-UPDATE repositories
-SET refresh_status = 'succeeded',
-    observed_commit_sha = sqlc.arg(observed_commit_sha),
-    last_refresh_attempted_at = sqlc.arg(attempted_at),
-    last_refresh_succeeded_at = sqlc.arg(attempted_at),
-    last_refresh_error = NULL
-WHERE id = sqlc.arg(id)
-  AND removed_at IS NULL;
-
--- name: RecordRepositoryRefreshFailure :execrows
+-- name: RecordRepositoryRefreshFailure :exec
 UPDATE repositories
 SET refresh_status = 'failed',
+    observed_commit_sha = COALESCE(
+        sqlc.narg(observed_commit_sha),
+        observed_commit_sha
+    ),
     last_refresh_attempted_at = sqlc.arg(attempted_at),
     last_refresh_error = sqlc.arg(refresh_error)
 WHERE id = sqlc.arg(id)

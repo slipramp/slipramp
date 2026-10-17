@@ -83,55 +83,6 @@ func (d *Database) ListRepositories(
 	return repositories, nil
 }
 
-func (d *Database) RecordRepositoryRefresh(
-	ctx context.Context,
-	repositoryID repository.RepositoryID,
-	result repository.RefreshResult,
-) error {
-	if err := repository.ValidateRefreshResult(result); err != nil {
-		return fmt.Errorf("validate repository refresh result: %w", err)
-	}
-
-	identifier := pgtype.UUID{Bytes: repositoryID, Valid: true}
-	attemptedAt := pgtype.Timestamptz{
-		Time:  result.AttemptedAt,
-		Valid: true,
-	}
-
-	var (
-		rowsAffected int64
-		err          error
-	)
-	if result.CommitSHA != nil {
-		rowsAffected, err = d.queries.RecordRepositoryRefreshSuccess(
-			ctx,
-			storedb.RecordRepositoryRefreshSuccessParams{
-				ObservedCommitSha: result.CommitSHA,
-				AttemptedAt:       attemptedAt,
-				ID:                identifier,
-			},
-		)
-	} else {
-		rowsAffected, err = d.queries.RecordRepositoryRefreshFailure(
-			ctx,
-			storedb.RecordRepositoryRefreshFailureParams{
-				AttemptedAt:  attemptedAt,
-				RefreshError: result.FailureReason,
-				ID:           identifier,
-			},
-		)
-	}
-	if err != nil {
-		return fmt.Errorf("record repository refresh: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return repository.ErrNotFound
-	}
-
-	return nil
-}
-
 func (d *Database) RemoveRepository(
 	ctx context.Context,
 	repositoryID uuid.UUID,

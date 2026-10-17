@@ -86,10 +86,11 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 	if err := database.RecordRepositoryRefresh(
 		ctx,
 		first.ID,
-		repository.RefreshResult{
-			CommitSHA:   &commitSHA,
-			AttemptedAt: succeededAt,
-		},
+		successfulCatalogRefresh(
+			commitSHA,
+			succeededAt,
+			uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1210"),
+		),
 	); err != nil {
 		t.Fatalf("record successful repository refresh: %v", err)
 	}
@@ -132,10 +133,11 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 	if err := database.RecordRepositoryRefresh(
 		ctx,
 		first.ID,
-		repository.RefreshResult{
-			CommitSHA:   &commitSHA,
-			AttemptedAt: createdAt.Add(150 * time.Second),
-		},
+		successfulCatalogRefresh(
+			commitSHA,
+			createdAt.Add(150*time.Second),
+			uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1211"),
+		),
 	); !errors.Is(err, repository.ErrNotFound) {
 		t.Errorf(
 			"removed repository refresh error = %v, want %v",

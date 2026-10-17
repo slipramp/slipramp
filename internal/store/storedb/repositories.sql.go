@@ -164,52 +164,34 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 	return items, nil
 }
 
-const recordRepositoryRefreshFailure = `-- name: RecordRepositoryRefreshFailure :execrows
+const recordRepositoryRefreshFailure = `-- name: RecordRepositoryRefreshFailure :exec
 UPDATE repositories
 SET refresh_status = 'failed',
-    last_refresh_attempted_at = $1,
-    last_refresh_error = $2
-WHERE id = $3
+    observed_commit_sha = COALESCE(
+        $1,
+        observed_commit_sha
+    ),
+    last_refresh_attempted_at = $2,
+    last_refresh_error = $3
+WHERE id = $4
   AND removed_at IS NULL
 `
 
 type RecordRepositoryRefreshFailureParams struct {
-	AttemptedAt  pgtype.Timestamptz
-	RefreshError *string
-	ID           pgtype.UUID
-}
-
-func (q *Queries) RecordRepositoryRefreshFailure(ctx context.Context, arg RecordRepositoryRefreshFailureParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recordRepositoryRefreshFailure, arg.AttemptedAt, arg.RefreshError, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
-const recordRepositoryRefreshSuccess = `-- name: RecordRepositoryRefreshSuccess :execrows
-UPDATE repositories
-SET refresh_status = 'succeeded',
-    observed_commit_sha = $1,
-    last_refresh_attempted_at = $2,
-    last_refresh_succeeded_at = $2,
-    last_refresh_error = NULL
-WHERE id = $3
-  AND removed_at IS NULL
-`
-
-type RecordRepositoryRefreshSuccessParams struct {
 	ObservedCommitSha *string
 	AttemptedAt       pgtype.Timestamptz
+	RefreshError      *string
 	ID                pgtype.UUID
 }
 
-func (q *Queries) RecordRepositoryRefreshSuccess(ctx context.Context, arg RecordRepositoryRefreshSuccessParams) (int64, error) {
-	result, err := q.db.Exec(ctx, recordRepositoryRefreshSuccess, arg.ObservedCommitSha, arg.AttemptedAt, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) RecordRepositoryRefreshFailure(ctx context.Context, arg RecordRepositoryRefreshFailureParams) error {
+	_, err := q.db.Exec(ctx, recordRepositoryRefreshFailure,
+		arg.ObservedCommitSha,
+		arg.AttemptedAt,
+		arg.RefreshError,
+		arg.ID,
+	)
+	return err
 }
 
 const removeRepository = `-- name: RemoveRepository :execrows
