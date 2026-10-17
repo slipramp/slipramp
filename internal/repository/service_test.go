@@ -23,16 +23,14 @@ func TestServiceCreatesFrozenRepository(t *testing.T) {
 	service.now = func() time.Time { return createdAt }
 	refreshCredentialName := "github-server"
 	checkoutCredentialName := "github-readonly"
+	cfg := validRepositoryConfig()
+	cfg.CloneURL = "git@github.com:example/infrastructure.git"
+	cfg.RefreshCredentialName = &refreshCredentialName
+	cfg.CheckoutCredentialName = &checkoutCredentialName
 
 	created, err := service.CreateRepository(
 		context.Background(),
-		Config{
-			Name:                   "infrastructure",
-			CloneURL:               "git@github.com:example/infrastructure.git",
-			Branch:                 "main",
-			RefreshCredentialName:  &refreshCredentialName,
-			CheckoutCredentialName: &checkoutCredentialName,
-		},
+		cfg,
 	)
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -60,58 +58,49 @@ func TestServiceCreatesFrozenRepository(t *testing.T) {
 func TestServiceRejectsInvalidConfigBeforePersistence(t *testing.T) {
 	t.Parallel()
 
-	repositories := &recordingStore{}
-	service := NewService(repositories, nil)
-
-	_, err := service.CreateRepository(
-		context.Background(),
-		Config{
-			Name:     "infrastructure",
-			CloneURL: "https://token@example.com/infrastructure.git",
-			Branch:   "main",
+	tests := []struct {
+		name        string
+		configure   func(*Config)
+		credentials RefreshCredentials
+		wantCauses  []error
+	}{
+		{
+			name: "invalid repository configuration",
+			configure: func(cfg *Config) {
+				cfg.CloneURL = "https://token@example.com/infrastructure.git"
+			},
+			wantCauses: []error{ErrInvalidConfig},
 		},
-	)
-	if !errors.Is(err, ErrInvalidConfig) {
-		t.Fatalf(
-			"CreateRepository() error = %v, want %v",
-			err,
-			ErrInvalidConfig,
-		)
-	}
-
-	if repositories.createCalls != 0 {
-		t.Errorf("persistence calls = %d, want 0", repositories.createCalls)
-	}
-}
-
-func TestServiceRejectsUnknownRefreshCredential(t *testing.T) {
-	t.Parallel()
-
-	repositories := &recordingStore{}
-	service := NewService(repositories, nil)
-	credentialName := "github-server"
-
-	_, err := service.CreateRepository(
-		context.Background(),
-		Config{
-			Name:                  "infrastructure",
-			CloneURL:              "https://github.com/example/infrastructure.git",
-			Branch:                "main",
-			RefreshCredentialName: &credentialName,
+		{
+			name: "unknown refresh credential",
+			configure: func(cfg *Config) {
+				credentialName := "github-server"
+				cfg.RefreshCredentialName = &credentialName
+			},
+			wantCauses: []error{ErrInvalidConfig, ErrUnknownRefreshCredential},
 		},
-	)
-	if !errors.Is(err, ErrInvalidConfig) ||
-		!errors.Is(err, ErrUnknownRefreshCredential) {
-		t.Fatalf(
-			"CreateRepository() error = %v, want %v and %v",
-			err,
-			ErrInvalidConfig,
-			ErrUnknownRefreshCredential,
-		)
 	}
 
-	if repositories.createCalls != 0 {
-		t.Errorf("persistence calls = %d, want 0", repositories.createCalls)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			repositories := &recordingStore{}
+			service := NewService(repositories, test.credentials)
+			cfg := validRepositoryConfig()
+			test.configure(&cfg)
+
+			_, err := service.CreateRepository(context.Background(), cfg)
+			for _, cause := range test.wantCauses {
+				if !errors.Is(err, cause) {
+					t.Errorf("CreateRepository() error = %v, want %v", err, cause)
+				}
+			}
+
+			if repositories.createCalls != 0 {
+				t.Errorf("persistence calls = %d, want 0", repositories.createCalls)
+			}
+		})
 	}
 }
 

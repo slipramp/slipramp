@@ -4,4 +4,5 @@ export default [
   index("routes/index.tsx"),
   route("repositories", "routes/repositories.tsx"),
   route("repositories/:repositoryId", "routes/repository.tsx"),
+  route("repositories/:repositoryId/targets/:targetName", "routes/target.tsx"),
 ] satisfies RouteConfig;

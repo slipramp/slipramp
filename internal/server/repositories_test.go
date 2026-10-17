@@ -85,23 +85,62 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 	}
 }
 
-func TestCreateRepositoryMapsExpectedFailures(t *testing.T) {
+func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 	t.Parallel()
 
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	validBody := `{
+		"name":"infrastructure",
+		"cloneUrl":"https://github.com/example/infrastructure.git",
+		"branch":"main"
+	}`
 	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
+		name          string
+		method        string
+		path          string
+		body          string
+		repositories  *recordingRepositoryService
+		wantStatus    int
+		privateDetail string
 	}{
 		{
-			name:       "invalid configuration",
-			err:        repository.ErrInvalidConfig,
+			name:   "invalid create configuration",
+			method: http.MethodPost,
+			path:   "/api/v1/repositories",
+			body:   validBody,
+			repositories: &recordingRepositoryService{
+				createError: repository.ErrInvalidConfig,
+			},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:       "name conflict",
-			err:        repository.ErrNameConflict,
+			name:   "create name conflict",
+			method: http.MethodPost,
+			path:   "/api/v1/repositories",
+			body:   validBody,
+			repositories: &recordingRepositoryService{
+				createError: repository.ErrNameConflict,
+			},
 			wantStatus: http.StatusConflict,
+		},
+		{
+			name:   "remove missing repository",
+			method: http.MethodDelete,
+			path:   "/api/v1/repositories/" + repositoryID.String(),
+			repositories: &recordingRepositoryService{
+				removeError: repository.ErrNotFound,
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:   "list persistence failure",
+			method: http.MethodGet,
+			path:   "/api/v1/repositories",
+			repositories: &recordingRepositoryService{
+				listError: errors.New("database unavailable"),
+			},
+			wantStatus:    http.StatusInternalServerError,
+			privateDetail: "database unavailable",
 		},
 	}
 
@@ -109,29 +148,29 @@ func TestCreateRepositoryMapsExpectedFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			repositories := &recordingRepositoryService{createError: test.err}
-			body := bytes.NewBufferString(`{
-				"name":"infrastructure",
-				"cloneUrl":"https://github.com/example/infrastructure.git",
-				"branch":"main"
-			}`)
 			request := httptest.NewRequestWithContext(
 				context.Background(),
-				http.MethodPost,
-				"/api/v1/repositories",
-				body,
+				test.method,
+				test.path,
+				bytes.NewBufferString(test.body),
 			)
-			request.Header.Set("Content-Type", "application/json")
+			if test.body != "" {
+				request.Header.Set("Content-Type", "application/json")
+			}
 			response := httptest.NewRecorder()
 
 			newHandler(
 				&recordingClusterService{},
-				repositories,
+				test.repositories,
 				nil,
 				nil,
 			).ServeHTTP(response, request)
 
 			assertProblem(t, response, test.wantStatus)
+			if test.privateDetail != "" &&
+				strings.Contains(response.Body.String(), test.privateDetail) {
+				t.Error("internal error details were exposed in the problem response")
+			}
 		})
 	}
 }
@@ -210,58 +249,6 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 
 	if repositories.removedID != repositoryID {
 		t.Errorf("removed ID = %s, want %s", repositories.removedID, repositoryID)
-	}
-}
-
-func TestRemoveRepositoryReturnsNotFound(t *testing.T) {
-	t.Parallel()
-
-	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
-	repositories := &recordingRepositoryService{
-		removeError: repository.ErrNotFound,
-	}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodDelete,
-		"/api/v1/repositories/"+repositoryID.String(),
-		nil,
-	)
-	response := httptest.NewRecorder()
-
-	newHandler(
-		&recordingClusterService{},
-		repositories,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
-
-	assertProblem(t, response, http.StatusNotFound)
-}
-
-func TestRepositoryHandlerDoesNotExposePersistenceFailures(t *testing.T) {
-	t.Parallel()
-
-	repositories := &recordingRepositoryService{
-		listError: errors.New("database unavailable"),
-	}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/repositories",
-		nil,
-	)
-	response := httptest.NewRecorder()
-
-	newHandler(
-		&recordingClusterService{},
-		repositories,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
-
-	assertProblem(t, response, http.StatusInternalServerError)
-	if strings.Contains(response.Body.String(), "database unavailable") {
-		t.Error("internal error details were exposed in the problem response")
 	}
 }
 

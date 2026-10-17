@@ -1,10 +1,10 @@
 package catalog_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestValidateParameters(t *testing.T) {
@@ -122,21 +122,11 @@ func TestValidateParameters(t *testing.T) {
 			action.Parameters = map[string]catalog.Parameter{"value": test.parameter}
 			input.Targets[0].Spec.Actions["preview"] = action
 
-			err := catalog.Validate(input, testPlacements(t))
-			if test.wantError == "" {
-				if err != nil {
-					t.Fatalf("Validate() error = %v", err)
-				}
-
-				return
-			}
-
-			if err == nil {
-				t.Fatal("Validate() error = nil, want an error")
-			}
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf("Validate() error = %q, want %q", err, test.wantError)
-			}
+			testcheck.ErrorContains(
+				t,
+				catalog.Validate(input, testPlacements(t)),
+				test.wantError,
+			)
 		})
 	}
 }

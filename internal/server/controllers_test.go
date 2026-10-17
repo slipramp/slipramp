@@ -98,73 +98,68 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	}
 }
 
-func TestControllerPollAuthenticatesAndDelegates(t *testing.T) {
+func TestControllerPollDelegatesWithConfiguredWait(t *testing.T) {
 	t.Parallel()
 
-	controllers := &recordingClusterService{}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/controllers/colo/poll?timeoutSeconds=0",
-		nil,
-	)
-	request.Header.Set("Authorization", "Bearer controller-token")
-	response := httptest.NewRecorder()
-
-	newHandler(
-		controllers,
-		nil,
-		nil,
-		map[string]string{"colo": "controller-token"},
-	).ServeHTTP(response, request)
-
-	if response.Code != http.StatusNoContent {
-		t.Errorf(
-			"status = %d, want %d",
-			response.Code,
-			http.StatusNoContent,
-		)
+	tests := []struct {
+		name     string
+		path     string
+		wantWait time.Duration
+	}{
+		{
+			name: "explicit zero",
+			path: "/api/v1/controllers/colo/poll?timeoutSeconds=0",
+		},
+		{
+			name:     "default",
+			path:     "/api/v1/controllers/colo/poll",
+			wantWait: 25 * time.Second,
+		},
 	}
 
-	if controllers.clusterName != "colo" {
-		t.Errorf("cluster name = %q, want %q", controllers.clusterName, "colo")
-	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	if controllers.wait != 0 {
-		t.Errorf("wait = %s, want 0", controllers.wait)
-	}
-}
+			controllers := &recordingClusterService{}
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				test.path,
+				nil,
+			)
+			request.Header.Set("Authorization", "Bearer controller-token")
+			response := httptest.NewRecorder()
 
-func TestControllerPollUsesDefaultWait(t *testing.T) {
-	t.Parallel()
+			newHandler(
+				controllers,
+				nil,
+				nil,
+				map[string]string{"colo": "controller-token"},
+			).ServeHTTP(response, request)
 
-	controllers := &recordingClusterService{}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/controllers/colo/poll",
-		nil,
-	)
-	request.Header.Set("Authorization", "Bearer controller-token")
-	response := httptest.NewRecorder()
-
-	newHandler(
-		controllers,
-		nil,
-		nil,
-		map[string]string{"colo": "controller-token"},
-	).ServeHTTP(response, request)
-
-	if response.Code != http.StatusNoContent {
-		t.Errorf(
-			"status = %d, want %d",
-			response.Code,
-			http.StatusNoContent,
-		)
-	}
-
-	if controllers.wait != 25*time.Second {
-		t.Errorf("wait = %s, want %s", controllers.wait, 25*time.Second)
+			if response.Code != http.StatusNoContent {
+				t.Errorf(
+					"status = %d, want %d",
+					response.Code,
+					http.StatusNoContent,
+				)
+			}
+			if controllers.clusterName != "colo" {
+				t.Errorf(
+					"cluster name = %q, want %q",
+					controllers.clusterName,
+					"colo",
+				)
+			}
+			if controllers.wait != test.wantWait {
+				t.Errorf(
+					"wait = %s, want %s",
+					controllers.wait,
+					test.wantWait,
+				)
+			}
+		})
 	}
 }
 
@@ -245,59 +240,66 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 	}
 }
 
-func TestControllerPollRejectsInvalidTimeout(t *testing.T) {
+func TestControllerPollMapsFailures(t *testing.T) {
 	t.Parallel()
 
-	controllers := &recordingClusterService{}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/controllers/colo/poll?timeoutSeconds=31",
-		nil,
-	)
-	request.Header.Set("Authorization", "Bearer controller-token")
-	response := httptest.NewRecorder()
-
-	newHandler(
-		controllers,
-		nil,
-		nil,
-		map[string]string{"colo": "controller-token"},
-	).ServeHTTP(response, request)
-
-	assertProblem(t, response, http.StatusBadRequest)
-
-	if controllers.calls != 0 {
-		t.Errorf("work wait calls = %d, want 0", controllers.calls)
+	tests := []struct {
+		name          string
+		path          string
+		serviceError  error
+		wantStatus    int
+		wantCalls     int
+		privateDetail string
+	}{
+		{
+			name:       "invalid timeout",
+			path:       "/api/v1/controllers/colo/poll?timeoutSeconds=31",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:          "service failure",
+			path:          "/api/v1/controllers/colo/poll?timeoutSeconds=0",
+			serviceError:  errors.New("database unavailable"),
+			wantStatus:    http.StatusInternalServerError,
+			wantCalls:     1,
+			privateDetail: "database unavailable",
+		},
 	}
-}
 
-func TestControllerPollReturnsProblemWhenServiceFails(t *testing.T) {
-	t.Parallel()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	controllers := &recordingClusterService{
-		err: errors.New("database unavailable"),
-	}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/controllers/colo/poll?timeoutSeconds=0",
-		nil,
-	)
-	request.Header.Set("Authorization", "Bearer controller-token")
-	response := httptest.NewRecorder()
+			controllers := &recordingClusterService{err: test.serviceError}
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				test.path,
+				nil,
+			)
+			request.Header.Set("Authorization", "Bearer controller-token")
+			response := httptest.NewRecorder()
 
-	newHandler(
-		controllers,
-		nil,
-		nil,
-		map[string]string{"colo": "controller-token"},
-	).ServeHTTP(response, request)
+			newHandler(
+				controllers,
+				nil,
+				nil,
+				map[string]string{"colo": "controller-token"},
+			).ServeHTTP(response, request)
 
-	assertProblem(t, response, http.StatusInternalServerError)
-
-	if strings.Contains(response.Body.String(), "database unavailable") {
-		t.Error("internal error details were exposed in the problem response")
+			assertProblem(t, response, test.wantStatus)
+			if controllers.calls != test.wantCalls {
+				t.Errorf(
+					"work wait calls = %d, want %d",
+					controllers.calls,
+					test.wantCalls,
+				)
+			}
+			if test.privateDetail != "" &&
+				strings.Contains(response.Body.String(), test.privateDetail) {
+				t.Error("internal error details were exposed in the problem response")
+			}
+		})
 	}
 }
 

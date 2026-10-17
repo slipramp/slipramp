@@ -1,10 +1,10 @@
 package config_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/config"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 const (
@@ -82,20 +82,8 @@ func TestLoadControllerRejectsInvalidConfig(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := config.LoadController(
-				mapEnvironment(test.environment),
-			)
-			if err == nil {
-				t.Fatal("LoadController() error = nil, want an error")
-			}
-
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf(
-					"LoadController() error = %q, want %q",
-					err,
-					test.wantError,
-				)
-			}
+			_, err := config.LoadController(mapEnvironment(test.environment))
+			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
 }
@@ -104,11 +92,5 @@ func TestLoadControllerRequiresEnvironmentLookup(t *testing.T) {
 	t.Parallel()
 
 	_, err := config.LoadController(nil)
-	if err == nil {
-		t.Fatal("LoadController() error = nil, want an error")
-	}
-
-	if !strings.Contains(err.Error(), "environment lookup") {
-		t.Errorf("LoadController() error = %q, want environment lookup", err)
-	}
+	testcheck.ErrorContains(t, err, "environment lookup")
 }

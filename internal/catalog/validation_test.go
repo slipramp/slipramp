@@ -1,22 +1,24 @@
 package catalog_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/testcheck"
 	"go.yaml.in/yaml/v3"
 )
+
+type validationTest struct {
+	name      string
+	configure func(*catalog.Catalog)
+	wantError string
+}
 
 func TestValidateRejectsIncompleteActions(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name      string
-		configure func(*catalog.Catalog)
-		wantError string
-	}{
+	tests := []validationTest{
 		{
 			name: "runtime without image",
 			configure: func(input *catalog.Catalog) {
@@ -58,20 +60,23 @@ func TestValidateRejectsIncompleteActions(t *testing.T) {
 		},
 	}
 
+	runValidationTests(t, tests)
+}
+
+func runValidationTests(t *testing.T, tests []validationTest) {
+	t.Helper()
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
 			input := validCatalog()
 			test.configure(&input)
-
-			err := catalog.Validate(input, testPlacements(t))
-			if err == nil {
-				t.Fatal("Validate() error = nil")
-			}
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf("Validate() error = %q, want %q", err, test.wantError)
-			}
+			testcheck.ErrorContains(
+				t,
+				catalog.Validate(input, testPlacements(t)),
+				test.wantError,
+			)
 		})
 	}
 }

@@ -1,7 +1,6 @@
 package catalog_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
@@ -10,11 +9,7 @@ import (
 func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name      string
-		configure func(*catalog.Catalog)
-		wantError string
-	}{
+	tests := []validationTest{
 		{
 			name: "complete",
 			configure: func(input *catalog.Catalog) {
@@ -136,30 +131,7 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			input := validCatalog()
-			test.configure(&input)
-
-			err := catalog.Validate(input, testPlacements(t))
-			if test.wantError == "" {
-				if err != nil {
-					t.Fatalf("Validate() error = %v", err)
-				}
-
-				return
-			}
-
-			if err == nil {
-				t.Fatal("Validate() error = nil, want an error")
-			}
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf("Validate() error = %q, want %q", err, test.wantError)
-			}
-		})
-	}
+	runValidationTests(t, tests)
 }
 
 func addPreviewAndApply(input *catalog.Catalog) {

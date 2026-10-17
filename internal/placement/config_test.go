@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/testcheck"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -231,22 +232,7 @@ func TestConfigValidate(t *testing.T) {
 				test.configure(&cfg)
 			}
 
-			err := cfg.Validate()
-			if test.wantError == "" {
-				if err != nil {
-					t.Fatalf("Validate() error = %v", err)
-				}
-
-				return
-			}
-
-			if err == nil {
-				t.Fatal("Validate() error = nil, want an error")
-			}
-
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf("Validate() error = %q, want %q", err, test.wantError)
-			}
+			testcheck.ErrorContains(t, cfg.Validate(), test.wantError)
 		})
 	}
 }

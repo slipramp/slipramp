@@ -2,6 +2,7 @@ import {
   Alert,
   Anchor,
   Badge,
+  Button,
   Card,
   Code,
   Divider,
@@ -12,12 +13,14 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { Link } from "react-router";
+import type { FormEvent } from "react";
+import { Form, Link, redirect, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getRepositoryCatalog,
   listRepositories,
+  removeRepository,
   type Action,
   type CatalogRevision,
   type Repository,
@@ -38,11 +41,33 @@ export async function loader({ params }: Route.LoaderArgs) {
     apiAvailable: repositoriesResult.data !== undefined || catalogResult.data !== undefined,
     catalog: catalogResult.data,
     repository,
+    repositoryId: params.repositoryId,
     repositoryListAvailable: repositoriesResult.data !== undefined,
   };
 }
 
-export default function RepositoryCatalog({ loaderData }: Route.ComponentProps) {
+export async function action({ params, request }: Route.ActionArgs) {
+  const formData = await request.formData();
+
+  if (formData.get("intent") !== "remove") {
+    return { error: "The requested repository operation is not supported." };
+  }
+
+  const result = await removeRepository({
+    client: createServerAPIClient(),
+    path: { repositoryId: params.repositoryId },
+  });
+
+  if (result.error === undefined) {
+    return redirect("/repositories");
+  }
+
+  return {
+    error: result.error.detail ?? result.error.title ?? "The repository could not be removed.",
+  };
+}
+
+export default function RepositoryCatalog({ actionData, loaderData }: Route.ComponentProps) {
   if (!loaderData.apiAvailable) {
     return (
       <Alert color="red" title="API unavailable">
@@ -86,6 +111,12 @@ export default function RepositoryCatalog({ loaderData }: Route.ComponentProps) 
         </Alert>
       ) : null}
 
+      {actionData?.error ? (
+        <Alert color="red" title="Repository not removed">
+          {actionData.error}
+        </Alert>
+      ) : null}
+
       {!loaderData.catalog ? (
         <Paper p="lg" withBorder>
           <Stack gap="xs">
@@ -108,14 +139,56 @@ export default function RepositoryCatalog({ loaderData }: Route.ComponentProps) 
             ) : (
               <SimpleGrid cols={{ base: 1, lg: 2 }}>
                 {loaderData.catalog.targets.map((target) => (
-                  <TargetCard key={target.metadata.name} target={target} />
+                  <TargetCard
+                    key={target.metadata.name}
+                    repositoryId={loaderData.repositoryId}
+                    target={target}
+                  />
                 ))}
               </SimpleGrid>
             )}
           </Stack>
         </>
       )}
+
+      {repository ? <RepositoryRemoval repository={repository} /> : null}
     </Stack>
+  );
+}
+
+function RepositoryRemoval({ repository }: Readonly<{ repository: Repository }>) {
+  const navigation = useNavigation();
+  const isRemoving =
+    navigation.state === "submitting" && navigation.formData?.get("intent") === "remove";
+
+  function confirmRemoval(event: FormEvent<HTMLFormElement>) {
+    const confirmed = window.confirm(
+      `Remove ${repository.name} from Slipramp? Historical records will be retained.`,
+    );
+
+    if (!confirmed) {
+      event.preventDefault();
+    }
+  }
+
+  return (
+    <Paper p="md" withBorder>
+      <Group align="center" justify="space-between">
+        <Stack gap={2}>
+          <Title order={2}>Remove repository</Title>
+          <Text c="dimmed" size="sm">
+            Stop tracking this repository. Historical identities and future run references are
+            retained.
+          </Text>
+        </Stack>
+        <Form method="post" onSubmit={confirmRemoval}>
+          <input name="intent" type="hidden" value="remove" />
+          <Button color="red" loading={isRemoving} type="submit" variant="light">
+            Remove repository
+          </Button>
+        </Form>
+      </Group>
+    </Paper>
   );
 }
 
@@ -164,7 +237,7 @@ function CatalogSummary({ catalog }: Readonly<{ catalog: CatalogRevision }>) {
   );
 }
 
-function TargetCard({ target }: Readonly<{ target: Target }>) {
+function TargetCard({ repositoryId, target }: Readonly<{ repositoryId: string; target: Target }>) {
   const actions = Object.entries(target.spec.actions).toSorted(([left], [right]) =>
     left.localeCompare(right),
   );
@@ -174,7 +247,15 @@ function TargetCard({ target }: Readonly<{ target: Target }>) {
       <Stack gap="md">
         <Stack gap={2}>
           <Group justify="space-between">
-            <Title order={3}>{target.metadata.title ?? target.metadata.name}</Title>
+            <Title order={3}>
+              <Anchor
+                component={Link}
+                inherit
+                to={`/repositories/${repositoryId}/targets/${encodeURIComponent(target.metadata.name)}`}
+              >
+                {target.metadata.title ?? target.metadata.name}
+              </Anchor>
+            </Title>
             <Badge variant="outline">{actions.length} actions</Badge>
           </Group>
           {target.metadata.title ? (
@@ -200,8 +281,8 @@ function TargetCard({ target }: Readonly<{ target: Target }>) {
         <Divider />
 
         <Stack gap="md">
-          {actions.map(([name, action]) => (
-            <ActionSummary action={action} key={name} name={name} />
+          {actions.map(([name, actionDefinition]) => (
+            <ActionSummary actionDefinition={actionDefinition} key={name} name={name} />
           ))}
         </Stack>
       </Stack>
@@ -209,23 +290,30 @@ function TargetCard({ target }: Readonly<{ target: Target }>) {
   );
 }
 
-function ActionSummary({ action, name }: Readonly<{ action: Action; name: string }>) {
-  const parameterCount = Object.keys(action.parameters ?? {}).length;
-  const artifactCount = Object.keys(action.artifacts ?? {}).length;
-  const inputCount = Object.keys(action.inputs ?? {}).length;
+function ActionSummary({
+  actionDefinition,
+  name,
+}: Readonly<{ actionDefinition: Action; name: string }>) {
+  const parameterCount = Object.keys(actionDefinition.parameters ?? {}).length;
+  const artifactCount = Object.keys(actionDefinition.artifacts ?? {}).length;
+  const inputCount = Object.keys(actionDefinition.inputs ?? {}).length;
 
   return (
     <Stack gap={4}>
       <Group gap="xs">
         <Text fw={600}>{name}</Text>
-        {action.intent ? <Badge variant="outline">{action.intent}</Badge> : null}
+        {actionDefinition.intent ? (
+          <Badge variant="outline">{actionDefinition.intent}</Badge>
+        ) : null}
       </Group>
-      <Code block>{action.command.join(" ")}</Code>
+      <Code block>{actionDefinition.command.join(" ")}</Code>
       <Group gap="xs">
         {parameterCount > 0 ? <Badge variant="light">{parameterCount} parameters</Badge> : null}
         {artifactCount > 0 ? <Badge variant="light">{artifactCount} artifacts</Badge> : null}
         {inputCount > 0 ? <Badge variant="light">{inputCount} inputs</Badge> : null}
-        {action.timeout ? <Badge variant="light">Timeout: {action.timeout}</Badge> : null}
+        {actionDefinition.timeout ? (
+          <Badge variant="light">Timeout: {actionDefinition.timeout}</Badge>
+        ) : null}
       </Group>
     </Stack>
   );

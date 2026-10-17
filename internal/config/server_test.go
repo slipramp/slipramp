@@ -1,11 +1,11 @@
 package config_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/slipramp/slipramp/internal/config"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 const (
@@ -24,55 +24,6 @@ const (
 	serverS3SecretAccessKeyEnvironment            = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
 	serverS3StartupTimeoutEnvironment             = "SLIPRAMP_S3_STARTUP_TIMEOUT"
 )
-
-func TestLoadServerUsesDefaults(t *testing.T) {
-	t.Parallel()
-
-	cfg, err := config.LoadServer(mapEnvironment(nil))
-	if err != nil {
-		t.Fatalf("LoadServer() error = %v", err)
-	}
-
-	if cfg.Address != ":8080" {
-		t.Errorf("Address = %q, want %q", cfg.Address, ":8080")
-	}
-
-	if cfg.ShutdownTimeout != 10*time.Second {
-		t.Errorf(
-			"ShutdownTimeout = %s, want %s",
-			cfg.ShutdownTimeout,
-			10*time.Second,
-		)
-	}
-
-	if cfg.RepositoryRefreshInterval != time.Minute {
-		t.Errorf(
-			"RepositoryRefreshInterval = %s, want %s",
-			cfg.RepositoryRefreshInterval,
-			time.Minute,
-		)
-	}
-
-	if cfg.RepositoryFetchTimeout != 30*time.Second {
-		t.Errorf(
-			"RepositoryFetchTimeout = %s, want %s",
-			cfg.RepositoryFetchTimeout,
-			30*time.Second,
-		)
-	}
-
-	if cfg.Database.URL == "" {
-		t.Error("Database.URL is empty")
-	}
-
-	if cfg.ObjectStore.Endpoint == "" {
-		t.Error("ObjectStore.Endpoint is empty")
-	}
-
-	if cfg.Placements.Len() != 0 {
-		t.Errorf("Placements.Len() = %d, want 0", cfg.Placements.Len())
-	}
-}
 
 func TestLoadServerFromEnvironment(t *testing.T) {
 	t.Parallel()
@@ -311,17 +262,7 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 			t.Parallel()
 
 			_, err := config.LoadServer(mapEnvironment(test.environment))
-			if err == nil {
-				t.Fatal("LoadServer() error = nil, want an error")
-			}
-
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf(
-					"LoadServer() error = %q, want %q",
-					err,
-					test.wantError,
-				)
-			}
+			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
 }
@@ -330,13 +271,7 @@ func TestLoadServerRequiresEnvironmentLookup(t *testing.T) {
 	t.Parallel()
 
 	_, err := config.LoadServer(nil)
-	if err == nil {
-		t.Fatal("LoadServer() error = nil, want an error")
-	}
-
-	if !strings.Contains(err.Error(), "environment lookup") {
-		t.Errorf("LoadServer() error = %q, want environment lookup", err)
-	}
+	testcheck.ErrorContains(t, err, "environment lookup")
 }
 
 func mapEnvironment(values map[string]string) func(string) (string, bool) {

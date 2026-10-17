@@ -1,8 +1,22 @@
-import { Anchor, Badge, Code, Paper, Stack, Table, Text, Title } from "@mantine/core";
-import { Link } from "react-router";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Code,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
+import { Form, Link, redirect, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { listRepositories } from "~/api/generated";
+import { createRepository, listRepositories } from "~/api/generated";
 
 import type { Route } from "./+types/repositories";
 
@@ -15,13 +29,37 @@ export async function loader() {
   };
 }
 
-export default function Repositories({ loaderData }: Route.ComponentProps) {
+export async function action({ request }: Route.ActionArgs) {
+  const formData = await request.formData();
+  const result = await createRepository({
+    body: {
+      branch: formValue(formData, "branch"),
+      checkoutCredentialName: optionalFormValue(formData, "checkoutCredentialName"),
+      cloneUrl: formValue(formData, "cloneUrl"),
+      name: formValue(formData, "name"),
+      refreshCredentialName: optionalFormValue(formData, "refreshCredentialName"),
+    },
+    client: createServerAPIClient(),
+  });
+
+  if (result.data) {
+    return redirect(`/repositories/${result.data.id}`);
+  }
+
+  return {
+    error: result.error.detail ?? result.error.title ?? "The repository could not be registered.",
+  };
+}
+
+export default function Repositories({ actionData, loaderData }: Route.ComponentProps) {
   return (
     <Stack gap="md">
       <Stack gap={2}>
         <Title order={1}>Repositories</Title>
         <Text c="dimmed">Tracked Git branches and their latest catalog refresh.</Text>
       </Stack>
+
+      <RepositoryConnectionForm error={actionData?.error} />
 
       <Paper withBorder>
         {!loaderData.available ? (
@@ -93,6 +131,76 @@ export default function Repositories({ loaderData }: Route.ComponentProps) {
   );
 }
 
+function RepositoryConnectionForm({ error }: Readonly<{ error?: string }>) {
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
+
+  return (
+    <Paper p="md" withBorder>
+      <Form method="post">
+        <Stack gap="md">
+          <Stack gap={2}>
+            <Title order={2}>Connect repository</Title>
+            <Text c="dimmed" size="sm">
+              Track one Git branch. Credential fields reference names configured on the Server or
+              controllers; secret values are never entered here.
+            </Text>
+          </Stack>
+
+          {error ? (
+            <Alert color="red" title="Repository not connected">
+              {error}
+            </Alert>
+          ) : null}
+
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            <TextInput
+              label="Name"
+              maxLength={63}
+              name="name"
+              pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+              placeholder="homelab"
+              required
+            />
+            <TextInput defaultValue="main" label="Branch" maxLength={255} name="branch" required />
+          </SimpleGrid>
+
+          <TextInput
+            label="Clone URL"
+            maxLength={2048}
+            name="cloneUrl"
+            placeholder="https://github.com/example/infrastructure.git"
+            required
+          />
+
+          <SimpleGrid cols={{ base: 1, sm: 2 }}>
+            <TextInput
+              description="Server-side credential used during refresh"
+              label="Refresh credential name"
+              maxLength={63}
+              name="refreshCredentialName"
+              pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+            />
+            <TextInput
+              description="Logical credential resolved inside execution clusters"
+              label="Checkout credential name"
+              maxLength={63}
+              name="checkoutCredentialName"
+              pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+            />
+          </SimpleGrid>
+
+          <Group justify="flex-end">
+            <Button loading={isSubmitting} type="submit">
+              Connect repository
+            </Button>
+          </Group>
+        </Stack>
+      </Form>
+    </Paper>
+  );
+}
+
 function RefreshBadge({ status }: Readonly<{ status: "pending" | "succeeded" | "failed" }>) {
   const colors = {
     failed: "red",
@@ -116,4 +224,14 @@ function formatTimestamp(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function formValue(formData: FormData, name: string) {
+  const value = formData.get(name);
+
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function optionalFormValue(formData: FormData, name: string) {
+  return formValue(formData, name) || undefined;
 }

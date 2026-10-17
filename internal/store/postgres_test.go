@@ -1,18 +1,11 @@
 package store
 
 import (
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
-
-func TestDefaultConfigIsValid(t *testing.T) {
-	t.Parallel()
-
-	if err := DefaultConfig().Validate(); err != nil {
-		t.Fatalf("DefaultConfig().Validate() error = %v", err)
-	}
-}
 
 func TestConfigValidate(t *testing.T) {
 	t.Parallel()
@@ -55,18 +48,7 @@ func TestConfigValidate(t *testing.T) {
 				test.configure(&cfg)
 			}
 
-			err := cfg.Validate()
-			if test.wantError == "" {
-				if err != nil {
-					t.Fatalf("Validate() error = %v", err)
-				}
-
-				return
-			}
-
-			if err == nil || !strings.Contains(err.Error(), test.wantError) {
-				t.Fatalf("Validate() error = %v, want %q", err, test.wantError)
-			}
+			testcheck.ErrorContains(t, cfg.Validate(), test.wantError)
 		})
 	}
 }

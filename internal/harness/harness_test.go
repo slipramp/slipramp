@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestRunConnectsStreamsAndPreservesArguments(t *testing.T) {
@@ -134,13 +136,7 @@ func TestRunRejectsMissingInputs(t *testing.T) {
 			t.Parallel()
 
 			_, err := Run(test.ctx, test.command, Streams{}, nil)
-			if err == nil {
-				t.Fatal("Run() error = nil, want an error")
-			}
-
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf("Run() error = %q, want %q", err, test.wantError)
-			}
+			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
 }
@@ -154,13 +150,7 @@ func TestRunReportsStartFailure(t *testing.T) {
 		Streams{},
 		nil,
 	)
-	if err == nil {
-		t.Fatal("Run() error = nil, want an error")
-	}
-
-	if !strings.Contains(err.Error(), "start action") {
-		t.Errorf("Run() error = %q, want start action error", err)
-	}
+	testcheck.ErrorContains(t, err, "start action")
 }
 
 type runResult struct {

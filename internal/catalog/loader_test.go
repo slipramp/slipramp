@@ -1,11 +1,11 @@
 package catalog_test
 
 import (
-	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestLoad(t *testing.T) {
@@ -183,12 +183,7 @@ spec:
 			}
 
 			_, err := catalog.Load(files, testPlacements(t))
-			if err == nil {
-				t.Fatal("Load() error = nil")
-			}
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf("Load() error = %q, want %q", err, test.wantError)
-			}
+			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
 }

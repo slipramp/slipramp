@@ -1,8 +1,9 @@
 package repository
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestConfigValidationAcceptsSupportedURLs(t *testing.T) {
@@ -20,15 +21,13 @@ func TestConfigValidationAcceptsSupportedURLs(t *testing.T) {
 		t.Run(repositoryURL, func(t *testing.T) {
 			t.Parallel()
 
-			refreshCredentialName := "github-server"
-			checkoutCredentialName := "github-readonly"
-			cfg := Config{
-				Name:                   "infrastructure",
-				CloneURL:               repositoryURL,
-				Branch:                 "release/production",
-				RefreshCredentialName:  &refreshCredentialName,
-				CheckoutCredentialName: &checkoutCredentialName,
-			}
+			refreshCredential := "github-server"
+			checkoutCredential := "github-readonly"
+			cfg := validRepositoryConfig()
+			cfg.CloneURL = repositoryURL
+			cfg.Branch = "release/production"
+			cfg.RefreshCredentialName = &refreshCredential
+			cfg.CheckoutCredentialName = &checkoutCredential
 
 			if err := cfg.Validate(); err != nil {
 				t.Errorf("Validate() error = %v", err)
@@ -40,72 +39,54 @@ func TestConfigValidationAcceptsSupportedURLs(t *testing.T) {
 func TestConfigValidationRejectsInvalidValues(t *testing.T) {
 	t.Parallel()
 
-	valid := Config{
-		Name:     "infrastructure",
-		CloneURL: "https://github.com/slipramp/slipramp.git",
-		Branch:   "main",
-	}
 	invalidCredential := "Embedded Secret"
 
 	tests := []struct {
-		name          string
-		cfg           Config
-		errorContains string
+		name      string
+		configure func(*Config)
+		wantError string
 	}{
 		{
 			name: "repository name",
-			cfg: Config{
-				Name:     "Infrastructure",
-				CloneURL: valid.CloneURL,
-				Branch:   valid.Branch,
+			configure: func(cfg *Config) {
+				cfg.Name = "Infrastructure"
 			},
-			errorContains: "repository name",
+			wantError: "repository name",
 		},
 		{
 			name: "unsupported URL scheme",
-			cfg: Config{
-				Name:     valid.Name,
-				CloneURL: "http://example.com/repository.git",
-				Branch:   valid.Branch,
+			configure: func(cfg *Config) {
+				cfg.CloneURL = "http://example.com/repository.git"
 			},
-			errorContains: "scheme must be https or ssh",
+			wantError: "scheme must be https or ssh",
 		},
 		{
 			name: "embedded HTTPS credential",
-			cfg: Config{
-				Name:     valid.Name,
-				CloneURL: "https://token@example.com/repository.git",
-				Branch:   valid.Branch,
+			configure: func(cfg *Config) {
+				cfg.CloneURL = "https://token@example.com/repository.git"
 			},
-			errorContains: "embedded HTTPS credentials",
+			wantError: "embedded HTTPS credentials",
 		},
 		{
 			name: "invalid branch",
-			cfg: Config{
-				Name:     valid.Name,
-				CloneURL: valid.CloneURL,
-				Branch:   "feature..broken",
+			configure: func(cfg *Config) {
+				cfg.Branch = "feature..broken"
 			},
-			errorContains: "Git branch name",
+			wantError: "Git branch name",
 		},
 		{
 			name: "branch beginning with dash",
-			cfg: Config{
-				Name:     valid.Name,
-				CloneURL: valid.CloneURL,
-				Branch:   "-main",
+			configure: func(cfg *Config) {
+				cfg.Branch = "-main"
 			},
-			errorContains: "Git branch name",
+			wantError: "Git branch name",
 		},
 		{
 			name: "invalid credential reference",
-			cfg: Config{
-				Name:                  valid.Name,
-				CloneURL:              valid.CloneURL,
-				Branch:                valid.Branch,
-				RefreshCredentialName: &invalidCredential,
+			configure: func(cfg *Config) {
+				cfg.RefreshCredentialName = &invalidCredential
 			},
-			errorContains: "refresh credential",
+			wantError: "refresh credential",
 		},
 	}
 
@@ -113,14 +94,17 @@ func TestConfigValidationRejectsInvalidValues(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := test.cfg.Validate()
-			if err == nil || !strings.Contains(err.Error(), test.errorContains) {
-				t.Errorf(
-					"Validate() error = %v, want error containing %q",
-					err,
-					test.errorContains,
-				)
-			}
+			cfg := validRepositoryConfig()
+			test.configure(&cfg)
+			testcheck.ErrorContains(t, cfg.Validate(), test.wantError)
 		})
+	}
+}
+
+func validRepositoryConfig() Config {
+	return Config{
+		Name:     "infrastructure",
+		CloneURL: "https://github.com/slipramp/slipramp.git",
+		Branch:   "main",
 	}
 }

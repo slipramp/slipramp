@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
@@ -245,22 +246,11 @@ func TestValidateRefreshResult(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := ValidateRefreshResult(test.result)
-			if test.wantError == "" {
-				if err != nil {
-					t.Fatalf("ValidateRefreshResult() error = %v", err)
-				}
-
-				return
-			}
-
-			if err == nil || !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf(
-					"ValidateRefreshResult() error = %v, want %q",
-					err,
-					test.wantError,
-				)
-			}
+			testcheck.ErrorContains(
+				t,
+				ValidateRefreshResult(test.result),
+				test.wantError,
+			)
 		})
 	}
 }

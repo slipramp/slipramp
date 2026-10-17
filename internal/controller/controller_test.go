@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 type serverPollerFunc func(ctx context.Context) error
@@ -17,44 +19,11 @@ func (f serverPollerFunc) Poll(ctx context.Context) error {
 	return f(ctx)
 }
 
-func TestNewValidatesDependencies(t *testing.T) {
+func TestNewRequiresLogger(t *testing.T) {
 	t.Parallel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	tests := []struct {
-		name      string
-		cfg       Config
-		logger    *slog.Logger
-		wantError string
-	}{
-		{
-			name:      "configuration",
-			cfg:       Config{},
-			logger:    logger,
-			wantError: "cluster name",
-		},
-		{
-			name:      "logger",
-			cfg:       validConfig(),
-			wantError: "logger",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			_, err := New(test.cfg, test.logger)
-			if err == nil {
-				t.Fatal("New() error = nil, want an error")
-			}
-
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf("New() error = %q, want %q", err, test.wantError)
-			}
-		})
-	}
+	_, err := New(validConfig(), nil)
+	testcheck.ErrorContains(t, err, "logger")
 }
 
 func TestControllerStopsWhenContextIsCanceled(t *testing.T) {

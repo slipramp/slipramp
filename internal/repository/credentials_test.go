@@ -1,8 +1,9 @@
 package repository
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 func TestRefreshCredentialsValidate(t *testing.T) {
@@ -46,18 +47,7 @@ func TestRefreshCredentialsValidate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := test.credentials.Validate()
-			if test.wantError == "" {
-				if err != nil {
-					t.Fatalf("Validate() error = %v", err)
-				}
-
-				return
-			}
-
-			if err == nil || !strings.Contains(err.Error(), test.wantError) {
-				t.Fatalf("Validate() error = %v, want %q", err, test.wantError)
-			}
+			testcheck.ErrorContains(t, test.credentials.Validate(), test.wantError)
 		})
 	}
 }

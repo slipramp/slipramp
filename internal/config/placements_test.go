@@ -3,11 +3,11 @@ package config_test
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/slipramp/slipramp/internal/config"
+	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
 const serverPlacementsFileEnvironment = "SLIPRAMP_PLACEMENTS_FILE"
@@ -277,17 +277,7 @@ placements:
 			}
 
 			_, err := config.LoadServer(mapEnvironment(environment))
-			if err == nil {
-				t.Fatal("LoadServer() error = nil, want an error")
-			}
-
-			if !strings.Contains(err.Error(), test.wantError) {
-				t.Errorf(
-					"LoadServer() error = %q, want %q",
-					err,
-					test.wantError,
-				)
-			}
+			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
 }
@@ -301,17 +291,7 @@ func TestLoadServerRejectsUnreadablePlacementsFile(t *testing.T) {
 	}
 
 	_, err := config.LoadServer(mapEnvironment(environment))
-	if err == nil {
-		t.Fatal("LoadServer() error = nil, want an error")
-	}
-
-	if !strings.Contains(err.Error(), serverPlacementsFileEnvironment) {
-		t.Errorf(
-			"LoadServer() error = %q, want %q",
-			err,
-			serverPlacementsFileEnvironment,
-		)
-	}
+	testcheck.ErrorContains(t, err, serverPlacementsFileEnvironment)
 }
 
 func validPlacementsFile(extra string) string {
