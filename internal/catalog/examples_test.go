@@ -92,8 +92,46 @@ func TestKcloudOpsExample(t *testing.T) {
 			len(upgrade.Spec.Actions),
 		)
 	}
-	host := upgrade.Spec.Actions["upgrade-node"].Parameters["host"]
-	if host.Type != catalog.ParameterTypeEnum || !host.Required {
-		t.Errorf("upgrade host parameter = %#v, want required enum", host)
+	upgradeHost := upgrade.Spec.Actions["upgrade-node"].Parameters["host"]
+	if upgradeHost.Type != catalog.ParameterTypeEnum || !upgradeHost.Required {
+		t.Errorf("upgrade host parameter = %#v, want required enum", upgradeHost)
+	}
+	previewHost := upgrade.Spec.Actions["preview"].Parameters["host"]
+	if previewHost.Type != catalog.ParameterTypeEnum || !previewHost.Required {
+		t.Errorf("preview host parameter = %#v, want required enum", previewHost)
+	}
+	if !slices.Equal(previewHost.Values, upgradeHost.Values) {
+		t.Errorf(
+			"preview host values = %q, want %q",
+			previewHost.Values,
+			upgradeHost.Values,
+		)
+	}
+	for _, actionName := range []string{
+		"upgrade-node",
+		"upgrade-control-planes",
+		"upgrade-compute",
+	} {
+		action := upgrade.Spec.Actions[actionName]
+		aptUpgrade := action.Parameters["apt-upgrade"]
+		if aptUpgrade.Type != catalog.ParameterTypeBoolean ||
+			aptUpgrade.Argument == nil ||
+			aptUpgrade.Argument.Name != "--apt-upgrade" {
+			t.Errorf(
+				"%s apt-upgrade parameter = %#v, want --apt-upgrade boolean flag",
+				actionName,
+				aptUpgrade,
+			)
+		}
+		reboot := action.Parameters["reboot"]
+		if reboot.Type != catalog.ParameterTypeBoolean ||
+			reboot.Argument == nil ||
+			reboot.Argument.Name != "--reboot" {
+			t.Errorf(
+				"%s reboot parameter = %#v, want --reboot boolean flag",
+				actionName,
+				reboot,
+			)
+		}
 	}
 }

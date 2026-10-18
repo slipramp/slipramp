@@ -53,6 +53,10 @@ func run(
 		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
 		return 1
 	}
+	if err := artifactConfig.PrepareArtifactOutputs(); err != nil {
+		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
+		return 1
+	}
 	if err := artifactConfig.MaterializeInputs(ctx); err != nil {
 		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
 		return 1

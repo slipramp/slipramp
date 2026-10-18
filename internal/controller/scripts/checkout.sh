@@ -5,6 +5,10 @@ url="$2"
 commit="$3"
 credentials="$4"
 
+# The artifact workspace is private to this execution Pod. Runtime images may
+# use any non-root UID, so make its root writable before the action starts.
+chmod a+rwx /slipramp
+
 mkdir -p /tmp/slipramp-home
 export HOME=/tmp/slipramp-home
 export GIT_TERMINAL_PROMPT=0

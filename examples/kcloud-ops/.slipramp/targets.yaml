@@ -110,6 +110,23 @@ spec:
       intent: preview
       command: [./slipramp/upgrade-k8s.sh, preview]
       parameters:
+        host:
+          type: enum
+          required: true
+          values:
+            - controlplane100
+            - controlplane101
+            - controlplane102
+            - compute105
+            - compute104
+            - compute103
+            - compute6
+            - compute5
+            - compute4
+            - compute2
+            - compute1
+          argument:
+            name: --host
         version:
           type: string
           argument:
@@ -135,11 +152,14 @@ spec:
             - compute1
           argument:
             name: --host
-        maintenance:
-          type: enum
-          values: [none, reboot, apt-upgrade]
+        apt-upgrade:
+          type: boolean
           argument:
-            name: --maintenance
+            name: --apt-upgrade
+        reboot:
+          type: boolean
+          argument:
+            name: --reboot
         version:
           type: string
           argument:
@@ -148,11 +168,14 @@ spec:
       intent: operation
       command: [./slipramp/upgrade-k8s.sh, control-planes]
       parameters:
-        maintenance:
-          type: enum
-          values: [none, reboot, apt-upgrade]
+        apt-upgrade:
+          type: boolean
           argument:
-            name: --maintenance
+            name: --apt-upgrade
+        reboot:
+          type: boolean
+          argument:
+            name: --reboot
         version:
           type: string
           argument:
@@ -161,11 +184,14 @@ spec:
       intent: operation
       command: [./slipramp/upgrade-k8s.sh, compute]
       parameters:
-        maintenance:
-          type: enum
-          values: [none, reboot, apt-upgrade]
+        apt-upgrade:
+          type: boolean
           argument:
-            name: --maintenance
+            name: --apt-upgrade
+        reboot:
+          type: boolean
+          argument:
+            name: --reboot
         version:
           type: string
           argument:

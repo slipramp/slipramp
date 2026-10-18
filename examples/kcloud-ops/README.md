@@ -34,10 +34,11 @@ The RustFS target offers:
 The direct `sync` actions are deliberate. Slipramp's safety policy is opt-in;
 previews and canaries are useful operations rather than mandatory gates.
 
-The Kubernetes upgrade target offers a read-only `preview`, a single-node
-action, and separate ordered control-plane and compute rolls. Its optional
-`maintenance` parameter maps `apt-upgrade` to the script's required
-apt-upgrade-plus-reboot pair.
+The Kubernetes upgrade target offers a read-only `preview` for a selected
+node, a single-node action, and separate ordered control-plane and compute
+rolls. Its independent `apt-upgrade` and `reboot` boolean parameters can be
+selected together; the underlying script rejects an apt upgrade without the
+required reboot.
 
 ## Placement and credentials
 

@@ -109,8 +109,15 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 	}
 	if !hasMount(action, "/home/ops/.ssh/id_ed25519", true) ||
 		!hasMount(action, "/var/run/ssh-extensions", false) ||
+		!hasMount(action, artifactWorkspaceMountPath, false) ||
 		!hasMount(action, runStateMountPath, false) {
 		t.Errorf("credential mounts = %#v", action.VolumeMounts)
+	}
+	if !hasMount(checkout, artifactWorkspaceMountPath, false) {
+		t.Errorf("checkout mounts = %#v", checkout.VolumeMounts)
+	}
+	if !hasEmptyDirVolume(pod.Spec.Volumes, artifactWorkspaceVolumeName) {
+		t.Errorf("Pod volumes = %#v", pod.Spec.Volumes)
 	}
 	if !hasCancellationVolume(pod.Spec.Volumes) {
 		t.Errorf("Pod volumes = %#v", pod.Spec.Volumes)
@@ -273,6 +280,16 @@ func hasCancellationVolume(volumes []corev1.Volume) bool {
 				item.FieldRef.FieldPath == wantField {
 				return true
 			}
+		}
+	}
+
+	return false
+}
+
+func hasEmptyDirVolume(volumes []corev1.Volume, name string) bool {
+	for _, volume := range volumes {
+		if volume.Name == name && volume.EmptyDir != nil {
+			return true
 		}
 	}
 

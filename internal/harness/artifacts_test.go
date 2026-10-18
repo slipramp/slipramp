@@ -54,10 +54,7 @@ func TestArtifactTransfersDownloadInputsAndRetryUploads(t *testing.T) {
 
 	directory := t.TempDir()
 	inputPath := filepath.Join(directory, "inputs", "plan.tfplan")
-	outputPath := filepath.Join(directory, "result.txt")
-	if err := os.WriteFile(outputPath, []byte("result bytes"), 0o600); err != nil {
-		t.Fatalf("write output fixture: %v", err)
-	}
+	outputPath := filepath.Join(directory, "artifacts", "reports", "result.txt")
 	config := ArtifactConfig{
 		ServerURL: "https://slipramp.test",
 		RunID:     "run-1",
@@ -71,6 +68,12 @@ func TestArtifactTransfersDownloadInputsAndRetryUploads(t *testing.T) {
 		Client: client,
 	}
 
+	if err := config.PrepareArtifactOutputs(); err != nil {
+		t.Fatalf("PrepareArtifactOutputs() error = %v", err)
+	}
+	if err := os.WriteFile(outputPath, []byte("result bytes"), 0o600); err != nil {
+		t.Fatalf("write output fixture: %v", err)
+	}
 	if err := config.MaterializeInputs(context.Background()); err != nil {
 		t.Fatalf("MaterializeInputs() error = %v", err)
 	}

@@ -27,11 +27,13 @@ const (
 	workspaceVolumeName         = "slipramp-workspace"
 	harnessVolumeName           = "slipramp-bin"
 	runStateVolumeName          = "slipramp-run-state"
+	artifactWorkspaceVolumeName = "slipramp-artifact-workspace"
 	gitCredentialVolumeName     = "slipramp-git-credential"
 	checkoutWorkspaceMountPath  = "/slipramp/checkout"
 	harnessMountPath            = "/slipramp/bin"
 	harnessExecutablePath       = harnessMountPath + "/slipramp-harness"
 	runStateMountPath           = "/slipramp/run-state"
+	artifactWorkspaceMountPath  = "/slipramp"
 	cancellationFileName        = "cancellation-requested"
 	cancellationFilePath        = runStateMountPath + "/" + cancellationFileName
 	gitCredentialMountPath      = "/slipramp/git-credential"
@@ -81,6 +83,10 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 		},
 		{
 			Name:     harnessVolumeName,
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+		{
+			Name:     artifactWorkspaceVolumeName,
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 		{
@@ -201,6 +207,7 @@ func checkoutContainer(
 	credentialPath := ""
 	volumes := []corev1.Volume{}
 	volumeMounts := []corev1.VolumeMount{
+		{Name: artifactWorkspaceVolumeName, MountPath: artifactWorkspaceMountPath},
 		{Name: workspaceVolumeName, MountPath: checkoutWorkspaceMountPath},
 		{Name: harnessVolumeName, MountPath: harnessMountPath, ReadOnly: true},
 		{Name: runStateVolumeName, MountPath: runStateMountPath, ReadOnly: true},
@@ -312,6 +319,7 @@ func actionContainer(
 
 	volumeMounts := append(
 		[]corev1.VolumeMount{
+			{Name: artifactWorkspaceVolumeName, MountPath: artifactWorkspaceMountPath},
 			{Name: workspaceVolumeName, MountPath: workspacePath},
 			{Name: harnessVolumeName, MountPath: harnessMountPath, ReadOnly: true},
 			{Name: runStateVolumeName, MountPath: runStateMountPath, ReadOnly: true},

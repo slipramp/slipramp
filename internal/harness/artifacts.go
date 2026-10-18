@@ -103,6 +103,17 @@ func (c ArtifactConfig) Enabled() bool {
 	return c.ServerURL != ""
 }
 
+func (c ArtifactConfig) PrepareArtifactOutputs() error {
+	for _, name := range slices.Sorted(maps.Keys(c.Artifacts)) {
+		declaration := c.Artifacts[name]
+		if err := os.MkdirAll(filepath.Dir(declaration.Path), 0o755); err != nil {
+			return fmt.Errorf("prepare artifact %q directory: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
 func (c ArtifactConfig) MaterializeInputs(ctx context.Context) error {
 	for _, name := range slices.Sorted(maps.Keys(c.Inputs)) {
 		declaration := c.Inputs[name]
