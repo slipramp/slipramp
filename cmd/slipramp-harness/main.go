@@ -66,7 +66,10 @@ func run(
 			Stdout: stdout,
 			Stderr: stderr,
 		},
-		signals,
+		harness.Options{
+			Signals:          signals,
+			CancellationFile: os.Getenv(harness.CancellationFileEnvironment),
+		},
 	)
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)

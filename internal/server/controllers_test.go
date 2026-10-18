@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -283,7 +284,7 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 		nil,
 		nil,
 		runs,
-		nil,
+		&recordingArtifactService{},
 		nil,
 	).ServeHTTP(response, request)
 
@@ -330,6 +331,9 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 		assignment.Placement.Credentials == nil ||
 		assignment.Placement.PodTemplate == nil {
 		t.Errorf("placement = %#v", assignment.Placement)
+	}
+	if assignment.ArtifactAccess.Token != "run-token" {
+		t.Errorf("artifact access = %#v", assignment.ArtifactAccess)
 	}
 	if runs.nextCalls != 1 {
 		t.Errorf("next assignment calls = %d, want 1", runs.nextCalls)
@@ -822,6 +826,64 @@ func (r *recordingArtifactService) AppendLogChunk(
 	r.request = request
 
 	return r.err
+}
+
+func (*recordingArtifactService) GetLogCursor(
+	context.Context,
+	uuid.UUID,
+	string,
+) (artifact.LogCursor, error) {
+	return artifact.LogCursor{}, artifact.ErrNotFound
+}
+
+func (*recordingArtifactService) SealLog(
+	context.Context,
+	artifact.SealLogRequest,
+) error {
+	return artifact.ErrNotFound
+}
+
+func (*recordingArtifactService) RunToken(uuid.UUID) string { return "run-token" }
+
+func (*recordingArtifactService) AuthenticateRunToken(uuid.UUID, string) bool {
+	return false
+}
+
+func (*recordingArtifactService) Upload(
+	context.Context,
+	artifact.UploadRequest,
+) error {
+	return artifact.ErrNotFound
+}
+
+func (*recordingArtifactService) List(
+	context.Context,
+	uuid.UUID,
+) ([]artifact.Record, error) {
+	return nil, artifact.ErrNotFound
+}
+
+func (*recordingArtifactService) OpenArtifact(
+	context.Context,
+	uuid.UUID,
+) (artifact.Content, error) {
+	return artifact.Content{}, artifact.ErrNotFound
+}
+
+func (*recordingArtifactService) OpenInput(
+	context.Context,
+	uuid.UUID,
+	string,
+) (artifact.Content, error) {
+	return artifact.Content{}, artifact.ErrNotFound
+}
+
+func (*recordingArtifactService) StreamLog(
+	context.Context,
+	uuid.UUID,
+	int64,
+) (io.ReadCloser, error) {
+	return nil, artifact.ErrNotFound
 }
 
 func controllerIdentityFor(

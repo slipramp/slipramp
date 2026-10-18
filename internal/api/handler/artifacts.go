@@ -16,9 +16,6 @@ import (
 
 type ArtifactService interface {
 	AppendLogChunk(context.Context, artifact.AppendLogChunkRequest) error
-}
-
-type artifactFeatures interface {
 	GetLogCursor(context.Context, uuid.UUID, string) (artifact.LogCursor, error)
 	SealLog(context.Context, artifact.SealLogRequest) error
 	RunToken(uuid.UUID) string
@@ -28,15 +25,6 @@ type artifactFeatures interface {
 	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
 	OpenInput(context.Context, uuid.UUID, string) (artifact.Content, error)
 	StreamLog(context.Context, uuid.UUID, int64) (io.ReadCloser, error)
-}
-
-func (h *Handler) artifactFeatures() (artifactFeatures, error) {
-	features, ok := h.artifacts.(artifactFeatures)
-	if !ok {
-		return nil, errors.New("artifact service does not provide artifact transfers")
-	}
-
-	return features, nil
 }
 
 func (h *Handler) AppendRunLogChunk(
@@ -104,11 +92,7 @@ func (h *Handler) GetRunLogCursor(
 	if err != nil {
 		return nil, err
 	}
-	features, err := h.artifactFeatures()
-	if err != nil {
-		return nil, err
-	}
-	cursor, err := features.GetLogCursor(ctx, request.RunID, principal.ClusterName)
+	cursor, err := h.artifacts.GetLogCursor(ctx, request.RunID, principal.ClusterName)
 	if errors.Is(err, artifact.ErrNotFound) {
 		problem := NewProblem(http.StatusNotFound, "The Run does not exist for this controller.")
 		return api.GetRunLogCursor404ApplicationProblemPlusJSONResponse(problem), nil
@@ -137,11 +121,7 @@ func (h *Handler) SealRunLog(
 		return api.SealRunLog400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	features, err := h.artifactFeatures()
-	if err != nil {
-		return nil, err
-	}
-	err = features.SealLog(ctx, artifact.SealLogRequest{
+	err = h.artifacts.SealLog(ctx, artifact.SealLogRequest{
 		RunID:       request.RunID,
 		ClusterName: principal.ClusterName,
 		SizeBytes:   request.Body.SizeBytes,
@@ -172,11 +152,7 @@ func (h *Handler) UploadRunArtifact(
 	if err != nil {
 		return nil, err
 	}
-	features, err := h.artifactFeatures()
-	if err != nil {
-		return nil, err
-	}
-	if !features.AuthenticateRunToken(request.RunID, execution.BearerToken) {
+	if !h.artifacts.AuthenticateRunToken(request.RunID, execution.BearerToken) {
 		problem := NewProblem(http.StatusUnauthorized, "The Run artifact credential is invalid.")
 		return api.UploadRunArtifact401ApplicationProblemPlusJSONResponse(problem), nil
 	}
@@ -185,7 +161,7 @@ func (h *Handler) UploadRunArtifact(
 		return api.UploadRunArtifact400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	err = features.Upload(ctx, artifact.UploadRequest{
+	err = h.artifacts.Upload(ctx, artifact.UploadRequest{
 		RunID:     request.RunID,
 		Name:      string(request.ArtifactName),
 		Body:      request.Body,
@@ -213,11 +189,7 @@ func (h *Handler) ListRunArtifacts(
 	ctx context.Context,
 	request api.ListRunArtifactsRequestObject,
 ) (api.ListRunArtifactsResponseObject, error) {
-	features, err := h.artifactFeatures()
-	if err != nil {
-		return nil, err
-	}
-	records, err := features.List(ctx, request.RunID)
+	records, err := h.artifacts.List(ctx, request.RunID)
 	if errors.Is(err, artifact.ErrNotFound) {
 		problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
 		return api.ListRunArtifacts404ApplicationProblemPlusJSONResponse(problem), nil
@@ -238,11 +210,7 @@ func (h *Handler) DownloadArtifact(
 	ctx context.Context,
 	request api.DownloadArtifactRequestObject,
 ) (api.DownloadArtifactResponseObject, error) {
-	features, err := h.artifactFeatures()
-	if err != nil {
-		return nil, err
-	}
-	content, err := features.OpenArtifact(ctx, request.ArtifactID)
+	content, err := h.artifacts.OpenArtifact(ctx, request.ArtifactID)
 	if errors.Is(err, artifact.ErrNotFound) {
 		problem := NewProblem(http.StatusNotFound, "The artifact does not exist.")
 		return api.DownloadArtifact404ApplicationProblemPlusJSONResponse(problem), nil
@@ -275,16 +243,12 @@ func (h *Handler) DownloadRunInput(
 	if err != nil {
 		return nil, err
 	}
-	features, err := h.artifactFeatures()
-	if err != nil {
-		return nil, err
-	}
-	if !features.AuthenticateRunToken(request.RunID, execution.BearerToken) {
+	if !h.artifacts.AuthenticateRunToken(request.RunID, execution.BearerToken) {
 		problem := NewProblem(http.StatusUnauthorized, "The Run artifact credential is invalid.")
 		return api.DownloadRunInput401ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	content, err := features.OpenInput(ctx, request.RunID, string(request.InputName))
+	content, err := h.artifacts.OpenInput(ctx, request.RunID, string(request.InputName))
 	if errors.Is(err, artifact.ErrNotFound) || errors.Is(err, artifact.ErrNotSealed) {
 		problem := NewProblem(http.StatusNotFound, "The Run input does not exist.")
 		return api.DownloadRunInput404ApplicationProblemPlusJSONResponse(problem), nil
@@ -320,11 +284,7 @@ func (h *Handler) StreamRunLog(
 		}
 	}
 
-	features, err := h.artifactFeatures()
-	if err != nil {
-		return nil, err
-	}
-	stream, err := features.StreamLog(ctx, request.RunID, offset)
+	stream, err := h.artifacts.StreamLog(ctx, request.RunID, offset)
 	if errors.Is(err, artifact.ErrInvalid) {
 		problem := NewProblem(http.StatusBadRequest, err.Error())
 		return api.StreamRunLog400ApplicationProblemPlusJSONResponse(problem), nil

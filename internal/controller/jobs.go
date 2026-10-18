@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	batchv1client "k8s.io/client-go/kubernetes/typed/batch/v1"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
@@ -21,38 +23,57 @@ import (
 
 type runJobs interface {
 	Ensure(ctx context.Context, assignment api.RunAssignment) (ensuredRunJob, error)
-	Cancel(ctx context.Context, command api.CancelRunCommand) (*string, error)
+	RequestCancellation(
+		ctx context.Context,
+		command api.CancelRunCommand,
+	) (cancellationResult, error)
 	Recover(ctx context.Context) ([]jobHandle, error)
 	Observe(ctx context.Context, handle jobHandle) (runObservation, error)
+	OpenLog(ctx context.Context, handle jobHandle, follow bool) (io.ReadCloser, error)
+	Delete(ctx context.Context, handle jobHandle) error
 }
 
 var errLogNotReady = errors.New("execution log is not ready")
 
-type runLogReader interface {
-	ReadLog(ctx context.Context, handle jobHandle) ([]byte, error)
+type cancellationResult struct {
+	handle      jobHandle
+	jobRetained bool
 }
 
-// Cancel removes the deterministic execution Job. A missing Job is success so
-// repeated cancel commands and assignments canceled before
-// materialization remain idempotent.
-func (r *kubernetesRunJobs) Cancel(
+// RequestCancellation marks the execution Pod so the Harness can terminate
+// the action and let the Job reach an observable terminal state. If the Job
+// has not created a Pod yet, deleting it is safe because no action or log has
+// started. A missing Job is also success, which keeps delivery idempotent.
+func (r *kubernetesRunJobs) RequestCancellation(
 	ctx context.Context,
 	command api.CancelRunCommand,
-) (*string, error) {
+) (cancellationResult, error) {
 	jobs := r.jobs.Jobs(string(command.JobNamespace))
 	name := runJobName(command.ID)
+	handle := jobHandle{
+		runID:     command.ID,
+		namespace: string(command.JobNamespace),
+		name:      name,
+	}
+	if command.JobUID != nil {
+		handle.uid = *command.JobUID
+	}
+
 	job, err := jobs.Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		return command.JobUID, nil
+		return cancellationResult{handle: handle}, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get execution Job to cancel: %w", err)
+		return cancellationResult{}, fmt.Errorf(
+			"get execution Job to cancel: %w",
+			err,
+		)
 	}
 
 	if job.Labels[managedByLabel] != managedByLabelValue ||
 		job.Labels[runIDLabel] != command.ID.String() ||
 		job.Labels[clusterLabel] != r.config.ClusterName {
-		return nil, fmt.Errorf(
+		return cancellationResult{}, fmt.Errorf(
 			"execution Job %q does not have the expected Run identity",
 			name,
 		)
@@ -60,7 +81,7 @@ func (r *kubernetesRunJobs) Cancel(
 
 	jobUID := string(job.UID)
 	if command.JobUID != nil && jobUID != *command.JobUID {
-		return nil, fmt.Errorf(
+		return cancellationResult{}, fmt.Errorf(
 			"execution Job %q UID %q does not match recorded UID %q",
 			name,
 			jobUID,
@@ -68,20 +89,83 @@ func (r *kubernetesRunJobs) Cancel(
 		)
 	}
 
-	propagation := metav1.DeletePropagationBackground
-	options := metav1.DeleteOptions{PropagationPolicy: &propagation}
-	if job.UID != "" {
-		options.Preconditions = &metav1.Preconditions{UID: &job.UID}
-	}
-	if err := jobs.Delete(ctx, name, options); err != nil && !apierrors.IsNotFound(err) {
-		return nil, fmt.Errorf("delete execution Job to cancel Run: %w", err)
+	if jobUID != "" {
+		handle.uid = jobUID
 	}
 
-	if jobUID == "" {
-		return command.JobUID, nil
+	pods, err := r.pods.Pods(handle.namespace).List(
+		ctx,
+		metav1.ListOptions{
+			LabelSelector: labels.Set{
+				batchv1.JobNameLabel: handle.name,
+				managedByLabel:       managedByLabelValue,
+				runIDLabel:           command.ID.String(),
+				clusterLabel:         r.config.ClusterName,
+			}.String(),
+		},
+	)
+	if err != nil {
+		return cancellationResult{}, fmt.Errorf(
+			"list execution Pods to cancel Run: %w",
+			err,
+		)
+	}
+	if len(pods.Items) == 0 {
+		propagation := metav1.DeletePropagationForeground
+		options := metav1.DeleteOptions{PropagationPolicy: &propagation}
+		if job.UID != "" {
+			options.Preconditions = &metav1.Preconditions{UID: &job.UID}
+		}
+		if err := jobs.Delete(ctx, name, options); err != nil &&
+			!apierrors.IsNotFound(err) {
+			return cancellationResult{}, fmt.Errorf(
+				"delete unstarted execution Job: %w",
+				err,
+			)
+		}
+
+		return cancellationResult{handle: handle}, nil
+	}
+	if terminalJobObservation(job.Status.Conditions, nil) != nil ||
+		actionAlreadyTerminated(pods.Items) {
+		return cancellationResult{handle: handle, jobRetained: true}, nil
 	}
 
-	return &jobUID, nil
+	for index := range pods.Items {
+		pod := pods.Items[index].DeepCopy()
+		if pod.Annotations[cancellationAnnotation] == "true" {
+			continue
+		}
+		if pod.Annotations == nil {
+			pod.Annotations = make(map[string]string)
+		}
+		pod.Annotations[cancellationAnnotation] = "true"
+		if _, err := r.pods.Pods(handle.namespace).Update(
+			ctx,
+			pod,
+			metav1.UpdateOptions{},
+		); err != nil && !apierrors.IsNotFound(err) {
+			return cancellationResult{}, fmt.Errorf(
+				"mark execution Pod for cancellation: %w",
+				err,
+			)
+		}
+	}
+
+	return cancellationResult{handle: handle, jobRetained: true}, nil
+}
+
+func actionAlreadyTerminated(pods []corev1.Pod) bool {
+	for podIndex := range pods {
+		for statusIndex := range pods[podIndex].Status.ContainerStatuses {
+			status := &pods[podIndex].Status.ContainerStatuses[statusIndex]
+			if status.Name == actionContainerName && status.State.Terminated != nil {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 type runObservation struct {
@@ -255,11 +339,15 @@ func (r *kubernetesRunJobs) Observe(
 		},
 	)
 	if err != nil {
-		if terminal != nil {
-			return *terminal, nil
-		}
-
 		return runObservation{}, fmt.Errorf("list execution Pods: %w", err)
+	}
+
+	cancellationRequested := false
+	for index := range pods.Items {
+		if pods.Items[index].Annotations[cancellationAnnotation] == "true" {
+			cancellationRequested = true
+			break
+		}
 	}
 
 	for podIndex := range pods.Items {
@@ -271,7 +359,10 @@ func (r *kubernetesRunJobs) Observe(
 
 			if status.State.Running != nil {
 				if terminal != nil {
-					return *terminal, nil
+					return canceledIfRequested(
+						*terminal,
+						cancellationRequested,
+					), nil
 				}
 
 				return runObservation{
@@ -282,7 +373,10 @@ func (r *kubernetesRunJobs) Observe(
 			if status.State.Terminated != nil {
 				terminated := status.State.Terminated
 				if terminal == nil {
-					return terminatedObservation(terminated, uid), nil
+					return canceledIfRequested(
+						terminatedObservation(terminated, uid),
+						cancellationRequested,
+					), nil
 				}
 
 				terminal.exitCode = &terminated.ExitCode
@@ -293,12 +387,15 @@ func (r *kubernetesRunJobs) Observe(
 					terminal.message = optionalNonemptyString(terminated.Message)
 				}
 
-				return *terminal, nil
+				return canceledIfRequested(
+					*terminal,
+					cancellationRequested,
+				), nil
 			}
 		}
 	}
 	if terminal != nil {
-		return *terminal, nil
+		return canceledIfRequested(*terminal, cancellationRequested), nil
 	}
 
 	return runObservation{
@@ -307,10 +404,56 @@ func (r *kubernetesRunJobs) Observe(
 	}, nil
 }
 
-func (r *kubernetesRunJobs) ReadLog(
+func canceledIfRequested(
+	observation runObservation,
+	requested bool,
+) runObservation {
+	if !requested || !observation.terminal() {
+		return observation
+	}
+
+	outcome := api.RunObservationOutcomeCanceled
+	reason := "CancelRequested"
+	observation.outcome = &outcome
+	observation.reason = &reason
+
+	return observation
+}
+
+// Delete removes a completed execution Job only when it still has the UID
+// captured when observation began. A missing Job is success so cleanup remains
+// idempotent when a deletion response is lost or the Controller restarts.
+func (r *kubernetesRunJobs) Delete(
 	ctx context.Context,
 	handle jobHandle,
-) ([]byte, error) {
+) error {
+	if handle.uid == "" {
+		return errors.New("delete execution Job: Job UID is required")
+	}
+
+	uid := types.UID(handle.uid)
+	propagation := metav1.DeletePropagationBackground
+	options := metav1.DeleteOptions{
+		Preconditions:     &metav1.Preconditions{UID: &uid},
+		PropagationPolicy: &propagation,
+	}
+	err := r.jobs.Jobs(handle.namespace).Delete(
+		ctx,
+		handle.name,
+		options,
+	)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete completed execution Job: %w", err)
+	}
+
+	return nil
+}
+
+func (r *kubernetesRunJobs) OpenLog(
+	ctx context.Context,
+	handle jobHandle,
+	follow bool,
+) (io.ReadCloser, error) {
 	pods, err := r.pods.Pods(handle.namespace).List(
 		ctx,
 		metav1.ListOptions{
@@ -318,7 +461,7 @@ func (r *kubernetesRunJobs) ReadLog(
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list execution Pods for logs: %w", err)
+		return nil, fmt.Errorf("list execution Pods for log stream: %w", err)
 	}
 	if len(pods.Items) == 0 {
 		return nil, errLogNotReady
@@ -336,15 +479,18 @@ func (r *kubernetesRunJobs) ReadLog(
 		}
 	}
 
-	contents, err := r.pods.Pods(handle.namespace).GetLogs(
+	stream, err := r.pods.Pods(handle.namespace).GetLogs(
 		pod.Name,
-		&corev1.PodLogOptions{Container: actionContainerName},
-	).DoRaw(ctx)
+		&corev1.PodLogOptions{
+			Container: actionContainerName,
+			Follow:    follow,
+		},
+	).Stream(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("read execution Pod log: %w", err)
+		return nil, fmt.Errorf("open execution Pod log stream: %w", err)
 	}
 
-	return contents, nil
+	return stream, nil
 }
 
 func terminalJobObservation(

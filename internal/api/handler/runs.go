@@ -19,29 +19,18 @@ import (
 
 type RunService interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
+	GetRun(context.Context, uuid.UUID) (run.Run, error)
+	ListRuns(context.Context, run.ListFilter) ([]run.Run, error)
 	CancelRun(ctx context.Context, runID uuid.UUID) (run.Run, error)
 	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
 	NextRunToCancel(ctx context.Context, clusterName string) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
 }
 
-type runReader interface {
-	GetRun(context.Context, uuid.UUID) (run.Run, error)
-}
-
-type runLister interface {
-	ListRuns(context.Context, run.ListFilter) ([]run.Run, error)
-}
-
 func (h *Handler) ListRuns(
 	ctx context.Context,
 	request api.ListRunsRequestObject,
 ) (api.ListRunsResponseObject, error) {
-	lister, ok := h.runs.(runLister)
-	if !ok {
-		return nil, errors.New("run service cannot list Runs")
-	}
-
 	limit := int32(run.DefaultListLimit)
 	if request.Params.Limit != nil {
 		if *request.Params.Limit < 1 || *request.Params.Limit > run.MaximumListLimit {
@@ -59,7 +48,7 @@ func (h *Handler) ListRuns(
 		targetName = string(*request.Params.Target)
 	}
 
-	records, err := lister.ListRuns(
+	records, err := h.runs.ListRuns(
 		ctx,
 		run.ListFilter{
 			RepositoryID: request.Params.RepositoryID,
@@ -154,11 +143,7 @@ func (h *Handler) GetRun(
 	ctx context.Context,
 	request api.GetRunRequestObject,
 ) (api.GetRunResponseObject, error) {
-	reader, ok := h.runs.(runReader)
-	if !ok {
-		return nil, errors.New("run service cannot load Runs")
-	}
-	record, err := reader.GetRun(ctx, request.RunID)
+	record, err := h.runs.GetRun(ctx, request.RunID)
 	if errors.Is(err, run.ErrRunNotFound) {
 		problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
 

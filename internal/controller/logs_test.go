@@ -1,99 +1,107 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/slipramp/slipramp/internal/api"
 )
 
-func TestSyncLogResumesFromDurableCursorAfterRestart(t *testing.T) {
+func TestForwardLogResumesFromDurableCursor(t *testing.T) {
 	t.Parallel()
 
-	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501")
-	reporter := &memoryLogReporter{contents: []byte("already ")}
-	jobs := &logRunJobs{contents: []byte("already durable\n")}
-	controller := &Controller{jobs: jobs, logs: reporter}
-	handle := jobHandle{runID: runID, namespace: "runs", name: runJobName(runID), uid: "job-1"}
+	payload := bytes.Repeat([]byte("log line\n"), 40_000)
+	prefixSize := 13
+	reporter := &memoryLogReporter{contents: bytes.Clone(payload[:prefixSize])}
+	controller := &Controller{logs: reporter, retryDelay: time.Millisecond}
 
-	if err := controller.syncLog(context.Background(), handle, true); err != nil {
-		t.Fatalf("syncLog() error = %v", err)
+	summary, err := controller.forwardLog(
+		context.Background(),
+		uuid.New(),
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		t.Fatalf("forwardLog() error = %v", err)
 	}
-	if string(reporter.contents) != "already durable\n" {
-		t.Errorf("durable contents = %q", reporter.contents)
+	if !bytes.Equal(reporter.bytes(), payload) {
+		t.Fatal("durable log does not match the streamed source")
 	}
-	if reporter.appendCalls != 1 || reporter.appendOffsets[0] != 8 {
-		t.Errorf("append calls = %d at %v, want one at 8", reporter.appendCalls, reporter.appendOffsets)
+	if reporter.acceptedAppends != 2 {
+		t.Errorf("accepted appends = %d, want 2 bounded chunks", reporter.acceptedAppends)
 	}
-	if !reporter.sealed {
-		t.Error("log was not sealed")
+	wantDigest := sha256.Sum256(payload)
+	if summary.sizeBytes != int64(len(payload)) ||
+		summary.sha256 != hex.EncodeToString(wantDigest[:]) {
+		t.Errorf("log summary = %#v", summary)
 	}
 }
 
-func TestSyncLogRecoversWhenAppendResponseIsLost(t *testing.T) {
+func TestForwardLogRetriesLostAppendResponseIdempotently(t *testing.T) {
 	t.Parallel()
 
-	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501")
-	reporter := &memoryLogReporter{loseFirstResponse: true}
-	jobs := &logRunJobs{contents: []byte("durable\n")}
-	controller := &Controller{jobs: jobs, logs: reporter}
-	handle := jobHandle{runID: runID, uid: "job-1"}
+	reporter := &memoryLogReporter{loseFirstAppendResponse: true}
+	controller := &Controller{logs: reporter, retryDelay: time.Millisecond}
+	payload := []byte("durable after a lost response\n")
 
-	if err := controller.syncLog(context.Background(), handle, false); err == nil {
-		t.Fatal("first syncLog() error = nil, want lost response")
+	_, err := controller.forwardLog(
+		context.Background(),
+		uuid.New(),
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		t.Fatalf("forwardLog() error = %v", err)
 	}
-	if err := controller.syncLog(context.Background(), handle, true); err != nil {
-		t.Fatalf("retry syncLog() error = %v", err)
+	if !bytes.Equal(reporter.bytes(), payload) {
+		t.Errorf("durable log = %q", reporter.bytes())
 	}
-	if reporter.appendCalls != 1 {
-		t.Errorf("accepted append calls = %d, want 1", reporter.appendCalls)
+	if reporter.appendAttempts != 2 || reporter.acceptedAppends != 1 {
+		t.Errorf(
+			"append attempts = %d, accepted = %d; want 2, 1",
+			reporter.appendAttempts,
+			reporter.acceptedAppends,
+		)
 	}
-	if string(reporter.contents) != "durable\n" || !reporter.sealed {
-		t.Errorf("reporter = %#v", reporter)
-	}
-}
-
-type logRunJobs struct {
-	contents []byte
-}
-
-func (j *logRunJobs) Ensure(context.Context, api.RunAssignment) (ensuredRunJob, error) {
-	return ensuredRunJob{}, nil
-}
-
-func (j *logRunJobs) Cancel(context.Context, api.CancelRunCommand) (*string, error) {
-	return nil, nil
-}
-
-func (j *logRunJobs) Recover(context.Context) ([]jobHandle, error) {
-	return nil, nil
-}
-
-func (j *logRunJobs) Observe(context.Context, jobHandle) (runObservation, error) {
-	return runObservation{}, nil
-}
-
-func (j *logRunJobs) ReadLog(context.Context, jobHandle) ([]byte, error) {
-	return append([]byte(nil), j.contents...), nil
 }
 
 type memoryLogReporter struct {
-	contents          []byte
-	appendCalls       int
-	appendOffsets     []int64
-	loseFirstResponse bool
-	lostResponse      bool
-	sealed            bool
+	mutex                   sync.Mutex
+	contents                []byte
+	sealed                  bool
+	sha256                  string
+	cursorErrors            []error
+	sealErrors              []error
+	loseFirstAppendResponse bool
+	lostAppendResponse      bool
+	appendAttempts          int
+	acceptedAppends         int
 }
 
 func (r *memoryLogReporter) GetLogCursor(
 	context.Context,
 	uuid.UUID,
 ) (logCursor, error) {
-	return logCursor{nextOffsetBytes: int64(len(r.contents)), sealed: r.sealed}, nil
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if len(r.cursorErrors) > 0 {
+		err := r.cursorErrors[0]
+		r.cursorErrors = r.cursorErrors[1:]
+
+		return logCursor{}, err
+	}
+
+	return logCursor{
+		nextOffsetBytes: int64(len(r.contents)),
+		sealed:          r.sealed,
+		sha256:          r.sha256,
+	}, nil
 }
 
 func (r *memoryLogReporter) AppendLogChunk(
@@ -102,14 +110,28 @@ func (r *memoryLogReporter) AppendLogChunk(
 	offset int64,
 	contents []byte,
 ) error {
-	if offset != int64(len(r.contents)) {
-		return errors.New("unexpected offset")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	r.appendAttempts++
+	end := offset + int64(len(contents))
+	if offset < int64(len(r.contents)) {
+		if end > int64(len(r.contents)) ||
+			!bytes.Equal(r.contents[offset:end], contents) {
+			return errors.New("conflicting repeated append")
+		}
+
+		return nil
 	}
+	if offset != int64(len(r.contents)) {
+		return fmt.Errorf("append offset %d, want %d", offset, len(r.contents))
+	}
+
 	r.contents = append(r.contents, contents...)
-	r.appendCalls++
-	r.appendOffsets = append(r.appendOffsets, offset)
-	if r.loseFirstResponse && !r.lostResponse {
-		r.lostResponse = true
+	r.acceptedAppends++
+	if r.loseFirstAppendResponse && !r.lostAppendResponse {
+		r.lostAppendResponse = true
+
 		return errors.New("response lost")
 	}
 
@@ -117,11 +139,44 @@ func (r *memoryLogReporter) AppendLogChunk(
 }
 
 func (r *memoryLogReporter) SealLog(
-	context.Context,
-	uuid.UUID,
-	int64,
-	string,
+	_ context.Context,
+	_ uuid.UUID,
+	sizeBytes int64,
+	digest string,
 ) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if len(r.sealErrors) > 0 {
+		err := r.sealErrors[0]
+		r.sealErrors = r.sealErrors[1:]
+
+		return err
+	}
+	if sizeBytes != int64(len(r.contents)) {
+		return fmt.Errorf("seal size %d, want %d", sizeBytes, len(r.contents))
+	}
+	wantDigest := sha256.Sum256(r.contents)
+	if digest != hex.EncodeToString(wantDigest[:]) {
+		return errors.New("seal digest does not match durable contents")
+	}
+
 	r.sealed = true
+	r.sha256 = digest
+
 	return nil
+}
+
+func (r *memoryLogReporter) bytes() []byte {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	return bytes.Clone(r.contents)
+}
+
+func (r *memoryLogReporter) isSealed() bool {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	return r.sealed
 }

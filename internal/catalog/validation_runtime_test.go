@@ -61,6 +61,15 @@ func TestValidateRuntimeCredentials(t *testing.T) {
 			wantError: "runtime environment name",
 		},
 		{
+			name: "reserved environment name",
+			configure: func(input *catalog.Catalog) {
+				input.Runtimes[0].Spec.Environment = map[string]string{
+					"SLIPRAMP_RUN_ID": "different-run",
+				}
+			},
+			wantError: "reserved SLIPRAMP_ namespace",
+		},
+		{
 			name: "environment collision",
 			configure: func(input *catalog.Catalog) {
 				input.Runtimes[0].Spec.Environment = map[string]string{"TOKEN": "public"}

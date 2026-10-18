@@ -29,13 +29,6 @@ type receivedEnrollment struct {
 	body          string
 }
 
-type receivedReport struct {
-	method        string
-	path          string
-	authorization string
-	body          string
-}
-
 type receivedLogChunk struct {
 	method        string
 	path          string
@@ -181,93 +174,6 @@ func TestServerClientPollRejectsUnauthorizedResponse(t *testing.T) {
 	}
 }
 
-func TestServerClientPollParsesRunAssignment(t *testing.T) {
-	t.Parallel()
-
-	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
-	body := `{
-		"type":"run-assignment",
-		"assignment":{
-		"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
-		"catalogRevisionId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1201",
-		"commitSha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		"parameters":{},
-		"repository":{"name":"ops","cloneUrl":"https://example.com/ops.git","branch":"main"},
-		"target":{"name":"network"},
-		"action":{"name":"sync","command":["terraform","apply"],"runtime":"terraform","placement":"admin"},
-		"runtime":{"name":"terraform","image":"terraform:1"},
-		"placement":{"name":"admin","cluster":"colo","jobNamespace":"slipramp-runs"}}
-	}`
-	client, err := newServerClientWithHTTPClient(
-		validConfig(),
-		httpDoerFunc(func(
-			_ *http.Request,
-		) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header: http.Header{
-					"Content-Type": []string{"application/json"},
-				},
-				Body: io.NopCloser(strings.NewReader(body)),
-			}, nil
-		}),
-	)
-	if err != nil {
-		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
-	}
-
-	command, err := client.Poll(context.Background())
-	if err != nil {
-		t.Fatalf("Poll() error = %v", err)
-	}
-	if command == nil || command.Assignment == nil ||
-		command.Assignment.ID != runID ||
-		command.Assignment.Action.Name != "sync" {
-		t.Fatalf("Poll() command = %#v", command)
-	}
-}
-
-func TestServerClientPollParsesCancelRun(t *testing.T) {
-	t.Parallel()
-
-	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
-	body := `{
-		"type":"cancel-run",
-		"cancel":{
-			"id":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
-			"jobNamespace":"slipramp-runs",
-			"jobUid":"job-uid"
-		}
-	}`
-	client, err := newServerClientWithHTTPClient(
-		validConfig(),
-		httpDoerFunc(func(_ *http.Request) (*http.Response, error) {
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header: http.Header{
-					"Content-Type": []string{"application/json"},
-				},
-				Body: io.NopCloser(strings.NewReader(body)),
-			}, nil
-		}),
-	)
-	if err != nil {
-		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
-	}
-
-	command, err := client.Poll(context.Background())
-	if err != nil {
-		t.Fatalf("Poll() error = %v", err)
-	}
-	if command == nil || command.Cancel == nil ||
-		command.Cancel.ID != runID ||
-		command.Cancel.JobNamespace != "slipramp-runs" ||
-		command.Cancel.JobUID == nil ||
-		*command.Cancel.JobUID != "job-uid" {
-		t.Fatalf("Poll() command = %#v", command)
-	}
-}
-
 func TestServerClientAppendsAuthenticatedRunLogChunk(t *testing.T) {
 	t.Parallel()
 
@@ -320,29 +226,22 @@ func TestServerClientAppendsAuthenticatedRunLogChunk(t *testing.T) {
 	}
 }
 
-func TestServerClientReportsAuthenticatedRunObservation(t *testing.T) {
+func TestServerClientReturnsSealedLogCursor(t *testing.T) {
 	t.Parallel()
 
-	var report receivedReport
-	cfg := validConfig()
-	cfg.ServerURL = "https://slipramp.example.com/slipramp"
+	digest := strings.Repeat("a", 64)
 	client, err := newServerClientWithHTTPClient(
-		cfg,
-		httpDoerFunc(func(request *http.Request) (*http.Response, error) {
-			body, readErr := io.ReadAll(request.Body)
-			if readErr != nil {
-				t.Fatalf("read request body: %v", readErr)
-			}
-			report = receivedReport{
-				method:        request.Method,
-				path:          request.URL.Path,
-				authorization: request.Header.Get("Authorization"),
-				body:          string(body),
-			}
+		validConfig(),
+		httpDoerFunc(func(*http.Request) (*http.Response, error) {
+			body := fmt.Sprintf(
+				`{"nextOffsetBytes":12,"state":"sealed","sha256":%q}`,
+				digest,
+			)
 
 			return &http.Response{
-				StatusCode: http.StatusNoContent,
-				Body:       io.NopCloser(strings.NewReader("")),
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(body)),
 			}, nil
 		}),
 	)
@@ -350,19 +249,70 @@ func TestServerClientReportsAuthenticatedRunObservation(t *testing.T) {
 		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
 	}
 
-	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
-	if err := client.ReportObservation(
-		context.Background(),
-		runID,
-		api.RunObservation{Phase: api.RunObservationPhaseRunning},
-	); err != nil {
-		t.Fatalf("ReportObservation() error = %v", err)
+	cursor, err := client.GetLogCursor(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("GetLogCursor() error = %v", err)
 	}
-	if report.method != http.MethodPost ||
-		report.path != "/slipramp/controller/v1/runs/"+
-			runID.String()+"/observations" ||
-		report.authorization != "Bearer controller-token" ||
-		!strings.Contains(report.body, `"phase":"running"`) {
-		t.Errorf("report = %#v", report)
+	if cursor.nextOffsetBytes != 12 || !cursor.sealed || cursor.sha256 != digest {
+		t.Errorf("log cursor = %#v", cursor)
+	}
+}
+
+func TestServerClientPreservesUnknownRunStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		call func(*serverClient) error
+		want error
+	}{
+		{
+			name: "log cursor",
+			call: func(client *serverClient) error {
+				_, err := client.GetLogCursor(context.Background(), uuid.New())
+
+				return err
+			},
+			want: errRunLogRejected,
+		},
+		{
+			name: "observation",
+			call: func(client *serverClient) error {
+				return client.ReportObservation(
+					context.Background(),
+					uuid.New(),
+					api.RunObservation{Phase: api.RunObservationPhaseRunning},
+				)
+			},
+			want: errRunObservationRejected,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			client, err := newServerClientWithHTTPClient(
+				validConfig(),
+				httpDoerFunc(func(*http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: http.StatusNotFound,
+						Body:       io.NopCloser(strings.NewReader("")),
+					}, nil
+				}),
+			)
+			if err != nil {
+				t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+			}
+
+			err = test.call(client)
+			if !errors.Is(err, test.want) {
+				t.Fatalf("error = %v, want %v", err, test.want)
+			}
+			statusCode, ok := serverResponseStatusCode(err)
+			if !ok || statusCode != http.StatusNotFound {
+				t.Errorf("HTTP status = %d, %t; want 404, true", statusCode, ok)
+			}
+		})
 	}
 }

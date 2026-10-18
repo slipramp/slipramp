@@ -24,6 +24,8 @@ const maximumIdempotencyKeyLength = 128
 
 type Store interface {
 	CreateRun(ctx context.Context, record Run) (Run, error)
+	GetRun(context.Context, uuid.UUID) (Run, error)
+	ListRuns(context.Context, ListFilter) ([]Run, error)
 	CancelRun(
 		ctx context.Context,
 		runID uuid.UUID,
@@ -47,23 +49,12 @@ type Store interface {
 		ctx context.Context,
 		clusterName string,
 	) (Run, error)
+	GetArtifactInputCandidate(context.Context, uuid.UUID) (ArtifactInput, error)
 	ApplyRunObservation(
 		ctx context.Context,
 		observation Observation,
 		allowedCurrentPhases []Phase,
 	) error
-}
-
-type runReader interface {
-	GetRun(context.Context, uuid.UUID) (Run, error)
-}
-
-type runLister interface {
-	ListRuns(context.Context, ListFilter) ([]Run, error)
-}
-
-type artifactInputStore interface {
-	GetArtifactInputCandidate(context.Context, uuid.UUID) (ArtifactInput, error)
 }
 
 type RepositoryService interface {
@@ -78,9 +69,6 @@ type CatalogService interface {
 		ctx context.Context,
 		repositoryID uuid.UUID,
 	) (catalog.Revision, error)
-}
-
-type catalogRevisionService interface {
 	GetRevision(context.Context, uuid.UUID, uuid.UUID) (catalog.Revision, error)
 }
 
@@ -168,11 +156,7 @@ func (s *Service) CreateRun(
 	if pinnedRevisionID == uuid.Nil {
 		revision, err = s.catalogs.GetActiveRevision(ctx, request.RepositoryID)
 	} else {
-		revisions, ok := s.catalogs.(catalogRevisionService)
-		if !ok {
-			return Run{}, errors.New("catalog service cannot load pinned revisions")
-		}
-		revision, err = revisions.GetRevision(
+		revision, err = s.catalogs.GetRevision(
 			ctx,
 			request.RepositoryID,
 			pinnedRevisionID,
@@ -260,11 +244,7 @@ func (s *Service) GetRun(ctx context.Context, runID uuid.UUID) (Run, error) {
 		return Run{}, fmt.Errorf("%w: Run ID is required", ErrInvalidRequest)
 	}
 
-	reader, ok := s.runs.(runReader)
-	if !ok {
-		return Run{}, errors.New("Run store cannot load Runs")
-	}
-	record, err := reader.GetRun(ctx, runID)
+	record, err := s.runs.GetRun(ctx, runID)
 	if err != nil {
 		return Run{}, err
 	}
@@ -296,12 +276,7 @@ func (s *Service) ListRuns(ctx context.Context, filter ListFilter) ([]Run, error
 		)
 	}
 
-	lister, ok := s.runs.(runLister)
-	if !ok {
-		return nil, errors.New("run store cannot list Runs")
-	}
-
-	records, err := lister.ListRuns(ctx, filter)
+	records, err := s.runs.ListRuns(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("list Runs: %w", err)
 	}
@@ -315,11 +290,6 @@ func (s *Service) resolveInputCandidates(
 ) (map[string]ArtifactInput, uuid.UUID, error) {
 	result := make(map[string]ArtifactInput, len(request.Inputs))
 	var revisionID uuid.UUID
-	artifacts, ok := s.runs.(artifactInputStore)
-	if len(request.Inputs) > 0 && !ok {
-		return nil, uuid.Nil, errors.New("Run store cannot resolve artifact inputs")
-	}
-
 	for _, name := range slices.Sorted(maps.Keys(request.Inputs)) {
 		if strings.TrimSpace(name) == "" {
 			return nil, uuid.Nil, fmt.Errorf(
@@ -337,7 +307,7 @@ func (s *Service) resolveInputCandidates(
 			)
 		}
 
-		candidate, err := artifacts.GetArtifactInputCandidate(ctx, artifactID)
+		candidate, err := s.runs.GetArtifactInputCandidate(ctx, artifactID)
 		if errors.Is(err, ErrArtifactNotFound) {
 			return nil, uuid.Nil, ErrArtifactNotFound
 		}

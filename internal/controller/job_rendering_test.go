@@ -41,6 +41,9 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 		pod.Labels[runIDLabel] != assignment.ID.String() {
 		t.Errorf("Pod labels = %#v", pod.Labels)
 	}
+	if pod.Annotations[cancellationAnnotation] != "false" {
+		t.Errorf("Pod annotations = %#v", pod.Annotations)
+	}
 	if pod.Spec.ServiceAccountName != "infrastructure-admin" {
 		t.Errorf("service account = %q", pod.Spec.ServiceAccountName)
 	}
@@ -53,13 +56,17 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 	if len(pod.Spec.InitContainers) != 2 {
 		t.Fatalf("init containers = %d, want 2", len(pod.Spec.InitContainers))
 	}
-	if pod.Spec.InitContainers[0].Image != validConfig().CheckoutImage ||
-		pod.Spec.InitContainers[1].Image != validConfig().HarnessImage {
+	if pod.Spec.InitContainers[0].Image != validConfig().HarnessImage ||
+		pod.Spec.InitContainers[1].Image != validConfig().CheckoutImage {
 		t.Errorf("init containers = %#v", pod.Spec.InitContainers)
 	}
-	if !strings.Contains(pod.Spec.InitContainers[0].Args[0], "git init") ||
-		pod.Spec.InitContainers[0].Args[4] != assignment.CommitSha {
-		t.Errorf("checkout arguments = %#v", pod.Spec.InitContainers[0].Args)
+	checkout := pod.Spec.InitContainers[1]
+	if len(checkout.Command) != 1 || checkout.Command[0] != harnessExecutablePath ||
+		!strings.Contains(checkout.Args[2], "git init") ||
+		checkout.Args[6] != assignment.CommitSha ||
+		environmentValue(checkout.Env, "SLIPRAMP_CANCELLATION_FILE") !=
+			cancellationFilePath {
+		t.Errorf("checkout container = %#v", checkout)
 	}
 
 	if len(pod.Spec.Containers) != 1 {
@@ -84,7 +91,9 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 		t.Errorf("working directory = %q", action.WorkingDir)
 	}
 	if environmentValue(action.Env, "TF_IN_AUTOMATION") != "true" ||
-		environmentValue(action.Env, "VERSION") != "1.2.3" {
+		environmentValue(action.Env, "VERSION") != "1.2.3" ||
+		environmentValue(action.Env, "SLIPRAMP_CANCELLATION_FILE") !=
+			cancellationFilePath {
 		t.Errorf("environment = %#v", action.Env)
 	}
 	if action.Resources.Requests.Cpu().String() != "200m" ||
@@ -99,8 +108,12 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 		t.Errorf("credential environment = %#v", action.Env)
 	}
 	if !hasMount(action, "/home/ops/.ssh/id_ed25519", true) ||
-		!hasMount(action, "/var/run/ssh-extensions", false) {
+		!hasMount(action, "/var/run/ssh-extensions", false) ||
+		!hasMount(action, runStateMountPath, false) {
 		t.Errorf("credential mounts = %#v", action.VolumeMounts)
+	}
+	if !hasCancellationVolume(pod.Spec.Volumes) {
+		t.Errorf("Pod volumes = %#v", pod.Spec.Volumes)
 	}
 }
 
@@ -243,6 +256,23 @@ func hasMount(container corev1.Container, mountPath string, subPath bool) bool {
 	for _, mount := range container.VolumeMounts {
 		if mount.MountPath == mountPath && (mount.SubPath != "") == subPath {
 			return true
+		}
+	}
+
+	return false
+}
+
+func hasCancellationVolume(volumes []corev1.Volume) bool {
+	wantField := "metadata.annotations['" + cancellationAnnotation + "']"
+	for _, volume := range volumes {
+		if volume.Name != runStateVolumeName || volume.DownwardAPI == nil {
+			continue
+		}
+		for _, item := range volume.DownwardAPI.Items {
+			if item.Path == cancellationFileName && item.FieldRef != nil &&
+				item.FieldRef.FieldPath == wantField {
+				return true
+			}
 		}
 	}
 

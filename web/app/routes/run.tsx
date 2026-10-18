@@ -16,6 +16,7 @@ import { Form, Link, redirect, useNavigation, useRevalidator } from "react-route
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
+  cancelRun,
   createRun,
   getRun,
   listRunArtifacts,
@@ -44,7 +45,22 @@ export async function loader({ params }: Route.LoaderArgs) {
 
 export async function action({ params, request }: Route.ActionArgs) {
   const formData = await request.formData();
-  if (formData.get("intent") !== "apply-artifact") {
+  const intent = formData.get("intent");
+  if (intent === "cancel") {
+    const result = await cancelRun({
+      client: createServerAPIClient(),
+      path: { runId: params.runId },
+    });
+    if (result.data) {
+      return redirect(`/runs/${result.data.id}`);
+    }
+
+    return {
+      error: result.error?.detail ?? result.error?.title ?? "The Run could not be canceled.",
+    };
+  }
+
+  if (intent !== "apply-artifact") {
     return { error: "The requested Run operation is not supported." };
   }
 
@@ -92,6 +108,7 @@ export async function action({ params, request }: Route.ActionArgs) {
 }
 
 export default function RunDetail({ actionData, loaderData }: Route.ComponentProps) {
+  const navigation = useNavigation();
   const { revalidate, state: revalidationState } = useRevalidator();
   const phase = loaderData.run?.phase;
 
@@ -120,13 +137,36 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
             {run.target} · {run.action} · <Code>{run.commitSha.slice(0, 12)}</Code>
           </Text>
         </Stack>
-        <Badge color={run.outcome === "failed" ? "red" : undefined} size="lg">
-          {run.outcome ?? run.phase}
-        </Badge>
+        <Group gap="sm">
+          {run.phase !== "finished" && run.cancellationRequestedAt === undefined ? (
+            <Form method="post">
+              <input name="intent" type="hidden" value="cancel" />
+              <Button
+                color="red"
+                loading={
+                  navigation.state === "submitting" &&
+                  navigation.formData?.get("intent") === "cancel"
+                }
+                type="submit"
+                variant="light"
+              >
+                Cancel Run
+              </Button>
+            </Form>
+          ) : null}
+          {run.phase !== "finished" && run.cancellationRequestedAt !== undefined ? (
+            <Badge color="yellow" size="lg" variant="light">
+              Cancellation requested
+            </Badge>
+          ) : null}
+          <Badge color={run.outcome === "failed" ? "red" : undefined} size="lg">
+            {run.outcome ?? run.phase}
+          </Badge>
+        </Group>
       </Group>
 
       {actionData?.error ? (
-        <Alert color="red" title="Run not created">
+        <Alert color="red" title="Run operation failed">
           {actionData.error}
         </Alert>
       ) : null}

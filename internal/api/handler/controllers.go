@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -281,10 +280,7 @@ func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, erro
 	if err != nil {
 		return api.RunAssignment{}, err
 	}
-	token := ""
-	if issuer, ok := h.artifacts.(interface{ RunToken(uuid.UUID) string }); ok {
-		token = issuer.RunToken(record.ID)
-	}
+	token := h.artifacts.RunToken(record.ID)
 
 	podTemplate, err := assignmentPodTemplateResponse(
 		record.Snapshot.Placement.PodTemplate,

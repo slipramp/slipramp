@@ -2,16 +2,20 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/slipramp/slipramp/internal/api"
 )
@@ -55,7 +59,73 @@ func TestKubernetesRunJobsCreatesAndReusesJob(t *testing.T) {
 	}
 }
 
-func TestKubernetesRunJobsCancelsJobIdempotently(t *testing.T) {
+func TestKubernetesRunJobsMarksPodForCancellationIdempotently(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	job, err := renderJob(validConfig(), assignment)
+	if err != nil {
+		t.Fatalf("renderJob() error = %v", err)
+	}
+	job.UID = types.UID("job-uid")
+	pod := &corev1.Pod{}
+	pod.Name = "run-pod"
+	pod.Namespace = job.Namespace
+	pod.Labels = map[string]string{
+		batchv1.JobNameLabel: job.Name,
+		managedByLabel:       managedByLabelValue,
+		runIDLabel:           assignment.ID.String(),
+		clusterLabel:         validConfig().ClusterName,
+	}
+	pod.Annotations = map[string]string{cancellationAnnotation: "false"}
+	client := fake.NewClientset(job, pod)
+	jobs := newKubernetesRunJobs(
+		validConfig(),
+		client.BatchV1(),
+		client.CoreV1(),
+	)
+	command := api.CancelRunCommand{
+		ID:           assignment.ID,
+		JobNamespace: assignment.Placement.JobNamespace,
+		JobUID:       new("job-uid"),
+	}
+
+	result, err := jobs.RequestCancellation(context.Background(), command)
+	if err != nil {
+		t.Fatalf("first RequestCancellation() error = %v", err)
+	}
+	if result.handle.uid != "job-uid" || !result.jobRetained {
+		t.Errorf("first RequestCancellation() result = %#v", result)
+	}
+	if _, err := client.BatchV1().Jobs(job.Namespace).Get(
+		context.Background(),
+		job.Name,
+		metav1.GetOptions{},
+	); err != nil {
+		t.Fatalf("get retained Job: %v", err)
+	}
+	gotPod, err := client.CoreV1().Pods(pod.Namespace).Get(
+		context.Background(),
+		pod.Name,
+		metav1.GetOptions{},
+	)
+	if err != nil {
+		t.Fatalf("get marked Pod: %v", err)
+	}
+	if gotPod.Annotations[cancellationAnnotation] != "true" {
+		t.Errorf("cancellation annotation = %#v", gotPod.Annotations)
+	}
+
+	result, err = jobs.RequestCancellation(context.Background(), command)
+	if err != nil {
+		t.Fatalf("repeated RequestCancellation() error = %v", err)
+	}
+	if result.handle.uid != "job-uid" || !result.jobRetained {
+		t.Errorf("repeated RequestCancellation() result = %#v", result)
+	}
+}
+
+func TestKubernetesRunJobsDeletesJobWithoutPodOnCancellation(t *testing.T) {
 	t.Parallel()
 
 	assignment := testRunAssignment(t)
@@ -76,31 +146,175 @@ func TestKubernetesRunJobsCancelsJobIdempotently(t *testing.T) {
 		JobUID:       new("job-uid"),
 	}
 
-	jobUID, err := jobs.Cancel(context.Background(), command)
+	result, err := jobs.RequestCancellation(context.Background(), command)
 	if err != nil {
-		t.Fatalf("first Cancel() error = %v", err)
+		t.Fatalf("RequestCancellation() error = %v", err)
 	}
-	if jobUID == nil || *jobUID != "job-uid" {
-		t.Errorf("first Cancel() Job UID = %v", jobUID)
+	if result.jobRetained {
+		t.Fatalf("RequestCancellation() result = %#v", result)
 	}
-	if _, err := client.BatchV1().Jobs(job.Namespace).Get(
+	_, err = client.BatchV1().Jobs(job.Namespace).Get(
 		context.Background(),
 		job.Name,
 		metav1.GetOptions{},
-	); err == nil {
-		t.Error("execution Job still exists after cancel")
-	}
-
-	jobUID, err = jobs.Cancel(context.Background(), command)
-	if err != nil {
-		t.Fatalf("repeated Cancel() error = %v", err)
-	}
-	if jobUID == nil || *jobUID != "job-uid" {
-		t.Errorf("repeated Cancel() Job UID = %v", jobUID)
+	)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("get canceled Job error = %v, want not found", err)
 	}
 }
 
-func TestKubernetesRunJobsRejectsCancelOfConflictingJob(t *testing.T) {
+func TestKubernetesRunJobsDoesNotRelabelCompletedPodAsCanceled(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	job, err := renderJob(validConfig(), assignment)
+	if err != nil {
+		t.Fatalf("renderJob() error = %v", err)
+	}
+	job.UID = types.UID("job-uid")
+	pod := &corev1.Pod{
+		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+			{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+				},
+			},
+		}},
+	}
+	pod.Name = "run-pod"
+	pod.Namespace = job.Namespace
+	pod.Labels = job.Spec.Template.Labels
+	pod.Annotations = map[string]string{cancellationAnnotation: "false"}
+	pod.Labels[batchv1.JobNameLabel] = job.Name
+	client := fake.NewClientset(job, pod)
+	jobs := newKubernetesRunJobs(
+		validConfig(),
+		client.BatchV1(),
+		client.CoreV1(),
+	)
+
+	result, err := jobs.RequestCancellation(
+		context.Background(),
+		api.CancelRunCommand{
+			ID:           assignment.ID,
+			JobNamespace: assignment.Placement.JobNamespace,
+			JobUID:       new("job-uid"),
+		},
+	)
+	if err != nil {
+		t.Fatalf("RequestCancellation() error = %v", err)
+	}
+	if !result.jobRetained {
+		t.Fatalf("RequestCancellation() result = %#v", result)
+	}
+	got, err := client.CoreV1().Pods(pod.Namespace).Get(
+		context.Background(),
+		pod.Name,
+		metav1.GetOptions{},
+	)
+	if err != nil {
+		t.Fatalf("get completed Pod: %v", err)
+	}
+	if got.Annotations[cancellationAnnotation] != "false" {
+		t.Errorf("cancellation annotation = %#v", got.Annotations)
+	}
+}
+
+func TestKubernetesRunJobsDeleteUsesUIDPrecondition(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.New()
+	replacement := &batchv1.Job{}
+	replacement.Name = runJobName(runID)
+	replacement.Namespace = "slipramp-runs"
+	replacement.UID = types.UID("replacement-uid")
+	client := fake.NewClientset(replacement)
+	var deleteOptions metav1.DeleteOptions
+	client.PrependReactor(
+		"delete",
+		"jobs",
+		func(action k8stesting.Action) (bool, runtime.Object, error) {
+			deleteAction, ok := action.(k8stesting.DeleteAction)
+			if !ok {
+				t.Fatalf("delete action = %T", action)
+			}
+			deleteOptions = deleteAction.GetDeleteOptions()
+
+			return true, nil, apierrors.NewConflict(
+				schema.GroupResource{Group: "batch", Resource: "jobs"},
+				replacement.Name,
+				errors.New("UID precondition failed"),
+			)
+		},
+	)
+	jobs := newKubernetesRunJobs(
+		validConfig(),
+		client.BatchV1(),
+		client.CoreV1(),
+	)
+	handle := jobHandle{
+		runID:     runID,
+		namespace: replacement.Namespace,
+		name:      replacement.Name,
+		uid:       "original-uid",
+	}
+
+	err := jobs.Delete(context.Background(), handle)
+	if !apierrors.IsConflict(err) {
+		t.Fatalf("Delete() error = %v, want conflict", err)
+	}
+	if deleteOptions.Preconditions == nil ||
+		deleteOptions.Preconditions.UID == nil ||
+		*deleteOptions.Preconditions.UID != types.UID(handle.uid) {
+		t.Fatalf("delete preconditions = %#v", deleteOptions.Preconditions)
+	}
+	got, err := client.BatchV1().Jobs(replacement.Namespace).Get(
+		context.Background(),
+		replacement.Name,
+		metav1.GetOptions{},
+	)
+	if err != nil {
+		t.Fatalf("get replacement Job: %v", err)
+	}
+	if got.UID != replacement.UID {
+		t.Errorf("replacement Job UID = %q, want %q", got.UID, replacement.UID)
+	}
+}
+
+func TestKubernetesRunJobsDeletesCompletedJobIdempotently(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.New()
+	job := &batchv1.Job{}
+	job.Name = runJobName(runID)
+	job.Namespace = "slipramp-runs"
+	job.UID = types.UID("job-uid")
+	client := fake.NewClientset(job)
+	jobs := newKubernetesRunJobs(
+		validConfig(),
+		client.BatchV1(),
+		client.CoreV1(),
+	)
+	handle := handleFromJob(job, runID)
+
+	if err := jobs.Delete(context.Background(), handle); err != nil {
+		t.Fatalf("first Delete() error = %v", err)
+	}
+	_, err := client.BatchV1().Jobs(job.Namespace).Get(
+		context.Background(),
+		job.Name,
+		metav1.GetOptions{},
+	)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("get deleted Job error = %v, want not found", err)
+	}
+	if err := jobs.Delete(context.Background(), handle); err != nil {
+		t.Fatalf("repeated Delete() error = %v", err)
+	}
+}
+
+func TestKubernetesRunJobsRejectsCancellationOfConflictingJob(t *testing.T) {
 	t.Parallel()
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
@@ -114,12 +328,12 @@ func TestKubernetesRunJobsRejectsCancelOfConflictingJob(t *testing.T) {
 		client.CoreV1(),
 	)
 
-	_, err := jobs.Cancel(context.Background(), api.CancelRunCommand{
+	_, err := jobs.RequestCancellation(context.Background(), api.CancelRunCommand{
 		ID:           runID,
 		JobNamespace: "slipramp-runs",
 	})
 	if err == nil || !strings.Contains(err.Error(), "expected Run identity") {
-		t.Fatalf("Cancel() error = %v", err)
+		t.Fatalf("RequestCancellation() error = %v", err)
 	}
 }
 
@@ -131,6 +345,7 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 		missing     bool
 		status      batchv1.JobStatus
 		podStatus   *corev1.ContainerStatus
+		canceled    bool
 		handleUID   string
 		wantPhase   api.RunObservationPhase
 		wantOutcome *api.RunObservationOutcome
@@ -198,6 +413,23 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 			wantExit:    new(int32(17)),
 		},
 		{
+			name:     "canceled action exited",
+			canceled: true,
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{
+						ExitCode: 143,
+						Reason:   "Error",
+					},
+				},
+			},
+			wantPhase:   api.RunObservationPhaseFinished,
+			wantOutcome: new(api.RunObservationOutcomeCanceled),
+			wantReason:  "CancelRequested",
+			wantExit:    new(int32(143)),
+		},
+		{
 			name:        "missing Job",
 			missing:     true,
 			handleUID:   "job-uid",
@@ -230,6 +462,11 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 				pod.Name = "run-pod"
 				pod.Namespace = job.Namespace
 				pod.Labels = map[string]string{batchv1.JobNameLabel: job.Name}
+				if test.canceled {
+					pod.Annotations = map[string]string{
+						cancellationAnnotation: "true",
+					}
+				}
 				objects = append(objects, pod)
 			}
 			client := fake.NewClientset(objects...)

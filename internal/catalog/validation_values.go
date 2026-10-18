@@ -270,6 +270,13 @@ func validateEnvironmentName(subject, value string) error {
 			value,
 		)
 	}
+	if strings.HasPrefix(value, "SLIPRAMP_") {
+		return fmt.Errorf(
+			"%s %q uses the reserved SLIPRAMP_ namespace",
+			subject,
+			value,
+		)
+	}
 
 	return nil
 }

@@ -26,12 +26,13 @@ const (
 	ArtifactInputsEnvironment = "SLIPRAMP_ARTIFACT_INPUTS"
 )
 
-var artifactEnvironmentNames = map[string]struct{}{
-	ServerURLEnvironment:      {},
-	RunIDEnvironment:          {},
-	ArtifactTokenEnvironment:  {},
-	ArtifactsEnvironment:      {},
-	ArtifactInputsEnvironment: {},
+var internalEnvironmentNames = map[string]struct{}{
+	ServerURLEnvironment:        {},
+	RunIDEnvironment:            {},
+	ArtifactTokenEnvironment:    {},
+	ArtifactsEnvironment:        {},
+	ArtifactInputsEnvironment:   {},
+	CancellationFileEnvironment: {},
 }
 
 type ArtifactDeclaration struct {
@@ -259,7 +260,7 @@ func actionEnvironment(environment []string) []string {
 	result := make([]string, 0, len(environment))
 	for _, value := range environment {
 		name, _, _ := strings.Cut(value, "=")
-		if _, internal := artifactEnvironmentNames[name]; !internal {
+		if _, internal := internalEnvironmentNames[name]; !internal {
 			result = append(result, value)
 		}
 	}

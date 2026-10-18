@@ -67,11 +67,13 @@ Cluster identity is part of every dispatched run and Kubernetes object reference
 
 A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTP API. HTTPS is required across untrusted networks, while plaintext HTTP is permitted when a trusted encrypted network such as a tailnet already protects the transport. At startup it presents a cluster-scoped enrollment credential to register the SHA-256 digest of a separate controller-owned bearer credential. The MVP auto-approves a valid enrollment credential; explicit approvals and credential rotation are deferred. The Server derives cluster identity from the enrolled bearer credential, so ordinary controller routes do not repeat a caller-supplied cluster name. The controller long-polls for command envelopes, creates and observes Jobs, and posts lifecycle observations, log chunks, and completion back through ordinary HTTP requests. Authenticated poll and report traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
 
-Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. A Run remains assigned until the controller reports the materialized Job UID and preparing phase. After restarting, the controller scans its labeled Jobs and reports their current observations before requesting more work. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica and a unique cluster name; duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
+Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. A Run remains assigned until the controller reports the materialized Job UID and preparing phase. After restarting, the controller scans its labeled Jobs and reports their current observations before requesting more work. For a terminal Job, it uploads and seals the complete log, successfully reports the terminal observation, deletes the Job with its observed UID as a Kubernetes precondition, and only then stops observation. Each accepted step is idempotent, so recovery can repeat log sealing and terminal reporting before finishing deletion. A `404` for the Run or its log violates the execution-namespace ownership contract; the controller warns once, stops that observer, and leaves the Job for manual diagnosis. Kubernetes TTL cleanup is not used because it could remove the log source while the Server or object storage is unavailable. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica and a unique cluster name; duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
 
 ### Placement
 
 A placement is a named deployment configuration that selects a cluster and describes where a run executes within it and what authority it receives. It may select a namespace, service account, named credential sources, node selection, resource limits, and other Kubernetes settings.
+
+Every Kubernetes namespace selected by a Slipramp placement is exclusively owned by one Slipramp Controller and its control plane. A controller may own multiple execution namespaces, but another control plane must not reuse one until all Jobs created by the previous owner have been removed. This is an operational invariant rather than an identity-label or compatibility mechanism.
 
 Placements are supplied to the Slipramp Server through its normal configuration, such as Helm values or a mounted ConfigMap managed by Argo CD. They are not Kubernetes custom resources. Placements form the boundary between portable repository behavior and cluster-specific capabilities, even when both definitions live in the same Git repository.
 
@@ -130,15 +132,15 @@ A schedule trigger includes an explicit time zone and records each intended occu
 
 ## Execution
 
-The Slipramp Server queues a run for the cluster selected by the resolved placement. That cluster's controller claims the run and creates its Kubernetes Job. A checkout init container clones the repository directly from Git and checks out the exact commit recorded by the run. For private repositories, it uses the repository's logical checkout credential resolved to a Kubernetes Secret by the controller. The Job downloads any selected artifact inputs separately, then the Slipramp harness executes the action in its runtime image.
+The Slipramp Server queues a run for the cluster selected by the resolved placement. That cluster's controller claims the run and creates its Kubernetes Job. A checkout init container clones the repository directly from Git and checks out the exact commit recorded by the run. For private repositories, it uses the repository's logical checkout credential resolved to a Kubernetes Secret by the controller. The controller injects the Slipramp harness ahead of checkout so both checkout and the action are cancellable without requiring the harness in either image. The Job downloads any selected artifact inputs separately, then the harness executes the action in its runtime image.
 
 Controllers require outbound access to the Slipramp Server, and execution Jobs require outbound access to their Git repositories and the Server's run-scoped artifact transfer endpoints. Only the Server accesses S3-compatible storage. The Server requires no Kubernetes API access and no inbound network path into execution clusters.
 
-The controller tails Kubernetes Pod logs and posts chunks with monotonically increasing byte offsets to the Slipramp Server. Repeated chunks are accepted idempotently. The Server durably appends each new chunk to the run's log artifact before publishing it to connected clients. Kubernetes Pod logs are an execution source, not the retained record, and the loss or cleanup of a Pod must not remove already accepted output.
+The controller follows the Kubernetes Pod log stream and posts bounded chunks with monotonically increasing byte offsets to the Slipramp Server. It does not repeatedly download the complete log. Repeated chunks are accepted idempotently, and recovery replays the Pod log only to verify and skip the durable prefix before continuing at the Server's cursor. The Server durably appends each new chunk to the run's log artifact before publishing it to connected clients. Kubernetes Pod logs are an execution source, not the retained record, and the loss or cleanup of a Pod must not remove already accepted output. The controller retains a terminal Job until the complete log is durably sealed and the terminal observation is accepted, then removes it with a UID-preconditioned delete. For cancellation, the controller marks the Pod through a controller-owned annotation projected into the checkout and action containers. The harness forwards `SIGTERM` to the active child process and force-stops it after a grace period; the Job remains recoverable while ordinary terminal observation drains and seals the log, reports the canceled outcome, and performs final cleanup.
 
 Runs for the same target are serialized by default to avoid conflicting infrastructure operations. Automatic retries are explicit because transparently repeating a partially completed infrastructure command can be unsafe.
 
-The execution contract should remain small and stable: workspace layout and permissions, standard environment variables, parameters, credential injection, artifact input and output directories, streaming logs, and exit status.
+The execution contract should remain small and stable: workspace layout and permissions, standard environment variables, parameters, credential injection, artifact input and output directories, streaming logs, and exit status. The `SLIPRAMP_` environment namespace is reserved for this internal contract and is rejected in catalog-defined runtime, parameter, and credential environment names.
 
 For artifact transfer, an assignment includes a Run-scoped credential derived
 from a Server-held HMAC key. The harness removes this credential from the child
@@ -149,23 +151,21 @@ retention, size, and digest; the Server streams the corresponding bytes to and
 from S3-compatible storage.
 
 For the MVP, each Run becomes a Job named `slipramp-run-<run-id>` with stable
-Run and cluster labels, `restartPolicy: Never`, and `backoffLimit: 0`. A checkout
-init container uses a pinned controller-configured image containing `/bin/sh`,
-Git, and SSH. It fetches the Run's exact commit into an `emptyDir`; it never
-copies repository contents through the Server or object storage. The action
-container mounts that repository at the runtime's `workingDirectory`, or
-`/workspace` when omitted, and uses the Target path as its process working
-directory. Because checkout and runtime images may use unrelated numeric users,
-the checkout init container makes the Pod-private repository tree writable by
-the action container. A placement uses the Pod security context, including
-`fsGroup` when required, to make restrictive projected Secret files readable by
-the runtime user.
-
-A second init container uses a pinned controller-configured harness image whose
-entrypoint is `slipramp-harness`. It invokes `--install` to copy the static
-harness into `/slipramp/bin` on an `emptyDir`. The action container starts that
-copy with the resolved explicit command and parameter arguments, preserving the
-rule that repository actions do not receive an implicit shell.
+Run and cluster labels, `restartPolicy: Never`, and `backoffLimit: 0`. An initial
+init container invokes `slipramp-harness --install` from a pinned
+controller-configured image to copy the static harness into `/slipramp/bin` on
+an `emptyDir`. A following checkout init container uses a pinned image containing
+`/bin/sh`, Git, and SSH. The harness launches its checkout script, which fetches
+the Run's exact commit into another `emptyDir`; repository contents never pass
+through the Server or object storage. The action container mounts that repository
+at the runtime's `workingDirectory`, or `/workspace` when omitted, and uses the
+Target path as its process working directory. It starts the same harness copy
+with the resolved explicit command and parameter arguments, preserving the rule
+that repository actions do not receive an implicit shell. Because checkout and
+runtime images may use unrelated numeric users, the checkout script makes the
+Pod-private repository tree writable by the action container. A placement uses
+the Pod security context, including `fsGroup` when required, to make restrictive
+projected Secret files readable by the runtime user.
 
 Cluster-controller Git credential mappings resolve a logical checkout
 credential to a Kubernetes Secret name. The checkout container mounts that

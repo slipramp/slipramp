@@ -494,6 +494,10 @@ type recordingRuns struct {
 	listError         error
 }
 
+func (s *recordingRuns) GetRun(context.Context, uuid.UUID) (Run, error) {
+	return Run{}, ErrRunNotFound
+}
+
 func (s *recordingRuns) ListRuns(
 	_ context.Context,
 	filter ListFilter,

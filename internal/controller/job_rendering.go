@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/harness"
 )
 
 const (
@@ -25,21 +26,21 @@ const (
 	harnessContainerName        = "install-harness"
 	workspaceVolumeName         = "slipramp-workspace"
 	harnessVolumeName           = "slipramp-bin"
+	runStateVolumeName          = "slipramp-run-state"
 	gitCredentialVolumeName     = "slipramp-git-credential"
 	checkoutWorkspaceMountPath  = "/slipramp/checkout"
 	harnessMountPath            = "/slipramp/bin"
 	harnessExecutablePath       = harnessMountPath + "/slipramp-harness"
+	runStateMountPath           = "/slipramp/run-state"
+	cancellationFileName        = "cancellation-requested"
+	cancellationFilePath        = runStateMountPath + "/" + cancellationFileName
 	gitCredentialMountPath      = "/slipramp/git-credential"
 	defaultRuntimeWorkspacePath = "/workspace"
 	managedByLabel              = "app.kubernetes.io/managed-by"
 	managedByLabelValue         = "slipramp-controller"
 	runIDLabel                  = "slipramp.com/run-id"
 	clusterLabel                = "slipramp.com/cluster"
-	serverURLEnvironment        = "SLIPRAMP_SERVER_URL"
-	runIDEnvironment            = "SLIPRAMP_RUN_ID"
-	artifactTokenEnvironment    = "SLIPRAMP_ARTIFACT_TOKEN"
-	artifactsEnvironment        = "SLIPRAMP_ARTIFACTS"
-	artifactInputsEnvironment   = "SLIPRAMP_ARTIFACT_INPUTS"
+	cancellationAnnotation      = "slipramp.com/cancellation-requested"
 )
 
 //go:embed scripts/checkout.sh
@@ -68,6 +69,10 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 		template.Labels = map[string]string{}
 	}
 	maps.Copy(template.Labels, labels)
+	if template.Annotations == nil {
+		template.Annotations = map[string]string{}
+	}
+	template.Annotations[cancellationAnnotation] = "false"
 
 	volumes := []corev1.Volume{
 		{
@@ -77,6 +82,20 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 		{
 			Name:     harnessVolumeName,
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+		{
+			Name: runStateVolumeName,
+			DownwardAPI: &corev1.DownwardAPIVolumeSource{
+				Items: []corev1.DownwardAPIVolumeFile{
+					{
+						Path: cancellationFileName,
+						FieldRef: &corev1.ObjectFieldSelector{
+							FieldPath: "metadata.annotations['" +
+								cancellationAnnotation + "']",
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -97,7 +116,6 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 	}
 
 	template.Spec.InitContainers = []corev1.Container{
-		checkout,
 		{
 			Name:  harnessContainerName,
 			Image: config.HarnessImage,
@@ -106,6 +124,7 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 				{Name: harnessVolumeName, MountPath: harnessMountPath},
 			},
 		},
+		checkout,
 	}
 	template.Spec.Containers = []corev1.Container{action}
 	template.Spec.RestartPolicy = corev1.RestartPolicyNever
@@ -183,6 +202,8 @@ func checkoutContainer(
 	volumes := []corev1.Volume{}
 	volumeMounts := []corev1.VolumeMount{
 		{Name: workspaceVolumeName, MountPath: checkoutWorkspaceMountPath},
+		{Name: harnessVolumeName, MountPath: harnessMountPath, ReadOnly: true},
+		{Name: runStateVolumeName, MountPath: runStateMountPath, ReadOnly: true},
 	}
 
 	if assignment.Repository.CheckoutCredentialName != nil {
@@ -215,14 +236,22 @@ func checkoutContainer(
 	return corev1.Container{
 		Name:    checkoutContainerName,
 		Image:   config.CheckoutImage,
-		Command: []string{"/bin/sh", "-ec"},
+		Command: []string{harnessExecutablePath},
 		Args: []string{
+			"/bin/sh",
+			"-ec",
 			checkoutScript,
 			"slipramp-checkout",
 			checkoutWorkspaceMountPath,
 			assignment.Repository.CloneURL,
 			assignment.CommitSha,
 			credentialPath,
+		},
+		Env: []corev1.EnvVar{
+			{
+				Name:  harness.CancellationFileEnvironment,
+				Value: cancellationFilePath,
+			},
 		},
 		VolumeMounts: volumeMounts,
 	}, volumes, nil
@@ -233,7 +262,12 @@ func actionContainer(
 	assignment api.RunAssignment,
 ) (corev1.Container, []corev1.Volume, error) {
 	arguments := append([]string(nil), assignment.Action.Command...)
-	environment := make([]corev1.EnvVar, 0)
+	environment := []corev1.EnvVar{
+		{
+			Name:  harness.CancellationFileEnvironment,
+			Value: cancellationFilePath,
+		},
+	}
 	artifactEnvironment, err := assignmentArtifactEnvironment(config, assignment)
 	if err != nil {
 		return corev1.Container{}, nil, err
@@ -280,6 +314,7 @@ func actionContainer(
 		[]corev1.VolumeMount{
 			{Name: workspaceVolumeName, MountPath: workspacePath},
 			{Name: harnessVolumeName, MountPath: harnessMountPath, ReadOnly: true},
+			{Name: runStateVolumeName, MountPath: runStateMountPath, ReadOnly: true},
 		},
 		credentials.volumeMounts...,
 	)
@@ -311,11 +346,11 @@ func assignmentArtifactEnvironment(
 	}
 
 	return []corev1.EnvVar{
-		{Name: serverURLEnvironment, Value: config.ServerURL},
-		{Name: runIDEnvironment, Value: assignment.ID.String()},
-		{Name: artifactTokenEnvironment, Value: assignment.ArtifactAccess.Token},
-		{Name: artifactsEnvironment, Value: string(artifacts)},
-		{Name: artifactInputsEnvironment, Value: string(inputs)},
+		{Name: harness.ServerURLEnvironment, Value: config.ServerURL},
+		{Name: harness.RunIDEnvironment, Value: assignment.ID.String()},
+		{Name: harness.ArtifactTokenEnvironment, Value: assignment.ArtifactAccess.Token},
+		{Name: harness.ArtifactsEnvironment, Value: string(artifacts)},
+		{Name: harness.ArtifactInputsEnvironment, Value: string(inputs)},
 	}, nil
 }
 

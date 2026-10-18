@@ -59,6 +59,7 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Load named placements from Slipramp Server configuration.
 - Require each placement to select a registered cluster name.
 - Support namespace, ServiceAccount, resource requests and limits, node selection, and timeout defaults.
+- Treat every namespace selected by a placement as exclusively owned by one Slipramp Controller and control plane. A controller may own multiple execution namespaces; before another control plane reuses one, operators must remove all Slipramp Jobs left by its previous owner. Do not add control-plane identity labels or compatibility behavior for namespace reuse.
 - Expose named Kubernetes Secret sources through placements.
 - Bind target credential requirements to placement sources.
 - Inject credentials as individual environment variables, `envFrom`, individual files, or mounted directories.
@@ -75,13 +76,17 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Clone the repository and check out the run's exact commit into a shared workspace through an init container.
 - Make the Pod-private checkout writable by the runtime container without requiring the checkout and runtime images to share a numeric user. Use placement pod security context, including `fsGroup` when needed, for restrictive Secret file modes.
 - Resolve private-repository checkout credentials from the selected cluster without persisting their values in PostgreSQL.
-- Inject a static Slipramp harness without requiring it in the runtime image.
-- Have the harness launch the configured process, forward signals, preserve its exit code, and collect artifacts.
+- Inject a static Slipramp harness without requiring it in the checkout or runtime image.
+- Have the harness launch cancellable checkout and action processes, forward signals, preserve exit status, and collect declared action artifacts.
 - Use `backoffLimit: 0` unless retry behavior is explicitly introduced later.
 - Apply a run deadline and return cancellation through the same long-poll API.
 - Serialize active runs for the same target by default.
 - Derive an unknown observation from controller connectivity and stale `lastObservedAt`; do not persist `unknown` as a Run lifecycle phase or terminal outcome.
 - Recover active run observations when either the Slipramp Server or a controller restarts by scanning labeled Jobs before polling for more work.
+- For every terminal Job, upload and seal its complete log, successfully report the terminal observation, delete the Job with its UID as a Kubernetes deletion precondition, and then stop its observer. Make each step idempotent so restart recovery repeats accepted sealing and reporting operations and completes deletion.
+- Follow each active Pod log once and forward bounded chunks instead of repeatedly downloading the complete log. On recovery, replay only to validate and skip the Server's durable prefix. Request cancellation through a controller-owned Pod annotation projected into the checkout and action containers; have the harness terminate the active child process, then let ordinary terminal observation drain and seal the log, report the canceled outcome, and delete the Job.
+- Do not set `ttlSecondsAfterFinished`; the controller must retain the Job and its Pod logs through Server or object-storage outages. Retry transient log, report, and delete failures without deleting prematurely.
+- Treat a `404` Run or log rejection as a namespace-ownership invariant violation: warn once, stop observing, and leave the Job for manual diagnosis instead of retrying continuously.
 
 ### Runs and status
 

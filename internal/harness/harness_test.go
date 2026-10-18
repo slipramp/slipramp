@@ -30,7 +30,7 @@ func TestRunConnectsStreamsAndPreservesArguments(t *testing.T) {
 			Stdout: &stdout,
 			Stderr: &stderr,
 		},
-		nil,
+		Options{},
 	)
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -56,7 +56,7 @@ func TestRunReturnsActionExitCode(t *testing.T) {
 		context.Background(),
 		helperCommand("exit"),
 		Streams{},
-		nil,
+		Options{},
 	)
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
@@ -79,7 +79,7 @@ func TestRunForwardsSignals(t *testing.T) {
 			context.Background(),
 			helperCommand("signal"),
 			Streams{Stdout: stdout},
-			signals,
+			Options{Signals: signals},
 		)
 		result <- runResult{exitCode: exitCode, err: err}
 	}()
@@ -110,6 +110,52 @@ func TestRunForwardsSignals(t *testing.T) {
 	}
 }
 
+func TestRunForwardsCancellationFile(t *testing.T) {
+	t.Setenv("SLIPRAMP_HARNESS_HELPER", "1")
+
+	cancellationFile := t.TempDir() + "/cancellation-requested"
+	if err := os.WriteFile(cancellationFile, []byte("false"), 0o600); err != nil {
+		t.Fatalf("write cancellation file: %v", err)
+	}
+	stdout := newReadyWriter("ready\n")
+	result := make(chan runResult, 1)
+
+	go func() {
+		exitCode, err := Run(
+			context.Background(),
+			helperCommand("signal"),
+			Streams{Stdout: stdout},
+			Options{
+				CancellationFile:         cancellationFile,
+				cancellationPollInterval: time.Millisecond,
+				cancellationGracePeriod:  time.Second,
+			},
+		)
+		result <- runResult{exitCode: exitCode, err: err}
+	}()
+
+	select {
+	case <-stdout.ready:
+	case <-time.After(2 * time.Second):
+		t.Fatal("action did not become ready")
+	}
+	if err := os.WriteFile(cancellationFile, []byte("true\n"), 0o600); err != nil {
+		t.Fatalf("request cancellation: %v", err)
+	}
+
+	select {
+	case received := <-result:
+		if received.err != nil {
+			t.Fatalf("Run() error = %v", received.err)
+		}
+		if received.exitCode != 23 {
+			t.Errorf("Run() exit code = %d, want 23", received.exitCode)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() did not forward the cancellation request")
+	}
+}
+
 func TestRunRejectsMissingInputs(t *testing.T) {
 	t.Parallel()
 
@@ -135,7 +181,7 @@ func TestRunRejectsMissingInputs(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := Run(test.ctx, test.command, Streams{}, nil)
+			_, err := Run(test.ctx, test.command, Streams{}, Options{})
 			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
@@ -148,7 +194,7 @@ func TestRunReportsStartFailure(t *testing.T) {
 		context.Background(),
 		[]string{"/path/that/does/not/exist"},
 		Streams{},
-		nil,
+		Options{},
 	)
 	testcheck.ErrorContains(t, err, "start action")
 }
