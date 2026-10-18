@@ -15,14 +15,11 @@ func TestKcloudOpsExample(t *testing.T) {
 
 	exampleRoot := filepath.Join("..", "..", "examples", "kcloud-ops")
 	credentials := map[string]placement.CredentialSource{
-		"homelab-ssh": {
-			SecretRef: placement.SecretReference{Name: "kcloud-ops-ssh"},
+		"ops-ci": {
+			SecretRef: placement.SecretReference{Name: "ops-ci"},
 		},
-		"rustfs-admin": {
-			SecretRef: placement.SecretReference{Name: "rustfs-admin"},
-		},
-		"rustfs-terraform-state": {
-			SecretRef: placement.SecretReference{Name: "rustfs-terraform-state"},
+		"homelab-known-hosts": {
+			SecretRef: placement.SecretReference{Name: "kcloud-ops-known-hosts"},
 		},
 	}
 	placements, err := placement.NewSet(map[string]placement.Config{
@@ -41,11 +38,11 @@ func TestKcloudOpsExample(t *testing.T) {
 		t.Fatalf("catalog.Load() error = %v", err)
 	}
 
-	if len(loaded.Runtimes) != 2 {
-		t.Errorf("len(Runtimes) = %d, want 2", len(loaded.Runtimes))
+	if len(loaded.Runtimes) != 3 {
+		t.Errorf("len(Runtimes) = %d, want 3", len(loaded.Runtimes))
 	}
-	if len(loaded.Targets) != 2 {
-		t.Fatalf("len(Targets) = %d, want 2", len(loaded.Targets))
+	if len(loaded.Targets) != 3 {
+		t.Fatalf("len(Targets) = %d, want 3", len(loaded.Targets))
 	}
 
 	targets := make(map[string]catalog.Target, len(loaded.Targets))
@@ -86,5 +83,17 @@ func TestKcloudOpsExample(t *testing.T) {
 			plan.Artifact.Compatibility,
 			catalog.ArtifactCompatibilityExactCatalogRevision,
 		)
+	}
+
+	upgrade := targets["homelab-kubernetes-upgrade"]
+	if len(upgrade.Spec.Actions) != 4 {
+		t.Errorf(
+			"kubernetes upgrade action count = %d, want 4",
+			len(upgrade.Spec.Actions),
+		)
+	}
+	host := upgrade.Spec.Actions["upgrade-node"].Parameters["host"]
+	if host.Type != catalog.ParameterTypeEnum || !host.Required {
+		t.Errorf("upgrade host parameter = %#v, want required enum", host)
 	}
 }

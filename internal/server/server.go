@@ -35,6 +35,7 @@ type Server struct {
 	httpServer          *http.Server
 	persistence         *persistence
 	repositoryRefresher *repository.Refresher
+	artifactReconciler  *artifact.Reconciler
 }
 
 func New(
@@ -81,6 +82,14 @@ func New(
 		cfg.RepositoryFetchTimeout,
 		logger,
 	)
+	artifactReconciler := artifact.NewReconciler(
+		persistence.database,
+		persistence.artifactContents,
+		cfg.ArtifactRetentionPeriod,
+		cfg.ArtifactReconcileInterval,
+		cfg.ArtifactOrphanGracePeriod,
+		logger,
+	)
 	httpHandler := newHandlerWithLogger(
 		clusters,
 		identities,
@@ -94,6 +103,7 @@ func New(
 	server := newServer(cfg, logger, httpHandler)
 	server.persistence = persistence
 	server.repositoryRefresher = repositoryRefresher
+	server.artifactReconciler = artifactReconciler
 
 	return server, nil
 }
@@ -129,22 +139,39 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("listen on %s: %w", s.address, err)
 	}
 
-	if s.repositoryRefresher == nil {
+	workerCount := 0
+	if s.repositoryRefresher != nil {
+		workerCount++
+	}
+	if s.artifactReconciler != nil {
+		workerCount++
+	}
+	if workerCount == 0 {
 		return s.serve(ctx, listener)
 	}
 
 	runContext, stop := context.WithCancel(ctx)
 	defer stop()
 
-	refreshStopped := make(chan struct{})
-	go func() {
-		defer close(refreshStopped)
-		s.repositoryRefresher.Run(runContext)
-	}()
+	workersStopped := make(chan struct{}, workerCount)
+	if s.repositoryRefresher != nil {
+		go func() {
+			s.repositoryRefresher.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.artifactReconciler != nil {
+		go func() {
+			s.artifactReconciler.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
 
 	serveErr := s.serve(runContext, listener)
 	stop()
-	<-refreshStopped
+	for range workerCount {
+		<-workersStopped
+	}
 
 	return serveErr
 }

@@ -153,3 +153,82 @@ FROM targets
 WHERE catalog_revision_id = sqlc.arg(catalog_revision_id)
   AND archived_at IS NULL
 ORDER BY name;
+
+-- name: ListActiveTargets :many
+SELECT
+    targets.repository_id,
+    repositories.name AS repository_name,
+    catalog_revisions.id AS catalog_revision_id,
+    catalog_revisions.commit_sha AS catalog_commit_sha,
+    targets.desired_commit_sha,
+    catalog_targets.definition
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.archived_at IS NULL
+  AND repositories.removed_at IS NULL
+  AND (
+      sqlc.narg(repository_id)::uuid IS NULL
+      OR targets.repository_id = sqlc.narg(repository_id)
+  )
+  AND (
+      sqlc.narg(search_query)::text IS NULL
+      OR strpos(lower(targets.name), lower(sqlc.narg(search_query))) > 0
+      OR strpos(lower(repositories.name), lower(sqlc.narg(search_query))) > 0
+      OR strpos(
+          lower(coalesce(catalog_targets.definition->'metadata'->>'title', '')),
+          lower(sqlc.narg(search_query))
+      ) > 0
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_object_keys(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name)
+          WHERE strpos(lower(action.name), lower(sqlc.narg(search_query))) > 0
+      )
+  )
+ORDER BY
+    lower(coalesce(
+        nullif(catalog_targets.definition->'metadata'->>'title', ''),
+        targets.name
+    )),
+    lower(repositories.name),
+    targets.name
+LIMIT sqlc.arg(result_limit)
+OFFSET sqlc.arg(result_offset);
+
+-- name: CountActiveTargets :one
+SELECT count(*)
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.archived_at IS NULL
+  AND repositories.removed_at IS NULL
+  AND (
+      sqlc.narg(repository_id)::uuid IS NULL
+      OR targets.repository_id = sqlc.narg(repository_id)
+  )
+  AND (
+      sqlc.narg(search_query)::text IS NULL
+      OR strpos(lower(targets.name), lower(sqlc.narg(search_query))) > 0
+      OR strpos(lower(repositories.name), lower(sqlc.narg(search_query))) > 0
+      OR strpos(
+          lower(coalesce(catalog_targets.definition->'metadata'->>'title', '')),
+          lower(sqlc.narg(search_query))
+      ) > 0
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_object_keys(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name)
+          WHERE strpos(lower(action.name), lower(sqlc.narg(search_query))) > 0
+      )
+  );

@@ -127,3 +127,71 @@ FROM artifact_log_chunks
 WHERE artifact_id = sqlc.arg(artifact_id)
   AND offset_bytes + size_bytes > sqlc.arg(from_offset_bytes)
 ORDER BY offset_bytes;
+
+-- name: ExpireArtifacts :many
+WITH candidates AS (
+    SELECT artifacts.id
+    FROM artifacts
+    WHERE artifacts.state = 'sealed'
+      AND artifacts.retention_state = 'retained'
+      AND artifacts.sealed_at <= sqlc.arg(sealed_before)
+      AND EXISTS (
+          SELECT 1
+          FROM runs AS producer_run
+          WHERE producer_run.id = artifacts.run_id
+            AND producer_run.phase = 'finished'
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM run_artifact_inputs
+          JOIN runs ON runs.id = run_artifact_inputs.run_id
+          WHERE run_artifact_inputs.artifact_id = artifacts.id
+            AND runs.phase <> 'finished'
+      )
+    ORDER BY artifacts.sealed_at, artifacts.id
+    LIMIT sqlc.arg(result_limit)
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE artifacts
+SET retention_state = 'expired'
+FROM candidates
+WHERE artifacts.id = candidates.id
+RETURNING artifacts.*;
+
+-- name: ListExpiredArtifacts :many
+SELECT *
+FROM artifacts
+WHERE retention_state = 'expired'
+ORDER BY sealed_at, id;
+
+-- name: ListArtifactObjectKeys :many
+SELECT COALESCE(content_object_key, '') AS object_key
+FROM artifacts
+WHERE id = sqlc.arg(artifact_id)
+  AND content_object_key IS NOT NULL
+UNION ALL
+SELECT object_key
+FROM artifact_log_chunks
+WHERE artifact_id = sqlc.arg(artifact_id)
+ORDER BY object_key;
+
+-- name: MarkArtifactDeleted :one
+UPDATE artifacts
+SET retention_state = 'deleted'
+WHERE id = sqlc.arg(id)
+  AND retention_state = 'expired'
+RETURNING *;
+
+-- name: ArtifactObjectKeyExists :one
+SELECT EXISTS (
+    SELECT 1
+    FROM artifacts
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifacts.content_object_key = sqlc.arg(candidate_object_key)
+    UNION ALL
+    SELECT 1
+    FROM artifact_log_chunks
+    JOIN artifacts ON artifacts.id = artifact_log_chunks.artifact_id
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifact_log_chunks.object_key = sqlc.arg(candidate_object_key)
+) AS exists;

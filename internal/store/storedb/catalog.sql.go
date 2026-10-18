@@ -61,6 +61,50 @@ func (q *Queries) ArchiveMissingTargets(ctx context.Context, arg ArchiveMissingT
 	return err
 }
 
+const countActiveTargets = `-- name: CountActiveTargets :one
+SELECT count(*)
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.archived_at IS NULL
+  AND repositories.removed_at IS NULL
+  AND (
+      $1::uuid IS NULL
+      OR targets.repository_id = $1
+  )
+  AND (
+      $2::text IS NULL
+      OR strpos(lower(targets.name), lower($2)) > 0
+      OR strpos(lower(repositories.name), lower($2)) > 0
+      OR strpos(
+          lower(coalesce(catalog_targets.definition->'metadata'->>'title', '')),
+          lower($2)
+      ) > 0
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_object_keys(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name)
+          WHERE strpos(lower(action.name), lower($2)) > 0
+      )
+  )
+`
+
+type CountActiveTargetsParams struct {
+	RepositoryID pgtype.UUID
+	SearchQuery  *string
+}
+
+func (q *Queries) CountActiveTargets(ctx context.Context, arg CountActiveTargetsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveTargets, arg.RepositoryID, arg.SearchQuery)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCatalogRevision = `-- name: CreateCatalogRevision :exec
 INSERT INTO catalog_revisions (
     id,
@@ -229,6 +273,103 @@ func (q *Queries) GetCatalogRevision(ctx context.Context, arg GetCatalogRevision
 	var i GetCatalogRevisionRow
 	err := row.Scan(&i.ID, &i.CommitSha, &i.CreatedAt)
 	return i, err
+}
+
+const listActiveTargets = `-- name: ListActiveTargets :many
+SELECT
+    targets.repository_id,
+    repositories.name AS repository_name,
+    catalog_revisions.id AS catalog_revision_id,
+    catalog_revisions.commit_sha AS catalog_commit_sha,
+    targets.desired_commit_sha,
+    catalog_targets.definition
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.archived_at IS NULL
+  AND repositories.removed_at IS NULL
+  AND (
+      $1::uuid IS NULL
+      OR targets.repository_id = $1
+  )
+  AND (
+      $2::text IS NULL
+      OR strpos(lower(targets.name), lower($2)) > 0
+      OR strpos(lower(repositories.name), lower($2)) > 0
+      OR strpos(
+          lower(coalesce(catalog_targets.definition->'metadata'->>'title', '')),
+          lower($2)
+      ) > 0
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_object_keys(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name)
+          WHERE strpos(lower(action.name), lower($2)) > 0
+      )
+  )
+ORDER BY
+    lower(coalesce(
+        nullif(catalog_targets.definition->'metadata'->>'title', ''),
+        targets.name
+    )),
+    lower(repositories.name),
+    targets.name
+LIMIT $4
+OFFSET $3
+`
+
+type ListActiveTargetsParams struct {
+	RepositoryID pgtype.UUID
+	SearchQuery  *string
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+type ListActiveTargetsRow struct {
+	RepositoryID      pgtype.UUID
+	RepositoryName    string
+	CatalogRevisionID pgtype.UUID
+	CatalogCommitSha  string
+	DesiredCommitSha  string
+	Definition        []byte
+}
+
+func (q *Queries) ListActiveTargets(ctx context.Context, arg ListActiveTargetsParams) ([]ListActiveTargetsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveTargets,
+		arg.RepositoryID,
+		arg.SearchQuery,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveTargetsRow
+	for rows.Next() {
+		var i ListActiveTargetsRow
+		if err := rows.Scan(
+			&i.RepositoryID,
+			&i.RepositoryName,
+			&i.CatalogRevisionID,
+			&i.CatalogCommitSha,
+			&i.DesiredCommitSha,
+			&i.Definition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCatalogRuntimes = `-- name: ListCatalogRuntimes :many

@@ -50,3 +50,74 @@ repositoryCatalog:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+targets:
+  get:
+    operationId: listTargets
+    summary: List active targets
+    description: >-
+      Lists target summaries across active repository catalogs, ordered by
+      display title, repository name, and target name. Search matches target
+      names and titles, repository names, and action names.
+    security: []
+    tags:
+      - Catalog
+    parameters:
+      - name: repositoryId
+        in: query
+        required: false
+        description: Limit targets to one active repository.
+        schema:
+          type: string
+          format: uuid
+      - name: q
+        in: query
+        required: false
+        description: Case-insensitive target, repository, or action search.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: limit
+        in: query
+        required: false
+        description: Maximum number of target summaries to return.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 25
+      - name: offset
+        in: query
+        required: false
+        description: Zero-based offset into the matching target summaries.
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Active targets matching the requested filters.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/catalog.yaml#/TargetSummaryList
+      "400":
+        description: A filter, limit, or offset is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Active targets could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

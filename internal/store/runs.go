@@ -201,15 +201,23 @@ func (d *Database) CreateRun(
 
 	for _, inputName := range slices.Sorted(maps.Keys(record.Snapshot.Inputs)) {
 		input := record.Snapshot.Inputs[inputName]
-		if err := queries.CreateRunArtifactInput(
+		rowsAffected, err := queries.CreateRunArtifactInput(
 			ctx,
 			storedb.CreateRunArtifactInputParams{
 				RunID:      databaseUUID(record.ID),
 				InputName:  inputName,
 				ArtifactID: databaseUUID(input.ArtifactID),
 			},
-		); err != nil {
+		)
+		if err != nil {
 			return run.Run{}, fmt.Errorf("record Run artifact input %q: %w", inputName, err)
+		}
+		if rowsAffected != 1 {
+			return run.Run{}, fmt.Errorf(
+				"%w: artifact for input %q is no longer retained",
+				run.ErrInvalidInputs,
+				inputName,
+			)
 		}
 	}
 

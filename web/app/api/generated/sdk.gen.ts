@@ -55,6 +55,9 @@ import type {
   ListRunsData,
   ListRunsErrors,
   ListRunsResponses,
+  ListTargetsData,
+  ListTargetsErrors,
+  ListTargetsResponses,
   PollForControllerCommandData,
   PollForControllerCommandErrors,
   PollForControllerCommandResponses,
@@ -164,6 +167,19 @@ export const getRepositoryCatalog = <ThrowOnError extends boolean = false>(
     GetRepositoryCatalogErrors,
     ThrowOnError
   >({ url: "/api/v1/repositories/{repositoryId}/catalog", ...options });
+
+/**
+ * List active targets
+ *
+ * Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+ */
+export const listTargets = <ThrowOnError extends boolean = false>(
+  options?: Options<ListTargetsData, ThrowOnError>,
+): RequestResult<ListTargetsResponses, ListTargetsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListTargetsResponses, ListTargetsErrors, ThrowOnError>({
+    url: "/api/v1/targets",
+    ...options,
+  });
 
 /**
  * List execution clusters

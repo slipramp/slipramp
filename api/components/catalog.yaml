@@ -28,6 +28,78 @@ CatalogRevision:
       items:
         $ref: "#/Target"
 
+TargetSummaryList:
+  type: object
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/TargetSummary"
+    total:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Total number of active targets matching the filters.
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+
+TargetSummary:
+  type: object
+  required:
+    - repositoryId
+    - repositoryName
+    - catalogRevisionId
+    - catalogCommitSha
+    - name
+    - actions
+    - desiredCommitSha
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    repositoryName:
+      type: string
+      minLength: 1
+    catalogRevisionId:
+      type: string
+      format: uuid
+    catalogCommitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    name:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+    title:
+      type: string
+      minLength: 1
+    actions:
+      type: array
+      items:
+        type: string
+        minLength: 1
+        maxLength: 63
+        pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+    runtime:
+      type: string
+      minLength: 1
+    placement:
+      type: string
+      minLength: 1
+    desiredCommitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+
 Runtime:
   type: object
   required:

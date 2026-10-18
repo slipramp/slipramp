@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/auth"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/objectstore"
@@ -26,6 +27,9 @@ type Config struct {
 	Database                     store.Config
 	ObjectStore                  objectstore.Config
 	ArtifactTokenSecret          string
+	ArtifactRetentionPeriod      time.Duration
+	ArtifactReconcileInterval    time.Duration
+	ArtifactOrphanGracePeriod    time.Duration
 }
 
 func DefaultConfig() Config {
@@ -39,6 +43,9 @@ func DefaultConfig() Config {
 		Database:                     store.DefaultConfig(),
 		ObjectStore:                  objectstore.DefaultConfig(),
 		ArtifactTokenSecret:          "slipramp-development-artifact-token-secret",
+		ArtifactRetentionPeriod:      artifact.DefaultRetentionPeriod,
+		ArtifactReconcileInterval:    artifact.DefaultReconcileInterval,
+		ArtifactOrphanGracePeriod:    artifact.DefaultOrphanGracePeriod,
 	}
 }
 
@@ -113,6 +120,18 @@ func (c Config) Validate() error {
 
 	if len(c.ArtifactTokenSecret) < 32 {
 		return fmt.Errorf("artifact token secret must be at least 32 characters")
+	}
+
+	if c.ArtifactRetentionPeriod <= 0 {
+		return fmt.Errorf("artifact retention period must be positive")
+	}
+
+	if c.ArtifactReconcileInterval <= 0 {
+		return fmt.Errorf("artifact reconciliation interval must be positive")
+	}
+
+	if c.ArtifactOrphanGracePeriod <= 0 {
+		return fmt.Errorf("artifact orphan grace period must be positive")
 	}
 
 	return nil

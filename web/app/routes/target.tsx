@@ -1,9 +1,9 @@
 import {
+  Accordion,
   Alert,
   Anchor,
   Badge,
   Button,
-  Card,
   Code,
   Divider,
   Group,
@@ -32,8 +32,16 @@ import {
   type ResourceRequirements,
   type Target,
 } from "~/api/generated";
+import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/target";
+
+export function meta({ loaderData }: Route.MetaArgs) {
+  const targetName = loaderData?.target
+    ? (loaderData.target.metadata.title ?? loaderData.target.metadata.name)
+    : "Target";
+  return [{ title: pageTitle(targetName) }];
+}
 
 export async function loader({ params }: Route.LoaderArgs) {
   const client = createServerAPIClient();
@@ -197,16 +205,18 @@ export default function TargetDetail({ actionData, loaderData }: Route.Component
 
       <Stack gap="md">
         <Title order={2}>Actions</Title>
-        {actions.map(([name, actionDefinition]) => (
-          <ActionDetail
-            actionDefinition={actionDefinition}
-            error={actionData?.actionName === name ? actionData.error : undefined}
-            key={name}
-            name={name}
-            submittedValues={actionData?.actionName === name ? actionData.values : undefined}
-            target={target}
-          />
-        ))}
+        <Accordion defaultValue={actionData?.actionName} variant="separated">
+          {actions.map(([name, actionDefinition]) => (
+            <ActionAccordionItem
+              actionDefinition={actionDefinition}
+              error={actionData?.actionName === name ? actionData.error : undefined}
+              key={name}
+              name={name}
+              submittedValues={actionData?.actionName === name ? actionData.values : undefined}
+              target={target}
+            />
+          ))}
+        </Accordion>
       </Stack>
     </Stack>
   );
@@ -262,6 +272,60 @@ function TargetDefaults({ target }: Readonly<{ target: Target }>) {
   );
 }
 
+function ActionAccordionItem({
+  actionDefinition,
+  error,
+  name,
+  submittedValues,
+  target,
+}: Readonly<{
+  actionDefinition: Action;
+  error?: string;
+  name: string;
+  submittedValues?: Record<string, string>;
+  target: Target;
+}>) {
+  const parameterCount = Object.keys(actionDefinition.parameters ?? {}).length;
+  const artifactCount = Object.keys(actionDefinition.artifacts ?? {}).length;
+  const inputCount = Object.keys(actionDefinition.inputs ?? {}).length;
+
+  return (
+    <Accordion.Item value={name}>
+      <Accordion.Control>
+        <Stack gap="xs">
+          <Group justify="space-between">
+            <Group gap="xs">
+              <Text fw={600}>{name}</Text>
+              {actionDefinition.intent ? (
+                <Badge variant="outline">{actionDefinition.intent}</Badge>
+              ) : null}
+            </Group>
+            <Group gap="xs">
+              {parameterCount > 0 ? (
+                <Badge variant="light">{parameterCount} parameters</Badge>
+              ) : null}
+              {artifactCount > 0 ? <Badge variant="light">{artifactCount} artifacts</Badge> : null}
+              {inputCount > 0 ? <Badge variant="light">{inputCount} inputs</Badge> : null}
+            </Group>
+          </Group>
+          <Text c="dimmed" lineClamp={1} size="sm">
+            {actionDefinition.command.join(" ")}
+          </Text>
+        </Stack>
+      </Accordion.Control>
+      <Accordion.Panel>
+        <ActionDetail
+          actionDefinition={actionDefinition}
+          error={error}
+          name={name}
+          submittedValues={submittedValues}
+          target={target}
+        />
+      </Accordion.Panel>
+    </Accordion.Item>
+  );
+}
+
 function ActionDetail({
   actionDefinition,
   error,
@@ -281,80 +345,71 @@ function ActionDetail({
   const inputs = sortedEntries(actionDefinition.inputs);
 
   return (
-    <Card padding="lg" withBorder>
-      <Stack gap="lg">
-        <Group justify="space-between">
-          <Title order={3}>{name}</Title>
-          {actionDefinition.intent ? (
-            <Badge variant="outline">{actionDefinition.intent}</Badge>
-          ) : null}
-        </Group>
-
-        <Stack gap={4}>
-          <Text c="dimmed" size="xs" tt="uppercase">
-            Argument array
-          </Text>
-          <Code block>{JSON.stringify(actionDefinition.command, null, 2)}</Code>
-        </Stack>
-
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <EffectiveValue
-            inherited={!actionDefinition.runtime}
-            label="Runtime"
-            value={effective.runtime ?? "Not configured"}
-          />
-          <EffectiveValue
-            inherited={!actionDefinition.placement}
-            label="Placement"
-            value={effective.placement ?? "Not configured"}
-          />
-          <EffectiveValue
-            inherited={!actionDefinition.timeout}
-            label="Timeout"
-            value={effective.timeout ?? "Placement default"}
-          />
-        </SimpleGrid>
-
-        <DefinitionEntries
-          empty="No credential bindings"
-          entries={sortedEntries(effective.credentials)}
-          label="Effective credential bindings"
-        />
-        <ResourceEntries
-          limits={sortedEntries(effective.resources.limits)}
-          requests={sortedEntries(effective.resources.requests)}
-        />
-
-        <ActionRunForm
-          actionDefinition={actionDefinition}
-          error={error}
-          name={name}
-          submittedValues={submittedValues}
-        />
-
-        <Divider />
-        <DefinitionTable
-          columns={["Parameter", "Type", "Required", "Delivery", "Allowed values"]}
-          empty="No parameters"
-          rows={parameters.map(([parameterName, parameter]) =>
-            parameterRow(parameterName, parameter),
-          )}
-          title="Parameters"
-        />
-        <DefinitionTable
-          columns={["Artifact", "Path", "Media type", "Sensitive"]}
-          empty="No declared artifacts"
-          rows={artifacts.map(([artifactName, artifact]) => artifactRow(artifactName, artifact))}
-          title="Artifacts"
-        />
-        <DefinitionTable
-          columns={["Input", "Source action", "Mount path", "Compatibility"]}
-          empty="No artifact inputs"
-          rows={inputs.map(([inputName, input]) => inputRow(inputName, input))}
-          title="Inputs"
-        />
+    <Stack gap="lg">
+      <Stack gap={4}>
+        <Text c="dimmed" size="xs" tt="uppercase">
+          Argument array
+        </Text>
+        <Code block>{JSON.stringify(actionDefinition.command, null, 2)}</Code>
       </Stack>
-    </Card>
+
+      <SimpleGrid cols={{ base: 1, sm: 3 }}>
+        <EffectiveValue
+          inherited={!actionDefinition.runtime}
+          label="Runtime"
+          value={effective.runtime ?? "Not configured"}
+        />
+        <EffectiveValue
+          inherited={!actionDefinition.placement}
+          label="Placement"
+          value={effective.placement ?? "Not configured"}
+        />
+        <EffectiveValue
+          inherited={!actionDefinition.timeout}
+          label="Timeout"
+          value={effective.timeout ?? "Placement default"}
+        />
+      </SimpleGrid>
+
+      <DefinitionEntries
+        empty="No credential bindings"
+        entries={sortedEntries(effective.credentials)}
+        label="Effective credential bindings"
+      />
+      <ResourceEntries
+        limits={sortedEntries(effective.resources.limits)}
+        requests={sortedEntries(effective.resources.requests)}
+      />
+
+      <ActionRunForm
+        actionDefinition={actionDefinition}
+        error={error}
+        name={name}
+        submittedValues={submittedValues}
+      />
+
+      <Divider />
+      <DefinitionTable
+        columns={["Parameter", "Type", "Required", "Delivery", "Allowed values"]}
+        empty="No parameters"
+        rows={parameters.map(([parameterName, parameter]) =>
+          parameterRow(parameterName, parameter),
+        )}
+        title="Parameters"
+      />
+      <DefinitionTable
+        columns={["Artifact", "Path", "Media type", "Sensitive"]}
+        empty="No declared artifacts"
+        rows={artifacts.map(([artifactName, artifact]) => artifactRow(artifactName, artifact))}
+        title="Artifacts"
+      />
+      <DefinitionTable
+        columns={["Input", "Source action", "Mount path", "Compatibility"]}
+        empty="No artifact inputs"
+        rows={inputs.map(([inputName, input]) => inputRow(inputName, input))}
+        title="Inputs"
+      />
+    </Stack>
   );
 }
 

@@ -462,6 +462,9 @@ func (s *Service) StreamLog(
 	if err != nil {
 		return nil, err
 	}
+	if record.RetentionState != RetentionRetained {
+		return nil, ErrNotFound
+	}
 	if offsetBytes > record.SizeBytes {
 		return nil, invalid("log offset exceeds durable size")
 	}

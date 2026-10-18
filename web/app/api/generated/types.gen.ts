@@ -90,6 +90,29 @@ export type CatalogRevision = {
   targets: Array<Target>;
 };
 
+export type TargetSummary = {
+  repositoryId: string;
+  repositoryName: string;
+  catalogRevisionId: string;
+  catalogCommitSha: string;
+  name: string;
+  title?: string;
+  actions: Array<string>;
+  runtime?: string;
+  placement?: string;
+  desiredCommitSha: string;
+};
+
+export type TargetSummaryList = {
+  items: Array<TargetSummary>;
+  /**
+   * Total number of active targets matching the filters.
+   */
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type Cluster = {
   /**
    * Stable logical name of the execution cluster.
@@ -773,6 +796,56 @@ export type GetRepositoryCatalogResponses = {
 
 export type GetRepositoryCatalogResponse =
   GetRepositoryCatalogResponses[keyof GetRepositoryCatalogResponses];
+
+export type ListTargetsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Limit targets to one active repository.
+     */
+    repositoryId?: string;
+    /**
+     * Case-insensitive target, repository, or action search.
+     */
+    q?: string;
+    /**
+     * Maximum number of target summaries to return.
+     */
+    limit?: number;
+    /**
+     * Zero-based offset into the matching target summaries.
+     */
+    offset?: number;
+  };
+  url: "/api/v1/targets";
+};
+
+export type ListTargetsErrors = {
+  /**
+   * A filter, limit, or offset is invalid.
+   */
+  400: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Active targets could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListTargetsError = ListTargetsErrors[keyof ListTargetsErrors];
+
+export type ListTargetsResponses = {
+  /**
+   * Active targets matching the requested filters.
+   */
+  200: TargetSummaryList;
+};
+
+export type ListTargetsResponse = ListTargetsResponses[keyof ListTargetsResponses];
 
 export type ListClustersData = {
   body?: never;

@@ -23,6 +23,9 @@ const (
 	serverS3AccessKeyIDEnvironment                = "SLIPRAMP_S3_ACCESS_KEY_ID"
 	serverS3SecretAccessKeyEnvironment            = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
 	serverS3StartupTimeoutEnvironment             = "SLIPRAMP_S3_STARTUP_TIMEOUT"
+	serverArtifactRetentionPeriodEnvironment      = "SLIPRAMP_ARTIFACT_RETENTION_PERIOD"
+	serverArtifactReconcileIntervalEnvironment    = "SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL"
+	serverArtifactOrphanGracePeriodEnvironment    = "SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD"
 )
 
 func TestLoadServerFromEnvironment(t *testing.T) {
@@ -43,6 +46,9 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		serverS3AccessKeyIDEnvironment:                "access-key",
 		serverS3SecretAccessKeyEnvironment:            "secret-key",
 		serverS3StartupTimeoutEnvironment:             "9s",
+		serverArtifactRetentionPeriodEnvironment:      "720h",
+		serverArtifactReconcileIntervalEnvironment:    "30m",
+		serverArtifactOrphanGracePeriodEnvironment:    "48h",
 	}
 
 	cfg, err := config.LoadServer(mapEnvironment(environment))
@@ -144,6 +150,24 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 			"ObjectStore.StartupTimeout = %s, want %s",
 			cfg.ObjectStore.StartupTimeout,
 			9*time.Second,
+		)
+	}
+
+	if cfg.ArtifactRetentionPeriod != 720*time.Hour {
+		t.Errorf("ArtifactRetentionPeriod = %s, want 720h", cfg.ArtifactRetentionPeriod)
+	}
+
+	if cfg.ArtifactReconcileInterval != 30*time.Minute {
+		t.Errorf(
+			"ArtifactReconcileInterval = %s, want 30m",
+			cfg.ArtifactReconcileInterval,
+		)
+	}
+
+	if cfg.ArtifactOrphanGracePeriod != 48*time.Hour {
+		t.Errorf(
+			"ArtifactOrphanGracePeriod = %s, want 48h",
+			cfg.ArtifactOrphanGracePeriod,
 		)
 	}
 }
@@ -252,6 +276,27 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 			name: "invalid S3 endpoint",
 			environment: map[string]string{
 				serverS3EndpointEnvironment: "objects.example.com",
+			},
+			wantError: "validate server configuration",
+		},
+		{
+			name: "malformed artifact retention period",
+			environment: map[string]string{
+				serverArtifactRetentionPeriodEnvironment: "eventually",
+			},
+			wantError: serverArtifactRetentionPeriodEnvironment,
+		},
+		{
+			name: "invalid artifact reconciliation interval",
+			environment: map[string]string{
+				serverArtifactReconcileIntervalEnvironment: "0s",
+			},
+			wantError: "validate server configuration",
+		},
+		{
+			name: "invalid artifact orphan grace period",
+			environment: map[string]string{
+				serverArtifactOrphanGracePeriodEnvironment: "-1h",
 			},
 			wantError: "validate server configuration",
 		},

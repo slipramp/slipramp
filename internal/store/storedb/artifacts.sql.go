@@ -27,6 +27,28 @@ func (q *Queries) AdvanceArtifactLogSize(ctx context.Context, arg AdvanceArtifac
 	return err
 }
 
+const artifactObjectKeyExists = `-- name: ArtifactObjectKeyExists :one
+SELECT EXISTS (
+    SELECT 1
+    FROM artifacts
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifacts.content_object_key = $1
+    UNION ALL
+    SELECT 1
+    FROM artifact_log_chunks
+    JOIN artifacts ON artifacts.id = artifact_log_chunks.artifact_id
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifact_log_chunks.object_key = $1
+) AS exists
+`
+
+func (q *Queries) ArtifactObjectKeyExists(ctx context.Context, candidateObjectKey *string) (bool, error) {
+	row := q.db.QueryRow(ctx, artifactObjectKeyExists, candidateObjectKey)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const createArtifact = `-- name: CreateArtifact :one
 INSERT INTO artifacts (
     id,
@@ -160,6 +182,76 @@ func (q *Queries) CreateArtifactLogChunk(ctx context.Context, arg CreateArtifact
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const expireArtifacts = `-- name: ExpireArtifacts :many
+WITH candidates AS (
+    SELECT artifacts.id
+    FROM artifacts
+    WHERE artifacts.state = 'sealed'
+      AND artifacts.retention_state = 'retained'
+      AND artifacts.sealed_at <= $1
+      AND EXISTS (
+          SELECT 1
+          FROM runs AS producer_run
+          WHERE producer_run.id = artifacts.run_id
+            AND producer_run.phase = 'finished'
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM run_artifact_inputs
+          JOIN runs ON runs.id = run_artifact_inputs.run_id
+          WHERE run_artifact_inputs.artifact_id = artifacts.id
+            AND runs.phase <> 'finished'
+      )
+    ORDER BY artifacts.sealed_at, artifacts.id
+    LIMIT $2
+    FOR UPDATE SKIP LOCKED
+)
+UPDATE artifacts
+SET retention_state = 'expired'
+FROM candidates
+WHERE artifacts.id = candidates.id
+RETURNING artifacts.id, artifacts.run_id, artifacts.name, artifacts.kind, artifacts.state, artifacts.media_type, artifacts.size_bytes, artifacts.sha256, artifacts.sensitive, artifacts.content_object_key, artifacts.retention_state, artifacts.created_at, artifacts.sealed_at
+`
+
+type ExpireArtifactsParams struct {
+	SealedBefore pgtype.Timestamptz
+	ResultLimit  int32
+}
+
+func (q *Queries) ExpireArtifacts(ctx context.Context, arg ExpireArtifactsParams) ([]Artifact, error) {
+	rows, err := q.db.Query(ctx, expireArtifacts, arg.SealedBefore, arg.ResultLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Artifact
+	for rows.Next() {
+		var i Artifact
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.Name,
+			&i.Kind,
+			&i.State,
+			&i.MediaType,
+			&i.SizeBytes,
+			&i.Sha256,
+			&i.Sensitive,
+			&i.ContentObjectKey,
+			&i.RetentionState,
+			&i.CreatedAt,
+			&i.SealedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getArtifact = `-- name: GetArtifact :one
@@ -385,6 +477,38 @@ func (q *Queries) ListArtifactLogChunks(ctx context.Context, arg ListArtifactLog
 	return items, nil
 }
 
+const listArtifactObjectKeys = `-- name: ListArtifactObjectKeys :many
+SELECT COALESCE(content_object_key, '') AS object_key
+FROM artifacts
+WHERE id = $1
+  AND content_object_key IS NOT NULL
+UNION ALL
+SELECT object_key
+FROM artifact_log_chunks
+WHERE artifact_id = $1
+ORDER BY object_key
+`
+
+func (q *Queries) ListArtifactObjectKeys(ctx context.Context, artifactID pgtype.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listArtifactObjectKeys, artifactID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var object_key string
+		if err := rows.Scan(&object_key); err != nil {
+			return nil, err
+		}
+		items = append(items, object_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArtifactsForRun = `-- name: ListArtifactsForRun :many
 SELECT id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
 FROM artifacts
@@ -394,6 +518,47 @@ ORDER BY created_at, id
 
 func (q *Queries) ListArtifactsForRun(ctx context.Context, runID pgtype.UUID) ([]Artifact, error) {
 	rows, err := q.db.Query(ctx, listArtifactsForRun, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Artifact
+	for rows.Next() {
+		var i Artifact
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.Name,
+			&i.Kind,
+			&i.State,
+			&i.MediaType,
+			&i.SizeBytes,
+			&i.Sha256,
+			&i.Sensitive,
+			&i.ContentObjectKey,
+			&i.RetentionState,
+			&i.CreatedAt,
+			&i.SealedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExpiredArtifacts = `-- name: ListExpiredArtifacts :many
+SELECT id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
+FROM artifacts
+WHERE retention_state = 'expired'
+ORDER BY sealed_at, id
+`
+
+func (q *Queries) ListExpiredArtifacts(ctx context.Context) ([]Artifact, error) {
+	rows, err := q.db.Query(ctx, listExpiredArtifacts)
 	if err != nil {
 		return nil, err
 	}
@@ -436,6 +601,35 @@ FOR UPDATE
 
 func (q *Queries) LockArtifactForLogAppend(ctx context.Context, id pgtype.UUID) (Artifact, error) {
 	row := q.db.QueryRow(ctx, lockArtifactForLogAppend, id)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Name,
+		&i.Kind,
+		&i.State,
+		&i.MediaType,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.Sensitive,
+		&i.ContentObjectKey,
+		&i.RetentionState,
+		&i.CreatedAt,
+		&i.SealedAt,
+	)
+	return i, err
+}
+
+const markArtifactDeleted = `-- name: MarkArtifactDeleted :one
+UPDATE artifacts
+SET retention_state = 'deleted'
+WHERE id = $1
+  AND retention_state = 'expired'
+RETURNING id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
+`
+
+func (q *Queries) MarkArtifactDeleted(ctx context.Context, id pgtype.UUID) (Artifact, error) {
+	row := q.db.QueryRow(ctx, markArtifactDeleted, id)
 	var i Artifact
 	err := row.Scan(
 		&i.ID,

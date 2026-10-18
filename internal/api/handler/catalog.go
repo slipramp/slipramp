@@ -3,8 +3,11 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -17,6 +20,92 @@ type CatalogService interface {
 		ctx context.Context,
 		repositoryID uuid.UUID,
 	) (catalog.Revision, error)
+	ListTargets(context.Context, catalog.TargetListFilter) (catalog.TargetList, error)
+}
+
+func (h *Handler) ListTargets(
+	ctx context.Context,
+	request api.ListTargetsRequestObject,
+) (api.ListTargetsResponseObject, error) {
+	limit := catalog.DefaultTargetListLimit
+	if request.Params.Limit != nil {
+		if *request.Params.Limit < 1 ||
+			*request.Params.Limit > catalog.MaximumTargetListLimit {
+			problem := NewProblem(
+				http.StatusBadRequest,
+				fmt.Sprintf(
+					"limit must be between 1 and %d",
+					catalog.MaximumTargetListLimit,
+				),
+			)
+
+			return api.ListTargets400ApplicationProblemPlusJSONResponse(problem), nil
+		}
+		limit = *request.Params.Limit
+	}
+
+	offset := int32(0)
+	if request.Params.Offset != nil {
+		if *request.Params.Offset < 0 ||
+			*request.Params.Offset > catalog.MaximumTargetListOffset {
+			problem := NewProblem(
+				http.StatusBadRequest,
+				"offset must be between 0 and 2147483647",
+			)
+
+			return api.ListTargets400ApplicationProblemPlusJSONResponse(problem), nil
+		}
+		offset = *request.Params.Offset
+	}
+
+	query := ""
+	if request.Params.Q != nil {
+		query = strings.TrimSpace(*request.Params.Q)
+		if query == "" || len(query) > catalog.MaximumTargetSearchLength {
+			problem := NewProblem(
+				http.StatusBadRequest,
+				"q must contain between 1 and 200 characters",
+			)
+
+			return api.ListTargets400ApplicationProblemPlusJSONResponse(problem), nil
+		}
+	}
+
+	targets, err := h.catalogs.ListTargets(
+		ctx,
+		catalog.TargetListFilter{
+			RepositoryID: request.Params.RepositoryID,
+			Query:        query,
+			Limit:        int32(limit),
+			Offset:       int32(offset),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]api.TargetSummary, 0, len(targets.Items))
+	for _, item := range targets.Items {
+		items = append(items, api.TargetSummary{
+			Actions:           slices.Sorted(maps.Keys(item.Target.Spec.Actions)),
+			CatalogCommitSha:  item.CatalogCommitSHA,
+			CatalogRevisionID: item.CatalogRevisionID,
+			DesiredCommitSha:  item.DesiredCommitSHA,
+			Name:              item.Target.Metadata.Name,
+			Placement:         optionalString(item.Target.Spec.Placement),
+			RepositoryID:      item.RepositoryID,
+			RepositoryName:    item.RepositoryName,
+			Runtime:           optionalString(item.Target.Spec.Runtime),
+			Title:             optionalString(item.Target.Metadata.Title),
+		})
+	}
+
+	return api.ListTargets200JSONResponse{
+		Items:  items,
+		Limit:  limit,
+		Offset: int(offset),
+		Total:  targets.Total,
+	}, nil
 }
 
 func (h *Handler) GetRepositoryCatalog(

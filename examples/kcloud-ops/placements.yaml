@@ -14,12 +14,9 @@ placements:
         cpu: "2"
         memory: 2Gi
     credentials:
-      homelab-ssh:
+      ops-ci:
         secretRef:
-          name: kcloud-ops-ssh
-      rustfs-admin:
+          name: ops-ci
+      homelab-known-hosts:
         secretRef:
-          name: rustfs-admin
-      rustfs-terraform-state:
-        secretRef:
-          name: rustfs-terraform-state
+          name: kcloud-ops-known-hosts

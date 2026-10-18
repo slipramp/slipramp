@@ -361,6 +361,111 @@ func TestCatalogRefreshTracksTargetDesiredCommitsIntegration(t *testing.T) {
 	}
 }
 
+func TestListActiveTargetsIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 18, 12, 0, 0, 0, time.UTC)
+	firstRepositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1400")
+	secondRepositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1401")
+	repositories := []repository.Repository{
+		{
+			ID:        firstRepositoryID,
+			Name:      "infrastructure",
+			CloneURL:  "https://github.com/example/infrastructure.git",
+			Branch:    "main",
+			CreatedAt: createdAt,
+		},
+		{
+			ID:        secondRepositoryID,
+			Name:      "operations",
+			CloneURL:  "https://github.com/example/operations.git",
+			Branch:    "main",
+			CreatedAt: createdAt,
+		},
+	}
+	for _, record := range repositories {
+		if _, err := database.CreateRepository(ctx, record); err != nil {
+			t.Fatalf("CreateRepository(%q) error = %v", record.Name, err)
+		}
+	}
+
+	firstCommit := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	firstRefresh := successfulCatalogRefresh(
+		firstCommit,
+		createdAt.Add(time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1402"),
+	)
+	firstTarget := testCatalogTarget("network", "network/**")
+	firstTarget.Metadata.Title = "Home network"
+	firstTarget.Spec.Runtime = "terraform"
+	firstTarget.Spec.Placement = "infrastructure"
+	firstTarget.Spec.Actions["deploy"] = catalog.Action{Command: []string{"deploy"}}
+	firstRefresh.Revision.Catalog.Targets = []catalog.Target{firstTarget}
+	if err := database.RecordRepositoryRefresh(
+		ctx,
+		firstRepositoryID,
+		firstRefresh,
+	); err != nil {
+		t.Fatalf("record first catalog: %v", err)
+	}
+
+	secondCommit := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	secondRefresh := successfulCatalogRefresh(
+		secondCommit,
+		createdAt.Add(2*time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1403"),
+	)
+	secondTarget := testCatalogTarget("backups", "backups/**")
+	secondTarget.Metadata.Title = "Backups"
+	secondRefresh.Revision.Catalog.Targets = []catalog.Target{secondTarget}
+	if err := database.RecordRepositoryRefresh(
+		ctx,
+		secondRepositoryID,
+		secondRefresh,
+	); err != nil {
+		t.Fatalf("record second catalog: %v", err)
+	}
+
+	page, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
+		Limit:  1,
+		Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("ListActiveTargets() error = %v", err)
+	}
+	if page.Total != 2 || len(page.Items) != 1 ||
+		page.Items[0].Target.Metadata.Name != "backups" {
+		t.Errorf("first target page = %#v", page)
+	}
+
+	search, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
+		Query: "DEPLOY",
+		Limit: 25,
+	})
+	if err != nil {
+		t.Fatalf("search active targets: %v", err)
+	}
+	if search.Total != 1 || len(search.Items) != 1 ||
+		search.Items[0].RepositoryID != firstRepositoryID ||
+		search.Items[0].CatalogCommitSHA != firstCommit ||
+		search.Items[0].DesiredCommitSHA != firstCommit {
+		t.Errorf("target search = %#v", search)
+	}
+
+	filtered, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
+		RepositoryID: &secondRepositoryID,
+		Limit:        25,
+	})
+	if err != nil {
+		t.Fatalf("filter active targets: %v", err)
+	}
+	if filtered.Total != 1 || len(filtered.Items) != 1 ||
+		filtered.Items[0].RepositoryName != "operations" {
+		t.Errorf("repository target filter = %#v", filtered)
+	}
+}
+
 func successfulCatalogRefresh(
 	commitSHA string,
 	attemptedAt time.Time,

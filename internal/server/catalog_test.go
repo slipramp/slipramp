@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -129,6 +130,117 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	}
 }
 
+func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
+	commitSHA := "0123456789abcdef0123456789abcdef01234567"
+	catalogs := &recordingCatalogService{
+		targets: catalog.TargetList{
+			Total: 3,
+			Items: []catalog.TargetSummary{{
+				RepositoryID:      repositoryID,
+				RepositoryName:    "infrastructure",
+				CatalogRevisionID: revisionID,
+				CatalogCommitSHA:  commitSHA,
+				DesiredCommitSHA:  commitSHA,
+				Target: catalog.Target{
+					Metadata: catalog.Metadata{
+						Name:  "network",
+						Title: "Home network",
+					},
+					Spec: catalog.TargetSpec{
+						Runtime:   "terraform",
+						Placement: "infrastructure",
+						Actions: map[string]catalog.Action{
+							"sync":    {},
+							"preview": {},
+						},
+					},
+				},
+			}},
+		},
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/targets?repositoryId="+repositoryID.String()+"&q=network&limit=1&offset=2",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newHandler(
+		&recordingClusterService{},
+		nil,
+		nil,
+		catalogs,
+		nil,
+		nil,
+		nil,
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+
+	var body api.TargetSummaryList
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if catalogs.listCalls != 1 || catalogs.filter.RepositoryID == nil ||
+		*catalogs.filter.RepositoryID != repositoryID ||
+		catalogs.filter.Query != "network" || catalogs.filter.Limit != 1 ||
+		catalogs.filter.Offset != 2 {
+		t.Errorf("target filter = %#v", catalogs.filter)
+	}
+	if body.Total != 3 || body.Limit != 1 || body.Offset != 2 || len(body.Items) != 1 {
+		t.Fatalf("target list = %#v", body)
+	}
+	item := body.Items[0]
+	if item.Name != "network" || item.Title == nil || *item.Title != "Home network" ||
+		item.RepositoryName != "infrastructure" ||
+		!slices.Equal(item.Actions, []string{"preview", "sync"}) {
+		t.Errorf("target summary = %#v", item)
+	}
+}
+
+func TestListTargetsRejectsInvalidPagination(t *testing.T) {
+	t.Parallel()
+
+	tests := []string{
+		"/api/v1/targets?limit=0",
+		"/api/v1/targets?limit=101",
+		"/api/v1/targets?offset=-1",
+		"/api/v1/targets?q=%20%20",
+	}
+	for _, path := range tests {
+		request := httptest.NewRequestWithContext(
+			context.Background(),
+			http.MethodGet,
+			path,
+			nil,
+		)
+		response := httptest.NewRecorder()
+		catalogs := &recordingCatalogService{}
+
+		newHandler(
+			&recordingClusterService{},
+			nil,
+			nil,
+			catalogs,
+			nil,
+			nil,
+			nil,
+		).ServeHTTP(response, request)
+
+		assertProblem(t, response, http.StatusBadRequest)
+		if catalogs.listCalls != 0 {
+			t.Errorf("catalog service calls = %d, want 0", catalogs.listCalls)
+		}
+	}
+}
+
 func TestGetRepositoryCatalogMapsExpectedFailures(t *testing.T) {
 	t.Parallel()
 
@@ -207,6 +319,9 @@ type recordingCatalogService struct {
 	repositoryID uuid.UUID
 	revision     catalog.Revision
 	err          error
+	listCalls    int
+	filter       catalog.TargetListFilter
+	targets      catalog.TargetList
 }
 
 func (s *recordingCatalogService) GetActiveRevision(
@@ -217,4 +332,14 @@ func (s *recordingCatalogService) GetActiveRevision(
 	s.repositoryID = repositoryID
 
 	return s.revision, s.err
+}
+
+func (s *recordingCatalogService) ListTargets(
+	_ context.Context,
+	filter catalog.TargetListFilter,
+) (catalog.TargetList, error) {
+	s.listCalls++
+	s.filter = filter
+
+	return s.targets, s.err
 }

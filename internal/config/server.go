@@ -25,6 +25,9 @@ const (
 	serverS3SecretAccessKeyEnvironment            = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
 	serverS3StartupTimeoutEnvironment             = "SLIPRAMP_S3_STARTUP_TIMEOUT"
 	serverArtifactTokenSecretEnvironment          = "SLIPRAMP_ARTIFACT_TOKEN_SECRET"
+	serverArtifactRetentionPeriodEnvironment      = "SLIPRAMP_ARTIFACT_RETENTION_PERIOD"
+	serverArtifactReconcileIntervalEnvironment    = "SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL"
+	serverArtifactOrphanGracePeriodEnvironment    = "SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD"
 )
 
 func LoadServer(
@@ -180,6 +183,42 @@ func LoadServer(
 
 	if value, ok := lookupEnvironment(serverArtifactTokenSecretEnvironment); ok {
 		cfg.ArtifactTokenSecret = value
+	}
+
+	if value, ok := lookupEnvironment(serverArtifactRetentionPeriodEnvironment); ok {
+		period, err := parseDurationEnvironment(
+			serverArtifactRetentionPeriodEnvironment,
+			value,
+		)
+		if err != nil {
+			return server.Config{}, err
+		}
+
+		cfg.ArtifactRetentionPeriod = period
+	}
+
+	if value, ok := lookupEnvironment(serverArtifactReconcileIntervalEnvironment); ok {
+		period, err := parseDurationEnvironment(
+			serverArtifactReconcileIntervalEnvironment,
+			value,
+		)
+		if err != nil {
+			return server.Config{}, err
+		}
+
+		cfg.ArtifactReconcileInterval = period
+	}
+
+	if value, ok := lookupEnvironment(serverArtifactOrphanGracePeriodEnvironment); ok {
+		period, err := parseDurationEnvironment(
+			serverArtifactOrphanGracePeriodEnvironment,
+			value,
+		)
+		if err != nil {
+			return server.Config{}, err
+		}
+
+		cfg.ArtifactOrphanGracePeriod = period
 	}
 
 	if err := cfg.Validate(); err != nil {

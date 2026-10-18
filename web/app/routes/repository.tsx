@@ -3,12 +3,9 @@ import {
   Anchor,
   Badge,
   Button,
-  Card,
   Code,
-  Divider,
   Group,
   Paper,
-  SimpleGrid,
   Stack,
   Text,
   Title,
@@ -21,13 +18,16 @@ import {
   getRepositoryCatalog,
   listRepositories,
   removeRepository,
-  type Action,
   type CatalogRevision,
   type Repository,
-  type Target,
 } from "~/api/generated";
+import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/repository";
+
+export function meta({ loaderData }: Route.MetaArgs) {
+  return [{ title: pageTitle(loaderData?.repository?.name ?? "Repository") }];
+}
 
 export async function loader({ params }: Route.LoaderArgs) {
   const client = createServerAPIClient();
@@ -139,23 +139,41 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         <>
           <CatalogSummary catalog={catalog} />
           <Stack gap="md">
-            <Title order={2}>Targets</Title>
-            {catalog.targets.length === 0 ? (
-              <Paper p="md" withBorder>
-                <Text c="dimmed">This catalog contains no targets.</Text>
-              </Paper>
-            ) : (
-              <SimpleGrid cols={{ base: 1, lg: 2 }}>
-                {catalog.targets.map((target) => (
-                  <TargetCard
-                    catalogCommitSha={catalog.commitSha}
-                    key={target.metadata.name}
-                    repositoryId={loaderData.repositoryId}
-                    target={target}
-                  />
-                ))}
-              </SimpleGrid>
-            )}
+            <Group justify="space-between">
+              <Title order={2}>Targets</Title>
+              {catalog.targets.length > 0 ? (
+                <Anchor
+                  component={Link}
+                  to={`/?repositoryId=${encodeURIComponent(loaderData.repositoryId)}`}
+                >
+                  Browse targets
+                </Anchor>
+              ) : null}
+            </Group>
+            <Paper p="md" withBorder>
+              <Group justify="space-between">
+                <Stack gap={2}>
+                  <Text fw={600}>
+                    {catalog.targets.length} active target
+                    {catalog.targets.length === 1 ? "" : "s"}
+                  </Text>
+                  <Text c="dimmed" size="sm">
+                    {catalog.targets.length === 0
+                      ? "This catalog contains no targets."
+                      : "Search and browse this repository’s targets in the main target index."}
+                  </Text>
+                </Stack>
+                {catalog.targets.length > 0 ? (
+                  <Button
+                    component={Link}
+                    to={`/?repositoryId=${encodeURIComponent(loaderData.repositoryId)}`}
+                    variant="light"
+                  >
+                    View targets
+                  </Button>
+                ) : null}
+              </Group>
+            </Paper>
           </Stack>
         </>
       )}
@@ -243,98 +261,6 @@ function CatalogSummary({ catalog }: Readonly<{ catalog: CatalogRevision }>) {
         </Stack>
       </Group>
     </Paper>
-  );
-}
-
-function TargetCard({
-  catalogCommitSha,
-  repositoryId,
-  target,
-}: Readonly<{ catalogCommitSha: string; repositoryId: string; target: Target }>) {
-  const actions = Object.entries(target.spec.actions).toSorted(([left], [right]) =>
-    left.localeCompare(right),
-  );
-
-  return (
-    <Card padding="lg" withBorder>
-      <Stack gap="md">
-        <Stack gap={2}>
-          <Group justify="space-between">
-            <Title order={3}>
-              <Anchor
-                component={Link}
-                inherit
-                to={`/repositories/${repositoryId}/targets/${encodeURIComponent(target.metadata.name)}`}
-              >
-                {target.metadata.title ?? target.metadata.name}
-              </Anchor>
-            </Title>
-            <Badge variant="outline">{actions.length} actions</Badge>
-          </Group>
-          {target.metadata.title ? (
-            <Text c="dimmed" size="sm">
-              {target.metadata.name}
-            </Text>
-          ) : null}
-          <Text c="dimmed" size="xs">
-            {target.source.path} · document {target.source.document}
-          </Text>
-        </Stack>
-
-        <Group gap="xs">
-          <Badge
-            color={target.status.desiredCommitSha === catalogCommitSha ? "green" : "gray"}
-            variant="light"
-          >
-            Desired: {shortCommit(target.status.desiredCommitSha)}
-          </Badge>
-          {target.spec.runtime ? (
-            <Badge variant="light">Runtime: {target.spec.runtime}</Badge>
-          ) : null}
-          {target.spec.placement ? (
-            <Badge variant="light">Placement: {target.spec.placement}</Badge>
-          ) : null}
-          {target.spec.path ? <Badge variant="light">Path: {target.spec.path}</Badge> : null}
-        </Group>
-
-        <Divider />
-
-        <Stack gap="md">
-          {actions.map(([name, actionDefinition]) => (
-            <ActionSummary actionDefinition={actionDefinition} key={name} name={name} />
-          ))}
-        </Stack>
-      </Stack>
-    </Card>
-  );
-}
-
-function ActionSummary({
-  actionDefinition,
-  name,
-}: Readonly<{ actionDefinition: Action; name: string }>) {
-  const parameterCount = Object.keys(actionDefinition.parameters ?? {}).length;
-  const artifactCount = Object.keys(actionDefinition.artifacts ?? {}).length;
-  const inputCount = Object.keys(actionDefinition.inputs ?? {}).length;
-
-  return (
-    <Stack gap={4}>
-      <Group gap="xs">
-        <Text fw={600}>{name}</Text>
-        {actionDefinition.intent ? (
-          <Badge variant="outline">{actionDefinition.intent}</Badge>
-        ) : null}
-      </Group>
-      <Code block>{actionDefinition.command.join(" ")}</Code>
-      <Group gap="xs">
-        {parameterCount > 0 ? <Badge variant="light">{parameterCount} parameters</Badge> : null}
-        {artifactCount > 0 ? <Badge variant="light">{artifactCount} artifacts</Badge> : null}
-        {inputCount > 0 ? <Badge variant="light">{inputCount} inputs</Badge> : null}
-        {actionDefinition.timeout ? (
-          <Badge variant="light">Timeout: {actionDefinition.timeout}</Badge>
-        ) : null}
-      </Group>
-    </Stack>
   );
 }
 

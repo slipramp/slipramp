@@ -97,6 +97,22 @@ The log artifact is append-only and available as a live stream while its run is 
 
 Artifact metadata includes its producing run, name, media type, lifecycle state, size, digest, sensitivity, object key, and retention state. Artifact contents are stored only in S3-compatible object storage rather than in PostgreSQL or on the Server filesystem. RustFS provides the local object store.
 
+The MVP applies one installation-wide retention period to sealed artifacts. A
+periodic Server reconciler changes eligible metadata from `retained` to
+`expired`, deletes every corresponding object idempotently, and changes the
+metadata to `deleted` only after all deletes succeed. Artifacts produced by an
+unfinished Run or bound to an unfinished consuming Run are not eligible to
+expire. Failed object deletes leave the artifact expired for a later retry,
+while the artifact metadata and provenance remain in PostgreSQL in every
+retention state.
+
+The same reconciler lists the Server-owned `runs/` object prefix and removes
+objects that have no non-deleted PostgreSQL metadata after a configurable grace
+period. The grace period protects the interval between writing an upload or log
+chunk object and committing its metadata. PostgreSQL is checked immediately
+before each orphan delete and remains authoritative; S3 lifecycle rules do not
+independently expire artifact contents.
+
 Repository contents, source bundles, and Git source archives are not artifacts and are never copied into S3. Execution Jobs clone their exact commit directly from Git.
 
 Actions may accept artifacts from earlier runs as inputs. An input binding identifies a specific artifact rather than implicitly selecting the latest one. Compatibility rules can require the artifact to come from a particular target, action, Git commit, catalog revision, or resolved execution environment.
@@ -539,7 +555,7 @@ Most architectural questions are settled above. These details still need decisio
 
 - Versioning and compatibility behavior after the MVP `v1alpha1` repository contract.
 - The remaining harness ABI for additional standard Slipramp environment variables and cancellation behavior.
-- PostgreSQL history retention and archival, plus artifact expiration, deletion, and orphan cleanup.
+- PostgreSQL history retention and archival.
 
 The following questions are intentionally deferred and do not block the MVP:
 

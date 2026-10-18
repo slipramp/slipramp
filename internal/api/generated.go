@@ -1040,6 +1040,30 @@ type TargetStatus struct {
 	DesiredCommitSha string `json:"desiredCommitSha"`
 }
 
+// TargetSummary defines model for TargetSummary.
+type TargetSummary struct {
+	Actions           []string           `json:"actions"`
+	CatalogCommitSha  string             `json:"catalogCommitSha"`
+	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
+	DesiredCommitSha  string             `json:"desiredCommitSha"`
+	Name              string             `json:"name"`
+	Placement         *string            `json:"placement,omitempty"`
+	RepositoryID      openapi_types.UUID `json:"repositoryId"`
+	RepositoryName    string             `json:"repositoryName"`
+	Runtime           *string            `json:"runtime,omitempty"`
+	Title             *string            `json:"title,omitempty"`
+}
+
+// TargetSummaryList defines model for TargetSummaryList.
+type TargetSummaryList struct {
+	Items  []TargetSummary `json:"items"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+
+	// Total Total number of active targets matching the filters.
+	Total int64 `json:"total"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	// RepositoryID Limit results to one repository.
@@ -1062,6 +1086,21 @@ type CreateRunParams struct {
 type StreamRunLogParams struct {
 	OffsetBytes *int64  `form:"offsetBytes,omitempty" json:"offsetBytes,omitempty"`
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
+// ListTargetsParams defines parameters for ListTargets.
+type ListTargetsParams struct {
+	// RepositoryID Limit targets to one active repository.
+	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
+
+	// Q Case-insensitive target, repository, or action search.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Limit Maximum number of target summaries to return.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based offset into the matching target summaries.
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // PollForControllerCommandParams defines parameters for PollForControllerCommand.
@@ -1357,6 +1396,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 	StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListTargets List active targets
+	//
+	// Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+	//
+	// Corresponds with GET /api/v1/targets (the `ListTargets` operationId).
+	ListTargets(ctx context.Context, params *ListTargetsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// EnrollControllerWithBody Enroll a cluster controller
 	//
@@ -1679,6 +1725,23 @@ func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEdi
 // Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 func (c *Client) StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStreamRunLogRequest(c.Server, runID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListTargets List active targets
+//
+// Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+//
+// Corresponds with GET /api/v1/targets (the `ListTargets` operationId).
+func (c *Client) ListTargets(ctx context.Context, params *ListTargetsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListTargetsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2406,6 +2469,96 @@ func NewStreamRunLogRequest(server string, runID openapi_types.UUID, params *Str
 	return req, nil
 }
 
+// NewListTargetsRequest constructs an http.Request for the ListTargets method
+func NewListTargetsRequest(server string, params *ListTargetsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/targets")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.RepositoryID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repositoryId", *params.RepositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewEnrollControllerRequest calls the generic EnrollController builder with application/json body
 func NewEnrollControllerRequest(server string, body EnrollControllerJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -2974,6 +3127,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 	StreamRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*StreamRunLogResponse, error)
+
+	// ListTargetsWithResponse List active targets
+	//
+	// Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/targets (the `ListTargets` operationId).
+	ListTargetsWithResponse(ctx context.Context, params *ListTargetsParams, reqEditors ...RequestEditorFn) (*ListTargetsResponse, error)
 
 	// EnrollControllerWithBodyWithResponse Enroll a cluster controller
 	//
@@ -3854,6 +4016,68 @@ func (r StreamRunLogResponse) ContentType() string {
 	return ""
 }
 
+type ListTargetsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TargetSummaryList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListTargetsResponse) GetJSON200() *TargetSummaryList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListTargetsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListTargetsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListTargetsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListTargetsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListTargetsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListTargetsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListTargetsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type EnrollControllerResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -4693,6 +4917,21 @@ func (c *ClientWithResponses) StreamRunLogWithResponse(ctx context.Context, runI
 	return ParseStreamRunLogResponse(rsp)
 }
 
+// ListTargetsWithResponse List active targets
+//
+// Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/targets (the `ListTargets` operationId).
+func (c *ClientWithResponses) ListTargetsWithResponse(ctx context.Context, params *ListTargetsParams, reqEditors ...RequestEditorFn) (*ListTargetsResponse, error) {
+	rsp, err := c.ListTargets(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListTargetsResponse(rsp)
+}
+
 // EnrollControllerWithBodyWithResponse Enroll a cluster controller
 //
 // Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
@@ -5484,6 +5723,53 @@ func ParseStreamRunLogResponse(rsp *http.Response) (*StreamRunLogResponse, error
 	return response, nil
 }
 
+// ParseListTargetsResponse parses an HTTP response from a ListTargetsWithResponse call
+func ParseListTargetsResponse(rsp *http.Response) (*ListTargetsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListTargetsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TargetSummaryList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseEnrollControllerResponse parses an HTTP response from a EnrollControllerWithResponse call
 func ParseEnrollControllerResponse(rsp *http.Response) (*EnrollControllerResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -6046,6 +6332,9 @@ type ServerInterface interface {
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
 	StreamRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params StreamRunLogParams)
+	// ListTargets List active targets
+	// (GET /api/v1/targets)
+	ListTargets(w http.ResponseWriter, r *http.Request, params ListTargetsParams)
 	// EnrollController Enroll a cluster controller
 	// (POST /controller/v1/enroll)
 	EnrollController(w http.ResponseWriter, r *http.Request)
@@ -6436,6 +6725,78 @@ func (siw *ServerInterfaceWrapper) StreamRunLog(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.StreamRunLog(w, r, runID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTargets operation middleware
+func (siw *ServerInterfaceWrapper) ListTargets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTargetsParams
+
+	// ------------- Optional query parameter "repositoryId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repositoryId", r.URL.Query(), &params.RepositoryID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repositoryId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTargets(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6849,6 +7210,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
@@ -7772,6 +8134,70 @@ func (response StreamRunLog500ApplicationProblemPlusJSONResponse) VisitStreamRun
 	return err
 }
 
+type ListTargetsRequestObject struct {
+	Params ListTargetsParams
+}
+
+type ListTargetsResponseObject interface {
+	VisitListTargetsResponse(w http.ResponseWriter) error
+}
+
+type ListTargets200JSONResponse TargetSummaryList
+
+func (response ListTargets200JSONResponse) VisitListTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTargets400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTargets400ApplicationProblemPlusJSONResponse) VisitListTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTargets405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTargets405ApplicationProblemPlusJSONResponse) VisitListTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTargets500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTargets500ApplicationProblemPlusJSONResponse) VisitListTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type EnrollControllerRequestObject struct {
 	Body *EnrollControllerJSONRequestBody
 }
@@ -8609,6 +9035,9 @@ type StrictServerInterface interface {
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
 	StreamRunLog(ctx context.Context, request StreamRunLogRequestObject) (StreamRunLogResponseObject, error)
+	// ListTargets List active targets
+	// (GET /api/v1/targets)
+	ListTargets(ctx context.Context, request ListTargetsRequestObject) (ListTargetsResponseObject, error)
 	// EnrollController Enroll a cluster controller
 	// (POST /controller/v1/enroll)
 	EnrollController(ctx context.Context, request EnrollControllerRequestObject) (EnrollControllerResponseObject, error)
@@ -8991,6 +9420,32 @@ func (sh *strictHandler) StreamRunLog(w http.ResponseWriter, r *http.Request, ru
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StreamRunLogResponseObject); ok {
 		if err := validResponse.VisitStreamRunLogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTargets operation middleware
+func (sh *strictHandler) ListTargets(w http.ResponseWriter, r *http.Request, params ListTargetsParams) {
+	var request ListTargetsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTargets(ctx, request.(ListTargetsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTargets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTargetsResponseObject); ok {
+		if err := validResponse.VisitListTargetsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

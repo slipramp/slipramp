@@ -202,6 +202,31 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+func (s *Store) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
+	if err := validateObjectKey(prefix); err != nil {
+		return nil, err
+	}
+
+	objects := make([]ObjectInfo, 0)
+	for item := range s.client.ListObjects(
+		ctx,
+		s.bucket,
+		minio.ListObjectsOptions{Prefix: prefix, Recursive: true},
+	) {
+		if item.Err != nil {
+			return nil, fmt.Errorf("list S3 objects under %q: %w", prefix, item.Err)
+		}
+
+		objects = append(objects, ObjectInfo{
+			Key:          item.Key,
+			Size:         item.Size,
+			LastModified: item.LastModified.UTC(),
+		})
+	}
+
+	return objects, nil
+}
+
 func parseEndpoint(value string) (*url.URL, error) {
 	endpoint, err := url.ParseRequestURI(value)
 	if err != nil {

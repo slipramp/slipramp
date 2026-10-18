@@ -239,9 +239,14 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 	return i, err
 }
 
-const createRunArtifactInput = `-- name: CreateRunArtifactInput :exec
+const createRunArtifactInput = `-- name: CreateRunArtifactInput :execrows
 INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)
-VALUES ($1, $2, $3)
+SELECT $1, $2, artifacts.id
+FROM artifacts
+WHERE artifacts.id = $3
+  AND artifacts.state = 'sealed'
+  AND artifacts.retention_state = 'retained'
+FOR UPDATE OF artifacts
 `
 
 type CreateRunArtifactInputParams struct {
@@ -250,9 +255,12 @@ type CreateRunArtifactInputParams struct {
 	ArtifactID pgtype.UUID
 }
 
-func (q *Queries) CreateRunArtifactInput(ctx context.Context, arg CreateRunArtifactInputParams) error {
-	_, err := q.db.Exec(ctx, createRunArtifactInput, arg.RunID, arg.InputName, arg.ArtifactID)
-	return err
+func (q *Queries) CreateRunArtifactInput(ctx context.Context, arg CreateRunArtifactInputParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createRunArtifactInput, arg.RunID, arg.InputName, arg.ArtifactID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const createRunPhaseTransition = `-- name: CreateRunPhaseTransition :exec

@@ -4,7 +4,7 @@ metadata:
   name: pyinfra
   title: pyinfra operations image
 spec:
-  image: ghcr.io/ianunruh/kcloud-ops@sha256:255cc6671085dda229fb3cc6d33953e43ad7da847c36dccf0b6caecf207c9cd3
+  image: ghcr.io/ianunruh/kcloud-ops@sha256:e944138a392bd0900b391d38d411de78177584d4fa387b179ca871e24bdfb2cd
   workingDirectory: /workspace
   environment:
     PYTHONUNBUFFERED: "1"
@@ -12,7 +12,7 @@ spec:
     ssh:
       inject:
         files:
-          - key: private-key
+          - key: SSH_PRIVATE_KEY
             path: /run/slipramp/credentials/ssh/id_ed25519
             mode: 0444
 ---
@@ -22,23 +22,44 @@ metadata:
   name: terraform-rustfs
   title: Terraform and RustFS operations image
 spec:
-  image: ghcr.io/ianunruh/kcloud-ops@sha256:255cc6671085dda229fb3cc6d33953e43ad7da847c36dccf0b6caecf207c9cd3
+  image: ghcr.io/ianunruh/kcloud-ops@sha256:e944138a392bd0900b391d38d411de78177584d4fa387b179ca871e24bdfb2cd
   workingDirectory: /workspace
   environment:
     TF_IN_AUTOMATION: "true"
     TF_INPUT: "false"
   credentials:
-    rustfs-admin:
-      inject:
-        environment:
-          TF_VAR_access_key:
-            key: access-key
-          TF_VAR_secret_key:
-            key: secret-key
-    state-backend:
+    ops-ci:
       inject:
         environment:
           AWS_ACCESS_KEY_ID:
-            key: access-key
+            key: TF_STATE_ACCESS_KEY
           AWS_SECRET_ACCESS_KEY:
-            key: secret-key
+            key: TF_STATE_SECRET_KEY
+          TF_VAR_access_key:
+            key: TF_VAR_access_key
+          TF_VAR_secret_key:
+            key: TF_VAR_secret_key
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
+  name: kubernetes-upgrade
+  title: Kubernetes upgrade operations image
+spec:
+  image: ghcr.io/ianunruh/kcloud-ops@sha256:e944138a392bd0900b391d38d411de78177584d4fa387b179ca871e24bdfb2cd
+  workingDirectory: /workspace
+  environment:
+    PYTHONUNBUFFERED: "1"
+  credentials:
+    ops-ci:
+      inject:
+        files:
+          - key: SSH_PRIVATE_KEY
+            path: /run/slipramp/credentials/ssh/id_ed25519
+            mode: 0444
+    ssh-known-hosts:
+      inject:
+        files:
+          - key: known_hosts
+            path: /run/slipramp/credentials/ssh/known_hosts
+            mode: 0444

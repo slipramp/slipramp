@@ -41,6 +41,30 @@ func TestDefaultConfig(t *testing.T) {
 		)
 	}
 
+	if settings.ArtifactRetentionPeriod != 30*24*time.Hour {
+		t.Errorf(
+			"ArtifactRetentionPeriod = %s, want %s",
+			settings.ArtifactRetentionPeriod,
+			30*24*time.Hour,
+		)
+	}
+
+	if settings.ArtifactReconcileInterval != time.Hour {
+		t.Errorf(
+			"ArtifactReconcileInterval = %s, want %s",
+			settings.ArtifactReconcileInterval,
+			time.Hour,
+		)
+	}
+
+	if settings.ArtifactOrphanGracePeriod != 24*time.Hour {
+		t.Errorf(
+			"ArtifactOrphanGracePeriod = %s, want %s",
+			settings.ArtifactOrphanGracePeriod,
+			24*time.Hour,
+		)
+	}
+
 	if err := settings.Database.Validate(); err != nil {
 		t.Errorf("Database.Validate() error = %v", err)
 	}
@@ -176,6 +200,27 @@ func TestConfigValidate(t *testing.T) {
 				settings.ObjectStore.Endpoint = ""
 			},
 			wantError: "object store",
+		},
+		{
+			name: "invalid artifact retention period",
+			configure: func(settings *Config) {
+				settings.ArtifactRetentionPeriod = 0
+			},
+			wantError: "artifact retention period",
+		},
+		{
+			name: "invalid artifact reconciliation interval",
+			configure: func(settings *Config) {
+				settings.ArtifactReconcileInterval = 0
+			},
+			wantError: "artifact reconciliation interval",
+		},
+		{
+			name: "invalid artifact orphan grace period",
+			configure: func(settings *Config) {
+				settings.ArtifactOrphanGracePeriod = 0
+			},
+			wantError: "artifact orphan grace period",
 		},
 	}
 

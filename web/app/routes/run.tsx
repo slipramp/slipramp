@@ -24,10 +24,16 @@ import {
   type RunArtifactConsumer,
   type RunArtifactInput,
 } from "~/api/generated";
+import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/run";
 
 const runRevalidationIntervalMs = 2000;
+
+export function meta({ loaderData }: Route.MetaArgs) {
+  const runName = loaderData?.run ? `Run ${loaderData.run.id.slice(0, 8)}` : "Run";
+  return [{ title: pageTitle(runName) }];
+}
 
 export async function loader({ params }: Route.LoaderArgs) {
   const client = createServerAPIClient();

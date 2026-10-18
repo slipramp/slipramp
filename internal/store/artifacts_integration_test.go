@@ -377,6 +377,128 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	}
 }
 
+func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
+	producerRunID := createArtifactTestRun(t, ctx, database, createdAt)
+	objectKey := "runs/retention/artifacts/plan/content-a"
+	digest := strings.Repeat("a", 64)
+	sealedAt := createdAt.Add(time.Hour)
+	record := artifact.Artifact{
+		ID:             uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1600"),
+		RunID:          producerRunID,
+		Name:           "plan",
+		Kind:           artifact.KindOutput,
+		State:          artifact.StateSealed,
+		MediaType:      "application/octet-stream",
+		SizeBytes:      128,
+		SHA256:         &digest,
+		ObjectKey:      &objectKey,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      sealedAt,
+		SealedAt:       &sealedAt,
+	}
+	if _, err := database.CreateArtifact(ctx, record); err != nil {
+		t.Fatalf("create retained Artifact: %v", err)
+	}
+	staleObjectKey := "runs/retention/artifacts/stale/content-b"
+	stale := record
+	stale.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1602")
+	stale.Name = "stale"
+	stale.ObjectKey = &staleObjectKey
+	if _, err := database.CreateArtifact(ctx, stale); err != nil {
+		t.Fatalf("create stale Artifact candidate: %v", err)
+	}
+	expired, err := database.ExpireArtifacts(ctx, sealedAt.Add(time.Hour), 10)
+	if err != nil {
+		t.Fatalf("ExpireArtifacts() with active producer error = %v", err)
+	}
+	if len(expired) != 0 {
+		t.Fatalf("ExpireArtifacts() with active producer = %#v, want none", expired)
+	}
+	if _, err := database.CancelRun(ctx, producerRunID, sealedAt.Add(time.Minute)); err != nil {
+		t.Fatalf("finish producing Run: %v", err)
+	}
+
+	candidate, err := database.GetArtifactInputCandidate(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetArtifactInputCandidate() error = %v", err)
+	}
+	staleCandidate, err := database.GetArtifactInputCandidate(ctx, stale.ID)
+	if err != nil {
+		t.Fatalf("GetArtifactInputCandidate(stale) error = %v", err)
+	}
+	consumerRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1601")
+	_, err = database.CreateRun(ctx, run.Run{
+		ID: consumerRunID, Phase: run.PhaseQueued,
+		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
+		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
+		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
+		Source: run.Source{Type: run.SourceTypeAPI}, RequestDigest: strings.Repeat("f", 64),
+		Snapshot: run.Snapshot{
+			Inputs: map[string]run.ArtifactInput{"plan": candidate},
+		},
+		CreatedAt: sealedAt.Add(2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("create consuming Run: %v", err)
+	}
+
+	expired, err = database.ExpireArtifacts(ctx, sealedAt.Add(time.Hour), 10)
+	if err != nil {
+		t.Fatalf("ExpireArtifacts() with active consumer error = %v", err)
+	}
+	if len(expired) != 1 || expired[0].ID != stale.ID {
+		t.Fatalf("ExpireArtifacts() with active consumer = %#v, want only stale candidate", expired)
+	}
+
+	_, err = database.CreateRun(ctx, run.Run{
+		ID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1603"), Phase: run.PhaseQueued,
+		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
+		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
+		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
+		Source: run.Source{Type: run.SourceTypeAPI}, RequestDigest: strings.Repeat("e", 64),
+		Snapshot: run.Snapshot{
+			Inputs: map[string]run.ArtifactInput{"stale": staleCandidate},
+		},
+		CreatedAt: sealedAt.Add(3 * time.Minute),
+	})
+	if !errors.Is(err, run.ErrInvalidInputs) {
+		t.Fatalf("CreateRun() with expired input error = %v, want invalid inputs", err)
+	}
+
+	if _, err := database.CancelRun(ctx, consumerRunID, sealedAt.Add(4*time.Minute)); err != nil {
+		t.Fatalf("finish consuming Run: %v", err)
+	}
+	expired, err = database.ExpireArtifacts(ctx, sealedAt.Add(time.Hour), 10)
+	if err != nil {
+		t.Fatalf("ExpireArtifacts() error = %v", err)
+	}
+	if len(expired) != 1 || expired[0].ID != record.ID ||
+		expired[0].RetentionState != artifact.RetentionExpired {
+		t.Fatalf("ExpireArtifacts() = %#v", expired)
+	}
+
+	keys, err := database.ListArtifactObjectKeys(ctx, record.ID)
+	if err != nil || len(keys) != 1 || keys[0] != objectKey {
+		t.Fatalf("ListArtifactObjectKeys() = %v, error = %v", keys, err)
+	}
+	exists, err := database.ArtifactObjectKeyExists(ctx, objectKey)
+	if err != nil || !exists {
+		t.Fatalf("ArtifactObjectKeyExists() = %t, error = %v", exists, err)
+	}
+
+	if err := database.MarkArtifactDeleted(ctx, record.ID); err != nil {
+		t.Fatalf("MarkArtifactDeleted() error = %v", err)
+	}
+	exists, err = database.ArtifactObjectKeyExists(ctx, objectKey)
+	if err != nil || exists {
+		t.Fatalf("ArtifactObjectKeyExists() after delete = %t, error = %v", exists, err)
+	}
+}
+
 func createArtifactTestRun(
 	t *testing.T,
 	ctx context.Context,

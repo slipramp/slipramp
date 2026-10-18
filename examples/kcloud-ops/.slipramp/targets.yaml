@@ -12,7 +12,7 @@ spec:
   runtime: pyinfra
   placement: homelab-infrastructure
   credentials:
-    ssh: homelab-ssh
+    ssh: ops-ci
   timeout: 20m
   resources:
     requests:
@@ -48,8 +48,7 @@ spec:
   runtime: terraform-rustfs
   placement: homelab-infrastructure
   credentials:
-    rustfs-admin: rustfs-admin
-    state-backend: rustfs-terraform-state
+    ops-ci: ops-ci
   timeout: 45m
   resources:
     requests:
@@ -79,3 +78,95 @@ spec:
     sync:
       intent: reconcile
       command: [./slipramp.sh, sync]
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: homelab-kubernetes-upgrade
+  title: Homelab Kubernetes upgrade
+spec:
+  path: deploys
+  watch:
+    - deploys/inventory.py
+    - deploys/upgrade_k8s.py
+    - deploys/k8s_ops.py
+    - deploys/k8s/**
+    - deploys/slipramp/upgrade-k8s.sh
+  runtime: kubernetes-upgrade
+  placement: homelab-infrastructure
+  credentials:
+    ops-ci: ops-ci
+    ssh-known-hosts: homelab-known-hosts
+  timeout: 12h
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  actions:
+    preview:
+      intent: preview
+      command: [./slipramp/upgrade-k8s.sh, preview]
+      parameters:
+        version:
+          type: string
+          argument:
+            name: --to
+    upgrade-node:
+      intent: operation
+      command: [./slipramp/upgrade-k8s.sh, node]
+      parameters:
+        host:
+          type: enum
+          required: true
+          values:
+            - controlplane100
+            - controlplane101
+            - controlplane102
+            - compute105
+            - compute104
+            - compute103
+            - compute6
+            - compute5
+            - compute4
+            - compute2
+            - compute1
+          argument:
+            name: --host
+        maintenance:
+          type: enum
+          values: [none, reboot, apt-upgrade]
+          argument:
+            name: --maintenance
+        version:
+          type: string
+          argument:
+            name: --to
+    upgrade-control-planes:
+      intent: operation
+      command: [./slipramp/upgrade-k8s.sh, control-planes]
+      parameters:
+        maintenance:
+          type: enum
+          values: [none, reboot, apt-upgrade]
+          argument:
+            name: --maintenance
+        version:
+          type: string
+          argument:
+            name: --to
+    upgrade-compute:
+      intent: operation
+      command: [./slipramp/upgrade-k8s.sh, compute]
+      parameters:
+        maintenance:
+          type: enum
+          values: [none, reboot, apt-upgrade]
+          argument:
+            name: --maintenance
+        version:
+          type: string
+          argument:
+            name: --to

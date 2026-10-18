@@ -62,9 +62,14 @@ AND (
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(result_limit);
 
--- name: CreateRunArtifactInput :exec
+-- name: CreateRunArtifactInput :execrows
 INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)
-VALUES (sqlc.arg(run_id), sqlc.arg(input_name), sqlc.arg(artifact_id));
+SELECT sqlc.arg(run_id), sqlc.arg(input_name), artifacts.id
+FROM artifacts
+WHERE artifacts.id = sqlc.arg(artifact_id)
+  AND artifacts.state = 'sealed'
+  AND artifacts.retention_state = 'retained'
+FOR UPDATE OF artifacts;
 
 -- name: GetArtifactInputCandidate :one
 SELECT

@@ -15,6 +15,7 @@ type Store interface {
 		repositoryID uuid.UUID,
 	) (Revision, error)
 	GetCatalogRevision(context.Context, uuid.UUID, uuid.UUID) (Revision, error)
+	ListActiveTargets(context.Context, TargetListFilter) (TargetList, error)
 }
 
 func (s *Service) GetRevision(
@@ -38,4 +39,11 @@ func (s *Service) GetActiveRevision(
 	repositoryID uuid.UUID,
 ) (Revision, error) {
 	return s.catalogs.GetActiveCatalogRevision(ctx, repositoryID)
+}
+
+func (s *Service) ListTargets(
+	ctx context.Context,
+	filter TargetListFilter,
+) (TargetList, error) {
+	return s.catalogs.ListActiveTargets(ctx, filter)
 }

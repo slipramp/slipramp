@@ -17,8 +17,13 @@ import { Form, Link, redirect, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { createRepository, listRepositories } from "~/api/generated";
+import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/repositories";
+
+export function meta() {
+  return [{ title: pageTitle("Repositories") }];
+}
 
 export async function loader() {
   const result = await listRepositories({ client: createServerAPIClient() });

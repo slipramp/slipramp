@@ -101,4 +101,21 @@ func TestStoreIntegration(t *testing.T) {
 	if object.Size != int64(len(contents)) {
 		t.Errorf("object size = %d, want %d", object.Size, len(contents))
 	}
+
+	listed, err := store.List(ctx, "integration/")
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	found := false
+	for _, item := range listed {
+		if item.Key == key {
+			found = true
+			if item.Size != int64(len(contents)) || item.LastModified.IsZero() {
+				t.Errorf("listed object = %#v", item)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("List() did not return %q", key)
+	}
 }

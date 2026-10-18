@@ -111,6 +111,12 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Keep run-scoped artifact credentials out of the child action environment and
   authorize only the Run's declared outputs and explicit input bindings.
 - Expose artifact metadata, download, sensitivity, provenance, and retention state through the API and UI.
+- Expire sealed artifacts after one installation-wide retention period, while
+  retaining artifacts produced by or bound to unfinished Runs. Delete their S3
+  objects idempotently before marking metadata deleted, and retry failed deletes.
+- Reconcile unreferenced objects under the Server-owned `runs/` prefix after a
+  grace period so interrupted uploads do not leak contents and in-flight
+  metadata commits are not raced.
 
 ### Preview and apply
 
@@ -144,10 +150,13 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Use Mantine UI v9 for application layout and components.
 - Present the Go API and web application through one origin in the deployment.
 - Provide these primary screens:
+  - Cross-repository Target index as the homepage, with server-side search,
+    repository filtering, pagination, and compact action summaries suitable for
+    hundreds of targets
   - Repository list and connection form
   - Repository status and validation errors
-  - Controller and cluster health
-  - Target catalog and target detail
+  - Controller and cluster health on a dedicated screen
+  - Target detail with collapsible action definitions and run forms
   - Action run form
   - Run history and run detail
   - Live and retained logs
@@ -244,7 +253,8 @@ Exit condition: a Terraform preview produces a plan artifact that can be selecte
 
 - Evaluate `watch` paths after catalog refresh and show affected targets' desired Git commits without initiating actions.
 - Exercise recovery from Server, controller, Pod, network, and individual cluster interruptions.
-- Add retention controls and orphaned-object reconciliation.
+- Configure the artifact retention, reconciliation, and orphan grace periods;
+  exercise expiration, retryable deletion, and orphaned-object reconciliation.
 - Add health, readiness, and dependency diagnostics.
 - Complete installation and operator documentation.
 

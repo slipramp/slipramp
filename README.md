@@ -164,6 +164,9 @@ The Server accepts these environment variables:
 | `SLIPRAMP_S3_SECRET_ACCESS_KEY` | `slipramp-development` | S3 secret access key |
 | `SLIPRAMP_S3_STARTUP_TIMEOUT` | `10s` | S3 bucket availability check deadline |
 | `SLIPRAMP_ARTIFACT_TOKEN_SECRET` | Local development secret | HMAC key for Run-scoped harness artifact credentials; use at least 32 characters |
+| `SLIPRAMP_ARTIFACT_RETENTION_PERIOD` | `720h` | Age after sealing when an artifact becomes eligible for expiration |
+| `SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL` | `1h` | Interval between artifact expiration, deletion, and orphan reconciliation passes |
+| `SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD` | `24h` | Minimum object age before an unreferenced object may be deleted |
 
 Placements are loaded from the file named by `SLIPRAMP_PLACEMENTS_FILE` when the
 Server starts. Each placement selects a cluster registered in
@@ -264,8 +267,10 @@ it never hides a nonzero action exit code.
 
 The web process is a React Router v8 Framework Mode application with server-side
 rendering and a Mantine v9 application shell. Its index route uses the generated
-API client to report whether the Slipramp Server is reachable and show observed
-execution clusters. The web process accepts these environment variables:
+API client to provide a searchable, repository-filtered, paginated view of
+Targets across active catalogs. Observed execution clusters are available on
+the dedicated Clusters screen. The web process accepts these environment
+variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |

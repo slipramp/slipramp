@@ -3,10 +3,15 @@ import { Link } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { listRepositories, listRuns, type Run } from "~/api/generated";
+import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/runs";
 
 const historyLimit = 50;
+
+export function meta() {
+  return [{ title: pageTitle("Run history") }];
+}
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
