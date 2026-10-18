@@ -1,4 +1,4 @@
-name: Build execution images
+name: Build images
 
 on:
   push:
@@ -7,10 +7,17 @@ on:
       - .github/workflows/images.yaml
       - cmd/slipramp-controller/**
       - cmd/slipramp-harness/**
+      - cmd/slipramp-server/**
       - internal/**
+      - web/**
+      - .dockerignore
+      - .npmrc
       - Dockerfile
       - go.mod
       - go.sum
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
   workflow_dispatch:
 
 permissions:
@@ -28,6 +35,8 @@ jobs:
           - checkout
           - controller
           - harness
+          - server
+          - web
     steps:
       - uses: actions/checkout@v5
 
