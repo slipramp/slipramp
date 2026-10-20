@@ -58,8 +58,9 @@ logical bindings and injection conventions.
 
 The upgrade launcher derives a temporary kubeconfig from the Run Pod's
 projected ServiceAccount token. The deployment must grant that ServiceAccount
-the narrow node lifecycle, eviction, health-check, backup-read, and etcd/Ceph
-exec permissions used by the script.
+cluster-admin access because the example's infrastructure actions intentionally
+have full control of the homelab cluster. Use a narrower placement and
+ServiceAccount for repositories or actions that should not have that access.
 
 ## Prototype gaps
 

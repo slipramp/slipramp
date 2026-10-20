@@ -11,9 +11,10 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Form, Link, redirect, useNavigation, useRevalidator } from "react-router";
 
+import { ANSI_DEFAULT_BACKGROUND, ANSI_DEFAULT_FOREGROUND, parseAnsi } from "~/ansi";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   cancelRun,
@@ -257,6 +258,7 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
   const [contents, setContents] = useState("");
   const [status, setStatus] = useState("Connecting");
   const outputRef = useRef<HTMLElement>(null);
+  const logSegments = useMemo(() => parseAnsi(contents), [contents]);
 
   useEffect(() => {
     if (contents.length === 0) return;
@@ -325,8 +327,25 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
           <Title order={2}>Logs</Title>
           <Badge variant="light">{status}</Badge>
         </Group>
-        <Code ref={outputRef} block mah={480} style={{ overflow: "auto", whiteSpace: "pre-wrap" }}>
-          {contents || "Waiting for durable log output…"}
+        <Code
+          ref={outputRef}
+          block
+          mah={480}
+          style={{
+            backgroundColor: ANSI_DEFAULT_BACKGROUND,
+            color: ANSI_DEFAULT_FOREGROUND,
+            overflow: "auto",
+            tabSize: 4,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {contents.length === 0
+            ? "Waiting for durable log output…"
+            : logSegments.map((segment, index) => (
+                <span key={index} style={segment.style}>
+                  {segment.text}
+                </span>
+              ))}
         </Code>
       </Stack>
     </Paper>

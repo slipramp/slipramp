@@ -8,5 +8,6 @@ export default [
   route("repositories/:repositoryId/targets/:targetName", "routes/target.tsx"),
   route("runs", "routes/runs.tsx"),
   route("runs/:runId", "routes/run.tsx"),
+  route("api/v1/artifacts/:artifactId/download", "routes/artifact-download.ts"),
   route("api/v1/runs/:runId/logs", "routes/run-log.ts"),
 ] satisfies RouteConfig;

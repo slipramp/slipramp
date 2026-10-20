@@ -104,7 +104,14 @@ still read-only and is mounted only into the action container.
 
 The controller has cluster-wide list access to its managed Jobs because restart
 recovery scans every placement namespace. It can otherwise only create, get,
-list, and delete Jobs and read Pods and their logs.
+list, and delete Jobs; read Pods and their logs; and update the cancellation
+annotation on managed Pods.
+
+The `infrastructure-admin` ServiceAccount used by the example placement is
+bound to the built-in `cluster-admin` role. Runs using that placement can make
+unrestricted changes to the homelab cluster, including draining nodes during a
+Kubernetes upgrade. Use a narrower ServiceAccount for untrusted repositories or
+actions.
 
 ## 5. Register and run `kcloud-ops`
 

@@ -159,6 +159,7 @@ tasks:
       - '"{{.GOLANGCI_LINT}}" run'
       - go test -race ./...
       - go build ./...
+      - '"{{.PNPM}}" --filter @slipramp/web run test'
       - '"{{.PNPM}}" --filter @slipramp/web run lint'
       - '"{{.PNPM}}" --filter @slipramp/web run format:check'
       - '"{{.PNPM}}" --filter @slipramp/web run typecheck'

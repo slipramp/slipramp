@@ -122,9 +122,12 @@ catalog contains a directly runnable consumer for the retained plan.
 
 `POST /api/v1/runs/{runId}/cancel` records a cancel request idempotently.
 Queued Runs finish as canceled immediately. Controllers receive cancel commands
-ahead of new assignments, stop local observation, and
-delete the deterministic Job with identity and UID checks before reporting the
-Run as canceled. Repeated delivery and an already-missing Job are safe.
+ahead of new assignments. A controller marks a started execution Pod through a
+projected cancellation annotation so the harness can terminate its active child
+process, drain and seal its log, report the canceled outcome, and only then
+delete the deterministic Job with identity and UID checks. An unstarted Job is
+deleted before the empty canceled Run is reported. Repeated delivery and an
+already-missing Job are safe.
 
 [`examples/kcloud-ops`](./examples/kcloud-ops) contains a larger catalog
 example with a pyinfra deployment and a Terraform stack, including runtime
@@ -230,8 +233,8 @@ observers. It derives `preparing` and `running` from the action container,
 records Job completion reasons and exit codes, maps deadline failures to the
 `timed-out` outcome, and reports a permanent rendering or admission failure as
 a terminal failed Run instead of blocking later assignments. Cancel commands
-stop an active observer before deleting its Job so deletion cannot be
-misreported as an unexpected missing Job.
+are delivered to the harness through a projected Pod annotation so the action
+can stop before the controller drains its final log and removes the Job.
 
 The controller requires in-cluster Kubernetes configuration and these
 environment variables:

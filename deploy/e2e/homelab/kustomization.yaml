@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
   - namespaces.yaml
   - service-accounts.yaml
+  - infrastructure-admin-rbac.yaml
   - controller-rbac.yaml
   - controller.yaml
