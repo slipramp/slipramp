@@ -34,6 +34,13 @@ export type Problem = {
   instance?: string;
 };
 
+export type ProductPrincipal = {
+  principalId: string;
+  kind: "user" | "service-account";
+  displayName: string;
+  role: "admin" | "operator" | "viewer";
+};
+
 export type Repository = RepositoryConfig & {
   /**
    * Stable identity of the repository registration.
@@ -244,6 +251,8 @@ export type Run = {
   placement: CatalogName;
   cluster: CatalogName;
   source: RunSource;
+  createdBy?: RunActor;
+  canceledBy?: RunActor;
   inputs: {
     [key: string]: RunArtifactInput;
   };
@@ -295,7 +304,18 @@ export type RunCreate = {
   inputs?: {
     [key: string]: string;
   };
-  source: RunSource;
+};
+
+export type RunActor = {
+  /**
+   * Durable product principal responsible for the operation.
+   */
+  principalId: string;
+  kind: "user" | "service-account";
+  /**
+   * Immutable display-name snapshot captured with the operation.
+   */
+  displayName: string;
 };
 
 export type Artifact = {
@@ -654,6 +674,14 @@ export type ListRepositoriesData = {
 
 export type ListRepositoriesErrors = {
   /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
@@ -686,6 +714,14 @@ export type CreateRepositoryErrors = {
    * The repository configuration is invalid.
    */
   400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
   /**
    * The HTTP method is not supported for this resource.
    */
@@ -729,6 +765,14 @@ export type RemoveRepositoryErrors = {
    */
   400: Problem;
   /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
    * The active repository does not exist.
    */
   404: Problem;
@@ -770,6 +814,14 @@ export type GetRepositoryCatalogErrors = {
    * The repository identity is not a valid UUID.
    */
   400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
   /**
    * The active repository does not exist or does not have an accepted catalog revision.
    */
@@ -827,6 +879,14 @@ export type ListTargetsErrors = {
    */
   400: Problem;
   /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
@@ -855,6 +915,14 @@ export type ListClustersData = {
 };
 
 export type ListClustersErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
   /**
    * The HTTP method is not supported for this resource.
    */
@@ -1281,6 +1349,14 @@ export type ListRunsErrors = {
    */
   400: Problem;
   /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
@@ -1305,7 +1381,7 @@ export type CreateRunData = {
   body: RunCreate;
   headers?: {
     /**
-     * Optional key that makes retries of the same run request return the originally created Run. Reusing a key for a different request is a conflict.
+     * Optional key that makes retries of the same run request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
      */
     "Idempotency-Key"?: string;
   };
@@ -1319,6 +1395,14 @@ export type CreateRunErrors = {
    * The run request or supplied parameters are invalid.
    */
   400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Operator permission and runs-write scope are required.
+   */
+  403: Problem;
   /**
    * The repository, active catalog, target, action, runtime, or placement required by the request does not exist.
    */
@@ -1359,6 +1443,14 @@ export type GetRunData = {
 
 export type GetRunErrors = {
   /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
    * The Run does not exist.
    */
   404: Problem;
@@ -1396,6 +1488,14 @@ export type CancelRunData = {
 };
 
 export type CancelRunErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Operator permission and runs-write scope are required.
+   */
+  403: Problem;
   /**
    * The Run does not exist.
    */
@@ -1435,6 +1535,14 @@ export type ListRunArtifactsData = {
 };
 
 export type ListRunArtifactsErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read artifact metadata.
+   */
+  403: Problem;
   /**
    * The Run does not exist.
    */
@@ -1480,6 +1588,14 @@ export type StreamRunLogErrors = {
    */
   400: Problem;
   /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read Run logs.
+   */
+  403: Problem;
+  /**
    * The Run or log artifact does not exist.
    */
   404: Problem;
@@ -1515,6 +1631,14 @@ export type DownloadArtifactData = {
 
 export type DownloadArtifactErrors = {
   /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read artifact contents.
+   */
+  403: Problem;
+  /**
    * The artifact does not exist or is not retained.
    */
   404: Problem;
@@ -1542,3 +1666,148 @@ export type DownloadArtifactResponses = {
 };
 
 export type DownloadArtifactResponse = DownloadArtifactResponses[keyof DownloadArtifactResponses];
+
+export type BeginOidcLoginData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/auth/login";
+};
+
+export type BeginOidcLoginErrors = {
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The login transaction could not be created.
+   */
+  500: Problem;
+  /**
+   * Browser authentication is not configured or available.
+   */
+  503: Problem;
+};
+
+export type BeginOidcLoginError = BeginOidcLoginErrors[keyof BeginOidcLoginErrors];
+
+export type CompleteOidcLoginData = {
+  body?: never;
+  path?: never;
+  query: {
+    code: string;
+    state: string;
+  };
+  url: "/api/v1/auth/callback";
+};
+
+export type CompleteOidcLoginErrors = {
+  /**
+   * The authorization response or login transaction is invalid.
+   */
+  400: Problem;
+  /**
+   * The provider identity is not enrolled in this installation.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The login could not be completed.
+   */
+  500: Problem;
+  /**
+   * Browser authentication is not configured or available.
+   */
+  503: Problem;
+};
+
+export type CompleteOidcLoginError = CompleteOidcLoginErrors[keyof CompleteOidcLoginErrors];
+
+export type GetCurrentPrincipalData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/auth/session";
+};
+
+export type GetCurrentPrincipalErrors = {
+  /**
+   * A valid product session is required.
+   */
+  401: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The session could not be authenticated.
+   */
+  500: Problem;
+  /**
+   * Browser authentication is not configured or available.
+   */
+  503: Problem;
+};
+
+export type GetCurrentPrincipalError = GetCurrentPrincipalErrors[keyof GetCurrentPrincipalErrors];
+
+export type GetCurrentPrincipalResponses = {
+  /**
+   * The principal authenticated by the local browser session.
+   */
+  200: ProductPrincipal;
+};
+
+export type GetCurrentPrincipalResponse =
+  GetCurrentPrincipalResponses[keyof GetCurrentPrincipalResponses];
+
+export type LogoutData = {
+  body?: never;
+  headers: {
+    "X-Slipramp-CSRF": "1";
+  };
+  path?: never;
+  query?: never;
+  url: "/api/v1/auth/logout";
+};
+
+export type LogoutErrors = {
+  /**
+   * The required CSRF header is missing or malformed.
+   */
+  400: Problem;
+  /**
+   * A valid product session is required.
+   */
+  401: Problem;
+  /**
+   * The CSRF header is invalid.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The session could not be revoked.
+   */
+  500: Problem;
+  /**
+   * Browser authentication is not configured or available.
+   */
+  503: Problem;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
+export type LogoutResponses = {
+  /**
+   * The session was revoked.
+   */
+  204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];

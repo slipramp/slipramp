@@ -14,13 +14,22 @@ import (
 // canceled outcome.
 func (s *Service) CancelRun(
 	ctx context.Context,
-	runID uuid.UUID,
+	request CancelRequest,
 ) (Run, error) {
-	if runID == uuid.Nil {
+	if request.RunID == uuid.Nil {
 		return Run{}, fmt.Errorf("%w: Run ID is required", ErrInvalidRequest)
 	}
+	canceledBy, err := actorSnapshot(request.Actor)
+	if err != nil {
+		return Run{}, err
+	}
 
-	record, err := s.runs.CancelRun(ctx, runID, s.now().UTC())
+	record, err := s.runs.CancelRun(
+		ctx,
+		request.RunID,
+		s.now().UTC(),
+		canceledBy,
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrRunNotFound), errors.Is(err, ErrRunFinished):

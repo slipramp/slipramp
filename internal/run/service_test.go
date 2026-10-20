@@ -11,6 +11,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -23,6 +24,12 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	service.newID = func() uuid.UUID { return runID }
 	service.now = func() time.Time { return createdAt }
 	idempotencyKey := "manual-network-preview"
+	actor := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500"),
+		Kind:        productidentity.KindUser,
+		DisplayName: "Ada Lovelace",
+		Role:        productidentity.RoleOperator,
+	}
 
 	created, err := service.CreateRun(
 		context.Background(),
@@ -33,6 +40,7 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 			Parameters:     map[string]any{"mode": "safe", "refresh": true},
 			Source:         Source{Type: SourceTypeManual},
 			IdempotencyKey: &idempotencyKey,
+			Actor:          &actor,
 		},
 	)
 	if err != nil {
@@ -52,6 +60,16 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	}
 	if created.RequestDigest == "" || runs.created.RequestDigest == "" {
 		t.Error("request digest was not recorded")
+	}
+	if created.CreatedBy == nil || created.CreatedBy.PrincipalID != actor.ID ||
+		created.CreatedBy.DisplayName != actor.DisplayName ||
+		runs.idempotencyPrincipalID == nil ||
+		*runs.idempotencyPrincipalID != actor.ID {
+		t.Errorf(
+			"Run attribution = %#v, idempotency principal = %v",
+			created.CreatedBy,
+			runs.idempotencyPrincipalID,
+		)
 	}
 	if created.Snapshot.Repository.CloneURL !=
 		"https://github.com/example/infrastructure.git" ||
@@ -462,36 +480,38 @@ func testRevision() catalog.Revision {
 }
 
 type recordingRuns struct {
-	calls             int
-	created           Run
-	err               error
-	existing          Run
-	getError          error
-	assignedCalls     int
-	assigned          Run
-	assignedError     error
-	claimCalls        int
-	claimClusterName  string
-	claimedAt         time.Time
-	claimed           Run
-	claimError        error
-	observationCalls  int
-	observation       Observation
-	observationFrom   []Phase
-	observationError  error
-	cancelCalls       int
-	cancelID          uuid.UUID
-	cancelAt          time.Time
-	canceled          Run
-	cancelError       error
-	nextCancelCalls   int
-	nextCancelCluster string
-	nextCancel        Run
-	nextCancelError   error
-	artifacts         map[uuid.UUID]ArtifactInput
-	listFilter        ListFilter
-	listed            []Run
-	listError         error
+	calls                  int
+	created                Run
+	err                    error
+	existing               Run
+	getError               error
+	idempotencyPrincipalID *uuid.UUID
+	assignedCalls          int
+	assigned               Run
+	assignedError          error
+	claimCalls             int
+	claimClusterName       string
+	claimedAt              time.Time
+	claimed                Run
+	claimError             error
+	observationCalls       int
+	observation            Observation
+	observationFrom        []Phase
+	observationError       error
+	cancelCalls            int
+	cancelID               uuid.UUID
+	cancelAt               time.Time
+	canceledBy             *productidentity.ActorSnapshot
+	canceled               Run
+	cancelError            error
+	nextCancelCalls        int
+	nextCancelCluster      string
+	nextCancel             Run
+	nextCancelError        error
+	artifacts              map[uuid.UUID]ArtifactInput
+	listFilter             ListFilter
+	listed                 []Run
+	listError              error
 }
 
 func (s *recordingRuns) GetRun(context.Context, uuid.UUID) (Run, error) {
@@ -527,10 +547,15 @@ func (s *recordingRuns) CreateRun(_ context.Context, record Run) (Run, error) {
 }
 
 func (s *recordingRuns) GetRunByIdempotencyKey(
-	context.Context,
-	SourceType,
-	string,
+	_ context.Context,
+	principalID *uuid.UUID,
+	_ SourceType,
+	_ string,
 ) (Run, error) {
+	if principalID != nil {
+		cloned := *principalID
+		s.idempotencyPrincipalID = &cloned
+	}
 	if s.getError == nil && s.existing.ID != uuid.Nil {
 		return s.existing, nil
 	}
@@ -545,10 +570,12 @@ func (s *recordingRuns) CancelRun(
 	_ context.Context,
 	runID uuid.UUID,
 	requestedAt time.Time,
+	canceledBy *productidentity.ActorSnapshot,
 ) (Run, error) {
 	s.cancelCalls++
 	s.cancelID = runID
 	s.cancelAt = requestedAt
+	s.canceledBy = canceledBy
 
 	return s.canceled, s.cancelError
 }

@@ -1,0 +1,29 @@
+ProductPrincipal:
+  type: object
+  additionalProperties: false
+  required:
+    - principalId
+    - kind
+    - displayName
+    - role
+  properties:
+    principalId:
+      type: string
+      format: uuid
+    kind:
+      type: string
+      enum:
+        - user
+        - service-account
+      x-go-type: string
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    role:
+      type: string
+      enum:
+        - admin
+        - operator
+        - viewer
+      x-go-type: string

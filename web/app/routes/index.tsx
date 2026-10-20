@@ -33,7 +33,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const query = url.searchParams.get("q")?.trim() ?? "";
   const repositoryId = url.searchParams.get("repositoryId")?.trim() ?? "";
   const requestedPage = positiveInteger(url.searchParams.get("page"));
-  const client = createServerAPIClient();
+  const client = createServerAPIClient(request);
   const offset = (requestedPage - 1) * pageSize;
   const [repositoriesResult, initialTargetsResult] = await Promise.all([
     listRepositories({ client }),

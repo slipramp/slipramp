@@ -4,7 +4,6 @@ RunCreate:
     - repositoryId
     - target
     - action
-    - source
   properties:
     repositoryId:
       type: string
@@ -28,8 +27,6 @@ RunCreate:
         Explicit bindings from declared input names to sealed artifacts. Exact
         catalog compatibility pins the new Run to the producer's commit and
         catalog revision.
-    source:
-      $ref: "#/RunSource"
 
 RunList:
   type: object
@@ -119,6 +116,10 @@ Run:
       $ref: "#/CatalogName"
     source:
       $ref: "#/RunSource"
+    createdBy:
+      $ref: "#/RunActor"
+    canceledBy:
+      $ref: "#/RunActor"
     inputs:
       type: object
       additionalProperties:
@@ -238,6 +239,28 @@ RunSource:
         - manual
         - api
       description: Boundary that submitted the Run.
+
+RunActor:
+  type: object
+  required:
+    - principalId
+    - kind
+    - displayName
+  properties:
+    principalId:
+      type: string
+      format: uuid
+      description: Durable product principal responsible for the operation.
+    kind:
+      type: string
+      enum:
+        - user
+        - service-account
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Immutable display-name snapshot captured with the operation.
 
 ParameterValue:
   oneOf:

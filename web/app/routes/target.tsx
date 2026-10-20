@@ -43,8 +43,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(targetName) }];
 }
 
-export async function loader({ params }: Route.LoaderArgs) {
-  const client = createServerAPIClient();
+export async function loader({ params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request);
   const [repositoriesResult, catalogResult] = await Promise.all([
     listRepositories({ client }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
@@ -72,7 +72,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   const catalogResult = await getRepositoryCatalog({
-    client: createServerAPIClient(),
+    client: createServerAPIClient(request),
     path: { repositoryId: params.repositoryId },
   });
   const target = catalogResult.data?.targets.find(
@@ -101,10 +101,9 @@ export async function action({ params, request }: Route.ActionArgs) {
       inputs: {},
       parameters: submission.parameters,
       repositoryId: params.repositoryId,
-      source: { type: "manual" },
       target: params.targetName,
     },
-    client: createServerAPIClient(),
+    client: createServerAPIClient(request),
   });
   if (result.data) {
     return redirect(`/runs/${result.data.id}`);

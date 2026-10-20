@@ -13,9 +13,13 @@ import type {
   AppendRunLogChunkData,
   AppendRunLogChunkErrors,
   AppendRunLogChunkResponses,
+  BeginOidcLoginData,
+  BeginOidcLoginErrors,
   CancelRunData,
   CancelRunErrors,
   CancelRunResponses,
+  CompleteOidcLoginData,
+  CompleteOidcLoginErrors,
   CreateRepositoryData,
   CreateRepositoryErrors,
   CreateRepositoryResponses,
@@ -31,6 +35,9 @@ import type {
   EnrollControllerData,
   EnrollControllerErrors,
   EnrollControllerResponses,
+  GetCurrentPrincipalData,
+  GetCurrentPrincipalErrors,
+  GetCurrentPrincipalResponses,
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
@@ -58,6 +65,9 @@ import type {
   ListTargetsData,
   ListTargetsErrors,
   ListTargetsResponses,
+  LogoutData,
+  LogoutErrors,
+  LogoutResponses,
   PollForControllerCommandData,
   PollForControllerCommandErrors,
   PollForControllerCommandResponses,
@@ -119,6 +129,18 @@ export const listRepositories = <ThrowOnError extends boolean = false>(
   options?: Options<ListRepositoriesData, ThrowOnError>,
 ): RequestResult<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListRepositoriesResponses, ListRepositoriesErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/repositories",
     ...options,
   });
@@ -132,6 +154,18 @@ export const createRepository = <ThrowOnError extends boolean = false>(
   options: Options<CreateRepositoryData, ThrowOnError>,
 ): RequestResult<CreateRepositoryResponses, CreateRepositoryErrors, ThrowOnError> =>
   (options.client ?? client).post<CreateRepositoryResponses, CreateRepositoryErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/repositories",
     ...options,
     headers: {
@@ -152,7 +186,22 @@ export const removeRepository = <ThrowOnError extends boolean = false>(
     RemoveRepositoryResponses,
     RemoveRepositoryErrors,
     ThrowOnError
-  >({ url: "/api/v1/repositories/{repositoryId}", ...options });
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/repositories/{repositoryId}",
+    ...options,
+  });
 
 /**
  * Get the active repository catalog
@@ -166,7 +215,22 @@ export const getRepositoryCatalog = <ThrowOnError extends boolean = false>(
     GetRepositoryCatalogResponses,
     GetRepositoryCatalogErrors,
     ThrowOnError
-  >({ url: "/api/v1/repositories/{repositoryId}/catalog", ...options });
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/repositories/{repositoryId}/catalog",
+    ...options,
+  });
 
 /**
  * List active targets
@@ -177,6 +241,18 @@ export const listTargets = <ThrowOnError extends boolean = false>(
   options?: Options<ListTargetsData, ThrowOnError>,
 ): RequestResult<ListTargetsResponses, ListTargetsErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListTargetsResponses, ListTargetsErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/targets",
     ...options,
   });
@@ -190,6 +266,18 @@ export const listClusters = <ThrowOnError extends boolean = false>(
   options?: Options<ListClustersData, ThrowOnError>,
 ): RequestResult<ListClustersResponses, ListClustersErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListClustersResponses, ListClustersErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/clusters",
     ...options,
   });
@@ -391,6 +479,18 @@ export const listRuns = <ThrowOnError extends boolean = false>(
   options?: Options<ListRunsData, ThrowOnError>,
 ): RequestResult<ListRunsResponses, ListRunsErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListRunsResponses, ListRunsErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/runs",
     ...options,
   });
@@ -404,6 +504,18 @@ export const createRun = <ThrowOnError extends boolean = false>(
   options: Options<CreateRunData, ThrowOnError>,
 ): RequestResult<CreateRunResponses, CreateRunErrors, ThrowOnError> =>
   (options.client ?? client).post<CreateRunResponses, CreateRunErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/runs",
     ...options,
     headers: {
@@ -419,6 +531,18 @@ export const getRun = <ThrowOnError extends boolean = false>(
   options: Options<GetRunData, ThrowOnError>,
 ): RequestResult<GetRunResponses, GetRunErrors, ThrowOnError> =>
   (options.client ?? client).get<GetRunResponses, GetRunErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/runs/{runId}",
     ...options,
   });
@@ -432,6 +556,18 @@ export const cancelRun = <ThrowOnError extends boolean = false>(
   options: Options<CancelRunData, ThrowOnError>,
 ): RequestResult<CancelRunResponses, CancelRunErrors, ThrowOnError> =>
   (options.client ?? client).post<CancelRunResponses, CancelRunErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/runs/{runId}/cancel",
     ...options,
   });
@@ -443,6 +579,18 @@ export const listRunArtifacts = <ThrowOnError extends boolean = false>(
   options: Options<ListRunArtifactsData, ThrowOnError>,
 ): RequestResult<ListRunArtifactsResponses, ListRunArtifactsErrors, ThrowOnError> =>
   (options.client ?? client).get<ListRunArtifactsResponses, ListRunArtifactsErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/runs/{runId}/artifacts",
     ...options,
   });
@@ -456,6 +604,18 @@ export const streamRunLog = <ThrowOnError extends boolean = false>(
   options: Options<StreamRunLogData, ThrowOnError, StreamRunLogResponse>,
 ): Promise<ServerSentEventsResult<StreamRunLogResponses>> =>
   (options.client ?? client).sse.get<StreamRunLogResponses, StreamRunLogErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/runs/{runId}/logs",
     ...options,
   });
@@ -467,6 +627,86 @@ export const downloadArtifact = <ThrowOnError extends boolean = false>(
   options: Options<DownloadArtifactData, ThrowOnError>,
 ): RequestResult<DownloadArtifactResponses, DownloadArtifactErrors, ThrowOnError> =>
   (options.client ?? client).get<DownloadArtifactResponses, DownloadArtifactErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
     url: "/api/v1/artifacts/{artifactId}/download",
+    ...options,
+  });
+
+/**
+ * Begin browser login
+ *
+ * Creates a short-lived, one-time OIDC authorization transaction and redirects the browser to the configured identity provider.
+ */
+export const beginOidcLogin = <ThrowOnError extends boolean = false>(
+  options?: Options<BeginOidcLoginData, ThrowOnError>,
+): RequestResult<unknown, BeginOidcLoginErrors, ThrowOnError> =>
+  (options?.client ?? client).get<unknown, BeginOidcLoginErrors, ThrowOnError>({
+    url: "/api/v1/auth/login",
+    ...options,
+  });
+
+/**
+ * Complete browser login
+ *
+ * Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+ */
+export const completeOidcLogin = <ThrowOnError extends boolean = false>(
+  options: Options<CompleteOidcLoginData, ThrowOnError>,
+): RequestResult<unknown, CompleteOidcLoginErrors, ThrowOnError> =>
+  (options.client ?? client).get<unknown, CompleteOidcLoginErrors, ThrowOnError>({
+    url: "/api/v1/auth/callback",
+    ...options,
+  });
+
+/**
+ * Get the current principal
+ */
+export const getCurrentPrincipal = <ThrowOnError extends boolean = false>(
+  options?: Options<GetCurrentPrincipalData, ThrowOnError>,
+): RequestResult<GetCurrentPrincipalResponses, GetCurrentPrincipalErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetCurrentPrincipalResponses,
+    GetCurrentPrincipalErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+    ],
+    url: "/api/v1/auth/session",
+    ...options,
+  });
+
+/**
+ * Revoke the current browser session
+ *
+ * Revokes the local session. The required custom header prevents a cross-site form from performing this cookie-authenticated state change.
+ */
+export const logout = <ThrowOnError extends boolean = false>(
+  options: Options<LogoutData, ThrowOnError>,
+): RequestResult<LogoutResponses, LogoutErrors, ThrowOnError> =>
+  (options.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+    ],
+    url: "/api/v1/auth/logout",
     ...options,
   });

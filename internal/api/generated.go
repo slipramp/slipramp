@@ -285,6 +285,24 @@ func (e RunPhase) Valid() bool {
 	}
 }
 
+// Defines values for RunActorKind.
+const (
+	ServiceAccount RunActorKind = "service-account"
+	User           RunActorKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the RunActorKind enum.
+func (e RunActorKind) Valid() bool {
+	switch e {
+	case ServiceAccount:
+		return true
+	case User:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunArtifactInputRetentionState.
 const (
 	RunArtifactInputRetentionStateDeleted  RunArtifactInputRetentionState = "deleted"
@@ -423,6 +441,21 @@ const (
 func (e TargetKind) Valid() bool {
 	switch e {
 	case TargetKindTarget:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LogoutParamsXSliprampCSRF.
+const (
+	N1 LogoutParamsXSliprampCSRF = "1"
+)
+
+// Valid indicates whether the value is a known member of the LogoutParamsXSliprampCSRF enum.
+func (e LogoutParamsXSliprampCSRF) Valid() bool {
+	switch e {
+	case N1:
 		return true
 	default:
 		return false
@@ -683,6 +716,14 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// ProductPrincipal defines model for ProductPrincipal.
+type ProductPrincipal struct {
+	DisplayName string             `json:"displayName"`
+	Kind        string             `json:"kind"`
+	PrincipalID openapi_types.UUID `json:"principalId"`
+	Role        string             `json:"role"`
+}
+
 // Repository defines model for Repository.
 type Repository struct {
 	// Branch Git branch tracked by repository refresh.
@@ -771,11 +812,13 @@ type Run struct {
 	// ArtifactConsumers Directly runnable actions, grouped by produced artifact name, that can consume that one artifact without other required inputs or parameters.
 	ArtifactConsumers       map[string][]RunArtifactConsumer `json:"artifactConsumers"`
 	AssignedAt              *time.Time                       `json:"assignedAt,omitempty"`
+	CanceledBy              *RunActor                        `json:"canceledBy,omitempty"`
 	CancellationRequestedAt *time.Time                       `json:"cancellationRequestedAt,omitempty"`
 	CatalogRevisionID       openapi_types.UUID               `json:"catalogRevisionId"`
 	Cluster                 CatalogName                      `json:"cluster"`
 	CommitSha               string                           `json:"commitSha"`
 	CreatedAt               time.Time                        `json:"createdAt"`
+	CreatedBy               *RunActor                        `json:"createdBy,omitempty"`
 	ExitCode                *int32                           `json:"exitCode,omitempty"`
 	FinishedAt              *time.Time                       `json:"finishedAt,omitempty"`
 
@@ -816,6 +859,19 @@ type RunOutcome string
 
 // RunPhase Durable lifecycle position of the Run.
 type RunPhase string
+
+// RunActor defines model for RunActor.
+type RunActor struct {
+	// DisplayName Immutable display-name snapshot captured with the operation.
+	DisplayName string       `json:"displayName"`
+	Kind        RunActorKind `json:"kind"`
+
+	// PrincipalID Durable product principal responsible for the operation.
+	PrincipalID openapi_types.UUID `json:"principalId"`
+}
+
+// RunActorKind defines model for RunActor.Kind.
+type RunActorKind string
 
 // RunArtifactAccess defines model for RunArtifactAccess.
 type RunArtifactAccess struct {
@@ -938,7 +994,6 @@ type RunCreate struct {
 
 	// RepositoryID Repository containing the target and action.
 	RepositoryID openapi_types.UUID `json:"repositoryId"`
-	Source       RunSource          `json:"source"`
 	Target       CatalogName        `json:"target"`
 }
 
@@ -1064,6 +1119,27 @@ type TargetSummaryList struct {
 	Total int64 `json:"total"`
 }
 
+// CompleteOIDCLoginParams defines parameters for CompleteOIDCLogin.
+type CompleteOIDCLoginParams struct {
+	Code              string  `form:"code" json:"code"`
+	State             string  `form:"state" json:"state"`
+	SliprampOidcState *string `form:"slipramp_oidc_state,omitempty" json:"slipramp_oidc_state,omitempty"`
+}
+
+// LogoutParams defines parameters for Logout.
+type LogoutParams struct {
+	XSliprampCSRF   LogoutParamsXSliprampCSRF `json:"X-Slipramp-CSRF"`
+	SliprampSession *string                   `form:"slipramp_session,omitempty" json:"slipramp_session,omitempty"`
+}
+
+// LogoutParamsXSliprampCSRF defines parameters for Logout.
+type LogoutParamsXSliprampCSRF string
+
+// GetCurrentPrincipalParams defines parameters for GetCurrentPrincipal.
+type GetCurrentPrincipalParams struct {
+	SliprampSession *string `form:"slipramp_session,omitempty" json:"slipramp_session,omitempty"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	// RepositoryID Limit results to one repository.
@@ -1078,7 +1154,7 @@ type ListRunsParams struct {
 
 // CreateRunParams defines parameters for CreateRun.
 type CreateRunParams struct {
-	// IdempotencyKey Optional key that makes retries of the same run request return the originally created Run. Reusing a key for a different request is a conflict.
+	// IdempotencyKey Optional key that makes retries of the same run request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 
@@ -1302,6 +1378,32 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
 	DownloadArtifact(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CompleteOIDCLogin Complete browser login
+	//
+	// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+	//
+	// Corresponds with GET /api/v1/auth/callback (the `CompleteOIDCLogin` operationId).
+	CompleteOIDCLogin(ctx context.Context, params *CompleteOIDCLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BeginOIDCLogin Begin browser login
+	//
+	// Creates a short-lived, one-time OIDC authorization transaction and redirects the browser to the configured identity provider.
+	//
+	// Corresponds with GET /api/v1/auth/login (the `BeginOIDCLogin` operationId).
+	BeginOIDCLogin(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// Logout Revoke the current browser session
+	//
+	// Revokes the local session. The required custom header prevents a cross-site form from performing this cookie-authenticated state change.
+	//
+	// Corresponds with POST /api/v1/auth/logout (the `Logout` operationId).
+	Logout(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetCurrentPrincipal Get the current principal
+	//
+	// Corresponds with GET /api/v1/auth/session (the `GetCurrentPrincipal` operationId).
+	GetCurrentPrincipal(ctx context.Context, params *GetCurrentPrincipalParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListClusters List execution clusters
 	//
 	// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
@@ -1500,6 +1602,72 @@ type ClientInterface interface {
 // Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
 func (c *Client) DownloadArtifact(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDownloadArtifactRequest(c.Server, artifactID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CompleteOIDCLogin Complete browser login
+//
+// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+//
+// Corresponds with GET /api/v1/auth/callback (the `CompleteOIDCLogin` operationId).
+func (c *Client) CompleteOIDCLogin(ctx context.Context, params *CompleteOIDCLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCompleteOIDCLoginRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// BeginOIDCLogin Begin browser login
+//
+// Creates a short-lived, one-time OIDC authorization transaction and redirects the browser to the configured identity provider.
+//
+// Corresponds with GET /api/v1/auth/login (the `BeginOIDCLogin` operationId).
+func (c *Client) BeginOIDCLogin(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBeginOIDCLoginRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// Logout Revoke the current browser session
+//
+// Revokes the local session. The required custom header prevents a cross-site form from performing this cookie-authenticated state change.
+//
+// Corresponds with POST /api/v1/auth/logout (the `Logout` operationId).
+func (c *Client) Logout(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewLogoutRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetCurrentPrincipal Get the current principal
+//
+// Corresponds with GET /api/v1/auth/session (the `GetCurrentPrincipal` operationId).
+func (c *Client) GetCurrentPrincipal(ctx context.Context, params *GetCurrentPrincipalParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCurrentPrincipalRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1993,6 +2161,209 @@ func NewDownloadArtifactRequest(server string, artifactID openapi_types.UUID) (*
 		return nil, err
 	}
 
+	return req, nil
+}
+
+// NewCompleteOIDCLoginRequest constructs an http.Request for the CompleteOIDCLogin method
+func NewCompleteOIDCLoginRequest(server string, params *CompleteOIDCLoginParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/callback")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.SliprampOidcState != nil {
+			var cookieParam0 string
+
+			cookieParam0, err = runtime.StyleParamWithOptions("simple", true, "slipramp_oidc_state", *params.SliprampOidcState, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationCookie, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			cookie0 := &http.Cookie{
+				Name:  "slipramp_oidc_state",
+				Value: cookieParam0,
+			}
+			req.AddCookie(cookie0)
+		}
+	}
+	return req, nil
+}
+
+// NewBeginOIDCLoginRequest constructs an http.Request for the BeginOIDCLogin method
+func NewBeginOIDCLoginRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/login")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewLogoutRequest constructs an http.Request for the Logout method
+func NewLogoutRequest(server string, params *LogoutParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/logout")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		var headerParam0 string
+
+		headerParam0, err = runtime.StyleParamWithOptions("simple", false, "X-Slipramp-CSRF", params.XSliprampCSRF, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+		if err != nil {
+			return nil, err
+		}
+
+		req.Header.Set("X-Slipramp-CSRF", headerParam0)
+
+	}
+
+	if params != nil {
+
+		if params.SliprampSession != nil {
+			var cookieParam0 string
+
+			cookieParam0, err = runtime.StyleParamWithOptions("simple", true, "slipramp_session", *params.SliprampSession, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationCookie, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			cookie0 := &http.Cookie{
+				Name:  "slipramp_session",
+				Value: cookieParam0,
+			}
+			req.AddCookie(cookie0)
+		}
+	}
+	return req, nil
+}
+
+// NewGetCurrentPrincipalRequest constructs an http.Request for the GetCurrentPrincipal method
+func NewGetCurrentPrincipalRequest(server string, params *GetCurrentPrincipalParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/session")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.SliprampSession != nil {
+			var cookieParam0 string
+
+			cookieParam0, err = runtime.StyleParamWithOptions("simple", true, "slipramp_session", *params.SliprampSession, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationCookie, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			cookie0 := &http.Cookie{
+				Name:  "slipramp_session",
+				Value: cookieParam0,
+			}
+			req.AddCookie(cookie0)
+		}
+	}
 	return req, nil
 }
 
@@ -3015,6 +3386,40 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
 	DownloadArtifactWithResponse(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadArtifactResponse, error)
 
+	// CompleteOIDCLoginWithResponse Complete browser login
+	//
+	// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/auth/callback (the `CompleteOIDCLogin` operationId).
+	CompleteOIDCLoginWithResponse(ctx context.Context, params *CompleteOIDCLoginParams, reqEditors ...RequestEditorFn) (*CompleteOIDCLoginResponse, error)
+
+	// BeginOIDCLoginWithResponse Begin browser login
+	//
+	// Creates a short-lived, one-time OIDC authorization transaction and redirects the browser to the configured identity provider.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/auth/login (the `BeginOIDCLogin` operationId).
+	BeginOIDCLoginWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*BeginOIDCLoginResponse, error)
+
+	// LogoutWithResponse Revoke the current browser session
+	//
+	// Revokes the local session. The required custom header prevents a cross-site form from performing this cookie-authenticated state change.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/logout (the `Logout` operationId).
+	LogoutWithResponse(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
+
+	// GetCurrentPrincipalWithResponse Get the current principal
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/auth/session (the `GetCurrentPrincipal` operationId).
+	GetCurrentPrincipalWithResponse(ctx context.Context, params *GetCurrentPrincipalParams, reqEditors ...RequestEditorFn) (*GetCurrentPrincipalResponse, error)
+
 	// ListClustersWithResponse List execution clusters
 	//
 	// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
@@ -3245,6 +3650,10 @@ type DownloadArtifactResponse200Headers struct {
 type DownloadArtifactResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3255,6 +3664,16 @@ type DownloadArtifactResponse struct {
 	ApplicationProblemJSON500 *Problem
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *DownloadArtifactResponse200Headers
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DownloadArtifactResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DownloadArtifactResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -3306,11 +3725,317 @@ func (r DownloadArtifactResponse) ContentType() string {
 	return ""
 }
 
+// CompleteOIDCLoginResponse303Headers the declared response headers of an HTTP 303 response for CompleteOIDCLogin
+type CompleteOIDCLoginResponse303Headers struct {
+	CacheControl string
+	Location     string
+	SetCookie    string
+}
+
+type CompleteOIDCLoginResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationProblemJSON503 *Problem
+	// Headers303 the parsed response headers for an HTTP 303 response
+	Headers303 *CompleteOIDCLoginResponse303Headers
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CompleteOIDCLoginResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CompleteOIDCLoginResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r CompleteOIDCLoginResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CompleteOIDCLoginResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetApplicationProblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r CompleteOIDCLoginResponse) GetApplicationProblemJSON503() *Problem {
+	return r.ApplicationProblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r CompleteOIDCLoginResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CompleteOIDCLoginResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CompleteOIDCLoginResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CompleteOIDCLoginResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// BeginOIDCLoginResponse303Headers the declared response headers of an HTTP 303 response for BeginOIDCLogin
+type BeginOIDCLoginResponse303Headers struct {
+	CacheControl string
+	Location     string
+	SetCookie    string
+}
+
+type BeginOIDCLoginResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationProblemJSON503 *Problem
+	// Headers303 the parsed response headers for an HTTP 303 response
+	Headers303 *BeginOIDCLoginResponse303Headers
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r BeginOIDCLoginResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r BeginOIDCLoginResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetApplicationProblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r BeginOIDCLoginResponse) GetApplicationProblemJSON503() *Problem {
+	return r.ApplicationProblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r BeginOIDCLoginResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r BeginOIDCLoginResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BeginOIDCLoginResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r BeginOIDCLoginResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// LogoutResponse204Headers the declared response headers of an HTTP 204 response for Logout
+type LogoutResponse204Headers struct {
+	CacheControl string
+	SetCookie    string
+}
+
+type LogoutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationProblemJSON503 *Problem
+	// Headers204 the parsed response headers for an HTTP 204 response
+	Headers204 *LogoutResponse204Headers
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r LogoutResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r LogoutResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r LogoutResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r LogoutResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r LogoutResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetApplicationProblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r LogoutResponse) GetApplicationProblemJSON503() *Problem {
+	return r.ApplicationProblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r LogoutResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r LogoutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r LogoutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r LogoutResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetCurrentPrincipalResponse200Headers the declared response headers of an HTTP 200 response for GetCurrentPrincipal
+type GetCurrentPrincipalResponse200Headers struct {
+	CacheControl string
+}
+
+type GetCurrentPrincipalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ProductPrincipal
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationProblemJSON503 *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetCurrentPrincipalResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetCurrentPrincipalResponse) GetJSON200() *ProductPrincipal {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetCurrentPrincipalResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetCurrentPrincipalResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetCurrentPrincipalResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetApplicationProblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetCurrentPrincipalResponse) GetApplicationProblemJSON503() *Problem {
+	return r.ApplicationProblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r GetCurrentPrincipalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCurrentPrincipalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCurrentPrincipalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCurrentPrincipalResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListClustersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *ClusterList
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
@@ -3320,6 +4045,16 @@ type ListClustersResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListClustersResponse) GetJSON200() *ClusterList {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListClustersResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListClustersResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
@@ -3366,6 +4101,10 @@ type ListRepositoriesResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *RepositoryList
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
@@ -3375,6 +4114,16 @@ type ListRepositoriesResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListRepositoriesResponse) GetJSON200() *RepositoryList {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListRepositoriesResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListRepositoriesResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
@@ -3428,6 +4177,10 @@ type CreateRepositoryResponse struct {
 	JSON201 *Repository
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
@@ -3446,6 +4199,16 @@ func (r CreateRepositoryResponse) GetJSON201() *Repository {
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r CreateRepositoryResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CreateRepositoryResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateRepositoryResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
@@ -3497,6 +4260,10 @@ type RemoveRepositoryResponse struct {
 	HTTPResponse *http.Response
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3508,6 +4275,16 @@ type RemoveRepositoryResponse struct {
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r RemoveRepositoryResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RemoveRepositoryResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RemoveRepositoryResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -3561,6 +4338,10 @@ type GetRepositoryCatalogResponse struct {
 	JSON200 *CatalogRevision
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3577,6 +4358,16 @@ func (r GetRepositoryCatalogResponse) GetJSON200() *CatalogRevision {
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetRepositoryCatalogResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -3630,6 +4421,10 @@ type ListRunsResponse struct {
 	JSON200 *RunList
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
@@ -3644,6 +4439,16 @@ func (r ListRunsResponse) GetJSON200() *RunList {
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r ListRunsResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListRunsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListRunsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
@@ -3692,6 +4497,10 @@ type CreateRunResponse struct {
 	JSON201 *Run
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3710,6 +4519,16 @@ func (r CreateRunResponse) GetJSON201() *Run {
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r CreateRunResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -3766,6 +4585,10 @@ type GetRunResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *Run
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3777,6 +4600,16 @@ type GetRunResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetRunResponse) GetJSON200() *Run {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetRunResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetRunResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -3828,6 +4661,10 @@ type ListRunArtifactsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *ArtifactList
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3839,6 +4676,16 @@ type ListRunArtifactsResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListRunArtifactsResponse) GetJSON200() *ArtifactList {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListRunArtifactsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListRunArtifactsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -3890,6 +4737,10 @@ type CancelRunResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *Run
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3903,6 +4754,16 @@ type CancelRunResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r CancelRunResponse) GetJSON200() *Run {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CancelRunResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CancelRunResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -3959,6 +4820,10 @@ type StreamRunLogResponse struct {
 	HTTPResponse *http.Response
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
@@ -3970,6 +4835,16 @@ type StreamRunLogResponse struct {
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r StreamRunLogResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r StreamRunLogResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r StreamRunLogResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
@@ -4023,6 +4898,10 @@ type ListTargetsResponse struct {
 	JSON200 *TargetSummaryList
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
@@ -4037,6 +4916,16 @@ func (r ListTargetsResponse) GetJSON200() *TargetSummaryList {
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
 func (r ListTargetsResponse) GetApplicationProblemJSON400() *Problem {
 	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListTargetsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListTargetsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
 }
 
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
@@ -4726,6 +5615,64 @@ func (c *ClientWithResponses) DownloadArtifactWithResponse(ctx context.Context, 
 	return ParseDownloadArtifactResponse(rsp)
 }
 
+// CompleteOIDCLoginWithResponse Complete browser login
+//
+// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/auth/callback (the `CompleteOIDCLogin` operationId).
+func (c *ClientWithResponses) CompleteOIDCLoginWithResponse(ctx context.Context, params *CompleteOIDCLoginParams, reqEditors ...RequestEditorFn) (*CompleteOIDCLoginResponse, error) {
+	rsp, err := c.CompleteOIDCLogin(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCompleteOIDCLoginResponse(rsp)
+}
+
+// BeginOIDCLoginWithResponse Begin browser login
+//
+// Creates a short-lived, one-time OIDC authorization transaction and redirects the browser to the configured identity provider.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/auth/login (the `BeginOIDCLogin` operationId).
+func (c *ClientWithResponses) BeginOIDCLoginWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*BeginOIDCLoginResponse, error) {
+	rsp, err := c.BeginOIDCLogin(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBeginOIDCLoginResponse(rsp)
+}
+
+// LogoutWithResponse Revoke the current browser session
+//
+// Revokes the local session. The required custom header prevents a cross-site form from performing this cookie-authenticated state change.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/logout (the `Logout` operationId).
+func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*LogoutResponse, error) {
+	rsp, err := c.Logout(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseLogoutResponse(rsp)
+}
+
+// GetCurrentPrincipalWithResponse Get the current principal
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/auth/session (the `GetCurrentPrincipal` operationId).
+func (c *ClientWithResponses) GetCurrentPrincipalWithResponse(ctx context.Context, params *GetCurrentPrincipalParams, reqEditors ...RequestEditorFn) (*GetCurrentPrincipalResponse, error) {
+	rsp, err := c.GetCurrentPrincipal(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCurrentPrincipalResponse(rsp)
+}
+
 // ListClustersWithResponse List execution clusters
 //
 // Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
@@ -5116,6 +6063,20 @@ func ParseDownloadArtifactResponse(rsp *http.Response) (*DownloadArtifactRespons
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5169,6 +6130,311 @@ func ParseDownloadArtifactResponse(rsp *http.Response) (*DownloadArtifactRespons
 	return response, nil
 }
 
+// ParseCompleteOIDCLoginResponse parses an HTTP response from a CompleteOIDCLoginWithResponse call
+func ParseCompleteOIDCLoginResponse(rsp *http.Response) (*CompleteOIDCLoginResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CompleteOIDCLoginResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 303:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 303:
+		var headers CompleteOIDCLoginResponse303Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = value
+		}
+		response.Headers303 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseBeginOIDCLoginResponse parses an HTTP response from a BeginOIDCLoginWithResponse call
+func ParseBeginOIDCLoginResponse(rsp *http.Response) (*BeginOIDCLoginResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BeginOIDCLoginResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 303:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 303:
+		var headers BeginOIDCLoginResponse303Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uri"}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = value
+		}
+		response.Headers303 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseLogoutResponse parses an HTTP response from a LogoutWithResponse call
+func ParseLogoutResponse(rsp *http.Response) (*LogoutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &LogoutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		var headers LogoutResponse204Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = value
+		}
+		response.Headers204 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetCurrentPrincipalResponse parses an HTTP response from a GetCurrentPrincipalWithResponse call
+func ParseGetCurrentPrincipalResponse(rsp *http.Response) (*GetCurrentPrincipalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCurrentPrincipalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ProductPrincipal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetCurrentPrincipalResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseListClustersResponse parses an HTTP response from a ListClustersWithResponse call
 func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -5189,6 +6455,20 @@ func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -5229,6 +6509,20 @@ func ParseListRepositoriesResponse(rsp *http.Response) (*ListRepositoriesRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -5276,6 +6570,20 @@ func ParseCreateRepositoryResponse(rsp *http.Response) (*CreateRepositoryRespons
 			return nil, err
 		}
 		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -5340,6 +6648,20 @@ func ParseRemoveRepositoryResponse(rsp *http.Response) (*RemoveRepositoryRespons
 		}
 		response.ApplicationProblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5393,6 +6715,20 @@ func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalo
 			return nil, err
 		}
 		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
@@ -5448,6 +6784,20 @@ func ParseListRunsResponse(rsp *http.Response) (*ListRunsResponse, error) {
 		}
 		response.ApplicationProblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5494,6 +6844,20 @@ func ParseCreateRunResponse(rsp *http.Response) (*CreateRunResponse, error) {
 			return nil, err
 		}
 		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
@@ -5549,6 +6913,20 @@ func ParseGetRunResponse(rsp *http.Response) (*GetRunResponse, error) {
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5596,6 +6974,20 @@ func ParseListRunArtifactsResponse(rsp *http.Response) (*ListRunArtifactsRespons
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5642,6 +7034,20 @@ func ParseCancelRunResponse(rsp *http.Response) (*CancelRunResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
@@ -5697,6 +7103,20 @@ func ParseStreamRunLogResponse(rsp *http.Response) (*StreamRunLogResponse, error
 		}
 		response.ApplicationProblemJSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -5750,6 +7170,20 @@ func ParseListTargetsResponse(rsp *http.Response) (*ListTargetsResponse, error) 
 			return nil, err
 		}
 		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -6299,6 +7733,18 @@ type ServerInterface interface {
 	// DownloadArtifact Download a sealed artifact
 	// (GET /api/v1/artifacts/{artifactId}/download)
 	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID)
+	// CompleteOIDCLogin Complete browser login
+	// (GET /api/v1/auth/callback)
+	CompleteOIDCLogin(w http.ResponseWriter, r *http.Request, params CompleteOIDCLoginParams)
+	// BeginOIDCLogin Begin browser login
+	// (GET /api/v1/auth/login)
+	BeginOIDCLogin(w http.ResponseWriter, r *http.Request)
+	// Logout Revoke the current browser session
+	// (POST /api/v1/auth/logout)
+	Logout(w http.ResponseWriter, r *http.Request, params LogoutParams)
+	// GetCurrentPrincipal Get the current principal
+	// (GET /api/v1/auth/session)
+	GetCurrentPrincipal(w http.ResponseWriter, r *http.Request, params GetCurrentPrincipalParams)
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(w http.ResponseWriter, r *http.Request)
@@ -6390,6 +7836,176 @@ func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DownloadArtifact(w, r, artifactID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteOIDCLogin operation middleware
+func (siw *ServerInterfaceWrapper) CompleteOIDCLogin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CompleteOIDCLoginParams
+
+	// ------------- Required query parameter "code" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "code", r.URL.Query(), &params.Code, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "code"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "code", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	{
+		var cookie *http.Cookie
+
+		if cookie, err = r.Cookie("slipramp_oidc_state"); err == nil {
+			var value string
+			err = runtime.BindStyledParameterWithOptions("simple", "slipramp_oidc_state", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
+			if err != nil {
+				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slipramp_oidc_state", Err: err})
+				return
+			}
+			params.SliprampOidcState = &value
+
+		}
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteOIDCLogin(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BeginOIDCLogin operation middleware
+func (siw *ServerInterfaceWrapper) BeginOIDCLogin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BeginOIDCLogin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Logout operation middleware
+func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LogoutParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "X-Slipramp-CSRF" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Slipramp-CSRF")]; found {
+		var XSliprampCSRF LogoutParamsXSliprampCSRF
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Slipramp-CSRF", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Slipramp-CSRF", valueList[0], &XSliprampCSRF, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Slipramp-CSRF", Err: err})
+			return
+		}
+
+		params.XSliprampCSRF = XSliprampCSRF
+
+	} else {
+		err := fmt.Errorf("Header parameter X-Slipramp-CSRF is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-Slipramp-CSRF", Err: err})
+		return
+	}
+
+	{
+		var cookie *http.Cookie
+
+		if cookie, err = r.Cookie("slipramp_session"); err == nil {
+			var value string
+			err = runtime.BindStyledParameterWithOptions("simple", "slipramp_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
+			if err != nil {
+				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slipramp_session", Err: err})
+				return
+			}
+			params.SliprampSession = &value
+
+		}
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Logout(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCurrentPrincipal operation middleware
+func (siw *ServerInterfaceWrapper) GetCurrentPrincipal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCurrentPrincipalParams
+
+	{
+		var cookie *http.Cookie
+
+		if cookie, err = r.Cookie("slipramp_session"); err == nil {
+			var value string
+			err = runtime.BindStyledParameterWithOptions("simple", "slipramp_session", cookie.Value, &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationCookie, Explode: true, Required: false, Type: "string", Format: ""})
+			if err != nil {
+				siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "slipramp_session", Err: err})
+				return
+			}
+			params.SliprampSession = &value
+
+		}
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCurrentPrincipal(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7227,6 +8843,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/artifacts", wrapper.ListRunArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/logs", wrapper.StreamRunLog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/download", wrapper.DownloadArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/login", wrapper.BeginOIDCLogin)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/callback", wrapper.CompleteOIDCLogin)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/session", wrapper.GetCurrentPrincipal)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/auth/logout", wrapper.Logout)
 
 	return m
 }
@@ -7268,6 +8888,34 @@ func (response DownloadArtifact200ApplicationOctetStreamResponse) VisitDownloadA
 		defer closer.Close()
 	}
 	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type DownloadArtifact401ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadArtifact401ApplicationProblemPlusJSONResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DownloadArtifact403ApplicationProblemPlusJSONResponse Problem
+
+func (response DownloadArtifact403ApplicationProblemPlusJSONResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
 	return err
 }
 
@@ -7327,6 +8975,363 @@ func (response DownloadArtifact500ApplicationProblemPlusJSONResponse) VisitDownl
 	return err
 }
 
+type CompleteOIDCLoginRequestObject struct {
+	Params CompleteOIDCLoginParams
+}
+
+type CompleteOIDCLoginResponseObject interface {
+	VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error
+}
+
+type CompleteOIDCLogin303ResponseHeaders struct {
+	CacheControl string
+	Location     string
+	SetCookie    string
+}
+
+type CompleteOIDCLogin303Response struct {
+	Headers CompleteOIDCLogin303ResponseHeaders
+}
+
+func (response CompleteOIDCLogin303Response) VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(303)
+	return nil
+}
+
+type CompleteOIDCLogin400ApplicationProblemPlusJSONResponse Problem
+
+func (response CompleteOIDCLogin400ApplicationProblemPlusJSONResponse) VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOIDCLogin403ApplicationProblemPlusJSONResponse Problem
+
+func (response CompleteOIDCLogin403ApplicationProblemPlusJSONResponse) VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOIDCLogin405ApplicationProblemPlusJSONResponse Problem
+
+func (response CompleteOIDCLogin405ApplicationProblemPlusJSONResponse) VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOIDCLogin500ApplicationProblemPlusJSONResponse Problem
+
+func (response CompleteOIDCLogin500ApplicationProblemPlusJSONResponse) VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteOIDCLogin503ApplicationProblemPlusJSONResponse Problem
+
+func (response CompleteOIDCLogin503ApplicationProblemPlusJSONResponse) VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginOIDCLoginRequestObject struct {
+}
+
+type BeginOIDCLoginResponseObject interface {
+	VisitBeginOIDCLoginResponse(w http.ResponseWriter) error
+}
+
+type BeginOIDCLogin303ResponseHeaders struct {
+	CacheControl string
+	Location     string
+	SetCookie    string
+}
+
+type BeginOIDCLogin303Response struct {
+	Headers BeginOIDCLogin303ResponseHeaders
+}
+
+func (response BeginOIDCLogin303Response) VisitBeginOIDCLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(303)
+	return nil
+}
+
+type BeginOIDCLogin405ApplicationProblemPlusJSONResponse Problem
+
+func (response BeginOIDCLogin405ApplicationProblemPlusJSONResponse) VisitBeginOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginOIDCLogin500ApplicationProblemPlusJSONResponse Problem
+
+func (response BeginOIDCLogin500ApplicationProblemPlusJSONResponse) VisitBeginOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginOIDCLogin503ApplicationProblemPlusJSONResponse Problem
+
+func (response BeginOIDCLogin503ApplicationProblemPlusJSONResponse) VisitBeginOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LogoutRequestObject struct {
+	Params LogoutParams
+}
+
+type LogoutResponseObject interface {
+	VisitLogoutResponse(w http.ResponseWriter) error
+}
+
+type Logout204ResponseHeaders struct {
+	CacheControl string
+	SetCookie    string
+}
+
+type Logout204Response struct {
+	Headers Logout204ResponseHeaders
+}
+
+func (response Logout204Response) VisitLogoutResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(204)
+	return nil
+}
+
+type Logout400ApplicationProblemPlusJSONResponse Problem
+
+func (response Logout400ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Logout401ApplicationProblemPlusJSONResponse Problem
+
+func (response Logout401ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Logout403ApplicationProblemPlusJSONResponse Problem
+
+func (response Logout403ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Logout405ApplicationProblemPlusJSONResponse Problem
+
+func (response Logout405ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Logout500ApplicationProblemPlusJSONResponse Problem
+
+func (response Logout500ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Logout503ApplicationProblemPlusJSONResponse Problem
+
+func (response Logout503ApplicationProblemPlusJSONResponse) VisitLogoutResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentPrincipalRequestObject struct {
+	Params GetCurrentPrincipalParams
+}
+
+type GetCurrentPrincipalResponseObject interface {
+	VisitGetCurrentPrincipalResponse(w http.ResponseWriter) error
+}
+
+type GetCurrentPrincipal200ResponseHeaders struct {
+	CacheControl string
+}
+
+type GetCurrentPrincipal200JSONResponse struct {
+	Body    ProductPrincipal
+	Headers GetCurrentPrincipal200ResponseHeaders
+}
+
+func (response GetCurrentPrincipal200JSONResponse) VisitGetCurrentPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentPrincipal401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCurrentPrincipal401ApplicationProblemPlusJSONResponse) VisitGetCurrentPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentPrincipal405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCurrentPrincipal405ApplicationProblemPlusJSONResponse) VisitGetCurrentPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentPrincipal500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCurrentPrincipal500ApplicationProblemPlusJSONResponse) VisitGetCurrentPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCurrentPrincipal503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCurrentPrincipal503ApplicationProblemPlusJSONResponse) VisitGetCurrentPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListClustersRequestObject struct {
 }
 
@@ -7344,6 +9349,34 @@ func (response ListClusters200JSONResponse) VisitListClustersResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClusters401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListClusters401ApplicationProblemPlusJSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClusters403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListClusters403ApplicationProblemPlusJSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7393,6 +9426,34 @@ func (response ListRepositories200JSONResponse) VisitListRepositoriesResponse(w 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositories401ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositories403ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7471,6 +9532,34 @@ func (response CreateRepository400ApplicationProblemPlusJSONResponse) VisitCreat
 	return err
 }
 
+type CreateRepository401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository401ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository403ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateRepository405ApplicationProblemPlusJSONResponse Problem
 
 func (response CreateRepository405ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
@@ -7539,6 +9628,34 @@ func (response RemoveRepository400ApplicationProblemPlusJSONResponse) VisitRemov
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRepository401ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveRepository401ApplicationProblemPlusJSONResponse) VisitRemoveRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveRepository403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveRepository403ApplicationProblemPlusJSONResponse) VisitRemoveRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7621,6 +9738,34 @@ func (response GetRepositoryCatalog400ApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type GetRepositoryCatalog401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryCatalog401ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryCatalog403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepositoryCatalog403ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRepositoryCatalog404ApplicationProblemPlusJSONResponse Problem
 
 func (response GetRepositoryCatalog404ApplicationProblemPlusJSONResponse) VisitGetRepositoryCatalogResponse(w http.ResponseWriter) error {
@@ -7699,6 +9844,34 @@ func (response ListRuns400ApplicationProblemPlusJSONResponse) VisitListRunsRespo
 	return err
 }
 
+type ListRuns401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuns401ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuns403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuns403ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRuns405ApplicationProblemPlusJSONResponse Problem
 
 func (response ListRuns405ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
@@ -7760,6 +9933,34 @@ func (response CreateRun400ApplicationProblemPlusJSONResponse) VisitCreateRunRes
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRun401ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRun403ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7842,6 +10043,34 @@ func (response GetRun200JSONResponse) VisitGetRunResponse(w http.ResponseWriter)
 	return err
 }
 
+type GetRun401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRun401ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRun403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRun403ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRun404ApplicationProblemPlusJSONResponse Problem
 
 func (response GetRun404ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
@@ -7906,6 +10135,34 @@ func (response ListRunArtifacts200JSONResponse) VisitListRunArtifactsResponse(w 
 	return err
 }
 
+type ListRunArtifacts401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunArtifacts401ApplicationProblemPlusJSONResponse) VisitListRunArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunArtifacts403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRunArtifacts403ApplicationProblemPlusJSONResponse) VisitListRunArtifactsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRunArtifacts404ApplicationProblemPlusJSONResponse Problem
 
 func (response ListRunArtifacts404ApplicationProblemPlusJSONResponse) VisitListRunArtifactsResponse(w http.ResponseWriter) error {
@@ -7966,6 +10223,34 @@ func (response CancelRun200JSONResponse) VisitCancelRunResponse(w http.ResponseW
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun401ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun401ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun403ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun403ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8092,6 +10377,34 @@ func (response StreamRunLog400ApplicationProblemPlusJSONResponse) VisitStreamRun
 	return err
 }
 
+type StreamRunLog401ApplicationProblemPlusJSONResponse Problem
+
+func (response StreamRunLog401ApplicationProblemPlusJSONResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamRunLog403ApplicationProblemPlusJSONResponse Problem
+
+func (response StreamRunLog403ApplicationProblemPlusJSONResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StreamRunLog404ApplicationProblemPlusJSONResponse Problem
 
 func (response StreamRunLog404ApplicationProblemPlusJSONResponse) VisitStreamRunLogResponse(w http.ResponseWriter) error {
@@ -8166,6 +10479,34 @@ func (response ListTargets400ApplicationProblemPlusJSONResponse) VisitListTarget
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTargets401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTargets401ApplicationProblemPlusJSONResponse) VisitListTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTargets403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTargets403ApplicationProblemPlusJSONResponse) VisitListTargetsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -9002,6 +11343,18 @@ type StrictServerInterface interface {
 	// DownloadArtifact Download a sealed artifact
 	// (GET /api/v1/artifacts/{artifactId}/download)
 	DownloadArtifact(ctx context.Context, request DownloadArtifactRequestObject) (DownloadArtifactResponseObject, error)
+	// CompleteOIDCLogin Complete browser login
+	// (GET /api/v1/auth/callback)
+	CompleteOIDCLogin(ctx context.Context, request CompleteOIDCLoginRequestObject) (CompleteOIDCLoginResponseObject, error)
+	// BeginOIDCLogin Begin browser login
+	// (GET /api/v1/auth/login)
+	BeginOIDCLogin(ctx context.Context, request BeginOIDCLoginRequestObject) (BeginOIDCLoginResponseObject, error)
+	// Logout Revoke the current browser session
+	// (POST /api/v1/auth/logout)
+	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// GetCurrentPrincipal Get the current principal
+	// (GET /api/v1/auth/session)
+	GetCurrentPrincipal(ctx context.Context, request GetCurrentPrincipalRequestObject) (GetCurrentPrincipalResponseObject, error)
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(ctx context.Context, request ListClustersRequestObject) (ListClustersResponseObject, error)
@@ -9125,6 +11478,108 @@ func (sh *strictHandler) DownloadArtifact(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DownloadArtifactResponseObject); ok {
 		if err := validResponse.VisitDownloadArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CompleteOIDCLogin operation middleware
+func (sh *strictHandler) CompleteOIDCLogin(w http.ResponseWriter, r *http.Request, params CompleteOIDCLoginParams) {
+	var request CompleteOIDCLoginRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteOIDCLogin(ctx, request.(CompleteOIDCLoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteOIDCLogin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteOIDCLoginResponseObject); ok {
+		if err := validResponse.VisitCompleteOIDCLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BeginOIDCLogin operation middleware
+func (sh *strictHandler) BeginOIDCLogin(w http.ResponseWriter, r *http.Request) {
+	var request BeginOIDCLoginRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BeginOIDCLogin(ctx, request.(BeginOIDCLoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BeginOIDCLogin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BeginOIDCLoginResponseObject); ok {
+		if err := validResponse.VisitBeginOIDCLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Logout operation middleware
+func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request, params LogoutParams) {
+	var request LogoutRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Logout(ctx, request.(LogoutRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Logout")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LogoutResponseObject); ok {
+		if err := validResponse.VisitLogoutResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCurrentPrincipal operation middleware
+func (sh *strictHandler) GetCurrentPrincipal(w http.ResponseWriter, r *http.Request, params GetCurrentPrincipalParams) {
+	var request GetCurrentPrincipalRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCurrentPrincipal(ctx, request.(GetCurrentPrincipalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCurrentPrincipal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCurrentPrincipalResponseObject); ok {
+		if err := validResponse.VisitGetCurrentPrincipalResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

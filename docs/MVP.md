@@ -322,7 +322,8 @@ accepted status of the MVP:
   guidance beyond the existing development, kind, and homelab flows
 - Evolution and compatibility policy for the pre-stable API, catalog, and
   database contracts
-- Built-in authentication, user management, authorization, and human attribution
+- Built-in authentication, user management, authorization, and human attribution,
+  planned incrementally in [AUTH.md](./AUTH.md)
 - Approval workflows and required previews
 - Git-change, scheduled, and webhook triggers
 - High-availability Server and web deployments

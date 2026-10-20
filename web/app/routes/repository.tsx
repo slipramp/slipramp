@@ -29,8 +29,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(loaderData?.repository?.name ?? "Repository") }];
 }
 
-export async function loader({ params }: Route.LoaderArgs) {
-  const client = createServerAPIClient();
+export async function loader({ params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request);
   const [repositoriesResult, catalogResult] = await Promise.all([
     listRepositories({ client }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
@@ -54,7 +54,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   }
 
   const result = await removeRepository({
-    client: createServerAPIClient(),
+    client: createServerAPIClient(request),
     path: { repositoryId: params.repositoryId },
   });
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/artifact"
+	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
 type ArtifactService interface {
@@ -222,6 +223,17 @@ func (h *Handler) DownloadArtifact(
 	if err != nil {
 		return nil, err
 	}
+	if content.Artifact.Sensitive && !canDownloadSensitiveArtifact(ctx) {
+		if closeErr := content.Body.Close(); closeErr != nil {
+			return nil, fmt.Errorf("close unauthorized artifact: %w", closeErr)
+		}
+		problem := NewProblem(
+			http.StatusForbidden,
+			"The authenticated principal cannot download sensitive artifact contents.",
+		)
+
+		return api.DownloadArtifact403ApplicationProblemPlusJSONResponse(problem), nil
+	}
 
 	disposition := fmt.Sprintf("attachment; filename=%q", content.Artifact.Name)
 	digest := "sha-256=" + *content.Artifact.SHA256
@@ -233,6 +245,15 @@ func (h *Handler) DownloadArtifact(
 			Digest:             &digest,
 		},
 	}, nil
+}
+
+func canDownloadSensitiveArtifact(ctx context.Context) bool {
+	authentication, authenticated := productAuthenticationFromContext(ctx)
+	if !authenticated {
+		return true
+	}
+
+	return authentication.Authorizes(productidentity.PermissionSensitiveArtifactsRead)
 }
 
 func (h *Handler) DownloadRunInput(

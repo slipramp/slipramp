@@ -89,7 +89,7 @@ The harness is supplied by Slipramp rather than baked into runtime images. Infra
 
 ### Run
 
-A run is an immutable execution of an action against a target. It captures the exact commit, catalog revision, resolved definitions, parameters, artifact inputs, run source, any available actor identity, and placement configuration used for the operation. Authentication and human attribution are intentionally left as a later design decision.
+A run is an immutable execution of an action against a target. It captures the exact commit, catalog revision, resolved definitions, parameters, artifact inputs, run source, any available actor identity, and placement configuration used for the operation. Product authentication, authorization, and human attribution follow the incremental design in [AUTH.md](./AUTH.md).
 
 ### Artifact
 
@@ -209,6 +209,13 @@ Supported injection forms should include individual environment variables, `envF
 When using Kubernetes Secrets, references are resolved in the placement's selected cluster. Slipramp should place `secretKeyRef`, secret volume, and projected volume references into the Job rather than copying secret values into PostgreSQL. Arbitrary pod-level mechanisms belong on the placement as an escape hatch, while runtime and target definitions remain portable.
 
 ## Safety and Trust
+
+Product users and automation resolve to durable Slipramp principals through
+OIDC sessions or API keys. Controllers and execution Jobs retain their separate
+cluster-scoped and Run-scoped credentials rather than becoming product
+principals. The initial authorization model remains installation-wide and
+deliberately small; resource-level ACLs and a general policy engine are not
+required. See [AUTH.md](./AUTH.md) for the implementation plan.
 
 Policy should be optional. A user must be able to run an unreviewed `terraform apply` or arbitrary script when that is the desired operating model.
 

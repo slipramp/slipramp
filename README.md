@@ -185,6 +185,28 @@ The Server accepts these environment variables:
 | `SLIPRAMP_ARTIFACT_RETENTION_PERIOD` | `720h` | Age after sealing when an artifact becomes eligible for expiration |
 | `SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL` | `1h` | Interval between artifact expiration, deletion, and orphan reconciliation passes |
 | `SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD` | `24h` | Minimum object age before an unreferenced object may be deleted |
+| `SLIPRAMP_OIDC_ISSUER` | Unset | Issuer URL for the single browser-login OIDC provider |
+| `SLIPRAMP_OIDC_CLIENT_ID` | Unset | OIDC relying-party client ID |
+| `SLIPRAMP_OIDC_CLIENT_SECRET` | Unset | OIDC relying-party client secret; supply through deployment secret configuration |
+| `SLIPRAMP_OIDC_REDIRECT_URL` | Unset | Absolute provider callback URL ending at `/api/v1/auth/callback` |
+| `SLIPRAMP_OIDC_SUBJECT_ROLES` | `{}` | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required |
+| `SLIPRAMP_PRODUCT_SESSION_LIFETIME` | `12h` | Absolute lifetime of a local browser session |
+
+Browser authentication is disabled when all OIDC settings are unset. When it
+is enabled, every OIDC setting is required. The subject-role map is the
+installation's initial enrollment and role authority: unknown subjects cannot
+sign in, and a mapped role is reapplied on each successful login. Browser
+sessions use an opaque, HTTP-only `slipramp_session` cookie. They have a fixed
+absolute lifetime and no idle expiry. The callback validates authorization
+code PKCE, state, nonce, issuer, signature, audience, and token time claims;
+provider access and refresh tokens are not retained.
+
+When browser authentication is enabled, product API operations require the
+local session and apply the principal's global role. The web process forwards
+only that session to SSR API calls, live-log streams, and artifact downloads;
+it also passes same-origin login and callback requests to the Server. Without
+OIDC configuration, product routes retain temporary anonymous access during
+the staged authentication rollout.
 
 Placements are loaded from the file named by `SLIPRAMP_PLACEMENTS_FILE` when the
 Server starts. Each placement selects a cluster registered in
@@ -292,7 +314,12 @@ variables:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `SLIPRAMP_API_URL` | `http://127.0.0.1:8080` | Server URL used by SSR loaders |
+| `SLIPRAMP_API_URL` | `http://127.0.0.1:8080` | Server URL used by the web process |
+
+The browser accesses login and callback paths through the web origin. The web
+process forwards those requests to `SLIPRAMP_API_URL`, so local development and
+deployments without path-based ingress routing still receive the Server's OIDC
+redirects and cookies on the web origin.
 
 ## Development
 

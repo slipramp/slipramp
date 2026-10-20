@@ -22,7 +22,11 @@ test("proxies immutable artifact bytes and download metadata", async () => {
 
   const response = await proxyArtifactDownload(
     artifactId,
-    new Request(`http://web.test/api/v1/artifacts/${artifactId}/download`),
+    new Request(`http://web.test/api/v1/artifacts/${artifactId}/download`, {
+      headers: {
+        cookie: "theme=dark; slipramp_session=session-token; analytics=disabled",
+      },
+    }),
     "http://server.test:8080/base/path",
     requestUpstream,
   );
@@ -32,6 +36,7 @@ test("proxies immutable artifact bytes and download metadata", async () => {
     `http://server.test:8080/api/v1/artifacts/${artifactId}/download`,
   );
   assert.equal(upstreamRequest.init.headers.accept, "application/octet-stream");
+  assert.equal(upstreamRequest.init.headers.cookie, "slipramp_session=session-token");
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-disposition"), 'attachment; filename="plan"');
   assert.equal(response.headers.get("content-length"), "10");

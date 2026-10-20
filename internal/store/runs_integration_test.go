@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -341,7 +342,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 
 	cancelAt := completedAt.Add(3 * time.Minute)
-	canceling, err := database.CancelRun(ctx, second.ID, cancelAt)
+	canceling, err := database.CancelRun(ctx, second.ID, cancelAt, nil)
 	if err != nil {
 		t.Fatalf("CancelRun() error = %v", err)
 	}
@@ -361,6 +362,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		ctx,
 		second.ID,
 		cancelAt.Add(time.Minute),
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("repeat CancelRun() error = %v", err)
@@ -387,6 +389,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		ctx,
 		record.ID,
 		cancelAt,
+		nil,
 	); !errors.Is(err, run.ErrRunFinished) {
 		t.Errorf("finished Run cancel error = %v, want Run finished", err)
 	}
@@ -404,6 +407,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		ctx,
 		third.ID,
 		queuedCancelAt,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("cancel queued Run: %v", err)
@@ -423,11 +427,164 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		ctx,
 		third.ID,
 		queuedCancelAt.Add(time.Minute),
+		nil,
 	); err != nil {
 		t.Fatalf("repeat queued Run cancel: %v", err)
 	}
 
 	assertRunCounts(t, database, 3, 10)
+}
+
+func TestRunAttributionPersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 19, 12, 0, 0, 0, time.UTC)
+	creator := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500"),
+		Kind:        productidentity.KindUser,
+		DisplayName: "Ada Lovelace",
+		Role:        productidentity.RoleOperator,
+		CreatedAt:   createdAt,
+		UpdatedAt:   createdAt,
+	}
+	creator, err := database.CreatePrincipal(ctx, creator)
+	if err != nil {
+		t.Fatalf("create Run creator: %v", err)
+	}
+	canceler := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501"),
+		Kind:        productidentity.KindServiceAccount,
+		DisplayName: "Automation",
+		Role:        productidentity.RoleOperator,
+		CreatedAt:   createdAt,
+		UpdatedAt:   createdAt,
+	}
+	canceler, err = database.CreatePrincipal(ctx, canceler)
+	if err != nil {
+		t.Fatalf("create Run canceler: %v", err)
+	}
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1510")
+	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1511")
+	_, err = database.CreateRepository(ctx, repository.Repository{
+		Name:      "attributed-infrastructure",
+		CloneURL:  "https://github.com/example/infrastructure.git",
+		Branch:    "main",
+		ID:        repositoryID,
+		CreatedAt: createdAt,
+	})
+	if err != nil {
+		t.Fatalf("create attributed repository: %v", err)
+	}
+	refresh := successfulCatalogRefresh(
+		"0123456789abcdef0123456789abcdef01234567",
+		createdAt.Add(time.Minute),
+		revisionID,
+	)
+	refresh.Revision.Catalog = persistedCatalog("1.14.3")
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refresh); err != nil {
+		t.Fatalf("record attributed catalog: %v", err)
+	}
+
+	creatorSnapshot, err := creator.ActorSnapshot()
+	if err != nil {
+		t.Fatalf("snapshot Run creator: %v", err)
+	}
+	idempotencyKey := "shared-key"
+	first := run.Run{
+		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1520"),
+		Phase:             run.PhaseQueued,
+		RepositoryID:      repositoryID,
+		CatalogRevisionID: revisionID,
+		CommitSHA:         *refresh.CommitSHA,
+		TargetName:        "network",
+		ActionName:        "preview",
+		Parameters:        map[string]any{},
+		PlacementName:     "infrastructure",
+		ClusterName:       "colo",
+		Source:            run.Source{Type: run.SourceTypeAPI},
+		IdempotencyKey:    &idempotencyKey,
+		RequestDigest:     strings.Repeat("a", 64),
+		Snapshot: run.Snapshot{
+			Repository: run.RepositorySnapshot{
+				Name:     "attributed-infrastructure",
+				CloneURL: "https://github.com/example/infrastructure.git",
+				Branch:   "main",
+			},
+			Target:  refresh.Revision.Catalog.Targets[0],
+			Action:  catalog.EffectiveAction{Name: "preview"},
+			Runtime: refresh.Revision.Catalog.Runtimes[0],
+			Placement: run.PlacementSnapshot{
+				Name:         "infrastructure",
+				ClusterName:  "colo",
+				JobNamespace: "slipramp-jobs",
+			},
+		},
+		CreatedBy: &creatorSnapshot,
+		CreatedAt: createdAt.Add(2 * time.Minute),
+	}
+	created, err := database.CreateRun(ctx, first)
+	if err != nil {
+		t.Fatalf("create attributed Run: %v", err)
+	}
+	if created.CreatedBy == nil || created.CreatedBy.PrincipalID != creator.ID ||
+		created.CreatedBy.DisplayName != creator.DisplayName {
+		t.Errorf("created Run actor = %#v", created.CreatedBy)
+	}
+
+	retry := first
+	retry.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1521")
+	retried, err := database.CreateRun(ctx, retry)
+	if err != nil {
+		t.Fatalf("retry attributed Run: %v", err)
+	}
+	if retried.ID != first.ID {
+		t.Errorf("retried Run ID = %s, want %s", retried.ID, first.ID)
+	}
+
+	cancelerSnapshot, err := canceler.ActorSnapshot()
+	if err != nil {
+		t.Fatalf("snapshot Run canceler: %v", err)
+	}
+	second := first
+	second.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1522")
+	second.CreatedBy = &cancelerSnapshot
+	second.CreatedAt = first.CreatedAt.Add(time.Minute)
+	createdSecond, err := database.CreateRun(ctx, second)
+	if err != nil {
+		t.Fatalf("reuse idempotency key for another principal: %v", err)
+	}
+	if createdSecond.ID != second.ID {
+		t.Errorf("second principal Run ID = %s, want %s", createdSecond.ID, second.ID)
+	}
+
+	canceled, err := database.CancelRun(
+		ctx,
+		first.ID,
+		createdAt.Add(4*time.Minute),
+		&cancelerSnapshot,
+	)
+	if err != nil {
+		t.Fatalf("cancel attributed Run: %v", err)
+	}
+	if canceled.CanceledBy == nil || canceled.CanceledBy.PrincipalID != canceler.ID ||
+		canceled.CanceledBy.DisplayName != canceler.DisplayName {
+		t.Errorf("canceled Run actor = %#v", canceled.CanceledBy)
+	}
+
+	repeated, err := database.CancelRun(
+		ctx,
+		first.ID,
+		createdAt.Add(5*time.Minute),
+		&creatorSnapshot,
+	)
+	if err != nil {
+		t.Fatalf("repeat attributed cancellation: %v", err)
+	}
+	if repeated.CanceledBy == nil || repeated.CanceledBy.PrincipalID != canceler.ID {
+		t.Errorf("repeat cancellation actor = %#v, want original", repeated.CanceledBy)
+	}
 }
 
 func assertRunCounts(

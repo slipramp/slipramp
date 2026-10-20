@@ -17,6 +17,7 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -74,6 +75,29 @@ func New(
 		persistence.artifactContents,
 		[]byte(cfg.ArtifactTokenSecret),
 	)
+	var productAuthentication *productauth.Service
+	if cfg.ProductAuthentication.OIDC.Enabled() {
+		provider, discoverErr := productauth.DiscoverOIDCProvider(
+			ctx,
+			cfg.ProductAuthentication.OIDC,
+		)
+		if discoverErr != nil {
+			persistence.Close()
+
+			return nil, discoverErr
+		}
+
+		productAuthentication, err = productauth.NewService(
+			persistence.database,
+			provider,
+			cfg.ProductAuthentication,
+		)
+		if err != nil {
+			persistence.Close()
+
+			return nil, fmt.Errorf("initialize product authentication: %w", err)
+		}
+	}
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
 		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
@@ -90,7 +114,7 @@ func New(
 		cfg.ArtifactOrphanGracePeriod,
 		logger,
 	)
-	httpHandler := newHandlerWithLogger(
+	httpHandler := newHandlerWithProductAuthentication(
 		clusters,
 		identities,
 		repositories,
@@ -98,6 +122,7 @@ func New(
 		runs,
 		artifacts,
 		cfg.ControllerEnrollmentTokens,
+		productAuthentication,
 		logger,
 	)
 	server := newServer(cfg, logger, httpHandler)
@@ -266,15 +291,56 @@ func newHandlerWithLogger(
 	controllerEnrollmentTokens map[string]string,
 	logger *slog.Logger,
 ) http.Handler {
+	return newHandlerWithProductAuthentication(
+		clusters,
+		identities,
+		repositories,
+		catalogs,
+		runs,
+		artifacts,
+		controllerEnrollmentTokens,
+		nil,
+		logger,
+	)
+}
+
+func newHandlerWithProductAuthentication(
+	clusters handler.ClusterService,
+	identities handler.ControllerIdentityService,
+	repositories handler.RepositoryService,
+	catalogs handler.CatalogService,
+	runs handler.RunService,
+	artifacts handler.ArtifactService,
+	controllerEnrollmentTokens map[string]string,
+	productAuthentication handler.ProductAuthenticationService,
+	logger *slog.Logger,
+) http.Handler {
 	authenticator := newControllerAuthenticator(
 		identities,
 		controllerEnrollmentTokens,
 	)
+	middleware := []api.StrictMiddlewareFunc{
+		handler.ControllerAuthentication(authenticator),
+	}
+	if productAuthentication != nil {
+		middleware = append(
+			middleware,
+			handler.ProductAuthentication(
+				newProductSessionAuthenticator(productAuthentication),
+			),
+		)
+	}
 	strictHandler := api.NewStrictHandlerWithOptions(
-		handler.New(clusters, identities, repositories, catalogs, runs, artifacts),
-		[]api.StrictMiddlewareFunc{
-			handler.ControllerAuthentication(authenticator),
-		},
+		handler.New(
+			clusters,
+			identities,
+			repositories,
+			catalogs,
+			runs,
+			artifacts,
+			productAuthentication,
+		),
+		middleware,
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: func(
 				writer http.ResponseWriter,
@@ -334,6 +400,10 @@ func newHandlerWithLogger(
 	)
 
 	registerMethodNotAllowed(mux, "/healthz", http.MethodGet)
+	registerMethodNotAllowed(mux, "/api/v1/auth/login", http.MethodGet)
+	registerMethodNotAllowed(mux, "/api/v1/auth/callback", http.MethodGet)
+	registerMethodNotAllowed(mux, "/api/v1/auth/session", http.MethodGet)
+	registerMethodNotAllowed(mux, "/api/v1/auth/logout", http.MethodPost)
 	registerMethodNotAllowed(
 		mux,
 		"/api/v1/repositories",

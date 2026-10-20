@@ -17,6 +17,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -30,9 +31,11 @@ type Store interface {
 		ctx context.Context,
 		runID uuid.UUID,
 		requestedAt time.Time,
+		canceledBy *productidentity.ActorSnapshot,
 	) (Run, error)
 	GetRunByIdempotencyKey(
 		ctx context.Context,
+		principalID *uuid.UUID,
 		sourceType SourceType,
 		idempotencyKey string,
 	) (Run, error)
@@ -121,6 +124,7 @@ func (s *Service) CreateRun(
 	if request.IdempotencyKey != nil {
 		existing, err := s.runs.GetRunByIdempotencyKey(
 			ctx,
+			actorPrincipalID(request.Actor),
 			request.Source.Type,
 			*request.IdempotencyKey,
 		)
@@ -199,6 +203,10 @@ func (s *Service) CreateRun(
 	}
 
 	createdAt := s.now().UTC()
+	createdBy, err := actorSnapshot(request.Actor)
+	if err != nil {
+		return Run{}, err
+	}
 	record := Run{
 		ID:                s.newID(),
 		Phase:             PhaseQueued,
@@ -213,6 +221,7 @@ func (s *Service) CreateRun(
 		Source:            request.Source,
 		IdempotencyKey:    cloneString(request.IdempotencyKey),
 		RequestDigest:     digest,
+		CreatedBy:         createdBy,
 		Snapshot: Snapshot{
 			Repository: RepositorySnapshot{
 				Name:     repositoryRecord.Name,
@@ -406,6 +415,10 @@ func validateRequest(request CreateRequest) error {
 		return fmt.Errorf("%w: run source is invalid", ErrInvalidRequest)
 	}
 
+	if _, err := actorSnapshot(request.Actor); err != nil {
+		return err
+	}
+
 	if request.IdempotencyKey != nil {
 		key := *request.IdempotencyKey
 		if strings.TrimSpace(key) == "" {
@@ -430,6 +443,31 @@ func validateRequest(request CreateRequest) error {
 	}
 
 	return nil
+}
+
+func actorSnapshot(
+	principal *productidentity.Principal,
+) (*productidentity.ActorSnapshot, error) {
+	if principal == nil {
+		return nil, nil
+	}
+
+	snapshot, err := principal.ActorSnapshot()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidRequest, err)
+	}
+
+	return &snapshot, nil
+}
+
+func actorPrincipalID(principal *productidentity.Principal) *uuid.UUID {
+	if principal == nil {
+		return nil
+	}
+
+	principalID := principal.ID
+
+	return &principalID
 }
 
 func validateParameters(

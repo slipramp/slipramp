@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/server"
 )
 
@@ -28,6 +29,12 @@ const (
 	serverArtifactRetentionPeriodEnvironment      = "SLIPRAMP_ARTIFACT_RETENTION_PERIOD"
 	serverArtifactReconcileIntervalEnvironment    = "SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL"
 	serverArtifactOrphanGracePeriodEnvironment    = "SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD"
+	serverOIDCIssuerEnvironment                   = "SLIPRAMP_OIDC_ISSUER"
+	serverOIDCClientIDEnvironment                 = "SLIPRAMP_OIDC_CLIENT_ID"
+	serverOIDCClientSecretEnvironment             = "SLIPRAMP_OIDC_CLIENT_SECRET"
+	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
+	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
+	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
 )
 
 func LoadServer(
@@ -219,6 +226,45 @@ func LoadServer(
 		}
 
 		cfg.ArtifactOrphanGracePeriod = period
+	}
+
+	if value, ok := lookupEnvironment(serverOIDCIssuerEnvironment); ok {
+		cfg.ProductAuthentication.OIDC.Issuer = value
+	}
+	if value, ok := lookupEnvironment(serverOIDCClientIDEnvironment); ok {
+		cfg.ProductAuthentication.OIDC.ClientID = value
+	}
+	if value, ok := lookupEnvironment(serverOIDCClientSecretEnvironment); ok {
+		cfg.ProductAuthentication.OIDC.ClientSecret = value
+	}
+	if value, ok := lookupEnvironment(serverOIDCRedirectURLEnvironment); ok {
+		cfg.ProductAuthentication.OIDC.RedirectURL = value
+	}
+	if value, ok := lookupEnvironment(serverOIDCSubjectRolesEnvironment); ok {
+		var subjectRoles map[string]productidentity.Role
+		if err := json.Unmarshal([]byte(value), &subjectRoles); err != nil {
+			return server.Config{}, fmt.Errorf(
+				"parse %s: %w",
+				serverOIDCSubjectRolesEnvironment,
+				err,
+			)
+		}
+		if subjectRoles == nil {
+			subjectRoles = map[string]productidentity.Role{}
+		}
+
+		cfg.ProductAuthentication.OIDC.SubjectRoles = subjectRoles
+	}
+	if value, ok := lookupEnvironment(serverProductSessionLifetimeEnvironment); ok {
+		lifetime, err := parseDurationEnvironment(
+			serverProductSessionLifetimeEnvironment,
+			value,
+		)
+		if err != nil {
+			return server.Config{}, err
+		}
+
+		cfg.ProductAuthentication.SessionLifetime = lifetime
 	}
 
 	if err := cfg.Validate(); err != nil {

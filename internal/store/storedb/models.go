@@ -8,6 +8,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ApiKey struct {
+	ID                   pgtype.UUID
+	PrincipalID          pgtype.UUID
+	CreatedByPrincipalID pgtype.UUID
+	Name                 string
+	TokenPrefix          string
+	TokenDigest          []byte
+	Scopes               []string
+	CreatedAt            pgtype.Timestamptz
+	ExpiresAt            pgtype.Timestamptz
+	LastUsedAt           pgtype.Timestamptz
+	RevokedAt            pgtype.Timestamptz
+}
+
 type Artifact struct {
 	ID               pgtype.UUID
 	RunID            pgtype.UUID
@@ -75,6 +89,29 @@ type ControllerCredential struct {
 	EnrolledAt  pgtype.Timestamptz
 }
 
+type OidcIdentity struct {
+	ID                  pgtype.UUID
+	PrincipalID         pgtype.UUID
+	Issuer              string
+	Subject             string
+	Email               *string
+	PreferredUsername   *string
+	DisplayName         *string
+	LastAuthenticatedAt pgtype.Timestamptz
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+}
+
+type Principal struct {
+	ID          pgtype.UUID
+	Kind        string
+	DisplayName string
+	Role        string
+	DisabledAt  pgtype.Timestamptz
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
 type Repository struct {
 	ID                      pgtype.UUID
 	Name                    string
@@ -119,6 +156,10 @@ type Run struct {
 	OutcomeReason           *string
 	OutcomeMessage          *string
 	ExitCode                *int32
+	CreatedByPrincipalID    pgtype.UUID
+	CreatedBySnapshot       []byte
+	CanceledByPrincipalID   pgtype.UUID
+	CanceledBySnapshot      []byte
 }
 
 type RunArtifactInput struct {
@@ -146,4 +187,13 @@ type Target struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	ArchivedAt        pgtype.Timestamptz
+}
+
+type WebSession struct {
+	ID          pgtype.UUID
+	PrincipalID pgtype.UUID
+	TokenDigest []byte
+	CreatedAt   pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	LastSeenAt  pgtype.Timestamptz
 }

@@ -1,4 +1,5 @@
 import { getServerAPIURL } from "~/api/client.server";
+import { forwardedCookieHeader, productSessionCookieName } from "~/api/request-auth.server";
 
 import type { Route } from "./+types/run-log";
 
@@ -16,6 +17,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   }
 
   const headers = new Headers({ accept: "text/event-stream" });
+  const sessionCookie = forwardedCookieHeader(request, productSessionCookieName).cookie;
+  if (sessionCookie) {
+    headers.set("cookie", sessionCookie);
+  }
   const lastEventID = request.headers.get("last-event-id");
   if (lastEventID !== null) {
     headers.set("last-event-id", lastEventID);

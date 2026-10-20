@@ -25,8 +25,8 @@ export function meta() {
   return [{ title: pageTitle("Repositories") }];
 }
 
-export async function loader() {
-  const result = await listRepositories({ client: createServerAPIClient() });
+export async function loader({ request }: Route.LoaderArgs) {
+  const result = await listRepositories({ client: createServerAPIClient(request) });
 
   return {
     available: result.data !== undefined,
@@ -44,7 +44,7 @@ export async function action({ request }: Route.ActionArgs) {
       name: formValue(formData, "name"),
       refreshCredentialName: optionalFormValue(formData, "refreshCredentialName"),
     },
-    client: createServerAPIClient(),
+    client: createServerAPIClient(request),
   });
 
   if (result.data) {

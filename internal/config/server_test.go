@@ -26,6 +26,12 @@ const (
 	serverArtifactRetentionPeriodEnvironment      = "SLIPRAMP_ARTIFACT_RETENTION_PERIOD"
 	serverArtifactReconcileIntervalEnvironment    = "SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL"
 	serverArtifactOrphanGracePeriodEnvironment    = "SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD"
+	serverOIDCIssuerEnvironment                   = "SLIPRAMP_OIDC_ISSUER"
+	serverOIDCClientIDEnvironment                 = "SLIPRAMP_OIDC_CLIENT_ID"
+	serverOIDCClientSecretEnvironment             = "SLIPRAMP_OIDC_CLIENT_SECRET"
+	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
+	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
+	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
 )
 
 func TestLoadServerFromEnvironment(t *testing.T) {
@@ -49,6 +55,12 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		serverArtifactRetentionPeriodEnvironment:      "720h",
 		serverArtifactReconcileIntervalEnvironment:    "30m",
 		serverArtifactOrphanGracePeriodEnvironment:    "48h",
+		serverOIDCIssuerEnvironment:                   "https://identity.example.com",
+		serverOIDCClientIDEnvironment:                 "slipramp",
+		serverOIDCClientSecretEnvironment:             "client-secret",
+		serverOIDCRedirectURLEnvironment:              "https://slipramp.example.com/api/v1/auth/callback",
+		serverOIDCSubjectRolesEnvironment:             `{"admin-subject":"admin","operator-subject":"operator"}`,
+		serverProductSessionLifetimeEnvironment:       "8h",
 	}
 
 	cfg, err := config.LoadServer(mapEnvironment(environment))
@@ -168,6 +180,27 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		t.Errorf(
 			"ArtifactOrphanGracePeriod = %s, want 48h",
 			cfg.ArtifactOrphanGracePeriod,
+		)
+	}
+
+	if cfg.ProductAuthentication.OIDC.Issuer != "https://identity.example.com" ||
+		cfg.ProductAuthentication.OIDC.ClientID != "slipramp" ||
+		cfg.ProductAuthentication.OIDC.ClientSecret != "client-secret" ||
+		cfg.ProductAuthentication.OIDC.RedirectURL !=
+			"https://slipramp.example.com/api/v1/auth/callback" {
+		t.Errorf("ProductAuthentication.OIDC = %#v", cfg.ProductAuthentication.OIDC)
+	}
+	if cfg.ProductAuthentication.OIDC.SubjectRoles["admin-subject"] != "admin" ||
+		cfg.ProductAuthentication.OIDC.SubjectRoles["operator-subject"] != "operator" {
+		t.Errorf(
+			"ProductAuthentication.OIDC.SubjectRoles = %v",
+			cfg.ProductAuthentication.OIDC.SubjectRoles,
+		)
+	}
+	if cfg.ProductAuthentication.SessionLifetime != 8*time.Hour {
+		t.Errorf(
+			"ProductAuthentication.SessionLifetime = %s, want 8h",
+			cfg.ProductAuthentication.SessionLifetime,
 		)
 	}
 }
@@ -299,6 +332,38 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 				serverArtifactOrphanGracePeriodEnvironment: "-1h",
 			},
 			wantError: "validate server configuration",
+		},
+		{
+			name: "partial OIDC configuration",
+			environment: map[string]string{
+				serverOIDCIssuerEnvironment: "https://identity.example.com",
+			},
+			wantError: "validate server configuration",
+		},
+		{
+			name: "malformed OIDC subject roles",
+			environment: map[string]string{
+				serverOIDCSubjectRolesEnvironment: "not-json",
+			},
+			wantError: serverOIDCSubjectRolesEnvironment,
+		},
+		{
+			name: "OIDC enrollment without administrator",
+			environment: map[string]string{
+				serverOIDCIssuerEnvironment:       "https://identity.example.com",
+				serverOIDCClientIDEnvironment:     "slipramp",
+				serverOIDCClientSecretEnvironment: "client-secret",
+				serverOIDCRedirectURLEnvironment:  "https://slipramp.example.com/api/v1/auth/callback",
+				serverOIDCSubjectRolesEnvironment: `{"viewer":"viewer"}`,
+			},
+			wantError: "administrator",
+		},
+		{
+			name: "malformed product session lifetime",
+			environment: map[string]string{
+				serverProductSessionLifetimeEnvironment: "later",
+			},
+			wantError: serverProductSessionLifetimeEnvironment,
 		},
 	}
 

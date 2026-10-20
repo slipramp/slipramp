@@ -17,7 +17,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const repositoryId = optionalSearchValue(url, "repositoryId");
   const target = optionalSearchValue(url, "target");
-  const client = createServerAPIClient();
+  const client = createServerAPIClient(request);
   const [runsResult, repositoriesResult] = await Promise.all([
     listRuns({
       client,

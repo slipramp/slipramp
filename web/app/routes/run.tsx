@@ -36,8 +36,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(runName) }];
 }
 
-export async function loader({ params }: Route.LoaderArgs) {
-  const client = createServerAPIClient();
+export async function loader({ params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request);
   const [runResult, artifactResult] = await Promise.all([
     getRun({ client, path: { runId: params.runId } }),
     listRunArtifacts({ client, path: { runId: params.runId } }),
@@ -55,7 +55,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   const intent = formData.get("intent");
   if (intent === "cancel") {
     const result = await cancelRun({
-      client: createServerAPIClient(),
+      client: createServerAPIClient(request),
       path: { runId: params.runId },
     });
     if (result.data) {
@@ -84,7 +84,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     return { error: "The artifact selection is incomplete." };
   }
 
-  const client = createServerAPIClient();
+  const client = createServerAPIClient(request);
   const producerResult = await getRun({ client, path: { runId: params.runId } });
   const producer = producerResult.data;
   const consumer = producer?.artifactConsumers[artifactName]?.find(
@@ -100,7 +100,6 @@ export async function action({ params, request }: Route.ActionArgs) {
       inputs: { [consumer.input]: artifactId },
       parameters: {},
       repositoryId: producer.repositoryId,
-      source: { type: "manual" },
       target: producer.target,
     },
     client,

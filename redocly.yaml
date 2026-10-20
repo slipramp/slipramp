@@ -6,3 +6,5 @@ extends:
 rules:
   info-license: off
   no-server-example.com: off
+  # Browser login and callback operations intentionally succeed with redirects.
+  operation-2xx-response: off

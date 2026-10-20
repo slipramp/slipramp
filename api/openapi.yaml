@@ -44,8 +44,25 @@ paths:
     $ref: ./paths/artifacts.yaml#/runLogs
   /api/v1/artifacts/{artifactId}/download:
     $ref: ./paths/artifacts.yaml#/artifactDownload
+  /api/v1/auth/login:
+    $ref: ./paths/authentication.yaml#/login
+  /api/v1/auth/callback:
+    $ref: ./paths/authentication.yaml#/callback
+  /api/v1/auth/session:
+    $ref: ./paths/authentication.yaml#/session
+  /api/v1/auth/logout:
+    $ref: ./paths/authentication.yaml#/logout
 components:
   securitySchemes:
+    ProductSession:
+      type: apiKey
+      in: cookie
+      name: slipramp_session
+      description: Opaque local browser session issued by the Slipramp Server.
+    ProductBearer:
+      type: http
+      scheme: bearer
+      description: Slipramp API key for a product principal.
     ControllerBearer:
       type: http
       scheme: bearer
@@ -60,6 +77,8 @@ components:
       $ref: ./components/common.yaml#/HealthResponse
     Problem:
       $ref: ./components/common.yaml#/Problem
+    ProductPrincipal:
+      $ref: ./components/authentication.yaml#/ProductPrincipal
     Repository:
       $ref: ./components/repositories.yaml#/Repository
     RepositoryList:
@@ -92,6 +111,8 @@ components:
       $ref: ./components/runs.yaml#/RunList
     RunCreate:
       $ref: ./components/runs.yaml#/RunCreate
+    RunActor:
+      $ref: ./components/runs.yaml#/RunActor
     Artifact:
       $ref: ./components/artifacts.yaml#/Artifact
     ArtifactList:

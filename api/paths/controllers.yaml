@@ -6,7 +6,10 @@ clusters:
       Lists clusters observed through authenticated controller requests and
       reports whether each controller has checked in recently enough to be
       considered connected.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Controllers
     responses:
@@ -16,6 +19,18 @@ clusters:
           application/json:
             schema:
               $ref: ../components/controllers.yaml#/ClusterList
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
       "405":
         description: The HTTP method is not supported for this resource.
         content:

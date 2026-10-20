@@ -10,8 +10,8 @@ export function meta() {
   return [{ title: pageTitle("Clusters") }];
 }
 
-export async function loader() {
-  const client = createServerAPIClient();
+export async function loader({ request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request);
   const [healthResult, clustersResult] = await Promise.all([
     getHealth({ client }),
     listClusters({ client }),

@@ -12,6 +12,7 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/store"
 )
@@ -30,6 +31,7 @@ type Config struct {
 	ArtifactRetentionPeriod      time.Duration
 	ArtifactReconcileInterval    time.Duration
 	ArtifactOrphanGracePeriod    time.Duration
+	ProductAuthentication        productauth.Config
 }
 
 func DefaultConfig() Config {
@@ -46,6 +48,7 @@ func DefaultConfig() Config {
 		ArtifactRetentionPeriod:      artifact.DefaultRetentionPeriod,
 		ArtifactReconcileInterval:    artifact.DefaultReconcileInterval,
 		ArtifactOrphanGracePeriod:    artifact.DefaultOrphanGracePeriod,
+		ProductAuthentication:        productauth.DefaultConfig(),
 	}
 }
 
@@ -132,6 +135,10 @@ func (c Config) Validate() error {
 
 	if c.ArtifactOrphanGracePeriod <= 0 {
 		return fmt.Errorf("artifact orphan grace period must be positive")
+	}
+
+	if err := c.ProductAuthentication.Validate(); err != nil {
+		return fmt.Errorf("validate product authentication: %w", err)
 	}
 
 	return nil

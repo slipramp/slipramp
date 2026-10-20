@@ -418,7 +418,12 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	if len(expired) != 0 {
 		t.Fatalf("ExpireArtifacts() with active producer = %#v, want none", expired)
 	}
-	if _, err := database.CancelRun(ctx, producerRunID, sealedAt.Add(time.Minute)); err != nil {
+	if _, err := database.CancelRun(
+		ctx,
+		producerRunID,
+		sealedAt.Add(time.Minute),
+		nil,
+	); err != nil {
 		t.Fatalf("finish producing Run: %v", err)
 	}
 
@@ -469,7 +474,12 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 		t.Fatalf("CreateRun() with expired input error = %v, want invalid inputs", err)
 	}
 
-	if _, err := database.CancelRun(ctx, consumerRunID, sealedAt.Add(4*time.Minute)); err != nil {
+	if _, err := database.CancelRun(
+		ctx,
+		consumerRunID,
+		sealedAt.Add(4*time.Minute),
+		nil,
+	); err != nil {
 		t.Fatalf("finish consuming Run: %v", err)
 	}
 	expired, err = database.ExpireArtifacts(ctx, sealedAt.Add(time.Hour), 10)

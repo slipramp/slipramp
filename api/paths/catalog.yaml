@@ -6,7 +6,10 @@ repositoryCatalog:
       Returns the immutable catalog revision currently active for an existing
       repository. A repository without an accepted catalog does not have this
       resource yet.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Catalog
     parameters:
@@ -26,6 +29,18 @@ repositoryCatalog:
               $ref: ../components/catalog.yaml#/CatalogRevision
       "400":
         description: The repository identity is not a valid UUID.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
         content:
           application/problem+json:
             schema:
@@ -59,7 +74,10 @@ targets:
       Lists target summaries across active repository catalogs, ordered by
       display title, repository name, and target name. Search matches target
       names and titles, repository names, and action names.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Catalog
     parameters:
@@ -105,6 +123,18 @@ targets:
               $ref: ../components/catalog.yaml#/TargetSummaryList
       "400":
         description: A filter, limit, or offset is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
         content:
           application/problem+json:
             schema:

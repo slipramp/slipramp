@@ -5,7 +5,10 @@ runs:
     description: >-
       Lists the most recent Runs in descending creation order. Repository and
       target filters expose history at both catalog levels.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Runs
     parameters:
@@ -46,6 +49,18 @@ runs:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
       "405":
         description: The HTTP method is not supported for this resource.
         content:
@@ -66,7 +81,10 @@ runs:
       the producing revision when explicit artifact inputs are selected, and
       persists an immutable queued Run. The Run remains pinned to the resolved
       catalog revision and Git commit even if the repository refreshes later.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Runs
     parameters:
@@ -75,8 +93,8 @@ runs:
         required: false
         description: >-
           Optional key that makes retries of the same run request return the
-          originally created Run. Reusing a key for a different request is a
-          conflict.
+          originally created Run. Authenticated keys are scoped to the calling
+          principal. Reusing a key for a different request is a conflict.
         schema:
           type: string
           minLength: 1
@@ -96,6 +114,18 @@ runs:
               $ref: ../components/runs.yaml#/Run
       "400":
         description: The run request or supplied parameters are invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Operator permission and runs-write scope are required.
         content:
           application/problem+json:
             schema:
@@ -131,7 +161,10 @@ run:
   get:
     operationId: getRun
     summary: Get a Run
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags: [Runs]
     parameters:
       - name: runId
@@ -145,6 +178,18 @@ run:
           application/json:
             schema:
               $ref: ../components/runs.yaml#/Run
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
       "404":
         description: The Run does not exist.
         content:
@@ -172,7 +217,10 @@ cancelRun:
       Records a cancel request idempotently. A queued Run finishes as canceled
       immediately; an active Run remains active until its cluster controller
       removes the execution Job and reports the canceled outcome.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Runs
     parameters:
@@ -190,6 +238,18 @@ cancelRun:
           application/json:
             schema:
               $ref: ../components/runs.yaml#/Run
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Operator permission and runs-write scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
       "404":
         description: The Run does not exist.
         content:

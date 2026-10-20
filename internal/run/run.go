@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
 const (
@@ -78,6 +79,12 @@ type CreateRequest struct {
 	Inputs         map[string]uuid.UUID
 	Source         Source
 	IdempotencyKey *string
+	Actor          *productidentity.Principal
+}
+
+type CancelRequest struct {
+	RunID uuid.UUID
+	Actor *productidentity.Principal
 }
 
 type ListFilter struct {
@@ -114,6 +121,8 @@ type Run struct {
 	IdempotencyKey          *string
 	RequestDigest           string
 	Snapshot                Snapshot
+	CreatedBy               *productidentity.ActorSnapshot
+	CanceledBy              *productidentity.ActorSnapshot
 	CreatedAt               time.Time
 	AssignedAt              *time.Time
 	PreparingAt             *time.Time

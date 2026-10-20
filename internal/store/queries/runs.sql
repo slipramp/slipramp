@@ -14,6 +14,8 @@ INSERT INTO runs (
     idempotency_key,
     request_digest,
     snapshot,
+    created_by_principal_id,
+    created_by_snapshot,
     created_at
 ) VALUES (
     sqlc.arg(id),
@@ -30,18 +32,28 @@ INSERT INTO runs (
     sqlc.narg(idempotency_key),
     sqlc.arg(request_digest),
     sqlc.arg(snapshot),
+    sqlc.narg(created_by_principal_id),
+    sqlc.narg(created_by_snapshot),
     sqlc.arg(created_at)
 )
-ON CONFLICT (source_type, idempotency_key)
-WHERE idempotency_key IS NOT NULL
-DO NOTHING
+ON CONFLICT DO NOTHING
 RETURNING *;
 
 -- name: GetRunByIdempotencyKey :one
 SELECT *
 FROM runs
-WHERE source_type = sqlc.arg(source_type)
-  AND idempotency_key = sqlc.arg(idempotency_key);
+WHERE idempotency_key = sqlc.arg(idempotency_key)
+  AND (
+      (
+          sqlc.narg(principal_id)::uuid IS NOT NULL
+          AND created_by_principal_id = sqlc.narg(principal_id)
+      )
+      OR (
+          sqlc.narg(principal_id)::uuid IS NULL
+          AND created_by_principal_id IS NULL
+          AND source_type = sqlc.arg(source_type)
+      )
+  );
 
 -- name: GetRun :one
 SELECT *
@@ -100,6 +112,8 @@ FOR UPDATE;
 -- name: CancelRun :one
 UPDATE runs
 SET cancellation_requested_at = sqlc.arg(requested_at),
+    canceled_by_principal_id = sqlc.narg(canceled_by_principal_id),
+    canceled_by_snapshot = sqlc.narg(canceled_by_snapshot),
     phase = CASE WHEN phase = 'queued' THEN 'finished' ELSE phase END,
     outcome = CASE WHEN phase = 'queued' THEN 'canceled' ELSE outcome END,
     finished_at = CASE

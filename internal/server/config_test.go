@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
@@ -62,6 +63,13 @@ func TestDefaultConfig(t *testing.T) {
 			"ArtifactOrphanGracePeriod = %s, want %s",
 			settings.ArtifactOrphanGracePeriod,
 			24*time.Hour,
+		)
+	}
+
+	if settings.ProductAuthentication.SessionLifetime != 12*time.Hour {
+		t.Errorf(
+			"ProductAuthentication.SessionLifetime = %s, want 12h",
+			settings.ProductAuthentication.SessionLifetime,
 		)
 	}
 
@@ -221,6 +229,44 @@ func TestConfigValidate(t *testing.T) {
 				settings.ArtifactOrphanGracePeriod = 0
 			},
 			wantError: "artifact orphan grace period",
+		},
+		{
+			name: "valid OIDC provider",
+			configure: func(settings *Config) {
+				settings.ProductAuthentication.OIDC.Issuer = "https://identity.example.com"
+				settings.ProductAuthentication.OIDC.ClientID = "slipramp"
+				settings.ProductAuthentication.OIDC.ClientSecret = "client-secret"
+				settings.ProductAuthentication.OIDC.RedirectURL =
+					"https://slipramp.example.com/api/v1/auth/callback"
+				settings.ProductAuthentication.OIDC.SubjectRoles =
+					map[string]productidentity.Role{"admin-subject": productidentity.RoleAdmin}
+			},
+		},
+		{
+			name: "OIDC provider without administrator",
+			configure: func(settings *Config) {
+				settings.ProductAuthentication.OIDC.Issuer = "https://identity.example.com"
+				settings.ProductAuthentication.OIDC.ClientID = "slipramp"
+				settings.ProductAuthentication.OIDC.ClientSecret = "client-secret"
+				settings.ProductAuthentication.OIDC.RedirectURL =
+					"https://slipramp.example.com/api/v1/auth/callback"
+				settings.ProductAuthentication.OIDC.SubjectRoles =
+					map[string]productidentity.Role{"viewer-subject": productidentity.RoleViewer}
+			},
+			wantError: "administrator",
+		},
+		{
+			name: "OIDC provider with wrong callback path",
+			configure: func(settings *Config) {
+				settings.ProductAuthentication.OIDC.Issuer = "https://identity.example.com"
+				settings.ProductAuthentication.OIDC.ClientID = "slipramp"
+				settings.ProductAuthentication.OIDC.ClientSecret = "client-secret"
+				settings.ProductAuthentication.OIDC.RedirectURL =
+					"https://slipramp.example.com/other-callback"
+				settings.ProductAuthentication.OIDC.SubjectRoles =
+					map[string]productidentity.Role{"admin-subject": productidentity.RoleAdmin}
+			},
+			wantError: "/api/v1/auth/callback",
 		},
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
@@ -116,14 +117,16 @@ func (d *Database) GetArtifactInputCandidate(
 
 func (d *Database) GetRunByIdempotencyKey(
 	ctx context.Context,
+	principalID *uuid.UUID,
 	sourceType run.SourceType,
 	idempotencyKey string,
 ) (run.Run, error) {
 	row, err := d.queries.GetRunByIdempotencyKey(
 		ctx,
 		storedb.GetRunByIdempotencyKeyParams{
-			SourceType:     string(sourceType),
 			IdempotencyKey: &idempotencyKey,
+			PrincipalID:    optionalDatabaseUUID(principalID),
+			SourceType:     string(sourceType),
 		},
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -155,6 +158,11 @@ func (d *Database) CreateRun(
 		return run.Run{}, fmt.Errorf("marshal run snapshot: %w", err)
 	}
 
+	createdByPrincipalID, createdBySnapshot, err := actorDatabaseFields(record.CreatedBy)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("encode Run creator: %w", err)
+	}
+
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("begin run transaction: %w", err)
@@ -167,20 +175,22 @@ func (d *Database) CreateRun(
 	row, err := queries.CreateRun(
 		ctx,
 		storedb.CreateRunParams{
-			ID:                databaseUUID(record.ID),
-			Phase:             string(record.Phase),
-			RepositoryID:      databaseUUID(record.RepositoryID),
-			CatalogRevisionID: databaseUUID(record.CatalogRevisionID),
-			CommitSha:         record.CommitSHA,
-			TargetName:        record.TargetName,
-			ActionName:        record.ActionName,
-			Parameters:        parameters,
-			PlacementName:     record.PlacementName,
-			ClusterName:       record.ClusterName,
-			SourceType:        string(record.Source.Type),
-			IdempotencyKey:    record.IdempotencyKey,
-			RequestDigest:     record.RequestDigest,
-			Snapshot:          snapshot,
+			ID:                   databaseUUID(record.ID),
+			Phase:                string(record.Phase),
+			RepositoryID:         databaseUUID(record.RepositoryID),
+			CatalogRevisionID:    databaseUUID(record.CatalogRevisionID),
+			CommitSha:            record.CommitSHA,
+			TargetName:           record.TargetName,
+			ActionName:           record.ActionName,
+			Parameters:           parameters,
+			PlacementName:        record.PlacementName,
+			ClusterName:          record.ClusterName,
+			SourceType:           string(record.Source.Type),
+			IdempotencyKey:       record.IdempotencyKey,
+			RequestDigest:        record.RequestDigest,
+			Snapshot:             snapshot,
+			CreatedByPrincipalID: createdByPrincipalID,
+			CreatedBySnapshot:    createdBySnapshot,
 			CreatedAt: pgtype.Timestamptz{
 				Time:  record.CreatedAt,
 				Valid: true,
@@ -251,7 +261,13 @@ func (d *Database) CancelRun(
 	ctx context.Context,
 	runID uuid.UUID,
 	requestedAt time.Time,
+	canceledBy *productidentity.ActorSnapshot,
 ) (run.Run, error) {
+	canceledByPrincipalID, canceledBySnapshot, err := actorDatabaseFields(canceledBy)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("encode Run canceler: %w", err)
+	}
+
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("begin cancel Run transaction: %w", err)
@@ -283,8 +299,10 @@ func (d *Database) CancelRun(
 	updated, err := queries.CancelRun(
 		ctx,
 		storedb.CancelRunParams{
-			RequestedAt: databaseTime(requestedAt),
-			ID:          databaseUUID(runID),
+			RequestedAt:           databaseTime(requestedAt),
+			CanceledByPrincipalID: canceledByPrincipalID,
+			CanceledBySnapshot:    canceledBySnapshot,
+			ID:                    databaseUUID(runID),
 		},
 	)
 	if err != nil {
@@ -551,8 +569,9 @@ func existingIdempotentRun(
 	row, err := queries.GetRunByIdempotencyKey(
 		ctx,
 		storedb.GetRunByIdempotencyKeyParams{
-			SourceType:     string(record.Source.Type),
 			IdempotencyKey: record.IdempotencyKey,
+			PrincipalID:    actorDatabasePrincipalID(record.CreatedBy),
+			SourceType:     string(record.Source.Type),
 		},
 	)
 	if err != nil {
@@ -586,6 +605,15 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		return run.Run{}, fmt.Errorf("decode run snapshot: %w", err)
 	}
 
+	createdBy, err := actorFromDatabase(row.CreatedByPrincipalID, row.CreatedBySnapshot)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("decode Run creator: %w", err)
+	}
+	canceledBy, err := actorFromDatabase(row.CanceledByPrincipalID, row.CanceledBySnapshot)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("decode Run canceler: %w", err)
+	}
+
 	return run.Run{
 		ID:                uuid.UUID(row.ID.Bytes),
 		Phase:             run.Phase(row.Phase),
@@ -602,6 +630,8 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		IdempotencyKey:    row.IdempotencyKey,
 		RequestDigest:     row.RequestDigest,
 		Snapshot:          snapshot,
+		CreatedBy:         createdBy,
+		CanceledBy:        canceledBy,
 		CreatedAt:         row.CreatedAt.Time.UTC(),
 		AssignedAt:        applicationTime(row.AssignedAt),
 		PreparingAt:       applicationTime(row.PreparingAt),
@@ -616,6 +646,57 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		OutcomeMessage: row.OutcomeMessage,
 		ExitCode:       row.ExitCode,
 	}, nil
+}
+
+func actorDatabaseFields(
+	actor *productidentity.ActorSnapshot,
+) (pgtype.UUID, []byte, error) {
+	if actor == nil {
+		return pgtype.UUID{}, nil, nil
+	}
+	if err := actor.Validate(); err != nil {
+		return pgtype.UUID{}, nil, err
+	}
+
+	encoded, err := json.Marshal(actor)
+	if err != nil {
+		return pgtype.UUID{}, nil, err
+	}
+
+	return databaseUUID(actor.PrincipalID), encoded, nil
+}
+
+func actorDatabasePrincipalID(actor *productidentity.ActorSnapshot) pgtype.UUID {
+	if actor == nil {
+		return pgtype.UUID{}
+	}
+
+	return databaseUUID(actor.PrincipalID)
+}
+
+func actorFromDatabase(
+	principalID pgtype.UUID,
+	encoded []byte,
+) (*productidentity.ActorSnapshot, error) {
+	if !principalID.Valid && encoded == nil {
+		return nil, nil
+	}
+	if !principalID.Valid || encoded == nil {
+		return nil, errors.New("principal reference and snapshot must both be present")
+	}
+
+	var actor productidentity.ActorSnapshot
+	if err := json.Unmarshal(encoded, &actor); err != nil {
+		return nil, err
+	}
+	if actor.PrincipalID != uuid.UUID(principalID.Bytes) {
+		return nil, errors.New("principal reference does not match actor snapshot")
+	}
+	if err := actor.Validate(); err != nil {
+		return nil, err
+	}
+
+	return &actor, nil
 }
 
 func runOutcome(value *string) *run.Outcome {
@@ -644,4 +725,12 @@ func applicationTime(value pgtype.Timestamptz) *time.Time {
 
 func databaseUUID(value uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: value, Valid: true}
+}
+
+func optionalDatabaseUUID(value *uuid.UUID) pgtype.UUID {
+	if value == nil {
+		return pgtype.UUID{}
+	}
+
+	return databaseUUID(*value)
 }

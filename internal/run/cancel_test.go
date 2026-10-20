@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
 func TestCancelRunRecordsIntentInUTC(t *testing.T) {
@@ -19,8 +21,16 @@ func TestCancelRunRecordsIntentInUTC(t *testing.T) {
 	location := time.FixedZone("test", -6*60*60)
 	requestedAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, location)
 	service.now = func() time.Time { return requestedAt }
+	actor := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500"),
+		Kind:        productidentity.KindUser,
+		DisplayName: "Ada Lovelace",
+	}
 
-	record, err := service.CancelRun(context.Background(), runID)
+	record, err := service.CancelRun(
+		context.Background(),
+		CancelRequest{RunID: runID, Actor: &actor},
+	)
 	if err != nil {
 		t.Fatalf("CancelRun() error = %v", err)
 	}
@@ -29,6 +39,10 @@ func TestCancelRunRecordsIntentInUTC(t *testing.T) {
 	}
 	if !runs.cancelAt.Equal(requestedAt) || runs.cancelAt.Location() != time.UTC {
 		t.Errorf("requested at = %s, want %s in UTC", runs.cancelAt, requestedAt)
+	}
+	if runs.canceledBy == nil || runs.canceledBy.PrincipalID != actor.ID ||
+		runs.canceledBy.DisplayName != actor.DisplayName {
+		t.Errorf("cancellation actor = %#v", runs.canceledBy)
 	}
 }
 
@@ -53,7 +67,10 @@ func TestCancelRunMapsExpectedFailures(t *testing.T) {
 
 			runs := &recordingRuns{cancelError: test.err}
 			service := &Service{runs: runs, now: time.Now}
-			_, err := service.CancelRun(context.Background(), test.runID)
+			_, err := service.CancelRun(
+				context.Background(),
+				CancelRequest{RunID: test.runID},
+			)
 			if !errors.Is(err, test.want) {
 				t.Fatalf("CancelRun() error = %v, want %v", err, test.want)
 			}

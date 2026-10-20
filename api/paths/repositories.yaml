@@ -3,7 +3,10 @@ repositories:
     operationId: listRepositories
     summary: List repositories
     description: Lists active repository registrations ordered by name.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Repositories
     responses:
@@ -13,6 +16,18 @@ repositories:
           application/json:
             schema:
               $ref: ../components/repositories.yaml#/RepositoryList
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
       "405":
         description: The HTTP method is not supported for this resource.
         content:
@@ -32,7 +47,10 @@ repositories:
       Registers one Git repository and branch for later refresh. Credential
       name fields refer to configured secret sources; secret values are not
       accepted.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Repositories
     requestBody:
@@ -55,6 +73,18 @@ repositories:
               $ref: ../components/repositories.yaml#/Repository
       "400":
         description: The repository configuration is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
         content:
           application/problem+json:
             schema:
@@ -85,7 +115,10 @@ repository:
     description: >-
       Removes a repository from the active set without erasing its durable
       identity or future historical references.
-    security: []
+    security:
+      - {}
+      - ProductSession: []
+      - ProductBearer: []
     tags:
       - Repositories
     parameters:
@@ -101,6 +134,18 @@ repository:
         description: Repository removed.
       "400":
         description: The repository identity is not a valid UUID.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
         content:
           application/problem+json:
             schema:

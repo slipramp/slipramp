@@ -1,0 +1,252 @@
+login:
+  get:
+    operationId: beginOIDCLogin
+    summary: Begin browser login
+    description: >-
+      Creates a short-lived, one-time OIDC authorization transaction and
+      redirects the browser to the configured identity provider.
+    security: []
+    tags:
+      - Authentication
+    responses:
+      "303":
+        description: The browser should continue at the identity provider.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+          Set-Cookie:
+            required: true
+            schema:
+              type: string
+          Cache-Control:
+            required: true
+            schema:
+              type: string
+              enum:
+                - no-store
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "503":
+        description: Browser authentication is not configured or available.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The login transaction could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+callback:
+  get:
+    operationId: completeOIDCLogin
+    summary: Complete browser login
+    description: >-
+      Validates the OIDC authorization response, enrolls or refreshes the
+      configured user, issues a local session, and redirects to the web root.
+    security: []
+    tags:
+      - Authentication
+    parameters:
+      - name: code
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: state
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: slipramp_oidc_state
+        in: cookie
+        required: false
+        schema:
+          type: string
+    responses:
+      "303":
+        description: Login succeeded and the browser should return to the web application.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+          Set-Cookie:
+            required: true
+            schema:
+              type: string
+          Cache-Control:
+            required: true
+            schema:
+              type: string
+              enum:
+                - no-store
+      "400":
+        description: The authorization response or login transaction is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The provider identity is not enrolled in this installation.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "503":
+        description: Browser authentication is not configured or available.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The login could not be completed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+session:
+  get:
+    operationId: getCurrentPrincipal
+    summary: Get the current principal
+    security:
+      - ProductSession: []
+    tags:
+      - Authentication
+    parameters:
+      - name: slipramp_session
+        in: cookie
+        required: false
+        schema:
+          type: string
+    responses:
+      "200":
+        description: The principal authenticated by the local browser session.
+        headers:
+          Cache-Control:
+            required: true
+            schema:
+              type: string
+              enum:
+                - no-store
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/ProductPrincipal
+      "401":
+        description: A valid product session is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "503":
+        description: Browser authentication is not configured or available.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The session could not be authenticated.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+logout:
+  post:
+    operationId: logout
+    summary: Revoke the current browser session
+    description: >-
+      Revokes the local session. The required custom header prevents a
+      cross-site form from performing this cookie-authenticated state change.
+    security:
+      - ProductSession: []
+    tags:
+      - Authentication
+    parameters:
+      - name: slipramp_session
+        in: cookie
+        required: false
+        schema:
+          type: string
+      - name: X-Slipramp-CSRF
+        in: header
+        required: true
+        schema:
+          type: string
+          enum:
+            - "1"
+    responses:
+      "204":
+        description: The session was revoked.
+        headers:
+          Set-Cookie:
+            required: true
+            schema:
+              type: string
+          Cache-Control:
+            required: true
+            schema:
+              type: string
+              enum:
+                - no-store
+      "400":
+        description: The required CSRF header is missing or malformed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The CSRF header is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "503":
+        description: Browser authentication is not configured or available.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The session could not be revoked.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

@@ -1,3 +1,5 @@
+import { forwardedCookieHeader, productSessionCookieName } from "./request-auth.server.ts";
+
 const forwardedResponseHeaders = [
   "cache-control",
   "content-disposition",
@@ -20,7 +22,10 @@ export async function proxyArtifactDownload(
   let response: Response;
   try {
     response = await requestUpstream(upstreamURL, {
-      headers: { accept: "application/octet-stream" },
+      headers: {
+        accept: "application/octet-stream",
+        ...forwardedCookieHeader(request, productSessionCookieName),
+      },
       signal: request.signal,
     });
   } catch {

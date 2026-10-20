@@ -15,6 +15,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -24,6 +25,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500")
 	createdAt := time.Date(2026, time.October, 16, 12, 5, 0, 0, time.UTC)
 	runs := &recordingRunService{
 		created: run.Run{
@@ -38,7 +40,12 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 			PlacementName:     "infrastructure",
 			ClusterName:       "colo",
 			Source:            run.Source{Type: run.SourceTypeManual},
-			CreatedAt:         createdAt,
+			CreatedBy: &productidentity.ActorSnapshot{
+				PrincipalID: principalID,
+				Kind:        productidentity.KindUser,
+				DisplayName: "Ada Lovelace",
+			},
+			CreatedAt: createdAt,
 		},
 	}
 	body := bytes.NewBufferString(`{
@@ -46,7 +53,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		"target":"network",
 		"action":"preview",
 		"parameters":{"mode":"safe","refresh":true},
-		"source":{"type":"manual"}
+		"source":{"type":"api"}
 	}`)
 	request := httptest.NewRequestWithContext(
 		context.Background(),
@@ -88,13 +95,111 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	}
 	if result.ID != runID || result.Phase != api.RunPhaseQueued ||
 		result.CatalogRevisionID != revisionID || result.Cluster != "colo" ||
-		!result.CreatedAt.Equal(createdAt) {
+		!result.CreatedAt.Equal(createdAt) || result.CreatedBy == nil ||
+		result.CreatedBy.PrincipalID != principalID ||
+		result.CreatedBy.DisplayName != "Ada Lovelace" {
 		t.Errorf("Run response = %#v", result)
 	}
 	mode, err := result.Parameters["mode"].AsParameterValue0()
 	if err != nil || mode != "safe" {
 		t.Errorf("mode parameter = %q, error = %v", mode, err)
 	}
+}
+
+func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 19, 12, 0, 0, 0, time.UTC)
+	principal := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500"),
+		Kind:        productidentity.KindUser,
+		DisplayName: "Ada Lovelace",
+		Role:        productidentity.RoleOperator,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	authentication := productidentity.Authentication{
+		Principal:    principal,
+		Method:       productidentity.AuthenticationMethodWebSession,
+		CredentialID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501"),
+	}
+	authenticationService := &recordingProductAuthenticationService{
+		authentication: authentication,
+	}
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	runs := &recordingRunService{
+		created: run.Run{
+			ID: runID, Phase: run.PhaseQueued, Parameters: map[string]any{},
+			Source: run.Source{Type: run.SourceTypeManual}, CreatedAt: now,
+		},
+		canceled: run.Run{
+			ID: runID, Phase: run.PhaseRunning, Parameters: map[string]any{},
+		},
+	}
+	httpHandler := newHandlerWithProductAuthentication(
+		&recordingClusterService{}, nil, nil, nil, runs, nil, nil,
+		authenticationService, nil,
+	)
+
+	body := bytes.NewBufferString(`{
+		"repositoryId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
+		"target":"network",
+		"action":"preview"
+	}`)
+	createRequest := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/api/v1/runs",
+		body,
+	)
+	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest.AddCookie(&http.Cookie{Name: "slipramp_session", Value: "session-token"})
+	createResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(createResponse, createRequest)
+
+	if createResponse.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d: %s", createResponse.Code, http.StatusCreated, createResponse.Body)
+	}
+	if runs.request.Source.Type != run.SourceTypeManual || runs.request.Actor == nil ||
+		runs.request.Actor.ID != principal.ID {
+		t.Errorf("authenticated creation request = %#v", runs.request)
+	}
+
+	cancelRequest := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/api/v1/runs/"+runID.String()+"/cancel",
+		nil,
+	)
+	cancelRequest.AddCookie(&http.Cookie{Name: "slipramp_session", Value: "session-token"})
+	cancelResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(cancelResponse, cancelRequest)
+
+	if cancelResponse.Code != http.StatusOK {
+		t.Fatalf("cancel status = %d, want %d: %s", cancelResponse.Code, http.StatusOK, cancelResponse.Body)
+	}
+	if runs.cancelRequest.Actor == nil || runs.cancelRequest.Actor.ID != principal.ID {
+		t.Errorf("authenticated cancellation request = %#v", runs.cancelRequest)
+	}
+}
+
+func TestConfiguredProductAuthenticationRejectsMissingSession(t *testing.T) {
+	t.Parallel()
+
+	httpHandler := newHandlerWithProductAuthentication(
+		&recordingClusterService{}, nil, nil, nil, &recordingRunService{}, nil, nil,
+		&recordingProductAuthenticationService{}, nil,
+	)
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/runs",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	httpHandler.ServeHTTP(response, request)
+
+	assertProblem(t, response, http.StatusUnauthorized)
 }
 
 func TestCreateRunMapsExpectedFailures(t *testing.T) {
@@ -136,8 +241,7 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 			body := bytes.NewBufferString(`{
 				"repositoryId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
 				"target":"network",
-				"action":"preview",
-				"source":{"type":"api"}
+				"action":"preview"
 			}`)
 			request := httptest.NewRequestWithContext(
 				context.Background(),
@@ -417,6 +521,7 @@ type recordingRunService struct {
 	reportError     error
 	reportCalls     int
 	cancelID        uuid.UUID
+	cancelRequest   run.CancelRequest
 	canceled        run.Run
 	cancelError     error
 	cancelCalls     int
@@ -446,10 +551,11 @@ func (s *recordingRunService) GetRun(
 
 func (s *recordingRunService) CancelRun(
 	_ context.Context,
-	runID uuid.UUID,
+	request run.CancelRequest,
 ) (run.Run, error) {
 	s.cancelCalls++
-	s.cancelID = runID
+	s.cancelID = request.RunID
+	s.cancelRequest = request
 
 	return s.canceled, s.cancelError
 }

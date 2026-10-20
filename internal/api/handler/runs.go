@@ -14,6 +14,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -21,7 +22,7 @@ type RunService interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
 	GetRun(context.Context, uuid.UUID) (run.Run, error)
 	ListRuns(context.Context, run.ListFilter) ([]run.Run, error)
-	CancelRun(ctx context.Context, runID uuid.UUID) (run.Run, error)
+	CancelRun(ctx context.Context, request run.CancelRequest) (run.Run, error)
 	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
 	NextRunToCancel(ctx context.Context, clusterName string) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
@@ -87,15 +88,14 @@ func (h *Handler) CreateRun(
 	created, err := h.runs.CreateRun(
 		ctx,
 		run.CreateRequest{
-			RepositoryID: request.Body.RepositoryID,
-			TargetName:   string(request.Body.Target),
-			ActionName:   string(request.Body.Action),
-			Parameters:   parameters,
-			Inputs:       runInputs(request.Body.Inputs),
-			Source: run.Source{
-				Type: run.SourceType(request.Body.Source.Type),
-			},
+			RepositoryID:   request.Body.RepositoryID,
+			TargetName:     string(request.Body.Target),
+			ActionName:     string(request.Body.Action),
+			Parameters:     parameters,
+			Inputs:         runInputs(request.Body.Inputs),
+			Source:         run.Source{Type: run.SourceTypeManual},
 			IdempotencyKey: request.Params.IdempotencyKey,
+			Actor:          currentProductPrincipal(ctx),
 		},
 	)
 	if err != nil {
@@ -176,7 +176,13 @@ func (h *Handler) CancelRun(
 	ctx context.Context,
 	request api.CancelRunRequestObject,
 ) (api.CancelRunResponseObject, error) {
-	record, err := h.runs.CancelRun(ctx, request.RunID)
+	record, err := h.runs.CancelRun(
+		ctx,
+		run.CancelRequest{
+			RunID: request.RunID,
+			Actor: currentProductPrincipal(ctx),
+		},
+	)
 	if err != nil {
 		switch {
 		case errors.Is(err, run.ErrRunNotFound):
@@ -249,6 +255,8 @@ func runResponse(record run.Run) (api.Run, error) {
 		Source: api.RunSource{
 			Type: api.RunSourceType(record.Source.Type),
 		},
+		CreatedBy:               apiRunActor(record.CreatedBy),
+		CanceledBy:              apiRunActor(record.CanceledBy),
 		Inputs:                  runInputResponse(record.Snapshot.Inputs),
 		ArtifactConsumers:       runArtifactConsumers(record.Snapshot),
 		CreatedAt:               record.CreatedAt,
@@ -263,6 +271,18 @@ func runResponse(record run.Run) (api.Run, error) {
 		OutcomeMessage:          record.OutcomeMessage,
 		ExitCode:                record.ExitCode,
 	}, nil
+}
+
+func apiRunActor(value *productidentity.ActorSnapshot) *api.RunActor {
+	if value == nil {
+		return nil
+	}
+
+	return &api.RunActor{
+		PrincipalID: value.PrincipalID,
+		Kind:        api.RunActorKind(value.Kind),
+		DisplayName: value.DisplayName,
+	}
 }
 
 func (h *Handler) runResponse(ctx context.Context, record run.Run) (api.Run, error) {
