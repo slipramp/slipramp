@@ -1,0 +1,46 @@
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
+  name: acceptance
+spec:
+  image: slipramp-checkout:acceptance
+  workingDirectory: /workspace
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: acceptance
+  title: Disposable kind acceptance target
+spec:
+  runtime: acceptance
+  placement: acceptance
+  watch:
+    - scripts/**
+  actions:
+    preview:
+      intent: preview
+      command: [/bin/sh, scripts/preview.sh]
+      parameters:
+        message:
+          type: string
+          required: true
+          environment: ACCEPTANCE_MESSAGE
+      artifacts:
+        plan:
+          path: /slipramp/artifacts/plan.txt
+          mediaType: text/plain
+    apply:
+      intent: reconcile
+      command: [/bin/sh, scripts/apply.sh]
+      inputs:
+        plan:
+          artifact:
+            fromAction: preview
+            compatibility: exact-catalog-revision
+          mountPath: /slipramp/inputs/plan.txt
+    cancel:
+      intent: operation
+      command: [/bin/sh, scripts/cancel.sh]
+    recover:
+      intent: operation
+      command: [/bin/sh, scripts/recover.sh]

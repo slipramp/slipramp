@@ -1,10 +1,17 @@
-# Slipramp MVP Plan
+# Slipramp MVP Baseline
 
-This document turns the direction in [PLAN.md](./PLAN.md) into the first usable Slipramp release.
+This document records the accepted first usable Slipramp release derived from
+[PLAN.md](./PLAN.md). The MVP is complete. Its scope remains here as the
+baseline for ongoing development, not as an open delivery checklist.
+
+Acceptance combines the repository's automated quality, integration, and
+disposable-cluster suites with operator-reviewed testing against a real homelab
+cluster. Further resilience drills, deployment packaging, diagnostics, and
+operator guidance continue as normal product work without reopening the MVP.
 
 ## Objective
 
-The MVP proves the complete operational loop:
+The MVP established the complete operational loop:
 
 1. Connect a Git repository and track one branch.
 2. Discover runtimes, targets, and actions from versioned YAML.
@@ -14,7 +21,10 @@ The MVP proves the complete operational loop:
 6. Publish and download declared artifacts.
 7. Reuse a preview artifact, such as a Terraform plan, in a later action.
 
-The intended deployment is a single trusted Slipramp installation executing work across one or more Kubernetes clusters. Authentication and human attribution are not required for this release; the deployment must be protected externally when exposed beyond a trusted network.
+The accepted deployment model is a single trusted Slipramp installation
+executing work across one or more Kubernetes clusters. Authentication and human
+attribution are not included in this baseline; the deployment must be protected
+externally when exposed beyond a trusted network.
 
 ## Scope
 
@@ -46,7 +56,7 @@ The intended deployment is a single trusted Slipramp installation executing work
 - Run a Slipramp controller inside every execution cluster.
 - Run one controller replica per execution cluster with a stable cluster name, a cluster-scoped bootstrap enrollment credential, and a separate controller-owned bearer credential.
 - Enroll the controller-owned credential at startup, persist only its SHA-256 digest in PostgreSQL, and derive cluster identity from that credential on all ongoing controller routes.
-- Auto-approve a controller presenting the configured enrollment credential for the MVP; defer explicit enrollment approvals and credential rotation workflows.
+- Auto-approve a controller presenting the configured enrollment credential; explicit enrollment approvals and credential rotation workflows remain later work.
 - Have controllers use a small versioned HTTP API and long-poll the Slipramp Server for command envelopes carrying a run assignment or cancellation. Require HTTPS across untrusted networks; allow plaintext HTTP when the transport is already protected by a trusted encrypted network such as a tailnet.
 - Treat ordinary authenticated controller request traffic as the cluster heartbeat and store only a last-seen time; do not introduce a separate heartbeat protocol.
 - Keep all Kubernetes clients, RBAC, Job creation, observation, and cancellation inside the corresponding cluster controller.
@@ -176,7 +186,7 @@ The repository remains a single project with a Go module at `github.com/slipramp
 
 ## Durable Model
 
-The initial PostgreSQL schema should center on these records:
+The MVP PostgreSQL schema centers on these records:
 
 - repositories and repository refresh state
 - immutable catalog revisions and validation results
@@ -189,76 +199,80 @@ The initial PostgreSQL schema should center on these records:
 
 Catalog revisions retain the resolved definitions needed to explain or reproduce a run even after Git advances. S3 object keys are derived from stable run and artifact IDs, while PostgreSQL remains authoritative for object metadata and ordering.
 
-## Delivery Milestones
+## Completed Delivery Milestones
 
-### 1. Project foundation
+All six milestones were accepted as a coherent operational baseline. The exit
+conditions below record the outcomes used to shape the implementation.
 
-- Initialize the Go module and TypeScript web workspace.
-- Establish the Server, cluster-controller, harness, and web entry points.
-- Establish the split OpenAPI contract, bundling and validation, pinned Go and TypeScript generation, and a single regeneration command.
-- Add PostgreSQL migrations and S3 client boundaries.
-- Add local PostgreSQL and RustFS dependencies.
-- Add versioned configuration loading for the Server, controllers, and placements.
-- Establish controller enrollment, the authenticated controller HTTP API, cluster last-seen tracking, long polling, and idempotent work delivery, with HTTPS required unless a trusted encrypted network protects plaintext transport.
-- Establish structured logging, configuration validation, and graceful shutdown.
-- Add the shared local and CI quality commands.
+### 1. Project foundation — complete
 
-Exit condition: all components build, connect to their dependencies, and pass formatting, linting, type checking, and baseline tests.
+- Initialized the Go module and TypeScript web workspace.
+- Established the Server, cluster-controller, harness, and web entry points.
+- Established the split OpenAPI contract, bundling and validation, pinned Go and TypeScript generation, and a single regeneration command.
+- Added PostgreSQL migrations and S3 client boundaries.
+- Added local PostgreSQL and RustFS dependencies.
+- Added versioned configuration loading for the Server, controllers, and placements.
+- Established controller enrollment, the authenticated controller HTTP API, cluster last-seen tracking, long polling, and idempotent work delivery, with HTTPS required unless a trusted encrypted network protects plaintext transport.
+- Established structured logging, configuration validation, and graceful shutdown.
+- Added the shared local and CI quality commands.
 
-### 2. Git catalog
+Accepted outcome: all components build, connect to their dependencies, and pass formatting, linting, type checking, and baseline tests.
 
-- Implement repository persistence and credential references.
-- Refresh configured branches by fetching their latest commits.
-- Define the discovery layout and parse `Runtime` and `Target` documents.
-- Validate references, defaults, actions, parameters, credentials, and artifacts, and report trigger declarations as unsupported in this release.
-- Store immutable catalog revisions and expose current catalog APIs.
-- Build repository and target catalog screens.
+### 2. Git catalog — complete
 
-Exit condition: connecting a repository produces a browsable target/action catalog, and an invalid commit leaves the previous catalog active with visible diagnostics.
+- Implemented repository persistence and credential references.
+- Refreshed configured branches by fetching their latest commits.
+- Defined the discovery layout and parsed `Runtime` and `Target` documents.
+- Validated references, defaults, actions, parameters, credentials, and artifacts, and reported trigger declarations as unsupported.
+- Stored immutable catalog revisions and exposed current catalog APIs.
+- Built repository and target catalog screens.
 
-### 3. Run execution
+Accepted outcome: connecting a repository produces a browsable target/action catalog, and an invalid commit leaves the previous catalog active with visible diagnostics.
 
-- Implement run creation and frozen definition resolution.
-- Implement target concurrency and the scheduler.
-- Resolve the placement's cluster and enqueue the frozen run for its controller.
-- Have the controller render credentials, parameters, and action overrides into a local Job.
-- Clone and materialize the exact Git commit directly inside that execution Job.
-- Observe Job conditions and the action container state locally, and report lifecycle phase, terminal outcome, reason, message, exit code, Job UID, and observation freshness through the controller HTTP API.
-- Implement cancellation, deadlines, restart recovery, and explicit no-retry behavior.
-- Build action-run and run-status screens.
+### 3. Run execution — complete
 
-Exit condition: arbitrary repository scripts can be invoked from the UI and API, routed to different registered clusters, execute at the requested commit, receive cluster-local credentials and parameters, and produce durable outcomes.
+- Implemented run creation and frozen definition resolution.
+- Implemented target concurrency and the scheduler.
+- Resolved the placement's cluster and enqueued the frozen Run for its controller.
+- Rendered credentials, parameters, and action overrides into a local Job.
+- Cloned and materialized the exact Git commit directly inside that execution Job.
+- Observed Job conditions and the action container state locally, and reported lifecycle phase, terminal outcome, reason, message, exit code, Job UID, and observation freshness through the controller HTTP API.
+- Implemented cancellation, deadlines, restart recovery, and explicit no-retry behavior.
+- Built action-run and run-detail screens.
 
-### 4. Streaming logs and artifacts
+Accepted outcome: arbitrary repository scripts can be invoked from the UI and API, routed to registered clusters, execute at the requested commit, receive cluster-local credentials and parameters, and produce durable outcomes.
 
-- Implement controller log forwarding, ordered S3-backed log chunks, and PostgreSQL metadata.
-- Add live streaming with reconnect cursors.
-- Seal completed log artifacts with size and digest.
-- Implement harness upload of declared artifacts.
-- Implement artifact download and input materialization.
-- Add artifact views to run detail.
+### 4. Streaming logs and artifacts — complete
 
-Exit condition: logs appear live, survive Pod deletion and Server restart, and declared files can be uploaded, downloaded, and supplied to another run.
+- Implemented controller log forwarding, ordered S3-backed log chunks, and PostgreSQL metadata.
+- Added live streaming with reconnect cursors.
+- Sealed completed log artifacts with size and digest.
+- Implemented harness upload of declared artifacts.
+- Implemented artifact download and input materialization.
+- Added artifact views to run detail.
 
-### 5. Preview promotion
+Accepted outcome: logs appear live, survive Pod deletion and Server restart, and declared files can be uploaded, downloaded, and supplied to another run.
 
-- Implement artifact compatibility checks.
-- Add the **Apply this plan** API and UI flow.
-- Pin the apply run to the plan's original Git commit and catalog revision.
-- Demonstrate the flow with the Terraform example.
+### 5. Preview promotion — complete
 
-Exit condition: a Terraform preview produces a plan artifact that can be selected and applied without generating a new plan, while direct apply remains available.
+- Implemented artifact compatibility checks.
+- Added the **Apply this plan** API and UI flow.
+- Pinned the apply Run to the plan's original Git commit and catalog revision.
+- Demonstrated the flow with the Terraform example.
 
-### 6. Operational hardening
+Accepted outcome: a Terraform preview produces a plan artifact that can be selected and applied without generating a new plan, while direct apply remains available.
 
-- Evaluate `watch` paths after catalog refresh and show affected targets' desired Git commits without initiating actions.
-- Exercise recovery from Server, controller, Pod, network, and individual cluster interruptions.
-- Configure the artifact retention, reconciliation, and orphan grace periods;
-  exercise expiration, retryable deletion, and orphaned-object reconciliation.
-- Add health, readiness, and dependency diagnostics.
-- Complete installation and operator documentation.
+### 6. Operational hardening — complete baseline
 
-Exit condition: the installation reports per-cluster health, preserves manual run request idempotency, and recovers cleanly from expected component and cluster interruptions.
+- Evaluated `watch` paths after catalog refresh and showed affected targets' desired Git commits without initiating actions.
+- Exercised Server and controller restart recovery while Runs were active.
+- Configured the artifact retention, reconciliation, and orphan grace periods;
+  exercised expiration, retryable deletion, and orphaned-object reconciliation.
+- Reported process liveness and per-cluster connection health.
+- Documented local development, disposable-cluster acceptance, and the initial
+  homelab operating flow.
+
+Accepted outcome: the installation reports per-cluster health, preserves manual run request idempotency, and recovers active Runs across Server and controller restarts.
 
 ## Quality Gates
 
@@ -272,20 +286,21 @@ The repository provides a single set of commands used by developers and CI:
 - Strict TypeScript checking
 - OpenAPI bundling and validation
 - Reproducible Go and TypeScript API generation with a stale-output check
-- Frontend unit and component tests
+- Frontend unit tests
 - PostgreSQL and S3 integration tests
-- Controller HTTP API, idempotent Job routing, and recovery tests against multiple disposable clusters
+- Controller HTTP API, idempotent Job routing, and recovery tests, including a
+  disposable kind acceptance environment
 
 Warnings fail CI. Tool versions are pinned, generated files are reproducible, migrations are tested in both directions where practical, and changed code is expected to include proportionate tests.
 
-## Definition of Done
+## Accepted Capabilities
 
-The MVP is complete when a fresh installation can:
+The accepted MVP baseline can:
 
-1. Configure PostgreSQL, an S3-compatible endpoint, deploy authenticated controllers into multiple Kubernetes clusters, and configure placements using their registered cluster names.
+1. Configure PostgreSQL, an S3-compatible endpoint, authenticated cluster controllers, and placements using their registered cluster names.
 2. Connect a private Git repository and continuously index its configured branch.
 3. Display valid targets and arbitrary actions from repository YAML.
-4. Route actions through different placements to different Kubernetes clusters and run them at exact commits without modifying their runtime images for Slipramp.
+4. Route actions through placements to registered Kubernetes clusters and run them at exact commits without modifying their runtime images for Slipramp.
 5. Inject parameters and Kubernetes-backed credentials using standard tool conventions.
 6. Show live reconnectable logs and retain them as downloadable S3-backed artifacts.
 7. Upload and download declared artifacts.
@@ -295,8 +310,18 @@ The MVP is complete when a fresh installation can:
 11. Generate the Go Server contract and TypeScript frontend client reproducibly from the validated split OpenAPI specification.
 12. Pass all formatting, linting, type checking, unit, integration, and build checks.
 
-## Deferred Work
+## Ongoing Work Beyond the MVP
 
+The following work is intentionally incremental and does not change the
+accepted status of the MVP:
+
+- Broader multi-cluster, Pod-loss, network-interruption, and dependency-outage
+  acceptance coverage
+- Dependency-aware readiness diagnostics and richer operational status
+- Generalized installation, upgrade, backup, recovery, and troubleshooting
+  guidance beyond the existing development, kind, and homelab flows
+- Evolution and compatibility policy for the pre-stable API, catalog, and
+  database contracts
 - Built-in authentication, user management, authorization, and human attribution
 - Approval workflows and required previews
 - Git-change, scheduled, and webhook triggers

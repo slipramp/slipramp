@@ -1,10 +1,10 @@
 # Slipramp Contributor Instructions
 
-Slipramp is a GitOps-driven infrastructure control plane for homelabs and small teams. Read `docs/PLAN.md` for the product and architecture direction and `docs/MVP.md` for the current delivery scope. Keep those documents consistent when changing a decision they describe.
+Slipramp is a GitOps-driven infrastructure control plane for homelabs and small teams. Read `docs/PLAN.md` for the product and architecture direction and `docs/MVP.md` for the accepted implementation baseline. Keep those documents consistent when changing a decision they describe.
 
 ## Project Phase
 
-Slipramp is in the MVP/prototype phase. Do not preserve backwards compatibility or introduce legacy behavior unless explicitly requested. Prefer a clean breaking change over compatibility aliases, deprecated fields, dual code paths, migration shims, legacy API routes, or support for obsolete YAML and database shapes. Update all callers, fixtures, generated code, and documentation together.
+Slipramp has completed its MVP and is in early, ongoing development. Its contracts are not yet stable. Do not preserve backwards compatibility or introduce legacy behavior unless explicitly requested. Prefer a clean breaking change over compatibility aliases, deprecated fields, dual code paths, migration shims, legacy API routes, or support for obsolete YAML and database shapes. Update all callers, fixtures, generated code, and documentation together.
 
 ## Core Model and Naming
 
@@ -26,7 +26,7 @@ Use the established names consistently:
 
 - The Slipramp Server must not have a kubeconfig, Kubernetes client, or direct Kubernetes API access.
 - Run one Controller replica in each execution cluster. It reaches out to the Server over a small authenticated HTTP API, manages local Jobs, and reports status and logs. Require HTTPS across untrusted networks; plaintext HTTP is valid only when a trusted encrypted network such as a tailnet already protects the transport.
-- Keep Controller delivery at least once and idempotent through deterministic Run and Job identifiers. Do not add message brokers, leader election, bidirectional RPC, or distributed leases for the MVP.
+- Keep Controller delivery at least once and idempotent through deterministic Run and Job identifiers. Do not add message brokers, leader election, bidirectional RPC, or distributed leases without an explicit post-MVP design change.
 - Treat multiple Kubernetes clusters as a first-class requirement. Never assume the Server and execution Jobs share a cluster.
 - Jobs clone their exact Git commit directly from the repository. Never copy repository contents, source bundles, or Git source archives into S3.
 - PostgreSQL is authoritative for product state and artifact metadata. S3-compatible storage is only for artifact contents, including streaming and completed logs. RustFS is the local implementation.
@@ -40,7 +40,7 @@ Use the established names consistently:
 - Safety policy is opt-in. Direct actions such as an unreviewed `terraform apply` must remain valid when that is the operator's chosen workflow.
 - Preview and plan flows are optional capabilities, not mandatory approval gates.
 - Do not assume every Target has a `sync` Action.
-- Manual and API Run creation are in scope. Git, schedule, and webhook triggers are deferred; keep the Run creation boundary ready for them without implementing them prematurely.
+- Manual and API Run creation are supported. Git, schedule, and webhook triggers remain later work; keep the Run creation boundary ready for them without implementing them prematurely.
 - Never interpret removing a Target as infrastructure destruction.
 - Serialize active Runs for the same Target by default and do not retry infrastructure commands implicitly.
 

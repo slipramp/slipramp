@@ -3,6 +3,8 @@ version: "3"
 vars:
   GOLANGCI_LINT: "{{.ROOT_DIR}}/.bin/golangci-lint"
   GOLANGCI_LINT_VERSION: v2.14.0
+  KIND: "{{.ROOT_DIR}}/.bin/kind"
+  KIND_VERSION: v0.33.0
   OAPI_CODEGEN: "{{.ROOT_DIR}}/.bin/oapi-codegen"
   OAPI_CODEGEN_VERSION: v2.8.0
   OPENAPI_BUNDLE: "{{.ROOT_DIR}}/.cache/openapi.yaml"
@@ -51,6 +53,15 @@ tasks:
     deps: [deps:pnpm]
     cmds:
       - '"{{.PNPM}}" install --frozen-lockfile --store-dir "{{.PNPM_STORE}}"'
+
+  deps:kind:
+    internal: true
+    cmds:
+      - mkdir -p "{{.ROOT_DIR}}/.bin"
+      - GOBIN="{{.ROOT_DIR}}/.bin" go install sigs.k8s.io/kind@{{.KIND_VERSION}}
+    status:
+      - test -x "{{.KIND}}"
+      - '"{{.KIND}}" version | rg -q "^kind {{.KIND_VERSION}} "'
 
   web:dev:
     desc: Run the web development server
@@ -141,6 +152,12 @@ tasks:
       TEST_S3_SECRET_ACCESS_KEY: slipramp-development
     cmds:
       - go test -race -count=1 ./internal/store ./internal/objectstore ./internal/server
+
+  acceptance:kind:
+    desc: Run the MVP acceptance suite in a disposable kind cluster
+    deps: [deps:kind]
+    cmds:
+      - ./scripts/e2e/kind-acceptance.sh
 
   build:
     desc: Build all processes

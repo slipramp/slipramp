@@ -1,6 +1,8 @@
 # Slipramp Plan
 
-The first implementation scope is defined in [MVP.md](./MVP.md).
+The accepted first implementation baseline is recorded in [MVP.md](./MVP.md).
+Slipramp now evolves incrementally from that baseline; this document continues
+to describe the product and architecture direction.
 
 ## Vision
 
@@ -65,7 +67,7 @@ Cluster identity is part of every dispatched run and Kubernetes object reference
 
 ### Controller
 
-A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTP API. HTTPS is required across untrusted networks, while plaintext HTTP is permitted when a trusted encrypted network such as a tailnet already protects the transport. At startup it presents a cluster-scoped enrollment credential to register the SHA-256 digest of a separate controller-owned bearer credential. The MVP auto-approves a valid enrollment credential; explicit approvals and credential rotation are deferred. The Server derives cluster identity from the enrolled bearer credential, so ordinary controller routes do not repeat a caller-supplied cluster name. The controller long-polls for command envelopes, creates and observes Jobs, and posts lifecycle observations, log chunks, and completion back through ordinary HTTP requests. Authenticated poll and report traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
+A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTP API. HTTPS is required across untrusted networks, while plaintext HTTP is permitted when a trusted encrypted network such as a tailnet already protects the transport. At startup it presents a cluster-scoped enrollment credential to register the SHA-256 digest of a separate controller-owned bearer credential. The current implementation auto-approves a valid enrollment credential; explicit approvals and credential rotation remain later product work. The Server derives cluster identity from the enrolled bearer credential, so ordinary controller routes do not repeat a caller-supplied cluster name. The controller long-polls for command envelopes, creates and observes Jobs, and posts lifecycle observations, log chunks, and completion back through ordinary HTTP requests. Authenticated poll and report traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
 
 Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. A Run remains assigned until the controller reports the materialized Job UID and preparing phase. After restarting, the controller scans its labeled Jobs and reports their current observations before requesting more work. For a terminal Job, it uploads and seals the complete log, successfully reports the terminal observation, deletes the Job with its observed UID as a Kubernetes precondition, and only then stops observation. Each accepted step is idempotent, so recovery can repeat log sealing and terminal reporting before finishing deletion. A `404` for the Run or its log violates the execution-namespace ownership contract; the controller warns once, stops that observer, and leaves the Job for manual diagnosis. Kubernetes TTL cleanup is not used because it could remove the log source while the Server or object storage is unavailable. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica and a unique cluster name; duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
 
@@ -97,7 +99,7 @@ The log artifact is append-only and available as a live stream while its run is 
 
 Artifact metadata includes its producing run, name, media type, lifecycle state, size, digest, sensitivity, object key, and retention state. Artifact contents are stored only in S3-compatible object storage rather than in PostgreSQL or on the Server filesystem. RustFS provides the local object store.
 
-The MVP applies one installation-wide retention period to sealed artifacts. A
+The current implementation applies one installation-wide retention period to sealed artifacts. A
 periodic Server reconciler changes eligible metadata from `retained` to
 `expired`, deletes every corresponding object idempotently, and changes the
 metadata to `deleted` only after all deletes succeed. Artifacts produced by an
@@ -134,7 +136,7 @@ Removing a target definition archives it from the active catalog; it must never 
 
 ## Triggers
 
-Automated triggers are intentionally deferred beyond the MVP, but the run-creation boundary should accommodate them without changing action execution.
+Automated triggers are not part of the current baseline, but the run-creation boundary accommodates adding them without changing action execution.
 
 An action is manually and programmatically invocable without declaring a trigger. Triggers are optional automation rules that turn external events into run requests for a particular target action.
 
@@ -166,7 +168,7 @@ authoritative for each binding and artifact's provenance, sensitivity,
 retention, size, and digest; the Server streams the corresponding bytes to and
 from S3-compatible storage.
 
-For the MVP, each Run becomes a Job named `slipramp-run-<run-id>` with stable
+Each Run currently becomes a Job named `slipramp-run-<run-id>` with stable
 Run and cluster labels, `restartPolicy: Never`, and `backoffLimit: 0`. An initial
 init container invokes `slipramp-harness --install` from a pinned
 controller-configured image to copy the static harness into `/slipramp/bin` on
@@ -222,7 +224,7 @@ The control plane owns repository refresh, catalog validation, run scheduling, c
 
 Kubernetes clusters are execution backends rather than the source of truth for Slipramp's product state. In-cluster controllers own Job observation and report it to the Server. The Server stores lifecycle phase (`queued`, `assigned`, `preparing`, `running`, or `finished`), terminal outcome (`succeeded`, `failed`, `canceled`, or `timed-out`), cancellation intent, Job identity, diagnostic details, and observation freshness as separate facts. `unknown` is derived from stale observation and controller connectivity rather than stored as a phase. After either side restarts, stable run labels and idempotent observation reports allow central run state to be reconciled with Jobs that still exist in the cluster.
 
-PostgreSQL is the durable database for repositories, catalog revisions and current projections, triggers, run metadata, and scheduler state. S3-compatible object storage is used only for artifact contents, including live and completed logs. Artifact metadata and object references remain in PostgreSQL.
+PostgreSQL is the durable database for repositories, catalog revisions and current projections, run metadata, artifact metadata, and scheduler state. S3-compatible object storage is used only for artifact contents, including live and completed logs. Artifact metadata and object references remain in PostgreSQL.
 
 The design should favor a simple single-operator deployment while keeping boundaries around repository access, persistence, and execution clear enough to evolve independently.
 
@@ -265,8 +267,8 @@ Generated Go and TypeScript code is never edited by hand. Generator versions and
 
 ## Illustrative YAML
 
-These examples use the `slipramp.com/v1alpha1` repository contract selected for
-the MVP. Catalog documents reject unknown fields and duplicate mapping keys so
+These examples use the current `slipramp.com/v1alpha1` repository contract.
+Catalog documents reject unknown fields and duplicate mapping keys so
 misspelled execution settings cannot be accepted silently.
 
 ### Repository Catalog Layout
@@ -427,13 +429,6 @@ spec:
     sync:
       intent: reconcile
       command: [terraform, apply, -auto-approve]
-      triggers:
-        - name: main-changes
-          source:
-            type: git
-            branch: main
-          policy:
-            coalesce: latest
     preview:
       intent: preview
       command:
@@ -482,15 +477,6 @@ spec:
     sync:
       intent: reconcile
       command: [pyinfra, inventory.py, deploy.py]
-      triggers:
-        - name: nightly
-          source:
-            type: schedule
-            cron: "0 3 * * *"
-            timezone: America/Denver
-          policy:
-            catchUp: latest
-            overlap: skip
     preview:
       intent: preview
       command: [pyinfra, inventory.py, deploy.py, --dry]
@@ -546,18 +532,23 @@ appended to the action command in lexical parameter-name order, and omitted
 optional parameters emit nothing.
 
 Artifact inputs use the input name as the artifact name on `fromAction`. The
-source action must declare that output. The only MVP compatibility policy is
-`exact-catalog-revision`, and it is the default when `compatibility` is omitted.
+source action must declare that output. The only currently supported
+compatibility policy is `exact-catalog-revision`, and it is the default when
+`compatibility` is omitted.
 
-## Remaining Design Questions
+## Ongoing Design Work
 
-Most architectural questions are settled above. These details still need decisions while planning or implementing the MVP:
+The accepted MVP settled the core architecture. These details remain open as
+Slipramp evolves:
 
-- Versioning and compatibility behavior after the MVP `v1alpha1` repository contract.
-- The remaining harness ABI for additional standard Slipramp environment variables and cancellation behavior.
+- Versioning and compatibility behavior beyond the pre-stable `v1alpha1` repository contract.
+- Additional standard harness environment variables beyond the implemented
+  workspace, artifact-transfer, log, signal, and cancellation contract.
 - PostgreSQL history retention and archival.
+- Dependency-aware readiness diagnostics, deployment packaging, and broader
+  failure-mode acceptance coverage.
 
-The following questions are intentionally deferred and do not block the MVP:
+The following product areas remain intentionally later work:
 
 - Authentication, authorization, and human run attribution.
 - Git, schedule, and webhook trigger filtering, idempotency, missed-event, coalescing, and overlap semantics.

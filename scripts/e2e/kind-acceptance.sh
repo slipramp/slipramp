@@ -1,0 +1,510 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repository_root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
+kind_bin=${SLIPRAMP_KIND_BIN:-"$repository_root/.bin/kind"}
+kubectl_bin=${SLIPRAMP_KUBECTL_BIN:-kubectl}
+cluster_name=${SLIPRAMP_ACCEPTANCE_CLUSTER_NAME:-slipramp-acceptance}
+server_port=${SLIPRAMP_ACCEPTANCE_SERVER_PORT:-18080}
+web_port=${SLIPRAMP_ACCEPTANCE_WEB_PORT:-13000}
+keep_cluster=${SLIPRAMP_ACCEPTANCE_KEEP_CLUSTER:-false}
+kind_node_image=kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+timeout_seconds=${SLIPRAMP_ACCEPTANCE_TIMEOUT_SECONDS:-180}
+
+system_namespace=slipramp-system
+run_namespace=slipramp-runs
+server_url="http://127.0.0.1:$server_port"
+web_url="http://127.0.0.1:$web_port"
+temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/slipramp-kind-acceptance.XXXXXX")
+cluster_created=false
+server_forward_pid=
+web_forward_pid=
+
+kubectl_command=("$kubectl_bin" --context "kind-$cluster_name")
+
+log() {
+  printf '==> %s\n' "$*"
+}
+
+stop_forward() {
+  local process_id=${1:-}
+  if [[ -n "$process_id" ]]; then
+    kill "$process_id" 2>/dev/null || true
+    wait "$process_id" 2>/dev/null || true
+  fi
+}
+
+dump_diagnostics() {
+  log "acceptance diagnostics"
+  "${kubectl_command[@]}" get pods,jobs -A -o wide || true
+  "${kubectl_command[@]}" -n "$system_namespace" describe pods || true
+
+  local deployment
+  for deployment in postgres rustfs acceptance-git slipramp-server slipramp-web slipramp-controller; do
+    printf '\n--- logs: deployment/%s ---\n' "$deployment"
+    "${kubectl_command[@]}" -n "$system_namespace" logs \
+      "deployment/$deployment" --all-containers --tail=-1 || true
+  done
+
+  local pod
+  while IFS= read -r pod; do
+    [[ -n "$pod" ]] || continue
+    printf '\n--- logs: %s ---\n' "$pod"
+    "${kubectl_command[@]}" -n "$run_namespace" logs "$pod" \
+      --all-containers --tail=-1 || true
+  done < <("${kubectl_command[@]}" -n "$run_namespace" get pods -o name 2>/dev/null)
+}
+
+cleanup() {
+  local status=$?
+  trap - EXIT
+  set +e
+
+  stop_forward "$server_forward_pid"
+  stop_forward "$web_forward_pid"
+
+  if [[ "$status" -ne 0 && "$cluster_created" == true ]]; then
+    dump_diagnostics
+  fi
+
+  if [[ "$cluster_created" == true && "$keep_cluster" != true ]]; then
+    log "deleting kind cluster $cluster_name"
+    "$kind_bin" delete cluster --name "$cluster_name"
+  elif [[ "$cluster_created" == true ]]; then
+    log "keeping kind cluster $cluster_name with context kind-$cluster_name"
+  fi
+
+  rm -rf "$temporary_directory"
+  exit "$status"
+}
+trap cleanup EXIT
+
+require_command() {
+  local command=$1
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'required command is not available: %s\n' "$command" >&2
+    exit 1
+  fi
+}
+
+for required_command in curl docker git jq ssh-keygen "$kubectl_bin"; do
+  require_command "$required_command"
+done
+if [[ ! -x "$kind_bin" ]]; then
+  printf 'kind binary is not executable: %s\n' "$kind_bin" >&2
+  exit 1
+fi
+if "$kind_bin" get clusters | grep -Fxq "$cluster_name"; then
+  printf 'kind cluster already exists: %s\n' "$cluster_name" >&2
+  exit 1
+fi
+
+wait_for_http() {
+  local url=$1
+  local deadline=$((SECONDS + timeout_seconds))
+  until curl --fail --silent --show-error "$url" >/dev/null 2>&1; do
+    if ((SECONDS >= deadline)); then
+      printf 'timed out waiting for %s\n' "$url" >&2
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+start_server_forward() {
+  stop_forward "$server_forward_pid"
+  "${kubectl_command[@]}" -n "$system_namespace" port-forward \
+    service/slipramp-server "$server_port:8080" \
+    >"$temporary_directory/server-port-forward.log" 2>&1 &
+  server_forward_pid=$!
+  wait_for_http "$server_url/healthz"
+}
+
+start_web_forward() {
+  stop_forward "$web_forward_pid"
+  "${kubectl_command[@]}" -n "$system_namespace" port-forward \
+    service/slipramp-web "$web_port:3000" \
+    >"$temporary_directory/web-port-forward.log" 2>&1 &
+  web_forward_pid=$!
+  wait_for_http "$web_url/"
+}
+
+api_get() {
+  curl --fail --silent --show-error "$server_url$1"
+}
+
+create_run() {
+  local action=$1
+  local parameters=$2
+  local inputs=$3
+  local idempotency_key=$4
+  local body
+  body=$(jq -cn \
+    --arg repositoryId "$repository_id" \
+    --arg action "$action" \
+    --argjson parameters "$parameters" \
+    --argjson inputs "$inputs" \
+    '{
+      repositoryId: $repositoryId,
+      target: "acceptance",
+      action: $action,
+      parameters: $parameters,
+      inputs: $inputs,
+      source: {type: "manual"}
+    }')
+
+  curl --fail --silent --show-error \
+    -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: $idempotency_key" \
+    --data "$body" \
+    "$server_url/api/v1/runs" |
+    jq -er '.id'
+}
+
+wait_for_repository() {
+  local deadline=$((SECONDS + timeout_seconds))
+  local response status commit
+  while ((SECONDS < deadline)); do
+    if response=$(api_get /api/v1/repositories 2>/dev/null); then
+      status=$(jq -r --arg id "$repository_id" \
+        '.items[] | select(.id == $id) | .refresh.status' <<<"$response")
+      commit=$(jq -r --arg id "$repository_id" \
+        '.items[] | select(.id == $id) | .refresh.commitSha // ""' <<<"$response")
+      if [[ "$status" == succeeded && "$commit" == "$fixture_commit" ]]; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'repository did not refresh commit %s\n' "$fixture_commit" >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
+}
+
+wait_for_run_phase() {
+  local run_id=$1
+  local expected_phase=$2
+  local deadline=$((SECONDS + timeout_seconds))
+  local response phase outcome
+  while ((SECONDS < deadline)); do
+    if response=$(api_get "/api/v1/runs/$run_id" 2>/dev/null); then
+      phase=$(jq -r '.phase' <<<"$response")
+      outcome=$(jq -r '.outcome // ""' <<<"$response")
+      if [[ "$phase" == "$expected_phase" ]]; then
+        return 0
+      fi
+      if [[ "$phase" == finished ]]; then
+        printf 'Run %s finished as %s before reaching %s\n' \
+          "$run_id" "$outcome" "$expected_phase" >&2
+        return 1
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'Run %s did not reach phase %s\n' "$run_id" "$expected_phase" >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
+}
+
+wait_for_run_outcome() {
+  local run_id=$1
+  local expected_outcome=$2
+  local deadline=$((SECONDS + timeout_seconds))
+  local response phase outcome
+  while ((SECONDS < deadline)); do
+    if response=$(api_get "/api/v1/runs/$run_id" 2>/dev/null); then
+      phase=$(jq -r '.phase' <<<"$response")
+      outcome=$(jq -r '.outcome // ""' <<<"$response")
+      if [[ "$phase" == finished ]]; then
+        if [[ "$outcome" != "$expected_outcome" ]]; then
+          printf 'Run %s outcome is %s, expected %s\n' \
+            "$run_id" "$outcome" "$expected_outcome" >&2
+          printf '%s\n' "$response" >&2
+          return 1
+        fi
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'Run %s did not finish as %s\n' "$run_id" "$expected_outcome" >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
+}
+
+cancel_run() {
+  local run_id=$1
+  curl --fail --silent --show-error -X POST \
+    "$server_url/api/v1/runs/$run_id/cancel" >/dev/null
+}
+
+artifact_id() {
+  local run_id=$1
+  local name=$2
+  api_get "/api/v1/runs/$run_id/artifacts" |
+    jq -er --arg name "$name" '.items[] | select(.name == $name) | .id'
+}
+
+download_artifact() {
+  local artifact=$1
+  local destination=$2
+  curl --fail --silent --show-error \
+    "$web_url/api/v1/artifacts/$artifact/download" \
+    --output "$destination"
+}
+
+assert_log_contains() {
+  local run_id=$1
+  local pattern=$2
+  local log_id log_file
+  log_id=$(artifact_id "$run_id" log)
+  log_file="$temporary_directory/$run_id.log"
+  download_artifact "$log_id" "$log_file"
+  grep -Fq "$pattern" "$log_file"
+}
+
+wait_for_job_deletion() {
+  local run_id=$1
+  local deadline=$((SECONDS + timeout_seconds))
+  local jobs
+  while ((SECONDS < deadline)); do
+    jobs=$("${kubectl_command[@]}" -n "$run_namespace" get jobs \
+      -l "slipramp.com/run-id=$run_id" -o name)
+    if [[ -z "$jobs" ]]; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  printf 'execution Job for Run %s was not deleted\n' "$run_id" >&2
+  return 1
+}
+
+log "building Slipramp acceptance images"
+for target in acceptance-git checkout controller harness server web; do
+  docker build --target "$target" \
+    --tag "slipramp-$target:acceptance" \
+    "$repository_root"
+done
+
+dependency_images=(
+  postgres:18.6-alpine3.24
+  rustfs/rustfs:1.0.1
+  rustfs/rc:v0.1.36
+)
+log "pulling acceptance dependency images"
+for image in "${dependency_images[@]}"; do
+  docker pull "$image"
+done
+
+log "creating kind cluster $cluster_name"
+"$kind_bin" create cluster \
+  --name "$cluster_name" \
+  --image "$kind_node_image" \
+  --wait 2m
+cluster_created=true
+
+local_images=(
+  slipramp-acceptance-git:acceptance
+  slipramp-checkout:acceptance
+  slipramp-controller:acceptance
+  slipramp-harness:acceptance
+  slipramp-server:acceptance
+  slipramp-web:acceptance
+)
+log "loading images into kind"
+"$kind_bin" load docker-image --name "$cluster_name" \
+  "${local_images[@]}" "${dependency_images[@]}"
+
+log "building the local Git fixture"
+fixture_directory="$temporary_directory/repository"
+mkdir -p "$fixture_directory"
+cp -R "$repository_root/deploy/e2e/kind/repository/." "$fixture_directory/"
+git -C "$fixture_directory" init --quiet --initial-branch=main
+git -C "$fixture_directory" config user.email acceptance@slipramp.test
+git -C "$fixture_directory" config user.name 'Slipramp Acceptance'
+git -C "$fixture_directory" add .
+git -C "$fixture_directory" commit --quiet -m 'Acceptance fixture'
+fixture_commit=$(git -C "$fixture_directory" rev-parse HEAD)
+git -C "$fixture_directory" bundle create \
+  "$temporary_directory/repository.bundle" main
+
+client_key="$temporary_directory/client-key"
+host_key="$temporary_directory/host-key"
+ssh-keygen -q -t ed25519 -N '' -C slipramp-acceptance-client \
+  -f "$client_key"
+ssh-keygen -q -t ed25519 -N '' -C slipramp-acceptance-host \
+  -f "$host_key"
+git_host=acceptance-git.slipramp-system.svc.cluster.local
+awk -v host="[$git_host]:2222" '{print host " " $1 " " $2}' \
+  "$host_key.pub" >"$temporary_directory/known_hosts"
+cat >"$temporary_directory/gitconfig" <<EOF
+[core]
+    sshCommand = ssh -i /var/run/slipramp/git/ssh-privatekey -o BatchMode=yes -o IdentitiesOnly=yes -o UserKnownHostsFile=/var/run/slipramp/git/known_hosts -o StrictHostKeyChecking=yes
+EOF
+cat >"$temporary_directory/sshd_config" <<'EOF'
+Port 2222
+ListenAddress 0.0.0.0
+HostKey /etc/ssh/keys/ssh_host_ed25519_key
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+AllowUsers git
+AllowTcpForwarding no
+X11Forwarding no
+PidFile /tmp/sshd.pid
+EOF
+
+log "deploying PostgreSQL and RustFS"
+"${kubectl_command[@]}" apply -f \
+  "$repository_root/deploy/e2e/kind/dependencies.yaml"
+"${kubectl_command[@]}" -n "$system_namespace" rollout status \
+  deployment/postgres --timeout="${timeout_seconds}s"
+"${kubectl_command[@]}" -n "$system_namespace" rollout status \
+  deployment/rustfs --timeout="${timeout_seconds}s"
+"${kubectl_command[@]}" apply -f \
+  "$repository_root/deploy/e2e/kind/rustfs-init.yaml"
+"${kubectl_command[@]}" -n "$system_namespace" wait \
+  --for=condition=complete job/rustfs-init --timeout="${timeout_seconds}s"
+
+log "deploying the Slipramp stack"
+"${kubectl_command[@]}" -n "$system_namespace" create configmap \
+  acceptance-repository \
+  --from-file="repository.bundle=$temporary_directory/repository.bundle" \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" -n "$system_namespace" create configmap \
+  acceptance-git-client-public \
+  --from-file="authorized_key=$client_key.pub" \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" -n "$system_namespace" create configmap \
+  acceptance-git-sshd \
+  --from-file="sshd_config=$temporary_directory/sshd_config" \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" -n "$system_namespace" create secret generic \
+  acceptance-git-host-keys \
+  --from-file="ssh_host_ed25519_key=$host_key" \
+  --from-file="ssh_host_ed25519_key.pub=$host_key.pub" \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" -n "$system_namespace" create secret generic \
+  acceptance-git-client \
+  --from-file="gitconfig=$temporary_directory/gitconfig" \
+  --from-file="ssh-privatekey=$client_key" \
+  --from-file="known_hosts=$temporary_directory/known_hosts" \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" -n "$run_namespace" create secret generic \
+  acceptance-git-client \
+  --from-file="ssh-privatekey=$client_key" \
+  --from-file="known_hosts=$temporary_directory/known_hosts" \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" apply -f \
+  "$repository_root/deploy/e2e/kind/platform.yaml"
+for deployment in acceptance-git slipramp-server slipramp-web slipramp-controller; do
+  "${kubectl_command[@]}" -n "$system_namespace" rollout status \
+    "deployment/$deployment" --timeout="${timeout_seconds}s"
+done
+
+start_server_forward
+start_web_forward
+
+log "registering and refreshing the Git fixture"
+repository_response=$(curl --fail --silent --show-error \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "name":"acceptance",
+    "cloneUrl":"ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git",
+    "branch":"main",
+    "refreshCredentialName":"acceptance",
+    "checkoutCredentialName":"acceptance"
+  }' \
+  "$server_url/api/v1/repositories")
+repository_id=$(jq -er '.id' <<<"$repository_response")
+wait_for_repository
+
+catalog_response=$(api_get "/api/v1/repositories/$repository_id/catalog")
+jq -e --arg commit "$fixture_commit" '
+  .commitSha == $commit and
+  any(.targets[]; .metadata.name == "acceptance") and
+  any(.runtimes[]; .metadata.name == "acceptance")
+' <<<"$catalog_response" >/dev/null
+
+log "running preview and checking idempotency"
+preview_parameters='{"message":"hello-kind"}'
+preview_run=$(create_run preview "$preview_parameters" '{}' acceptance-preview)
+preview_retry=$(create_run preview "$preview_parameters" '{}' acceptance-preview)
+test "$preview_run" = "$preview_retry"
+wait_for_run_outcome "$preview_run" succeeded
+preview_response=$(api_get "/api/v1/runs/$preview_run")
+jq -e --arg commit "$fixture_commit" '.commitSha == $commit' \
+  <<<"$preview_response" >/dev/null
+
+plan_id=$(artifact_id "$preview_run" plan)
+download_artifact "$plan_id" "$temporary_directory/plan.txt"
+test "$(cat "$temporary_directory/plan.txt")" = 'plan:hello-kind'
+assert_log_contains "$preview_run" 'acceptance preview complete: hello-kind'
+
+log "applying the exact preview artifact"
+apply_inputs=$(jq -cn --arg id "$plan_id" '{plan: $id}')
+apply_run=$(create_run apply '{}' "$apply_inputs" acceptance-apply)
+wait_for_run_outcome "$apply_run" succeeded
+apply_response=$(api_get "/api/v1/runs/$apply_run")
+jq -e \
+  --arg commit "$(jq -r '.commitSha' <<<"$preview_response")" \
+  --arg revision "$(jq -r '.catalogRevisionId' <<<"$preview_response")" \
+  --arg artifact "$plan_id" '
+    .commitSha == $commit and
+    .catalogRevisionId == $revision and
+    .inputs.plan.artifactId == $artifact
+  ' <<<"$apply_response" >/dev/null
+assert_log_contains "$apply_run" 'acceptance apply consumed: plan:hello-kind'
+
+log "testing queued and running cancellation"
+cancel_run_id=$(create_run cancel '{}' '{}' acceptance-running-cancel)
+wait_for_run_phase "$cancel_run_id" running
+queued_run=$(create_run preview "$preview_parameters" '{}' acceptance-queued-cancel)
+wait_for_run_phase "$queued_run" queued
+cancel_run "$queued_run"
+wait_for_run_outcome "$queued_run" canceled
+cancel_run "$cancel_run_id"
+wait_for_run_outcome "$cancel_run_id" canceled
+assert_log_contains "$cancel_run_id" 'acceptance cancellation observed'
+wait_for_job_deletion "$cancel_run_id"
+
+log "testing controller restart recovery"
+controller_recovery_run=$(create_run recover '{}' '{}' acceptance-controller-recovery)
+wait_for_run_phase "$controller_recovery_run" running
+"${kubectl_command[@]}" -n "$system_namespace" rollout restart \
+  deployment/slipramp-controller
+"${kubectl_command[@]}" -n "$system_namespace" rollout status \
+  deployment/slipramp-controller --timeout="${timeout_seconds}s"
+wait_for_run_outcome "$controller_recovery_run" succeeded
+assert_log_contains "$controller_recovery_run" 'acceptance recovery completed'
+
+log "testing Server restart recovery"
+server_recovery_run=$(create_run recover '{}' '{}' acceptance-server-recovery)
+wait_for_run_phase "$server_recovery_run" running
+"${kubectl_command[@]}" -n "$system_namespace" rollout restart \
+  deployment/slipramp-server
+"${kubectl_command[@]}" -n "$system_namespace" rollout status \
+  deployment/slipramp-server --timeout="${timeout_seconds}s"
+start_server_forward
+wait_for_run_outcome "$server_recovery_run" succeeded
+assert_log_contains "$server_recovery_run" 'acceptance recovery completed'
+
+log "kind acceptance passed"
+printf 'Repository commit: %s\n' "$fixture_commit"
+printf 'Preview Run:       %s\n' "$preview_run"
+printf 'Apply Run:         %s\n' "$apply_run"
+printf 'Canceled Run:      %s\n' "$cancel_run_id"
+printf 'Controller recovery Run: %s\n' "$controller_recovery_run"
+printf 'Server recovery Run:     %s\n' "$server_recovery_run"

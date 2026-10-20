@@ -55,6 +55,14 @@ FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cab
 
 RUN apk add --no-cache ca-certificates git openssh-client
 
+FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS acceptance-git
+
+RUN apk add --no-cache ca-certificates git openssh-server \
+    && addgroup -S git \
+    && adduser -S -D -h /home/git -s /usr/bin/git-shell -G git git \
+    && printf 'git:acceptance-disabled-password\n' | chpasswd \
+    && mkdir -p /run/sshd
+
 FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS web-build
 
 WORKDIR /src

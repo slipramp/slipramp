@@ -1,4 +1,13 @@
-# Homelab end-to-end test
+# End-to-end tests
+
+The automated acceptance suite exercises the accepted MVP baseline in a
+disposable kind cluster. See the [kind acceptance test](./kind/README.md) and
+run it with `task acceptance:kind`.
+
+The homelab flow below remains useful for validating a real remote cluster,
+private Git and image credentials, and an operator-reviewed infrastructure Run.
+
+## Homelab test
 
 This setup keeps the Slipramp Server, PostgreSQL, RustFS, and web process on the
 development laptop. The homelab controller and execution Jobs reach the Server
@@ -12,7 +21,7 @@ Run resolution, controller enrollment and polling, Kubernetes Job creation,
 the exact-commit checkout, Secret injection, the harness, durable log streaming,
 and terminal observation.
 
-## 1. Publish the execution images
+### 1. Publish the execution images
 
 The root [`Dockerfile`](../../Dockerfile) contains separate `controller`,
 `harness`, and `checkout` targets. The image workflow publishes Linux AMD64
@@ -27,7 +36,7 @@ export SLIPRAMP_HARNESS_IMAGE='ghcr.io/slipramp/slipramp-harness@sha256:<digest>
 export SLIPRAMP_CHECKOUT_IMAGE='ghcr.io/slipramp/slipramp-checkout@sha256:<digest>'
 ```
 
-## 2. Add the catalog to `kcloud-ops`
+### 2. Add the catalog to `kcloud-ops`
 
 Copy the two files below into the real repository and commit them to `main`:
 
@@ -41,7 +50,7 @@ The checked-in `deploys/slipramp/node-exporter.sh` already supplies the action
 boundary needed by the first Run. Copy the Terraform `slipramp.sh` launcher from
 the example before testing the later plan-artifact promotion flow.
 
-## 3. Start the laptop services
+### 3. Start the laptop services
 
 Create independent controller enrollment, controller bearer, and artifact-token
 secrets. Preserve these environment variables in both shells used below without
@@ -72,7 +81,7 @@ In another shell, start the web application:
 SLIPRAMP_API_URL="$SLIPRAMP_SERVER_URL" task web:dev
 ```
 
-## 4. Deploy the homelab controller
+### 4. Deploy the homelab controller
 
 The controller and execution images are private. Provide a GitHub username and
 a token with `read:packages`, or point at a portable Docker config containing
@@ -113,7 +122,7 @@ unrestricted changes to the homelab cluster, including draining nodes during a
 Kubernetes upgrade. Use a narrower ServiceAccount for untrusted repositories or
 actions.
 
-## 5. Register and run `kcloud-ops`
+### 5. Register and run `kcloud-ops`
 
 Open the repository form and use:
 

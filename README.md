@@ -1,19 +1,34 @@
 # Slipramp
 
 Slipramp is a GitOps-driven infrastructure control plane for homelabs and small
-teams. The product direction is in [`docs/PLAN.md`](docs/PLAN.md), and the first
-delivery scope is in [`docs/MVP.md`](docs/MVP.md).
+teams. The product direction is in [`docs/PLAN.md`](docs/PLAN.md), and the
+accepted MVP baseline is recorded in [`docs/MVP.md`](docs/MVP.md).
 
-## Current foundation
+## Project status
 
-The current foundation establishes the four Slipramp processes: the Server,
-cluster controller, harness, and web application. The split OpenAPI contract
-defines the Server's JSON liveness probe at `GET /healthz`, the read-only
+The MVP operational loop is implemented and accepted. Slipramp can discover a
+versioned repository catalog, run exact commits through authenticated in-cluster
+controllers, stream and retain logs, transfer declared artifacts, and promote a
+preview artifact into a pinned follow-up Run. Development now continues
+incrementally from that baseline; the MVP document is a record of the delivered
+scope rather than an open checklist.
+
+The repository keeps formatting, linting, generation, unit, integration, build,
+and disposable-cluster acceptance checks in CI. The end-to-end suite and the
+operator-reviewed homelab flow are documented in
+[`deploy/e2e`](deploy/e2e/README.md).
+
+## Current implementation
+
+Slipramp consists of four processes: the Server, cluster controller, harness,
+and web application. The split OpenAPI contract defines the Server's JSON
+liveness probe at `GET /healthz`, the read-only
 cluster health endpoint at `GET /api/v1/clusters`, and the authenticated
 controller enrollment and long poll at `POST /controller/v1/enroll` and
 `POST /controller/v1/poll`. Ongoing controller routes derive the cluster
 identity from the enrolled bearer credential rather than repeating it in every
 path.
+
 Repository registrations can be listed and created at
 `GET|POST /api/v1/repositories` and removed at
 `DELETE /api/v1/repositories/{repositoryId}`. Go request and response types,
@@ -294,6 +309,7 @@ task local:up
 task generate
 task check
 task integration
+task acceptance:kind
 SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS='{"colo":"development-enrollment-token"}' \
   go run ./cmd/slipramp-server
 go run ./cmd/slipramp-harness command argument
@@ -311,6 +327,6 @@ deployment, and `kcloud-ops` preview sequence.
 `task local:down` stops PostgreSQL and RustFS while retaining their named
 volumes. Database migrations live in `internal/store/migrations`, queries live
 in `internal/store/queries`, and `task generate` refreshes both sqlc output and
-the OpenAPI-generated clients. During the MVP, schema baselines may be rewritten
-instead of migrated compatibly; recreate the local PostgreSQL volume after such
-a change.
+the OpenAPI-generated clients. While the repository and database contracts are
+still pre-stable, schema baselines may be rewritten instead of migrated
+compatibly; recreate the local PostgreSQL volume after such a change.

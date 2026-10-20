@@ -1,0 +1,408 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slipramp-placements
+  namespace: slipramp-system
+data:
+  placements.yaml: |
+    apiVersion: slipramp.com/v1alpha1
+    kind: PlacementConfig
+    placements:
+      acceptance:
+        cluster: kind
+        jobNamespace: slipramp-runs
+        serviceAccountName: slipramp-runner
+        timeout: 2m
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: slipramp-controller-credentials
+  namespace: slipramp-system
+type: Opaque
+stringData:
+  enrollment-token: acceptance-enrollment-token
+  controller-token: acceptance-controller-token
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: slipramp-controller
+  namespace: slipramp-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: slipramp-runner
+  namespace: slipramp-runs
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: slipramp-acceptance-controller
+rules:
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [create, delete, get, list]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, update]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: slipramp-acceptance-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: slipramp-acceptance-controller
+subjects:
+  - kind: ServiceAccount
+    name: slipramp-controller
+    namespace: slipramp-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acceptance-git
+  namespace: slipramp-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: acceptance-git
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: acceptance-git
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+        - name: initialize
+          image: slipramp-acceptance-git:acceptance
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              git clone --bare /fixtures/repository.bundle /srv/repository.git
+              chown -R git:git /srv/repository.git
+              mkdir -p /home/git/.ssh
+              cp /client/authorized_key /home/git/.ssh/authorized_keys
+              chmod 0755 /home/git
+              chmod 0700 /home/git/.ssh
+              chmod 0600 /home/git/.ssh/authorized_keys
+              chown -R git:git /home/git
+          volumeMounts:
+            - name: client-public-key
+              mountPath: /client
+              readOnly: true
+            - name: fixture
+              mountPath: /fixtures
+              readOnly: true
+            - name: git-home
+              mountPath: /home/git
+            - name: repository
+              mountPath: /srv
+      containers:
+        - name: git
+          image: slipramp-acceptance-git:acceptance
+          command: [/usr/sbin/sshd]
+          args:
+            - -D
+            - -e
+            - -f
+            - /etc/ssh/acceptance/sshd_config
+          ports:
+            - containerPort: 2222
+              name: git
+          readinessProbe:
+            tcpSocket:
+              port: git
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          volumeMounts:
+            - name: git-home
+              mountPath: /home/git
+            - name: host-keys
+              mountPath: /etc/ssh/keys
+              readOnly: true
+            - name: repository
+              mountPath: /srv
+              readOnly: true
+            - name: sshd-config
+              mountPath: /etc/ssh/acceptance
+              readOnly: true
+      volumes:
+        - name: client-public-key
+          configMap:
+            name: acceptance-git-client-public
+        - name: fixture
+          configMap:
+            name: acceptance-repository
+        - name: git-home
+          emptyDir: {}
+        - name: host-keys
+          secret:
+            secretName: acceptance-git-host-keys
+            defaultMode: 0400
+        - name: repository
+          emptyDir: {}
+        - name: sshd-config
+          configMap:
+            name: acceptance-git-sshd
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acceptance-git
+  namespace: slipramp-system
+spec:
+  selector:
+    app.kubernetes.io/name: acceptance-git
+  ports:
+    - name: git
+      port: 2222
+      targetPort: git
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slipramp-server
+  namespace: slipramp-system
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: slipramp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: slipramp-server
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+        - name: prepare-git-credential
+          image: slipramp-server:acceptance
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              cp /source/* /credential/
+              chmod 0600 /credential/ssh-privatekey
+              chown -R 65532:65532 /credential
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: git-credential-source
+              mountPath: /source
+              readOnly: true
+            - name: git-credential
+              mountPath: /credential
+      containers:
+        - name: server
+          image: slipramp-server:acceptance
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SLIPRAMP_ARTIFACT_TOKEN_SECRET
+              value: acceptance-artifact-token-secret-32
+            - name: SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS
+              value: '{"kind":"acceptance-enrollment-token"}'
+            - name: SLIPRAMP_DATABASE_URL
+              value: postgres://slipramp:slipramp-acceptance@postgres:5432/slipramp?sslmode=disable
+            - name: SLIPRAMP_PLACEMENTS_FILE
+              value: /etc/slipramp/placements.yaml
+            - name: SLIPRAMP_REPOSITORY_FETCH_TIMEOUT
+              value: 15s
+            - name: SLIPRAMP_REPOSITORY_REFRESH_INTERVAL
+              value: 1s
+            - name: SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS
+              value: '{"acceptance":"/var/run/slipramp/git/gitconfig"}'
+            - name: SLIPRAMP_S3_ACCESS_KEY_ID
+              value: slipramp
+            - name: SLIPRAMP_S3_BUCKET
+              value: slipramp
+            - name: SLIPRAMP_S3_ENDPOINT
+              value: http://rustfs:9000
+            - name: SLIPRAMP_S3_REGION
+              value: us-east-1
+            - name: SLIPRAMP_S3_SECRET_ACCESS_KEY
+              value: slipramp-acceptance
+          ports:
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: git-credential
+              mountPath: /var/run/slipramp/git
+              readOnly: true
+            - name: placements
+              mountPath: /etc/slipramp
+              readOnly: true
+      volumes:
+        - name: git-credential
+          emptyDir: {}
+        - name: git-credential-source
+          secret:
+            secretName: acceptance-git-client
+        - name: placements
+          configMap:
+            name: slipramp-placements
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slipramp-server
+  namespace: slipramp-system
+spec:
+  selector:
+    app.kubernetes.io/name: slipramp-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slipramp-web
+  namespace: slipramp-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: slipramp-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: slipramp-web
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: web
+          image: slipramp-web:acceptance
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SLIPRAMP_API_URL
+              value: http://slipramp-server:8080
+          ports:
+            - containerPort: 3000
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slipramp-web
+  namespace: slipramp-system
+spec:
+  selector:
+    app.kubernetes.io/name: slipramp-web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slipramp-controller
+  namespace: slipramp-system
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: slipramp-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: slipramp-controller
+    spec:
+      serviceAccountName: slipramp-controller
+      containers:
+        - name: controller
+          image: slipramp-controller:acceptance
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE
+              value: slipramp-checkout:acceptance
+            - name: SLIPRAMP_CONTROLLER_CLUSTER
+              value: kind
+            - name: SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slipramp-controller-credentials
+                  key: enrollment-token
+            - name: SLIPRAMP_CONTROLLER_GIT_CREDENTIALS
+              value: '{"acceptance":"acceptance-git-client"}'
+            - name: SLIPRAMP_CONTROLLER_HARNESS_IMAGE
+              value: slipramp-harness:acceptance
+            - name: SLIPRAMP_CONTROLLER_SERVER_URL
+              value: http://slipramp-server.slipramp-system.svc.cluster.local:8080
+            - name: SLIPRAMP_CONTROLLER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slipramp-controller-credentials
+                  key: controller-token
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 10
