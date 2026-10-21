@@ -133,7 +133,16 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	}
 	repositories := repository.NewService(database, repository.RefreshCredentials{})
 	catalogs := catalog.NewService(database)
-	runs := run.NewService(database, repositories, catalogs, placements)
+	runs := run.NewService(run.Dependencies{
+		Creation:      database,
+		History:       database,
+		Assignments:   database,
+		Cancellations: database,
+		Observations:  database,
+		Repositories:  repositories,
+		Catalogs:      catalogs,
+		Placements:    placements,
+	})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	failingStore := &failingGitTriggerCompletionStore{database: database}
 	dispatcher := gittrigger.NewDispatcher(failingStore, runs, time.Second, logger)
@@ -666,7 +675,16 @@ func newGitTriggerTestServices(
 	}
 	repositories := repository.NewService(database, repository.RefreshCredentials{})
 	catalogs := catalog.NewService(database)
-	runs := run.NewService(database, repositories, catalogs, placements)
+	runs := run.NewService(run.Dependencies{
+		Creation:      database,
+		History:       database,
+		Assignments:   database,
+		Cancellations: database,
+		Observations:  database,
+		Repositories:  repositories,
+		Catalogs:      catalogs,
+		Placements:    placements,
+	})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	return runs, gittrigger.NewDispatcher(database, runs, time.Second, logger)

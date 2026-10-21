@@ -540,9 +540,10 @@ func testService(t *testing.T) (*Service, *recordingRuns) {
 	}
 
 	runs := &recordingRuns{}
-	service := NewService(
-		runs,
-		&recordingRepositories{
+	service := NewService(Dependencies{
+		Creation: runs,
+		History:  runs,
+		Repositories: &recordingRepositories{
 			record: repository.Repository{
 				Config: repository.Config{
 					Name:     "infrastructure",
@@ -552,9 +553,9 @@ func testService(t *testing.T) (*Service, *recordingRuns) {
 				ID: testRepositoryID,
 			},
 		},
-		&recordingCatalogs{revision: testRevision()},
-		placements,
-	)
+		Catalogs:   &recordingCatalogs{revision: testRevision()},
+		Placements: placements,
+	})
 
 	return service, runs
 }
@@ -618,28 +619,6 @@ type recordingRuns struct {
 	existing               Run
 	getError               error
 	idempotencyPrincipalID *uuid.UUID
-	assignedCalls          int
-	assigned               Run
-	assignedError          error
-	claimCalls             int
-	claimClusterName       string
-	claimedAt              time.Time
-	claimed                Run
-	claimError             error
-	observationCalls       int
-	observation            Observation
-	observationFrom        []Phase
-	observationError       error
-	cancelCalls            int
-	cancelID               uuid.UUID
-	cancelAt               time.Time
-	canceledBy             *productidentity.ActorSnapshot
-	canceled               Run
-	cancelError            error
-	nextCancelCalls        int
-	nextCancelCluster      string
-	nextCancel             Run
-	nextCancelError        error
 	artifacts              map[uuid.UUID]ArtifactInput
 	listFilter             ListFilter
 	listed                 []Run
@@ -690,53 +669,6 @@ func (s *recordingRuns) GetRunByIdempotencyKey(
 	}
 
 	return Run{}, ErrRunNotFound
-}
-
-func (s *recordingRuns) CancelRun(
-	_ context.Context,
-	runID uuid.UUID,
-	requestedAt time.Time,
-	canceledBy *productidentity.ActorSnapshot,
-) (Run, error) {
-	s.cancelCalls++
-	s.cancelID = runID
-	s.cancelAt = requestedAt
-	s.canceledBy = canceledBy
-
-	return s.canceled, s.cancelError
-}
-
-func (s *recordingRuns) GetAssignedRunForCluster(_ context.Context, _ string) (Run, error) {
-	s.assignedCalls++
-
-	return s.assigned, s.assignedError
-}
-
-func (s *recordingRuns) ClaimQueuedRun(_ context.Context, clusterName string, claimedAt time.Time) (Run, error) {
-	s.claimCalls++
-	s.claimClusterName = clusterName
-	s.claimedAt = claimedAt
-
-	return s.claimed, s.claimError
-}
-
-func (s *recordingRuns) GetRunToCancelForCluster(_ context.Context, clusterName string) (Run, error) {
-	s.nextCancelCalls++
-	s.nextCancelCluster = clusterName
-
-	return s.nextCancel, s.nextCancelError
-}
-
-func (s *recordingRuns) ApplyRunObservation(
-	_ context.Context,
-	observation Observation,
-	allowedCurrentPhases []Phase,
-) error {
-	s.observationCalls++
-	s.observation = observation
-	s.observationFrom = append([]Phase(nil), allowedCurrentPhases...)
-
-	return s.observationError
 }
 
 type recordingRepositories struct {

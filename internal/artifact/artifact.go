@@ -2,7 +2,6 @@
 package artifact
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -199,27 +198,6 @@ func (c LogChunk) Validate() error {
 
 func (c LogChunk) EndOffset() int64 {
 	return c.OffsetBytes + c.SizeBytes
-}
-
-type Store interface {
-	GetRunClusterName(ctx context.Context, runID uuid.UUID) (string, error)
-	CreateArtifact(ctx context.Context, record Artifact) (Artifact, error)
-	GetArtifact(ctx context.Context, artifactID uuid.UUID) (Artifact, error)
-	GetArtifactByRunAndName(ctx context.Context, runID uuid.UUID, name string) (Artifact, error)
-	ListArtifactsForRun(ctx context.Context, runID uuid.UUID) ([]Artifact, error)
-	GetArtifactProvenance(ctx context.Context, runID uuid.UUID) (Provenance, error)
-	GetRunArtifactContext(ctx context.Context, runID uuid.UUID) (RunContext, error)
-	GetRunInputArtifact(ctx context.Context, runID uuid.UUID, inputName string) (Artifact, error)
-	CreateLogChunk(ctx context.Context, chunk LogChunk) (LogChunk, error)
-	GetLogChunk(ctx context.Context, artifactID uuid.UUID, offsetBytes int64) (LogChunk, error)
-	ListLogChunks(ctx context.Context, artifactID uuid.UUID, fromOffsetBytes int64) ([]LogChunk, error)
-	SealArtifact(
-		ctx context.Context,
-		artifactID uuid.UUID,
-		sizeBytes int64,
-		sha256 string,
-		sealedAt time.Time,
-	) (Artifact, error)
 }
 
 func validateObjectKey(value *string) error {

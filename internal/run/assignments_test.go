@@ -16,8 +16,8 @@ func TestNextRunAssignmentRedeliversAssignedRun(t *testing.T) {
 		ID:    uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
 		Phase: PhaseAssigned,
 	}
-	runs := &recordingRuns{assigned: want}
-	service := &Service{runs: runs, now: time.Now}
+	runs := &recordingAssignments{assigned: want}
+	service := &Service{assignments: runs, now: time.Now}
 
 	assigned, err := service.NextRunAssignment(context.Background(), "colo")
 	if err != nil {
@@ -38,11 +38,11 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 		ID:    uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
 		Phase: PhaseAssigned,
 	}
-	runs := &recordingRuns{
+	runs := &recordingAssignments{
 		assignedError: ErrNoRunAssignment,
 		claimed:       want,
 	}
-	service := &Service{runs: runs}
+	service := &Service{assignments: runs}
 	location := time.FixedZone("test", -6*60*60)
 	claimedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, location)
 	service.now = func() time.Time { return claimedAt }
@@ -65,11 +65,11 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 func TestNextRunAssignmentReturnsNoAssignment(t *testing.T) {
 	t.Parallel()
 
-	runs := &recordingRuns{
+	runs := &recordingAssignments{
 		assignedError: ErrNoRunAssignment,
 		claimError:    ErrNoRunAssignment,
 	}
-	service := &Service{runs: runs, now: time.Now}
+	service := &Service{assignments: runs, now: time.Now}
 
 	_, err := service.NextRunAssignment(context.Background(), "colo")
 	if !errors.Is(err, ErrNoRunAssignment) {
@@ -80,8 +80,8 @@ func TestNextRunAssignmentReturnsNoAssignment(t *testing.T) {
 func TestNextRunAssignmentRejectsBlankClusterName(t *testing.T) {
 	t.Parallel()
 
-	runs := &recordingRuns{}
-	service := &Service{runs: runs, now: time.Now}
+	runs := &recordingAssignments{}
+	service := &Service{assignments: runs, now: time.Now}
 
 	_, err := service.NextRunAssignment(context.Background(), " ")
 	if !errors.Is(err, ErrInvalidRequest) {
@@ -90,4 +90,33 @@ func TestNextRunAssignmentRejectsBlankClusterName(t *testing.T) {
 	if runs.assignedCalls != 0 || runs.claimCalls != 0 {
 		t.Errorf("store calls = (%d, %d), want (0, 0)", runs.assignedCalls, runs.claimCalls)
 	}
+}
+
+type recordingAssignments struct {
+	assignedCalls    int
+	assigned         Run
+	assignedError    error
+	claimCalls       int
+	claimClusterName string
+	claimedAt        time.Time
+	claimed          Run
+	claimError       error
+}
+
+func (s *recordingAssignments) GetAssignedRunForCluster(context.Context, string) (Run, error) {
+	s.assignedCalls++
+
+	return s.assigned, s.assignedError
+}
+
+func (s *recordingAssignments) ClaimQueuedRun(
+	_ context.Context,
+	clusterName string,
+	claimedAt time.Time,
+) (Run, error) {
+	s.claimCalls++
+	s.claimClusterName = clusterName
+	s.claimedAt = claimedAt
+
+	return s.claimed, s.claimError
 }

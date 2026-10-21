@@ -46,7 +46,13 @@ func TestArtifactTransferIntegration(t *testing.T) {
 
 	createdAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
 	runID := createArtifactTestRun(t, ctx, database, createdAt)
-	service := artifact.NewService(database, objects, []byte("integration-artifact-token-key-32-bytes"))
+	service := artifact.NewService(artifact.Dependencies{
+		Runs:      database,
+		Artifacts: database,
+		LogChunks: database,
+		Contents:  objects,
+		TokenKey:  []byte("integration-artifact-token-key-32-bytes"),
+	})
 
 	contents := []byte("durable plan contents")
 	digest := sha256.Sum256(contents)

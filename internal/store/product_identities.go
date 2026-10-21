@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/store/storedb"
@@ -495,14 +494,6 @@ func credentialDigest(value []byte) (productidentity.CredentialDigest, error) {
 	copy(digest[:], value)
 
 	return digest, nil
-}
-
-func optionalDatabaseTime(value *time.Time) pgtype.Timestamptz {
-	if value == nil {
-		return pgtype.Timestamptz{}
-	}
-
-	return databaseTime(*value)
 }
 
 func identityConflict(err error) bool {

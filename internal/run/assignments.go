@@ -16,7 +16,7 @@ func (s *Service) NextRunAssignment(ctx context.Context, clusterName string) (Ru
 		return Run{}, fmt.Errorf("%w: cluster name is required", ErrInvalidRequest)
 	}
 
-	assigned, err := s.runs.GetAssignedRunForCluster(ctx, clusterName)
+	assigned, err := s.assignments.GetAssignedRunForCluster(ctx, clusterName)
 	if err == nil {
 		return assigned, nil
 	}
@@ -24,7 +24,7 @@ func (s *Service) NextRunAssignment(ctx context.Context, clusterName string) (Ru
 		return Run{}, fmt.Errorf("get assigned run: %w", err)
 	}
 
-	assigned, err = s.runs.ClaimQueuedRun(ctx, clusterName, s.now().UTC())
+	assigned, err = s.assignments.ClaimQueuedRun(ctx, clusterName, s.now().UTC())
 	if err != nil {
 		if errors.Is(err, ErrNoRunAssignment) {
 			return Run{}, ErrNoRunAssignment

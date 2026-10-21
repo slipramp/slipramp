@@ -23,26 +23,38 @@ import (
 
 const maximumIdempotencyKeyLength = 128
 
-type Store interface {
+type CreationStore interface {
 	CreateRun(ctx context.Context, record Run) (Run, error)
-	GetRun(context.Context, uuid.UUID) (Run, error)
-	ListRuns(context.Context, ListFilter) ([]Run, error)
-	CancelRun(
-		ctx context.Context,
-		runID uuid.UUID,
-		requestedAt time.Time,
-		canceledBy *productidentity.ActorSnapshot,
-	) (Run, error)
 	GetRunByIdempotencyKey(
 		ctx context.Context,
 		principalID *uuid.UUID,
 		sourceType SourceType,
 		idempotencyKey string,
 	) (Run, error)
+	GetArtifactInputCandidate(context.Context, uuid.UUID) (ArtifactInput, error)
+}
+
+type HistoryStore interface {
+	GetRun(context.Context, uuid.UUID) (Run, error)
+	ListRuns(context.Context, ListFilter) ([]Run, error)
+}
+
+type AssignmentStore interface {
 	GetAssignedRunForCluster(ctx context.Context, clusterName string) (Run, error)
 	ClaimQueuedRun(ctx context.Context, clusterName string, claimedAt time.Time) (Run, error)
+}
+
+type CancellationStore interface {
+	CancelRun(
+		ctx context.Context,
+		runID uuid.UUID,
+		requestedAt time.Time,
+		canceledBy *productidentity.ActorSnapshot,
+	) (Run, error)
 	GetRunToCancelForCluster(ctx context.Context, clusterName string) (Run, error)
-	GetArtifactInputCandidate(context.Context, uuid.UUID) (ArtifactInput, error)
+}
+
+type ObservationStore interface {
 	ApplyRunObservation(ctx context.Context, observation Observation, allowedCurrentPhases []Phase) error
 }
 
@@ -56,27 +68,41 @@ type CatalogService interface {
 }
 
 type Service struct {
-	runs         Store
-	repositories RepositoryService
-	catalogs     CatalogService
-	placements   placement.Set
-	newID        func() uuid.UUID
-	now          func() time.Time
+	creation      CreationStore
+	history       HistoryStore
+	assignments   AssignmentStore
+	cancellations CancellationStore
+	observations  ObservationStore
+	repositories  RepositoryService
+	catalogs      CatalogService
+	placements    placement.Set
+	newID         func() uuid.UUID
+	now           func() time.Time
 }
 
-func NewService(
-	runs Store,
-	repositories RepositoryService,
-	catalogs CatalogService,
-	placements placement.Set,
-) *Service {
+type Dependencies struct {
+	Creation      CreationStore
+	History       HistoryStore
+	Assignments   AssignmentStore
+	Cancellations CancellationStore
+	Observations  ObservationStore
+	Repositories  RepositoryService
+	Catalogs      CatalogService
+	Placements    placement.Set
+}
+
+func NewService(dependencies Dependencies) *Service {
 	return &Service{
-		runs:         runs,
-		repositories: repositories,
-		catalogs:     catalogs,
-		placements:   placements,
-		newID:        uuid.New,
-		now:          time.Now,
+		creation:      dependencies.Creation,
+		history:       dependencies.History,
+		assignments:   dependencies.Assignments,
+		cancellations: dependencies.Cancellations,
+		observations:  dependencies.Observations,
+		repositories:  dependencies.Repositories,
+		catalogs:      dependencies.Catalogs,
+		placements:    dependencies.Placements,
+		newID:         uuid.New,
+		now:           time.Now,
 	}
 }
 
@@ -99,7 +125,7 @@ func (s *Service) CreateRun(ctx context.Context, request CreateRequest) (Run, er
 	}
 
 	if request.IdempotencyKey != nil {
-		existing, err := s.runs.GetRunByIdempotencyKey(
+		existing, err := s.creation.GetRunByIdempotencyKey(
 			ctx,
 			actorPrincipalID(request.Actor),
 			request.Source.Type,
@@ -215,7 +241,7 @@ func (s *Service) CreateRun(ctx context.Context, request CreateRequest) (Run, er
 		CreatedAt: createdAt,
 	}
 
-	created, err := s.runs.CreateRun(ctx, record)
+	created, err := s.creation.CreateRun(ctx, record)
 	if err != nil {
 		return Run{}, fmt.Errorf("create run: %w", err)
 	}
@@ -228,7 +254,7 @@ func (s *Service) GetRun(ctx context.Context, runID uuid.UUID) (Run, error) {
 		return Run{}, fmt.Errorf("%w: Run ID is required", ErrInvalidRequest)
 	}
 
-	record, err := s.runs.GetRun(ctx, runID)
+	record, err := s.history.GetRun(ctx, runID)
 	if err != nil {
 		return Run{}, err
 	}
@@ -253,7 +279,7 @@ func (s *Service) ListRuns(ctx context.Context, filter ListFilter) ([]Run, error
 		return nil, fmt.Errorf("%w: limit must be between 1 and %d", ErrInvalidRequest, MaximumListLimit)
 	}
 
-	records, err := s.runs.ListRuns(ctx, filter)
+	records, err := s.history.ListRuns(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("list Runs: %w", err)
 	}
@@ -277,7 +303,7 @@ func (s *Service) resolveInputCandidates(
 			return nil, uuid.Nil, fmt.Errorf("%w: input %q artifact ID is required", ErrInvalidInputs, name)
 		}
 
-		candidate, err := s.runs.GetArtifactInputCandidate(ctx, artifactID)
+		candidate, err := s.creation.GetArtifactInputCandidate(ctx, artifactID)
 		if errors.Is(err, ErrArtifactNotFound) {
 			return nil, uuid.Nil, ErrArtifactNotFound
 		}

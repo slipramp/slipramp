@@ -21,7 +21,7 @@ func (s *Service) CancelRun(ctx context.Context, request CancelRequest) (Run, er
 		return Run{}, err
 	}
 
-	record, err := s.runs.CancelRun(ctx, request.RunID, s.now().UTC(), canceledBy)
+	record, err := s.cancellations.CancelRun(ctx, request.RunID, s.now().UTC(), canceledBy)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrRunNotFound), errors.Is(err, ErrRunFinished):
@@ -42,7 +42,7 @@ func (s *Service) NextRunToCancel(ctx context.Context, clusterName string) (Run,
 		return Run{}, fmt.Errorf("%w: cluster name is required", ErrInvalidRequest)
 	}
 
-	record, err := s.runs.GetRunToCancelForCluster(ctx, clusterName)
+	record, err := s.cancellations.GetRunToCancelForCluster(ctx, clusterName)
 	if err != nil {
 		if errors.Is(err, ErrNoRunToCancel) {
 			return Run{}, ErrNoRunToCancel

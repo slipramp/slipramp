@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"maps"
 	"slices"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/slipramp/slipramp/internal/productidentity"
@@ -19,7 +17,13 @@ import (
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
-var _ run.Store = (*Database)(nil)
+var (
+	_ run.CreationStore     = (*Database)(nil)
+	_ run.HistoryStore      = (*Database)(nil)
+	_ run.AssignmentStore   = (*Database)(nil)
+	_ run.CancellationStore = (*Database)(nil)
+	_ run.ObservationStore  = (*Database)(nil)
+)
 
 func (d *Database) GetRun(ctx context.Context, runID uuid.UUID) (run.Run, error) {
 	row, err := d.queries.GetRun(ctx, databaseUUID(runID))
@@ -255,285 +259,6 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 	return created, nil
 }
 
-func (d *Database) CancelRun(
-	ctx context.Context,
-	runID uuid.UUID,
-	requestedAt time.Time,
-	canceledBy *productidentity.ActorSnapshot,
-) (run.Run, error) {
-	canceledByPrincipalID, canceledBySnapshot, err := actorDatabaseFields(canceledBy)
-	if err != nil {
-		return run.Run{}, fmt.Errorf("encode Run canceler: %w", err)
-	}
-
-	transaction, err := d.pool.Begin(ctx)
-	if err != nil {
-		return run.Run{}, fmt.Errorf("begin cancel Run transaction: %w", err)
-	}
-	defer func() {
-		_ = transaction.Rollback(context.WithoutCancel(ctx))
-	}()
-
-	queries := d.queries.WithTx(transaction)
-	current, err := queries.GetRunForCancel(ctx, databaseUUID(runID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return run.Run{}, run.ErrRunNotFound
-	}
-	if err != nil {
-		return run.Run{}, fmt.Errorf("get Run to cancel: %w", err)
-	}
-
-	if current.Phase == string(run.PhaseFinished) {
-		if !current.CancellationRequestedAt.Valid {
-			return run.Run{}, run.ErrRunFinished
-		}
-
-		return commitCancelResult(ctx, transaction, current)
-	}
-	if current.CancellationRequestedAt.Valid {
-		return commitCancelResult(ctx, transaction, current)
-	}
-
-	updated, err := queries.CancelRun(
-		ctx,
-		storedb.CancelRunParams{
-			RequestedAt:           databaseTime(requestedAt),
-			CanceledByPrincipalID: canceledByPrincipalID,
-			CanceledBySnapshot:    canceledBySnapshot,
-			ID:                    databaseUUID(runID),
-		},
-	)
-	if err != nil {
-		return run.Run{}, fmt.Errorf("cancel Run: %w", err)
-	}
-
-	if current.Phase == string(run.PhaseQueued) {
-		outcome := string(run.OutcomeCanceled)
-		reason := run.ReasonCancelRequested
-		if err := queries.CreateRunPhaseTransition(
-			ctx,
-			storedb.CreateRunPhaseTransitionParams{
-				RunID:      databaseUUID(runID),
-				Phase:      string(run.PhaseFinished),
-				Outcome:    &outcome,
-				Reason:     &reason,
-				RecordedAt: databaseTime(requestedAt),
-			},
-		); err != nil {
-			return run.Run{}, fmt.Errorf("record canceled Run phase: %w", err)
-		}
-	}
-
-	return commitCancelResult(ctx, transaction, updated)
-}
-
-func (d *Database) GetRunToCancelForCluster(ctx context.Context, clusterName string) (run.Run, error) {
-	row, err := d.queries.GetRunToCancelForCluster(ctx, clusterName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return run.Run{}, run.ErrNoRunToCancel
-	}
-	if err != nil {
-		return run.Run{}, fmt.Errorf("get Run to cancel for cluster: %w", err)
-	}
-
-	record, err := runFromRow(row)
-	if err != nil {
-		return run.Run{}, err
-	}
-
-	return record, nil
-}
-
-func (d *Database) GetAssignedRunForCluster(ctx context.Context, clusterName string) (run.Run, error) {
-	row, err := d.queries.GetAssignedRunForCluster(ctx, clusterName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return run.Run{}, run.ErrNoRunAssignment
-	}
-	if err != nil {
-		return run.Run{}, fmt.Errorf("get assigned Run for cluster: %w", err)
-	}
-
-	record, err := runFromRow(row)
-	if err != nil {
-		return run.Run{}, err
-	}
-
-	return record, nil
-}
-
-func (d *Database) ClaimQueuedRun(ctx context.Context, clusterName string, claimedAt time.Time) (run.Run, error) {
-	transaction, err := d.pool.Begin(ctx)
-	if err != nil {
-		return run.Run{}, fmt.Errorf("begin Run claim transaction: %w", err)
-	}
-	defer func() {
-		_ = transaction.Rollback(context.WithoutCancel(ctx))
-	}()
-
-	queries := d.queries.WithTx(transaction)
-	row, err := queries.ClaimQueuedRun(
-		ctx,
-		storedb.ClaimQueuedRunParams{
-			AssignedAt:  databaseTime(claimedAt),
-			ClusterName: clusterName,
-		},
-	)
-	if errors.Is(err, pgx.ErrNoRows) || isTargetConcurrencyConflict(err) {
-		return run.Run{}, run.ErrNoRunAssignment
-	}
-	if err != nil {
-		return run.Run{}, fmt.Errorf("claim queued Run: %w", err)
-	}
-
-	if err := queries.CreateRunPhaseTransition(
-		ctx,
-		storedb.CreateRunPhaseTransitionParams{
-			RunID:      databaseUUID(uuid.UUID(row.ID.Bytes)),
-			Phase:      string(run.PhaseAssigned),
-			RecordedAt: databaseTime(claimedAt),
-		},
-	); err != nil {
-		return run.Run{}, fmt.Errorf("record assigned Run phase: %w", err)
-	}
-
-	if err := transaction.Commit(ctx); err != nil {
-		return run.Run{}, fmt.Errorf("commit Run claim transaction: %w", err)
-	}
-
-	record, err := runFromRow(row)
-	if err != nil {
-		return run.Run{}, err
-	}
-
-	return record, nil
-}
-
-func (d *Database) ApplyRunObservation(
-	ctx context.Context,
-	observation run.Observation,
-	allowedCurrentPhases []run.Phase,
-) error {
-	transaction, err := d.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin Run observation transaction: %w", err)
-	}
-	defer func() {
-		_ = transaction.Rollback(context.WithoutCancel(ctx))
-	}()
-
-	queries := d.queries.WithTx(transaction)
-	current, err := queries.GetRunObservationStateForUpdate(
-		ctx,
-		storedb.GetRunObservationStateForUpdateParams{
-			ID:          databaseUUID(observation.ID),
-			ClusterName: observation.ClusterName,
-		},
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return run.ErrRunNotFound
-	}
-	if err != nil {
-		return fmt.Errorf("get current Run phase: %w", err)
-	}
-
-	currentPhase := run.Phase(current.Phase)
-	if !slices.Contains(allowedCurrentPhases, currentPhase) ||
-		!sameJob(current.JobUid, observation.JobUID) ||
-		!sameFinishedOutcome(currentPhase, current.Outcome, observation.Outcome) ||
-		!validCanceledObservation(current.CancellationRequestedAt.Valid, observation.Outcome) {
-		return run.ErrObservationConflict
-	}
-
-	if err := queries.UpdateRunObservation(
-		ctx,
-		storedb.UpdateRunObservationParams{
-			Phase:      string(observation.Phase),
-			Outcome:    outcomeString(observation.Outcome),
-			JobUid:     observation.JobUID,
-			ObservedAt: databaseTime(observation.ObservedAt),
-			Reason:     observation.Reason,
-			Message:    observation.Message,
-			ExitCode:   observation.ExitCode,
-			ID:         databaseUUID(observation.ID),
-		},
-	); err != nil {
-		return fmt.Errorf("update Run observation: %w", err)
-	}
-
-	phaseChanged := currentPhase != observation.Phase
-	if phaseChanged {
-		err = queries.CreateRunPhaseTransition(
-			ctx,
-			storedb.CreateRunPhaseTransitionParams{
-				RunID:      databaseUUID(observation.ID),
-				Phase:      string(observation.Phase),
-				Outcome:    outcomeString(observation.Outcome),
-				Reason:     observation.Reason,
-				Message:    observation.Message,
-				ExitCode:   observation.ExitCode,
-				RecordedAt: databaseTime(observation.ObservedAt),
-			},
-		)
-		if err != nil {
-			return fmt.Errorf("record Run phase transition: %w", err)
-		}
-	}
-
-	if err := transaction.Commit(ctx); err != nil {
-		return fmt.Errorf("commit Run observation transaction: %w", err)
-	}
-
-	return nil
-}
-
-func commitCancelResult(ctx context.Context, transaction pgx.Tx, row storedb.Run) (run.Run, error) {
-	if err := transaction.Commit(ctx); err != nil {
-		return run.Run{}, fmt.Errorf("commit cancel Run transaction: %w", err)
-	}
-
-	record, err := runFromRow(row)
-	if err != nil {
-		return run.Run{}, err
-	}
-
-	return record, nil
-}
-
-func sameJob(current, observed *string) bool {
-	return current == nil || observed != nil && *current == *observed
-}
-
-func sameFinishedOutcome(currentPhase run.Phase, currentOutcome *string, observedOutcome *run.Outcome) bool {
-	if currentPhase != run.PhaseFinished {
-		return true
-	}
-
-	return currentOutcome != nil && observedOutcome != nil &&
-		*currentOutcome == string(*observedOutcome)
-}
-
-func validCanceledObservation(cancellationRequested bool, observedOutcome *run.Outcome) bool {
-	return observedOutcome == nil || *observedOutcome != run.OutcomeCanceled ||
-		cancellationRequested
-}
-
-func outcomeString(value *run.Outcome) *string {
-	if value == nil {
-		return nil
-	}
-
-	converted := string(*value)
-
-	return &converted
-}
-
-func isTargetConcurrencyConflict(err error) bool {
-	var postgresError *pgconn.PgError
-
-	return errors.As(err, &postgresError) &&
-		postgresError.ConstraintName == "runs_one_active_per_target"
-}
-
 func existingIdempotentRun(
 	ctx context.Context,
 	queries *storedb.Queries,
@@ -679,30 +404,4 @@ func runOutcome(value *string) *run.Outcome {
 	converted := run.Outcome(*value)
 
 	return &converted
-}
-
-func databaseTime(value time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: value, Valid: true}
-}
-
-func applicationTime(value pgtype.Timestamptz) *time.Time {
-	if !value.Valid {
-		return nil
-	}
-
-	converted := value.Time.UTC()
-
-	return &converted
-}
-
-func databaseUUID(value uuid.UUID) pgtype.UUID {
-	return pgtype.UUID{Bytes: value, Valid: true}
-}
-
-func optionalDatabaseUUID(value *uuid.UUID) pgtype.UUID {
-	if value == nil {
-		return pgtype.UUID{}
-	}
-
-	return databaseUUID(*value)
 }

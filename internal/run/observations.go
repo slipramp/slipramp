@@ -23,7 +23,7 @@ func (s *Service) ReportObservation(ctx context.Context, observation Observation
 	}
 
 	observation.ObservedAt = s.now().UTC()
-	err = s.runs.ApplyRunObservation(ctx, observation, allowedCurrentPhases)
+	err = s.observations.ApplyRunObservation(ctx, observation, allowedCurrentPhases)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrRunNotFound),

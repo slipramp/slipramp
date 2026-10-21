@@ -49,8 +49,8 @@ func TestReportObservationRecordsAllowedTransitions(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			runs := &recordingRuns{}
-			service := &Service{runs: runs}
+			runs := &recordingObservations{}
+			service := &Service{observations: runs}
 			location := time.FixedZone("test", -6*60*60)
 			reportedAt := time.Date(2026, time.October, 17, 10, 0, 0, 0, location)
 			service.now = func() time.Time { return reportedAt }
@@ -62,10 +62,10 @@ func TestReportObservationRecordsAllowedTransitions(t *testing.T) {
 			if err != nil {
 				t.Fatalf("ReportObservation() error = %v", err)
 			}
-			if runs.observationCalls != 1 || runs.observation.ID != runID ||
+			if runs.calls != 1 || runs.observation.ID != runID ||
 				runs.observation.ClusterName != "colo" ||
 				runs.observation.Phase != test.observation.Phase ||
-				!slices.Equal(runs.observationFrom, test.from) {
+				!slices.Equal(runs.from, test.from) {
 				t.Errorf("observation = %#v", runs)
 			}
 			if !runs.observation.ObservedAt.Equal(reportedAt) ||
@@ -97,17 +97,36 @@ func TestReportObservationRejectsInvalidPhaseOutcomeCombinations(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			runs := &recordingRuns{}
-			service := &Service{runs: runs, now: time.Now}
+			runs := &recordingObservations{}
+			service := &Service{observations: runs, now: time.Now}
 			test.observation.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 			test.observation.ClusterName = "colo"
 			err := service.ReportObservation(context.Background(), test.observation)
 			if !errors.Is(err, ErrInvalidRequest) {
 				t.Fatalf("ReportObservation() error = %v, want %v", err, ErrInvalidRequest)
 			}
-			if runs.observationCalls != 0 {
-				t.Errorf("observation calls = %d, want 0", runs.observationCalls)
+			if runs.calls != 0 {
+				t.Errorf("observation calls = %d, want 0", runs.calls)
 			}
 		})
 	}
+}
+
+type recordingObservations struct {
+	calls       int
+	observation Observation
+	from        []Phase
+	err         error
+}
+
+func (s *recordingObservations) ApplyRunObservation(
+	_ context.Context,
+	observation Observation,
+	allowedCurrentPhases []Phase,
+) error {
+	s.calls++
+	s.observation = observation
+	s.from = append([]Phase(nil), allowedCurrentPhases...)
+
+	return s.err
 }

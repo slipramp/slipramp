@@ -16,8 +16,8 @@ func TestCancelRunRecordsIntentInUTC(t *testing.T) {
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	want := Run{ID: runID, Phase: PhaseAssigned}
-	runs := &recordingRuns{canceled: want}
-	service := &Service{runs: runs}
+	runs := &recordingCancellations{canceled: want}
+	service := &Service{cancellations: runs}
 	location := time.FixedZone("test", -6*60*60)
 	requestedAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, location)
 	service.now = func() time.Time { return requestedAt }
@@ -62,8 +62,8 @@ func TestCancelRunMapsExpectedFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			runs := &recordingRuns{cancelError: test.err}
-			service := &Service{runs: runs, now: time.Now}
+			runs := &recordingCancellations{cancelError: test.err}
+			service := &Service{cancellations: runs, now: time.Now}
 			_, err := service.CancelRun(context.Background(), CancelRequest{RunID: test.runID})
 			if !errors.Is(err, test.want) {
 				t.Fatalf("CancelRun() error = %v, want %v", err, test.want)
@@ -79,8 +79,8 @@ func TestNextRunToCancelReturnsPendingRun(t *testing.T) {
 	t.Parallel()
 
 	want := Run{ID: uuid.New(), Phase: PhaseRunning}
-	runs := &recordingRuns{nextCancel: want}
-	service := &Service{runs: runs}
+	runs := &recordingCancellations{nextCancel: want}
+	service := &Service{cancellations: runs}
 
 	record, err := service.NextRunToCancel(context.Background(), "colo")
 	if err != nil {
@@ -94,8 +94,8 @@ func TestNextRunToCancelReturnsPendingRun(t *testing.T) {
 func TestNextRunToCancelRejectsBlankClusterName(t *testing.T) {
 	t.Parallel()
 
-	runs := &recordingRuns{}
-	service := &Service{runs: runs}
+	runs := &recordingCancellations{}
+	service := &Service{cancellations: runs}
 	_, err := service.NextRunToCancel(context.Background(), " ")
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("NextRunToCancel() error = %v, want %v", err, ErrInvalidRequest)
@@ -103,4 +103,41 @@ func TestNextRunToCancelRejectsBlankClusterName(t *testing.T) {
 	if runs.nextCancelCalls != 0 {
 		t.Errorf("store calls = %d, want 0", runs.nextCancelCalls)
 	}
+}
+
+type recordingCancellations struct {
+	cancelCalls       int
+	cancelID          uuid.UUID
+	cancelAt          time.Time
+	canceledBy        *productidentity.ActorSnapshot
+	canceled          Run
+	cancelError       error
+	nextCancelCalls   int
+	nextCancelCluster string
+	nextCancel        Run
+	nextCancelError   error
+}
+
+func (s *recordingCancellations) CancelRun(
+	_ context.Context,
+	runID uuid.UUID,
+	requestedAt time.Time,
+	canceledBy *productidentity.ActorSnapshot,
+) (Run, error) {
+	s.cancelCalls++
+	s.cancelID = runID
+	s.cancelAt = requestedAt
+	s.canceledBy = canceledBy
+
+	return s.canceled, s.cancelError
+}
+
+func (s *recordingCancellations) GetRunToCancelForCluster(
+	_ context.Context,
+	clusterName string,
+) (Run, error) {
+	s.nextCancelCalls++
+	s.nextCancelCluster = clusterName
+
+	return s.nextCancel, s.nextCancelError
 }

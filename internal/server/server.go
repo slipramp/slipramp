@@ -58,12 +58,23 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database)
 	repositories := repository.NewService(persistence.database, cfg.RepositoryRefreshCredentials)
-	runs := run.NewService(persistence.database, repositories, catalogs, cfg.Placements)
-	artifacts := artifact.NewService(
-		persistence.database,
-		persistence.artifactContents,
-		[]byte(cfg.ArtifactTokenSecret),
-	)
+	runs := run.NewService(run.Dependencies{
+		Creation:      persistence.database,
+		History:       persistence.database,
+		Assignments:   persistence.database,
+		Cancellations: persistence.database,
+		Observations:  persistence.database,
+		Repositories:  repositories,
+		Catalogs:      catalogs,
+		Placements:    cfg.Placements,
+	})
+	artifacts := artifact.NewService(artifact.Dependencies{
+		Runs:      persistence.database,
+		Artifacts: persistence.database,
+		LogChunks: persistence.database,
+		Contents:  persistence.artifactContents,
+		TokenKey:  []byte(cfg.ArtifactTokenSecret),
+	})
 	provider, err := productauth.DiscoverOIDCProvider(ctx, cfg.ProductAuthentication.OIDC)
 	if err != nil {
 		persistence.Close()

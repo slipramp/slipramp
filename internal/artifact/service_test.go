@@ -146,6 +146,15 @@ type serviceContentStore struct {
 	objects   map[string]string
 }
 
+func newTestService(metadata *serviceMetadataStore, contents *serviceContentStore) *Service {
+	return NewService(Dependencies{
+		Runs:      metadata,
+		Artifacts: metadata,
+		LogChunks: metadata,
+		Contents:  contents,
+	})
+}
+
 func (s *serviceContentStore) Put(
 	_ context.Context,
 	key string,
@@ -197,7 +206,7 @@ func TestServiceAppendsLogChunkDurably(t *testing.T) {
 		events:     &events,
 	}
 	contents := &serviceContentStore{events: &events}
-	service := NewService(metadata, contents)
+	service := newTestService(metadata, contents)
 	service.newID = func() uuid.UUID {
 		return uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500")
 	}
@@ -243,7 +252,7 @@ func TestServiceTreatsRepeatedLogChunkAsIdempotent(t *testing.T) {
 		chunks:     map[int64]LogChunk{},
 	}
 	contents := &serviceContentStore{}
-	service := NewService(metadata, contents)
+	service := newTestService(metadata, contents)
 	request := AppendLogChunkRequest{
 		RunID:       uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501"),
 		ClusterName: "colo",
@@ -278,7 +287,7 @@ func TestServiceRejectsLogChunkFromWrongCluster(t *testing.T) {
 		chunks:     map[int64]LogChunk{},
 	}
 	contents := &serviceContentStore{}
-	service := NewService(metadata, contents)
+	service := newTestService(metadata, contents)
 
 	err := service.AppendLogChunk(context.Background(), AppendLogChunkRequest{
 		RunID:       uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501"),
@@ -296,7 +305,7 @@ func TestServiceRejectsLogChunkFromWrongCluster(t *testing.T) {
 func TestServiceRejectsOversizedLogChunk(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(&serviceMetadataStore{chunks: map[int64]LogChunk{}}, &serviceContentStore{})
+	service := newTestService(&serviceMetadataStore{chunks: map[int64]LogChunk{}}, &serviceContentStore{})
 	err := service.AppendLogChunk(context.Background(), AppendLogChunkRequest{
 		RunID:       uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501"),
 		ClusterName: "colo",
@@ -315,7 +324,7 @@ func TestServiceSealsAndReconnectsToDurableLog(t *testing.T) {
 		chunks:     map[int64]LogChunk{},
 	}
 	contents := &serviceContentStore{}
-	service := NewService(metadata, contents)
+	service := newTestService(metadata, contents)
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501")
 
 	for _, request := range []AppendLogChunkRequest{
@@ -369,7 +378,7 @@ func TestServiceUploadsDeclaredArtifactIdempotently(t *testing.T) {
 		}},
 	}
 	contents := &serviceContentStore{}
-	service := NewService(metadata, contents)
+	service := newTestService(metadata, contents)
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501")
 	digest := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
 
