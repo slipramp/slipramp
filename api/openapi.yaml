@@ -8,6 +8,8 @@ servers:
 paths:
   /healthz:
     $ref: ./paths/system.yaml#/health
+  /readyz:
+    $ref: ./paths/system.yaml#/readiness
   /api/v1/repositories:
     $ref: ./paths/repositories.yaml#/repositories
   /api/v1/repositories/{repositoryId}:
@@ -83,6 +85,10 @@ components:
   schemas:
     HealthResponse:
       $ref: ./components/common.yaml#/HealthResponse
+    ReadinessResponse:
+      $ref: ./components/common.yaml#/ReadinessResponse
+    DependencyStatus:
+      $ref: ./components/common.yaml#/DependencyStatus
     Problem:
       $ref: ./components/common.yaml#/Problem
     ProductPrincipal:

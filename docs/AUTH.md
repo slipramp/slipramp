@@ -49,7 +49,8 @@ Product authentication remains separate from existing execution credentials:
 - Cluster Controllers retain cluster-scoped enrollment and bearer credentials
   for `/controller/v1`.
 - Execution Jobs retain Run-scoped artifact credentials for `/execution/v1`.
-- `/healthz` remains unauthenticated and contains no sensitive product data.
+- `/healthz` and `/readyz` remain unauthenticated and contain no sensitive
+  product data.
 
 Controller and Run artifact credentials must not become product principals or
 be accepted by product routes.

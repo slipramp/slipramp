@@ -8,6 +8,14 @@ export type HealthResponse = {
   status: "ok";
 };
 
+export type ReadinessResponse = {
+  status: "ready" | "not-ready";
+  database: DependencyStatus;
+  artifactStorage: DependencyStatus;
+};
+
+export type DependencyStatus = "available" | "unavailable";
+
 /**
  * An RFC 9457 problem detail.
  */
@@ -714,6 +722,35 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type GetReadinessData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/readyz";
+};
+
+export type GetReadinessErrors = {
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * One or more required dependencies are unavailable.
+   */
+  503: ReadinessResponse;
+};
+
+export type GetReadinessError = GetReadinessErrors[keyof GetReadinessErrors];
+
+export type GetReadinessResponses = {
+  /**
+   * The server and its required dependencies are ready.
+   */
+  200: ReadinessResponse;
+};
+
+export type GetReadinessResponse = GetReadinessResponses[keyof GetReadinessResponses];
 
 export type ListRepositoriesData = {
   body?: never;

@@ -136,7 +136,7 @@ func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
 		},
 	}
 	httpHandler := newHTTPHandler(
-		&recordingClusterService{}, nil, nil, nil, runs, nil, nil,
+		&recordingClusterService{}, nil, nil, nil, runs, nil, nil, nil,
 		authenticationService, nil,
 	)
 
@@ -212,7 +212,7 @@ func TestAuthenticatedRunCreationDerivesAPISourceFromAPIKey(t *testing.T) {
 		},
 	}
 	httpHandler := newHTTPHandler(
-		&recordingClusterService{}, nil, nil, nil, runs, nil, nil,
+		&recordingClusterService{}, nil, nil, nil, runs, nil, nil, nil,
 		authenticationService, nil,
 	)
 	body := bytes.NewBufferString(`{
@@ -245,7 +245,7 @@ func TestConfiguredProductAuthenticationRejectsMissingSession(t *testing.T) {
 	t.Parallel()
 
 	httpHandler := newHTTPHandler(
-		&recordingClusterService{}, nil, nil, nil, &recordingRunService{}, nil, nil,
+		&recordingClusterService{}, nil, nil, nil, &recordingRunService{}, nil, nil, nil,
 		&recordingProductAuthenticationService{}, nil,
 	)
 	request := httptest.NewRequestWithContext(

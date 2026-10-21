@@ -1,0 +1,58 @@
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+clusterName: ""
+serverURL: ""
+executionNamespaces: []
+
+image:
+  repository: ghcr.io/slipramp/slipramp-controller
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+checkoutImage:
+  repository: ghcr.io/slipramp/slipramp-checkout
+  tag: "0.1.0"
+harnessImage:
+  repository: ghcr.io/slipramp/slipramp-harness
+  tag: "0.1.0"
+
+credentials:
+  enrollmentToken:
+    value: ""
+    existingSecret:
+      name: slipramp-controller-credentials
+      key: enrollment-token
+  bearerToken:
+    value: ""
+    existingSecret:
+      name: slipramp-controller-credentials
+      key: controller-token
+
+gitCredentials: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+rbac:
+  create: true
+
+imagePullSecrets: []
+resources: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+  readOnlyRootFilesystem: true
+nodeSelector: {}
+affinity: {}
+tolerations: []
+topologySpreadConstraints: []
+terminationGracePeriodSeconds: 10

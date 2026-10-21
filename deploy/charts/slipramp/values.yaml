@@ -1,0 +1,134 @@
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+server:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/slipramp/slipramp-server
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+
+  service:
+    type: ClusterIP
+    port: 8080
+    annotations: {}
+
+  shutdownTimeout: 10s
+  database:
+    url:
+      value: ""
+      existingSecret:
+        name: slipramp-server-secrets
+        key: database-url
+    connectTimeout: 10s
+  objectStore:
+    endpoint: ""
+    region: us-east-1
+    bucket: ""
+    accessKeyID:
+      value: ""
+      existingSecret:
+        name: slipramp-server-secrets
+        key: s3-access-key-id
+    secretAccessKey:
+      value: ""
+      existingSecret:
+        name: slipramp-server-secrets
+        key: s3-secret-access-key
+    startupTimeout: 10s
+  controllerEnrollmentTokens:
+    value: ""
+    existingSecret:
+      name: slipramp-server-secrets
+      key: controller-enrollment-tokens
+  artifactTokenSecret:
+    value: ""
+    existingSecret:
+      name: slipramp-server-secrets
+      key: artifact-token-secret
+  artifacts:
+    retentionPeriod: 720h
+    reconciliationInterval: 1h
+    orphanGracePeriod: 24h
+  oidc:
+    issuer: ""
+    clientID: ""
+    clientSecret:
+      value: ""
+      existingSecret:
+        name: slipramp-server-secrets
+        key: oidc-client-secret
+    redirectURL: ""
+    subjectRoles: {}
+    sessionLifetime: 12h
+  repositoryRefresh:
+    interval: 1m
+    fetchTimeout: 30s
+    credentials: {}
+  placements: {}
+
+  livenessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  resources: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    readOnlyRootFilesystem: true
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+  topologySpreadConstraints: []
+
+web:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/slipramp/slipramp-web
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+    annotations: {}
+  resources: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    readOnlyRootFilesystem: true
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+  topologySpreadConstraints: []
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: slipramp.example.com
+  tls: []

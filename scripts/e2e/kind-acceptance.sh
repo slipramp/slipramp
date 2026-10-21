@@ -4,6 +4,7 @@ set -euo pipefail
 
 repository_root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 kind_bin=${SLIPRAMP_KIND_BIN:-"$repository_root/.bin/kind"}
+helm_bin=${SLIPRAMP_HELM_BIN:-"$repository_root/.bin/helm"}
 kubectl_bin=${SLIPRAMP_KUBECTL_BIN:-kubectl}
 cluster_name=${SLIPRAMP_ACCEPTANCE_CLUSTER_NAME:-slipramp-acceptance}
 server_port=${SLIPRAMP_ACCEPTANCE_SERVER_PORT:-18080}
@@ -101,6 +102,10 @@ if [[ ! -x "$kind_bin" ]]; then
   printf 'kind binary is not executable: %s\n' "$kind_bin" >&2
   exit 1
 fi
+if [[ ! -x "$helm_bin" ]]; then
+  printf 'Helm binary is not executable: %s\n' "$helm_bin" >&2
+  exit 1
+fi
 if "$kind_bin" get clusters | grep -Fxq "$cluster_name"; then
   printf 'kind cluster already exists: %s\n' "$cluster_name" >&2
   exit 1
@@ -124,7 +129,7 @@ start_server_forward() {
     service/slipramp-server "$server_port:8080" \
     >"$temporary_directory/server-port-forward.log" 2>&1 &
   server_forward_pid=$!
-  wait_for_http "$server_url/healthz"
+  wait_for_http "$server_url/readyz"
 }
 
 start_web_forward() {
@@ -421,7 +426,7 @@ awk -v host="[$git_host]:2222" '{print host " " $1 " " $2}' \
   "$host_key.pub" >"$temporary_directory/known_hosts"
 cat >"$temporary_directory/gitconfig" <<EOF
 [core]
-    sshCommand = ssh -i /var/run/slipramp/git/ssh-privatekey -o BatchMode=yes -o IdentitiesOnly=yes -o UserKnownHostsFile=/var/run/slipramp/git/known_hosts -o StrictHostKeyChecking=yes
+    sshCommand = ssh -i /var/run/slipramp/repository-credentials/acceptance/ssh-privatekey -o BatchMode=yes -o IdentitiesOnly=yes -o UserKnownHostsFile=/var/run/slipramp/repository-credentials/acceptance/known_hosts -o StrictHostKeyChecking=yes
 EOF
 cat >"$temporary_directory/sshd_config" <<'EOF'
 Port 2222
@@ -449,7 +454,7 @@ log "deploying PostgreSQL and RustFS"
 "${kubectl_command[@]}" -n "$system_namespace" wait \
   --for=condition=complete job/rustfs-init --timeout="${timeout_seconds}s"
 
-log "deploying the Slipramp stack"
+log "deploying the acceptance fixtures"
 "${kubectl_command[@]}" -n "$system_namespace" create configmap \
   acceptance-repository \
   --from-file="repository.bundle=$temporary_directory/repository.bundle" \
@@ -489,15 +494,44 @@ log "deploying the Slipramp stack"
 "${kubectl_command[@]}" -n "$system_namespace" set env \
   deployment/acceptance-dex \
   "SLIPRAMP_ACCEPTANCE_OIDC_REDIRECT_URL=$web_url/api/v1/auth/callback"
-"${kubectl_command[@]}" -n "$system_namespace" set env \
-  deployment/slipramp-server \
-  "SLIPRAMP_OIDC_REDIRECT_URL=$web_url/api/v1/auth/callback"
 for deployment in acceptance-git acceptance-dex; do
   "${kubectl_command[@]}" -n "$system_namespace" rollout status \
     "deployment/$deployment" --timeout="${timeout_seconds}s"
 done
-"${kubectl_command[@]}" -n "$system_namespace" rollout restart \
-  deployment/slipramp-server
+
+log "installing Slipramp through the supported Helm charts"
+"${kubectl_command[@]}" -n "$system_namespace" create secret generic \
+  slipramp-server-secrets \
+  --from-literal='database-url=postgres://slipramp:slipramp-acceptance@postgres:5432/slipramp?sslmode=disable' \
+  --from-literal='s3-access-key-id=slipramp' \
+  --from-literal='s3-secret-access-key=slipramp-acceptance' \
+  --from-literal='controller-enrollment-tokens={"kind":"acceptance-enrollment-token"}' \
+  --from-literal='artifact-token-secret=acceptance-artifact-token-secret-32' \
+  --from-literal='oidc-client-secret=acceptance-client-secret' \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" -n "$system_namespace" create secret generic \
+  slipramp-controller-credentials \
+  --from-literal='enrollment-token=acceptance-enrollment-token' \
+  --from-literal='controller-token=acceptance-controller-token' \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+
+"$helm_bin" upgrade --install slipramp \
+  "$repository_root/deploy/charts/slipramp" \
+  --kube-context "kind-$cluster_name" \
+  --namespace "$system_namespace" \
+  --values "$repository_root/deploy/e2e/kind/slipramp-values.yaml" \
+  --set-string "server.oidc.redirectURL=$web_url/api/v1/auth/callback" \
+  --wait \
+  --timeout "${timeout_seconds}s"
+"$helm_bin" upgrade --install slipramp-controller \
+  "$repository_root/deploy/charts/slipramp-controller" \
+  --kube-context "kind-$cluster_name" \
+  --namespace "$system_namespace" \
+  --values "$repository_root/deploy/e2e/kind/controller-values.yaml" \
+  --wait \
+  --timeout "${timeout_seconds}s"
 for deployment in slipramp-server slipramp-web slipramp-controller; do
   "${kubectl_command[@]}" -n "$system_namespace" rollout status \
     "deployment/$deployment" --timeout="${timeout_seconds}s"

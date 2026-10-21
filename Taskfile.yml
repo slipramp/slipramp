@@ -3,6 +3,9 @@ version: "3"
 vars:
   GOLANGCI_LINT: "{{.ROOT_DIR}}/.bin/golangci-lint"
   GOLANGCI_LINT_VERSION: v2.14.0
+  HELM: "{{.ROOT_DIR}}/.bin/helm"
+  HELM_SHORT_VERSION: v3.19
+  HELM_VERSION: v3.19.0
   KIND: "{{.ROOT_DIR}}/.bin/kind"
   KIND_VERSION: v0.33.0
   OAPI_CODEGEN: "{{.ROOT_DIR}}/.bin/oapi-codegen"
@@ -23,7 +26,7 @@ env:
 tasks:
   deps:
     desc: Install pinned development tools
-    deps: [deps:go, deps:web]
+    deps: [deps:go, deps:helm, deps:web]
 
   deps:go:
     internal: true
@@ -62,6 +65,15 @@ tasks:
     status:
       - test -x "{{.KIND}}"
       - '"{{.KIND}}" version | rg -q "^kind {{.KIND_VERSION}} "'
+
+  deps:helm:
+    internal: true
+    cmds:
+      - mkdir -p "{{.ROOT_DIR}}/.bin"
+      - GOBIN="{{.ROOT_DIR}}/.bin" go install helm.sh/helm/v3/cmd/helm@{{.HELM_VERSION}}
+    status:
+      - test -x "{{.HELM}}"
+      - 'test "$("{{.HELM}}" version --short | cut -d+ -f1)" = "{{.HELM_SHORT_VERSION}}"'
 
   web:dev:
     desc: Run the web development server
@@ -153,9 +165,19 @@ tasks:
     cmds:
       - go test -race -count=1 ./internal/store ./internal/objectstore ./internal/server
 
+  charts:check:
+    desc: Lint and test deterministic Helm chart rendering
+    deps: [deps:helm]
+    env:
+      SLIPRAMP_HELM_BIN: "{{.HELM}}"
+    cmds:
+      - ./scripts/check-charts.sh
+
   acceptance:kind:
     desc: Run the MVP acceptance suite in a disposable kind cluster
-    deps: [deps:kind]
+    deps: [deps:helm, deps:kind]
+    env:
+      SLIPRAMP_HELM_BIN: "{{.HELM}}"
     cmds:
       - ./scripts/e2e/kind-acceptance.sh
 
@@ -172,6 +194,7 @@ tasks:
     cmds:
       - task: api:check
       - task: store:check
+      - task: charts:check
       - '"{{.GOLANGCI_LINT}}" fmt --diff'
       - '"{{.GOLANGCI_LINT}}" run'
       - go test -race ./...

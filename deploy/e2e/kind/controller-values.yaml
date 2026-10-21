@@ -1,0 +1,32 @@
+clusterName: kind
+serverURL: http://slipramp-server.slipramp-system.svc.cluster.local:8080
+executionNamespaces:
+  - slipramp-runs
+image:
+  repository: slipramp-controller
+  tag: acceptance
+  pullPolicy: IfNotPresent
+checkoutImage:
+  repository: slipramp-checkout
+  tag: acceptance
+harnessImage:
+  repository: slipramp-harness
+  tag: acceptance
+credentials:
+  enrollmentToken:
+    existingSecret:
+      name: slipramp-controller-credentials
+      key: enrollment-token
+  bearerToken:
+    existingSecret:
+      name: slipramp-controller-credentials
+      key: controller-token
+gitCredentials:
+  acceptance: acceptance-git-client
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

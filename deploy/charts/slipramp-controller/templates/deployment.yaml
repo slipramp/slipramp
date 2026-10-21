@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "slipramp-controller.fullname" . }}
+  labels:
+    {{- include "slipramp-controller.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "slipramp-controller.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "slipramp-controller.selectorLabels" . | nindent 8 }}
+        slipramp.com/cluster: {{ .Values.clusterName | quote }}
+    spec:
+      serviceAccountName: {{ include "slipramp-controller.serviceAccountName" . }}
+      automountServiceAccountToken: true
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: controller
+          image: {{ include "slipramp-controller.image" .Values.image | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: SLIPRAMP_CONTROLLER_CLUSTER
+              value: {{ .Values.clusterName | quote }}
+            - name: SLIPRAMP_CONTROLLER_SERVER_URL
+              value: {{ .Values.serverURL | quote }}
+            - name: SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "slipramp-controller.secretName" (dict "root" . "secret" .Values.credentials.enrollmentToken) }}
+                  key: {{ include "slipramp-controller.secretKey" (dict "secret" .Values.credentials.enrollmentToken "managedKey" "enrollment-token") }}
+            - name: SLIPRAMP_CONTROLLER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "slipramp-controller.secretName" (dict "root" . "secret" .Values.credentials.bearerToken) }}
+                  key: {{ include "slipramp-controller.secretKey" (dict "secret" .Values.credentials.bearerToken "managedKey" "controller-token") }}
+            - name: SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE
+              value: {{ include "slipramp-controller.image" .Values.checkoutImage | quote }}
+            - name: SLIPRAMP_CONTROLLER_HARNESS_IMAGE
+              value: {{ include "slipramp-controller.image" .Values.harnessImage | quote }}
+            - name: SLIPRAMP_CONTROLLER_GIT_CREDENTIALS
+              value: {{ .Values.gitCredentials | toJson | quote }}
+            - name: SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES
+              value: {{ .Values.executionNamespaces | toJson | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

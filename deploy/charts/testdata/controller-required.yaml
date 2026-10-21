@@ -1,0 +1,4 @@
+clusterName: primary
+serverURL: https://slipramp.example.com
+executionNamespaces:
+  - slipramp-runs

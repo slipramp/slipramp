@@ -14,13 +14,14 @@ import (
 )
 
 type Config struct {
-	ClusterName     string
-	ServerURL       string
-	EnrollmentToken string
-	BearerToken     string
-	CheckoutImage   string
-	HarnessImage    string
-	GitCredentials  map[string]string
+	ClusterName         string
+	ServerURL           string
+	EnrollmentToken     string
+	BearerToken         string
+	CheckoutImage       string
+	HarnessImage        string
+	GitCredentials      map[string]string
+	ExecutionNamespaces []string
 }
 
 func (c Config) Validate() error {
@@ -62,6 +63,20 @@ func (c Config) Validate() error {
 		return err
 	}
 
+	if len(c.ExecutionNamespaces) == 0 {
+		return errors.New("at least one execution namespace is required")
+	}
+	seenNamespaces := make(map[string]struct{}, len(c.ExecutionNamespaces))
+	for _, namespace := range c.ExecutionNamespaces {
+		if err := kubevalidate.DNSLabel("execution namespace", namespace); err != nil {
+			return err
+		}
+		if _, ok := seenNamespaces[namespace]; ok {
+			return fmt.Errorf("execution namespace %q is configured more than once", namespace)
+		}
+		seenNamespaces[namespace] = struct{}{}
+	}
+
 	for _, name := range slices.Sorted(maps.Keys(c.GitCredentials)) {
 		if err := kubevalidate.DNSLabel("Git credential name", name); err != nil {
 			return err
@@ -76,6 +91,10 @@ func (c Config) Validate() error {
 	}
 
 	return nil
+}
+
+func (c Config) OwnsExecutionNamespace(namespace string) bool {
+	return slices.Contains(c.ExecutionNamespaces, namespace)
 }
 
 func validateImage(subject, image string) error {

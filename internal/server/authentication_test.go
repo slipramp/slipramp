@@ -425,6 +425,7 @@ func newAuthenticationHandler(service handler.ProductAuthenticationService) http
 		nil,
 		nil,
 		nil,
+		nil,
 		service,
 		nil,
 	)

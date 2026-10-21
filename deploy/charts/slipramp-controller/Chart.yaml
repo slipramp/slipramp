@@ -1,0 +1,7 @@
+apiVersion: v2
+name: slipramp-controller
+description: One Slipramp Controller for one execution Cluster
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.30.0-0"

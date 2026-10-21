@@ -1,0 +1,79 @@
+server:
+  image:
+    repository: slipramp-server
+    tag: acceptance
+    pullPolicy: IfNotPresent
+  database:
+    url:
+      existingSecret:
+        name: slipramp-server-secrets
+        key: database-url
+  objectStore:
+    endpoint: http://rustfs:9000
+    region: us-east-1
+    bucket: slipramp
+    accessKeyID:
+      existingSecret:
+        name: slipramp-server-secrets
+        key: s3-access-key-id
+    secretAccessKey:
+      existingSecret:
+        name: slipramp-server-secrets
+        key: s3-secret-access-key
+  controllerEnrollmentTokens:
+    existingSecret:
+      name: slipramp-server-secrets
+      key: controller-enrollment-tokens
+  artifactTokenSecret:
+    existingSecret:
+      name: slipramp-server-secrets
+      key: artifact-token-secret
+  oidc:
+    issuer: http://acceptance-dex.slipramp-system.svc.cluster.local:5556/dex
+    clientID: slipramp-acceptance
+    clientSecret:
+      existingSecret:
+        name: slipramp-server-secrets
+        key: oidc-client-secret
+    redirectURL: http://127.0.0.1:13000/api/v1/auth/callback
+    subjectRoles:
+      Cg0wLTM4NS0yODA4OS0wEgRtb2Nr: admin
+  repositoryRefresh:
+    interval: 1s
+    fetchTimeout: 15s
+    credentials:
+      acceptance:
+        secretName: acceptance-git-client
+        gitConfigKey: gitconfig
+  placements:
+    acceptance:
+      cluster: kind
+      jobNamespace: slipramp-runs
+      serviceAccountName: slipramp-runner
+      timeout: 2m
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 250m
+          memory: 128Mi
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+web:
+  image:
+    repository: slipramp-web
+    tag: acceptance
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi

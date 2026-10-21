@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api/handler"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/readiness"
 )
 
 // newAdminTestHandler supplies an administrator API key to product requests so
@@ -70,6 +72,10 @@ func newAdminTestHandlerWithLogger(
 		catalogs,
 		runs,
 		artifacts,
+		staticReadinessService{report: readiness.Report{
+			Database:        readiness.DependencyAvailable,
+			ArtifactStorage: readiness.DependencyAvailable,
+		}},
 		controllerEnrollmentTokens,
 		service,
 		logger,
@@ -82,4 +88,12 @@ func newAdminTestHandlerWithLogger(
 		}
 		httpHandler.ServeHTTP(writer, request)
 	})
+}
+
+type staticReadinessService struct {
+	report readiness.Report
+}
+
+func (s staticReadinessService) Check(context.Context) readiness.Report {
+	return s.report
 }

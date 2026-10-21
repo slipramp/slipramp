@@ -542,9 +542,19 @@ func TestKubernetesRunJobsRecoversValidClusterJobs(t *testing.T) {
 	}
 	invalidIdentity := job.DeepCopy()
 	invalidIdentity.Name = "not-a-run-job"
-	client := fake.NewClientset(job, otherCluster, invalidIdentity)
+	secondRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
+	secondNamespace := job.DeepCopy()
+	secondNamespace.Name = runJobName(secondRunID)
+	secondNamespace.Namespace = "slipramp-runs-secondary"
+	secondNamespace.Labels[runIDLabel] = secondRunID.String()
+	client := fake.NewClientset(job, otherCluster, invalidIdentity, secondNamespace)
+	config := validConfig()
+	config.ExecutionNamespaces = []string{
+		"slipramp-runs",
+		"slipramp-runs-secondary",
+	}
 	jobs := newKubernetesRunJobs(
-		validConfig(),
+		config,
 		client.BatchV1(),
 		client.CoreV1(),
 	)
@@ -553,8 +563,33 @@ func TestKubernetesRunJobsRecoversValidClusterJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Recover() error = %v", err)
 	}
-	if len(handles) != 1 || handles[0].runID != runID ||
+	if len(handles) != 2 || handles[0].runID != runID ||
 		handles[0].namespace != job.Namespace || handles[0].uid != "job-uid" {
 		t.Fatalf("Recover() = %#v", handles)
+	}
+	if handles[1].runID != secondRunID ||
+		handles[1].namespace != secondNamespace.Namespace {
+		t.Fatalf("Recover() second handle = %#v", handles[1])
+	}
+}
+
+func TestKubernetesRunJobsRejectsUnownedExecutionNamespace(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	assignment.Placement.JobNamespace = "other-runs"
+	client := fake.NewClientset()
+	jobs := newKubernetesRunJobs(
+		validConfig(),
+		client.BatchV1(),
+		client.CoreV1(),
+	)
+
+	_, err := jobs.Ensure(context.Background(), assignment)
+	if err == nil || !strings.Contains(err.Error(), "not owned") {
+		t.Fatalf("Ensure() error = %v, want unowned namespace", err)
+	}
+	if !isPermanentMaterializationError(err) {
+		t.Fatalf("Ensure() error = %T, want permanent materialization error", err)
 	}
 }

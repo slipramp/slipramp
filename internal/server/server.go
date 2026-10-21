@@ -18,6 +18,7 @@ import (
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
+	"github.com/slipramp/slipramp/internal/readiness"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -111,6 +112,10 @@ func New(
 		cfg.ArtifactOrphanGracePeriod,
 		logger,
 	)
+	readinessService := readiness.NewService(
+		persistence.database,
+		persistence.artifactContents,
+	)
 	httpHandler := newHTTPHandler(
 		clusters,
 		identities,
@@ -118,6 +123,7 @@ func New(
 		catalogs,
 		runs,
 		artifacts,
+		readinessService,
 		cfg.ControllerEnrollmentTokens,
 		productAuthenticationService,
 		logger,
@@ -264,6 +270,7 @@ func newHTTPHandler(
 	catalogs handler.CatalogService,
 	runs handler.RunService,
 	artifacts handler.ArtifactService,
+	readinessService handler.ReadinessService,
 	controllerEnrollmentTokens map[string]string,
 	productAuthentication handler.ProductAuthenticationService,
 	logger *slog.Logger,
@@ -289,6 +296,7 @@ func newHTTPHandler(
 			catalogs,
 			runs,
 			artifacts,
+			readinessService,
 			productAuthentication,
 		),
 		middleware,
@@ -351,6 +359,7 @@ func newHTTPHandler(
 	)
 
 	registerMethodNotAllowed(mux, "/healthz", http.MethodGet)
+	registerMethodNotAllowed(mux, "/readyz", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/auth/login", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/auth/callback", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/auth/session", http.MethodGet)

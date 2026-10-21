@@ -1,0 +1,13 @@
+One Slipramp Controller for Cluster {{ .Values.clusterName | quote }} was installed.
+
+The Controller owns these execution namespaces exclusively:
+{{- range .Values.executionNamespaces }}
+  - {{ . }}
+{{- end }}
+
+The execution namespaces must be created separately; this chart does not own
+their lifecycle.
+
+Do not install another active Controller with the same Cluster name or reuse an
+execution namespace until every Slipramp Job left by its previous owner has
+been removed. This chart intentionally provides no leader election or failover.

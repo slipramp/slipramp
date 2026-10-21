@@ -4,9 +4,13 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/api"
 )
 
 func TestPersistenceIntegration(t *testing.T) {
@@ -34,4 +38,31 @@ func TestPersistenceIntegration(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	defer app.Close()
+
+	request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/readyz", nil)
+	response := httptest.NewRecorder()
+	app.httpServer.Handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"readiness status = %d, want %d: %s",
+			response.Code,
+			http.StatusOK,
+			response.Body.String(),
+		)
+	}
+	if responseBody := response.Body.String(); responseBody == "" {
+		t.Fatal("readiness response body is empty")
+	}
+	httpResponse := response.Result()
+	defer func() {
+		_ = httpResponse.Body.Close()
+	}()
+	readinessResponse, err := api.ParseGetReadinessResponse(httpResponse)
+	if err != nil {
+		t.Fatalf("parse readiness response: %v", err)
+	}
+	if readinessResponse.JSON200 == nil || readinessResponse.JSON200.Status != api.Ready {
+		t.Errorf("readiness response = %#v, want ready", readinessResponse.JSON200)
+	}
 }

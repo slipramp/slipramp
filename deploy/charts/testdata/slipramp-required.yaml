@@ -1,0 +1,14 @@
+server:
+  objectStore:
+    endpoint: https://s3.example.com
+    bucket: slipramp
+  oidc:
+    issuer: https://identity.example.com
+    clientID: slipramp
+    redirectURL: https://slipramp.example.com/api/v1/auth/callback
+    subjectRoles:
+      administrator-subject: admin
+  placements:
+    primary:
+      cluster: primary
+      jobNamespace: slipramp-runs

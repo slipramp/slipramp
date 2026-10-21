@@ -1,7 +1,9 @@
 # End-to-end tests
 
 The supported end-to-end acceptance suite exercises the accepted MVP baseline
-in a disposable kind cluster. See the
+in a disposable kind cluster. It installs the Server, web, and Controller from
+their supported Helm charts while keeping test-only dependencies as ordinary
+manifests. See the
 [kind acceptance test](./kind/README.md) for its coverage, prerequisites, and
 diagnostic options.
 

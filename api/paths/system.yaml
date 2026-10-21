@@ -19,3 +19,34 @@ health:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+readiness:
+  get:
+    operationId: getReadiness
+    summary: Check server readiness
+    description: >-
+      Reports whether the Slipramp Server can reach the PostgreSQL database and
+      artifact storage required to serve product, controller, and execution
+      requests. Dependency errors are intentionally omitted.
+    security: []
+    tags:
+      - System
+    responses:
+      "200":
+        description: The server and its required dependencies are ready.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/common.yaml#/ReadinessResponse
+      "503":
+        description: One or more required dependencies are unavailable.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/common.yaml#/ReadinessResponse
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

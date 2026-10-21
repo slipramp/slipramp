@@ -1,0 +1,16 @@
+clusterName: edge
+serverURL: https://slipramp.test
+executionNamespaces:
+  - runs-blue
+  - runs-green
+gitCredentials:
+  github-readonly: github-readonly
+imagePullSecrets:
+  - name: registry-credentials
+nodeSelector:
+  kubernetes.io/os: linux
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: slipramp
+    effect: NoSchedule

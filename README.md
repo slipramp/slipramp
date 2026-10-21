@@ -15,18 +15,20 @@ scope rather than an open checklist.
 
 The repository keeps formatting, linting, generation, unit, integration, build,
 and disposable-cluster acceptance checks in CI. The kind-based end-to-end suite
-is documented in [`deploy/e2e`](deploy/e2e/README.md).
+is documented in [`deploy/e2e`](deploy/e2e/README.md). Supported Kubernetes
+installation is provided by the focused Server/web and Controller charts under
+[`deploy/charts`](deploy/charts).
 
 ## Current implementation
 
 Slipramp consists of four processes: the Server, cluster controller, harness,
 and web application. The split OpenAPI contract defines the Server's JSON
-liveness probe at `GET /healthz`, the read-only
-cluster health endpoint at `GET /api/v1/clusters`, and the authenticated
-controller enrollment and long poll at `POST /controller/v1/enroll` and
-`POST /controller/v1/poll`. Ongoing controller routes derive the cluster
-identity from the enrolled bearer credential rather than repeating it in every
-path.
+liveness probe at `GET /healthz`, dependency-aware readiness probe at
+`GET /readyz`, the read-only cluster health endpoint at
+`GET /api/v1/clusters`, and the authenticated controller enrollment and long
+poll at `POST /controller/v1/enroll` and `POST /controller/v1/poll`. Ongoing
+controller routes derive the cluster identity from the enrolled bearer
+credential rather than repeating it in every path.
 
 Repository registrations can be listed and created at
 `GET|POST /api/v1/repositories` and removed at
@@ -261,7 +263,10 @@ Slipramp-owned containers, init containers, restart policy, service account,
 node selector, or run deadline.
 
 The Server emits structured JSON logs and shuts down gracefully on `SIGINT` or
-`SIGTERM`.
+`SIGTERM`. Its liveness probe only reports that HTTP is serving. Readiness
+checks PostgreSQL and artifact storage concurrently under a two-second deadline
+and returns `503 Service Unavailable` with non-sensitive per-dependency status
+when either required service cannot be reached.
 
 The controller process runs inside its execution cluster. At startup it uses a
 cluster-scoped enrollment credential to register the SHA-256 digest of its
@@ -295,8 +300,12 @@ environment variables:
 | `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE` | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container |
 | `SLIPRAMP_CONTROLLER_HARNESS_IMAGE` | Pinned image whose entrypoint is `slipramp-harness` |
 | `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS` | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
+| `SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES` | Required JSON array of exclusively owned execution namespaces |
 
-The checkout init container materializes the exact commit into an `emptyDir`.
+The Controller validates every assignment against its configured execution
+namespaces and scans those namespaces individually during restart recovery.
+This permits namespace-scoped Roles instead of cluster-wide RBAC. The checkout
+init container materializes the exact commit into an `emptyDir`.
 The action container mounts it at the runtime's `workingDirectory`, or
 `/workspace` by default, and runs from the target's repository-relative path.
 The checkout is made writable inside the execution Pod so checkout and runtime
@@ -331,6 +340,29 @@ process forwards those requests to `SLIPRAMP_API_URL`, so local development and
 deployments without path-based ingress routing still receive the Server's OIDC
 redirects and cookies on the web origin.
 
+## Kubernetes installation
+
+[`deploy/charts/slipramp`](deploy/charts/slipramp/README.md) installs one Server
+and one web process. It requires external PostgreSQL and S3-compatible storage,
+uses operator-managed Secret references by default, rolls the Server when its
+Placement ConfigMap changes, and gives the Server neither RBAC nor a mounted
+service-account token. Its optional single-host Ingress routes API, Controller,
+execution, and health paths to the Server and the remaining web path to the web
+process.
+
+Install [`deploy/charts/slipramp-controller`](deploy/charts/slipramp-controller/README.md)
+once in each execution Cluster. It requires one stable Cluster name and one or
+more exclusive execution namespaces, creates only namespaced Job/Pod RBAC, and
+fixes the replica count at one. Git and execution Secrets stay in that Cluster.
+Both charts use explicit non-`latest` image tags and expose resources, security
+contexts, image pull Secrets, and focused scheduling settings.
+
+```console
+task charts:check
+helm upgrade --install slipramp deploy/charts/slipramp --namespace slipramp-system --create-namespace --values server-values.yaml
+helm upgrade --install slipramp-controller deploy/charts/slipramp-controller --namespace slipramp-system --values controller-values.yaml
+```
+
 ## Development
 
 Go 1.27.2, Git, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
@@ -346,6 +378,7 @@ suite includes its own Dex provider and needs no external identity service.
 task deps
 task local:up
 task generate
+task charts:check
 task check
 task integration
 task acceptance:kind

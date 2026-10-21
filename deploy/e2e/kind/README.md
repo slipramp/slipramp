@@ -3,6 +3,9 @@
 The acceptance task creates a new single-node kind cluster, builds and loads the
 Slipramp images, deploys PostgreSQL, RustFS, Dex, the Server, web application,
 and one Controller, and serves a generated Git fixture over authenticated SSH.
+The Server, web application, and Controller are installed through the supported
+Helm charts; only disposable dependencies and acceptance fixtures use raw
+manifests.
 It then verifies the accepted baseline end to end:
 
 - repository registration, authenticated refresh, and catalog indexing;
@@ -17,7 +20,7 @@ It then verifies the accepted baseline end to end:
 
 The cluster and all generated SSH keys are deleted when the test exits. Run it
 from the repository root with Docker, kubectl, curl, Git, jq, and `ssh-keygen`
-available:
+available. The Task workflow installs pinned kind and Helm binaries:
 
 ```console
 task acceptance:kind
@@ -45,8 +48,9 @@ interactive demo or failure diagnosis. The context is
 `kind-slipramp-acceptance` by default.
 The cluster name, forwarded Server and web ports, timeout, kind binary, and
 kubectl binary can be overridden with the `SLIPRAMP_ACCEPTANCE_*`,
-`SLIPRAMP_KIND_BIN`, and `SLIPRAMP_KUBECTL_BIN` environment variables used near
-the top of [`kind-acceptance.sh`](../../../scripts/e2e/kind-acceptance.sh).
+`SLIPRAMP_KIND_BIN`, `SLIPRAMP_HELM_BIN`, and `SLIPRAMP_KUBECTL_BIN`
+environment variables used near the top of
+[`kind-acceptance.sh`](../../../scripts/e2e/kind-acceptance.sh).
 
 The `Checks` GitHub Actions workflow runs the same task for pushes to `main`,
 pull requests, and manual workflow dispatches.

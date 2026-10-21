@@ -6,6 +6,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/readiness"
 )
 
 type ControllerIdentityService interface {
@@ -27,8 +28,13 @@ type Handler struct {
 	catalogs     CatalogService
 	runs         RunService
 	artifacts    ArtifactService
+	readiness    ReadinessService
 	productAuth  ProductAuthenticationService
 	now          func() time.Time
+}
+
+type ReadinessService interface {
+	Check(ctx context.Context) readiness.Report
 }
 
 type ProductAuthenticationService interface {
@@ -45,6 +51,7 @@ func New(
 	catalogs CatalogService,
 	runs RunService,
 	artifacts ArtifactService,
+	readinessService ReadinessService,
 	productAuth ProductAuthenticationService,
 ) *Handler {
 	return &Handler{
@@ -54,6 +61,7 @@ func New(
 		catalogs:     catalogs,
 		runs:         runs,
 		artifacts:    artifacts,
+		readiness:    readinessService,
 		productAuth:  productAuth,
 		now:          time.Now,
 	}

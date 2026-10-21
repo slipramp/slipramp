@@ -5,9 +5,9 @@ This document records the accepted first usable Slipramp release derived from
 baseline for ongoing development, not as an open delivery checklist.
 
 Acceptance combines the repository's automated quality, integration, and
-disposable-cluster suites. Further resilience drills, deployment packaging,
-diagnostics, and operator guidance continue as normal product work without
-reopening the MVP.
+disposable-cluster suites. Further resilience drills, diagnostics, upgrades,
+and operator guidance continue as normal product work without reopening the
+MVP.
 
 ## Objective
 
@@ -70,6 +70,9 @@ in as described in [AUTH.md](./AUTH.md).
 - Require each placement to select a registered cluster name.
 - Support namespace, ServiceAccount, resource requests and limits, node selection, and timeout defaults.
 - Treat every namespace selected by a placement as exclusively owned by one Slipramp Controller and control plane. A controller may own multiple execution namespaces; before another control plane reuses one, operators must remove all Slipramp Jobs left by its previous owner. Do not add control-plane identity labels or compatibility behavior for namespace reuse.
+- Configure each Controller with its owned execution namespaces, reject work
+  outside that list, and recover Jobs namespace by namespace so installation
+  RBAC remains namespace-scoped.
 - Expose named Kubernetes Secret sources through placements.
 - Bind target credential requirements to placement sources.
 - Inject credentials as individual environment variables, `envFrom`, individual files, or mounted directories.
@@ -289,6 +292,8 @@ The repository provides a single set of commands used by developers and CI:
 - PostgreSQL and S3 integration tests
 - Controller HTTP API, idempotent Job routing, and recovery tests, including a
   disposable kind acceptance environment
+- Helm chart linting, schema validation, deterministic rendering checks, and
+  focused positive and negative render tests
 
 Warnings fail CI. Tool versions are pinned, generated files are reproducible, migrations are tested in both directions where practical, and changed code is expected to include proportionate tests.
 
@@ -308,6 +313,9 @@ The accepted MVP baseline can:
 10. Detect relevant Git changes without automatically executing actions, while preserving a trigger-ready run-creation boundary.
 11. Generate the Go Server contract and TypeScript frontend client reproducibly from the validated split OpenAPI specification.
 12. Pass all formatting, linting, type checking, unit, integration, and build checks.
+13. Install the Server, web process, and one Controller through supported Helm
+    charts without giving the Server Kubernetes access or bundling production
+    data services.
 
 ## Ongoing Work Beyond the MVP
 
@@ -316,9 +324,9 @@ accepted status of the MVP:
 
 - Broader multi-cluster, Pod-loss, network-interruption, and dependency-outage
   acceptance coverage
-- Dependency-aware readiness diagnostics and richer operational status
-- Generalized installation, upgrade, backup, recovery, and troubleshooting
-  guidance beyond the existing development and kind flows
+- Richer operational status beyond the implemented dependency-aware Server readiness
+- Upgrade, backup, recovery, and troubleshooting guidance beyond the supported
+  Helm installation and existing development and kind flows
 - Evolution and compatibility policy for the pre-stable API, catalog, and
   database contracts
 - Further identity administration, audit history, and MCP authentication beyond

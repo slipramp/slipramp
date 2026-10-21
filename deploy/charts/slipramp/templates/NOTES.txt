@@ -1,0 +1,16 @@
+Slipramp Server and web were installed with one replica each.
+
+The chart does not install PostgreSQL or S3-compatible storage. Confirm that the
+configured database, bucket, OIDC provider, and referenced Secrets exist before
+waiting for the Server readiness probe.
+
+The Server Pod has service-account token automounting disabled and receives no
+Kubernetes RBAC from this chart. Controllers require a separately installed
+slipramp-controller chart in each execution Cluster.
+
+{{- if .Values.ingress.enabled }}
+Open https://{{ .Values.ingress.host }}/ (or the scheme configured by your ingress).
+{{- else }}
+To inspect the web application locally:
+  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "slipramp.webName" . }} 3000:{{ .Values.web.service.port }}
+{{- end }}

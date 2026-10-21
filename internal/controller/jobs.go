@@ -48,6 +48,13 @@ func (r *kubernetesRunJobs) RequestCancellation(
 	ctx context.Context,
 	command api.CancelRunCommand,
 ) (cancellationResult, error) {
+	if !r.config.OwnsExecutionNamespace(string(command.JobNamespace)) {
+		return cancellationResult{}, fmt.Errorf(
+			"execution namespace %q is not owned by this Controller",
+			command.JobNamespace,
+		)
+	}
+
 	jobs := r.jobs.Jobs(string(command.JobNamespace))
 	name := runJobName(command.ID)
 	handle := jobHandle{
@@ -221,6 +228,13 @@ func (r *kubernetesRunJobs) Ensure(
 	ctx context.Context,
 	assignment api.RunAssignment,
 ) (ensuredRunJob, error) {
+	if !r.config.OwnsExecutionNamespace(string(assignment.Placement.JobNamespace)) {
+		return ensuredRunJob{}, permanentMaterialization(fmt.Errorf(
+			"execution namespace %q is not owned by this Controller",
+			assignment.Placement.JobNamespace,
+		))
+	}
+
 	job, err := renderJob(r.config, assignment)
 	if err != nil {
 		return ensuredRunJob{}, permanentMaterialization(err)
@@ -268,25 +282,31 @@ func (r *kubernetesRunJobs) Recover(ctx context.Context) ([]jobHandle, error) {
 		managedByLabel: managedByLabelValue,
 		clusterLabel:   r.config.ClusterName,
 	}.String()
-	jobs, err := r.jobs.Jobs(metav1.NamespaceAll).List(
-		ctx,
-		metav1.ListOptions{LabelSelector: selector},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("list managed execution Jobs: %w", err)
-	}
-
-	handles := make([]jobHandle, 0, len(jobs.Items))
-	for index := range jobs.Items {
-		job := &jobs.Items[index]
-		runID, parseErr := uuid.Parse(job.Labels[runIDLabel])
-		// A partial or copied label set does not establish Slipramp ownership.
-		// Ignore it rather than letting one malformed Job block all recovery.
-		if parseErr != nil || job.Name != runJobName(runID) {
-			continue
+	handles := make([]jobHandle, 0)
+	for _, namespace := range r.config.ExecutionNamespaces {
+		jobs, err := r.jobs.Jobs(namespace).List(
+			ctx,
+			metav1.ListOptions{LabelSelector: selector},
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"list managed execution Jobs in namespace %q: %w",
+				namespace,
+				err,
+			)
 		}
 
-		handles = append(handles, handleFromJob(job, runID))
+		for index := range jobs.Items {
+			job := &jobs.Items[index]
+			runID, parseErr := uuid.Parse(job.Labels[runIDLabel])
+			// A partial or copied label set does not establish Slipramp ownership.
+			// Ignore it rather than letting one malformed Job block all recovery.
+			if parseErr != nil || job.Name != runJobName(runID) {
+				continue
+			}
+
+			handles = append(handles, handleFromJob(job, runID))
+		}
 	}
 
 	return handles, nil

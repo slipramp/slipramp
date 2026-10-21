@@ -69,7 +69,7 @@ Cluster identity is part of every dispatched run and Kubernetes object reference
 
 A controller runs inside each execution cluster and is the only Slipramp component that uses that cluster's Kubernetes API. A single controller replica uses a small, versioned HTTP API. HTTPS is required across untrusted networks, while plaintext HTTP is permitted when a trusted encrypted network such as a tailnet already protects the transport. At startup it presents a cluster-scoped enrollment credential to register the SHA-256 digest of a separate controller-owned bearer credential. The current implementation auto-approves a valid enrollment credential; explicit approvals and credential rotation remain later product work. The Server derives cluster identity from the enrolled bearer credential, so ordinary controller routes do not repeat a caller-supplied cluster name. The controller long-polls for command envelopes, creates and observes Jobs, and posts lifecycle observations, log chunks, and completion back through ordinary HTTP requests. Authenticated poll and report traffic updates the cluster's last-seen time, so there is no separate heartbeat protocol.
 
-Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. A Run remains assigned until the controller reports the materialized Job UID and preparing phase. After restarting, the controller scans its labeled Jobs and reports their current observations before requesting more work. For a terminal Job, it uploads and seals the complete log, successfully reports the terminal observation, deletes the Job with its observed UID as a Kubernetes precondition, and only then stops observation. Each accepted step is idempotent, so recovery can repeat log sealing and terminal reporting before finishing deletion. A `404` for the Run or its log violates the execution-namespace ownership contract; the controller warns once, stops that observer, and leaves the Job for manual diagnosis. Kubernetes TTL cleanup is not used because it could remove the log source while the Server or object storage is unavailable. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica and a unique cluster name; duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
+Delivery is at least once. Runs and Jobs use deterministic identifiers, allowing a repeated response or request to be handled idempotently without a distributed lease protocol. A Run remains assigned until the controller reports the materialized Job UID and preparing phase. After restarting, the controller scans its labeled Jobs and reports their current observations before requesting more work. For a terminal Job, it uploads and seals the complete log, successfully reports the terminal observation, deletes the Job with its observed UID as a Kubernetes precondition, and only then stops observation. Each accepted step is idempotent, so recovery can repeat log sealing and terminal reporting before finishing deletion. A `404` for the Run or its log violates the execution-namespace ownership contract; the controller warns once, stops that observer, and leaves the Job for manual diagnosis. Kubernetes TTL cleanup is not used because it could remove the log source while the Server or object storage is unavailable. Execution clusters require no inbound network path from Slipramp. The initial deployment requires one controller replica, a unique cluster name, and an explicit list of exclusively owned execution namespaces. The controller rejects assignments outside that list and scans each configured namespace individually during recovery, allowing namespace-scoped RBAC instead of cluster-wide access. Duplicate active controllers or reused names are configuration errors rather than a supported failover mechanism. Controller high availability, fencing, leader election, message brokers, bidirectional streaming, and a custom RPC protocol are not required for the initial design.
 
 ### Placement
 
@@ -233,7 +233,33 @@ Kubernetes clusters are execution backends rather than the source of truth for S
 
 PostgreSQL is the durable database for repositories, catalog revisions and current projections, run metadata, artifact metadata, and scheduler state. S3-compatible object storage is used only for artifact contents, including live and completed logs. Artifact metadata and object references remain in PostgreSQL.
 
+The Server exposes process-only liveness separately from dependency-aware
+readiness. Readiness checks PostgreSQL and artifact storage concurrently under
+a bounded deadline and reports only non-sensitive availability states. A
+failed required dependency makes the Server unready without changing the
+liveness result.
+
 The design should favor a simple single-operator deployment while keeping boundaries around repository access, persistence, and execution clear enough to evolve independently.
+
+## Deployment Packaging
+
+Slipramp provides two focused Helm charts. The `slipramp` chart deploys exactly
+one Server and one web process and requires separately managed PostgreSQL and
+S3-compatible artifact storage. It supplies placements through a ConfigMap and
+rolls the Server from that ConfigMap's checksum. Secret-bearing Server settings
+default to operator-managed Secret references, and the Server receives neither
+Kubernetes RBAC nor a service-account token.
+
+The `slipramp-controller` chart installs exactly one Controller for one stable
+Cluster name. It grants only namespaced Job and Pod permissions in the
+configured execution namespaces. Controller enrollment and bearer credentials,
+Git checkout credentials, and execution credentials remain cluster-local
+Secrets. Both charts use deterministic resource names, standard labels,
+non-floating images, focused scheduling and security settings, schema
+validation, and optional explicit chart-managed Secrets for disposable uses.
+The central chart offers a minimal single-host Ingress without bundling a
+database or object store. Server, web, and Controller high availability remain
+later work.
 
 ## Technology Stack
 
@@ -368,6 +394,8 @@ Each cluster runs one controller replica configured with its stable cluster name
 controller:
   cluster: colo
   server: https://slipramp.com
+  executionNamespaces:
+    - slipramp-runs
   enrollmentCredential:
     secretRef:
       name: slipramp-controller
@@ -552,8 +580,7 @@ Slipramp evolves:
 - Additional standard harness environment variables beyond the implemented
   workspace, artifact-transfer, log, signal, and cancellation contract.
 - PostgreSQL history retention and archival.
-- Dependency-aware readiness diagnostics, deployment packaging, and broader
-  failure-mode acceptance coverage.
+- Upgrade, backup, recovery, and broader failure-mode acceptance guidance.
 
 The following product areas remain intentionally later work:
 

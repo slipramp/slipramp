@@ -122,6 +122,27 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "harness image",
 		},
 		{
+			name: "missing execution namespace",
+			configure: func(settings *Config) {
+				settings.ExecutionNamespaces = nil
+			},
+			wantError: "execution namespace",
+		},
+		{
+			name: "invalid execution namespace",
+			configure: func(settings *Config) {
+				settings.ExecutionNamespaces = []string{"Invalid Namespace"}
+			},
+			wantError: "execution namespace",
+		},
+		{
+			name: "duplicate execution namespace",
+			configure: func(settings *Config) {
+				settings.ExecutionNamespaces = []string{"runs", "runs"}
+			},
+			wantError: "configured more than once",
+		},
+		{
 			name: "invalid Git credential name",
 			configure: func(settings *Config) {
 				settings.GitCredentials = map[string]string{
@@ -157,12 +178,13 @@ func TestConfigValidate(t *testing.T) {
 
 func validConfig() Config {
 	return Config{
-		ClusterName:     "colo",
-		ServerURL:       "https://slipramp.example.com",
-		EnrollmentToken: "enrollment-token",
-		BearerToken:     "controller-token",
-		CheckoutImage:   "registry.example.com/slipramp-checkout:1",
-		HarnessImage:    "registry.example.com/slipramp-harness:1",
+		ClusterName:         "colo",
+		ServerURL:           "https://slipramp.example.com",
+		EnrollmentToken:     "enrollment-token",
+		BearerToken:         "controller-token",
+		CheckoutImage:       "registry.example.com/slipramp-checkout:1",
+		HarnessImage:        "registry.example.com/slipramp-harness:1",
+		ExecutionNamespaces: []string{"slipramp-runs"},
 		GitCredentials: map[string]string{
 			"github-readonly": "github-readonly",
 		},

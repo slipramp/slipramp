@@ -1,0 +1,361 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["imagePullSecrets", "server", "web", "ingress"],
+  "properties": {
+    "nameOverride": { "type": "string" },
+    "fullnameOverride": { "type": "string" },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": { "name": { "$ref": "#/$defs/dnsSubdomain" } }
+      }
+    },
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicaCount",
+        "image",
+        "service",
+        "shutdownTimeout",
+        "database",
+        "objectStore",
+        "controllerEnrollmentTokens",
+        "artifactTokenSecret",
+        "artifacts",
+        "oidc",
+        "repositoryRefresh",
+        "placements",
+        "livenessProbe",
+        "readinessProbe",
+        "resources",
+        "podSecurityContext",
+        "securityContext",
+        "nodeSelector",
+        "affinity",
+        "tolerations",
+        "topologySpreadConstraints"
+      ],
+      "properties": {
+        "replicaCount": { "type": "integer", "const": 1 },
+        "image": { "$ref": "#/$defs/image" },
+        "service": { "$ref": "#/$defs/service" },
+        "shutdownTimeout": { "$ref": "#/$defs/duration" },
+        "database": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "connectTimeout"],
+          "properties": {
+            "url": { "$ref": "#/$defs/secretInput" },
+            "connectTimeout": { "$ref": "#/$defs/duration" }
+          }
+        },
+        "objectStore": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "endpoint",
+            "region",
+            "bucket",
+            "accessKeyID",
+            "secretAccessKey",
+            "startupTimeout"
+          ],
+          "properties": {
+            "endpoint": { "type": "string", "pattern": "^https?://[^[:space:]]+$" },
+            "region": { "type": "string", "minLength": 1 },
+            "bucket": { "type": "string", "minLength": 3, "maxLength": 63 },
+            "accessKeyID": { "$ref": "#/$defs/secretInput" },
+            "secretAccessKey": { "$ref": "#/$defs/secretInput" },
+            "startupTimeout": { "$ref": "#/$defs/duration" }
+          }
+        },
+        "controllerEnrollmentTokens": { "$ref": "#/$defs/secretInput" },
+        "artifactTokenSecret": { "$ref": "#/$defs/secretInput" },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["retentionPeriod", "reconciliationInterval", "orphanGracePeriod"],
+          "properties": {
+            "retentionPeriod": { "$ref": "#/$defs/duration" },
+            "reconciliationInterval": { "$ref": "#/$defs/duration" },
+            "orphanGracePeriod": { "$ref": "#/$defs/duration" }
+          }
+        },
+        "oidc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "issuer",
+            "clientID",
+            "clientSecret",
+            "redirectURL",
+            "subjectRoles",
+            "sessionLifetime"
+          ],
+          "properties": {
+            "issuer": { "type": "string", "pattern": "^https?://[^[:space:]]+$" },
+            "clientID": { "type": "string", "minLength": 1 },
+            "clientSecret": { "$ref": "#/$defs/secretInput" },
+            "redirectURL": {
+              "type": "string",
+              "pattern": "^https?://[^[:space:]]+/api/v1/auth/callback$"
+            },
+            "subjectRoles": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "minLength": 1 },
+              "additionalProperties": {
+                "type": "string",
+                "enum": ["admin", "operator", "viewer"]
+              }
+            },
+            "sessionLifetime": { "$ref": "#/$defs/duration" }
+          }
+        },
+        "repositoryRefresh": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["interval", "fetchTimeout", "credentials"],
+          "properties": {
+            "interval": { "$ref": "#/$defs/duration" },
+            "fetchTimeout": { "$ref": "#/$defs/duration" },
+            "credentials": {
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/dnsLabel" },
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["secretName", "gitConfigKey"],
+                "properties": {
+                  "secretName": { "$ref": "#/$defs/dnsSubdomain" },
+                  "gitConfigKey": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9][-._A-Za-z0-9]*$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "placements": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/dnsLabel" },
+          "additionalProperties": { "$ref": "#/$defs/placement" }
+        },
+        "livenessProbe": { "$ref": "#/$defs/probe" },
+        "readinessProbe": {
+          "allOf": [
+            { "$ref": "#/$defs/probe" },
+            {
+              "type": "object",
+              "properties": { "timeoutSeconds": { "type": "integer", "minimum": 3 } }
+            }
+          ]
+        },
+        "resources": { "type": "object" },
+        "podSecurityContext": { "type": "object" },
+        "securityContext": { "type": "object" },
+        "nodeSelector": { "$ref": "#/$defs/stringMap" },
+        "affinity": { "type": "object" },
+        "tolerations": { "type": "array", "items": { "type": "object" } },
+        "topologySpreadConstraints": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "web": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicaCount",
+        "image",
+        "service",
+        "resources",
+        "podSecurityContext",
+        "securityContext",
+        "nodeSelector",
+        "affinity",
+        "tolerations",
+        "topologySpreadConstraints"
+      ],
+      "properties": {
+        "replicaCount": { "type": "integer", "const": 1 },
+        "image": { "$ref": "#/$defs/image" },
+        "service": { "$ref": "#/$defs/service" },
+        "resources": { "type": "object" },
+        "podSecurityContext": { "type": "object" },
+        "securityContext": { "type": "object" },
+        "nodeSelector": { "$ref": "#/$defs/stringMap" },
+        "affinity": { "type": "object" },
+        "tolerations": { "type": "array", "items": { "type": "object" } },
+        "topologySpreadConstraints": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "className", "annotations", "host", "tls"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "className": { "type": "string" },
+        "annotations": { "$ref": "#/$defs/stringMap" },
+        "host": { "type": "string" },
+        "tls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hosts", "secretName"],
+            "properties": {
+              "hosts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+              "secretName": { "$ref": "#/$defs/dnsSubdomain" }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "enabled": { "const": true } } },
+          "then": { "properties": { "host": { "minLength": 1 } } }
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "dnsLabel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+    },
+    "dnsSubdomain": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253,
+      "pattern": "^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+    },
+    "duration": {
+      "type": "string",
+      "pattern": "^[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$"
+    },
+    "stringMap": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "pullPolicy"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1, "pattern": "^[^[:space:]]+$" },
+        "tag": { "type": "string", "minLength": 1, "not": { "const": "latest" } },
+        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "port", "annotations"],
+      "properties": {
+        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "annotations": { "$ref": "#/$defs/stringMap" }
+      }
+    },
+    "secretInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "existingSecret"],
+      "properties": {
+        "value": { "type": "string" },
+        "existingSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "key"],
+          "properties": {
+            "name": { "type": "string" },
+            "key": { "type": "string" }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "value": { "minLength": 1 },
+            "existingSecret": {
+              "properties": {
+                "name": { "maxLength": 0 },
+                "key": { "maxLength": 0 }
+              }
+            }
+          }
+        },
+        {
+          "properties": {
+            "value": { "maxLength": 0 },
+            "existingSecret": {
+              "properties": {
+                "name": { "$ref": "#/$defs/dnsSubdomain" },
+                "key": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initialDelaySeconds", "periodSeconds", "timeoutSeconds", "failureThreshold"],
+      "properties": {
+        "initialDelaySeconds": { "type": "integer", "minimum": 0 },
+        "periodSeconds": { "type": "integer", "minimum": 1 },
+        "timeoutSeconds": { "type": "integer", "minimum": 1 },
+        "failureThreshold": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cluster", "jobNamespace"],
+      "properties": {
+        "cluster": { "$ref": "#/$defs/dnsLabel" },
+        "jobNamespace": { "$ref": "#/$defs/dnsLabel" },
+        "serviceAccountName": { "$ref": "#/$defs/dnsSubdomain" },
+        "timeout": { "$ref": "#/$defs/duration" },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requests": { "$ref": "#/$defs/stringMap" },
+            "limits": { "$ref": "#/$defs/stringMap" }
+          }
+        },
+        "nodeSelector": { "$ref": "#/$defs/stringMap" },
+        "credentials": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/dnsLabel" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["secretRef"],
+            "properties": {
+              "secretRef": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name"],
+                "properties": { "name": { "$ref": "#/$defs/dnsSubdomain" } }
+              }
+            }
+          }
+        },
+        "podTemplate": { "type": "object" }
+      }
+    }
+  }
+}

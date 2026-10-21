@@ -8,6 +8,29 @@ HealthResponse:
       enum:
         - ok
 
+ReadinessResponse:
+  type: object
+  required:
+    - status
+    - database
+    - artifactStorage
+  properties:
+    status:
+      type: string
+      enum:
+        - ready
+        - not-ready
+    database:
+      $ref: "#/DependencyStatus"
+    artifactStorage:
+      $ref: "#/DependencyStatus"
+
+DependencyStatus:
+  type: string
+  enum:
+    - available
+    - unavailable
+
 Problem:
   type: object
   description: An RFC 9457 problem detail.

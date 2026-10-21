@@ -1,0 +1,47 @@
+imagePullSecrets:
+  - name: registry-credentials
+server:
+  nodeSelector:
+    kubernetes.io/os: linux
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution: []
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: slipramp
+      effect: NoSchedule
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: server
+web:
+  nodeSelector:
+    kubernetes.io/os: linux
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution: []
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: slipramp
+      effect: NoSchedule
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/component: web
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  host: slipramp.test
+  tls:
+    - hosts: [slipramp.test]
+      secretName: slipramp-tls

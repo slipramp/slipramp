@@ -50,6 +50,9 @@ import type {
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
+  GetReadinessData,
+  GetReadinessErrors,
+  GetReadinessResponses,
   GetRepositoryCatalogData,
   GetRepositoryCatalogErrors,
   GetRepositoryCatalogResponses,
@@ -138,6 +141,19 @@ export const getHealth = <ThrowOnError extends boolean = false>(
 ): RequestResult<GetHealthResponses, GetHealthErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetHealthResponses, GetHealthErrors, ThrowOnError>({
     url: "/healthz",
+    ...options,
+  });
+
+/**
+ * Check server readiness
+ *
+ * Reports whether the Slipramp Server can reach the PostgreSQL database and artifact storage required to serve product, controller, and execution requests. Dependency errors are intentionally omitted.
+ */
+export const getReadiness = <ThrowOnError extends boolean = false>(
+  options?: Options<GetReadinessData, ThrowOnError>,
+): RequestResult<GetReadinessResponses, GetReadinessErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetReadinessResponses, GetReadinessErrors, ThrowOnError>({
+    url: "/readyz",
     ...options,
   });
 

@@ -9,13 +9,14 @@ import (
 )
 
 const (
-	controllerClusterEnvironment         = "SLIPRAMP_CONTROLLER_CLUSTER"
-	controllerServerEnvironment          = "SLIPRAMP_CONTROLLER_SERVER_URL"
-	controllerEnrollmentTokenEnvironment = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
-	controllerTokenEnvironment           = "SLIPRAMP_CONTROLLER_TOKEN"
-	controllerCheckoutImageEnvironment   = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
-	controllerHarnessImageEnvironment    = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
-	controllerGitCredentialsEnvironment  = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
+	controllerClusterEnvironment             = "SLIPRAMP_CONTROLLER_CLUSTER"
+	controllerServerEnvironment              = "SLIPRAMP_CONTROLLER_SERVER_URL"
+	controllerEnrollmentTokenEnvironment     = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
+	controllerTokenEnvironment               = "SLIPRAMP_CONTROLLER_TOKEN"
+	controllerCheckoutImageEnvironment       = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
+	controllerHarnessImageEnvironment        = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
+	controllerGitCredentialsEnvironment      = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
+	controllerExecutionNamespacesEnvironment = "SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES"
 )
 
 func LoadController(
@@ -33,6 +34,20 @@ func LoadController(
 	cfg.CheckoutImage, _ = lookupEnvironment(controllerCheckoutImageEnvironment)
 	cfg.HarnessImage, _ = lookupEnvironment(controllerHarnessImageEnvironment)
 	cfg.GitCredentials = map[string]string{}
+	cfg.ExecutionNamespaces = []string{}
+
+	if value, ok := lookupEnvironment(controllerExecutionNamespacesEnvironment); ok {
+		if err := json.Unmarshal([]byte(value), &cfg.ExecutionNamespaces); err != nil {
+			return controller.Config{}, fmt.Errorf(
+				"parse %s: %w",
+				controllerExecutionNamespacesEnvironment,
+				err,
+			)
+		}
+		if cfg.ExecutionNamespaces == nil {
+			cfg.ExecutionNamespaces = []string{}
+		}
+	}
 
 	if value, ok := lookupEnvironment(controllerGitCredentialsEnvironment); ok {
 		if err := json.Unmarshal([]byte(value), &cfg.GitCredentials); err != nil {

@@ -8,26 +8,28 @@ import (
 )
 
 const (
-	controllerClusterEnvironment         = "SLIPRAMP_CONTROLLER_CLUSTER"
-	controllerServerEnvironment          = "SLIPRAMP_CONTROLLER_SERVER_URL"
-	controllerEnrollmentTokenEnvironment = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
-	controllerTokenEnvironment           = "SLIPRAMP_CONTROLLER_TOKEN"
-	controllerCheckoutImageEnvironment   = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
-	controllerHarnessImageEnvironment    = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
-	controllerGitCredentialsEnvironment  = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
+	controllerClusterEnvironment             = "SLIPRAMP_CONTROLLER_CLUSTER"
+	controllerServerEnvironment              = "SLIPRAMP_CONTROLLER_SERVER_URL"
+	controllerEnrollmentTokenEnvironment     = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
+	controllerTokenEnvironment               = "SLIPRAMP_CONTROLLER_TOKEN"
+	controllerCheckoutImageEnvironment       = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
+	controllerHarnessImageEnvironment        = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
+	controllerGitCredentialsEnvironment      = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
+	controllerExecutionNamespacesEnvironment = "SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES"
 )
 
 func TestLoadControllerFromEnvironment(t *testing.T) {
 	t.Parallel()
 
 	environment := map[string]string{
-		controllerClusterEnvironment:         "colo",
-		controllerServerEnvironment:          "https://slipramp.example.com",
-		controllerEnrollmentTokenEnvironment: "enrollment-token",
-		controllerTokenEnvironment:           "controller-token",
-		controllerCheckoutImageEnvironment:   "registry.example.com/slipramp-checkout:1",
-		controllerHarnessImageEnvironment:    "registry.example.com/slipramp-harness:1",
-		controllerGitCredentialsEnvironment:  `{"github-readonly":"github-readonly"}`,
+		controllerClusterEnvironment:             "colo",
+		controllerServerEnvironment:              "https://slipramp.example.com",
+		controllerEnrollmentTokenEnvironment:     "enrollment-token",
+		controllerTokenEnvironment:               "controller-token",
+		controllerCheckoutImageEnvironment:       "registry.example.com/slipramp-checkout:1",
+		controllerHarnessImageEnvironment:        "registry.example.com/slipramp-harness:1",
+		controllerGitCredentialsEnvironment:      `{"github-readonly":"github-readonly"}`,
+		controllerExecutionNamespacesEnvironment: `["runs-a","runs-b"]`,
 	}
 
 	cfg, err := config.LoadController(mapEnvironment(environment))
@@ -66,6 +68,10 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 	if cfg.GitCredentials["github-readonly"] != "github-readonly" {
 		t.Error("GitCredentials does not contain github-readonly")
 	}
+
+	if len(cfg.ExecutionNamespaces) != 2 || cfg.ExecutionNamespaces[1] != "runs-b" {
+		t.Errorf("ExecutionNamespaces = %#v", cfg.ExecutionNamespaces)
+	}
 }
 
 func TestLoadControllerRejectsInvalidConfig(t *testing.T) {
@@ -79,81 +85,101 @@ func TestLoadControllerRejectsInvalidConfig(t *testing.T) {
 		{
 			name: "missing cluster",
 			environment: map[string]string{
-				controllerServerEnvironment:          "https://slipramp.example.com",
-				controllerEnrollmentTokenEnvironment: "enrollment-token",
-				controllerTokenEnvironment:           "controller-token",
-				controllerCheckoutImageEnvironment:   "checkout:1",
-				controllerHarnessImageEnvironment:    "harness:1",
+				controllerServerEnvironment:              "https://slipramp.example.com",
+				controllerEnrollmentTokenEnvironment:     "enrollment-token",
+				controllerTokenEnvironment:               "controller-token",
+				controllerCheckoutImageEnvironment:       "checkout:1",
+				controllerHarnessImageEnvironment:        "harness:1",
+				controllerExecutionNamespacesEnvironment: `["slipramp-runs"]`,
 			},
 			wantError: "cluster name",
 		},
 		{
 			name: "missing server URL",
 			environment: map[string]string{
-				controllerClusterEnvironment:         "colo",
-				controllerEnrollmentTokenEnvironment: "enrollment-token",
-				controllerTokenEnvironment:           "controller-token",
-				controllerCheckoutImageEnvironment:   "checkout:1",
-				controllerHarnessImageEnvironment:    "harness:1",
+				controllerClusterEnvironment:             "colo",
+				controllerEnrollmentTokenEnvironment:     "enrollment-token",
+				controllerTokenEnvironment:               "controller-token",
+				controllerCheckoutImageEnvironment:       "checkout:1",
+				controllerHarnessImageEnvironment:        "harness:1",
+				controllerExecutionNamespacesEnvironment: `["slipramp-runs"]`,
 			},
 			wantError: "server URL",
 		},
 		{
 			name: "missing token",
 			environment: map[string]string{
-				controllerClusterEnvironment:         "colo",
-				controllerServerEnvironment:          "https://slipramp.example.com",
-				controllerEnrollmentTokenEnvironment: "enrollment-token",
-				controllerCheckoutImageEnvironment:   "checkout:1",
-				controllerHarnessImageEnvironment:    "harness:1",
+				controllerClusterEnvironment:             "colo",
+				controllerServerEnvironment:              "https://slipramp.example.com",
+				controllerEnrollmentTokenEnvironment:     "enrollment-token",
+				controllerCheckoutImageEnvironment:       "checkout:1",
+				controllerHarnessImageEnvironment:        "harness:1",
+				controllerExecutionNamespacesEnvironment: `["slipramp-runs"]`,
 			},
 			wantError: "bearer token",
 		},
 		{
 			name: "missing enrollment token",
 			environment: map[string]string{
-				controllerClusterEnvironment:       "colo",
-				controllerServerEnvironment:        "https://slipramp.example.com",
-				controllerTokenEnvironment:         "controller-token",
-				controllerCheckoutImageEnvironment: "checkout:1",
-				controllerHarnessImageEnvironment:  "harness:1",
+				controllerClusterEnvironment:             "colo",
+				controllerServerEnvironment:              "https://slipramp.example.com",
+				controllerTokenEnvironment:               "controller-token",
+				controllerCheckoutImageEnvironment:       "checkout:1",
+				controllerHarnessImageEnvironment:        "harness:1",
+				controllerExecutionNamespacesEnvironment: `["slipramp-runs"]`,
 			},
 			wantError: "enrollment credential",
 		},
 		{
 			name: "missing checkout image",
 			environment: map[string]string{
-				controllerClusterEnvironment:         "colo",
-				controllerServerEnvironment:          "https://slipramp.example.com",
-				controllerEnrollmentTokenEnvironment: "enrollment-token",
-				controllerTokenEnvironment:           "controller-token",
-				controllerHarnessImageEnvironment:    "harness:1",
+				controllerClusterEnvironment:             "colo",
+				controllerServerEnvironment:              "https://slipramp.example.com",
+				controllerEnrollmentTokenEnvironment:     "enrollment-token",
+				controllerTokenEnvironment:               "controller-token",
+				controllerHarnessImageEnvironment:        "harness:1",
+				controllerExecutionNamespacesEnvironment: `["slipramp-runs"]`,
 			},
 			wantError: "checkout image",
 		},
 		{
 			name: "missing harness image",
 			environment: map[string]string{
-				controllerClusterEnvironment:         "colo",
-				controllerServerEnvironment:          "https://slipramp.example.com",
-				controllerEnrollmentTokenEnvironment: "enrollment-token",
-				controllerTokenEnvironment:           "controller-token",
-				controllerCheckoutImageEnvironment:   "checkout:1",
+				controllerClusterEnvironment:             "colo",
+				controllerServerEnvironment:              "https://slipramp.example.com",
+				controllerEnrollmentTokenEnvironment:     "enrollment-token",
+				controllerTokenEnvironment:               "controller-token",
+				controllerCheckoutImageEnvironment:       "checkout:1",
+				controllerExecutionNamespacesEnvironment: `["slipramp-runs"]`,
 			},
 			wantError: "harness image",
 		},
 		{
 			name: "invalid Git credentials",
 			environment: map[string]string{
-				controllerClusterEnvironment:         "colo",
-				controllerServerEnvironment:          "https://slipramp.example.com",
-				controllerEnrollmentTokenEnvironment: "enrollment-token",
-				controllerTokenEnvironment:           "controller-token",
-				controllerCheckoutImageEnvironment:   "checkout:1",
-				controllerHarnessImageEnvironment:    "harness:1",
-				controllerGitCredentialsEnvironment:  "not-json",
+				controllerClusterEnvironment:             "colo",
+				controllerServerEnvironment:              "https://slipramp.example.com",
+				controllerEnrollmentTokenEnvironment:     "enrollment-token",
+				controllerTokenEnvironment:               "controller-token",
+				controllerCheckoutImageEnvironment:       "checkout:1",
+				controllerHarnessImageEnvironment:        "harness:1",
+				controllerGitCredentialsEnvironment:      "not-json",
+				controllerExecutionNamespacesEnvironment: `["slipramp-runs"]`,
 			},
 			wantError: controllerGitCredentialsEnvironment,
+		},
+		{
+			name: "invalid execution namespaces",
+			environment: map[string]string{
+				controllerClusterEnvironment:             "colo",
+				controllerServerEnvironment:              "https://slipramp.example.com",
+				controllerEnrollmentTokenEnvironment:     "enrollment-token",
+				controllerTokenEnvironment:               "controller-token",
+				controllerCheckoutImageEnvironment:       "checkout:1",
+				controllerHarnessImageEnvironment:        "harness:1",
+				controllerExecutionNamespacesEnvironment: "not-json",
+			},
+			wantError: controllerExecutionNamespacesEnvironment,
 		},
 	}
 
