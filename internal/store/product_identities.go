@@ -15,8 +15,6 @@ import (
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
-var _ productidentity.Store = (*Database)(nil)
-
 func (d *Database) CreatePrincipal(
 	ctx context.Context,
 	record productidentity.Principal,
@@ -54,33 +52,20 @@ func (d *Database) GetPrincipal(
 	return principalFromRow(row), nil
 }
 
-func (d *Database) CreateOIDCIdentity(
+func (d *Database) ListServiceAccounts(
 	ctx context.Context,
-	record productidentity.OIDCIdentity,
-) (productidentity.OIDCIdentity, error) {
-	row, err := d.queries.CreateOIDCIdentity(
-		ctx,
-		storedb.CreateOIDCIdentityParams{
-			ID:                  databaseUUID(record.ID),
-			PrincipalID:         databaseUUID(record.PrincipalID),
-			Issuer:              record.Issuer,
-			Subject:             record.Subject,
-			Email:               record.Email,
-			PreferredUsername:   record.PreferredUsername,
-			DisplayName:         record.DisplayName,
-			LastAuthenticatedAt: databaseTime(record.LastAuthenticatedAt),
-			CreatedAt:           databaseTime(record.CreatedAt),
-			UpdatedAt:           databaseTime(record.UpdatedAt),
-		},
-	)
-	if identityConflict(err) {
-		return productidentity.OIDCIdentity{}, productidentity.ErrIdentityConflict
-	}
+) ([]productidentity.Principal, error) {
+	rows, err := d.queries.ListServiceAccounts(ctx)
 	if err != nil {
-		return productidentity.OIDCIdentity{}, fmt.Errorf("insert OIDC identity: %w", err)
+		return nil, fmt.Errorf("list product service accounts: %w", err)
 	}
 
-	return oidcIdentityFromRow(row), nil
+	principals := make([]productidentity.Principal, 0, len(rows))
+	for _, row := range rows {
+		principals = append(principals, principalFromRow(row))
+	}
+
+	return principals, nil
 }
 
 func (d *Database) GetOIDCUser(
@@ -237,11 +222,6 @@ func (d *Database) CreateAPIKey(
 	ctx context.Context,
 	record productidentity.APIKey,
 ) (productidentity.APIKey, error) {
-	scopes := make([]string, 0, len(record.Scopes))
-	for _, scope := range record.Scopes {
-		scopes = append(scopes, string(scope))
-	}
-
 	row, err := d.queries.CreateAPIKey(
 		ctx,
 		storedb.CreateAPIKeyParams{
@@ -251,7 +231,7 @@ func (d *Database) CreateAPIKey(
 			Name:                 record.Name,
 			TokenPrefix:          record.TokenPrefix,
 			TokenDigest:          record.TokenDigest[:],
-			Scopes:               scopes,
+			Scopes:               apiKeyScopes(record.Scopes),
 			CreatedAt:            databaseTime(record.CreatedAt),
 			ExpiresAt:            optionalDatabaseTime(record.ExpiresAt),
 		},
@@ -264,6 +244,112 @@ func (d *Database) CreateAPIKey(
 	}
 
 	return apiKeyFromRow(row)
+}
+
+func (d *Database) GetAPIKey(
+	ctx context.Context,
+	keyID uuid.UUID,
+) (productidentity.APIKey, error) {
+	row, err := d.queries.GetAPIKey(ctx, databaseUUID(keyID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return productidentity.APIKey{}, productidentity.ErrCredentialNotFound
+	}
+	if err != nil {
+		return productidentity.APIKey{}, fmt.Errorf("get API key: %w", err)
+	}
+
+	return apiKeyFromRow(row)
+}
+
+func (d *Database) ListAPIKeys(
+	ctx context.Context,
+	principalID uuid.UUID,
+) ([]productidentity.APIKey, error) {
+	rows, err := d.queries.ListAPIKeysByPrincipal(ctx, databaseUUID(principalID))
+	if err != nil {
+		return nil, fmt.Errorf("list API keys: %w", err)
+	}
+
+	keys := make([]productidentity.APIKey, 0, len(rows))
+	for _, row := range rows {
+		key, decodeErr := apiKeyFromRow(row)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		keys = append(keys, key)
+	}
+
+	return keys, nil
+}
+
+func (d *Database) GetAPIKeyPrincipal(
+	ctx context.Context,
+	tokenDigest productidentity.CredentialDigest,
+) (productidentity.APIKey, productidentity.Principal, error) {
+	row, err := d.queries.GetAPIKeyByDigest(ctx, tokenDigest[:])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return productidentity.APIKey{}, productidentity.Principal{},
+			productidentity.ErrCredentialNotFound
+	}
+	if err != nil {
+		return productidentity.APIKey{}, productidentity.Principal{},
+			fmt.Errorf("get API key: %w", err)
+	}
+
+	key, err := apiKeyFromRow(row)
+	if err != nil {
+		return productidentity.APIKey{}, productidentity.Principal{}, err
+	}
+	principal, err := d.GetPrincipal(ctx, key.PrincipalID)
+	if err != nil {
+		return productidentity.APIKey{}, productidentity.Principal{}, err
+	}
+
+	return key, principal, nil
+}
+
+func (d *Database) TouchAPIKey(
+	ctx context.Context,
+	keyID uuid.UUID,
+	lastUsedAt time.Time,
+) error {
+	rowsAffected, err := d.queries.TouchAPIKey(
+		ctx,
+		storedb.TouchAPIKeyParams{
+			LastUsedAt: databaseTime(lastUsedAt),
+			ID:         databaseUUID(keyID),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("touch API key: %w", err)
+	}
+	if rowsAffected != 1 {
+		return productidentity.ErrCredentialNotFound
+	}
+
+	return nil
+}
+
+func (d *Database) RevokeAPIKey(
+	ctx context.Context,
+	keyID uuid.UUID,
+	revokedAt time.Time,
+) error {
+	rowsAffected, err := d.queries.RevokeAPIKey(
+		ctx,
+		storedb.RevokeAPIKeyParams{
+			RevokedAt: databaseTime(revokedAt),
+			ID:        databaseUUID(keyID),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("revoke API key: %w", err)
+	}
+	if rowsAffected != 1 {
+		return productidentity.ErrCredentialNotFound
+	}
+
+	return nil
 }
 
 func (d *Database) CreateWebSession(
@@ -405,6 +491,15 @@ func apiKeyFromRow(row storedb.ApiKey) (productidentity.APIKey, error) {
 		LastUsedAt:           applicationTime(row.LastUsedAt),
 		RevokedAt:            applicationTime(row.RevokedAt),
 	}, nil
+}
+
+func apiKeyScopes(scopes []productidentity.Scope) []string {
+	values := make([]string, 0, len(scopes))
+	for _, scope := range scopes {
+		values = append(values, string(scope))
+	}
+
+	return values
 }
 
 func webSessionFromRow(row storedb.WebSession) (productidentity.WebSession, error) {

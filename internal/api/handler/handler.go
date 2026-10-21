@@ -6,8 +6,6 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
-	"github.com/slipramp/slipramp/internal/productauth"
-	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
 type ControllerIdentityService interface {
@@ -34,19 +32,8 @@ type Handler struct {
 }
 
 type ProductAuthenticationService interface {
-	BeginLogin() (productauth.LoginStart, error)
-	CompleteLogin(
-		ctx context.Context,
-		code string,
-		state string,
-		cookieState string,
-	) (productauth.SessionCredential, error)
-	AuthenticateSession(
-		ctx context.Context,
-		token string,
-	) (productidentity.Authentication, error)
-	RevokeSession(context.Context, string) error
-	SecureCookies() bool
+	BrowserAuthenticationService
+	AccessService
 }
 
 var _ api.StrictServerInterface = (*Handler)(nil)

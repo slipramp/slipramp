@@ -108,6 +108,17 @@ func TestConfigValidate(t *testing.T) {
 			name: "valid",
 		},
 		{
+			name: "missing OIDC provider",
+			configure: func(settings *Config) {
+				settings.ProductAuthentication.OIDC.Issuer = ""
+				settings.ProductAuthentication.OIDC.ClientID = ""
+				settings.ProductAuthentication.OIDC.ClientSecret = ""
+				settings.ProductAuthentication.OIDC.RedirectURL = ""
+				settings.ProductAuthentication.OIDC.SubjectRoles = nil
+			},
+			wantError: "OIDC configuration is required",
+		},
+		{
 			name: "empty address",
 			configure: func(settings *Config) {
 				settings.Address = ""
@@ -275,6 +286,7 @@ func TestConfigValidate(t *testing.T) {
 			t.Parallel()
 
 			settings := DefaultConfig()
+			configureRequiredOIDC(&settings)
 			if test.configure != nil {
 				test.configure(&settings)
 			}
@@ -282,4 +294,14 @@ func TestConfigValidate(t *testing.T) {
 			testcheck.ErrorContains(t, settings.Validate(), test.wantError)
 		})
 	}
+}
+
+func configureRequiredOIDC(settings *Config) {
+	settings.ProductAuthentication.OIDC.Issuer = "https://identity.example.com"
+	settings.ProductAuthentication.OIDC.ClientID = "slipramp"
+	settings.ProductAuthentication.OIDC.ClientSecret = "client-secret"
+	settings.ProductAuthentication.OIDC.RedirectURL =
+		"https://slipramp.example.com/api/v1/auth/callback"
+	settings.ProductAuthentication.OIDC.SubjectRoles =
+		map[string]productidentity.Role{"admin-subject": productidentity.RoleAdmin}
 }

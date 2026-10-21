@@ -1,4 +1,5 @@
-// Package productauth owns product-user OIDC login and local browser sessions.
+// Package productauth owns product credentials, OIDC login, and local browser
+// sessions.
 package productauth
 
 import (
@@ -14,6 +15,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
@@ -34,9 +36,15 @@ var (
 	ErrUnavailable      = errors.New("browser authentication is unavailable")
 	ErrInvalidLogin     = errors.New("invalid OIDC login")
 	ErrEnrollmentDenied = errors.New("OIDC identity is not enrolled")
+	ErrForbidden        = errors.New("product credential operation is forbidden")
 )
 
 type Store interface {
+	browserSessionStore
+	accessStore
+}
+
+type browserSessionStore interface {
 	GetOIDCUser(
 		ctx context.Context,
 		issuer string,
@@ -97,14 +105,11 @@ func NewService(store Store, provider OIDCProvider, cfg Config) (*Service, error
 	if store == nil {
 		return nil, errors.New("product authentication store is required")
 	}
-	if provider == nil {
-		return nil, errors.New("OIDC provider is required")
-	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	if !cfg.OIDC.Enabled() {
-		return nil, errors.New("OIDC configuration is required")
+	if provider == nil {
+		return nil, errors.New("OIDC provider is required")
 	}
 	cfg.OIDC.SubjectRoles = maps.Clone(cfg.OIDC.SubjectRoles)
 
@@ -154,7 +159,7 @@ func (s *Service) BeginLogin() (LoginStart, error) {
 		AuthorizationURL: s.provider.AuthorizationURL(
 			state,
 			nonce,
-			oauth2.S256ChallengeFromVerifier(codeVerifier),
+			codeVerifier,
 		),
 		State:     state,
 		ExpiresAt: expiresAt,
@@ -183,7 +188,7 @@ func (s *Service) CompleteLogin(
 		transaction.nonce,
 	)
 	if err != nil {
-		if isInvalidLogin(err) {
+		if errors.Is(err, ErrInvalidLogin) {
 			return SessionCredential{}, err
 		}
 
@@ -308,16 +313,39 @@ func (s *Service) resolveOIDCUser(
 		return productidentity.Principal{}, err
 	}
 
-	principal, identity, err := s.store.GetOIDCUser(ctx, profile.Issuer, profile.Subject)
-	if err == nil {
-		principal.DisplayName = displayName
-		principal.Role = role
-		principal.UpdatedAt = now
-		identity.Email = normalizedProfileValue(profile.Email)
-		identity.PreferredUsername = normalizedProfileValue(profile.PreferredUsername)
-		identity.DisplayName = normalizedProfileValue(profile.DisplayName)
-		identity.LastAuthenticatedAt = now
-		identity.UpdatedAt = now
+	for range maximumCreateTries {
+		principal, identity, getErr := s.store.GetOIDCUser(
+			ctx,
+			profile.Issuer,
+			profile.Subject,
+		)
+		if getErr == nil {
+			return s.updateOIDCUser(ctx, principal, identity, profile, role, displayName, now)
+		}
+		if !errors.Is(getErr, productidentity.ErrIdentityNotFound) {
+			return productidentity.Principal{}, fmt.Errorf("get OIDC user: %w", getErr)
+		}
+
+		principal = productidentity.Principal{
+			ID:          s.newID(),
+			Kind:        productidentity.KindUser,
+			DisplayName: displayName,
+			Role:        role,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+		identity = productidentity.OIDCIdentity{
+			ID:                  s.newID(),
+			PrincipalID:         principal.ID,
+			Issuer:              profile.Issuer,
+			Subject:             profile.Subject,
+			Email:               normalizedProfileValue(profile.Email),
+			PreferredUsername:   normalizedProfileValue(profile.PreferredUsername),
+			DisplayName:         normalizedProfileValue(profile.DisplayName),
+			LastAuthenticatedAt: now,
+			CreatedAt:           now,
+			UpdatedAt:           now,
+		}
 		if err := principal.Validate(); err != nil {
 			return productidentity.Principal{}, err
 		}
@@ -325,37 +353,44 @@ func (s *Service) resolveOIDCUser(
 			return productidentity.Principal{}, err
 		}
 
-		updated, _, updateErr := s.store.UpdateOIDCUser(ctx, principal, identity)
-		if updateErr != nil {
-			return productidentity.Principal{}, fmt.Errorf("update OIDC user: %w", updateErr)
+		created, _, createErr := s.store.CreateOIDCUser(ctx, principal, identity)
+		if errors.Is(createErr, productidentity.ErrIdentityConflict) {
+			continue
+		}
+		if createErr != nil {
+			return productidentity.Principal{}, fmt.Errorf("create OIDC user: %w", createErr)
 		}
 
-		return updated, nil
-	}
-	if !errors.Is(err, productidentity.ErrIdentityNotFound) {
-		return productidentity.Principal{}, fmt.Errorf("get OIDC user: %w", err)
+		return created, nil
 	}
 
-	principal = productidentity.Principal{
-		ID:          s.newID(),
-		Kind:        productidentity.KindUser,
-		DisplayName: displayName,
-		Role:        role,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+	return productidentity.Principal{}, productidentity.ErrIdentityConflict
+}
+
+func (s *Service) updateOIDCUser(
+	ctx context.Context,
+	principal productidentity.Principal,
+	identity productidentity.OIDCIdentity,
+	profile OIDCProfile,
+	role productidentity.Role,
+	displayName string,
+	now time.Time,
+) (productidentity.Principal, error) {
+	if principal.Kind != productidentity.KindUser {
+		return productidentity.Principal{}, fmt.Errorf(
+			"%w: OIDC identity requires a user principal",
+			productidentity.ErrInvalid,
+		)
 	}
-	identity = productidentity.OIDCIdentity{
-		ID:                  s.newID(),
-		PrincipalID:         principal.ID,
-		Issuer:              profile.Issuer,
-		Subject:             profile.Subject,
-		Email:               normalizedProfileValue(profile.Email),
-		PreferredUsername:   normalizedProfileValue(profile.PreferredUsername),
-		DisplayName:         normalizedProfileValue(profile.DisplayName),
-		LastAuthenticatedAt: now,
-		CreatedAt:           now,
-		UpdatedAt:           now,
-	}
+
+	principal.DisplayName = displayName
+	principal.Role = role
+	principal.UpdatedAt = now
+	identity.Email = normalizedProfileValue(profile.Email)
+	identity.PreferredUsername = normalizedProfileValue(profile.PreferredUsername)
+	identity.DisplayName = normalizedProfileValue(profile.DisplayName)
+	identity.LastAuthenticatedAt = now
+	identity.UpdatedAt = now
 	if err := principal.Validate(); err != nil {
 		return productidentity.Principal{}, err
 	}
@@ -363,15 +398,12 @@ func (s *Service) resolveOIDCUser(
 		return productidentity.Principal{}, err
 	}
 
-	created, _, err := s.store.CreateOIDCUser(ctx, principal, identity)
-	if errors.Is(err, productidentity.ErrIdentityConflict) {
-		return s.resolveOIDCUser(ctx, profile, role)
-	}
+	updated, _, err := s.store.UpdateOIDCUser(ctx, principal, identity)
 	if err != nil {
-		return productidentity.Principal{}, fmt.Errorf("create OIDC user: %w", err)
+		return productidentity.Principal{}, fmt.Errorf("update OIDC user: %w", err)
 	}
 
-	return created, nil
+	return updated, nil
 }
 
 func (s *Service) createSession(
@@ -438,7 +470,7 @@ func profileDisplayName(profile OIDCProfile) (string, error) {
 }
 
 func validDisplayName(value string) bool {
-	return value != "" && len(value) <= 200 &&
+	return value != "" && utf8.RuneCountInString(value) <= 200 &&
 		strings.IndexFunc(value, unicode.IsControl) == -1
 }
 

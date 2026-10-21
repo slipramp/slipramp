@@ -7,7 +7,6 @@ repositoryCatalog:
       repository. A repository without an accepted catalog does not have this
       resource yet.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:
@@ -75,7 +74,6 @@ targets:
       display title, repository name, and target name. Search matches target
       names and titles, repository names, and action names.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:

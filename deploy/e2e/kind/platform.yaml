@@ -180,6 +180,117 @@ spec:
       port: 2222
       targetPort: git
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acceptance-dex
+  namespace: slipramp-system
+data:
+  config.yaml: |
+    issuer: http://acceptance-dex.slipramp-system.svc.cluster.local:5556/dex
+    storage:
+      type: memory
+    web:
+      http: 0.0.0.0:5556
+    telemetry:
+      http: 0.0.0.0:5558
+    oauth2:
+      alwaysShowLoginScreen: true
+      skipApprovalScreen: true
+    staticClients:
+      - id: slipramp-acceptance
+        name: Slipramp Acceptance
+        secret: acceptance-client-secret
+        redirectURIs:
+          - {{ getenv "SLIPRAMP_ACCEPTANCE_OIDC_REDIRECT_URL" }}
+    connectors:
+      - type: mockCallback
+        id: mock
+        name: Acceptance Identity
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acceptance-dex
+  namespace: slipramp-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: acceptance-dex
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: acceptance-dex
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: dex
+          image: slipramp-acceptance-dex:acceptance
+          imagePullPolicy: Never
+          args: [dex, serve, /etc/dex/config.yaml]
+          env:
+            - name: SLIPRAMP_ACCEPTANCE_OIDC_REDIRECT_URL
+              value: http://127.0.0.1:13000/api/v1/auth/callback
+          ports:
+            - containerPort: 5556
+              name: http
+            - containerPort: 5558
+              name: telemetry
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: telemetry
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: telemetry
+            periodSeconds: 2
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsGroup: 1001
+            runAsUser: 1001
+          volumeMounts:
+            - name: config
+              mountPath: /etc/dex
+              readOnly: true
+            - name: temporary
+              mountPath: /tmp
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: config
+          configMap:
+            name: acceptance-dex
+        - name: temporary
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acceptance-dex
+  namespace: slipramp-system
+spec:
+  selector:
+    app.kubernetes.io/name: acceptance-dex
+  ports:
+    - name: http
+      port: 5556
+      targetPort: http
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -226,6 +337,17 @@ spec:
               value: '{"kind":"acceptance-enrollment-token"}'
             - name: SLIPRAMP_DATABASE_URL
               value: postgres://slipramp:slipramp-acceptance@postgres:5432/slipramp?sslmode=disable
+            - name: SLIPRAMP_OIDC_CLIENT_ID
+              value: slipramp-acceptance
+            - name: SLIPRAMP_OIDC_CLIENT_SECRET
+              value: acceptance-client-secret
+            - name: SLIPRAMP_OIDC_ISSUER
+              value: http://acceptance-dex.slipramp-system.svc.cluster.local:5556/dex
+            - name: SLIPRAMP_OIDC_REDIRECT_URL
+              value: http://127.0.0.1:13000/api/v1/auth/callback
+            - name: SLIPRAMP_OIDC_SUBJECT_ROLES
+              # Dex v2.45.1 mockCallback subject for its built-in test identity.
+              value: '{"Cg0wLTM4NS0yODA4OS0wEgRtb2Nr":"admin"}'
             - name: SLIPRAMP_PLACEMENTS_FILE
               value: /etc/slipramp/placements.yaml
             - name: SLIPRAMP_REPOSITORY_FETCH_TIMEOUT

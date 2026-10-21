@@ -64,7 +64,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	}
 	settings := DefaultConfig()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	httpHandler := newHandler(
+	httpHandler := newAdminTestHandler(
 		controllers,
 		controllerIdentityFor("controller-token", "colo"),
 		nil,

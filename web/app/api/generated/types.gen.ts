@@ -41,6 +41,54 @@ export type ProductPrincipal = {
   role: "admin" | "operator" | "viewer";
 };
 
+export type ApiKey = {
+  id: string;
+  principalId: string;
+  name: string;
+  /**
+   * Non-secret prefix suitable for identifying the credential.
+   */
+  tokenPrefix: string;
+  scopes: Array<ApiKeyScope>;
+  createdAt: string;
+  expiresAt?: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+};
+
+export type ApiKeyList = {
+  items: Array<ApiKey>;
+};
+
+export type ApiKeyCreate = {
+  name: string;
+  scopes: Array<ApiKeyScope>;
+  expiresAt?: string;
+};
+
+export type ApiKeyCredential = ApiKey & {
+  /**
+   * Complete secret returned only when the API key is created.
+   */
+  token: string;
+};
+
+export type ServiceAccount = {
+  principalId: string;
+  displayName: string;
+  role: "admin" | "operator" | "viewer";
+  createdAt: string;
+};
+
+export type ServiceAccountList = {
+  items: Array<ServiceAccount>;
+};
+
+export type ServiceAccountCreate = {
+  displayName: string;
+  role: "admin" | "operator" | "viewer";
+};
+
 export type Repository = RepositoryConfig & {
   /**
    * Stable identity of the repository registration.
@@ -639,6 +687,8 @@ export type ArtifactProvenance = {
   commitSha: string;
   catalogRevisionId: string;
 };
+
+export type ApiKeyScope = "slipramp:read" | "slipramp:runs:write" | "slipramp:admin";
 
 export type GetHealthData = {
   body?: never;
@@ -1684,7 +1734,7 @@ export type BeginOidcLoginErrors = {
    */
   500: Problem;
   /**
-   * Browser authentication is not configured or available.
+   * Browser authentication is temporarily unavailable.
    */
   503: Problem;
 };
@@ -1718,10 +1768,6 @@ export type CompleteOidcLoginErrors = {
    * The login could not be completed.
    */
   500: Problem;
-  /**
-   * Browser authentication is not configured or available.
-   */
-  503: Problem;
 };
 
 export type CompleteOidcLoginError = CompleteOidcLoginErrors[keyof CompleteOidcLoginErrors];
@@ -1746,10 +1792,6 @@ export type GetCurrentPrincipalErrors = {
    * The session could not be authenticated.
    */
   500: Problem;
-  /**
-   * Browser authentication is not configured or available.
-   */
-  503: Problem;
 };
 
 export type GetCurrentPrincipalError = GetCurrentPrincipalErrors[keyof GetCurrentPrincipalErrors];
@@ -1795,10 +1837,6 @@ export type LogoutErrors = {
    * The session could not be revoked.
    */
   500: Problem;
-  /**
-   * Browser authentication is not configured or available.
-   */
-  503: Problem;
 };
 
 export type LogoutError = LogoutErrors[keyof LogoutErrors];
@@ -1811,3 +1849,307 @@ export type LogoutResponses = {
 };
 
 export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type ListApiKeysData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/auth/api-keys";
+};
+
+export type ListApiKeysErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The credential cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * API key metadata could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListApiKeysError = ListApiKeysErrors[keyof ListApiKeysErrors];
+
+export type ListApiKeysResponses = {
+  /**
+   * API key metadata ordered from newest to oldest.
+   */
+  200: ApiKeyList;
+};
+
+export type ListApiKeysResponse = ListApiKeysResponses[keyof ListApiKeysResponses];
+
+export type CreateApiKeyData = {
+  body: ApiKeyCreate;
+  path?: never;
+  query?: never;
+  url: "/api/v1/auth/api-keys";
+};
+
+export type CreateApiKeyErrors = {
+  /**
+   * The API key configuration is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session is required.
+   */
+  401: Problem;
+  /**
+   * API keys cannot create additional user credentials.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The API key could not be created.
+   */
+  500: Problem;
+};
+
+export type CreateApiKeyError = CreateApiKeyErrors[keyof CreateApiKeyErrors];
+
+export type CreateApiKeyResponses = {
+  /**
+   * API key created.
+   */
+  201: ApiKeyCredential;
+};
+
+export type CreateApiKeyResponse = CreateApiKeyResponses[keyof CreateApiKeyResponses];
+
+export type RevokeApiKeyData = {
+  body?: never;
+  path: {
+    apiKeyId: string;
+  };
+  query?: never;
+  url: "/api/v1/auth/api-keys/{apiKeyId}";
+};
+
+export type RevokeApiKeyErrors = {
+  /**
+   * The API key identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The principal cannot revoke this API key.
+   */
+  403: Problem;
+  /**
+   * The API key does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The API key could not be revoked.
+   */
+  500: Problem;
+};
+
+export type RevokeApiKeyError = RevokeApiKeyErrors[keyof RevokeApiKeyErrors];
+
+export type RevokeApiKeyResponses = {
+  /**
+   * The API key is revoked.
+   */
+  204: void;
+};
+
+export type RevokeApiKeyResponse = RevokeApiKeyResponses[keyof RevokeApiKeyResponses];
+
+export type ListServiceAccountsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/service-accounts";
+};
+
+export type ListServiceAccountsErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Service accounts could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListServiceAccountsError = ListServiceAccountsErrors[keyof ListServiceAccountsErrors];
+
+export type ListServiceAccountsResponses = {
+  /**
+   * Service accounts ordered by display name.
+   */
+  200: ServiceAccountList;
+};
+
+export type ListServiceAccountsResponse =
+  ListServiceAccountsResponses[keyof ListServiceAccountsResponses];
+
+export type CreateServiceAccountData = {
+  body: ServiceAccountCreate;
+  path?: never;
+  query?: never;
+  url: "/api/v1/service-accounts";
+};
+
+export type CreateServiceAccountErrors = {
+  /**
+   * The service-account configuration is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The service account could not be created.
+   */
+  500: Problem;
+};
+
+export type CreateServiceAccountError =
+  CreateServiceAccountErrors[keyof CreateServiceAccountErrors];
+
+export type CreateServiceAccountResponses = {
+  /**
+   * Service account created.
+   */
+  201: ServiceAccount;
+};
+
+export type CreateServiceAccountResponse =
+  CreateServiceAccountResponses[keyof CreateServiceAccountResponses];
+
+export type ListServiceAccountApiKeysData = {
+  body?: never;
+  path: {
+    principalId: string;
+  };
+  query?: never;
+  url: "/api/v1/service-accounts/{principalId}/api-keys";
+};
+
+export type ListServiceAccountApiKeysErrors = {
+  /**
+   * The service-account identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The service account does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * API key metadata could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListServiceAccountApiKeysError =
+  ListServiceAccountApiKeysErrors[keyof ListServiceAccountApiKeysErrors];
+
+export type ListServiceAccountApiKeysResponses = {
+  /**
+   * API key metadata ordered from newest to oldest.
+   */
+  200: ApiKeyList;
+};
+
+export type ListServiceAccountApiKeysResponse =
+  ListServiceAccountApiKeysResponses[keyof ListServiceAccountApiKeysResponses];
+
+export type CreateServiceAccountApiKeyData = {
+  body: ApiKeyCreate;
+  path: {
+    principalId: string;
+  };
+  query?: never;
+  url: "/api/v1/service-accounts/{principalId}/api-keys";
+};
+
+export type CreateServiceAccountApiKeyErrors = {
+  /**
+   * The API key or service-account identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The service account does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The API key could not be created.
+   */
+  500: Problem;
+};
+
+export type CreateServiceAccountApiKeyError =
+  CreateServiceAccountApiKeyErrors[keyof CreateServiceAccountApiKeyErrors];
+
+export type CreateServiceAccountApiKeyResponses = {
+  /**
+   * API key created.
+   */
+  201: ApiKeyCredential;
+};
+
+export type CreateServiceAccountApiKeyResponse =
+  CreateServiceAccountApiKeyResponses[keyof CreateServiceAccountApiKeyResponses];

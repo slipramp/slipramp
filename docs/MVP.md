@@ -23,8 +23,8 @@ The MVP established the complete operational loop:
 
 The accepted deployment model is a single trusted Slipramp installation
 executing work across one or more Kubernetes clusters. Authentication and human
-attribution are not included in this baseline; the deployment must be protected
-externally when exposed beyond a trusted network.
+attribution were not included in this historical baseline. They are now built
+in as described in [AUTH.md](./AUTH.md).
 
 ## Scope
 
@@ -322,8 +322,8 @@ accepted status of the MVP:
   guidance beyond the existing development, kind, and homelab flows
 - Evolution and compatibility policy for the pre-stable API, catalog, and
   database contracts
-- Built-in authentication, user management, authorization, and human attribution,
-  planned incrementally in [AUTH.md](./AUTH.md)
+- Further identity administration, audit history, and MCP authentication beyond
+  the implemented model in [AUTH.md](./AUTH.md)
 - Approval workflows and required previews
 - Git-change, scheduled, and webhook triggers
 - High-availability Server and web deployments

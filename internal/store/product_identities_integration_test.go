@@ -15,17 +15,31 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
 
-	service := productidentity.NewService(database)
-	user, err := service.CreatePrincipal(
-		ctx,
-		productidentity.KindUser,
-		"Ada Lovelace",
-		productidentity.RoleAdmin,
-	)
-	if err != nil {
-		t.Fatalf("CreatePrincipal() error = %v", err)
+	now := time.Now().UTC()
+	userRecord := productidentity.Principal{
+		ID:          uuid.New(),
+		Kind:        productidentity.KindUser,
+		DisplayName: "Ada Lovelace",
+		Role:        productidentity.RoleAdmin,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
-	loaded, err := service.GetPrincipal(ctx, user.ID)
+	email := "ada@example.com"
+	identityRecord := productidentity.OIDCIdentity{
+		ID:                  uuid.New(),
+		PrincipalID:         userRecord.ID,
+		Issuer:              "https://identity.example.com",
+		Subject:             "00u-ada",
+		Email:               &email,
+		LastAuthenticatedAt: now,
+		CreatedAt:           now,
+		UpdatedAt:           now,
+	}
+	user, identity, err := database.CreateOIDCUser(ctx, userRecord, identityRecord)
+	if err != nil {
+		t.Fatalf("CreateOIDCUser() error = %v", err)
+	}
+	loaded, err := database.GetPrincipal(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("GetPrincipal() error = %v", err)
 	}
@@ -35,42 +49,19 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		t.Errorf("loaded principal = %#v", loaded)
 	}
 
-	email := "ada@example.com"
-	identity, err := service.CreateOIDCIdentity(
-		ctx,
-		user.ID,
-		"https://identity.example.com",
-		"00u-ada",
-		&email,
-		nil,
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("CreateOIDCIdentity() error = %v", err)
-	}
 	if identity.PrincipalID != user.ID || identity.Email == nil ||
 		*identity.Email != email {
 		t.Errorf("created OIDC identity = %#v", identity)
 	}
-	_, err = service.CreateOIDCIdentity(
-		ctx,
-		user.ID,
-		identity.Issuer,
-		identity.Subject,
-		nil,
-		nil,
-		nil,
-	)
-	if !errors.Is(err, productidentity.ErrIdentityConflict) {
-		t.Errorf("duplicate OIDC identity error = %v, want conflict", err)
-	}
 
-	serviceAccount, err := service.CreatePrincipal(
-		ctx,
-		productidentity.KindServiceAccount,
-		"Deployment automation",
-		productidentity.RoleOperator,
-	)
+	serviceAccount, err := database.CreatePrincipal(ctx, productidentity.Principal{
+		ID:          uuid.New(),
+		Kind:        productidentity.KindServiceAccount,
+		DisplayName: "Deployment automation",
+		Role:        productidentity.RoleOperator,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
 	if err != nil {
 		t.Fatalf("create service account: %v", err)
 	}
@@ -78,20 +69,21 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 	apiKeyDigest := productidentity.CredentialDigest(
 		sha256.Sum256([]byte("API key secret")),
 	)
-	expiresAt := time.Now().UTC().Add(24 * time.Hour)
-	key, err := service.CreateAPIKey(
-		ctx,
-		serviceAccount.ID,
-		user.ID,
-		"deployments",
-		"srk_deployments",
-		apiKeyDigest,
-		[]productidentity.Scope{
-			productidentity.ScopeRunsWrite,
+	expiresAt := now.Add(24 * time.Hour)
+	key, err := database.CreateAPIKey(ctx, productidentity.APIKey{
+		ID:                   uuid.New(),
+		PrincipalID:          serviceAccount.ID,
+		CreatedByPrincipalID: user.ID,
+		Name:                 "deployments",
+		TokenPrefix:          "slipramp_key_deployments",
+		TokenDigest:          apiKeyDigest,
+		Scopes: []productidentity.Scope{
 			productidentity.ScopeRead,
+			productidentity.ScopeRunsWrite,
 		},
-		&expiresAt,
-	)
+		CreatedAt: now,
+		ExpiresAt: &expiresAt,
+	})
 	if err != nil {
 		t.Fatalf("CreateAPIKey() error = %v", err)
 	}
@@ -101,16 +93,65 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		key.Scopes[0] != productidentity.ScopeRead {
 		t.Errorf("created API key = %#v", key)
 	}
+	loadedKey, keyPrincipal, err := database.GetAPIKeyPrincipal(ctx, apiKeyDigest)
+	if err != nil {
+		t.Fatalf("GetAPIKeyPrincipal() error = %v", err)
+	}
+	if loadedKey.ID != key.ID || keyPrincipal.ID != serviceAccount.ID {
+		t.Errorf("loaded API key = %#v, principal = %#v", loadedKey, keyPrincipal)
+	}
+	loadedKey, err = database.GetAPIKey(ctx, key.ID)
+	if err != nil || loadedKey.TokenDigest != key.TokenDigest {
+		t.Errorf("GetAPIKey() key = %#v, error = %v", loadedKey, err)
+	}
+	keys, err := database.ListAPIKeys(ctx, serviceAccount.ID)
+	if err != nil || len(keys) != 1 || keys[0].ID != key.ID {
+		t.Errorf("ListAPIKeys() keys = %#v, error = %v", keys, err)
+	}
+	serviceAccounts, err := database.ListServiceAccounts(ctx)
+	if err != nil || len(serviceAccounts) != 1 || serviceAccounts[0].ID != serviceAccount.ID {
+		t.Errorf("ListServiceAccounts() principals = %#v, error = %v", serviceAccounts, err)
+	}
+	keyUsedAt := key.CreatedAt.Add(time.Minute)
+	if err := database.TouchAPIKey(ctx, key.ID, keyUsedAt); err != nil {
+		t.Fatalf("TouchAPIKey() error = %v", err)
+	}
+	loadedKey, _, err = database.GetAPIKeyPrincipal(ctx, apiKeyDigest)
+	if err != nil {
+		t.Fatalf("GetAPIKeyPrincipal() after touch error = %v", err)
+	}
+	if loadedKey.LastUsedAt == nil || !loadedKey.LastUsedAt.Equal(keyUsedAt) {
+		t.Errorf("LastUsedAt = %v, want %s", loadedKey.LastUsedAt, keyUsedAt)
+	}
+	revokedAt := keyUsedAt.Add(time.Minute)
+	if err := database.RevokeAPIKey(ctx, key.ID, revokedAt); err != nil {
+		t.Fatalf("RevokeAPIKey() error = %v", err)
+	}
+	if err := database.RevokeAPIKey(ctx, key.ID, revokedAt.Add(time.Minute)); err != nil {
+		t.Fatalf("second RevokeAPIKey() error = %v", err)
+	}
+	loadedKey, _, err = database.GetAPIKeyPrincipal(ctx, apiKeyDigest)
+	if err != nil {
+		t.Fatalf("GetAPIKeyPrincipal() after revocation error = %v", err)
+	}
+	if loadedKey.RevokedAt == nil || !loadedKey.RevokedAt.Equal(revokedAt) {
+		t.Errorf("RevokedAt = %v, want %s", loadedKey.RevokedAt, revokedAt)
+	}
+	if err := database.TouchAPIKey(ctx, key.ID, revokedAt.Add(time.Minute)); !errors.Is(err, productidentity.ErrCredentialNotFound) {
+		t.Errorf("TouchAPIKey() after revocation error = %v, want not found", err)
+	}
 
 	sessionDigest := productidentity.CredentialDigest(
 		sha256.Sum256([]byte("web session secret")),
 	)
-	session, err := service.CreateWebSession(
-		ctx,
-		user.ID,
-		sessionDigest,
-		time.Now().UTC().Add(time.Hour),
-	)
+	session, err := database.CreateWebSession(ctx, productidentity.WebSession{
+		ID:          uuid.New(),
+		PrincipalID: user.ID,
+		TokenDigest: sessionDigest,
+		CreatedAt:   now,
+		ExpiresAt:   now.Add(time.Hour),
+		LastSeenAt:  now,
+	})
 	if err != nil {
 		t.Fatalf("CreateWebSession() error = %v", err)
 	}
@@ -177,34 +218,16 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		t.Errorf("updated user = %#v, identity = %#v", updatedUser, updatedIdentity)
 	}
 
-	now := time.Now().UTC()
-	newPrincipal := productidentity.Principal{
+	conflictingPrincipal := productidentity.Principal{
 		ID: uuid.New(), Kind: productidentity.KindUser,
 		DisplayName: "Grace Hopper", Role: productidentity.RoleViewer,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	newIdentity := productidentity.OIDCIdentity{
-		ID: uuid.New(), PrincipalID: newPrincipal.ID,
-		Issuer: identity.Issuer, Subject: "00u-grace",
+	conflictingIdentity := productidentity.OIDCIdentity{
+		ID: uuid.New(), PrincipalID: conflictingPrincipal.ID,
+		Issuer: identity.Issuer, Subject: identity.Subject,
 		LastAuthenticatedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
-	createdPrincipal, createdIdentity, err := database.CreateOIDCUser(
-		ctx,
-		newPrincipal,
-		newIdentity,
-	)
-	if err != nil {
-		t.Fatalf("CreateOIDCUser() error = %v", err)
-	}
-	if createdPrincipal.ID != newPrincipal.ID || createdIdentity.ID != newIdentity.ID {
-		t.Errorf("created principal = %#v, identity = %#v", createdPrincipal, createdIdentity)
-	}
-
-	conflictingPrincipal := newPrincipal
-	conflictingPrincipal.ID = uuid.New()
-	conflictingIdentity := newIdentity
-	conflictingIdentity.ID = uuid.New()
-	conflictingIdentity.PrincipalID = conflictingPrincipal.ID
 	_, _, err = database.CreateOIDCUser(ctx, conflictingPrincipal, conflictingIdentity)
 	if !errors.Is(err, productidentity.ErrIdentityConflict) {
 		t.Errorf("conflicting CreateOIDCUser() error = %v, want conflict", err)

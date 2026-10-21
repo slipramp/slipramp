@@ -7,7 +7,6 @@ clusters:
       reports whether each controller has checked in recently enough to be
       considered connected.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:

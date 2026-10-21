@@ -21,6 +21,12 @@ SELECT *
 FROM principals
 WHERE id = sqlc.arg(id);
 
+-- name: ListServiceAccounts :many
+SELECT *
+FROM principals
+WHERE kind = 'service-account'
+ORDER BY display_name, id;
+
 -- name: CreateOIDCIdentity :one
 INSERT INTO oidc_identities (
     id,
@@ -94,6 +100,37 @@ INSERT INTO api_keys (
     sqlc.narg(expires_at)
 )
 RETURNING *;
+
+-- name: GetAPIKeyByDigest :one
+SELECT *
+FROM api_keys
+WHERE token_digest = sqlc.arg(token_digest);
+
+-- name: GetAPIKey :one
+SELECT *
+FROM api_keys
+WHERE id = sqlc.arg(id);
+
+-- name: ListAPIKeysByPrincipal :many
+SELECT *
+FROM api_keys
+WHERE principal_id = sqlc.arg(principal_id)
+ORDER BY created_at DESC, id DESC;
+
+-- name: TouchAPIKey :execrows
+UPDATE api_keys
+SET last_used_at = GREATEST(
+    COALESCE(last_used_at, created_at),
+    sqlc.arg(last_used_at)
+)
+WHERE id = sqlc.arg(id)
+  AND revoked_at IS NULL
+  AND (expires_at IS NULL OR expires_at > sqlc.arg(last_used_at));
+
+-- name: RevokeAPIKey :execrows
+UPDATE api_keys
+SET revoked_at = COALESCE(revoked_at, sqlc.arg(revoked_at))
+WHERE id = sqlc.arg(id);
 
 -- name: CreateWebSession :one
 INSERT INTO web_sessions (

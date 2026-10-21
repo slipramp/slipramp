@@ -34,7 +34,7 @@ login:
             schema:
               $ref: ../components/common.yaml#/Problem
       "503":
-        description: Browser authentication is not configured or available.
+        description: Browser authentication is temporarily unavailable.
         content:
           application/problem+json:
             schema:
@@ -110,12 +110,6 @@ callback:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
-      "503":
-        description: Browser authentication is not configured or available.
-        content:
-          application/problem+json:
-            schema:
-              $ref: ../components/common.yaml#/Problem
       "500":
         description: The login could not be completed.
         content:
@@ -159,12 +153,6 @@ session:
               $ref: ../components/common.yaml#/Problem
       "405":
         description: The HTTP method is not supported for this resource.
-        content:
-          application/problem+json:
-            schema:
-              $ref: ../components/common.yaml#/Problem
-      "503":
-        description: Browser authentication is not configured or available.
         content:
           application/problem+json:
             schema:
@@ -238,14 +226,382 @@ logout:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
-      "503":
-        description: Browser authentication is not configured or available.
+      "500":
+        description: The session could not be revoked.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+apiKeys:
+  get:
+    operationId: listAPIKeys
+    summary: List API keys for the current principal
+    description: Lists credential metadata without exposing API key secrets.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    responses:
+      "200":
+        description: API key metadata ordered from newest to oldest.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/APIKeyList
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The credential cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
         content:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
       "500":
-        description: The session could not be revoked.
+        description: API key metadata could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
+    operationId: createAPIKey
+    summary: Create an API key for the current user
+    description: >-
+      Creates a credential for the browser-authenticated user. The complete
+      token is returned once and is never available from later reads.
+    security:
+      - ProductSession: []
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/authentication.yaml#/APIKeyCreate
+    responses:
+      "201":
+        description: API key created.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/APIKeyCredential
+      "400":
+        description: The API key configuration is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: API keys cannot create additional user credentials.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The API key could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+apiKey:
+  delete:
+    operationId: revokeAPIKey
+    summary: Revoke an API key
+    description: >-
+      Idempotently revokes an API key owned by the current principal. An
+      administrator with administrator scope may revoke any API key.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    parameters:
+      - name: apiKeyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "204":
+        description: The API key is revoked.
+      "400":
+        description: The API key identity is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The principal cannot revoke this API key.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The API key does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The API key could not be revoked.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+serviceAccounts:
+  get:
+    operationId: listServiceAccounts
+    summary: List service accounts
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    responses:
+      "200":
+        description: Service accounts ordered by display name.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/ServiceAccountList
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Service accounts could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
+    operationId: createServiceAccount
+    summary: Create a service account
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/authentication.yaml#/ServiceAccountCreate
+    responses:
+      "201":
+        description: Service account created.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/ServiceAccount
+      "400":
+        description: The service-account configuration is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The service account could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+serviceAccountAPIKeys:
+  parameters:
+    - name: principalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: listServiceAccountAPIKeys
+    summary: List API keys for a service account
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    responses:
+      "200":
+        description: API key metadata ordered from newest to oldest.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/APIKeyList
+      "400":
+        description: The service-account identity is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The service account does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: API key metadata could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
+    operationId: createServiceAccountAPIKey
+    summary: Create an API key for a service account
+    description: The complete token is returned once and is never available from later reads.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/authentication.yaml#/APIKeyCreate
+    responses:
+      "201":
+        description: API key created.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/APIKeyCredential
+      "400":
+        description: The API key or service-account identity is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The service account does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The API key could not be created.
         content:
           application/problem+json:
             schema:

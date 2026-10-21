@@ -6,7 +6,6 @@ runs:
       Lists the most recent Runs in descending creation order. Repository and
       target filters expose history at both catalog levels.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:
@@ -82,7 +81,6 @@ runs:
       persists an immutable queued Run. The Run remains pinned to the resolved
       catalog revision and Git commit even if the repository refreshes later.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:
@@ -162,7 +160,6 @@ run:
     operationId: getRun
     summary: Get a Run
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags: [Runs]
@@ -218,7 +215,6 @@ cancelRun:
       immediately; an active Run remains active until its cluster controller
       removes the execution Job and reports the canceled outcome.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:

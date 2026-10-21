@@ -8,18 +8,23 @@ kubectl_bin=${SLIPRAMP_KUBECTL_BIN:-kubectl}
 cluster_name=${SLIPRAMP_ACCEPTANCE_CLUSTER_NAME:-slipramp-acceptance}
 server_port=${SLIPRAMP_ACCEPTANCE_SERVER_PORT:-18080}
 web_port=${SLIPRAMP_ACCEPTANCE_WEB_PORT:-13000}
+oidc_port=${SLIPRAMP_ACCEPTANCE_OIDC_PORT:-18081}
 keep_cluster=${SLIPRAMP_ACCEPTANCE_KEEP_CLUSTER:-false}
 kind_node_image=kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+dex_image=ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
 timeout_seconds=${SLIPRAMP_ACCEPTANCE_TIMEOUT_SECONDS:-180}
 
 system_namespace=slipramp-system
 run_namespace=slipramp-runs
 server_url="http://127.0.0.1:$server_port"
 web_url="http://127.0.0.1:$web_port"
+oidc_host=acceptance-dex.slipramp-system.svc.cluster.local
+product_api_key=
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/slipramp-kind-acceptance.XXXXXX")
 cluster_created=false
 server_forward_pid=
 web_forward_pid=
+oidc_forward_pid=
 
 kubectl_command=("$kubectl_bin" --context "kind-$cluster_name")
 
@@ -41,7 +46,7 @@ dump_diagnostics() {
   "${kubectl_command[@]}" -n "$system_namespace" describe pods || true
 
   local deployment
-  for deployment in postgres rustfs acceptance-git slipramp-server slipramp-web slipramp-controller; do
+  for deployment in postgres rustfs acceptance-git acceptance-dex slipramp-server slipramp-web slipramp-controller; do
     printf '\n--- logs: deployment/%s ---\n' "$deployment"
     "${kubectl_command[@]}" -n "$system_namespace" logs \
       "deployment/$deployment" --all-containers --tail=-1 || true
@@ -63,6 +68,7 @@ cleanup() {
 
   stop_forward "$server_forward_pid"
   stop_forward "$web_forward_pid"
+  stop_forward "$oidc_forward_pid"
 
   if [[ "$status" -ne 0 && "$cluster_created" == true ]]; then
     dump_diagnostics
@@ -130,8 +136,74 @@ start_web_forward() {
   wait_for_http "$web_url/"
 }
 
+start_oidc_forward() {
+  stop_forward "$oidc_forward_pid"
+  "${kubectl_command[@]}" -n "$system_namespace" port-forward \
+    service/acceptance-dex "$oidc_port:5556" \
+    >"$temporary_directory/oidc-port-forward.log" 2>&1 &
+  oidc_forward_pid=$!
+  wait_for_http \
+    "http://127.0.0.1:$oidc_port/dex/.well-known/openid-configuration"
+}
+
+create_product_api_key_via_oidc() {
+  local cookie_jar="$temporary_directory/oidc-cookies.txt"
+  local headers="$temporary_directory/oidc-login-headers.txt"
+  local response_body="$temporary_directory/oidc-response.json"
+  local authorization_url
+  local oauth_result principal_response key_response
+
+  curl --fail --silent --show-error \
+    --cookie "$cookie_jar" \
+    --cookie-jar "$cookie_jar" \
+    --dump-header "$headers" \
+    --output /dev/null \
+    "$web_url/api/v1/auth/login"
+  authorization_url=$(awk '
+    tolower($1) == "location:" {
+      sub(/^[^:]*:[[:space:]]*/, "")
+      sub(/\r$/, "")
+      print
+      exit
+    }
+  ' "$headers")
+  test -n "$authorization_url"
+
+  oauth_result=$(curl --silent --show-error --location \
+    --cookie "$cookie_jar" \
+    --cookie-jar "$cookie_jar" \
+    --connect-to "$oidc_host:5556:127.0.0.1:$oidc_port" \
+    --output "$response_body" \
+    --write-out '%{http_code} %{url_effective}' \
+    "${authorization_url}&connector_id=mock")
+  if ! grep -Fq $'\tslipramp_session\t' "$cookie_jar"; then
+    printf 'OIDC login ended at %s without a session cookie\n' \
+      "$oauth_result" >&2
+    jq -c . "$response_body" >&2 2>/dev/null || true
+    return 1
+  fi
+
+  principal_response=$(curl --fail --silent --show-error \
+    --cookie "$cookie_jar" \
+    "$server_url/api/v1/auth/session")
+  jq -e '.kind == "user" and .role == "admin"' \
+    <<<"$principal_response" >/dev/null
+
+  key_response=$(curl --fail --silent --show-error \
+    --cookie "$cookie_jar" \
+    -H 'Content-Type: application/json' \
+    --data '{
+      "name":"acceptance automation",
+      "scopes":["slipramp:admin"]
+    }' \
+    "$server_url/api/v1/auth/api-keys")
+  product_api_key=$(jq -er '.token' <<<"$key_response")
+}
+
 api_get() {
-  curl --fail --silent --show-error "$server_url$1"
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $product_api_key" \
+    "$server_url$1"
 }
 
 create_run() {
@@ -150,12 +222,12 @@ create_run() {
       target: "acceptance",
       action: $action,
       parameters: $parameters,
-      inputs: $inputs,
-      source: {type: "manual"}
+      inputs: $inputs
     }')
 
   curl --fail --silent --show-error \
     -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $product_api_key" \
     -H "Idempotency-Key: $idempotency_key" \
     --data "$body" \
     "$server_url/api/v1/runs" |
@@ -239,6 +311,7 @@ wait_for_run_outcome() {
 cancel_run() {
   local run_id=$1
   curl --fail --silent --show-error -X POST \
+    -H "Authorization: Bearer $product_api_key" \
     "$server_url/api/v1/runs/$run_id/cancel" >/dev/null
 }
 
@@ -253,7 +326,8 @@ download_artifact() {
   local artifact=$1
   local destination=$2
   curl --fail --silent --show-error \
-    "$web_url/api/v1/artifacts/$artifact/download" \
+    -H "Authorization: Bearer $product_api_key" \
+    "$server_url/api/v1/artifacts/$artifact/download" \
     --output "$destination"
 }
 
@@ -300,6 +374,8 @@ log "pulling acceptance dependency images"
 for image in "${dependency_images[@]}"; do
   docker pull "$image"
 done
+docker pull "$dex_image"
+docker tag "$dex_image" slipramp-acceptance-dex:acceptance
 
 log "creating kind cluster $cluster_name"
 "$kind_bin" create cluster \
@@ -309,6 +385,7 @@ log "creating kind cluster $cluster_name"
 cluster_created=true
 
 local_images=(
+  slipramp-acceptance-dex:acceptance
   slipramp-acceptance-git:acceptance
   slipramp-checkout:acceptance
   slipramp-controller:acceptance
@@ -409,17 +486,34 @@ log "deploying the Slipramp stack"
   "${kubectl_command[@]}" apply -f -
 "${kubectl_command[@]}" apply -f \
   "$repository_root/deploy/e2e/kind/platform.yaml"
-for deployment in acceptance-git slipramp-server slipramp-web slipramp-controller; do
+"${kubectl_command[@]}" -n "$system_namespace" set env \
+  deployment/acceptance-dex \
+  "SLIPRAMP_ACCEPTANCE_OIDC_REDIRECT_URL=$web_url/api/v1/auth/callback"
+"${kubectl_command[@]}" -n "$system_namespace" set env \
+  deployment/slipramp-server \
+  "SLIPRAMP_OIDC_REDIRECT_URL=$web_url/api/v1/auth/callback"
+for deployment in acceptance-git acceptance-dex; do
+  "${kubectl_command[@]}" -n "$system_namespace" rollout status \
+    "deployment/$deployment" --timeout="${timeout_seconds}s"
+done
+"${kubectl_command[@]}" -n "$system_namespace" rollout restart \
+  deployment/slipramp-server
+for deployment in slipramp-server slipramp-web slipramp-controller; do
   "${kubectl_command[@]}" -n "$system_namespace" rollout status \
     "deployment/$deployment" --timeout="${timeout_seconds}s"
 done
 
 start_server_forward
 start_web_forward
+start_oidc_forward
+
+log "signing in through OIDC and creating the acceptance API key"
+create_product_api_key_via_oidc
 
 log "registering and refreshing the Git fixture"
 repository_response=$(curl --fail --silent --show-error \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $product_api_key" \
   --data '{
     "name":"acceptance",
     "cloneUrl":"ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git",

@@ -20,12 +20,21 @@ import type {
   CancelRunResponses,
   CompleteOidcLoginData,
   CompleteOidcLoginErrors,
+  CreateApiKeyData,
+  CreateApiKeyErrors,
+  CreateApiKeyResponses,
   CreateRepositoryData,
   CreateRepositoryErrors,
   CreateRepositoryResponses,
   CreateRunData,
   CreateRunErrors,
   CreateRunResponses,
+  CreateServiceAccountApiKeyData,
+  CreateServiceAccountApiKeyErrors,
+  CreateServiceAccountApiKeyResponses,
+  CreateServiceAccountData,
+  CreateServiceAccountErrors,
+  CreateServiceAccountResponses,
   DownloadArtifactData,
   DownloadArtifactErrors,
   DownloadArtifactResponses,
@@ -50,6 +59,9 @@ import type {
   GetRunLogCursorErrors,
   GetRunLogCursorResponses,
   GetRunResponses,
+  ListApiKeysData,
+  ListApiKeysErrors,
+  ListApiKeysResponses,
   ListClustersData,
   ListClustersErrors,
   ListClustersResponses,
@@ -62,6 +74,12 @@ import type {
   ListRunsData,
   ListRunsErrors,
   ListRunsResponses,
+  ListServiceAccountApiKeysData,
+  ListServiceAccountApiKeysErrors,
+  ListServiceAccountApiKeysResponses,
+  ListServiceAccountsData,
+  ListServiceAccountsErrors,
+  ListServiceAccountsResponses,
   ListTargetsData,
   ListTargetsErrors,
   ListTargetsResponses,
@@ -77,6 +95,9 @@ import type {
   ReportRunObservationData,
   ReportRunObservationErrors,
   ReportRunObservationResponses,
+  RevokeApiKeyData,
+  RevokeApiKeyErrors,
+  RevokeApiKeyResponses,
   SealRunLogData,
   SealRunLogErrors,
   SealRunLogResponses,
@@ -709,4 +730,204 @@ export const logout = <ThrowOnError extends boolean = false>(
     ],
     url: "/api/v1/auth/logout",
     ...options,
+  });
+
+/**
+ * List API keys for the current principal
+ *
+ * Lists credential metadata without exposing API key secrets.
+ */
+export const listApiKeys = <ThrowOnError extends boolean = false>(
+  options?: Options<ListApiKeysData, ThrowOnError>,
+): RequestResult<ListApiKeysResponses, ListApiKeysErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListApiKeysResponses, ListApiKeysErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/auth/api-keys",
+    ...options,
+  });
+
+/**
+ * Create an API key for the current user
+ *
+ * Creates a credential for the browser-authenticated user. The complete token is returned once and is never available from later reads.
+ */
+export const createApiKey = <ThrowOnError extends boolean = false>(
+  options: Options<CreateApiKeyData, ThrowOnError>,
+): RequestResult<CreateApiKeyResponses, CreateApiKeyErrors, ThrowOnError> =>
+  (options.client ?? client).post<CreateApiKeyResponses, CreateApiKeyErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+    ],
+    url: "/api/v1/auth/api-keys",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Revoke an API key
+ *
+ * Idempotently revokes an API key owned by the current principal. An administrator with administrator scope may revoke any API key.
+ */
+export const revokeApiKey = <ThrowOnError extends boolean = false>(
+  options: Options<RevokeApiKeyData, ThrowOnError>,
+): RequestResult<RevokeApiKeyResponses, RevokeApiKeyErrors, ThrowOnError> =>
+  (options.client ?? client).delete<RevokeApiKeyResponses, RevokeApiKeyErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/auth/api-keys/{apiKeyId}",
+    ...options,
+  });
+
+/**
+ * List service accounts
+ */
+export const listServiceAccounts = <ThrowOnError extends boolean = false>(
+  options?: Options<ListServiceAccountsData, ThrowOnError>,
+): RequestResult<ListServiceAccountsResponses, ListServiceAccountsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListServiceAccountsResponses,
+    ListServiceAccountsErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/service-accounts",
+    ...options,
+  });
+
+/**
+ * Create a service account
+ */
+export const createServiceAccount = <ThrowOnError extends boolean = false>(
+  options: Options<CreateServiceAccountData, ThrowOnError>,
+): RequestResult<CreateServiceAccountResponses, CreateServiceAccountErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreateServiceAccountResponses,
+    CreateServiceAccountErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/service-accounts",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List API keys for a service account
+ */
+export const listServiceAccountApiKeys = <ThrowOnError extends boolean = false>(
+  options: Options<ListServiceAccountApiKeysData, ThrowOnError>,
+): RequestResult<
+  ListServiceAccountApiKeysResponses,
+  ListServiceAccountApiKeysErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListServiceAccountApiKeysResponses,
+    ListServiceAccountApiKeysErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/service-accounts/{principalId}/api-keys",
+    ...options,
+  });
+
+/**
+ * Create an API key for a service account
+ *
+ * The complete token is returned once and is never available from later reads.
+ */
+export const createServiceAccountApiKey = <ThrowOnError extends boolean = false>(
+  options: Options<CreateServiceAccountApiKeyData, ThrowOnError>,
+): RequestResult<
+  CreateServiceAccountApiKeyResponses,
+  CreateServiceAccountApiKeyErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateServiceAccountApiKeyResponses,
+    CreateServiceAccountApiKeyErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/service-accounts/{principalId}/api-keys",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });

@@ -52,6 +52,14 @@ paths:
     $ref: ./paths/authentication.yaml#/session
   /api/v1/auth/logout:
     $ref: ./paths/authentication.yaml#/logout
+  /api/v1/auth/api-keys:
+    $ref: ./paths/authentication.yaml#/apiKeys
+  /api/v1/auth/api-keys/{apiKeyId}:
+    $ref: ./paths/authentication.yaml#/apiKey
+  /api/v1/service-accounts:
+    $ref: ./paths/authentication.yaml#/serviceAccounts
+  /api/v1/service-accounts/{principalId}/api-keys:
+    $ref: ./paths/authentication.yaml#/serviceAccountAPIKeys
 components:
   securitySchemes:
     ProductSession:
@@ -79,6 +87,20 @@ components:
       $ref: ./components/common.yaml#/Problem
     ProductPrincipal:
       $ref: ./components/authentication.yaml#/ProductPrincipal
+    APIKey:
+      $ref: ./components/authentication.yaml#/APIKey
+    APIKeyList:
+      $ref: ./components/authentication.yaml#/APIKeyList
+    APIKeyCreate:
+      $ref: ./components/authentication.yaml#/APIKeyCreate
+    APIKeyCredential:
+      $ref: ./components/authentication.yaml#/APIKeyCredential
+    ServiceAccount:
+      $ref: ./components/authentication.yaml#/ServiceAccount
+    ServiceAccountList:
+      $ref: ./components/authentication.yaml#/ServiceAccountList
+    ServiceAccountCreate:
+      $ref: ./components/authentication.yaml#/ServiceAccountCreate
     Repository:
       $ref: ./components/repositories.yaml#/Repository
     RepositoryList:

@@ -185,28 +185,39 @@ The Server accepts these environment variables:
 | `SLIPRAMP_ARTIFACT_RETENTION_PERIOD` | `720h` | Age after sealing when an artifact becomes eligible for expiration |
 | `SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL` | `1h` | Interval between artifact expiration, deletion, and orphan reconciliation passes |
 | `SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD` | `24h` | Minimum object age before an unreferenced object may be deleted |
-| `SLIPRAMP_OIDC_ISSUER` | Unset | Issuer URL for the single browser-login OIDC provider |
-| `SLIPRAMP_OIDC_CLIENT_ID` | Unset | OIDC relying-party client ID |
-| `SLIPRAMP_OIDC_CLIENT_SECRET` | Unset | OIDC relying-party client secret; supply through deployment secret configuration |
-| `SLIPRAMP_OIDC_REDIRECT_URL` | Unset | Absolute provider callback URL ending at `/api/v1/auth/callback` |
-| `SLIPRAMP_OIDC_SUBJECT_ROLES` | `{}` | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required |
+| `SLIPRAMP_OIDC_ISSUER` | Required | Issuer URL for the single browser-login OIDC provider |
+| `SLIPRAMP_OIDC_CLIENT_ID` | Required | OIDC relying-party client ID |
+| `SLIPRAMP_OIDC_CLIENT_SECRET` | Required | OIDC relying-party client secret; supply through deployment secret configuration |
+| `SLIPRAMP_OIDC_REDIRECT_URL` | Required | Absolute provider callback URL ending at `/api/v1/auth/callback` |
+| `SLIPRAMP_OIDC_SUBJECT_ROLES` | Required | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME` | `12h` | Absolute lifetime of a local browser session |
 
-Browser authentication is disabled when all OIDC settings are unset. When it
-is enabled, every OIDC setting is required. The subject-role map is the
-installation's initial enrollment and role authority: unknown subjects cannot
-sign in, and a mapped role is reapplied on each successful login. Browser
-sessions use an opaque, HTTP-only `slipramp_session` cookie. They have a fixed
-absolute lifetime and no idle expiry. The callback validates authorization
-code PKCE, state, nonce, issuer, signature, audience, and token time claims;
-provider access and refresh tokens are not retained.
+OIDC configuration is required for the Server to start. The subject-role map is
+the installation's enrollment and role authority: unknown subjects cannot sign
+in, at least one mapped subject must be an administrator, and a mapped role is
+reapplied on each successful login. The first administrator signs in through
+OIDC and can then create user API keys, service accounts, and service-account
+keys through the authenticated management surface. There is no bootstrap API
+key or anonymous product-route mode.
 
-When browser authentication is enabled, product API operations require the
-local session and apply the principal's global role. The web process forwards
-only that session to SSR API calls, live-log streams, and artifact downloads;
-it also passes same-origin login and callback requests to the Server. Without
-OIDC configuration, product routes retain temporary anonymous access during
-the staged authentication rollout.
+Browser sessions use an opaque, HTTP-only `slipramp_session` cookie. They have
+a fixed absolute lifetime and no idle expiry. The callback validates
+authorization code PKCE, state, nonce, issuer, signature, audience, and token
+time claims; provider access and refresh tokens are not retained. Every product
+API operation requires either a local session or a Slipramp API key and applies
+the principal's global role and, for a key, its scopes. The web process forwards
+only the session to SSR API calls, live-log streams, and artifact downloads; it
+also passes same-origin login and callback requests to the Server.
+
+Back up the PostgreSQL database and OIDC deployment configuration together.
+PostgreSQL contains principals, OIDC identity mappings, API-key digests, and
+session digests, while API-key plaintext is never stored and must remain with
+its client. A restore keeps API keys usable when their client still has the
+secret and the restored record is active. The configured provider must retain
+the same issuer and subject identifiers. If administrator credentials are
+lost, an operator with deployment access can explicitly map a known OIDC
+subject to `admin`, restart the Server, sign in, and issue replacement keys;
+there is no configuration credential that bypasses OIDC.
 
 Placements are loaded from the file named by `SLIPRAMP_PLACEMENTS_FILE` when the
 Server starts. Each placement selects a cluster registered in
@@ -328,7 +339,9 @@ required. Docker is required for the local PostgreSQL and RustFS services.
 Development tool and package versions are pinned by `Taskfile.yml`, `go.mod`,
 `package.json`, and `pnpm-lock.yaml`; `task deps` installs the pinned Go tools
 and pnpm release into the ignored repository cache. The development credentials
-below are intentionally local-only.
+below are intentionally local-only. Configure the five required OIDC variables
+from the Server table before running `slipramp-server`; the disposable kind
+suite includes its own Dex provider and needs no external identity service.
 
 ```console
 task deps

@@ -19,7 +19,7 @@ type OIDCProfile struct {
 }
 
 type OIDCProvider interface {
-	AuthorizationURL(state, nonce, codeChallenge string) string
+	AuthorizationURL(state, nonce, codeVerifier string) string
 	Authenticate(
 		ctx context.Context,
 		code string,
@@ -38,9 +38,6 @@ func DiscoverOIDCProvider(
 	ctx context.Context,
 	cfg OIDCConfig,
 ) (OIDCProvider, error) {
-	if !cfg.Enabled() {
-		return nil, ErrUnavailable
-	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -66,13 +63,13 @@ func DiscoverOIDCProvider(
 func (p *discoveredOIDCProvider) AuthorizationURL(
 	state string,
 	nonce string,
-	codeChallenge string,
+	codeVerifier string,
 ) string {
 	return p.oauthConfig.AuthCodeURL(
 		state,
 		oidc.Nonce(nonce),
 		oauth2.AccessTypeOnline,
-		oauth2.S256ChallengeOption(codeChallenge),
+		oauth2.S256ChallengeOption(codeVerifier),
 	)
 }
 
@@ -90,8 +87,9 @@ func (p *discoveredOIDCProvider) Authenticate(
 	if err != nil {
 		if _, ok := errors.AsType[*oauth2.RetrieveError](err); ok {
 			return OIDCProfile{}, fmt.Errorf(
-				"%w: exchange authorization code",
+				"%w: exchange authorization code: %w",
 				ErrInvalidLogin,
+				err,
 			)
 		}
 
@@ -131,8 +129,4 @@ func (p *discoveredOIDCProvider) Authenticate(
 		PreferredUsername: claims.PreferredUsername,
 		DisplayName:       claims.DisplayName,
 	}, nil
-}
-
-func isInvalidLogin(err error) bool {
-	return errors.Is(err, ErrInvalidLogin)
 }

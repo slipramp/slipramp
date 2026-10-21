@@ -95,7 +95,15 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			permission: PermissionRead,
 		},
 		{
-			name:       "admin key grants every permission",
+			name:       "runs key grants revoke permission",
+			role:       RoleOperator,
+			method:     AuthenticationMethodAPIKey,
+			scopes:     []Scope{ScopeRunsWrite},
+			permission: PermissionAPIKeyRevoke,
+			want:       true,
+		},
+		{
+			name:       "admin key grants run permission",
 			role:       RoleAdmin,
 			method:     AuthenticationMethodAPIKey,
 			scopes:     []Scope{ScopeAdmin},

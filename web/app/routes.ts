@@ -5,6 +5,7 @@ export default [
   route("api/v1/auth/login", "routes/auth-login.ts"),
   route("api/v1/auth/callback", "routes/auth-callback.ts"),
   route("logout", "routes/logout.ts"),
+  route("access", "routes/access.tsx"),
   route("clusters", "routes/clusters.tsx"),
   route("repositories", "routes/repositories.tsx"),
   route("repositories/:repositoryId", "routes/repository.tsx"),

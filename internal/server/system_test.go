@@ -18,7 +18,7 @@ func TestHealthEndpoint(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
 		response,
 		request,
 	)
@@ -56,7 +56,7 @@ func TestHealthEndpointRejectsOtherMethods(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
 		response,
 		request,
 	)

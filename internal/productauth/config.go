@@ -40,24 +40,23 @@ func DefaultConfig() Config {
 	}
 }
 
-func (c OIDCConfig) Enabled() bool {
-	return c.Issuer != "" || c.ClientID != "" || c.ClientSecret != "" ||
-		c.RedirectURL != "" || len(c.SubjectRoles) != 0
-}
-
 func (c OIDCConfig) Validate() error {
-	if !c.Enabled() {
-		return nil
+	if c.Issuer == "" && c.ClientID == "" && c.ClientSecret == "" &&
+		c.RedirectURL == "" && len(c.SubjectRoles) == 0 {
+		return errors.New("OIDC configuration is required for product authentication")
 	}
 
-	for label, value := range map[string]string{
-		"issuer":        c.Issuer,
-		"client ID":     c.ClientID,
-		"client secret": c.ClientSecret,
-		"redirect URL":  c.RedirectURL,
+	for _, field := range []struct {
+		label string
+		value string
+	}{
+		{label: "issuer", value: c.Issuer},
+		{label: "client ID", value: c.ClientID},
+		{label: "client secret", value: c.ClientSecret},
+		{label: "redirect URL", value: c.RedirectURL},
 	} {
-		if strings.TrimSpace(value) == "" {
-			return fmt.Errorf("OIDC %s is required when browser authentication is configured", label)
+		if strings.TrimSpace(field.value) == "" {
+			return fmt.Errorf("OIDC %s is required", field.label)
 		}
 	}
 
@@ -106,7 +105,6 @@ func (c Config) Validate() error {
 	if c.LoginTransactionLifetime <= 0 {
 		return errors.New("OIDC login transaction lifetime must be positive")
 	}
-
 	return nil
 }
 

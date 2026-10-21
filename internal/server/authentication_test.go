@@ -3,6 +3,8 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/api/handler"
 	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
@@ -217,25 +220,204 @@ func TestAuthenticationHTTPRejectsInvalidRequests(t *testing.T) {
 	}
 }
 
-func TestAuthenticationHTTPReportsUnconfiguredProvider(t *testing.T) {
+func TestProductAuthenticatorPrefersExplicitBearerCredential(t *testing.T) {
 	t.Parallel()
 
+	service := &recordingProductAuthenticationService{}
+	authenticator := newProductAuthenticator(service)
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		"/api/v1/auth/login",
+		"/api/v1/runs",
 		nil,
 	)
-	response := httptest.NewRecorder()
-	newAuthenticationHandler(nil).ServeHTTP(response, request)
+	request.Header.Set("Authorization", "Bearer slipramp_key_secret")
+	request.AddCookie(&http.Cookie{
+		Name:  productauth.SessionCookieName,
+		Value: "session-token",
+	})
 
-	if response.Code != http.StatusServiceUnavailable {
-		t.Errorf("status=%d want=%d", response.Code, http.StatusServiceUnavailable)
+	if _, err := authenticator.AuthenticateProductRequest(
+		context.Background(),
+		request,
+	); err != nil {
+		t.Fatalf("AuthenticateProductRequest() error = %v", err)
+	}
+	if service.apiKeyToken != "slipramp_key_secret" || service.authToken != "" {
+		t.Errorf("API key token = %q, session token = %q", service.apiKeyToken, service.authToken)
 	}
 }
 
-func newAuthenticationHandler(service handlerProductAuthenticationService) http.Handler {
-	return newHandlerWithProductAuthentication(
+func TestProductAuthenticatorRejectsMalformedBearerWithoutSessionFallback(t *testing.T) {
+	t.Parallel()
+
+	service := &recordingProductAuthenticationService{}
+	authenticator := newProductAuthenticator(service)
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/runs",
+		nil,
+	)
+	request.Header.Add("Authorization", "Bearer first")
+	request.Header.Add("Authorization", "Bearer second")
+	request.AddCookie(&http.Cookie{
+		Name:  productauth.SessionCookieName,
+		Value: "session-token",
+	})
+
+	_, err := authenticator.AuthenticateProductRequest(context.Background(), request)
+	if !errors.Is(err, productidentity.ErrUnauthenticated) {
+		t.Fatalf("AuthenticateProductRequest() error = %v, want unauthenticated", err)
+	}
+	if service.apiKeyToken != "" || service.authToken != "" {
+		t.Errorf("API key token = %q, session token = %q", service.apiKeyToken, service.authToken)
+	}
+}
+
+func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 20, 12, 0, 0, 0, time.UTC)
+	principal := productidentity.Principal{
+		ID:   uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1600"),
+		Kind: productidentity.KindUser, DisplayName: "Ada Lovelace",
+		Role: productidentity.RoleAdmin, CreatedAt: now, UpdatedAt: now,
+	}
+	authentication := productidentity.Authentication{
+		Principal: principal, Method: productidentity.AuthenticationMethodWebSession,
+		CredentialID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1601"),
+	}
+	key := productidentity.APIKey{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1602"),
+		PrincipalID: principal.ID, CreatedByPrincipalID: principal.ID,
+		Name: "automation", TokenPrefix: "slipramp_key_AQEBAQEBAQEB",
+		TokenDigest: productidentity.CredentialDigest{1},
+		Scopes:      []productidentity.Scope{productidentity.ScopeRead}, CreatedAt: now,
+	}
+	serviceAccount := productidentity.Principal{
+		ID:   uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1603"),
+		Kind: productidentity.KindServiceAccount, DisplayName: "Deployments",
+		Role: productidentity.RoleOperator, CreatedAt: now, UpdatedAt: now,
+	}
+	service := &recordingProductAuthenticationService{
+		authentication: authentication,
+		apiKeys:        []productidentity.APIKey{key},
+		createdAPIKey: productauth.APIKeyCredential{
+			Key: key, Token: "slipramp_key_complete-secret",
+		},
+		serviceAccounts:       []productidentity.Principal{serviceAccount},
+		createdServiceAccount: serviceAccount,
+	}
+	httpHandler := newAuthenticationHandler(service)
+
+	listRequest := authenticatedProductRequest(http.MethodGet, "/api/v1/auth/api-keys", "")
+	listResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(listResponse, listRequest)
+	if listResponse.Code != http.StatusOK || strings.Contains(listResponse.Body.String(), "complete-secret") {
+		t.Fatalf("list status=%d body=%s", listResponse.Code, listResponse.Body.String())
+	}
+
+	createRequest := authenticatedProductRequest(
+		http.MethodPost,
+		"/api/v1/auth/api-keys",
+		`{"name":"new automation","scopes":["slipramp:read"]}`,
+	)
+	createRequest.Header.Set("Content-Type", "application/json")
+	createResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(createResponse, createRequest)
+	if createResponse.Code != http.StatusCreated ||
+		!strings.Contains(createResponse.Body.String(), "slipramp_key_complete-secret") {
+		t.Fatalf("create status=%d body=%s", createResponse.Code, createResponse.Body.String())
+	}
+	if service.createAPIKeyAuth.Principal.ID != principal.ID ||
+		service.createAPIKeyName != "new automation" ||
+		len(service.createAPIKeyScopes) != 1 ||
+		service.createAPIKeyScopes[0] != productidentity.ScopeRead {
+		t.Errorf("create API key request = %#v", service)
+	}
+
+	accountsRequest := authenticatedProductRequest(
+		http.MethodGet,
+		"/api/v1/service-accounts",
+		"",
+	)
+	accountsResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(accountsResponse, accountsRequest)
+	if accountsResponse.Code != http.StatusOK ||
+		!strings.Contains(accountsResponse.Body.String(), serviceAccount.DisplayName) {
+		t.Fatalf("accounts status=%d body=%s", accountsResponse.Code, accountsResponse.Body.String())
+	}
+
+	createAccountRequest := authenticatedProductRequest(
+		http.MethodPost,
+		"/api/v1/service-accounts",
+		`{"displayName":"Deployments","role":"operator"}`,
+	)
+	createAccountRequest.Header.Set("Content-Type", "application/json")
+	createAccountResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(createAccountResponse, createAccountRequest)
+	if createAccountResponse.Code != http.StatusCreated ||
+		service.serviceAccountName != "Deployments" ||
+		service.serviceAccountRole != productidentity.RoleOperator {
+		t.Fatalf(
+			"create account status=%d name=%q role=%q body=%s",
+			createAccountResponse.Code,
+			service.serviceAccountName,
+			service.serviceAccountRole,
+			createAccountResponse.Body.String(),
+		)
+	}
+
+	createServiceKeyRequest := authenticatedProductRequest(
+		http.MethodPost,
+		fmt.Sprintf("/api/v1/service-accounts/%s/api-keys", serviceAccount.ID),
+		`{"name":"deployment key","scopes":["slipramp:runs:write"]}`,
+	)
+	createServiceKeyRequest.Header.Set("Content-Type", "application/json")
+	createServiceKeyResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(createServiceKeyResponse, createServiceKeyRequest)
+	if createServiceKeyResponse.Code != http.StatusCreated ||
+		service.serviceAccountKeyPrincipalID != serviceAccount.ID ||
+		service.serviceAccountKeyCreatorID != principal.ID {
+		t.Fatalf(
+			"create service key status=%d target=%s creator=%s body=%s",
+			createServiceKeyResponse.Code,
+			service.serviceAccountKeyPrincipalID,
+			service.serviceAccountKeyCreatorID,
+			createServiceKeyResponse.Body.String(),
+		)
+	}
+
+	revokeRequest := authenticatedProductRequest(
+		http.MethodDelete,
+		fmt.Sprintf("/api/v1/auth/api-keys/%s", key.ID),
+		"",
+	)
+	revokeResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(revokeResponse, revokeRequest)
+	if revokeResponse.Code != http.StatusNoContent || service.revokedAPIKeyID != key.ID {
+		t.Fatalf("revoke status=%d key=%s", revokeResponse.Code, service.revokedAPIKeyID)
+	}
+}
+
+func authenticatedProductRequest(method, path, body string) *http.Request {
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		method,
+		path,
+		strings.NewReader(body),
+	)
+	request.AddCookie(&http.Cookie{
+		Name:  productauth.SessionCookieName,
+		Value: "session-token",
+	})
+
+	return request
+}
+
+func newAuthenticationHandler(service handler.ProductAuthenticationService) http.Handler {
+	return newHTTPHandler(
 		&recordingClusterService{},
 		nil,
 		nil,
@@ -248,34 +430,31 @@ func newAuthenticationHandler(service handlerProductAuthenticationService) http.
 	)
 }
 
-type handlerProductAuthenticationService interface {
-	BeginLogin() (productauth.LoginStart, error)
-	CompleteLogin(
-		context.Context,
-		string,
-		string,
-		string,
-	) (productauth.SessionCredential, error)
-	AuthenticateSession(
-		context.Context,
-		string,
-	) (productidentity.Authentication, error)
-	RevokeSession(context.Context, string) error
-	SecureCookies() bool
-}
-
 type recordingProductAuthenticationService struct {
-	login               productauth.LoginStart
-	credential          productauth.SessionCredential
-	authentication      productidentity.Authentication
-	authenticationErr   error
-	revokeErr           error
-	secure              bool
-	completeCode        string
-	completeState       string
-	completeCookieState string
-	authToken           string
-	revokedToken        string
+	login                        productauth.LoginStart
+	credential                   productauth.SessionCredential
+	authentication               productidentity.Authentication
+	authenticationErr            error
+	revokeErr                    error
+	secure                       bool
+	completeCode                 string
+	completeState                string
+	completeCookieState          string
+	authToken                    string
+	apiKeyToken                  string
+	revokedToken                 string
+	apiKeys                      []productidentity.APIKey
+	createdAPIKey                productauth.APIKeyCredential
+	createAPIKeyAuth             productidentity.Authentication
+	createAPIKeyName             string
+	createAPIKeyScopes           []productidentity.Scope
+	revokedAPIKeyID              uuid.UUID
+	serviceAccounts              []productidentity.Principal
+	createdServiceAccount        productidentity.Principal
+	serviceAccountName           string
+	serviceAccountRole           productidentity.Role
+	serviceAccountKeyPrincipalID uuid.UUID
+	serviceAccountKeyCreatorID   uuid.UUID
 }
 
 func (s *recordingProductAuthenticationService) BeginLogin() (productauth.LoginStart, error) {
@@ -302,6 +481,86 @@ func (s *recordingProductAuthenticationService) AuthenticateSession(
 	s.authToken = token
 
 	return s.authentication, s.authenticationErr
+}
+
+func (s *recordingProductAuthenticationService) AuthenticateAPIKey(
+	_ context.Context,
+	token string,
+) (productidentity.Authentication, error) {
+	s.apiKeyToken = token
+
+	return s.authentication, s.authenticationErr
+}
+
+func (s *recordingProductAuthenticationService) ListOwnAPIKeys(
+	context.Context,
+	productidentity.Authentication,
+) ([]productidentity.APIKey, error) {
+	return s.apiKeys, nil
+}
+
+func (s *recordingProductAuthenticationService) CreateUserAPIKey(
+	_ context.Context,
+	authentication productidentity.Authentication,
+	name string,
+	scopes []productidentity.Scope,
+	_ *time.Time,
+) (productauth.APIKeyCredential, error) {
+	s.createAPIKeyAuth = authentication
+	s.createAPIKeyName = name
+	s.createAPIKeyScopes = scopes
+
+	return s.createdAPIKey, nil
+}
+
+func (s *recordingProductAuthenticationService) RevokeAPIKey(
+	_ context.Context,
+	_ productidentity.Authentication,
+	keyID uuid.UUID,
+) error {
+	s.revokedAPIKeyID = keyID
+
+	return nil
+}
+
+func (s *recordingProductAuthenticationService) ListServiceAccounts(
+	context.Context,
+) ([]productidentity.Principal, error) {
+	return s.serviceAccounts, nil
+}
+
+func (s *recordingProductAuthenticationService) CreateServiceAccount(
+	_ context.Context,
+	displayName string,
+	role productidentity.Role,
+) (productidentity.Principal, error) {
+	s.serviceAccountName = displayName
+	s.serviceAccountRole = role
+
+	return s.createdServiceAccount, nil
+}
+
+func (s *recordingProductAuthenticationService) ListServiceAccountAPIKeys(
+	context.Context,
+	uuid.UUID,
+) ([]productidentity.APIKey, error) {
+	return s.apiKeys, nil
+}
+
+func (s *recordingProductAuthenticationService) CreateServiceAccountAPIKey(
+	_ context.Context,
+	principalID uuid.UUID,
+	createdByPrincipalID uuid.UUID,
+	name string,
+	scopes []productidentity.Scope,
+	_ *time.Time,
+) (productauth.APIKeyCredential, error) {
+	s.serviceAccountKeyPrincipalID = principalID
+	s.serviceAccountKeyCreatorID = createdByPrincipalID
+	s.createAPIKeyName = name
+	s.createAPIKeyScopes = scopes
+
+	return s.createdAPIKey, nil
 }
 
 func (s *recordingProductAuthenticationService) RevokeSession(

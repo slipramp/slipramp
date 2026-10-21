@@ -62,7 +62,17 @@ export SLIPRAMP_CONTROLLER_TOKEN="$(openssl rand -hex 32)"
 export SLIPRAMP_ARTIFACT_TOKEN_SECRET="$(openssl rand -hex 32)"
 export SLIPRAMP_SERVER_ADDRESS='<tailscale-ip>:8080'
 export SLIPRAMP_SERVER_URL="http://${SLIPRAMP_SERVER_ADDRESS}"
+export SLIPRAMP_OIDC_ISSUER='https://<provider-issuer>'
+export SLIPRAMP_OIDC_CLIENT_ID='<client-id>'
+export SLIPRAMP_OIDC_CLIENT_SECRET='<client-secret>'
+export SLIPRAMP_OIDC_REDIRECT_URL='http://127.0.0.1:5173/api/v1/auth/callback'
+export SLIPRAMP_OIDC_SUBJECT_ROLES='{"<provider-subject>":"admin"}'
 ```
+
+Register the exact redirect URL with the provider. The subject-role map is the
+installation enrollment boundary and must contain at least one administrator.
+The administrator's first OIDC login creates its local principal; automation
+keys are then created through the Access screen or authenticated API.
 
 Start the durable dependencies and then the Server:
 

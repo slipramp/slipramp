@@ -86,7 +86,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		nil,
 		nil,
@@ -170,7 +170,7 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		nil,
 		nil,
@@ -224,7 +224,7 @@ func TestListTargetsRejectsInvalidPagination(t *testing.T) {
 		response := httptest.NewRecorder()
 		catalogs := &recordingCatalogService{}
 
-		newHandler(
+		newAdminTestHandler(
 			&recordingClusterService{},
 			nil,
 			nil,
@@ -288,7 +288,7 @@ func TestGetRepositoryCatalogMapsExpectedFailures(t *testing.T) {
 			)
 			response := httptest.NewRecorder()
 
-			newHandler(
+			newAdminTestHandler(
 				&recordingClusterService{},
 				nil,
 				nil,

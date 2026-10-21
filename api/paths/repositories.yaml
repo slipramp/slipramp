@@ -4,7 +4,6 @@ repositories:
     summary: List repositories
     description: Lists active repository registrations ordered by name.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:
@@ -48,7 +47,6 @@ repositories:
       name fields refer to configured secret sources; secret values are not
       accepted.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:
@@ -116,7 +114,6 @@ repository:
       Removes a repository from the active set without erasing its durable
       identity or future historical references.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags:

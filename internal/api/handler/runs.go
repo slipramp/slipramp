@@ -93,7 +93,7 @@ func (h *Handler) CreateRun(
 			ActionName:     string(request.Body.Action),
 			Parameters:     parameters,
 			Inputs:         runInputs(request.Body.Inputs),
-			Source:         run.Source{Type: run.SourceTypeManual},
+			Source:         currentRunSource(ctx),
 			IdempotencyKey: request.Params.IdempotencyKey,
 			Actor:          currentProductPrincipal(ctx),
 		},
@@ -137,6 +137,15 @@ func (h *Handler) CreateRun(
 	}
 
 	return api.CreateRun201JSONResponse(body), nil
+}
+
+func currentRunSource(ctx context.Context) run.Source {
+	authentication, authenticated := productAuthenticationFromContext(ctx)
+	if authenticated && authentication.Method == productidentity.AuthenticationMethodAPIKey {
+		return run.Source{Type: run.SourceTypeAPI}
+	}
+
+	return run.Source{Type: run.SourceTypeManual}
 }
 
 func (h *Handler) GetRun(

@@ -557,7 +557,8 @@ Slipramp evolves:
 
 The following product areas remain intentionally later work:
 
-- Authentication, authorization, and human run attribution.
+- MCP integration and further identity-administration or audit capabilities
+  beyond the implemented OIDC, API-key, authorization, and attribution model.
 - Git, schedule, and webhook trigger filtering, idempotency, missed-event, coalescing, and overlap semantics.
 - Explicit controller enrollment approvals and credential rotation workflows.
 - Controller high availability, fencing, leader election, and multiple active replicas for one cluster name.

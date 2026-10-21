@@ -39,7 +39,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 			Parameters:        map[string]any{"mode": "safe", "refresh": true},
 			PlacementName:     "infrastructure",
 			ClusterName:       "colo",
-			Source:            run.Source{Type: run.SourceTypeManual},
+			Source:            run.Source{Type: run.SourceTypeAPI},
 			CreatedBy: &productidentity.ActorSnapshot{
 				PrincipalID: principalID,
 				Kind:        productidentity.KindUser,
@@ -52,8 +52,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		"repositoryId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
 		"target":"network",
 		"action":"preview",
-		"parameters":{"mode":"safe","refresh":true},
-		"source":{"type":"api"}
+		"parameters":{"mode":"safe","refresh":true}
 	}`)
 	request := httptest.NewRequestWithContext(
 		context.Background(),
@@ -65,7 +64,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	request.Header.Set("Idempotency-Key", "manual-network-preview")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		nil,
 		nil,
@@ -81,7 +80,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	if runs.request.RepositoryID != repositoryID ||
 		runs.request.TargetName != "network" ||
 		runs.request.ActionName != "preview" ||
-		runs.request.Source.Type != run.SourceTypeManual ||
+		runs.request.Source.Type != run.SourceTypeAPI ||
 		runs.request.IdempotencyKey == nil ||
 		*runs.request.IdempotencyKey != "manual-network-preview" ||
 		runs.request.Parameters["mode"] != "safe" ||
@@ -136,7 +135,7 @@ func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
 			ID: runID, Phase: run.PhaseRunning, Parameters: map[string]any{},
 		},
 	}
-	httpHandler := newHandlerWithProductAuthentication(
+	httpHandler := newHTTPHandler(
 		&recordingClusterService{}, nil, nil, nil, runs, nil, nil,
 		authenticationService, nil,
 	)
@@ -183,10 +182,69 @@ func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedRunCreationDerivesAPISourceFromAPIKey(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 20, 12, 0, 0, 0, time.UTC)
+	principal := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500"),
+		Kind:        productidentity.KindServiceAccount,
+		DisplayName: "Deployment automation",
+		Role:        productidentity.RoleOperator,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	authentication := productidentity.Authentication{
+		Principal:       principal,
+		Method:          productidentity.AuthenticationMethodAPIKey,
+		CredentialID:    uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501"),
+		CredentialLabel: "deployments",
+		Scopes:          []productidentity.Scope{productidentity.ScopeRunsWrite},
+	}
+	authenticationService := &recordingProductAuthenticationService{
+		authentication: authentication,
+	}
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	runs := &recordingRunService{
+		created: run.Run{
+			ID: runID, Phase: run.PhaseQueued, Parameters: map[string]any{},
+			Source: run.Source{Type: run.SourceTypeAPI}, CreatedAt: now,
+		},
+	}
+	httpHandler := newHTTPHandler(
+		&recordingClusterService{}, nil, nil, nil, runs, nil, nil,
+		authenticationService, nil,
+	)
+	body := bytes.NewBufferString(`{
+		"repositoryId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
+		"target":"network",
+		"action":"preview"
+	}`)
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/api/v1/runs",
+		body,
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Authorization", "Bearer slipramp_key_secret")
+	response := httptest.NewRecorder()
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d: %s", response.Code, http.StatusCreated, response.Body)
+	}
+	if authenticationService.apiKeyToken != "slipramp_key_secret" ||
+		runs.request.Source.Type != run.SourceTypeAPI || runs.request.Actor == nil ||
+		runs.request.Actor.ID != principal.ID {
+		t.Errorf("authenticated API creation request = %#v", runs.request)
+	}
+}
+
 func TestConfiguredProductAuthenticationRejectsMissingSession(t *testing.T) {
 	t.Parallel()
 
-	httpHandler := newHandlerWithProductAuthentication(
+	httpHandler := newHTTPHandler(
 		&recordingClusterService{}, nil, nil, nil, &recordingRunService{}, nil, nil,
 		&recordingProductAuthenticationService{}, nil,
 	)
@@ -251,7 +309,7 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 			)
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
-			newHandler(
+			newAdminTestHandler(
 				&recordingClusterService{},
 				nil,
 				nil,
@@ -305,7 +363,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(clusters, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
+	newAdminTestHandler(clusters, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
@@ -345,7 +403,7 @@ func TestListRunsRejectsInvalidLimit(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		nil,
 		nil,
@@ -379,7 +437,7 @@ func TestCancelRun(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		nil,
 		nil,
@@ -437,7 +495,7 @@ func TestGetRunReportsDerivedObservationState(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		clusters,
 		nil,
 		nil,
@@ -489,7 +547,7 @@ func TestCancelRunMapsExpectedFailures(t *testing.T) {
 				nil,
 			)
 			response := httptest.NewRecorder()
-			newHandler(
+			newAdminTestHandler(
 				&recordingClusterService{},
 				nil,
 				nil,

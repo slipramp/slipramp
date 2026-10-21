@@ -3,7 +3,6 @@ runArtifacts:
     operationId: listRunArtifacts
     summary: List a Run's artifacts
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags: [Artifacts]
@@ -55,7 +54,6 @@ artifactDownload:
     operationId: downloadArtifact
     summary: Download a sealed artifact
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags: [Artifacts]
@@ -120,7 +118,6 @@ runLogs:
       Sends JSON log events over SSE. Reconnect with offsetBytes or the last
       event ID; event IDs are the next durable byte offset.
     security:
-      - {}
       - ProductSession: []
       - ProductBearer: []
     tags: [Artifacts]

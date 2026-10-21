@@ -250,7 +250,7 @@ func (h *Handler) DownloadArtifact(
 func canDownloadSensitiveArtifact(ctx context.Context) bool {
 	authentication, authenticated := productAuthenticationFromContext(ctx)
 	if !authenticated {
-		return true
+		return false
 	}
 
 	return authentication.Authorizes(productidentity.PermissionSensitiveArtifactsRead)

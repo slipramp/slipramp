@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
+	"golang.org/x/oauth2"
 
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
@@ -38,6 +41,17 @@ func TestDiscoveredOIDCProviderValidatesClaims(t *testing.T) {
 	provider, err := DiscoverOIDCProvider(clientContext, cfg)
 	if err != nil {
 		t.Fatalf("DiscoverOIDCProvider() error = %v", err)
+	}
+	verifier := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~abcdef"
+	authorizationURL := provider.AuthorizationURL("login-state", issuer.nonce, verifier)
+	parsedAuthorizationURL, err := url.Parse(authorizationURL)
+	if err != nil {
+		t.Fatalf("parse authorization URL: %v", err)
+	}
+	query := parsedAuthorizationURL.Query()
+	if query.Get("code_challenge") != oauth2.S256ChallengeFromVerifier(verifier) ||
+		query.Get("code_challenge_method") != "S256" {
+		t.Errorf("authorization URL PKCE query = %q", parsedAuthorizationURL.RawQuery)
 	}
 
 	profile, err := provider.Authenticate(
@@ -96,7 +110,7 @@ func TestDiscoveredOIDCProviderValidatesClaims(t *testing.T) {
 				"code-verifier",
 				test.nonce,
 			)
-			if !isInvalidLogin(err) {
+			if !errors.Is(err, ErrInvalidLogin) {
 				t.Fatalf("Authenticate() error = %v, want invalid login", err)
 			}
 		})

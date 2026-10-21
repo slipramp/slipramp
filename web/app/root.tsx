@@ -41,10 +41,6 @@ export async function loader({ request }: Route.LoaderArgs) {
   if (result.response?.status === 401) {
     return { authentication: "required", principal: undefined } as const;
   }
-  if (result.response?.status === 503) {
-    return { authentication: "disabled", principal: undefined } as const;
-  }
-
   return { authentication: "unavailable", principal: undefined } as const;
 }
 
@@ -71,6 +67,9 @@ export default function App({ loaderData }: Route.ComponentProps) {
   if (loaderData.authentication === "required") {
     return <LoginPrompt />;
   }
+  if (loaderData.authentication === "unavailable") {
+    return <AuthenticationUnavailable />;
+  }
 
   return (
     <AppShell header={{ height: 60 }} padding="md">
@@ -93,17 +92,22 @@ export default function App({ loaderData }: Route.ComponentProps) {
               Runs
             </Anchor>
             {loaderData.principal ? (
-              <Group gap="xs">
-                <Text fw={500} size="sm">
-                  {loaderData.principal.displayName}
-                </Text>
-                <Badge variant="light">{loaderData.principal.role}</Badge>
-                <Form action="/logout" method="post">
-                  <Button size="compact-sm" type="submit" variant="subtle">
-                    Log out
-                  </Button>
-                </Form>
-              </Group>
+              <>
+                <Anchor component={Link} to="/access">
+                  Access
+                </Anchor>
+                <Group gap="xs">
+                  <Text fw={500} size="sm">
+                    {loaderData.principal.displayName}
+                  </Text>
+                  <Badge variant="light">{loaderData.principal.role}</Badge>
+                  <Form action="/logout" method="post">
+                    <Button size="compact-sm" type="submit" variant="subtle">
+                      Log out
+                    </Button>
+                  </Form>
+                </Group>
+              </>
             ) : null}
           </Group>
         </Group>
@@ -129,6 +133,21 @@ function LoginPrompt() {
           <Button component="a" href="/api/v1/auth/login">
             Sign in
           </Button>
+        </Stack>
+      </Paper>
+    </Center>
+  );
+}
+
+function AuthenticationUnavailable() {
+  return (
+    <Center mih="100vh" p="md">
+      <Paper maw={420} p="xl" shadow="sm" withBorder>
+        <Stack gap={4}>
+          <Title order={1}>Slipramp is unavailable</Title>
+          <Text c="dimmed">
+            The web application could not verify your session with the Slipramp Server.
+          </Text>
         </Stack>
       </Paper>
     </Center>

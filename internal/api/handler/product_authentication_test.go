@@ -146,31 +146,45 @@ func TestProductAuthenticationRejectsInsufficientRoleOrScope(t *testing.T) {
 func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 	t.Parallel()
 
-	authentication := productAuthentication(
-		productidentity.RoleOperator,
-		productidentity.AuthenticationMethodAPIKey,
-		[]productidentity.Scope{productidentity.ScopeRunsWrite},
-	)
-	var attached productidentity.Authentication
-	response := runProductMiddleware(
-		t,
-		&recordingProductAuthenticator{authentication: authentication},
-		"CancelRun",
-		func(ctx context.Context) {
-			var err error
-			attached, err = currentProductAuthentication(ctx)
-			if err != nil {
-				t.Errorf("currentProductAuthentication() error = %v", err)
-			}
-		},
-	)
-
-	if response.Code != http.StatusNoContent {
-		t.Errorf("status = %d, want %d", response.Code, http.StatusNoContent)
+	tests := []struct {
+		name        string
+		operationID string
+	}{
+		{name: "Run cancellation", operationID: "CancelRun"},
+		{name: "API key revocation", operationID: "RevokeAPIKey"},
 	}
-	if attached.Principal.ID != authentication.Principal.ID ||
-		attached.CredentialID != authentication.CredentialID {
-		t.Errorf("attached authentication = %#v, want %#v", attached, authentication)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			authentication := productAuthentication(
+				productidentity.RoleOperator,
+				productidentity.AuthenticationMethodAPIKey,
+				[]productidentity.Scope{productidentity.ScopeRunsWrite},
+			)
+			var attached productidentity.Authentication
+			response := runProductMiddleware(
+				t,
+				&recordingProductAuthenticator{authentication: authentication},
+				test.operationID,
+				func(ctx context.Context) {
+					var err error
+					attached, err = currentProductAuthentication(ctx)
+					if err != nil {
+						t.Errorf("currentProductAuthentication() error = %v", err)
+					}
+				},
+			)
+
+			if response.Code != http.StatusNoContent {
+				t.Errorf("status = %d, want %d", response.Code, http.StatusNoContent)
+			}
+			if attached.Principal.ID != authentication.Principal.ID ||
+				attached.CredentialID != authentication.CredentialID {
+				t.Errorf("attached authentication = %#v, want %#v", attached, authentication)
+			}
+		})
 	}
 }
 
@@ -182,7 +196,7 @@ func TestSensitiveArtifactAuthorization(t *testing.T) {
 		authentication *productidentity.Authentication
 		want           bool
 	}{
-		{name: "rollout anonymous", want: true},
+		{name: "unauthenticated"},
 		{
 			name: "viewer session",
 			authentication: new(productAuthentication(

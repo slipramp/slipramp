@@ -27,3 +27,158 @@ ProductPrincipal:
         - operator
         - viewer
       x-go-type: string
+
+APIKeyScope:
+  type: string
+  enum:
+    - slipramp:read
+    - slipramp:runs:write
+    - slipramp:admin
+  x-go-type: string
+
+APIKey:
+  type: object
+  unevaluatedProperties: false
+  required:
+    - id
+    - principalId
+    - name
+    - tokenPrefix
+    - scopes
+    - createdAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    principalId:
+      type: string
+      format: uuid
+    name:
+      type: string
+      minLength: 1
+      maxLength: 200
+    tokenPrefix:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: Non-secret prefix suitable for identifying the credential.
+    scopes:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        $ref: "#/APIKeyScope"
+    createdAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+    lastUsedAt:
+      type: string
+      format: date-time
+    revokedAt:
+      type: string
+      format: date-time
+
+APIKeyList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/APIKey"
+
+APIKeyCreate:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - scopes
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 200
+    scopes:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        $ref: "#/APIKeyScope"
+    expiresAt:
+      type: string
+      format: date-time
+
+APIKeyCredential:
+  allOf:
+    - $ref: "#/APIKey"
+    - type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          minLength: 1
+          description: Complete secret returned only when the API key is created.
+  unevaluatedProperties: false
+
+ServiceAccount:
+  type: object
+  additionalProperties: false
+  required:
+    - principalId
+    - displayName
+    - role
+    - createdAt
+  properties:
+    principalId:
+      type: string
+      format: uuid
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    role:
+      type: string
+      enum:
+        - admin
+        - operator
+        - viewer
+      x-go-type: string
+    createdAt:
+      type: string
+      format: date-time
+
+ServiceAccountList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/ServiceAccount"
+
+ServiceAccountCreate:
+  type: object
+  additionalProperties: false
+  required:
+    - displayName
+    - role
+  properties:
+    displayName:
+      type: string
+      minLength: 1
+      maxLength: 200
+    role:
+      type: string
+      enum:
+        - admin
+        - operator
+        - viewer
+      x-go-type: string

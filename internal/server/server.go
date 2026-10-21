@@ -75,28 +75,25 @@ func New(
 		persistence.artifactContents,
 		[]byte(cfg.ArtifactTokenSecret),
 	)
-	var productAuthentication *productauth.Service
-	if cfg.ProductAuthentication.OIDC.Enabled() {
-		provider, discoverErr := productauth.DiscoverOIDCProvider(
-			ctx,
-			cfg.ProductAuthentication.OIDC,
-		)
-		if discoverErr != nil {
-			persistence.Close()
+	provider, err := productauth.DiscoverOIDCProvider(
+		ctx,
+		cfg.ProductAuthentication.OIDC,
+	)
+	if err != nil {
+		persistence.Close()
 
-			return nil, discoverErr
-		}
+		return nil, err
+	}
 
-		productAuthentication, err = productauth.NewService(
-			persistence.database,
-			provider,
-			cfg.ProductAuthentication,
-		)
-		if err != nil {
-			persistence.Close()
+	productAuthenticationService, err := productauth.NewService(
+		persistence.database,
+		provider,
+		cfg.ProductAuthentication,
+	)
+	if err != nil {
+		persistence.Close()
 
-			return nil, fmt.Errorf("initialize product authentication: %w", err)
-		}
+		return nil, fmt.Errorf("initialize product authentication: %w", err)
 	}
 	repositoryRefresher := repository.NewRefresher(
 		persistence.database,
@@ -114,7 +111,7 @@ func New(
 		cfg.ArtifactOrphanGracePeriod,
 		logger,
 	)
-	httpHandler := newHandlerWithProductAuthentication(
+	httpHandler := newHTTPHandler(
 		clusters,
 		identities,
 		repositories,
@@ -122,7 +119,7 @@ func New(
 		runs,
 		artifacts,
 		cfg.ControllerEnrollmentTokens,
-		productAuthentication,
+		productAuthenticationService,
 		logger,
 	)
 	server := newServer(cfg, logger, httpHandler)
@@ -260,51 +257,7 @@ func (s *Server) shutdown(ctx context.Context) error {
 	return nil
 }
 
-func newHandler(
-	clusters handler.ClusterService,
-	identities handler.ControllerIdentityService,
-	repositories handler.RepositoryService,
-	catalogs handler.CatalogService,
-	runs handler.RunService,
-	artifacts handler.ArtifactService,
-	controllerEnrollmentTokens map[string]string,
-) http.Handler {
-	return newHandlerWithLogger(
-		clusters,
-		identities,
-		repositories,
-		catalogs,
-		runs,
-		artifacts,
-		controllerEnrollmentTokens,
-		nil,
-	)
-}
-
-func newHandlerWithLogger(
-	clusters handler.ClusterService,
-	identities handler.ControllerIdentityService,
-	repositories handler.RepositoryService,
-	catalogs handler.CatalogService,
-	runs handler.RunService,
-	artifacts handler.ArtifactService,
-	controllerEnrollmentTokens map[string]string,
-	logger *slog.Logger,
-) http.Handler {
-	return newHandlerWithProductAuthentication(
-		clusters,
-		identities,
-		repositories,
-		catalogs,
-		runs,
-		artifacts,
-		controllerEnrollmentTokens,
-		nil,
-		logger,
-	)
-}
-
-func newHandlerWithProductAuthentication(
+func newHTTPHandler(
 	clusters handler.ClusterService,
 	identities handler.ControllerIdentityService,
 	repositories handler.RepositoryService,
@@ -322,14 +275,12 @@ func newHandlerWithProductAuthentication(
 	middleware := []api.StrictMiddlewareFunc{
 		handler.ControllerAuthentication(authenticator),
 	}
-	if productAuthentication != nil {
-		middleware = append(
-			middleware,
-			handler.ProductAuthentication(
-				newProductSessionAuthenticator(productAuthentication),
-			),
-		)
-	}
+	middleware = append(
+		middleware,
+		handler.ProductAuthentication(
+			newProductAuthenticator(productAuthentication),
+		),
+	)
 	strictHandler := api.NewStrictHandlerWithOptions(
 		handler.New(
 			clusters,
@@ -404,6 +355,25 @@ func newHandlerWithProductAuthentication(
 	registerMethodNotAllowed(mux, "/api/v1/auth/callback", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/auth/session", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/auth/logout", http.MethodPost)
+	registerMethodNotAllowed(
+		mux,
+		"/api/v1/auth/api-keys",
+		http.MethodGet,
+		http.MethodPost,
+	)
+	registerMethodNotAllowed(mux, "/api/v1/auth/api-keys/{apiKeyId}", http.MethodDelete)
+	registerMethodNotAllowed(
+		mux,
+		"/api/v1/service-accounts",
+		http.MethodGet,
+		http.MethodPost,
+	)
+	registerMethodNotAllowed(
+		mux,
+		"/api/v1/service-accounts/{principalId}/api-keys",
+		http.MethodGet,
+		http.MethodPost,
+	)
 	registerMethodNotAllowed(
 		mux,
 		"/api/v1/repositories",

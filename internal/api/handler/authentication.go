@@ -13,19 +13,26 @@ import (
 
 const callbackPath = "/api/v1/auth/callback"
 
+type BrowserAuthenticationService interface {
+	BeginLogin() (productauth.LoginStart, error)
+	CompleteLogin(
+		ctx context.Context,
+		code string,
+		state string,
+		cookieState string,
+	) (productauth.SessionCredential, error)
+	AuthenticateSession(
+		ctx context.Context,
+		token string,
+	) (productidentity.Authentication, error)
+	RevokeSession(context.Context, string) error
+	SecureCookies() bool
+}
+
 func (h *Handler) BeginOIDCLogin(
 	context.Context,
 	api.BeginOIDCLoginRequestObject,
 ) (api.BeginOIDCLoginResponseObject, error) {
-	if h.productAuth == nil {
-		problem := NewProblem(
-			http.StatusServiceUnavailable,
-			"Browser authentication is not configured.",
-		)
-
-		return api.BeginOIDCLogin503ApplicationProblemPlusJSONResponse(problem), nil
-	}
-
 	login, err := h.productAuth.BeginLogin()
 	if errors.Is(err, productauth.ErrUnavailable) {
 		problem := NewProblem(
@@ -61,15 +68,6 @@ func (h *Handler) CompleteOIDCLogin(
 	ctx context.Context,
 	request api.CompleteOIDCLoginRequestObject,
 ) (api.CompleteOIDCLoginResponseObject, error) {
-	if h.productAuth == nil {
-		problem := NewProblem(
-			http.StatusServiceUnavailable,
-			"Browser authentication is not configured.",
-		)
-
-		return api.CompleteOIDCLogin503ApplicationProblemPlusJSONResponse(problem), nil
-	}
-
 	cookieState := ""
 	if request.Params.SliprampOidcState != nil {
 		cookieState = *request.Params.SliprampOidcState
@@ -125,15 +123,6 @@ func (h *Handler) GetCurrentPrincipal(
 	ctx context.Context,
 	request api.GetCurrentPrincipalRequestObject,
 ) (api.GetCurrentPrincipalResponseObject, error) {
-	if h.productAuth == nil {
-		problem := NewProblem(
-			http.StatusServiceUnavailable,
-			"Browser authentication is not configured.",
-		)
-
-		return api.GetCurrentPrincipal503ApplicationProblemPlusJSONResponse(problem), nil
-	}
-
 	token := ""
 	if request.Params.SliprampSession != nil {
 		token = *request.Params.SliprampSession
@@ -163,14 +152,6 @@ func (h *Handler) Logout(
 	ctx context.Context,
 	request api.LogoutRequestObject,
 ) (api.LogoutResponseObject, error) {
-	if h.productAuth == nil {
-		problem := NewProblem(
-			http.StatusServiceUnavailable,
-			"Browser authentication is not configured.",
-		)
-
-		return api.Logout503ApplicationProblemPlusJSONResponse(problem), nil
-	}
 	if request.Params.XSliprampCSRF != "1" {
 		problem := NewProblem(
 			http.StatusForbidden,

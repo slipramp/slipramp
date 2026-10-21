@@ -54,6 +54,11 @@ placements:
 	environment := map[string]string{
 		serverControllerEnrollmentTokensEnvironment: `{"colo":"enrollment-token"}`,
 		serverPlacementsFileEnvironment:             path,
+		serverOIDCIssuerEnvironment:                 "https://identity.example.com",
+		serverOIDCClientIDEnvironment:               "slipramp",
+		serverOIDCClientSecretEnvironment:           "client-secret",
+		serverOIDCRedirectURLEnvironment:            "https://slipramp.example.com/api/v1/auth/callback",
+		serverOIDCSubjectRolesEnvironment:           `{"admin-subject":"admin"}`,
 	}
 
 	cfg, err := config.LoadServer(mapEnvironment(environment))

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -21,6 +22,8 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/productauth"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store"
@@ -48,6 +51,9 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 	})
 
 	firstRunID, secondRunID := createRecoveryRuns(t, ctx, app.persistence.database)
+	productAuthorization := bearerAuthorization(
+		createRecoveryProductAPIKey(t, ctx, app.persistence.database, cfg),
+	)
 	client := recoveryAPIClient(t, app.httpServer.Handler)
 	controllerAuthorization := bearerAuthorization(recoveryControllerToken)
 
@@ -208,7 +214,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 	}
 	requireRecoveryStatus(t, finished, http.StatusNoContent)
 
-	loaded, err := client.GetRunWithResponse(ctx, firstRunID)
+	loaded, err := client.GetRunWithResponse(ctx, firstRunID, productAuthorization)
 	if err != nil {
 		t.Fatalf("get recovered Run: %v", err)
 	}
@@ -222,7 +228,11 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 		t.Fatalf("recovered Run = %#v", loaded.JSON200)
 	}
 
-	artifacts, err := client.ListRunArtifactsWithResponse(ctx, firstRunID)
+	artifacts, err := client.ListRunArtifactsWithResponse(
+		ctx,
+		firstRunID,
+		productAuthorization,
+	)
 	if err != nil {
 		t.Fatalf("list recovered artifacts: %v", err)
 	}
@@ -234,7 +244,11 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 		t.Fatalf("recovered log artifact = %#v", logArtifact)
 	}
 
-	download, err := client.DownloadArtifactWithResponse(ctx, logArtifact.ID)
+	download, err := client.DownloadArtifactWithResponse(
+		ctx,
+		logArtifact.ID,
+		productAuthorization,
+	)
 	if err != nil {
 		t.Fatalf("download recovered log: %v", err)
 	}
@@ -431,8 +445,63 @@ func recoveryIntegrationConfig(t *testing.T) Config {
 	cfg.ControllerEnrollmentTokens = map[string]string{
 		recoveryClusterName: recoveryEnrollmentToken,
 	}
+	configureIntegrationOIDC(t, &cfg)
 
 	return cfg
+}
+
+func createRecoveryProductAPIKey(
+	t *testing.T,
+	ctx context.Context,
+	database *store.Database,
+	cfg Config,
+) string {
+	t.Helper()
+
+	service, err := productauth.NewService(
+		database,
+		recoveryOIDCProvider{},
+		cfg.ProductAuthentication,
+	)
+	if err != nil {
+		t.Fatalf("create recovery product authentication service: %v", err)
+	}
+	principal, err := service.CreateServiceAccount(
+		ctx,
+		"Recovery integration",
+		productidentity.RoleAdmin,
+	)
+	if err != nil {
+		t.Fatalf("create recovery service account: %v", err)
+	}
+	credential, err := service.CreateServiceAccountAPIKey(
+		ctx,
+		principal.ID,
+		principal.ID,
+		"recovery integration",
+		[]productidentity.Scope{productidentity.ScopeAdmin},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("create recovery API key: %v", err)
+	}
+
+	return credential.Token
+}
+
+type recoveryOIDCProvider struct{}
+
+func (recoveryOIDCProvider) AuthorizationURL(string, string, string) string {
+	return "http://slipramp.test/authorize"
+}
+
+func (recoveryOIDCProvider) Authenticate(
+	context.Context,
+	string,
+	string,
+	string,
+) (productauth.OIDCProfile, error) {
+	return productauth.OIDCProfile{}, errors.New("recovery OIDC provider is not interactive")
 }
 
 type recoveryHTTPClient struct {

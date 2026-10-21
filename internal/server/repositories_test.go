@@ -47,7 +47,7 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		nil,
 		repositories,
@@ -163,7 +163,7 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 			}
 			response := httptest.NewRecorder()
 
-			newHandler(
+			newAdminTestHandler(
 				&recordingClusterService{},
 				nil,
 				test.repositories,
@@ -205,7 +205,7 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 			},
 		},
 	}
-	httpHandler := newHandler(
+	httpHandler := newAdminTestHandler(
 		&recordingClusterService{},
 		nil,
 		repositories,

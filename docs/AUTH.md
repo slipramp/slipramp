@@ -10,7 +10,8 @@ identity platform.
 
 ## Goals
 
-- Support browser login through one configured OpenID Connect provider.
+- Require browser login through one configured OpenID Connect provider as the
+  installation's root product-authentication path.
 - Support API keys for people, scripts, and shared automation.
 - Resolve every product credential to one durable Slipramp principal.
 - Record who created and canceled a Run without confusing actor identity with
@@ -171,21 +172,13 @@ state changes require CSRF protection; the exact mechanism can be chosen with
 the web implementation.
 
 Successful login to an issuer does not automatically imply enrollment in a
-Slipramp installation. Before the OIDC milestone, choose one small rule suited
-to the intended provider, such as an explicit subject allowlist, a required
-group or claim, or accepting accounts assigned to a private application-scoped
-issuer. Do not build a general claim-expression language.
-
-The same milestone must document how the first administrator is established. A
-public issuer must not accidentally make Slipramp open to every account at that
-issuer.
-
-The implemented enrollment rule is an explicit configuration map from OIDC
-subject to global role. Unknown subjects are rejected, at least one
-mapped subject must be an administrator, and the configured role is reapplied
-on every successful login. This makes the first administrator explicit without
-email linking or a claim-expression language. Removing a subject prevents new
-logins; existing sessions remain valid until their fixed expiry or revocation.
+Slipramp installation. The implemented enrollment rule is an explicit
+configuration map from OIDC subject to global role. Unknown subjects are
+rejected, at least one mapped subject must be an administrator, and the
+configured role is reapplied on every successful login. This establishes the
+first administrator through OIDC without email linking or a claim-expression
+language. Removing a subject prevents new logins; existing sessions remain
+valid until their fixed expiry or revocation.
 
 Local sessions have a configurable absolute lifetime of 12 hours by default
 and no idle expiry. `last_seen_at` is refreshed for observability but does not
@@ -213,7 +206,21 @@ The initial management surface should support:
 Keys contain a high-entropy random secret, are displayed once, and are stored
 only as a digest plus a non-secret identifier or prefix. Rotation is
 create-new, update-client, revoke-old; no separate rotation protocol is needed.
-The exact token encoding is deferred to implementation.
+The token encoding is `slipramp_key_` followed by an unpadded Base64URL encoding
+of 32 random bytes. PostgreSQL stores the SHA-256 digest of the complete token
+and a display prefix containing the marker plus the first 12 encoded secret
+characters.
+
+User API keys can be created only from that user's browser session, preventing
+one API key from minting replacement user credentials. Administrators may use a
+session or an administrator-scoped API key to create service accounts and their
+keys. Revocation is allowed for the owning principal with any valid API-key
+scope, or for a caller with both the administrator role and scope.
+
+There is no bootstrap API key. The first configured administrator signs in
+through OIDC, then creates service accounts and automation keys through the
+normal authenticated management API. Automated tests follow the same boundary
+using a disposable OIDC provider.
 
 ## Authorization
 
@@ -233,7 +240,8 @@ The initial permission matrix is:
 | --- | --- | --- | --- |
 | `read` | List repositories, targets, clusters, Runs, logs, and artifact metadata; get catalogs and Runs; download non-sensitive artifacts | `viewer` | `slipramp:read` |
 | `runs:write` | Create and cancel Runs | `operator` | `slipramp:runs:write` |
-| `admin` | Create and remove repositories; later identity administration | `admin` | `slipramp:admin` |
+| `admin` | Create and remove repositories; manage service accounts and their API keys | `admin` | `slipramp:admin` |
+| `api-keys:revoke` | Revoke an API key owned by the current principal | `viewer` | Any valid scope |
 
 The `slipramp:admin` scope grants every permission, subject to the principal's
 role. Other scopes do not imply one another, so an operator API key that must
@@ -250,9 +258,10 @@ Credentials may carry coarse scopes such as `slipramp:read`,
 principal's role but cannot expand it. Custom roles, resource grants, deny
 rules, and a policy language remain out of scope.
 
-All product endpoints require authentication when rollout is complete. OpenAPI
-should declare product session and bearer security schemes while retaining the
-existing controller and Run artifact schemes.
+All product endpoints except the OIDC login and callback boundary require
+authentication. Current-principal and logout authenticate their session inside
+the operation. OpenAPI declares product session and bearer security schemes
+while retaining the existing controller and Run artifact schemes.
 
 ## Run Source and Actor Attribution
 
@@ -324,13 +333,9 @@ Each milestone is intended to fit in an independent implementation session.
 - Scope authenticated Run idempotency to the principal.
 - Add persistence and migration integration tests.
 
-This milestone need not expose credentials or protect routes.
-
-The rollout-compatible implementation permits null Run actors until product
-authentication is enforced. Authenticated idempotency keys are scoped to the
-creating principal. Anonymous requests temporarily retain source-scoped keys
-so existing manual and API callers continue to behave deterministically during
-the remaining authentication milestones.
+This milestone did not expose credentials or protect routes. The completed
+authentication work now requires actors for new product Runs and scopes
+idempotency keys to the creating principal.
 
 ### 2. Authentication and authorization boundaries — complete
 
@@ -340,16 +345,12 @@ the remaining authentication milestones.
 - Define product security schemes and authentication errors in OpenAPI.
 - Test missing, invalid, disabled, and insufficiently authorized callers.
 
-Do not enable route protection until a usable login or key bootstrap exists.
-
 The implemented boundary defines validated product authentication results,
 the role-and-scope permission intersection, operation-level middleware, and
 the product session and bearer security schemes with standard `401` and `403`
-responses. Product operations retain an anonymous OpenAPI security alternative
-and the middleware is intentionally not registered with the live Server, so
-existing routes remained reachable during this boundary-only milestone.
-Controller and Run artifact authentication continue through their independent
-credential paths.
+responses. The live Server now registers the middleware for every product
+operation. Controller and Run artifact authentication continue through their
+independent credential paths.
 
 ### 3. OIDC login and local sessions — complete
 
@@ -364,10 +365,8 @@ The implemented Server surface provides login, callback, current-principal,
 and logout operations through the generated contract. It discovers one OIDC
 provider, uses authorization code flow with PKCE, validates state and nonce,
 creates or refreshes `(issuer, subject)` identities, and stores only local
-session digests. Browser authentication remains optional during rollout.
-Milestone 4 conditionally protects product routes when OIDC is configured;
-unconfigured deployments retain temporary anonymous access until API-key
-bootstrap and final route enforcement are completed.
+session digests. OIDC configuration and at least one administrator mapping are
+required at startup.
 
 ### 4. Web authentication — complete
 
@@ -383,19 +382,17 @@ also exposes same-origin login and callback pass-through routes, displays the
 current principal and role, and performs CSRF-protected logout without becoming
 an identity provider itself.
 
-When OIDC is configured, the Server now authenticates and authorizes product
-operations from the local session. Deployments without OIDC retain the
-temporary anonymous rollout behavior until API-key bootstrap and final route
-enforcement are complete. Manual Run creation no longer accepts a source from
-the request contract: the HTTP handler assigns `manual` and attaches the
-authenticated principal to creation and cancellation. API-source derivation
-remains part of the API-key milestone.
+The Server authenticates and authorizes product operations from the local
+session. Manual Run creation no longer accepts a source from the request
+contract: the web boundary assigns `manual` and attaches the authenticated
+principal to creation and cancellation. API-source derivation is applied for
+API-key callers.
 
 The same session reaches live-log and artifact-download requests. In
 authenticated mode, sensitive artifact metadata remains readable to viewers,
 while downloading sensitive contents requires an operator or administrator.
 
-### 5. API keys and service accounts
+### 5. API keys and service accounts — complete
 
 - Implement generation, digest lookup, authentication, last-use recording,
   expiry, and revocation.
@@ -404,13 +401,35 @@ while downloading sensitive contents requires an operator or administrator.
 - Derive API source and actor attribution at the Server boundary.
 - Use API keys in end-to-end coverage instead of an auth bypass.
 
-### 6. Complete product-route enforcement
+The completed API-key surface generates prefixed 256-bit secrets, stores only
+their digest and display prefix, authenticates bearer credentials, records last
+use, rejects expired, revoked, or disabled credentials, and supports idempotent
+owner-or-administrator revocation. API-key-authenticated Run creation derives
+the `api` source at the Server boundary.
+
+The generated management API and Access screen list key metadata, create user
+keys from browser sessions, display new secrets once, and let administrators
+create service accounts and their keys. The disposable-cluster acceptance flow
+signs in through its Dex provider as the configured administrator, creates an
+API key through the same management API, and uses that bearer credential for
+the remaining product requests.
+
+### 6. Complete product-route enforcement — complete
 
 - Require authentication on every `/api/v1` operation.
 - Apply the reviewed role and scope matrix consistently.
 - Remove temporary rollout or test bypasses.
 - Update deployment, configuration, backup, and recovery documentation.
 - Run generated-output, unit, integration, lint, and build checks.
+
+The Server now requires complete OIDC configuration, discovers the provider at
+startup, and rejects missing or invalid credentials for every product
+operation. OpenAPI no longer advertises an anonymous alternative. The reviewed
+role-and-scope matrix is enforced by one fail-closed middleware, with the
+additional operator requirement for sensitive artifact contents. Identity
+recovery uses the explicit OIDC subject-role mapping; no bootstrap credential
+or authentication bypass remains. The acceptance environment deploys Dex and
+exercises OIDC login before creating its automation key.
 
 ### 7. MCP adapter, later
 
@@ -424,8 +443,6 @@ while downloading sensitive contents requires an operator or administrator.
 
 Resolve these in the milestone that first needs them:
 
-- API-key token encoding;
-- whether a narrowly marked development-only principal is worthwhile;
 - when administrative operations justify a general audit-event table.
 
 Choose the smallest behavior that meets the actual deployment need. Do not

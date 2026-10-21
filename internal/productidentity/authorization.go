@@ -13,6 +13,7 @@ const (
 	PermissionRead                   Permission = "read"
 	PermissionRunsWrite              Permission = "runs:write"
 	PermissionAdmin                  Permission = "admin"
+	PermissionAPIKeyRevoke           Permission = "api-keys:revoke"
 	PermissionSensitiveArtifactsRead Permission = "sensitive-artifacts:read"
 )
 
@@ -53,7 +54,7 @@ func (a Authentication) Validate() error {
 		if err := validateName(
 			"API key authentication label",
 			a.CredentialLabel,
-			maximumCredentialName,
+			maximumAPIKeyNameLength,
 		); err != nil {
 			return err
 		}
@@ -90,6 +91,8 @@ func roleAuthorizes(role Role, permission Permission) bool {
 		return role == RoleOperator || role == RoleAdmin
 	case PermissionAdmin:
 		return role == RoleAdmin
+	case PermissionAPIKeyRevoke:
+		return role == RoleViewer || role == RoleOperator || role == RoleAdmin
 	case PermissionSensitiveArtifactsRead:
 		return role == RoleOperator || role == RoleAdmin
 	default:
@@ -114,6 +117,10 @@ func scopesAuthorize(scopes []Scope, permission Permission) bool {
 			}
 		case PermissionRunsWrite:
 			if scope == ScopeRunsWrite {
+				return true
+			}
+		case PermissionAPIKeyRevoke:
+			if scope == ScopeRead || scope == ScopeRunsWrite {
 				return true
 			}
 		case PermissionAdmin:

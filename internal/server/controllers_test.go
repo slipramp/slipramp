@@ -45,7 +45,7 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
+	newAdminTestHandler(controllers, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -98,7 +98,7 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newHandler(controllers, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
+	newAdminTestHandler(controllers, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusInternalServerError)
 	if strings.Contains(response.Body.String(), "database unavailable") {
@@ -123,7 +123,7 @@ func TestControllerEnrollmentRegistersCredentialDigest(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		identities,
 		nil,
@@ -168,7 +168,7 @@ func TestControllerEnrollmentRejectsInvalidCredential(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		identities,
 		nil,
@@ -203,7 +203,7 @@ func TestControllerEnrollmentReturnsConflict(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		identities,
 		nil,
@@ -230,7 +230,7 @@ func TestControllerPollReturnsNoContentWithoutWaiting(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		controllers,
 		controllerIdentityFor("controller-token", "colo"),
 		nil,
@@ -278,7 +278,7 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		controllers,
 		controllerIdentityFor("controller-token", "colo"),
 		nil,
@@ -365,7 +365,7 @@ func TestControllerPollPrioritizesCancelRun(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		&recordingClusterService{},
 		controllerIdentityFor("controller-token", "colo"),
 		nil,
@@ -437,7 +437,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 			}
 
 			response := httptest.NewRecorder()
-			newHandler(
+			newAdminTestHandler(
 				controllers,
 				controllerIdentityFor("controller-token", "colo"),
 				nil,
@@ -503,7 +503,7 @@ func TestControllerPollMapsFailures(t *testing.T) {
 			request.Header.Set("Authorization", "Bearer controller-token")
 			response := httptest.NewRecorder()
 
-			newHandler(
+			newAdminTestHandler(
 				controllers,
 				controllerIdentityFor("controller-token", "colo"),
 				nil,
@@ -545,7 +545,7 @@ func TestControllerAppendsRunLogChunk(t *testing.T) {
 	request.Header.Set("Content-Type", "application/octet-stream")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		controllers,
 		controllerIdentityFor("controller-token", "colo"),
 		nil,
@@ -651,7 +651,7 @@ func TestControllerRunLogChunkMapsFailures(t *testing.T) {
 			request.Header.Set("Content-Type", "application/octet-stream")
 			response := httptest.NewRecorder()
 
-			newHandler(
+			newAdminTestHandler(
 				&recordingClusterService{},
 				controllerIdentityFor("controller-token", "colo"),
 				nil,
@@ -688,7 +688,7 @@ func TestControllerReportsRunObservation(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 
-	newHandler(
+	newAdminTestHandler(
 		controllers,
 		controllerIdentityFor("controller-token", "colo"),
 		nil,
@@ -778,7 +778,7 @@ func TestControllerRunObservationMapsFailures(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 
-			newHandler(
+			newAdminTestHandler(
 				&recordingClusterService{},
 				controllerIdentityFor("controller-token", "colo"),
 				nil,

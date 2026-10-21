@@ -258,6 +258,56 @@ func (q *Queries) DeleteWebSession(ctx context.Context, id pgtype.UUID) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const getAPIKey = `-- name: GetAPIKey :one
+SELECT id, principal_id, created_by_principal_id, name, token_prefix, token_digest, scopes, created_at, expires_at, last_used_at, revoked_at
+FROM api_keys
+WHERE id = $1
+`
+
+func (q *Queries) GetAPIKey(ctx context.Context, id pgtype.UUID) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, getAPIKey, id)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.PrincipalID,
+		&i.CreatedByPrincipalID,
+		&i.Name,
+		&i.TokenPrefix,
+		&i.TokenDigest,
+		&i.Scopes,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const getAPIKeyByDigest = `-- name: GetAPIKeyByDigest :one
+SELECT id, principal_id, created_by_principal_id, name, token_prefix, token_digest, scopes, created_at, expires_at, last_used_at, revoked_at
+FROM api_keys
+WHERE token_digest = $1
+`
+
+func (q *Queries) GetAPIKeyByDigest(ctx context.Context, tokenDigest []byte) (ApiKey, error) {
+	row := q.db.QueryRow(ctx, getAPIKeyByDigest, tokenDigest)
+	var i ApiKey
+	err := row.Scan(
+		&i.ID,
+		&i.PrincipalID,
+		&i.CreatedByPrincipalID,
+		&i.Name,
+		&i.TokenPrefix,
+		&i.TokenDigest,
+		&i.Scopes,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getOIDCIdentity = `-- name: GetOIDCIdentity :one
 SELECT id, principal_id, issuer, subject, email, preferred_username, display_name, last_authenticated_at, created_at, updated_at
 FROM oidc_identities
@@ -327,6 +377,123 @@ func (q *Queries) GetWebSessionByDigest(ctx context.Context, tokenDigest []byte)
 		&i.LastSeenAt,
 	)
 	return i, err
+}
+
+const listAPIKeysByPrincipal = `-- name: ListAPIKeysByPrincipal :many
+SELECT id, principal_id, created_by_principal_id, name, token_prefix, token_digest, scopes, created_at, expires_at, last_used_at, revoked_at
+FROM api_keys
+WHERE principal_id = $1
+ORDER BY created_at DESC, id DESC
+`
+
+func (q *Queries) ListAPIKeysByPrincipal(ctx context.Context, principalID pgtype.UUID) ([]ApiKey, error) {
+	rows, err := q.db.Query(ctx, listAPIKeysByPrincipal, principalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ApiKey
+	for rows.Next() {
+		var i ApiKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrincipalID,
+			&i.CreatedByPrincipalID,
+			&i.Name,
+			&i.TokenPrefix,
+			&i.TokenDigest,
+			&i.Scopes,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listServiceAccounts = `-- name: ListServiceAccounts :many
+SELECT id, kind, display_name, role, disabled_at, created_at, updated_at
+FROM principals
+WHERE kind = 'service-account'
+ORDER BY display_name, id
+`
+
+func (q *Queries) ListServiceAccounts(ctx context.Context) ([]Principal, error) {
+	rows, err := q.db.Query(ctx, listServiceAccounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Principal
+	for rows.Next() {
+		var i Principal
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.DisplayName,
+			&i.Role,
+			&i.DisabledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeAPIKey = `-- name: RevokeAPIKey :execrows
+UPDATE api_keys
+SET revoked_at = COALESCE(revoked_at, $1)
+WHERE id = $2
+`
+
+type RevokeAPIKeyParams struct {
+	RevokedAt pgtype.Timestamptz
+	ID        pgtype.UUID
+}
+
+func (q *Queries) RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAPIKey, arg.RevokedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const touchAPIKey = `-- name: TouchAPIKey :execrows
+UPDATE api_keys
+SET last_used_at = GREATEST(
+    COALESCE(last_used_at, created_at),
+    $1
+)
+WHERE id = $2
+  AND revoked_at IS NULL
+  AND (expires_at IS NULL OR expires_at > $1)
+`
+
+type TouchAPIKeyParams struct {
+	LastUsedAt pgtype.Timestamptz
+	ID         pgtype.UUID
+}
+
+func (q *Queries) TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, touchAPIKey, arg.LastUsedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const touchWebSession = `-- name: TouchWebSession :execrows

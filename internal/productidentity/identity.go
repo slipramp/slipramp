@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -27,12 +27,12 @@ const (
 	ScopeRunsWrite Scope = "slipramp:runs:write"
 	ScopeAdmin     Scope = "slipramp:admin"
 
-	maximumDisplayNameLength = 200
-	maximumCredentialName    = 200
-	maximumIssuerLength      = 2048
-	maximumSubjectLength     = 1024
-	maximumProfileField      = 320
-	maximumTokenPrefixLength = 64
+	maximumDisplayNameLength  = 200
+	maximumAPIKeyNameLength   = 200
+	maximumIssuerLength       = 2048
+	maximumSubjectLength      = 1024
+	maximumProfileFieldLength = 320
+	maximumTokenPrefixLength  = 64
 )
 
 var (
@@ -163,13 +163,20 @@ func (i OIDCIdentity) Validate() error {
 	if err := validateName("OIDC subject", i.Subject, maximumSubjectLength); err != nil {
 		return err
 	}
-	for label, value := range map[string]*string{
-		"OIDC email":              i.Email,
-		"OIDC preferred username": i.PreferredUsername,
-		"OIDC display name":       i.DisplayName,
+	for _, field := range []struct {
+		label string
+		value *string
+	}{
+		{label: "OIDC email", value: i.Email},
+		{label: "OIDC preferred username", value: i.PreferredUsername},
+		{label: "OIDC display name", value: i.DisplayName},
 	} {
-		if value != nil {
-			if err := validateName(label, *value, maximumProfileField); err != nil {
+		if field.value != nil {
+			if err := validateName(
+				field.label,
+				*field.value,
+				maximumProfileFieldLength,
+			); err != nil {
 				return err
 			}
 		}
@@ -185,7 +192,7 @@ func (k APIKey) Validate() error {
 	if k.ID == uuid.Nil || k.PrincipalID == uuid.Nil || k.CreatedByPrincipalID == uuid.Nil {
 		return fmt.Errorf("%w: API key and principal IDs are required", ErrInvalid)
 	}
-	if err := validateName("API key name", k.Name, maximumCredentialName); err != nil {
+	if err := validateName("API key name", k.Name, maximumAPIKeyNameLength); err != nil {
 		return err
 	}
 	if err := validateName("API key token prefix", k.TokenPrefix, maximumTokenPrefixLength); err != nil {
@@ -249,6 +256,10 @@ func validateIssuer(value string) error {
 }
 
 func validateScopes(scopes []Scope) error {
+	if len(scopes) == 0 {
+		return fmt.Errorf("%w: at least one API key scope is required", ErrInvalid)
+	}
+
 	seen := make(map[Scope]struct{}, len(scopes))
 	for _, scope := range scopes {
 		if scope != ScopeRead && scope != ScopeRunsWrite && scope != ScopeAdmin {
@@ -263,18 +274,11 @@ func validateScopes(scopes []Scope) error {
 	return nil
 }
 
-func normalizedScopes(scopes []Scope) []Scope {
-	result := slices.Clone(scopes)
-	slices.Sort(result)
-
-	return result
-}
-
 func validateName(label, value string, maximumLength int) error {
 	if strings.TrimSpace(value) == "" || value != strings.TrimSpace(value) {
 		return fmt.Errorf("%w: %s must not be blank or have surrounding whitespace", ErrInvalid, label)
 	}
-	if len(value) > maximumLength {
+	if utf8.RuneCountInString(value) > maximumLength {
 		return fmt.Errorf("%w: %s must not exceed %d characters", ErrInvalid, label, maximumLength)
 	}
 	if strings.IndexFunc(value, unicode.IsControl) >= 0 {

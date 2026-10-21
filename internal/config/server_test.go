@@ -214,6 +214,11 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 		wantError   string
 	}{
 		{
+			name:        "missing OIDC configuration",
+			environment: map[string]string{},
+			wantError:   "OIDC configuration is required",
+		},
+		{
 			name:        "empty address",
 			environment: map[string]string{serverAddressEnvironment: ""},
 			wantError:   "validate server configuration",
