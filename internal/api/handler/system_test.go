@@ -1,4 +1,4 @@
-package server
+package handler
 
 import (
 	"context"
@@ -31,17 +31,6 @@ func TestHealthEndpoint(t *testing.T) {
 	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
 		t.Errorf("Content-Type = %q, want %q", contentType, "application/json")
 	}
-}
-
-func TestHealthEndpointRejectsOtherMethods(t *testing.T) {
-	t.Parallel()
-
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/healthz", nil)
-	response := httptest.NewRecorder()
-
-	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
-
-	assertProblem(t, response, http.StatusMethodNotAllowed)
 }
 
 func TestHealthEndpointDoesNotCheckDependencies(t *testing.T) {
@@ -131,17 +120,6 @@ func TestReadinessEndpoint(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestReadinessEndpointRejectsOtherMethods(t *testing.T) {
-	t.Parallel()
-
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/readyz", nil)
-	response := httptest.NewRecorder()
-
-	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
-
-	assertProblem(t, response, http.StatusMethodNotAllowed)
 }
 
 func newSystemTestHandler(report readiness.Report) http.Handler {

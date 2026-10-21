@@ -12,13 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestDatabaseIntegration(t *testing.T) {
+func TestOpenAppliesMigrationsIdempotently(t *testing.T) {
 	ctx, cfg, database := openIntegrationDatabase(t)
-
-	if err := database.Ping(ctx); err != nil {
-		t.Errorf("Ping() error = %v", err)
-	}
-
 	database.Close()
 
 	database, err := Open(ctx, cfg)

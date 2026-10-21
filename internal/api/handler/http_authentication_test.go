@@ -1,4 +1,4 @@
-package server
+package handler
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/slipramp/slipramp/internal/api/handler"
 	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
@@ -366,7 +365,7 @@ func authenticatedProductRequest(method, path, body string) *http.Request {
 	return request
 }
 
-func newAuthenticationHandler(service handler.ProductAuthenticationService) http.Handler {
+func newAuthenticationHandler(service ProductAuthenticationService) http.Handler {
 	return newHTTPHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil, nil, service, nil)
 }
 

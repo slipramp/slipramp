@@ -70,6 +70,7 @@ type Controller struct {
 	retryDelay     time.Duration
 	observeEvery   time.Duration
 	heartbeatEvery time.Duration
+	now            func() time.Time
 	observerMutex  sync.Mutex
 	observedRuns   map[uuid.UUID]*runObserver
 	observers      sync.WaitGroup
@@ -104,6 +105,7 @@ func New(cfg Config, logger *slog.Logger, kubeClient kubernetes.Interface) (*Con
 		retryDelay:     pollRetryDelay,
 		observeEvery:   jobObservationPeriod,
 		heartbeatEvery: observationHeartbeatPeriod,
+		now:            time.Now,
 		observedRuns:   make(map[uuid.UUID]*runObserver),
 	}, nil
 }

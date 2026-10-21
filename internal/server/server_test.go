@@ -10,9 +10,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/slipramp/slipramp/internal/cluster"
-	"github.com/slipramp/slipramp/internal/run"
 )
 
 func TestServerStopsWhenContextIsCanceled(t *testing.T) {
@@ -59,20 +56,13 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 		_ = clientConnection.Close()
 	}()
 
-	controllers := &blockingClusterService{
-		started: make(chan struct{}),
-	}
+	requestStarted := make(chan struct{})
 	settings := DefaultConfig()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	httpHandler := newAdminTestHandler(
-		controllers,
-		controllerIdentityFor("controller-token", "colo"),
-		nil,
-		nil,
-		&recordingRunService{nextError: run.ErrNoRunAssignment},
-		nil,
-		nil,
-	)
+	httpHandler := http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) {
+		close(requestStarted)
+		<-request.Context().Done()
+	})
 	app := newServer(settings, logger, httpHandler)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -115,7 +105,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	}()
 
 	select {
-	case <-controllers.started:
+	case <-requestStarted:
 	case <-time.After(2 * time.Second):
 		t.Fatal("controller poll did not start")
 	}
@@ -136,20 +126,6 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("controller poll request did not finish")
 	}
-}
-
-type blockingClusterService struct {
-	started chan struct{}
-}
-
-func (p *blockingClusterService) RecordControllerContact(_ context.Context, _ string) error {
-	close(p.started)
-
-	return nil
-}
-
-func (*blockingClusterService) ListClusters(context.Context) ([]cluster.Status, error) {
-	return nil, nil
 }
 
 type singleConnectionListener struct {

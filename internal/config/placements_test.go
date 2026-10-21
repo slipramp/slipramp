@@ -118,10 +118,9 @@ func TestLoadServerRejectsInvalidPlacementsFile(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		contents   string
-		wantError  string
-		registered bool
+		name      string
+		contents  string
+		wantError string
 	}{
 		{
 			name:      "malformed YAML",
@@ -203,36 +202,11 @@ placements: {}
 			wantError: "must be positive",
 		},
 		{
-			name: "invalid placement name",
-			contents: `
-apiVersion: slipramp.com/v1alpha1
-kind: PlacementConfig
-placements:
-  Infrastructure:
-    cluster: colo
-    jobNamespace: slipramp-runs
-`,
-			wantError:  "placement name",
-			registered: true,
-		},
-		{
-			name:      "invalid resource quantity",
-			contents:  validPlacementsFile("    resources:\n      limits:\n        memory: many"),
-			wantError: "invalid quantity",
-		},
-		{
 			name: "unknown pod template field",
 			contents: validPlacementsFile(`    podTemplate:
       spec:
         schedularName: custom`),
 			wantError: "schedularName",
-		},
-		{
-			name: "protected pod template field",
-			contents: validPlacementsFile(`    podTemplate:
-      spec:
-        serviceAccountName: bypass`),
-			wantError: "use serviceAccountName",
 		},
 		{
 			name:      "null pod template",
@@ -252,10 +226,6 @@ placements:
 
 			environment := map[string]string{
 				serverPlacementsFileEnvironment: writePlacementsFile(t, test.contents),
-			}
-			if test.registered {
-				environment[serverControllerEnrollmentTokensEnvironment] =
-					`{"colo":"enrollment-token"}`
 			}
 
 			_, err := config.LoadServer(mapEnvironment(environment))

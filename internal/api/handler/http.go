@@ -10,18 +10,26 @@ import (
 )
 
 type HTTPOptions struct {
-	Middlewares []api.StrictMiddlewareFunc
-	Logger      *slog.Logger
+	ControllerEnrollmentTokens map[string]string
+	Logger                     *slog.Logger
 }
 
-func NewHTTP(server api.StrictServerInterface, options HTTPOptions) http.Handler {
-	return newHTTP(server, options)
+func NewHTTP(dependencies Dependencies, options HTTPOptions) http.Handler {
+	return newHTTP(dependencies, options)
 }
 
-func newHTTP(server api.StrictServerInterface, options HTTPOptions) *operationRouter {
+func newHTTP(dependencies Dependencies, options HTTPOptions) *operationRouter {
+	controllerAuthenticator := newControllerAuthenticator(
+		dependencies.ControllerIdentities,
+		options.ControllerEnrollmentTokens,
+	)
+	middlewares := []api.StrictMiddlewareFunc{
+		ControllerAuthentication(controllerAuthenticator),
+		ProductAuthentication(newProductAuthenticator(dependencies.ProductAuthentication)),
+	}
 	strictHandler := api.NewStrictHandlerWithOptions(
-		server,
-		options.Middlewares,
+		newHandler(dependencies),
+		middlewares,
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, err error) {
 				WriteProblem(writer, http.StatusBadRequest, err.Error())

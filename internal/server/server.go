@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/api/handler"
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
@@ -105,9 +104,8 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		logger,
 	)
 	readinessService := readiness.NewService(persistence.database, persistence.artifactContents)
-	controllerAuthenticator := newControllerAuthenticator(identities, cfg.ControllerEnrollmentTokens)
 	httpHandler := handler.NewHTTP(
-		handler.New(handler.Dependencies{
+		handler.Dependencies{
 			Clusters:              clusters,
 			ControllerIdentities:  identities,
 			Repositories:          repositories,
@@ -116,13 +114,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			Artifacts:             artifacts,
 			Readiness:             readinessService,
 			ProductAuthentication: productAuthenticationService,
-		}),
+		},
 		handler.HTTPOptions{
-			Middlewares: []api.StrictMiddlewareFunc{
-				handler.ControllerAuthentication(controllerAuthenticator),
-				handler.ProductAuthentication(newProductAuthenticator(productAuthenticationService)),
-			},
-			Logger: logger,
+			ControllerEnrollmentTokens: cfg.ControllerEnrollmentTokens,
+			Logger:                     logger,
 		},
 	)
 	server := newServer(cfg, logger, httpHandler)

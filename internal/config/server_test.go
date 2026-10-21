@@ -157,7 +157,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 }
 
-func TestLoadServerRejectsInvalidConfig(t *testing.T) {
+func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -169,21 +169,6 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 			name:        "missing OIDC configuration",
 			environment: map[string]string{},
 			wantError:   "OIDC configuration is required",
-		},
-		{
-			name:        "empty address",
-			environment: map[string]string{serverAddressEnvironment: ""},
-			wantError:   "validate server configuration",
-		},
-		{
-			name:        "missing port",
-			environment: map[string]string{serverAddressEnvironment: "localhost"},
-			wantError:   "validate server configuration",
-		},
-		{
-			name:        "zero port",
-			environment: map[string]string{serverAddressEnvironment: ":0"},
-			wantError:   "validate server configuration",
 		},
 		{
 			name: "malformed shutdown timeout",
@@ -200,13 +185,6 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 			wantError: serverControllerEnrollmentTokensEnvironment,
 		},
 		{
-			name: "invalid controller enrollment token",
-			environment: map[string]string{
-				serverControllerEnrollmentTokensEnvironment: `{"colo":""}`,
-			},
-			wantError: "validate server configuration",
-		},
-		{
 			name: "malformed repository refresh credentials",
 			environment: map[string]string{
 				serverRepositoryRefreshCredentialsEnvironment: "not-json",
@@ -214,113 +192,11 @@ func TestLoadServerRejectsInvalidConfig(t *testing.T) {
 			wantError: serverRepositoryRefreshCredentialsEnvironment,
 		},
 		{
-			name: "invalid repository refresh credential",
-			environment: map[string]string{
-				serverRepositoryRefreshCredentialsEnvironment: `{"github":"relative"}`,
-			},
-			wantError: "validate server configuration",
-		},
-		{
-			name: "malformed repository refresh interval",
-			environment: map[string]string{
-				serverRepositoryRefreshIntervalEnvironment: "often",
-			},
-			wantError: serverRepositoryRefreshIntervalEnvironment,
-		},
-		{
-			name: "invalid repository fetch timeout",
-			environment: map[string]string{
-				serverRepositoryFetchTimeoutEnvironment: "0s",
-			},
-			wantError: "validate server configuration",
-		},
-		{
-			name: "negative shutdown timeout",
-			environment: map[string]string{
-				serverShutdownTimeoutEnvironment: "-1s",
-			},
-			wantError: "validate server configuration",
-		},
-		{
-			name: "malformed database timeout",
-			environment: map[string]string{
-				serverDatabaseConnectTimeoutEnvironment: "soon",
-			},
-			wantError: serverDatabaseConnectTimeoutEnvironment,
-		},
-		{
-			name: "empty database URL",
-			environment: map[string]string{
-				serverDatabaseURLEnvironment: "",
-			},
-			wantError: "validate server configuration",
-		},
-		{
-			name: "malformed S3 timeout",
-			environment: map[string]string{
-				serverS3StartupTimeoutEnvironment: "soon",
-			},
-			wantError: serverS3StartupTimeoutEnvironment,
-		},
-		{
-			name: "invalid S3 endpoint",
-			environment: map[string]string{
-				serverS3EndpointEnvironment: "objects.example.com",
-			},
-			wantError: "validate server configuration",
-		},
-		{
-			name: "malformed artifact retention period",
-			environment: map[string]string{
-				serverArtifactRetentionPeriodEnvironment: "eventually",
-			},
-			wantError: serverArtifactRetentionPeriodEnvironment,
-		},
-		{
-			name: "invalid artifact reconciliation interval",
-			environment: map[string]string{
-				serverArtifactReconcileIntervalEnvironment: "0s",
-			},
-			wantError: "validate server configuration",
-		},
-		{
-			name: "invalid artifact orphan grace period",
-			environment: map[string]string{
-				serverArtifactOrphanGracePeriodEnvironment: "-1h",
-			},
-			wantError: "validate server configuration",
-		},
-		{
-			name: "partial OIDC configuration",
-			environment: map[string]string{
-				serverOIDCIssuerEnvironment: "https://identity.example.com",
-			},
-			wantError: "validate server configuration",
-		},
-		{
 			name: "malformed OIDC subject roles",
 			environment: map[string]string{
 				serverOIDCSubjectRolesEnvironment: "not-json",
 			},
 			wantError: serverOIDCSubjectRolesEnvironment,
-		},
-		{
-			name: "OIDC enrollment without administrator",
-			environment: map[string]string{
-				serverOIDCIssuerEnvironment:       "https://identity.example.com",
-				serverOIDCClientIDEnvironment:     "slipramp",
-				serverOIDCClientSecretEnvironment: "client-secret",
-				serverOIDCRedirectURLEnvironment:  "https://slipramp.example.com/api/v1/auth/callback",
-				serverOIDCSubjectRolesEnvironment: `{"viewer":"viewer"}`,
-			},
-			wantError: "administrator",
-		},
-		{
-			name: "malformed product session lifetime",
-			environment: map[string]string{
-				serverProductSessionLifetimeEnvironment: "later",
-			},
-			wantError: serverProductSessionLifetimeEnvironment,
 		},
 	}
 

@@ -48,7 +48,7 @@ type Dependencies struct {
 
 var _ api.StrictServerInterface = (*Handler)(nil)
 
-func New(dependencies Dependencies) *Handler {
+func newHandler(dependencies Dependencies) *Handler {
 	return &Handler{
 		clusters:     dependencies.Clusters,
 		identities:   dependencies.ControllerIdentities,

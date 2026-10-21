@@ -18,7 +18,7 @@ var pathParameterPattern = regexp.MustCompile(`\{[^/]+\}`)
 func TestHTTPRejectsUnsupportedMethodsForEveryOperationPath(t *testing.T) {
 	t.Parallel()
 
-	router := newHTTP(New(Dependencies{}), HTTPOptions{})
+	router := newHTTP(Dependencies{}, HTTPOptions{})
 	if len(router.allowedMethods) == 0 {
 		t.Fatal("generated router registered no operation paths")
 	}

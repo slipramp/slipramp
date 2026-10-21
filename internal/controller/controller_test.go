@@ -525,6 +525,7 @@ func newTestController(jobs runJobs, logs runLogReporter) *Controller {
 		retryDelay:     time.Millisecond,
 		observeEvery:   time.Millisecond,
 		heartbeatEvery: time.Hour,
+		now:            time.Now,
 		observedRuns:   make(map[uuid.UUID]*runObserver),
 	}
 }

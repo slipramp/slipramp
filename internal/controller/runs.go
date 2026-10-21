@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -124,126 +123,7 @@ func (c *Controller) observeRun(ctx context.Context, handle jobHandle, observer 
 		c.observers.Done()
 	}()
 
-	var cancellation *api.CancelRunCommand
-	var logStream *logSession
-	var completedLog *logStreamResult
-	var reported *runObservation
-	var reportedAt time.Time
-
-	for {
-		if cancellation == nil {
-			select {
-			case command := <-observer.cancellations:
-				cancellation = &command
-			default:
-			}
-		}
-		if cancellation != nil {
-			result, err := c.requestJobCancellation(ctx, *cancellation)
-			if err != nil {
-				return
-			}
-			if result.handle.uid != "" {
-				handle.uid = result.handle.uid
-			}
-			cancellation = nil
-			if !result.jobRetained {
-				c.finishUnstartedCancellation(ctx, handle)
-
-				return
-			}
-
-			continue
-		}
-
-		observation, err := c.jobs.Observe(ctx, handle)
-		if ctx.Err() != nil {
-			return
-		}
-		if err != nil {
-			c.logger.Warn(
-				"observe execution Job",
-				"run_id", handle.runID,
-				"error", err,
-			)
-		} else {
-			if observation.jobUID != nil {
-				handle.uid = *observation.jobUID
-			}
-
-			if observation.terminal() {
-				c.finishObservedRun(ctx, handle, observation, logStream, completedLog)
-
-				return
-			}
-
-			if completedLog != nil {
-				if completedLog.err != nil {
-					c.logger.Warn(
-						"stream Run log",
-						"run_id", handle.runID,
-						"error", completedLog.err,
-					)
-				}
-				completedLog = nil
-			}
-			if observation.phase == api.RunObservationPhaseRunning && logStream == nil {
-				logStream, err = c.startLogSession(ctx, handle, true)
-				if err != nil && !errors.Is(err, errLogNotReady) {
-					c.logger.Warn(
-						"open Run log stream",
-						"run_id", handle.runID,
-						"error", err,
-					)
-				}
-			}
-
-			if shouldReport(observation, reported, reportedAt, c.heartbeatEvery) {
-				reportErr := c.reports.ReportObservation(ctx, handle.runID, observationRequest(observation))
-				if ctx.Err() != nil {
-					return
-				}
-				if errors.Is(reportErr, errRunObservationRejected) {
-					c.logRunRejection(handle.runID, "report observation", reportErr)
-
-					return
-				}
-				if reportErr != nil {
-					c.logger.Warn(
-						"report Run observation",
-						"run_id", handle.runID,
-						"phase", observation.phase,
-						"error", reportErr,
-					)
-				} else {
-					copy := observation
-					reported = &copy
-					reportedAt = time.Now()
-				}
-			}
-		}
-
-		var logResult <-chan logStreamResult
-		if logStream != nil {
-			logResult = logStream.result
-		}
-
-		timer := time.NewTimer(c.observeEvery)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-
-			return
-		case command := <-observer.cancellations:
-			timer.Stop()
-			cancellation = &command
-		case result := <-logResult:
-			timer.Stop()
-			logStream = nil
-			completedLog = &result
-		case <-timer.C:
-		}
-	}
+	newRunObservationSession(c, handle, observer).run(ctx)
 }
 
 func (c *Controller) requestJobCancellation(
@@ -483,28 +363,4 @@ func observationRequest(observation runObservation) api.RunObservation {
 		Message:  observation.message,
 		ExitCode: observation.exitCode,
 	}
-}
-
-func shouldReport(
-	observation runObservation,
-	reported *runObservation,
-	reportedAt time.Time,
-	heartbeatEvery time.Duration,
-) bool {
-	return reported == nil || !sameObservation(observation, *reported) ||
-		time.Since(reportedAt) >= heartbeatEvery
-}
-
-func sameObservation(left, right runObservation) bool {
-	return left.phase == right.phase &&
-		equalPointers(left.outcome, right.outcome) &&
-		equalPointers(left.jobUID, right.jobUID) &&
-		equalPointers(left.reason, right.reason) &&
-		equalPointers(left.message, right.message) &&
-		equalPointers(left.exitCode, right.exitCode)
-}
-
-func equalPointers[T comparable](left, right *T) bool {
-	return left == nil && right == nil ||
-		left != nil && right != nil && *left == *right
 }

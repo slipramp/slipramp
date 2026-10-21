@@ -1,4 +1,4 @@
-package server
+package handler
 
 import (
 	"context"
@@ -9,8 +9,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/slipramp/slipramp/internal/api"
-	"github.com/slipramp/slipramp/internal/api/handler"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/readiness"
 )
@@ -18,12 +16,12 @@ import (
 // newAdminTestHandler supplies an administrator API key to product requests so
 // endpoint tests outside authentication can stay focused on their feature.
 func newAdminTestHandler(
-	clusters handler.ClusterService,
-	identities handler.ControllerIdentityService,
-	repositories handler.RepositoryService,
-	catalogs handler.CatalogService,
-	runs handler.RunService,
-	artifacts handler.ArtifactService,
+	clusters ClusterService,
+	identities ControllerIdentityService,
+	repositories RepositoryService,
+	catalogs CatalogService,
+	runs RunService,
+	artifacts ArtifactService,
 	controllerEnrollmentTokens map[string]string,
 ) http.Handler {
 	return newAdminTestHandlerWithLogger(
@@ -39,12 +37,12 @@ func newAdminTestHandler(
 }
 
 func newAdminTestHandlerWithLogger(
-	clusters handler.ClusterService,
-	identities handler.ControllerIdentityService,
-	repositories handler.RepositoryService,
-	catalogs handler.CatalogService,
-	runs handler.RunService,
-	artifacts handler.ArtifactService,
+	clusters ClusterService,
+	identities ControllerIdentityService,
+	repositories RepositoryService,
+	catalogs CatalogService,
+	runs RunService,
+	artifacts ArtifactService,
 	controllerEnrollmentTokens map[string]string,
 	logger *slog.Logger,
 ) http.Handler {
@@ -92,21 +90,19 @@ func newAdminTestHandlerWithLogger(
 }
 
 func newHTTPHandler(
-	clusters handler.ClusterService,
-	identities handler.ControllerIdentityService,
-	repositories handler.RepositoryService,
-	catalogs handler.CatalogService,
-	runs handler.RunService,
-	artifacts handler.ArtifactService,
-	readinessService handler.ReadinessService,
+	clusters ClusterService,
+	identities ControllerIdentityService,
+	repositories RepositoryService,
+	catalogs CatalogService,
+	runs RunService,
+	artifacts ArtifactService,
+	readinessService ReadinessService,
 	controllerEnrollmentTokens map[string]string,
-	productAuthentication handler.ProductAuthenticationService,
+	productAuthentication ProductAuthenticationService,
 	logger *slog.Logger,
 ) http.Handler {
-	controllerAuthenticator := newControllerAuthenticator(identities, controllerEnrollmentTokens)
-
-	return handler.NewHTTP(
-		handler.New(handler.Dependencies{
+	return NewHTTP(
+		Dependencies{
 			Clusters:              clusters,
 			ControllerIdentities:  identities,
 			Repositories:          repositories,
@@ -115,13 +111,10 @@ func newHTTPHandler(
 			Artifacts:             artifacts,
 			Readiness:             readinessService,
 			ProductAuthentication: productAuthentication,
-		}),
-		handler.HTTPOptions{
-			Middlewares: []api.StrictMiddlewareFunc{
-				handler.ControllerAuthentication(controllerAuthenticator),
-				handler.ProductAuthentication(newProductAuthenticator(productAuthentication)),
-			},
-			Logger: logger,
+		},
+		HTTPOptions{
+			ControllerEnrollmentTokens: controllerEnrollmentTokens,
+			Logger:                     logger,
 		},
 	)
 }
