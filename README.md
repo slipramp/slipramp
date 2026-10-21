@@ -357,10 +357,32 @@ fixes the replica count at one. Git and execution Secrets stay in that Cluster.
 Both charts use explicit non-`latest` image tags and expose resources, security
 contexts, image pull Secrets, and focused scheduling settings.
 
+Version tags publish matching application images and both charts to GHCR. OCI
+installs pin the chart version; Helm infers the chart name from the final path
+component and does not use `helm repo add` or an `index.yaml`.
+
 ```console
 task charts:check
-helm upgrade --install slipramp deploy/charts/slipramp --namespace slipramp-system --create-namespace --values server-values.yaml
-helm upgrade --install slipramp-controller deploy/charts/slipramp-controller --namespace slipramp-system --values controller-values.yaml
+helm upgrade --install slipramp oci://ghcr.io/slipramp/slipramp-charts/slipramp --version 0.1.0 --namespace slipramp-system --create-namespace --values server-values.yaml
+helm upgrade --install slipramp-controller oci://ghcr.io/slipramp/slipramp-charts/slipramp-controller --version 0.1.0 --namespace slipramp-system --values controller-values.yaml
+```
+
+Source checkouts remain installable from `deploy/charts/slipramp` and
+`deploy/charts/slipramp-controller`. GHCR creates new container packages as
+private by default. After the first release, a maintainer must verify that the
+five image packages and two chart packages are public for anonymous installs.
+Private packages require `helm registry login ghcr.io` and matching Kubernetes
+image pull credentials.
+
+To publish a release, update both charts' `version` and `appVersion` fields and
+every default image tag to the same version, then run the package check and
+push the matching Git tag. The release workflow publishes the five images
+first and only pushes the two OCI charts after every image succeeds.
+
+```console
+task charts:package CHART_VERSION=0.1.0
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
 ```
 
 ## Development
@@ -379,6 +401,7 @@ task deps
 task local:up
 task generate
 task charts:check
+task charts:package CHART_VERSION=0.1.0
 task check
 task integration
 task acceptance:kind

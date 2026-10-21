@@ -22,13 +22,13 @@ fail() {
 assert_contains() {
   local file=$1
   local pattern=$2
-  rg -q -- "$pattern" "$file" || fail "$file does not contain $pattern"
+  grep -Eq -- "$pattern" "$file" || fail "$file does not contain $pattern"
 }
 
 assert_not_contains() {
   local file=$1
   local pattern=$2
-  if rg -q -- "$pattern" "$file"; then
+  if grep -Eq -- "$pattern" "$file"; then
     fail "$file unexpectedly contains $pattern"
   fi
 }
@@ -43,6 +43,21 @@ assert_render_fails() {
 
 "$helm_bin" lint "$server_chart" --values "$testdata/slipramp-required.yaml"
 "$helm_bin" lint "$controller_chart" --values "$testdata/controller-required.yaml"
+
+chart_version=$(
+  "$helm_bin" show chart "$server_chart" |
+    awk '$1 == "version:" { gsub(/^"|"$/, "", $2); print $2; exit }'
+)
+package_directory="$test_directory/packages"
+SLIPRAMP_HELM_BIN="$helm_bin" \
+  "$repository_root/scripts/package-charts.sh" "$chart_version" "$package_directory"
+test -f "$package_directory/slipramp-$chart_version.tgz" || fail "Server chart was not packaged"
+test -f "$package_directory/slipramp-controller-$chart_version.tgz" || fail "Controller chart was not packaged"
+if SLIPRAMP_HELM_BIN="$helm_bin" \
+  "$repository_root/scripts/package-charts.sh" 999.0.0 "$test_directory/invalid-packages" \
+  >"$test_directory/invalid-package.out" 2>&1; then
+  fail "Mismatched release version packaged successfully"
+fi
 
 server_render="$test_directory/server.yaml"
 server_repeat="$test_directory/server-repeat.yaml"
@@ -62,13 +77,13 @@ assert_contains "$server_render" 'path: /readyz'
 assert_contains "$server_render" 'timeoutSeconds: 3'
 assert_not_contains "$server_render" '^kind: (ClusterRole|Role|RoleBinding|ServiceAccount)$'
 
-checksum_default=$(rg 'checksum/placements:' "$server_render" | awk '{print $2}')
+checksum_default=$(grep -E 'checksum/placements:' "$server_render" | awk '{print $2}')
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
   --values "$testdata/slipramp-required.yaml" \
   --set-string server.placements.primary.jobNamespace=other-runs \
   >"$test_directory/server-placement.yaml"
-checksum_changed=$(rg 'checksum/placements:' "$test_directory/server-placement.yaml" | awk '{print $2}')
+checksum_changed=$(grep -E 'checksum/placements:' "$test_directory/server-placement.yaml" | awk '{print $2}')
 test "$checksum_default" != "$checksum_changed" || fail "Placement change did not change the rollout checksum"
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
@@ -106,8 +121,8 @@ controller_repeat="$test_directory/controller-repeat.yaml"
   >"$controller_repeat"
 cmp -s "$controller_render" "$controller_repeat" || fail "Controller chart rendering is not deterministic"
 
-test "$(rg -c '^kind: Role$' "$controller_render")" = 2 || fail "Controller chart did not create one Role per execution namespace"
-test "$(rg -c '^kind: RoleBinding$' "$controller_render")" = 2 || fail "Controller chart did not create one RoleBinding per execution namespace"
+test "$(grep -Ec '^kind: Role$' "$controller_render")" = 2 || fail "Controller chart did not create one Role per execution namespace"
+test "$(grep -Ec '^kind: RoleBinding$' "$controller_render")" = 2 || fail "Controller chart did not create one RoleBinding per execution namespace"
 assert_not_contains "$controller_render" '^kind: ClusterRole'
 assert_not_contains "$controller_render" '^kind: Secret$'
 assert_contains "$controller_render" '^  replicas: 1$'

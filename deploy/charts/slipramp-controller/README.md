@@ -49,9 +49,17 @@ them to a release tag or an immutable registry tag appropriate for the
 installation. The checkout image must contain `/bin/sh`, Git, and SSH; the
 Harness image entrypoint must be `slipramp-harness`.
 
+Released chart versions are published as OCI artifacts in GHCR. Pin the chart
+version explicitly; the same release version is the default Controller,
+checkout, and Harness image tag.
+
 ```console
 helm upgrade --install slipramp-controller \
-  deploy/charts/slipramp-controller \
+  oci://ghcr.io/slipramp/slipramp-charts/slipramp-controller \
+  --version 0.1.0 \
   --namespace slipramp-system --create-namespace \
   --values cluster-values.yaml
 ```
+
+For development from a source checkout, replace the OCI reference and
+`--version` with `deploy/charts/slipramp-controller`.

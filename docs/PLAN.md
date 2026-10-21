@@ -259,7 +259,10 @@ non-floating images, focused scheduling and security settings, schema
 validation, and optional explicit chart-managed Secrets for disposable uses.
 The central chart offers a minimal single-host Ingress without bundling a
 database or object store. Server, web, and Controller high availability remain
-later work.
+later work. A `vX.Y.Z` Git tag publishes the matching application images and
+both versioned charts to GHCR as OCI artifacts. Release validation requires the
+tag, chart versions, application versions, and default image tags to agree and
+never publishes a floating `latest` tag.
 
 ## Technology Stack
 

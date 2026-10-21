@@ -64,8 +64,17 @@ checks at two seconds. PostgreSQL and S3 Secret changes require an explicit
 Server rollout. The chart fixes Server and web replicas at one and does not
 claim high-availability support.
 
+Released chart versions are published as OCI artifacts in GHCR. Pin the chart
+version explicitly; the same release version is the default Server and web
+image tag.
+
 ```console
-helm upgrade --install slipramp deploy/charts/slipramp \
+helm upgrade --install slipramp \
+  oci://ghcr.io/slipramp/slipramp-charts/slipramp \
+  --version 0.1.0 \
   --namespace slipramp-system --create-namespace \
   --values production-values.yaml
 ```
+
+For development from a source checkout, replace the OCI reference and
+`--version` with `deploy/charts/slipramp`.

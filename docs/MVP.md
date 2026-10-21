@@ -294,6 +294,7 @@ The repository provides a single set of commands used by developers and CI:
   disposable kind acceptance environment
 - Helm chart linting, schema validation, deterministic rendering checks, and
   focused positive and negative render tests
+- Release-version validation and OCI packaging for both supported charts
 
 Warnings fail CI. Tool versions are pinned, generated files are reproducible, migrations are tested in both directions where practical, and changed code is expected to include proportionate tests.
 
@@ -315,7 +316,8 @@ The accepted MVP baseline can:
 12. Pass all formatting, linting, type checking, unit, integration, and build checks.
 13. Install the Server, web process, and one Controller through supported Helm
     charts without giving the Server Kubernetes access or bundling production
-    data services.
+    data services, with versioned release charts and matching images published
+    to GHCR from a single release tag.
 
 ## Ongoing Work Beyond the MVP
 

@@ -39,7 +39,7 @@ tasks:
       - test -x "{{.GOLANGCI_LINT}}"
       - test "$("{{.GOLANGCI_LINT}}" version --short)" = "{{trimPrefix "v" .GOLANGCI_LINT_VERSION}}"
       - test -x "{{.OAPI_CODEGEN}}"
-      - '"{{.OAPI_CODEGEN}}" -version | rg -q "^{{.OAPI_CODEGEN_VERSION}}$"'
+      - '"{{.OAPI_CODEGEN}}" -version | grep -Eq "^{{.OAPI_CODEGEN_VERSION}}$"'
       - test -x "{{.SQLC}}"
       - test "$("{{.SQLC}}" version)" = "{{.SQLC_VERSION}}"
 
@@ -64,10 +64,10 @@ tasks:
       - GOBIN="{{.ROOT_DIR}}/.bin" go install sigs.k8s.io/kind@{{.KIND_VERSION}}
     status:
       - test -x "{{.KIND}}"
-      - '"{{.KIND}}" version | rg -q "^kind {{.KIND_VERSION}} "'
+      - '"{{.KIND}}" version | grep -Eq "^kind {{.KIND_VERSION}} "'
 
   deps:helm:
-    internal: true
+    desc: Install the pinned Helm release
     cmds:
       - mkdir -p "{{.ROOT_DIR}}/.bin"
       - GOBIN="{{.ROOT_DIR}}/.bin" go install helm.sh/helm/v3/cmd/helm@{{.HELM_VERSION}}
@@ -172,6 +172,16 @@ tasks:
       SLIPRAMP_HELM_BIN: "{{.HELM}}"
     cmds:
       - ./scripts/check-charts.sh
+
+  charts:package:
+    desc: Package both Helm charts for an OCI release
+    deps: [charts:check]
+    requires:
+      vars: [CHART_VERSION]
+    env:
+      SLIPRAMP_HELM_BIN: "{{.HELM}}"
+    cmds:
+      - ./scripts/package-charts.sh "{{.CHART_VERSION}}" "{{.ROOT_DIR}}/dist/charts"
 
   acceptance:kind:
     desc: Run the MVP acceptance suite in a disposable kind cluster
