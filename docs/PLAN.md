@@ -4,6 +4,9 @@ The accepted first implementation baseline is recorded in [MVP.md](./MVP.md).
 Slipramp now evolves incrementally from that baseline; this document continues
 to describe the product and architecture direction.
 
+The focused design and delivery plan for the optional Kargo promotion-review
+vertical is recorded in [KARGO_PROMOTIONS.md](./KARGO_PROMOTIONS.md).
+
 ## Vision
 
 Slipramp is a GitOps-driven infrastructure control plane for homelabs and small teams. A user connects a Git repository and gets a catalog of targets and actions defined by YAML in that repository.
