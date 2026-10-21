@@ -20,12 +20,7 @@ type OIDCProfile struct {
 
 type OIDCProvider interface {
 	AuthorizationURL(state, nonce, codeVerifier string) string
-	Authenticate(
-		ctx context.Context,
-		code string,
-		codeVerifier string,
-		expectedNonce string,
-	) (OIDCProfile, error)
+	Authenticate(ctx context.Context, code string, codeVerifier string, expectedNonce string) (OIDCProfile, error)
 }
 
 type discoveredOIDCProvider struct {
@@ -34,10 +29,7 @@ type discoveredOIDCProvider struct {
 	verifier    *oidc.IDTokenVerifier
 }
 
-func DiscoverOIDCProvider(
-	ctx context.Context,
-	cfg OIDCConfig,
-) (OIDCProvider, error) {
+func DiscoverOIDCProvider(ctx context.Context, cfg OIDCConfig) (OIDCProvider, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -60,11 +52,7 @@ func DiscoverOIDCProvider(
 	}, nil
 }
 
-func (p *discoveredOIDCProvider) AuthorizationURL(
-	state string,
-	nonce string,
-	codeVerifier string,
-) string {
+func (p *discoveredOIDCProvider) AuthorizationURL(state string, nonce string, codeVerifier string) string {
 	return p.oauthConfig.AuthCodeURL(
 		state,
 		oidc.Nonce(nonce),
@@ -79,18 +67,10 @@ func (p *discoveredOIDCProvider) Authenticate(
 	codeVerifier string,
 	expectedNonce string,
 ) (OIDCProfile, error) {
-	token, err := p.oauthConfig.Exchange(
-		ctx,
-		code,
-		oauth2.VerifierOption(codeVerifier),
-	)
+	token, err := p.oauthConfig.Exchange(ctx, code, oauth2.VerifierOption(codeVerifier))
 	if err != nil {
 		if _, ok := errors.AsType[*oauth2.RetrieveError](err); ok {
-			return OIDCProfile{}, fmt.Errorf(
-				"%w: exchange authorization code: %w",
-				ErrInvalidLogin,
-				err,
-			)
+			return OIDCProfile{}, fmt.Errorf("%w: exchange authorization code: %w", ErrInvalidLogin, err)
 		}
 
 		return OIDCProfile{}, fmt.Errorf("exchange OIDC authorization code: %w", err)

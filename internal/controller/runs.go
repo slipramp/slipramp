@@ -10,10 +10,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 )
 
-func (c *Controller) handleAssignment(
-	ctx context.Context,
-	assignment api.RunAssignment,
-) error {
+func (c *Controller) handleAssignment(ctx context.Context, assignment api.RunAssignment) error {
 	ensured, err := c.jobs.Ensure(ctx, assignment)
 	if err != nil {
 		c.logger.Warn(
@@ -66,10 +63,7 @@ func (c *Controller) handleAssignment(
 	return nil
 }
 
-func (c *Controller) handleCancellation(
-	ctx context.Context,
-	command api.CancelRunCommand,
-) error {
+func (c *Controller) handleCancellation(ctx context.Context, command api.CancelRunCommand) error {
 	handle := jobHandle{
 		runID:     command.ID,
 		namespace: string(command.JobNamespace),
@@ -119,11 +113,7 @@ func (c *Controller) startRunObserver(
 	return observer
 }
 
-func (c *Controller) observeRun(
-	ctx context.Context,
-	handle jobHandle,
-	observer *runObserver,
-) {
+func (c *Controller) observeRun(ctx context.Context, handle jobHandle, observer *runObserver) {
 	defer func() {
 		c.observerMutex.Lock()
 		if c.observedRuns[handle.runID] == observer {
@@ -209,11 +199,7 @@ func (c *Controller) observeRun(
 			}
 
 			if shouldReport(observation, reported, reportedAt, c.heartbeatEvery) {
-				reportErr := c.reports.ReportObservation(
-					ctx,
-					handle.runID,
-					observationRequest(observation),
-				)
+				reportErr := c.reports.ReportObservation(ctx, handle.runID, observationRequest(observation))
 				if ctx.Err() != nil {
 					return
 				}
@@ -284,10 +270,7 @@ func (c *Controller) requestJobCancellation(
 	}
 }
 
-func (c *Controller) finishUnstartedCancellation(
-	ctx context.Context,
-	handle jobHandle,
-) {
+func (c *Controller) finishUnstartedCancellation(ctx context.Context, handle jobHandle) {
 	summary, err := c.emptyOrSealedLog(ctx, handle.runID)
 	if err != nil {
 		if isUnknownRunRejection(err) {
@@ -417,10 +400,7 @@ func (c *Controller) completeRunLog(
 	return waitForLog(ctx, logStream)
 }
 
-func (c *Controller) emptyOrSealedLog(
-	ctx context.Context,
-	runID uuid.UUID,
-) (logSummary, error) {
+func (c *Controller) emptyOrSealedLog(ctx context.Context, runID uuid.UUID) (logSummary, error) {
 	cursor, err := c.getLogCursor(ctx, runID)
 	if err != nil {
 		return logSummary{}, err
@@ -433,9 +413,7 @@ func (c *Controller) emptyOrSealedLog(
 		}, nil
 	}
 	if cursor.nextOffsetBytes != 0 {
-		return logSummary{}, errors.New(
-			"cannot finalize a nonempty Run log after its Kubernetes source disappeared",
-		)
+		return logSummary{}, errors.New("cannot finalize a nonempty Run log after its Kubernetes source disappeared")
 	}
 
 	return emptyLogSummary(), nil
@@ -450,11 +428,7 @@ func waitForLog(ctx context.Context, session *logSession) (logSummary, error) {
 	}
 }
 
-func (c *Controller) reportTerminalObservation(
-	ctx context.Context,
-	runID uuid.UUID,
-	observation runObservation,
-) bool {
+func (c *Controller) reportTerminalObservation(ctx context.Context, runID uuid.UUID, observation runObservation) bool {
 	for {
 		err := c.reports.ReportObservation(ctx, runID, observationRequest(observation))
 		if err == nil {
@@ -480,11 +454,7 @@ func (c *Controller) reportTerminalObservation(
 	}
 }
 
-func (c *Controller) logRunRejection(
-	runID uuid.UUID,
-	operation string,
-	err error,
-) {
+func (c *Controller) logRunRejection(runID uuid.UUID, operation string, err error) {
 	c.logger.Warn(
 		"stop observing Run rejected by Server",
 		"run_id", runID,

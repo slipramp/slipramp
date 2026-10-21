@@ -19,51 +19,27 @@ func TestDefaultConfig(t *testing.T) {
 	}
 
 	if settings.ShutdownTimeout != 10*time.Second {
-		t.Errorf(
-			"ShutdownTimeout = %s, want %s",
-			settings.ShutdownTimeout,
-			10*time.Second,
-		)
+		t.Errorf("ShutdownTimeout = %s, want %s", settings.ShutdownTimeout, 10*time.Second)
 	}
 
 	if settings.RepositoryRefreshInterval != time.Minute {
-		t.Errorf(
-			"RepositoryRefreshInterval = %s, want %s",
-			settings.RepositoryRefreshInterval,
-			time.Minute,
-		)
+		t.Errorf("RepositoryRefreshInterval = %s, want %s", settings.RepositoryRefreshInterval, time.Minute)
 	}
 
 	if settings.RepositoryFetchTimeout != 30*time.Second {
-		t.Errorf(
-			"RepositoryFetchTimeout = %s, want %s",
-			settings.RepositoryFetchTimeout,
-			30*time.Second,
-		)
+		t.Errorf("RepositoryFetchTimeout = %s, want %s", settings.RepositoryFetchTimeout, 30*time.Second)
 	}
 
 	if settings.ArtifactRetentionPeriod != 30*24*time.Hour {
-		t.Errorf(
-			"ArtifactRetentionPeriod = %s, want %s",
-			settings.ArtifactRetentionPeriod,
-			30*24*time.Hour,
-		)
+		t.Errorf("ArtifactRetentionPeriod = %s, want %s", settings.ArtifactRetentionPeriod, 30*24*time.Hour)
 	}
 
 	if settings.ArtifactReconcileInterval != time.Hour {
-		t.Errorf(
-			"ArtifactReconcileInterval = %s, want %s",
-			settings.ArtifactReconcileInterval,
-			time.Hour,
-		)
+		t.Errorf("ArtifactReconcileInterval = %s, want %s", settings.ArtifactReconcileInterval, time.Hour)
 	}
 
 	if settings.ArtifactOrphanGracePeriod != 24*time.Hour {
-		t.Errorf(
-			"ArtifactOrphanGracePeriod = %s, want %s",
-			settings.ArtifactOrphanGracePeriod,
-			24*time.Hour,
-		)
+		t.Errorf("ArtifactOrphanGracePeriod = %s, want %s", settings.ArtifactOrphanGracePeriod, 24*time.Hour)
 	}
 
 	if settings.ProductAuthentication.SessionLifetime != 12*time.Hour {

@@ -145,7 +145,7 @@ delete the deterministic Job with identity and UID checks. An unstarted Job is
 deleted before the empty canceled Run is reported. Repeated delivery and an
 already-missing Job are safe.
 
-[`examples/kcloud-ops`](./examples/kcloud-ops) contains a larger catalog
+[`examples/infrastructure-ops`](./examples/infrastructure-ops) contains a larger catalog
 example with a pyinfra deployment and a Terraform stack, including runtime
 credentials, placement configuration, a canary action, and a saved-plan
 artifact flow.

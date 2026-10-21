@@ -55,17 +55,11 @@ func (c Config) Validate() error {
 		return fmt.Errorf("branch: %w", err)
 	}
 
-	if err := validateCredential(
-		"refresh credential name",
-		c.RefreshCredentialName,
-	); err != nil {
+	if err := validateCredential("refresh credential name", c.RefreshCredentialName); err != nil {
 		return err
 	}
 
-	if err := validateCredential(
-		"checkout credential name",
-		c.CheckoutCredentialName,
-	); err != nil {
+	if err := validateCredential("checkout credential name", c.CheckoutCredentialName); err != nil {
 		return err
 	}
 

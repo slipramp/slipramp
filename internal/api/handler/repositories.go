@@ -12,10 +12,7 @@ import (
 )
 
 type RepositoryService interface {
-	CreateRepository(
-		ctx context.Context,
-		cfg repository.Config,
-	) (repository.Repository, error)
+	CreateRepository(ctx context.Context, cfg repository.Config) (repository.Repository, error)
 	ListRepositories(ctx context.Context) ([]repository.Repository, error)
 	RemoveRepository(ctx context.Context, repositoryID uuid.UUID) error
 }
@@ -57,10 +54,7 @@ func (h *Handler) CreateRepository(
 
 			return api.CreateRepository400ApplicationProblemPlusJSONResponse(problem), nil
 		case errors.Is(err, repository.ErrNameConflict):
-			problem := NewProblem(
-				http.StatusConflict,
-				"An active repository already uses that name.",
-			)
+			problem := NewProblem(http.StatusConflict, "An active repository already uses that name.")
 
 			return api.CreateRepository409ApplicationProblemPlusJSONResponse(problem), nil
 		default:
@@ -84,10 +78,7 @@ func (h *Handler) RemoveRepository(
 ) (api.RemoveRepositoryResponseObject, error) {
 	err := h.repositories.RemoveRepository(ctx, request.RepositoryID)
 	if errors.Is(err, repository.ErrNotFound) {
-		problem := NewProblem(
-			http.StatusNotFound,
-			"The active repository does not exist.",
-		)
+		problem := NewProblem(http.StatusNotFound, "The active repository does not exist.")
 
 		return api.RemoveRepository404ApplicationProblemPlusJSONResponse(problem), nil
 	}

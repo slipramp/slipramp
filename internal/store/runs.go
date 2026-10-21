@@ -21,10 +21,7 @@ import (
 
 var _ run.Store = (*Database)(nil)
 
-func (d *Database) GetRun(
-	ctx context.Context,
-	runID uuid.UUID,
-) (run.Run, error) {
+func (d *Database) GetRun(ctx context.Context, runID uuid.UUID) (run.Run, error) {
 	row, err := d.queries.GetRun(ctx, databaseUUID(runID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return run.Run{}, run.ErrRunNotFound
@@ -41,10 +38,7 @@ func (d *Database) GetRun(
 	return record, nil
 }
 
-func (d *Database) ListRuns(
-	ctx context.Context,
-	filter run.ListFilter,
-) ([]run.Run, error) {
+func (d *Database) ListRuns(ctx context.Context, filter run.ListFilter) ([]run.Run, error) {
 	var repositoryID pgtype.UUID
 	if filter.RepositoryID != nil {
 		repositoryID = databaseUUID(*filter.RepositoryID)
@@ -80,10 +74,7 @@ func (d *Database) ListRuns(
 	return records, nil
 }
 
-func (d *Database) GetArtifactInputCandidate(
-	ctx context.Context,
-	artifactID uuid.UUID,
-) (run.ArtifactInput, error) {
+func (d *Database) GetArtifactInputCandidate(ctx context.Context, artifactID uuid.UUID) (run.ArtifactInput, error) {
 	row, err := d.queries.GetArtifactInputCandidate(ctx, databaseUUID(artifactID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return run.ArtifactInput{}, run.ErrArtifactNotFound
@@ -92,10 +83,7 @@ func (d *Database) GetArtifactInputCandidate(
 		return run.ArtifactInput{}, fmt.Errorf("get artifact input candidate: %w", err)
 	}
 	if row.State != "sealed" || row.Sha256 == nil {
-		return run.ArtifactInput{}, fmt.Errorf(
-			"%w: artifact is not sealed",
-			run.ErrInvalidInputs,
-		)
+		return run.ArtifactInput{}, fmt.Errorf("%w: artifact is not sealed", run.ErrInvalidInputs)
 	}
 
 	return run.ArtifactInput{
@@ -144,10 +132,7 @@ func (d *Database) GetRunByIdempotencyKey(
 	return record, nil
 }
 
-func (d *Database) CreateRun(
-	ctx context.Context,
-	record run.Run,
-) (run.Run, error) {
+func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, error) {
 	parameters, err := json.Marshal(record.Parameters)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("marshal run parameters: %w", err)
@@ -198,12 +183,7 @@ func (d *Database) CreateRun(
 		},
 	)
 	if errors.Is(err, pgx.ErrNoRows) && record.IdempotencyKey != nil {
-		return existingIdempotentRun(
-			ctx,
-			queries,
-			transaction,
-			record,
-		)
+		return existingIdempotentRun(ctx, queries, transaction, record)
 	}
 	if err != nil {
 		return run.Run{}, fmt.Errorf("insert run: %w", err)
@@ -329,10 +309,7 @@ func (d *Database) CancelRun(
 	return commitCancelResult(ctx, transaction, updated)
 }
 
-func (d *Database) GetRunToCancelForCluster(
-	ctx context.Context,
-	clusterName string,
-) (run.Run, error) {
+func (d *Database) GetRunToCancelForCluster(ctx context.Context, clusterName string) (run.Run, error) {
 	row, err := d.queries.GetRunToCancelForCluster(ctx, clusterName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return run.Run{}, run.ErrNoRunToCancel
@@ -349,10 +326,7 @@ func (d *Database) GetRunToCancelForCluster(
 	return record, nil
 }
 
-func (d *Database) GetAssignedRunForCluster(
-	ctx context.Context,
-	clusterName string,
-) (run.Run, error) {
+func (d *Database) GetAssignedRunForCluster(ctx context.Context, clusterName string) (run.Run, error) {
 	row, err := d.queries.GetAssignedRunForCluster(ctx, clusterName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return run.Run{}, run.ErrNoRunAssignment
@@ -369,11 +343,7 @@ func (d *Database) GetAssignedRunForCluster(
 	return record, nil
 }
 
-func (d *Database) ClaimQueuedRun(
-	ctx context.Context,
-	clusterName string,
-	claimedAt time.Time,
-) (run.Run, error) {
+func (d *Database) ClaimQueuedRun(ctx context.Context, clusterName string, claimedAt time.Time) (run.Run, error) {
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("begin Run claim transaction: %w", err)
@@ -452,10 +422,7 @@ func (d *Database) ApplyRunObservation(
 	if !slices.Contains(allowedCurrentPhases, currentPhase) ||
 		!sameJob(current.JobUid, observation.JobUID) ||
 		!sameFinishedOutcome(currentPhase, current.Outcome, observation.Outcome) ||
-		!validCanceledObservation(
-			current.CancellationRequestedAt.Valid,
-			observation.Outcome,
-		) {
+		!validCanceledObservation(current.CancellationRequestedAt.Valid, observation.Outcome) {
 		return run.ErrObservationConflict
 	}
 
@@ -501,11 +468,7 @@ func (d *Database) ApplyRunObservation(
 	return nil
 }
 
-func commitCancelResult(
-	ctx context.Context,
-	transaction pgx.Tx,
-	row storedb.Run,
-) (run.Run, error) {
+func commitCancelResult(ctx context.Context, transaction pgx.Tx, row storedb.Run) (run.Run, error) {
 	if err := transaction.Commit(ctx); err != nil {
 		return run.Run{}, fmt.Errorf("commit cancel Run transaction: %w", err)
 	}
@@ -522,11 +485,7 @@ func sameJob(current, observed *string) bool {
 	return current == nil || observed != nil && *current == *observed
 }
 
-func sameFinishedOutcome(
-	currentPhase run.Phase,
-	currentOutcome *string,
-	observedOutcome *run.Outcome,
-) bool {
+func sameFinishedOutcome(currentPhase run.Phase, currentOutcome *string, observedOutcome *run.Outcome) bool {
 	if currentPhase != run.PhaseFinished {
 		return true
 	}
@@ -535,10 +494,7 @@ func sameFinishedOutcome(
 		*currentOutcome == string(*observedOutcome)
 }
 
-func validCanceledObservation(
-	cancellationRequested bool,
-	observedOutcome *run.Outcome,
-) bool {
+func validCanceledObservation(cancellationRequested bool, observedOutcome *run.Outcome) bool {
 	return observedOutcome == nil || *observedOutcome != run.OutcomeCanceled ||
 		cancellationRequested
 }
@@ -615,42 +571,38 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 	}
 
 	return run.Run{
-		ID:                uuid.UUID(row.ID.Bytes),
-		Phase:             run.Phase(row.Phase),
-		Outcome:           runOutcome(row.Outcome),
-		RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
-		CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
-		CommitSHA:         row.CommitSha,
-		TargetName:        row.TargetName,
-		ActionName:        row.ActionName,
-		Parameters:        parameters,
-		PlacementName:     row.PlacementName,
-		ClusterName:       row.ClusterName,
-		Source:            run.Source{Type: run.SourceType(row.SourceType)},
-		IdempotencyKey:    row.IdempotencyKey,
-		RequestDigest:     row.RequestDigest,
-		Snapshot:          snapshot,
-		CreatedBy:         createdBy,
-		CanceledBy:        canceledBy,
-		CreatedAt:         row.CreatedAt.Time.UTC(),
-		AssignedAt:        applicationTime(row.AssignedAt),
-		PreparingAt:       applicationTime(row.PreparingAt),
-		StartedAt:         applicationTime(row.StartedAt),
-		FinishedAt:        applicationTime(row.FinishedAt),
-		LastObservedAt:    applicationTime(row.LastObservedAt),
-		CancellationRequestedAt: applicationTime(
-			row.CancellationRequestedAt,
-		),
-		JobUID:         row.JobUid,
-		OutcomeReason:  row.OutcomeReason,
-		OutcomeMessage: row.OutcomeMessage,
-		ExitCode:       row.ExitCode,
+		ID:                      uuid.UUID(row.ID.Bytes),
+		Phase:                   run.Phase(row.Phase),
+		Outcome:                 runOutcome(row.Outcome),
+		RepositoryID:            uuid.UUID(row.RepositoryID.Bytes),
+		CatalogRevisionID:       uuid.UUID(row.CatalogRevisionID.Bytes),
+		CommitSHA:               row.CommitSha,
+		TargetName:              row.TargetName,
+		ActionName:              row.ActionName,
+		Parameters:              parameters,
+		PlacementName:           row.PlacementName,
+		ClusterName:             row.ClusterName,
+		Source:                  run.Source{Type: run.SourceType(row.SourceType)},
+		IdempotencyKey:          row.IdempotencyKey,
+		RequestDigest:           row.RequestDigest,
+		Snapshot:                snapshot,
+		CreatedBy:               createdBy,
+		CanceledBy:              canceledBy,
+		CreatedAt:               row.CreatedAt.Time.UTC(),
+		AssignedAt:              applicationTime(row.AssignedAt),
+		PreparingAt:             applicationTime(row.PreparingAt),
+		StartedAt:               applicationTime(row.StartedAt),
+		FinishedAt:              applicationTime(row.FinishedAt),
+		LastObservedAt:          applicationTime(row.LastObservedAt),
+		CancellationRequestedAt: applicationTime(row.CancellationRequestedAt),
+		JobUID:                  row.JobUid,
+		OutcomeReason:           row.OutcomeReason,
+		OutcomeMessage:          row.OutcomeMessage,
+		ExitCode:                row.ExitCode,
 	}, nil
 }
 
-func actorDatabaseFields(
-	actor *productidentity.ActorSnapshot,
-) (pgtype.UUID, []byte, error) {
+func actorDatabaseFields(actor *productidentity.ActorSnapshot) (pgtype.UUID, []byte, error) {
 	if actor == nil {
 		return pgtype.UUID{}, nil, nil
 	}
@@ -674,10 +626,7 @@ func actorDatabasePrincipalID(actor *productidentity.ActorSnapshot) pgtype.UUID 
 	return databaseUUID(actor.PrincipalID)
 }
 
-func actorFromDatabase(
-	principalID pgtype.UUID,
-	encoded []byte,
-) (*productidentity.ActorSnapshot, error) {
+func actorFromDatabase(principalID pgtype.UUID, encoded []byte) (*productidentity.ActorSnapshot, error) {
 	if !principalID.Valid && encoded == nil {
 		return nil, nil
 	}

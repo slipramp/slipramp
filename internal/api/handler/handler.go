@@ -10,15 +10,8 @@ import (
 )
 
 type ControllerIdentityService interface {
-	EnrollController(
-		ctx context.Context,
-		clusterName string,
-		credentialSHA256 string,
-	) error
-	AuthenticateController(
-		ctx context.Context,
-		bearerToken string,
-	) (controlleridentity.Principal, error)
+	EnrollController(ctx context.Context, clusterName string, credentialSHA256 string) error
+	AuthenticateController(ctx context.Context, bearerToken string) (controlleridentity.Principal, error)
 }
 
 type Handler struct {

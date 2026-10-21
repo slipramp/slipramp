@@ -11,10 +11,7 @@ import (
 // are returned again until the controller reports that the Job was
 // materialized, making a lost HTTP response safe to retry with the same
 // deterministic Run identity.
-func (s *Service) NextRunAssignment(
-	ctx context.Context,
-	clusterName string,
-) (Run, error) {
+func (s *Service) NextRunAssignment(ctx context.Context, clusterName string) (Run, error) {
 	if strings.TrimSpace(clusterName) == "" {
 		return Run{}, fmt.Errorf("%w: cluster name is required", ErrInvalidRequest)
 	}
@@ -27,11 +24,7 @@ func (s *Service) NextRunAssignment(
 		return Run{}, fmt.Errorf("get assigned run: %w", err)
 	}
 
-	assigned, err = s.runs.ClaimQueuedRun(
-		ctx,
-		clusterName,
-		s.now().UTC(),
-	)
+	assigned, err = s.runs.ClaimQueuedRun(ctx, clusterName, s.now().UTC())
 	if err != nil {
 		if errors.Is(err, ErrNoRunAssignment) {
 			return Run{}, ErrNoRunAssignment

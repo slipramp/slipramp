@@ -60,10 +60,7 @@ type browserSessionStore interface {
 		productidentity.Principal,
 		productidentity.OIDCIdentity,
 	) (productidentity.Principal, productidentity.OIDCIdentity, error)
-	CreateWebSession(
-		context.Context,
-		productidentity.WebSession,
-	) (productidentity.WebSession, error)
+	CreateWebSession(context.Context, productidentity.WebSession) (productidentity.WebSession, error)
 	GetWebSessionPrincipal(
 		ctx context.Context,
 		tokenDigest productidentity.CredentialDigest,
@@ -156,13 +153,9 @@ func (s *Service) BeginLogin() (LoginStart, error) {
 	}
 
 	return LoginStart{
-		AuthorizationURL: s.provider.AuthorizationURL(
-			state,
-			nonce,
-			codeVerifier,
-		),
-		State:     state,
-		ExpiresAt: expiresAt,
+		AuthorizationURL: s.provider.AuthorizationURL(state, nonce, codeVerifier),
+		State:            state,
+		ExpiresAt:        expiresAt,
 	}, nil
 }
 
@@ -181,12 +174,7 @@ func (s *Service) CompleteLogin(
 		return SessionCredential{}, err
 	}
 
-	profile, err := s.provider.Authenticate(
-		ctx,
-		code,
-		transaction.codeVerifier,
-		transaction.nonce,
-	)
+	profile, err := s.provider.Authenticate(ctx, code, transaction.codeVerifier, transaction.nonce)
 	if err != nil {
 		if errors.Is(err, ErrInvalidLogin) {
 			return SessionCredential{}, err
@@ -211,10 +199,7 @@ func (s *Service) CompleteLogin(
 	return s.createSession(ctx, principal.ID)
 }
 
-func (s *Service) AuthenticateSession(
-	ctx context.Context,
-	token string,
-) (productidentity.Authentication, error) {
+func (s *Service) AuthenticateSession(ctx context.Context, token string) (productidentity.Authentication, error) {
 	digest, err := sessionDigest(token)
 	if err != nil {
 		return productidentity.Authentication{}, productidentity.ErrUnauthenticated
@@ -250,10 +235,7 @@ func (s *Service) AuthenticateSession(
 		CredentialID: session.ID,
 	}
 	if err := authentication.Validate(); err != nil {
-		return productidentity.Authentication{}, fmt.Errorf(
-			"validate product session authentication: %w",
-			err,
-		)
+		return productidentity.Authentication{}, fmt.Errorf("validate product session authentication: %w", err)
 	}
 
 	return authentication, nil
@@ -272,10 +254,7 @@ func (s *Service) RevokeSession(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *Service) takeLoginTransaction(
-	state string,
-	cookieState string,
-) (loginTransaction, error) {
+func (s *Service) takeLoginTransaction(state string, cookieState string) (loginTransaction, error) {
 	if state == "" || cookieState == "" ||
 		subtle.ConstantTimeCompare([]byte(state), []byte(cookieState)) != 1 {
 		return loginTransaction{}, fmt.Errorf("%w: state cookie does not match", ErrInvalidLogin)
@@ -314,11 +293,7 @@ func (s *Service) resolveOIDCUser(
 	}
 
 	for range maximumCreateTries {
-		principal, identity, getErr := s.store.GetOIDCUser(
-			ctx,
-			profile.Issuer,
-			profile.Subject,
-		)
+		principal, identity, getErr := s.store.GetOIDCUser(ctx, profile.Issuer, profile.Subject)
 		if getErr == nil {
 			return s.updateOIDCUser(ctx, principal, identity, profile, role, displayName, now)
 		}
@@ -406,10 +381,7 @@ func (s *Service) updateOIDCUser(
 	return updated, nil
 }
 
-func (s *Service) createSession(
-	ctx context.Context,
-	principalID uuid.UUID,
-) (SessionCredential, error) {
+func (s *Service) createSession(ctx context.Context, principalID uuid.UUID) (SessionCredential, error) {
 	for range maximumCreateTries {
 		token, err := s.randomSecret()
 		if err != nil {

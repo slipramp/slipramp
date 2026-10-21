@@ -1,8 +1,8 @@
 apiVersion: slipramp.com/v1alpha1
 kind: Target
 metadata:
-  name: homelab-node-exporter
-  title: Homelab node_exporter
+  name: node-exporter
+  title: Fleet node_exporter
 spec:
   path: deploys
   watch:
@@ -10,9 +10,9 @@ spec:
     - deploys/node_exporter/**
     - deploys/slipramp/node-exporter.sh
   runtime: pyinfra
-  placement: homelab-infrastructure
+  placement: infrastructure-admin
   credentials:
-    ssh: ops-ci
+    ssh: operations
   timeout: 20m
   resources:
     requests:
@@ -30,7 +30,7 @@ spec:
       command:
         - ./slipramp/node-exporter.sh
         - apply
-        - flows1.den1.kcloud.zone
+        - node01.example.com
     sync:
       intent: reconcile
       command: [./slipramp/node-exporter.sh, apply, exporter_nodes]
@@ -38,17 +38,17 @@ spec:
 apiVersion: slipramp.com/v1alpha1
 kind: Target
 metadata:
-  name: rustfs-homelab
-  title: Homelab RustFS buckets
+  name: rustfs-buckets
+  title: RustFS buckets
 spec:
-  path: terraform/environments/rustfs-homelab
+  path: terraform/environments/rustfs
   watch:
-    - terraform/environments/rustfs-homelab/**
+    - terraform/environments/rustfs/**
     - terraform/modules/rustfs-bucket/**
   runtime: terraform-rustfs
-  placement: homelab-infrastructure
+  placement: infrastructure-admin
   credentials:
-    ops-ci: ops-ci
+    operations: operations
   timeout: 45m
   resources:
     requests:
@@ -82,8 +82,8 @@ spec:
 apiVersion: slipramp.com/v1alpha1
 kind: Target
 metadata:
-  name: homelab-kubernetes-upgrade
-  title: Homelab Kubernetes upgrade
+  name: kubernetes-upgrade
+  title: Kubernetes upgrade
 spec:
   path: deploys
   watch:
@@ -93,10 +93,10 @@ spec:
     - deploys/k8s/**
     - deploys/slipramp/upgrade-k8s.sh
   runtime: kubernetes-upgrade
-  placement: homelab-infrastructure
+  placement: infrastructure-admin
   credentials:
-    ops-ci: ops-ci
-    ssh-known-hosts: homelab-known-hosts
+    operations: operations
+    ssh-known-hosts: ssh-known-hosts
   timeout: 12h
   resources:
     requests:
@@ -114,17 +114,12 @@ spec:
           type: enum
           required: true
           values:
-            - controlplane100
-            - controlplane101
-            - controlplane102
-            - compute105
-            - compute104
-            - compute103
-            - compute6
-            - compute5
-            - compute4
-            - compute2
-            - compute1
+            - control-plane-01
+            - control-plane-02
+            - control-plane-03
+            - compute-01
+            - compute-02
+            - compute-03
           argument:
             name: --host
         version:
@@ -139,17 +134,12 @@ spec:
           type: enum
           required: true
           values:
-            - controlplane100
-            - controlplane101
-            - controlplane102
-            - compute105
-            - compute104
-            - compute103
-            - compute6
-            - compute5
-            - compute4
-            - compute2
-            - compute1
+            - control-plane-01
+            - control-plane-02
+            - control-plane-03
+            - compute-01
+            - compute-02
+            - compute-03
           argument:
             name: --host
         apt-upgrade:

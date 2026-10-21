@@ -48,10 +48,7 @@ func TestStoreIntegration(t *testing.T) {
 
 	key := fmt.Sprintf("integration/%d.txt", time.Now().UnixNano())
 	t.Cleanup(func() {
-		cleanupContext, cleanupCancel := context.WithTimeout(
-			context.Background(),
-			10*time.Second,
-		)
+		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cleanupCancel()
 
 		if err := store.Delete(cleanupContext, key); err != nil {

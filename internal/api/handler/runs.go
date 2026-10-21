@@ -148,10 +148,7 @@ func currentRunSource(ctx context.Context) run.Source {
 	return run.Source{Type: run.SourceTypeManual}
 }
 
-func (h *Handler) GetRun(
-	ctx context.Context,
-	request api.GetRunRequestObject,
-) (api.GetRunResponseObject, error) {
+func (h *Handler) GetRun(ctx context.Context, request api.GetRunRequestObject) (api.GetRunResponseObject, error) {
 	record, err := h.runs.GetRun(ctx, request.RunID)
 	if errors.Is(err, run.ErrRunNotFound) {
 		problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
@@ -199,10 +196,7 @@ func (h *Handler) CancelRun(
 
 			return api.CancelRun404ApplicationProblemPlusJSONResponse(problem), nil
 		case errors.Is(err, run.ErrRunFinished):
-			problem := NewProblem(
-				http.StatusConflict,
-				"The Run already finished and cannot be canceled.",
-			)
+			problem := NewProblem(http.StatusConflict, "The Run already finished and cannot be canceled.")
 
 			return api.CancelRun409ApplicationProblemPlusJSONResponse(problem), nil
 		default:
@@ -218,9 +212,7 @@ func (h *Handler) CancelRun(
 	return api.CancelRun200JSONResponse(body), nil
 }
 
-func runParameters(
-	values *map[string]api.ParameterValue,
-) (map[string]any, error) {
+func runParameters(values *map[string]api.ParameterValue) (map[string]any, error) {
 	if values == nil {
 		return map[string]any{}, nil
 	}
@@ -332,11 +324,7 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 			return nil, err
 		}
 
-		state, present := run.DeriveObservationState(
-			record,
-			connectedClusters[record.ClusterName],
-			now,
-		)
+		state, present := run.DeriveObservationState(record, connectedClusters[record.ClusterName], now)
 		if present {
 			value := api.RunObservationState(state)
 			body.ObservationState = &value
@@ -414,9 +402,7 @@ func apiRunOutcome(value *run.Outcome) *api.RunOutcome {
 	return &converted
 }
 
-func runParameterResponse(
-	values map[string]any,
-) (map[string]api.ParameterValue, error) {
+func runParameterResponse(values map[string]any) (map[string]api.ParameterValue, error) {
 	parameters := make(map[string]api.ParameterValue, len(values))
 	for name, value := range values {
 		encoded, err := json.Marshal(value)

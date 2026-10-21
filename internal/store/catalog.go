@@ -18,26 +18,17 @@ import (
 var _ repository.RefreshStore = (*Database)(nil)
 var _ catalog.Store = (*Database)(nil)
 
-func (d *Database) GetActiveCatalogRevision(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-) (catalog.Revision, error) {
+func (d *Database) GetActiveCatalogRevision(ctx context.Context, repositoryID uuid.UUID) (catalog.Revision, error) {
 	repositoryIdentifier := pgtype.UUID{
 		Bytes: repositoryID,
 		Valid: true,
 	}
-	row, err := d.queries.GetActiveCatalogRevision(
-		ctx,
-		repositoryIdentifier,
-	)
+	row, err := d.queries.GetActiveCatalogRevision(ctx, repositoryIdentifier)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return catalog.Revision{}, catalog.ErrNotFound
 	}
 	if err != nil {
-		return catalog.Revision{}, fmt.Errorf(
-			"get active catalog revision: %w",
-			err,
-		)
+		return catalog.Revision{}, fmt.Errorf("get active catalog revision: %w", err)
 	}
 
 	return d.loadCatalogRevision(ctx, row.ID, row.CommitSha, row.CreatedAt)
@@ -141,18 +132,12 @@ func (d *Database) loadCatalogRevision(
 		return catalog.Revision{}, fmt.Errorf("list catalog target states: %w", err)
 	}
 
-	decodedRuntimes, err := decodeCatalogDefinitions[catalog.Runtime](
-		"runtime",
-		runtimes,
-	)
+	decodedRuntimes, err := decodeCatalogDefinitions[catalog.Runtime]("runtime", runtimes)
 	if err != nil {
 		return catalog.Revision{}, err
 	}
 
-	decodedTargets, err := decodeCatalogDefinitions[catalog.Target](
-		"target",
-		targets,
-	)
+	decodedTargets, err := decodeCatalogDefinitions[catalog.Target]("target", targets)
 	if err != nil {
 		return catalog.Revision{}, err
 	}
@@ -176,10 +161,7 @@ func (d *Database) loadCatalogRevision(
 	}, nil
 }
 
-func decodeCatalogDefinitions[T any](
-	kind string,
-	definitions [][]byte,
-) ([]T, error) {
+func decodeCatalogDefinitions[T any](kind string, definitions [][]byte) ([]T, error) {
 	decoded := make([]T, 0, len(definitions))
 	for _, definition := range definitions {
 		var item T
@@ -221,21 +203,11 @@ func (d *Database) RecordRepositoryRefresh(
 	}
 
 	if result.Revision != nil {
-		if err := recordCatalogRevision(
-			ctx,
-			queries,
-			identifier,
-			result,
-		); err != nil {
+		if err := recordCatalogRevision(ctx, queries, identifier, result); err != nil {
 			return err
 		}
 	} else {
-		if err := recordRefreshFailure(
-			ctx,
-			queries,
-			identifier,
-			result,
-		); err != nil {
+		if err := recordRefreshFailure(ctx, queries, identifier, result); err != nil {
 			return err
 		}
 	}
@@ -254,36 +226,19 @@ func recordCatalogRevision(
 	result repository.RefreshResult,
 ) error {
 	revision := *result.Revision
-	revisionID, err := findCatalogRevisionID(
-		ctx,
-		queries,
-		repositoryID,
-		revision.CommitSHA,
-	)
+	revisionID, err := findCatalogRevisionID(ctx, queries, repositoryID, revision.CommitSHA)
 	if err != nil {
 		return err
 	}
 
 	if !revisionID.Valid {
 		revisionID = pgtype.UUID{Bytes: revision.ID, Valid: true}
-		if err := createCatalogRevision(
-			ctx,
-			queries,
-			repositoryID,
-			revisionID,
-			revision,
-		); err != nil {
+		if err := createCatalogRevision(ctx, queries, repositoryID, revisionID, revision); err != nil {
 			return err
 		}
 	}
 
-	if err := updateTargetStates(
-		ctx,
-		queries,
-		repositoryID,
-		revisionID,
-		result,
-	); err != nil {
+	if err := updateTargetStates(ctx, queries, repositoryID, revisionID, result); err != nil {
 		return err
 	}
 
@@ -424,11 +379,7 @@ func createCatalogRevision(
 	for _, runtime := range revision.Catalog.Runtimes {
 		definition, err := json.Marshal(runtime)
 		if err != nil {
-			return fmt.Errorf(
-				"marshal catalog runtime %q: %w",
-				runtime.Metadata.Name,
-				err,
-			)
+			return fmt.Errorf("marshal catalog runtime %q: %w", runtime.Metadata.Name, err)
 		}
 
 		err = queries.CreateCatalogRuntime(
@@ -442,22 +393,14 @@ func createCatalogRevision(
 			},
 		)
 		if err != nil {
-			return fmt.Errorf(
-				"create catalog runtime %q: %w",
-				runtime.Metadata.Name,
-				err,
-			)
+			return fmt.Errorf("create catalog runtime %q: %w", runtime.Metadata.Name, err)
 		}
 	}
 
 	for _, target := range revision.Catalog.Targets {
 		definition, err := json.Marshal(target)
 		if err != nil {
-			return fmt.Errorf(
-				"marshal catalog target %q: %w",
-				target.Metadata.Name,
-				err,
-			)
+			return fmt.Errorf("marshal catalog target %q: %w", target.Metadata.Name, err)
 		}
 
 		err = queries.CreateCatalogTarget(
@@ -471,11 +414,7 @@ func createCatalogRevision(
 			},
 		)
 		if err != nil {
-			return fmt.Errorf(
-				"create catalog target %q: %w",
-				target.Metadata.Name,
-				err,
-			)
+			return fmt.Errorf("create catalog target %q: %w", target.Metadata.Name, err)
 		}
 	}
 

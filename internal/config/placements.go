@@ -72,23 +72,15 @@ func loadPlacementsFile(path string) (placement.Set, error) {
 	}
 
 	if document.APIVersion != placementsAPIVersion {
-		return placement.Set{}, fmt.Errorf(
-			"placement configuration apiVersion must be %q",
-			placementsAPIVersion,
-		)
+		return placement.Set{}, fmt.Errorf("placement configuration apiVersion must be %q", placementsAPIVersion)
 	}
 
 	if document.Kind != placementsKind {
-		return placement.Set{}, fmt.Errorf(
-			"placement configuration kind must be %q",
-			placementsKind,
-		)
+		return placement.Set{}, fmt.Errorf("placement configuration kind must be %q", placementsKind)
 	}
 
 	if document.Placements == nil {
-		return placement.Set{}, errors.New(
-			"placement configuration must define placements",
-		)
+		return placement.Set{}, errors.New("placement configuration must define placements")
 	}
 
 	configured := make(map[string]placement.Config, len(document.Placements))
@@ -104,10 +96,7 @@ func loadPlacementsFile(path string) (placement.Set, error) {
 			return placement.Set{}, err
 		}
 
-		credentials := make(
-			map[string]placement.CredentialSource,
-			len(input.Credentials),
-		)
+		credentials := make(map[string]placement.CredentialSource, len(input.Credentials))
 		for credentialName, source := range input.Credentials {
 			credentials[credentialName] = placement.CredentialSource{
 				SecretRef: placement.SecretReference{
@@ -134,36 +123,22 @@ func loadPlacementsFile(path string) (placement.Set, error) {
 	return placement.NewSet(configured)
 }
 
-func decodePodTemplate(
-	placementName string,
-	node yaml.Node,
-) (*corev1.PodTemplateSpec, error) {
+func decodePodTemplate(placementName string, node yaml.Node) (*corev1.PodTemplateSpec, error) {
 	if node.Kind == 0 {
 		return nil, nil
 	}
 	if node.Kind == yaml.ScalarNode && node.Tag == "!!null" {
-		return nil, fmt.Errorf(
-			"placement %q pod template must be an object",
-			placementName,
-		)
+		return nil, fmt.Errorf("placement %q pod template must be an object", placementName)
 	}
 
 	var value any
 	if err := node.Decode(&value); err != nil {
-		return nil, fmt.Errorf(
-			"placement %q pod template: %w",
-			placementName,
-			err,
-		)
+		return nil, fmt.Errorf("placement %q pod template: %w", placementName, err)
 	}
 
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"encode placement %q pod template: %w",
-			placementName,
-			err,
-		)
+		return nil, fmt.Errorf("encode placement %q pod template: %w", placementName, err)
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
@@ -171,11 +146,7 @@ func decodePodTemplate(
 
 	var template corev1.PodTemplateSpec
 	if err := decoder.Decode(&template); err != nil {
-		return nil, fmt.Errorf(
-			"decode placement %q pod template: %w",
-			placementName,
-			err,
-		)
+		return nil, fmt.Errorf("decode placement %q pod template: %w", placementName, err)
 	}
 
 	return &template, nil
@@ -195,28 +166,18 @@ func requireSingleYAMLDocument(decoder *yaml.Decoder) error {
 	return errors.New("placement configuration must contain exactly one document")
 }
 
-func parsePlacementTimeout(
-	placementName string,
-	value *string,
-) (time.Duration, error) {
+func parsePlacementTimeout(placementName string, value *string) (time.Duration, error) {
 	if value == nil {
 		return 0, nil
 	}
 
 	timeout, err := time.ParseDuration(*value)
 	if err != nil {
-		return 0, fmt.Errorf(
-			"placement %q timeout: %w",
-			placementName,
-			err,
-		)
+		return 0, fmt.Errorf("placement %q timeout: %w", placementName, err)
 	}
 
 	if timeout <= 0 {
-		return 0, fmt.Errorf(
-			"placement %q timeout must be positive",
-			placementName,
-		)
+		return 0, fmt.Errorf("placement %q timeout must be positive", placementName)
 	}
 
 	return timeout, nil

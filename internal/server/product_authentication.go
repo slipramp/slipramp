@@ -10,23 +10,15 @@ import (
 )
 
 type productAuthenticationService interface {
-	AuthenticateAPIKey(
-		context.Context,
-		string,
-	) (productidentity.Authentication, error)
-	AuthenticateSession(
-		context.Context,
-		string,
-	) (productidentity.Authentication, error)
+	AuthenticateAPIKey(context.Context, string) (productidentity.Authentication, error)
+	AuthenticateSession(context.Context, string) (productidentity.Authentication, error)
 }
 
 type productAuthenticator struct {
 	authentication productAuthenticationService
 }
 
-func newProductAuthenticator(
-	authentication productAuthenticationService,
-) *productAuthenticator {
+func newProductAuthenticator(authentication productAuthenticationService) *productAuthenticator {
 	return &productAuthenticator{authentication: authentication}
 }
 

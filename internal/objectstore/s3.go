@@ -121,13 +121,7 @@ func (s *Store) Check(ctx context.Context) error {
 	return fmt.Errorf("S3 bucket %q does not exist", s.bucket)
 }
 
-func (s *Store) Put(
-	ctx context.Context,
-	key string,
-	body io.Reader,
-	size int64,
-	options PutOptions,
-) (int64, error) {
+func (s *Store) Put(ctx context.Context, key string, body io.Reader, size int64, options PutOptions) (int64, error) {
 	if err := validateObjectKey(key); err != nil {
 		return 0, err
 	}
@@ -160,12 +154,7 @@ func (s *Store) Open(ctx context.Context, key string) (Object, error) {
 		return Object{}, err
 	}
 
-	body, err := s.client.GetObject(
-		ctx,
-		s.bucket,
-		key,
-		minio.GetObjectOptions{},
-	)
+	body, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 	if err != nil {
 		return Object{}, fmt.Errorf("open S3 object %q: %w", key, err)
 	}
@@ -189,12 +178,7 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 		return err
 	}
 
-	err := s.client.RemoveObject(
-		ctx,
-		s.bucket,
-		key,
-		minio.RemoveObjectOptions{},
-	)
+	err := s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
 	if err != nil {
 		return fmt.Errorf("delete S3 object %q: %w", key, err)
 	}
@@ -208,11 +192,7 @@ func (s *Store) List(ctx context.Context, prefix string) ([]ObjectInfo, error) {
 	}
 
 	objects := make([]ObjectInfo, 0)
-	for item := range s.client.ListObjects(
-		ctx,
-		s.bucket,
-		minio.ListObjectsOptions{Prefix: prefix, Recursive: true},
-	) {
+	for item := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
 		if item.Err != nil {
 			return nil, fmt.Errorf("list S3 objects under %q: %w", prefix, item.Err)
 		}

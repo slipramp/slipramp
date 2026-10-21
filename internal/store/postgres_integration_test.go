@@ -28,9 +28,7 @@ func TestDatabaseIntegration(t *testing.T) {
 	database.Close()
 }
 
-func openIntegrationDatabase(
-	t *testing.T,
-) (context.Context, Config, *Database) {
+func openIntegrationDatabase(t *testing.T) (context.Context, Config, *Database) {
 	t.Helper()
 
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
@@ -60,16 +58,10 @@ func openIntegrationDatabase(
 	}
 
 	t.Cleanup(func() {
-		cleanupContext, cleanupCancel := context.WithTimeout(
-			context.Background(),
-			10*time.Second,
-		)
+		cleanupContext, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cleanupCancel()
 
-		if _, err := adminPool.Exec(
-			cleanupContext,
-			"DROP DATABASE "+identifier+" WITH (FORCE)",
-		); err != nil {
+		if _, err := adminPool.Exec(cleanupContext, "DROP DATABASE "+identifier+" WITH (FORCE)"); err != nil {
 			t.Errorf("drop test database: %v", err)
 		}
 	})

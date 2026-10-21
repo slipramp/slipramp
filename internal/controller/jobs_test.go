@@ -24,11 +24,7 @@ func TestKubernetesRunJobsCreatesAndReusesJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 	assignment := testRunAssignment(t)
 
 	ensured, err := jobs.Ensure(context.Background(), assignment)
@@ -47,10 +43,7 @@ func TestKubernetesRunJobsCreatesAndReusesJob(t *testing.T) {
 		t.Error("second Ensure() created = true, want false")
 	}
 
-	jobList, err := client.BatchV1().Jobs("slipramp-runs").List(
-		context.Background(),
-		metav1.ListOptions{},
-	)
+	jobList, err := client.BatchV1().Jobs("slipramp-runs").List(context.Background(), metav1.ListOptions{})
 	if err != nil {
 		t.Fatalf("list Jobs: %v", err)
 	}
@@ -79,11 +72,7 @@ func TestKubernetesRunJobsMarksPodForCancellationIdempotently(t *testing.T) {
 	}
 	pod.Annotations = map[string]string{cancellationAnnotation: "false"}
 	client := fake.NewClientset(job, pod)
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 	command := api.CancelRunCommand{
 		ID:           assignment.ID,
 		JobNamespace: assignment.Placement.JobNamespace,
@@ -104,11 +93,7 @@ func TestKubernetesRunJobsMarksPodForCancellationIdempotently(t *testing.T) {
 	); err != nil {
 		t.Fatalf("get retained Job: %v", err)
 	}
-	gotPod, err := client.CoreV1().Pods(pod.Namespace).Get(
-		context.Background(),
-		pod.Name,
-		metav1.GetOptions{},
-	)
+	gotPod, err := client.CoreV1().Pods(pod.Namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("get marked Pod: %v", err)
 	}
@@ -135,11 +120,7 @@ func TestKubernetesRunJobsDeletesJobWithoutPodOnCancellation(t *testing.T) {
 	}
 	job.UID = types.UID("job-uid")
 	client := fake.NewClientset(job)
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 	command := api.CancelRunCommand{
 		ID:           assignment.ID,
 		JobNamespace: assignment.Placement.JobNamespace,
@@ -153,11 +134,7 @@ func TestKubernetesRunJobsDeletesJobWithoutPodOnCancellation(t *testing.T) {
 	if result.jobRetained {
 		t.Fatalf("RequestCancellation() result = %#v", result)
 	}
-	_, err = client.BatchV1().Jobs(job.Namespace).Get(
-		context.Background(),
-		job.Name,
-		metav1.GetOptions{},
-	)
+	_, err = client.BatchV1().Jobs(job.Namespace).Get(context.Background(), job.Name, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
 		t.Fatalf("get canceled Job error = %v, want not found", err)
 	}
@@ -188,11 +165,7 @@ func TestKubernetesRunJobsDoesNotRelabelCompletedPodAsCanceled(t *testing.T) {
 	pod.Annotations = map[string]string{cancellationAnnotation: "false"}
 	pod.Labels[batchv1.JobNameLabel] = job.Name
 	client := fake.NewClientset(job, pod)
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 
 	result, err := jobs.RequestCancellation(
 		context.Background(),
@@ -208,11 +181,7 @@ func TestKubernetesRunJobsDoesNotRelabelCompletedPodAsCanceled(t *testing.T) {
 	if !result.jobRetained {
 		t.Fatalf("RequestCancellation() result = %#v", result)
 	}
-	got, err := client.CoreV1().Pods(pod.Namespace).Get(
-		context.Background(),
-		pod.Name,
-		metav1.GetOptions{},
-	)
+	got, err := client.CoreV1().Pods(pod.Namespace).Get(context.Background(), pod.Name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("get completed Pod: %v", err)
 	}
@@ -248,11 +217,7 @@ func TestKubernetesRunJobsDeleteUsesUIDPrecondition(t *testing.T) {
 			)
 		},
 	)
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 	handle := jobHandle{
 		runID:     runID,
 		namespace: replacement.Namespace,
@@ -291,21 +256,13 @@ func TestKubernetesRunJobsDeletesCompletedJobIdempotently(t *testing.T) {
 	job.Namespace = "slipramp-runs"
 	job.UID = types.UID("job-uid")
 	client := fake.NewClientset(job)
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 	handle := handleFromJob(job, runID)
 
 	if err := jobs.Delete(context.Background(), handle); err != nil {
 		t.Fatalf("first Delete() error = %v", err)
 	}
-	_, err := client.BatchV1().Jobs(job.Namespace).Get(
-		context.Background(),
-		job.Name,
-		metav1.GetOptions{},
-	)
+	_, err := client.BatchV1().Jobs(job.Namespace).Get(context.Background(), job.Name, metav1.GetOptions{})
 	if !apierrors.IsNotFound(err) {
 		t.Fatalf("get deleted Job error = %v, want not found", err)
 	}
@@ -322,11 +279,7 @@ func TestKubernetesRunJobsRejectsCancellationOfConflictingJob(t *testing.T) {
 	job.Name = runJobName(runID)
 	job.Namespace = "slipramp-runs"
 	client := fake.NewClientset(job)
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 
 	_, err := jobs.RequestCancellation(context.Background(), api.CancelRunCommand{
 		ID:           runID,
@@ -470,11 +423,7 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 				objects = append(objects, pod)
 			}
 			client := fake.NewClientset(objects...)
-			jobs := newKubernetesRunJobs(
-				validConfig(),
-				client.BatchV1(),
-				client.CoreV1(),
-			)
+			jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 
 			observation, err := jobs.Observe(
 				context.Background(),
@@ -501,15 +450,8 @@ func TestKubernetesRunJobsRejectsConflictingJob(t *testing.T) {
 
 	assignment := testRunAssignment(t)
 	name := "slipramp-run-" + assignment.ID.String()
-	client := fake.NewClientset(&batchv1.Job{
-		Name:      name,
-		Namespace: "slipramp-runs",
-	})
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	client := fake.NewClientset(&batchv1.Job{Name: name, Namespace: "slipramp-runs"})
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 
 	_, err := jobs.Ensure(context.Background(), assignment)
 	if err == nil || !strings.Contains(err.Error(), "expected Run identity") {
@@ -553,11 +495,7 @@ func TestKubernetesRunJobsRecoversValidClusterJobs(t *testing.T) {
 		"slipramp-runs",
 		"slipramp-runs-secondary",
 	}
-	jobs := newKubernetesRunJobs(
-		config,
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(config, client.BatchV1(), client.CoreV1())
 
 	handles, err := jobs.Recover(context.Background())
 	if err != nil {
@@ -579,11 +517,7 @@ func TestKubernetesRunJobsRejectsUnownedExecutionNamespace(t *testing.T) {
 	assignment := testRunAssignment(t)
 	assignment.Placement.JobNamespace = "other-runs"
 	client := fake.NewClientset()
-	jobs := newKubernetesRunJobs(
-		validConfig(),
-		client.BatchV1(),
-		client.CoreV1(),
-	)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 
 	_, err := jobs.Ensure(context.Background(), assignment)
 	if err == nil || !strings.Contains(err.Error(), "not owned") {

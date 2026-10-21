@@ -97,9 +97,7 @@ func TestServerClientPollSendsAuthenticatedRequest(t *testing.T) {
 	cfg.ServerURL = "https://slipramp.example.com/slipramp"
 	client, err := newServerClientWithHTTPClient(
 		cfg,
-		httpDoerFunc(func(
-			request *http.Request,
-		) (*http.Response, error) {
+		httpDoerFunc(func(request *http.Request) (*http.Response, error) {
 			poll = receivedPoll{
 				method:        request.Method,
 				path:          request.URL.Path,
@@ -130,11 +128,7 @@ func TestServerClientPollSendsAuthenticatedRequest(t *testing.T) {
 	}
 
 	if poll.path != "/slipramp/controller/v1/poll" {
-		t.Errorf(
-			"path = %q, want %q",
-			poll.path,
-			"/slipramp/controller/v1/poll",
-		)
+		t.Errorf("path = %q, want %q", poll.path, "/slipramp/controller/v1/poll")
 	}
 
 	if poll.timeout != "" {
@@ -151,9 +145,7 @@ func TestServerClientPollRejectsUnauthorizedResponse(t *testing.T) {
 
 	client, err := newServerClientWithHTTPClient(
 		validConfig(),
-		httpDoerFunc(func(
-			_ *http.Request,
-		) (*http.Response, error) {
+		httpDoerFunc(func(_ *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,
 				Body:       io.NopCloser(strings.NewReader("")),
@@ -166,11 +158,7 @@ func TestServerClientPollRejectsUnauthorizedResponse(t *testing.T) {
 
 	_, err = client.Poll(context.Background())
 	if !errors.Is(err, errControllerCredentialRejected) {
-		t.Fatalf(
-			"Poll() error = %v, want %v",
-			err,
-			errControllerCredentialRejected,
-		)
+		t.Fatalf("Poll() error = %v, want %v", err, errControllerCredentialRejected)
 	}
 }
 
@@ -207,12 +195,7 @@ func TestServerClientAppendsAuthenticatedRunLogChunk(t *testing.T) {
 	}
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
-	if err := client.AppendLogChunk(
-		context.Background(),
-		runID,
-		12,
-		[]byte("hello logs\n"),
-	); err != nil {
+	if err := client.AppendLogChunk(context.Background(), runID, 12, []byte("hello logs\n")); err != nil {
 		t.Fatalf("AppendLogChunk() error = %v", err)
 	}
 	if chunk.method != http.MethodPost ||

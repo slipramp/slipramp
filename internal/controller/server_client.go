@@ -29,12 +29,7 @@ func (e *serverResponseError) Error() string {
 		return fmt.Sprintf("%s returned HTTP %d", e.operation, e.statusCode)
 	}
 
-	return fmt.Sprintf(
-		"%s: %v; Server returned HTTP %d",
-		e.operation,
-		e.err,
-		e.statusCode,
-	)
+	return fmt.Sprintf("%s: %v; Server returned HTTP %d", e.operation, e.err, e.statusCode)
 }
 
 func (e *serverResponseError) Unwrap() error { return e.err }
@@ -48,11 +43,7 @@ func serverResponseStatusCode(err error) (int, bool) {
 	return responseErr.statusCode, true
 }
 
-func rejectedServerResponse(
-	operation string,
-	statusCode int,
-	err error,
-) error {
+func rejectedServerResponse(operation string, statusCode int, err error) error {
 	return &serverResponseError{
 		operation:  operation,
 		statusCode: statusCode,
@@ -98,15 +89,8 @@ type controllerAPI interface {
 	) (*api.ReportRunObservationResponse, error)
 }
 
-func (c *serverClient) GetLogCursor(
-	ctx context.Context,
-	runID uuid.UUID,
-) (logCursor, error) {
-	response, err := c.api.GetRunLogCursorWithResponse(
-		ctx,
-		runID,
-		controllerAuthorization(c.bearerToken),
-	)
+func (c *serverClient) GetLogCursor(ctx context.Context, runID uuid.UUID) (logCursor, error) {
+	response, err := c.api.GetRunLogCursorWithResponse(ctx, runID, controllerAuthorization(c.bearerToken))
 	if err != nil {
 		return logCursor{}, fmt.Errorf("get Run log cursor: %w", err)
 	}
@@ -124,26 +108,13 @@ func (c *serverClient) GetLogCursor(
 	case http.StatusUnauthorized:
 		return logCursor{}, errControllerCredentialRejected
 	case http.StatusNotFound:
-		return logCursor{}, rejectedServerResponse(
-			"get Run log cursor",
-			response.StatusCode(),
-			errRunLogRejected,
-		)
+		return logCursor{}, rejectedServerResponse("get Run log cursor", response.StatusCode(), errRunLogRejected)
 	default:
-		return logCursor{}, rejectedServerResponse(
-			"get Run log cursor",
-			response.StatusCode(),
-			nil,
-		)
+		return logCursor{}, rejectedServerResponse("get Run log cursor", response.StatusCode(), nil)
 	}
 }
 
-func (c *serverClient) SealLog(
-	ctx context.Context,
-	runID uuid.UUID,
-	sizeBytes int64,
-	digest string,
-) error {
+func (c *serverClient) SealLog(ctx context.Context, runID uuid.UUID, sizeBytes int64, digest string) error {
 	response, err := c.api.SealRunLogWithResponse(
 		ctx,
 		runID,
@@ -160,26 +131,13 @@ func (c *serverClient) SealLog(
 	case http.StatusUnauthorized:
 		return errControllerCredentialRejected
 	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict:
-		return rejectedServerResponse(
-			"seal Run log",
-			response.StatusCode(),
-			errRunLogRejected,
-		)
+		return rejectedServerResponse("seal Run log", response.StatusCode(), errRunLogRejected)
 	default:
-		return rejectedServerResponse(
-			"seal Run log",
-			response.StatusCode(),
-			nil,
-		)
+		return rejectedServerResponse("seal Run log", response.StatusCode(), nil)
 	}
 }
 
-func (c *serverClient) AppendLogChunk(
-	ctx context.Context,
-	runID uuid.UUID,
-	offsetBytes int64,
-	contents []byte,
-) error {
+func (c *serverClient) AppendLogChunk(ctx context.Context, runID uuid.UUID, offsetBytes int64, contents []byte) error {
 	response, err := c.api.AppendRunLogChunkWithBodyWithResponse(
 		ctx,
 		runID,
@@ -201,17 +159,9 @@ func (c *serverClient) AppendLogChunk(
 		http.StatusNotFound,
 		http.StatusConflict,
 		http.StatusRequestEntityTooLarge:
-		return rejectedServerResponse(
-			"append Run log chunk",
-			response.StatusCode(),
-			errRunLogRejected,
-		)
+		return rejectedServerResponse("append Run log chunk", response.StatusCode(), errRunLogRejected)
 	default:
-		return rejectedServerResponse(
-			"append Run log chunk",
-			response.StatusCode(),
-			nil,
-		)
+		return rejectedServerResponse("append Run log chunk", response.StatusCode(), nil)
 	}
 }
 
@@ -228,14 +178,8 @@ func newServerClient(cfg Config) (*serverClient, error) {
 	return newServerClientWithHTTPClient(cfg, httpClient)
 }
 
-func newServerClientWithHTTPClient(
-	cfg Config,
-	httpClient api.HttpRequestDoer,
-) (*serverClient, error) {
-	client, err := api.NewClientWithResponses(
-		cfg.ServerURL,
-		api.WithHTTPClient(httpClient),
-	)
+func newServerClientWithHTTPClient(cfg Config, httpClient api.HttpRequestDoer) (*serverClient, error) {
+	client, err := api.NewClientWithResponses(cfg.ServerURL, api.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("create Server API client: %w", err)
 	}
@@ -270,19 +214,12 @@ func (c *serverClient) Enroll(ctx context.Context) error {
 	case http.StatusConflict:
 		return errControllerEnrollmentConflict
 	default:
-		return fmt.Errorf(
-			"controller enrollment returned HTTP %d",
-			response.StatusCode(),
-		)
+		return fmt.Errorf("controller enrollment returned HTTP %d", response.StatusCode())
 	}
 }
 
 func (c *serverClient) Poll(ctx context.Context) (*api.ControllerCommand, error) {
-	response, err := c.api.PollForControllerCommandWithResponse(
-		ctx,
-		nil,
-		controllerAuthorization(c.bearerToken),
-	)
+	response, err := c.api.PollForControllerCommandWithResponse(ctx, nil, controllerAuthorization(c.bearerToken))
 	if err != nil {
 		return nil, fmt.Errorf("poll Server for run assignment: %w", err)
 	}
@@ -299,18 +236,11 @@ func (c *serverClient) Poll(ctx context.Context) (*api.ControllerCommand, error)
 	case http.StatusUnauthorized:
 		return nil, errControllerCredentialRejected
 	default:
-		return nil, fmt.Errorf(
-			"controller poll returned HTTP %d",
-			response.StatusCode(),
-		)
+		return nil, fmt.Errorf("controller poll returned HTTP %d", response.StatusCode())
 	}
 }
 
-func (c *serverClient) ReportObservation(
-	ctx context.Context,
-	runID uuid.UUID,
-	observation api.RunObservation,
-) error {
+func (c *serverClient) ReportObservation(ctx context.Context, runID uuid.UUID, observation api.RunObservation) error {
 	response, err := c.api.ReportRunObservationWithResponse(
 		ctx,
 		runID,
@@ -327,17 +257,9 @@ func (c *serverClient) ReportObservation(
 	case http.StatusUnauthorized:
 		return errControllerCredentialRejected
 	case http.StatusNotFound, http.StatusConflict:
-		return rejectedServerResponse(
-			"report Run observation",
-			response.StatusCode(),
-			errRunObservationRejected,
-		)
+		return rejectedServerResponse("report Run observation", response.StatusCode(), errRunObservationRejected)
 	default:
-		return rejectedServerResponse(
-			"report Run observation",
-			response.StatusCode(),
-			nil,
-		)
+		return rejectedServerResponse("report Run observation", response.StatusCode(), nil)
 	}
 }
 

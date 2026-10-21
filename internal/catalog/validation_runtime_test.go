@@ -127,9 +127,7 @@ func TestValidateRuntimeCredentials(t *testing.T) {
 		{
 			name: "binding source not offered by placement",
 			configure: func(input *catalog.Catalog) {
-				addRuntimeCredential(input, "backend", catalog.CredentialInjection{
-					EnvironmentFrom: true,
-				})
+				addRuntimeCredential(input, "backend", catalog.CredentialInjection{EnvironmentFrom: true})
 				input.Targets[0].Spec.Credentials["backend"] = "missing-source"
 			},
 			wantError: "not offered by placement",
@@ -159,11 +157,7 @@ func TestValidateRuntimeCredentials(t *testing.T) {
 	runValidationTests(t, tests)
 }
 
-func addRuntimeCredential(
-	input *catalog.Catalog,
-	name string,
-	injection catalog.CredentialInjection,
-) {
+func addRuntimeCredential(input *catalog.Catalog, name string, injection catalog.CredentialInjection) {
 	input.Runtimes[0].Spec.Credentials = map[string]catalog.RuntimeCredential{
 		name: {Inject: injection},
 	}

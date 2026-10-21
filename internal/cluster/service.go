@@ -8,11 +8,7 @@ import (
 const connectionWindow = time.Minute
 
 type Store interface {
-	RecordClusterObservation(
-		ctx context.Context,
-		clusterName string,
-		observedAt time.Time,
-	) error
+	RecordClusterObservation(ctx context.Context, clusterName string, observedAt time.Time) error
 	ListClusterObservations(ctx context.Context) ([]Observation, error)
 }
 
@@ -42,23 +38,13 @@ func (s *Service) ListClusters(ctx context.Context) ([]Status, error) {
 			connectionState = ConnectionStateConnected
 		}
 
-		statuses = append(statuses, Status{
-			Observation:     observation,
-			ConnectionState: connectionState,
-		})
+		statuses = append(statuses, Status{Observation: observation, ConnectionState: connectionState})
 	}
 
 	return statuses, nil
 }
 
-func (s *Service) RecordControllerContact(
-	ctx context.Context,
-	clusterName string,
-) error {
+func (s *Service) RecordControllerContact(ctx context.Context, clusterName string) error {
 	observedAt := s.now().UTC()
-	return s.clusters.RecordClusterObservation(
-		ctx,
-		clusterName,
-		observedAt,
-	)
+	return s.clusters.RecordClusterObservation(ctx, clusterName, observedAt)
 }

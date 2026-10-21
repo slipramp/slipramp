@@ -13,48 +13,25 @@ func TestServiceRecordsClusterObservation(t *testing.T) {
 	clusters := &recordingStore{}
 	service := NewService(clusters)
 	location := time.FixedZone("test", -6*60*60)
-	observedAt := time.Date(
-		2026,
-		time.October,
-		16,
-		12,
-		0,
-		0,
-		0,
-		location,
-	)
+	observedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, location)
 	service.now = func() time.Time {
 		return observedAt
 	}
 
-	if err := service.RecordControllerContact(
-		context.Background(),
-		"colo",
-	); err != nil {
+	if err := service.RecordControllerContact(context.Background(), "colo"); err != nil {
 		t.Fatalf("RecordControllerContact() error = %v", err)
 	}
 
 	if clusters.clusterName != "colo" {
-		t.Errorf(
-			"cluster name = %q, want %q",
-			clusters.clusterName,
-			"colo",
-		)
+		t.Errorf("cluster name = %q, want %q", clusters.clusterName, "colo")
 	}
 
 	if !clusters.observedAt.Equal(observedAt) {
-		t.Errorf(
-			"observed at = %s, want %s",
-			clusters.observedAt,
-			observedAt,
-		)
+		t.Errorf("observed at = %s, want %s", clusters.observedAt, observedAt)
 	}
 
 	if clusters.observedAt.Location() != time.UTC {
-		t.Errorf(
-			"observation location = %s, want UTC",
-			clusters.observedAt.Location(),
-		)
+		t.Errorf("observation location = %s, want UTC", clusters.observedAt.Location())
 	}
 }
 
@@ -66,11 +43,7 @@ func TestServiceReturnsObservationFailure(t *testing.T) {
 
 	err := service.RecordControllerContact(context.Background(), "colo")
 	if !errors.Is(err, want) {
-		t.Fatalf(
-			"RecordControllerContact() error = %v, want %v",
-			err,
-			want,
-		)
+		t.Fatalf("RecordControllerContact() error = %v, want %v", err, want)
 	}
 }
 
@@ -107,19 +80,11 @@ func TestServiceReportsConnectionState(t *testing.T) {
 	}
 
 	if statuses[0].ConnectionState != ConnectionStateConnected {
-		t.Errorf(
-			"connected state = %q, want %q",
-			statuses[0].ConnectionState,
-			ConnectionStateConnected,
-		)
+		t.Errorf("connected state = %q, want %q", statuses[0].ConnectionState, ConnectionStateConnected)
 	}
 
 	if statuses[1].ConnectionState != ConnectionStateUnreachable {
-		t.Errorf(
-			"unreachable state = %q, want %q",
-			statuses[1].ConnectionState,
-			ConnectionStateUnreachable,
-		)
+		t.Errorf("unreachable state = %q, want %q", statuses[1].ConnectionState, ConnectionStateUnreachable)
 	}
 }
 
@@ -130,19 +95,13 @@ type recordingStore struct {
 	err         error
 }
 
-func (r *recordingStore) RecordClusterObservation(
-	_ context.Context,
-	clusterName string,
-	observedAt time.Time,
-) error {
+func (r *recordingStore) RecordClusterObservation(_ context.Context, clusterName string, observedAt time.Time) error {
 	r.clusterName = clusterName
 	r.observedAt = observedAt
 
 	return r.err
 }
 
-func (r *recordingStore) ListClusterObservations(
-	context.Context,
-) ([]Observation, error) {
+func (r *recordingStore) ListClusterObservations(context.Context) ([]Observation, error) {
 	return r.clusters, nil
 }

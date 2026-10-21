@@ -25,10 +25,7 @@ func TestDiscoveredOIDCProviderValidatesClaims(t *testing.T) {
 	t.Parallel()
 
 	issuer := newTestOIDCIssuer(t)
-	clientContext := oidc.ClientContext(
-		context.Background(),
-		&http.Client{Transport: roundTripFunc(issuer.roundTrip)},
-	)
+	clientContext := oidc.ClientContext(context.Background(), &http.Client{Transport: roundTripFunc(issuer.roundTrip)})
 	cfg := OIDCConfig{
 		Issuer:       issuer.issuer,
 		ClientID:     "slipramp",
@@ -54,12 +51,7 @@ func TestDiscoveredOIDCProviderValidatesClaims(t *testing.T) {
 		t.Errorf("authorization URL PKCE query = %q", parsedAuthorizationURL.RawQuery)
 	}
 
-	profile, err := provider.Authenticate(
-		clientContext,
-		"authorization-code",
-		"code-verifier",
-		issuer.nonce,
-	)
+	profile, err := provider.Authenticate(clientContext, "authorization-code", "code-verifier", issuer.nonce)
 	if err != nil {
 		t.Fatalf("Authenticate() error = %v", err)
 	}
@@ -104,12 +96,7 @@ func TestDiscoveredOIDCProviderValidatesClaims(t *testing.T) {
 				test.configure(issuer)
 			}
 
-			_, err := provider.Authenticate(
-				clientContext,
-				"authorization-code",
-				"code-verifier",
-				test.nonce,
-			)
+			_, err := provider.Authenticate(clientContext, "authorization-code", "code-verifier", test.nonce)
 			if !errors.Is(err, ErrInvalidLogin) {
 				t.Fatalf("Authenticate() error = %v, want invalid login", err)
 			}
@@ -204,10 +191,7 @@ func (i *testOIDCIssuer) signedIDToken() string {
 			Expiry:   jwt.NewNumericDate(i.expiry),
 			IssuedAt: jwt.NewNumericDate(time.Now().Add(-time.Minute)),
 		}).
-		Claims(map[string]any{
-			"nonce": i.nonce,
-			"name":  "Ada Lovelace",
-		}).
+		Claims(map[string]any{"nonce": i.nonce, "name": "Ada Lovelace"}).
 		Serialize()
 	if err != nil {
 		panic(err)

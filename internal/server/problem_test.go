@@ -13,27 +13,15 @@ import (
 func TestUnknownRouteReturnsProblem(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/unknown",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/unknown", nil)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
-		response,
-		request,
-	)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusNotFound)
 }
 
-func assertProblem(
-	t *testing.T,
-	response *httptest.ResponseRecorder,
-	wantStatus int,
-) {
+func assertProblem(t *testing.T, response *httptest.ResponseRecorder, wantStatus int) {
 	t.Helper()
 
 	if response.Code != wantStatus {
@@ -41,11 +29,7 @@ func assertProblem(
 	}
 
 	if contentType := response.Header().Get("Content-Type"); contentType != "application/problem+json" {
-		t.Errorf(
-			"Content-Type = %q, want %q",
-			contentType,
-			"application/problem+json",
-		)
+		t.Errorf("Content-Type = %q, want %q", contentType, "application/problem+json")
 	}
 
 	var problem api.Problem
@@ -58,11 +42,7 @@ func assertProblem(
 	}
 
 	if problem.Title != http.StatusText(wantStatus) {
-		t.Errorf(
-			"problem title = %q, want %q",
-			problem.Title,
-			http.StatusText(wantStatus),
-		)
+		t.Errorf("problem title = %q, want %q", problem.Title, http.StatusText(wantStatus))
 	}
 
 	if problem.Status != wantStatus {

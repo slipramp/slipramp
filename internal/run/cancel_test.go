@@ -27,10 +27,7 @@ func TestCancelRunRecordsIntentInUTC(t *testing.T) {
 		DisplayName: "Ada Lovelace",
 	}
 
-	record, err := service.CancelRun(
-		context.Background(),
-		CancelRequest{RunID: runID, Actor: &actor},
-	)
+	record, err := service.CancelRun(context.Background(), CancelRequest{RunID: runID, Actor: &actor})
 	if err != nil {
 		t.Fatalf("CancelRun() error = %v", err)
 	}
@@ -67,10 +64,7 @@ func TestCancelRunMapsExpectedFailures(t *testing.T) {
 
 			runs := &recordingRuns{cancelError: test.err}
 			service := &Service{runs: runs, now: time.Now}
-			_, err := service.CancelRun(
-				context.Background(),
-				CancelRequest{RunID: test.runID},
-			)
+			_, err := service.CancelRun(context.Background(), CancelRequest{RunID: test.runID})
 			if !errors.Is(err, test.want) {
 				t.Fatalf("CancelRun() error = %v, want %v", err, test.want)
 			}

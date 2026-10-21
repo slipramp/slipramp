@@ -37,10 +37,7 @@ func (d *Database) CreatePrincipal(
 	return principalFromRow(row), nil
 }
 
-func (d *Database) GetPrincipal(
-	ctx context.Context,
-	principalID uuid.UUID,
-) (productidentity.Principal, error) {
+func (d *Database) GetPrincipal(ctx context.Context, principalID uuid.UUID) (productidentity.Principal, error) {
 	row, err := d.queries.GetPrincipal(ctx, databaseUUID(principalID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return productidentity.Principal{}, productidentity.ErrPrincipalNotFound
@@ -52,9 +49,7 @@ func (d *Database) GetPrincipal(
 	return principalFromRow(row), nil
 }
 
-func (d *Database) ListServiceAccounts(
-	ctx context.Context,
-) ([]productidentity.Principal, error) {
+func (d *Database) ListServiceAccounts(ctx context.Context) ([]productidentity.Principal, error) {
 	rows, err := d.queries.ListServiceAccounts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list product service accounts: %w", err)
@@ -73,10 +68,7 @@ func (d *Database) GetOIDCUser(
 	issuer string,
 	subject string,
 ) (productidentity.Principal, productidentity.OIDCIdentity, error) {
-	row, err := d.queries.GetOIDCIdentity(
-		ctx,
-		storedb.GetOIDCIdentityParams{Issuer: issuer, Subject: subject},
-	)
+	row, err := d.queries.GetOIDCIdentity(ctx, storedb.GetOIDCIdentityParams{Issuer: issuer, Subject: subject})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return productidentity.Principal{}, productidentity.OIDCIdentity{},
 			productidentity.ErrIdentityNotFound
@@ -218,10 +210,7 @@ func (d *Database) UpdateOIDCUser(
 	return principalFromRow(principalRow), oidcIdentityFromRow(identityRow), nil
 }
 
-func (d *Database) CreateAPIKey(
-	ctx context.Context,
-	record productidentity.APIKey,
-) (productidentity.APIKey, error) {
+func (d *Database) CreateAPIKey(ctx context.Context, record productidentity.APIKey) (productidentity.APIKey, error) {
 	row, err := d.queries.CreateAPIKey(
 		ctx,
 		storedb.CreateAPIKeyParams{
@@ -246,10 +235,7 @@ func (d *Database) CreateAPIKey(
 	return apiKeyFromRow(row)
 }
 
-func (d *Database) GetAPIKey(
-	ctx context.Context,
-	keyID uuid.UUID,
-) (productidentity.APIKey, error) {
+func (d *Database) GetAPIKey(ctx context.Context, keyID uuid.UUID) (productidentity.APIKey, error) {
 	row, err := d.queries.GetAPIKey(ctx, databaseUUID(keyID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return productidentity.APIKey{}, productidentity.ErrCredentialNotFound
@@ -261,10 +247,7 @@ func (d *Database) GetAPIKey(
 	return apiKeyFromRow(row)
 }
 
-func (d *Database) ListAPIKeys(
-	ctx context.Context,
-	principalID uuid.UUID,
-) ([]productidentity.APIKey, error) {
+func (d *Database) ListAPIKeys(ctx context.Context, principalID uuid.UUID) ([]productidentity.APIKey, error) {
 	rows, err := d.queries.ListAPIKeysByPrincipal(ctx, databaseUUID(principalID))
 	if err != nil {
 		return nil, fmt.Errorf("list API keys: %w", err)
@@ -308,11 +291,7 @@ func (d *Database) GetAPIKeyPrincipal(
 	return key, principal, nil
 }
 
-func (d *Database) TouchAPIKey(
-	ctx context.Context,
-	keyID uuid.UUID,
-	lastUsedAt time.Time,
-) error {
+func (d *Database) TouchAPIKey(ctx context.Context, keyID uuid.UUID, lastUsedAt time.Time) error {
 	rowsAffected, err := d.queries.TouchAPIKey(
 		ctx,
 		storedb.TouchAPIKeyParams{
@@ -330,11 +309,7 @@ func (d *Database) TouchAPIKey(
 	return nil
 }
 
-func (d *Database) RevokeAPIKey(
-	ctx context.Context,
-	keyID uuid.UUID,
-	revokedAt time.Time,
-) error {
+func (d *Database) RevokeAPIKey(ctx context.Context, keyID uuid.UUID, revokedAt time.Time) error {
 	rowsAffected, err := d.queries.RevokeAPIKey(
 		ctx,
 		storedb.RevokeAPIKeyParams{
@@ -403,11 +378,7 @@ func (d *Database) GetWebSessionPrincipal(
 	return session, principal, nil
 }
 
-func (d *Database) TouchWebSession(
-	ctx context.Context,
-	sessionID uuid.UUID,
-	lastSeenAt time.Time,
-) error {
+func (d *Database) TouchWebSession(ctx context.Context, sessionID uuid.UUID, lastSeenAt time.Time) error {
 	rowsAffected, err := d.queries.TouchWebSession(
 		ctx,
 		storedb.TouchWebSessionParams{
@@ -425,10 +396,7 @@ func (d *Database) TouchWebSession(
 	return nil
 }
 
-func (d *Database) DeleteWebSession(
-	ctx context.Context,
-	sessionID uuid.UUID,
-) error {
+func (d *Database) DeleteWebSession(ctx context.Context, sessionID uuid.UUID) error {
 	rowsAffected, err := d.queries.DeleteWebSession(ctx, databaseUUID(sessionID))
 	if err != nil {
 		return fmt.Errorf("delete web session: %w", err)

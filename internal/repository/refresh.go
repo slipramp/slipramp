@@ -39,11 +39,7 @@ type RefreshResult struct {
 
 type RefreshStore interface {
 	ListRepositories(ctx context.Context) ([]Repository, error)
-	RecordRepositoryRefresh(
-		ctx context.Context,
-		repositoryID RepositoryID,
-		result RefreshResult,
-	) error
+	RecordRepositoryRefresh(ctx context.Context, repositoryID RepositoryID, result RefreshResult) error
 }
 
 type Fetcher interface {

@@ -28,13 +28,7 @@ const (
 )
 
 type ContentStore interface {
-	Put(
-		ctx context.Context,
-		key string,
-		body io.Reader,
-		size int64,
-		options objectstore.PutOptions,
-	) (int64, error)
+	Put(ctx context.Context, key string, body io.Reader, size int64, options objectstore.PutOptions) (int64, error)
 	Open(ctx context.Context, key string) (objectstore.Object, error)
 }
 
@@ -77,11 +71,7 @@ type Service struct {
 	tokenKey []byte
 }
 
-func NewService(
-	metadata Store,
-	contents ContentStore,
-	tokenKeys ...[]byte,
-) *Service {
+func NewService(metadata Store, contents ContentStore, tokenKeys ...[]byte) *Service {
 	tokenKey := []byte("slipramp-artifact-test-token-key")
 	if len(tokenKeys) > 0 {
 		tokenKey = bytes.Clone(tokenKeys[0])
@@ -135,10 +125,7 @@ func (s *Service) AuthenticateRunToken(runID uuid.UUID, token string) bool {
 	return hmac.Equal([]byte(want), []byte(token))
 }
 
-func (s *Service) AppendLogChunk(
-	ctx context.Context,
-	request AppendLogChunkRequest,
-) error {
+func (s *Service) AppendLogChunk(ctx context.Context, request AppendLogChunkRequest) error {
 	if err := request.Validate(); err != nil {
 		return err
 	}
@@ -165,11 +152,7 @@ func (s *Service) AppendLogChunk(
 
 	digest := sha256.Sum256(request.Contents)
 	encodedDigest := hex.EncodeToString(digest[:])
-	objectKey := logChunkObjectKey(
-		request.RunID,
-		request.OffsetBytes,
-		encodedDigest,
-	)
+	objectKey := logChunkObjectKey(request.RunID, request.OffsetBytes, encodedDigest)
 	chunk := LogChunk{
 		ArtifactID:  record.ID,
 		OffsetBytes: request.OffsetBytes,
@@ -179,11 +162,7 @@ func (s *Service) AppendLogChunk(
 		CreatedAt:   s.now().UTC(),
 	}
 
-	existing, err := s.metadata.GetLogChunk(
-		ctx,
-		record.ID,
-		request.OffsetBytes,
-	)
+	existing, err := s.metadata.GetLogChunk(ctx, record.ID, request.OffsetBytes)
 	if err == nil {
 		return compareLogChunks(existing, chunk)
 	}
@@ -202,20 +181,12 @@ func (s *Service) AppendLogChunk(
 		return fmt.Errorf("store log chunk contents: %w", err)
 	}
 	if written != chunk.SizeBytes {
-		return fmt.Errorf(
-			"store log chunk contents: wrote %d bytes, expected %d",
-			written,
-			chunk.SizeBytes,
-		)
+		return fmt.Errorf("store log chunk contents: wrote %d bytes, expected %d", written, chunk.SizeBytes)
 	}
 
 	_, err = s.metadata.CreateLogChunk(ctx, chunk)
 	if errors.Is(err, ErrAlreadyExists) {
-		existing, getErr := s.metadata.GetLogChunk(
-			ctx,
-			record.ID,
-			request.OffsetBytes,
-		)
+		existing, getErr := s.metadata.GetLogChunk(ctx, record.ID, request.OffsetBytes)
 		if getErr != nil {
 			return fmt.Errorf("get concurrently stored log chunk: %w", getErr)
 		}
@@ -229,11 +200,7 @@ func (s *Service) AppendLogChunk(
 	return nil
 }
 
-func (s *Service) GetLogCursor(
-	ctx context.Context,
-	runID uuid.UUID,
-	clusterName string,
-) (LogCursor, error) {
+func (s *Service) GetLogCursor(ctx context.Context, runID uuid.UUID, clusterName string) (LogCursor, error) {
 	if runID == uuid.Nil {
 		return LogCursor{}, invalid("Run ID is required")
 	}
@@ -265,11 +232,7 @@ func (s *Service) SealLog(ctx context.Context, request SealLogRequest) error {
 	if err := cluster.ValidateName(request.ClusterName); err != nil {
 		return invalid("%s", err)
 	}
-	if err := s.authorizeClusterRun(
-		ctx,
-		request.RunID,
-		request.ClusterName,
-	); err != nil {
+	if err := s.authorizeClusterRun(ctx, request.RunID, request.ClusterName); err != nil {
 		return err
 	}
 
@@ -299,13 +262,7 @@ func (s *Service) SealLog(ctx context.Context, request SealLogRequest) error {
 		return ErrSealConflict
 	}
 
-	_, err = s.metadata.SealArtifact(
-		ctx,
-		record.ID,
-		request.SizeBytes,
-		request.SHA256,
-		s.now().UTC(),
-	)
+	_, err = s.metadata.SealArtifact(ctx, record.ID, request.SizeBytes, request.SHA256, s.now().UTC())
 	if err != nil {
 		return fmt.Errorf("seal log artifact: %w", err)
 	}
@@ -313,10 +270,7 @@ func (s *Service) SealLog(ctx context.Context, request SealLogRequest) error {
 	return nil
 }
 
-func (s *Service) Upload(
-	ctx context.Context,
-	request UploadRequest,
-) error {
+func (s *Service) Upload(ctx context.Context, request UploadRequest) error {
 	if request.RunID == uuid.Nil || request.Body == nil || request.SizeBytes < 0 ||
 		!sha256Pattern.MatchString(request.SHA256) {
 		return invalid("Run ID, body, nonnegative size, and SHA-256 digest are required")
@@ -331,11 +285,7 @@ func (s *Service) Upload(
 		return ErrNotFound
 	}
 
-	existing, err := s.metadata.GetArtifactByRunAndName(
-		ctx,
-		request.RunID,
-		request.Name,
-	)
+	existing, err := s.metadata.GetArtifactByRunAndName(ctx, request.RunID, request.Name)
 	if err == nil {
 		return compareUpload(existing, request)
 	}
@@ -382,11 +332,7 @@ func (s *Service) Upload(
 	}
 	_, err = s.metadata.CreateArtifact(ctx, record)
 	if errors.Is(err, ErrAlreadyExists) {
-		existing, getErr := s.metadata.GetArtifactByRunAndName(
-			ctx,
-			request.RunID,
-			request.Name,
-		)
+		existing, getErr := s.metadata.GetArtifactByRunAndName(ctx, request.RunID, request.Name)
 		if getErr != nil {
 			return fmt.Errorf("get concurrently uploaded artifact: %w", getErr)
 		}
@@ -400,10 +346,7 @@ func (s *Service) Upload(
 	return nil
 }
 
-func (s *Service) List(
-	ctx context.Context,
-	runID uuid.UUID,
-) ([]Record, error) {
+func (s *Service) List(ctx context.Context, runID uuid.UUID) ([]Record, error) {
 	if _, err := s.metadata.GetRunClusterName(ctx, runID); err != nil {
 		return nil, err
 	}
@@ -425,10 +368,7 @@ func (s *Service) List(
 	return result, nil
 }
 
-func (s *Service) OpenArtifact(
-	ctx context.Context,
-	artifactID uuid.UUID,
-) (Content, error) {
+func (s *Service) OpenArtifact(ctx context.Context, artifactID uuid.UUID) (Content, error) {
 	record, err := s.metadata.GetArtifact(ctx, artifactID)
 	if err != nil {
 		return Content{}, err
@@ -437,11 +377,7 @@ func (s *Service) OpenArtifact(
 	return s.openRecord(ctx, record)
 }
 
-func (s *Service) OpenInput(
-	ctx context.Context,
-	runID uuid.UUID,
-	inputName string,
-) (Content, error) {
+func (s *Service) OpenInput(ctx context.Context, runID uuid.UUID, inputName string) (Content, error) {
 	record, err := s.metadata.GetRunInputArtifact(ctx, runID, inputName)
 	if err != nil {
 		return Content{}, err
@@ -450,11 +386,7 @@ func (s *Service) OpenInput(
 	return s.openRecord(ctx, record)
 }
 
-func (s *Service) StreamLog(
-	ctx context.Context,
-	runID uuid.UUID,
-	offsetBytes int64,
-) (io.ReadCloser, error) {
+func (s *Service) StreamLog(ctx context.Context, runID uuid.UUID, offsetBytes int64) (io.ReadCloser, error) {
 	if offsetBytes < 0 {
 		return nil, invalid("log offset must not be negative")
 	}
@@ -475,10 +407,7 @@ func (s *Service) StreamLog(
 	return reader, nil
 }
 
-func (s *Service) ensureLogArtifact(
-	ctx context.Context,
-	runID uuid.UUID,
-) (Artifact, error) {
+func (s *Service) ensureLogArtifact(ctx context.Context, runID uuid.UUID) (Artifact, error) {
 	record, err := s.metadata.GetArtifactByRunAndName(ctx, runID, logArtifactName)
 	if err == nil {
 		return record, nil
@@ -499,11 +428,7 @@ func (s *Service) ensureLogArtifact(
 	}
 	created, err := s.metadata.CreateArtifact(ctx, record)
 	if errors.Is(err, ErrAlreadyExists) {
-		existing, getErr := s.metadata.GetArtifactByRunAndName(
-			ctx,
-			runID,
-			logArtifactName,
-		)
+		existing, getErr := s.metadata.GetArtifactByRunAndName(ctx, runID, logArtifactName)
 		if getErr != nil {
 			return Artifact{}, fmt.Errorf("get concurrently created Run log artifact: %w", getErr)
 		}
@@ -527,11 +452,7 @@ func compareLogChunks(existing, candidate LogChunk) error {
 	return ErrChunkConflict
 }
 
-func logChunkObjectKey(
-	runID uuid.UUID,
-	offsetBytes int64,
-	digest string,
-) string {
+func logChunkObjectKey(runID uuid.UUID, offsetBytes int64, digest string) string {
 	return strings.Join(
 		[]string{
 			"runs",
@@ -546,17 +467,10 @@ func logChunkObjectKey(
 }
 
 func outputObjectKey(runID uuid.UUID, name, digest string) string {
-	return strings.Join(
-		[]string{"runs", runID.String(), "artifacts", name, "content-" + digest},
-		"/",
-	)
+	return strings.Join([]string{"runs", runID.String(), "artifacts", name, "content-" + digest}, "/")
 }
 
-func (s *Service) authorizeClusterRun(
-	ctx context.Context,
-	runID uuid.UUID,
-	clusterName string,
-) error {
+func (s *Service) authorizeClusterRun(ctx context.Context, runID uuid.UUID, clusterName string) error {
 	assignedCluster, err := s.metadata.GetRunClusterName(ctx, runID)
 	if errors.Is(err, ErrNotFound) ||
 		(err == nil && assignedCluster != clusterName) {
@@ -578,10 +492,7 @@ func compareUpload(existing Artifact, request UploadRequest) error {
 	return ErrChunkConflict
 }
 
-func (s *Service) openRecord(
-	ctx context.Context,
-	record Artifact,
-) (Content, error) {
+func (s *Service) openRecord(ctx context.Context, record Artifact) (Content, error) {
 	if record.RetentionState != RetentionRetained {
 		return Content{}, ErrNotFound
 	}
@@ -614,11 +525,7 @@ func (s *Service) openRecord(
 	return Content{Artifact: record, Body: reader}, nil
 }
 
-func (s *Service) copyLogContents(
-	ctx context.Context,
-	artifactID uuid.UUID,
-	destination io.Writer,
-) (int64, error) {
+func (s *Service) copyLogContents(ctx context.Context, artifactID uuid.UUID, destination io.Writer) (int64, error) {
 	chunks, err := s.metadata.ListLogChunks(ctx, artifactID, 0)
 	if err != nil {
 		return 0, err
@@ -655,12 +562,7 @@ func (s *Service) copyLogContents(
 	return offset, nil
 }
 
-func (s *Service) writeLogEvents(
-	ctx context.Context,
-	writer *io.PipeWriter,
-	artifactID uuid.UUID,
-	offsetBytes int64,
-) {
+func (s *Service) writeLogEvents(ctx context.Context, writer *io.PipeWriter, artifactID uuid.UUID, offsetBytes int64) {
 	defer func() { _ = writer.Close() }()
 
 	cursor := offsetBytes
@@ -731,11 +633,7 @@ func (s *Service) writeLogEvents(
 			return
 		}
 		if record.State != StateOpen && cursor >= record.SizeBytes {
-			_, _ = fmt.Fprintf(
-				writer,
-				"id: %d\nevent: sealed\ndata: {}\n\n",
-				cursor,
-			)
+			_, _ = fmt.Fprintf(writer, "id: %d\nevent: sealed\ndata: {}\n\n", cursor)
 			return
 		}
 

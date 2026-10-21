@@ -46,21 +46,12 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 	}
 	httpHandler := newAuthenticationHandler(service)
 
-	loginRequest := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/auth/login",
-		nil,
-	)
+	loginRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/login", nil)
 	loginResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(loginResponse, loginRequest)
 	if loginResponse.Code != http.StatusSeeOther ||
 		loginResponse.Header().Get("Location") != service.login.AuthorizationURL {
-		t.Fatalf(
-			"login status=%d location=%q",
-			loginResponse.Code,
-			loginResponse.Header().Get("Location"),
-		)
+		t.Fatalf("login status=%d location=%q", loginResponse.Code, loginResponse.Header().Get("Location"))
 	}
 	if loginResponse.Header().Get("Cache-Control") != "no-store" {
 		t.Errorf("login Cache-Control = %q", loginResponse.Header().Get("Cache-Control"))
@@ -103,12 +94,7 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 		t.Errorf("session cookie = %#v", sessionCookie)
 	}
 
-	sessionRequest := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/auth/session",
-		nil,
-	)
+	sessionRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/auth/session", nil)
 	sessionRequest.AddCookie(sessionCookie)
 	sessionResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(sessionResponse, sessionRequest)
@@ -134,12 +120,7 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 		t.Errorf("authenticated token = %q", service.authToken)
 	}
 
-	logoutRequest := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/auth/logout",
-		nil,
-	)
+	logoutRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/auth/logout", nil)
 	logoutRequest.Header.Set("X-Slipramp-CSRF", "1")
 	logoutRequest.AddCookie(sessionCookie)
 	logoutResponse := httptest.NewRecorder()
@@ -225,22 +206,11 @@ func TestProductAuthenticatorPrefersExplicitBearerCredential(t *testing.T) {
 
 	service := &recordingProductAuthenticationService{}
 	authenticator := newProductAuthenticator(service)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/runs",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs", nil)
 	request.Header.Set("Authorization", "Bearer slipramp_key_secret")
-	request.AddCookie(&http.Cookie{
-		Name:  productauth.SessionCookieName,
-		Value: "session-token",
-	})
+	request.AddCookie(&http.Cookie{Name: productauth.SessionCookieName, Value: "session-token"})
 
-	if _, err := authenticator.AuthenticateProductRequest(
-		context.Background(),
-		request,
-	); err != nil {
+	if _, err := authenticator.AuthenticateProductRequest(context.Background(), request); err != nil {
 		t.Fatalf("AuthenticateProductRequest() error = %v", err)
 	}
 	if service.apiKeyToken != "slipramp_key_secret" || service.authToken != "" {
@@ -253,18 +223,10 @@ func TestProductAuthenticatorRejectsMalformedBearerWithoutSessionFallback(t *tes
 
 	service := &recordingProductAuthenticationService{}
 	authenticator := newProductAuthenticator(service)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/runs",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs", nil)
 	request.Header.Add("Authorization", "Bearer first")
 	request.Header.Add("Authorization", "Bearer second")
-	request.AddCookie(&http.Cookie{
-		Name:  productauth.SessionCookieName,
-		Value: "session-token",
-	})
+	request.AddCookie(&http.Cookie{Name: productauth.SessionCookieName, Value: "session-token"})
 
 	_, err := authenticator.AuthenticateProductRequest(context.Background(), request)
 	if !errors.Is(err, productidentity.ErrUnauthenticated) {
@@ -337,11 +299,7 @@ func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
 		t.Errorf("create API key request = %#v", service)
 	}
 
-	accountsRequest := authenticatedProductRequest(
-		http.MethodGet,
-		"/api/v1/service-accounts",
-		"",
-	)
+	accountsRequest := authenticatedProductRequest(http.MethodGet, "/api/v1/service-accounts", "")
 	accountsResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(accountsResponse, accountsRequest)
 	if accountsResponse.Code != http.StatusOK ||
@@ -402,33 +360,14 @@ func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
 }
 
 func authenticatedProductRequest(method, path, body string) *http.Request {
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		method,
-		path,
-		strings.NewReader(body),
-	)
-	request.AddCookie(&http.Cookie{
-		Name:  productauth.SessionCookieName,
-		Value: "session-token",
-	})
+	request := httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
+	request.AddCookie(&http.Cookie{Name: productauth.SessionCookieName, Value: "session-token"})
 
 	return request
 }
 
 func newAuthenticationHandler(service handler.ProductAuthenticationService) http.Handler {
-	return newHTTPHandler(
-		&recordingClusterService{},
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		service,
-		nil,
-	)
+	return newHTTPHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil, nil, service, nil)
 }
 
 type recordingProductAuthenticationService struct {
@@ -564,10 +503,7 @@ func (s *recordingProductAuthenticationService) CreateServiceAccountAPIKey(
 	return s.createdAPIKey, nil
 }
 
-func (s *recordingProductAuthenticationService) RevokeSession(
-	_ context.Context,
-	token string,
-) error {
+func (s *recordingProductAuthenticationService) RevokeSession(_ context.Context, token string) error {
 	s.revokedToken = token
 
 	return s.revokeErr

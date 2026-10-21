@@ -11,15 +11,8 @@ import (
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
-func validateTarget(
-	target Target,
-	runtimes map[string]Runtime,
-	placements placement.Set,
-) error {
-	if err := kubevalidate.DNSLabel(
-		"target metadata.name",
-		target.Metadata.Name,
-	); err != nil {
+func validateTarget(target Target, runtimes map[string]Runtime, placements placement.Set) error {
+	if err := kubevalidate.DNSLabel("target metadata.name", target.Metadata.Name); err != nil {
 		return validationError(target.Source, err)
 	}
 
@@ -36,10 +29,7 @@ func validateTarget(
 			return validationError(target.Source, err)
 		}
 		if _, found := seenWatchPatterns[pattern]; found {
-			return validationError(
-				target.Source,
-				fmt.Errorf("target watch pattern %q is duplicated", pattern),
-			)
+			return validationError(target.Source, fmt.Errorf("target watch pattern %q is duplicated", pattern))
 		}
 		seenWatchPatterns[pattern] = struct{}{}
 	}
@@ -51,44 +41,26 @@ func validateTarget(
 	}
 
 	if target.Spec.Placement != "" {
-		if err := kubevalidate.DNSLabel(
-			"target placement",
-			target.Spec.Placement,
-		); err != nil {
+		if err := kubevalidate.DNSLabel("target placement", target.Spec.Placement); err != nil {
 			return validationError(target.Source, err)
 		}
 		if _, found := placements.Lookup(target.Spec.Placement); !found {
-			return validationError(
-				target.Source,
-				fmt.Errorf(
-					"placement %q is not defined",
-					target.Spec.Placement,
-				),
-			)
+			return validationError(target.Source, fmt.Errorf("placement %q is not defined", target.Spec.Placement))
 		}
 	}
 
-	if err := validateCredentialBindings(
-		"target",
-		target.Spec.Credentials,
-	); err != nil {
+	if err := validateCredentialBindings("target", target.Spec.Credentials); err != nil {
 		return validationError(target.Source, err)
 	}
 	if err := validateTimeout("target timeout", target.Spec.Timeout); err != nil {
 		return validationError(target.Source, err)
 	}
-	if err := validateResourceValues(
-		"target",
-		target.Spec.Resources,
-	); err != nil {
+	if err := validateResourceValues("target", target.Spec.Resources); err != nil {
 		return validationError(target.Source, err)
 	}
 
 	if len(target.Spec.Actions) == 0 {
-		return validationError(
-			target.Source,
-			errors.New("target must define at least one action"),
-		)
+		return validationError(target.Source, errors.New("target must define at least one action"))
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(target.Spec.Actions)) {
@@ -123,13 +95,7 @@ func validateAction(
 	}
 
 	if len(action.Triggers) > 0 {
-		return validationError(
-			source,
-			fmt.Errorf(
-				"action %q declares triggers, which are not supported",
-				name,
-			),
-		)
+		return validationError(source, fmt.Errorf("action %q declares triggers, which are not supported", name))
 	}
 
 	if err := validateIntent(name, action.Intent); err != nil {
@@ -140,43 +106,25 @@ func validateAction(
 	}
 
 	if effective.Runtime == "" {
-		return validationError(
-			source,
-			fmt.Errorf("action %q must select a runtime", name),
-		)
+		return validationError(source, fmt.Errorf("action %q must select a runtime", name))
 	}
 	runtime, found := runtimes[effective.Runtime]
 	if !found {
-		return validationError(
-			source,
-			fmt.Errorf("runtime %q is not defined", effective.Runtime),
-		)
+		return validationError(source, fmt.Errorf("runtime %q is not defined", effective.Runtime))
 	}
 
 	if effective.Placement == "" {
-		return validationError(
-			source,
-			fmt.Errorf("action %q must select a placement", name),
-		)
+		return validationError(source, fmt.Errorf("action %q must select a placement", name))
 	}
-	if err := kubevalidate.DNSLabel(
-		fmt.Sprintf("action %q placement", name),
-		effective.Placement,
-	); err != nil {
+	if err := kubevalidate.DNSLabel(fmt.Sprintf("action %q placement", name), effective.Placement); err != nil {
 		return validationError(source, err)
 	}
 	placementConfig, found := placements.Lookup(effective.Placement)
 	if !found {
-		return validationError(
-			source,
-			fmt.Errorf("placement %q is not defined", effective.Placement),
-		)
+		return validationError(source, fmt.Errorf("placement %q is not defined", effective.Placement))
 	}
 
-	if err := validateCredentialBindings(
-		fmt.Sprintf("action %q", name),
-		action.Credentials,
-	); err != nil {
+	if err := validateCredentialBindings(fmt.Sprintf("action %q", name), action.Credentials); err != nil {
 		return validationError(source, err)
 	}
 	for _, credentialName := range slices.Sorted(maps.Keys(action.Credentials)) {
@@ -197,11 +145,7 @@ func validateAction(
 		if sourceName == "" {
 			return validationError(
 				source,
-				fmt.Errorf(
-					"action %q must bind runtime credential %q",
-					name,
-					credentialName,
-				),
+				fmt.Errorf("action %q must bind runtime credential %q", name, credentialName),
 			)
 		}
 		if _, found := placementConfig.Credentials[sourceName]; !found {
@@ -218,22 +162,13 @@ func validateAction(
 		}
 	}
 
-	if err := validateTimeout(
-		fmt.Sprintf("action %q timeout", name),
-		action.Timeout,
-	); err != nil {
+	if err := validateTimeout(fmt.Sprintf("action %q timeout", name), action.Timeout); err != nil {
 		return validationError(source, err)
 	}
-	if err := validateResourceValues(
-		fmt.Sprintf("action %q", name),
-		action.Resources,
-	); err != nil {
+	if err := validateResourceValues(fmt.Sprintf("action %q", name), action.Resources); err != nil {
 		return validationError(source, err)
 	}
-	if err := validateResources(
-		fmt.Sprintf("action %q effective", name),
-		effective.Resources,
-	); err != nil {
+	if err := validateResources(fmt.Sprintf("action %q effective", name), effective.Resources); err != nil {
 		return validationError(source, err)
 	}
 	if err := validateResources(
@@ -297,10 +232,7 @@ func validateIntent(actionName, intent string) error {
 	case "", "reconcile", "preview", "operation":
 		return nil
 	default:
-		return fmt.Errorf(
-			"action %q intent must be reconcile, preview, or operation",
-			actionName,
-		)
+		return fmt.Errorf("action %q intent must be reconcile, preview, or operation", actionName)
 	}
 }
 
@@ -310,11 +242,7 @@ func validateCommand(actionName string, command []string) error {
 	}
 	for index, argument := range command {
 		if strings.ContainsRune(argument, '\x00') {
-			return fmt.Errorf(
-				"action %q command argument %d contains a null byte",
-				actionName,
-				index+1,
-			)
+			return fmt.Errorf("action %q command argument %d contains a null byte", actionName, index+1)
 		}
 	}
 
@@ -326,10 +254,7 @@ func validateCredentialBindings(subject string, bindings map[string]string) erro
 		if err := kubevalidate.DNSLabel(subject+" credential name", name); err != nil {
 			return err
 		}
-		if err := kubevalidate.DNSLabel(
-			subject+" credential source",
-			bindings[name],
-		); err != nil {
+		if err := kubevalidate.DNSLabel(subject+" credential source", bindings[name]); err != nil {
 			return err
 		}
 	}
@@ -337,10 +262,7 @@ func validateCredentialBindings(subject string, bindings map[string]string) erro
 	return nil
 }
 
-func validateTargetCredentialUsage(
-	target Target,
-	runtimes map[string]Runtime,
-) error {
+func validateTargetCredentialUsage(target Target, runtimes map[string]Runtime) error {
 	used := map[string]struct{}{}
 	for actionName := range target.Spec.Actions {
 		effective, _ := target.EffectiveAction(actionName)
@@ -352,10 +274,7 @@ func validateTargetCredentialUsage(
 
 	for _, credentialName := range slices.Sorted(maps.Keys(target.Spec.Credentials)) {
 		if _, found := used[credentialName]; !found {
-			return fmt.Errorf(
-				"target binds credential %q not declared by any selected runtime",
-				credentialName,
-			)
+			return fmt.Errorf("target binds credential %q not declared by any selected runtime", credentialName)
 		}
 	}
 

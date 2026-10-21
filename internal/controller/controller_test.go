@@ -27,11 +27,7 @@ type controllerEnrollerFunc func(context.Context) error
 
 func (f controllerEnrollerFunc) Enroll(ctx context.Context) error { return f(ctx) }
 
-type runObservationReporterFunc func(
-	context.Context,
-	uuid.UUID,
-	api.RunObservation,
-) error
+type runObservationReporterFunc func(context.Context, uuid.UUID, api.RunObservation) error
 
 func (f runObservationReporterFunc) ReportObservation(
 	ctx context.Context,
@@ -43,20 +39,14 @@ func (f runObservationReporterFunc) ReportObservation(
 
 type stubRunJobs struct {
 	ensure              func(context.Context, api.RunAssignment) (ensuredRunJob, error)
-	requestCancellation func(
-		context.Context,
-		api.CancelRunCommand,
-	) (cancellationResult, error)
-	recover func(context.Context) ([]jobHandle, error)
-	observe func(context.Context, jobHandle) (runObservation, error)
-	openLog func(context.Context, jobHandle, bool) (io.ReadCloser, error)
-	delete  func(context.Context, jobHandle) error
+	requestCancellation func(context.Context, api.CancelRunCommand) (cancellationResult, error)
+	recover             func(context.Context) ([]jobHandle, error)
+	observe             func(context.Context, jobHandle) (runObservation, error)
+	openLog             func(context.Context, jobHandle, bool) (io.ReadCloser, error)
+	delete              func(context.Context, jobHandle) error
 }
 
-func (s *stubRunJobs) Ensure(
-	ctx context.Context,
-	assignment api.RunAssignment,
-) (ensuredRunJob, error) {
+func (s *stubRunJobs) Ensure(ctx context.Context, assignment api.RunAssignment) (ensuredRunJob, error) {
 	if s.ensure == nil {
 		return ensuredRunJob{}, nil
 	}
@@ -79,18 +69,11 @@ func (s *stubRunJobs) Recover(ctx context.Context) ([]jobHandle, error) {
 	return s.recover(ctx)
 }
 
-func (s *stubRunJobs) Observe(
-	ctx context.Context,
-	handle jobHandle,
-) (runObservation, error) {
+func (s *stubRunJobs) Observe(ctx context.Context, handle jobHandle) (runObservation, error) {
 	return s.observe(ctx, handle)
 }
 
-func (s *stubRunJobs) OpenLog(
-	ctx context.Context,
-	handle jobHandle,
-	follow bool,
-) (io.ReadCloser, error) {
+func (s *stubRunJobs) OpenLog(ctx context.Context, handle jobHandle, follow bool) (io.ReadCloser, error) {
 	if s.openLog == nil {
 		return nil, errLogNotReady
 	}
@@ -109,11 +92,7 @@ func (s *stubRunJobs) Delete(ctx context.Context, handle jobHandle) error {
 func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 	t.Parallel()
 
-	app, err := New(
-		validConfig(),
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
-		fake.NewClientset(),
-	)
+	app, err := New(validConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), fake.NewClientset())
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -166,9 +145,7 @@ func TestControllerRejectsInvalidCredentials(t *testing.T) {
 			t.Parallel()
 
 			app := newTestController(&stubRunJobs{}, &memoryLogReporter{})
-			app.enrollment = controllerEnrollerFunc(func(context.Context) error {
-				return test.enrollment
-			})
+			app.enrollment = controllerEnrollerFunc(func(context.Context) error { return test.enrollment })
 			app.server = commandPollerFunc(func(context.Context) (*api.ControllerCommand, error) {
 				return nil, test.poll
 			})
@@ -187,10 +164,7 @@ func TestControllerReportsMaterializationFailureWithSealedEmptyLog(t *testing.T)
 	runID := uuid.New()
 	logs := &memoryLogReporter{}
 	var reported api.RunObservation
-	jobs := &stubRunJobs{ensure: func(
-		context.Context,
-		api.RunAssignment,
-	) (ensuredRunJob, error) {
+	jobs := &stubRunJobs{ensure: func(context.Context, api.RunAssignment) (ensuredRunJob, error) {
 		return ensuredRunJob{}, permanentMaterialization(errors.New("invalid Job"))
 	}}
 	app := newTestController(jobs, logs)
@@ -207,10 +181,7 @@ func TestControllerReportsMaterializationFailureWithSealedEmptyLog(t *testing.T)
 		return nil
 	})
 
-	if err := app.handleAssignment(
-		context.Background(),
-		api.RunAssignment{ID: runID},
-	); err != nil {
+	if err := app.handleAssignment(context.Background(), api.RunAssignment{ID: runID}); err != nil {
 		t.Fatalf("handleAssignment() error = %v", err)
 	}
 	if reported.Outcome == nil ||
@@ -379,10 +350,7 @@ func TestControllerCancellationDrainsLogBeforeReporting(t *testing.T) {
 
 			return reader, nil
 		},
-		requestCancellation: func(
-			context.Context,
-			api.CancelRunCommand,
-		) (cancellationResult, error) {
+		requestCancellation: func(context.Context, api.CancelRunCommand) (cancellationResult, error) {
 			if _, err := io.WriteString(writer, "during shutdown\n"); err != nil {
 				return cancellationResult{}, err
 			}
@@ -462,10 +430,7 @@ func TestControllerCancellationWinsBeforeMaterialization(t *testing.T) {
 
 			return runObservation{}, nil
 		},
-		requestCancellation: func(
-			_ context.Context,
-			command api.CancelRunCommand,
-		) (cancellationResult, error) {
+		requestCancellation: func(_ context.Context, command api.CancelRunCommand) (cancellationResult, error) {
 			return cancellationResult{handle: jobHandle{
 				runID:     command.ID,
 				namespace: string(command.JobNamespace),
@@ -549,25 +514,12 @@ func TestControllerLeavesJobWhenServerDoesNotOwnRun(t *testing.T) {
 	}
 }
 
-func newTestController(
-	jobs runJobs,
-	logs runLogReporter,
-) *Controller {
+func newTestController(jobs runJobs, logs runLogReporter) *Controller {
 	return &Controller{
-		logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
-		enrollment: controllerEnrollerFunc(func(context.Context) error { return nil }),
-		server: commandPollerFunc(func(
-			context.Context,
-		) (*api.ControllerCommand, error) {
-			return nil, nil
-		}),
-		reports: runObservationReporterFunc(func(
-			context.Context,
-			uuid.UUID,
-			api.RunObservation,
-		) error {
-			return nil
-		}),
+		logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		enrollment:     controllerEnrollerFunc(func(context.Context) error { return nil }),
+		server:         commandPollerFunc(func(context.Context) (*api.ControllerCommand, error) { return nil, nil }),
+		reports:        runObservationReporterFunc(func(context.Context, uuid.UUID, api.RunObservation) error { return nil }),
 		jobs:           jobs,
 		logs:           logs,
 		retryDelay:     time.Millisecond,

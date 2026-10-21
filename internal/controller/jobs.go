@@ -23,10 +23,7 @@ import (
 
 type runJobs interface {
 	Ensure(ctx context.Context, assignment api.RunAssignment) (ensuredRunJob, error)
-	RequestCancellation(
-		ctx context.Context,
-		command api.CancelRunCommand,
-	) (cancellationResult, error)
+	RequestCancellation(ctx context.Context, command api.CancelRunCommand) (cancellationResult, error)
 	Recover(ctx context.Context) ([]jobHandle, error)
 	Observe(ctx context.Context, handle jobHandle) (runObservation, error)
 	OpenLog(ctx context.Context, handle jobHandle, follow bool) (io.ReadCloser, error)
@@ -71,19 +68,13 @@ func (r *kubernetesRunJobs) RequestCancellation(
 		return cancellationResult{handle: handle}, nil
 	}
 	if err != nil {
-		return cancellationResult{}, fmt.Errorf(
-			"get execution Job to cancel: %w",
-			err,
-		)
+		return cancellationResult{}, fmt.Errorf("get execution Job to cancel: %w", err)
 	}
 
 	if job.Labels[managedByLabel] != managedByLabelValue ||
 		job.Labels[runIDLabel] != command.ID.String() ||
 		job.Labels[clusterLabel] != r.config.ClusterName {
-		return cancellationResult{}, fmt.Errorf(
-			"execution Job %q does not have the expected Run identity",
-			name,
-		)
+		return cancellationResult{}, fmt.Errorf("execution Job %q does not have the expected Run identity", name)
 	}
 
 	jobUID := string(job.UID)
@@ -112,10 +103,7 @@ func (r *kubernetesRunJobs) RequestCancellation(
 		},
 	)
 	if err != nil {
-		return cancellationResult{}, fmt.Errorf(
-			"list execution Pods to cancel Run: %w",
-			err,
-		)
+		return cancellationResult{}, fmt.Errorf("list execution Pods to cancel Run: %w", err)
 	}
 	if len(pods.Items) == 0 {
 		propagation := metav1.DeletePropagationForeground
@@ -125,10 +113,7 @@ func (r *kubernetesRunJobs) RequestCancellation(
 		}
 		if err := jobs.Delete(ctx, name, options); err != nil &&
 			!apierrors.IsNotFound(err) {
-			return cancellationResult{}, fmt.Errorf(
-				"delete unstarted execution Job: %w",
-				err,
-			)
+			return cancellationResult{}, fmt.Errorf("delete unstarted execution Job: %w", err)
 		}
 
 		return cancellationResult{handle: handle}, nil
@@ -152,10 +137,7 @@ func (r *kubernetesRunJobs) RequestCancellation(
 			pod,
 			metav1.UpdateOptions{},
 		); err != nil && !apierrors.IsNotFound(err) {
-			return cancellationResult{}, fmt.Errorf(
-				"mark execution Pod for cancellation: %w",
-				err,
-			)
+			return cancellationResult{}, fmt.Errorf("mark execution Pod for cancellation: %w", err)
 		}
 	}
 
@@ -224,10 +206,7 @@ func newKubernetesRunJobs(
 // Ensure creates the deterministic Job for an assignment. A matching existing
 // Job is success because the Server may deliver the same assignment more than
 // once.
-func (r *kubernetesRunJobs) Ensure(
-	ctx context.Context,
-	assignment api.RunAssignment,
-) (ensuredRunJob, error) {
+func (r *kubernetesRunJobs) Ensure(ctx context.Context, assignment api.RunAssignment) (ensuredRunJob, error) {
 	if !r.config.OwnsExecutionNamespace(string(assignment.Placement.JobNamespace)) {
 		return ensuredRunJob{}, permanentMaterialization(fmt.Errorf(
 			"execution namespace %q is not owned by this Controller",
@@ -249,18 +228,12 @@ func (r *kubernetesRunJobs) Ensure(
 		}, nil
 	}
 	if !apierrors.IsAlreadyExists(err) {
-		return ensuredRunJob{}, classifyMaterializationError(
-			"create execution Job",
-			err,
-		)
+		return ensuredRunJob{}, classifyMaterializationError("create execution Job", err)
 	}
 
 	existing, err := jobs.Get(ctx, job.Name, metav1.GetOptions{})
 	if err != nil {
-		return ensuredRunJob{}, classifyMaterializationError(
-			"get existing execution Job",
-			err,
-		)
+		return ensuredRunJob{}, classifyMaterializationError("get existing execution Job", err)
 	}
 
 	if existing.Labels[managedByLabel] != managedByLabelValue ||
@@ -284,16 +257,9 @@ func (r *kubernetesRunJobs) Recover(ctx context.Context) ([]jobHandle, error) {
 	}.String()
 	handles := make([]jobHandle, 0)
 	for _, namespace := range r.config.ExecutionNamespaces {
-		jobs, err := r.jobs.Jobs(namespace).List(
-			ctx,
-			metav1.ListOptions{LabelSelector: selector},
-		)
+		jobs, err := r.jobs.Jobs(namespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
 		if err != nil {
-			return nil, fmt.Errorf(
-				"list managed execution Jobs in namespace %q: %w",
-				namespace,
-				err,
-			)
+			return nil, fmt.Errorf("list managed execution Jobs in namespace %q: %w", namespace, err)
 		}
 
 		for index := range jobs.Items {
@@ -312,24 +278,13 @@ func (r *kubernetesRunJobs) Recover(ctx context.Context) ([]jobHandle, error) {
 	return handles, nil
 }
 
-func (r *kubernetesRunJobs) Observe(
-	ctx context.Context,
-	handle jobHandle,
-) (runObservation, error) {
-	job, err := r.jobs.Jobs(handle.namespace).Get(
-		ctx,
-		handle.name,
-		metav1.GetOptions{},
-	)
+func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runObservation, error) {
+	job, err := r.jobs.Jobs(handle.namespace).Get(ctx, handle.name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			outcome := api.RunObservationOutcomeFailed
 			reason := "JobNotFound"
-			message := fmt.Sprintf(
-				"execution Job %s/%s no longer exists",
-				handle.namespace,
-				handle.name,
-			)
+			message := fmt.Sprintf("execution Job %s/%s no longer exists", handle.namespace, handle.name)
 
 			return runObservation{
 				phase:   api.RunObservationPhaseFinished,
@@ -379,10 +334,7 @@ func (r *kubernetesRunJobs) Observe(
 
 			if status.State.Running != nil {
 				if terminal != nil {
-					return canceledIfRequested(
-						*terminal,
-						cancellationRequested,
-					), nil
+					return canceledIfRequested(*terminal, cancellationRequested), nil
 				}
 
 				return runObservation{
@@ -393,10 +345,7 @@ func (r *kubernetesRunJobs) Observe(
 			if status.State.Terminated != nil {
 				terminated := status.State.Terminated
 				if terminal == nil {
-					return canceledIfRequested(
-						terminatedObservation(terminated, uid),
-						cancellationRequested,
-					), nil
+					return canceledIfRequested(terminatedObservation(terminated, uid), cancellationRequested), nil
 				}
 
 				terminal.exitCode = &terminated.ExitCode
@@ -407,10 +356,7 @@ func (r *kubernetesRunJobs) Observe(
 					terminal.message = optionalNonemptyString(terminated.Message)
 				}
 
-				return canceledIfRequested(
-					*terminal,
-					cancellationRequested,
-				), nil
+				return canceledIfRequested(*terminal, cancellationRequested), nil
 			}
 		}
 	}
@@ -424,10 +370,7 @@ func (r *kubernetesRunJobs) Observe(
 	}, nil
 }
 
-func canceledIfRequested(
-	observation runObservation,
-	requested bool,
-) runObservation {
+func canceledIfRequested(observation runObservation, requested bool) runObservation {
 	if !requested || !observation.terminal() {
 		return observation
 	}
@@ -443,10 +386,7 @@ func canceledIfRequested(
 // Delete removes a completed execution Job only when it still has the UID
 // captured when observation began. A missing Job is success so cleanup remains
 // idempotent when a deletion response is lost or the Controller restarts.
-func (r *kubernetesRunJobs) Delete(
-	ctx context.Context,
-	handle jobHandle,
-) error {
+func (r *kubernetesRunJobs) Delete(ctx context.Context, handle jobHandle) error {
 	if handle.uid == "" {
 		return errors.New("delete execution Job: Job UID is required")
 	}
@@ -457,11 +397,7 @@ func (r *kubernetesRunJobs) Delete(
 		Preconditions:     &metav1.Preconditions{UID: &uid},
 		PropagationPolicy: &propagation,
 	}
-	err := r.jobs.Jobs(handle.namespace).Delete(
-		ctx,
-		handle.name,
-		options,
-	)
+	err := r.jobs.Jobs(handle.namespace).Delete(ctx, handle.name, options)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete completed execution Job: %w", err)
 	}
@@ -469,11 +405,7 @@ func (r *kubernetesRunJobs) Delete(
 	return nil
 }
 
-func (r *kubernetesRunJobs) OpenLog(
-	ctx context.Context,
-	handle jobHandle,
-	follow bool,
-) (io.ReadCloser, error) {
+func (r *kubernetesRunJobs) OpenLog(ctx context.Context, handle jobHandle, follow bool) (io.ReadCloser, error) {
 	pods, err := r.pods.Pods(handle.namespace).List(
 		ctx,
 		metav1.ListOptions{
@@ -487,9 +419,7 @@ func (r *kubernetesRunJobs) OpenLog(
 		return nil, errLogNotReady
 	}
 	sort.Slice(pods.Items, func(left, right int) bool {
-		return pods.Items[left].CreationTimestamp.Before(
-			&pods.Items[right].CreationTimestamp,
-		)
+		return pods.Items[left].CreationTimestamp.Before(&pods.Items[right].CreationTimestamp)
 	})
 	pod := pods.Items[0]
 	for _, status := range pod.Status.ContainerStatuses {
@@ -513,10 +443,7 @@ func (r *kubernetesRunJobs) OpenLog(
 	return stream, nil
 }
 
-func terminalJobObservation(
-	conditions []batchv1.JobCondition,
-	jobUID *string,
-) *runObservation {
+func terminalJobObservation(conditions []batchv1.JobCondition, jobUID *string) *runObservation {
 	for _, condition := range conditions {
 		if condition.Status != corev1.ConditionTrue {
 			continue
@@ -558,10 +485,7 @@ func handleFromJob(job *batchv1.Job, runID uuid.UUID) jobHandle {
 	}
 }
 
-func terminatedObservation(
-	terminated *corev1.ContainerStateTerminated,
-	jobUID *string,
-) runObservation {
+func terminatedObservation(terminated *corev1.ContainerStateTerminated, jobUID *string) runObservation {
 	outcome := api.RunObservationOutcomeFailed
 	if terminated.ExitCode == 0 {
 		outcome = api.RunObservationOutcomeSucceeded

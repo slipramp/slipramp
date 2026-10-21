@@ -36,10 +36,7 @@ func (c Credential) Validate() error {
 	}
 
 	if !sha256Pattern.MatchString(c.SHA256) {
-		return fmt.Errorf(
-			"%w: credential SHA-256 digest must be 64 lowercase hexadecimal characters",
-			ErrInvalid,
-		)
+		return fmt.Errorf("%w: credential SHA-256 digest must be 64 lowercase hexadecimal characters", ErrInvalid)
 	}
 
 	if c.EnrolledAt.IsZero() {
@@ -55,10 +52,7 @@ type Principal struct {
 
 type Store interface {
 	EnrollControllerCredential(ctx context.Context, credential Credential) error
-	GetControllerClusterByCredentialSHA256(
-		ctx context.Context,
-		credentialSHA256 string,
-	) (string, error)
+	GetControllerClusterByCredentialSHA256(ctx context.Context, credentialSHA256 string) (string, error)
 }
 
 type Service struct {
@@ -73,11 +67,7 @@ func NewService(credentials Store) *Service {
 	}
 }
 
-func (s *Service) EnrollController(
-	ctx context.Context,
-	clusterName string,
-	credentialSHA256 string,
-) error {
+func (s *Service) EnrollController(ctx context.Context, clusterName string, credentialSHA256 string) error {
 	credential := Credential{
 		ClusterName: clusterName,
 		SHA256:      credentialSHA256,
@@ -94,20 +84,14 @@ func (s *Service) EnrollController(
 	return nil
 }
 
-func (s *Service) AuthenticateController(
-	ctx context.Context,
-	bearerToken string,
-) (Principal, error) {
+func (s *Service) AuthenticateController(ctx context.Context, bearerToken string) (Principal, error) {
 	if err := auth.ValidateBearerToken(bearerToken); err != nil {
 		return Principal{}, ErrUnauthorized
 	}
 
 	digest := sha256.Sum256([]byte(bearerToken))
 	encodedDigest := hex.EncodeToString(digest[:])
-	clusterName, err := s.credentials.GetControllerClusterByCredentialSHA256(
-		ctx,
-		encodedDigest,
-	)
+	clusterName, err := s.credentials.GetControllerClusterByCredentialSHA256(ctx, encodedDigest)
 	if errors.Is(err, ErrCredentialNotFound) {
 		return Principal{}, ErrUnauthorized
 	}

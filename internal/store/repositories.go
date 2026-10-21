@@ -19,10 +19,7 @@ const activeRepositoryNameConstraint = "repositories_active_name_key"
 
 var _ repository.Store = (*Database)(nil)
 
-func (d *Database) CreateRepository(
-	ctx context.Context,
-	record repository.Repository,
-) (repository.Repository, error) {
+func (d *Database) CreateRepository(ctx context.Context, record repository.Repository) (repository.Repository, error) {
 	row, err := d.queries.CreateRepository(
 		ctx,
 		storedb.CreateRepositoryParams{
@@ -54,9 +51,7 @@ func (d *Database) CreateRepository(
 	return repositoryFromCreateRow(row), nil
 }
 
-func (d *Database) ListRepositories(
-	ctx context.Context,
-) ([]repository.Repository, error) {
+func (d *Database) ListRepositories(ctx context.Context) ([]repository.Repository, error) {
 	rows, err := d.queries.ListRepositories(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list repositories: %w", err)
@@ -86,14 +81,8 @@ func (d *Database) ListRepositories(
 	return repositories, nil
 }
 
-func (d *Database) GetRepository(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-) (repository.Repository, error) {
-	row, err := d.queries.GetActiveRepository(
-		ctx,
-		pgtype.UUID{Bytes: repositoryID, Valid: true},
-	)
+func (d *Database) GetRepository(ctx context.Context, repositoryID uuid.UUID) (repository.Repository, error) {
+	row, err := d.queries.GetActiveRepository(ctx, pgtype.UUID{Bytes: repositoryID, Valid: true})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return repository.Repository{}, repository.ErrNotFound
 	}
@@ -120,11 +109,7 @@ func (d *Database) GetRepository(
 	}, nil
 }
 
-func (d *Database) RemoveRepository(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-	removedAt time.Time,
-) error {
+func (d *Database) RemoveRepository(ctx context.Context, repositoryID uuid.UUID, removedAt time.Time) error {
 	rowsAffected, err := d.queries.RemoveRepository(
 		ctx,
 		storedb.RemoveRepositoryParams{
@@ -149,9 +134,7 @@ func (d *Database) RemoveRepository(
 	return nil
 }
 
-func repositoryFromCreateRow(
-	row storedb.CreateRepositoryRow,
-) repository.Repository {
+func repositoryFromCreateRow(row storedb.CreateRepositoryRow) repository.Repository {
 	return repository.Repository{
 		Name:                   row.Name,
 		CloneURL:               row.CloneUrl,

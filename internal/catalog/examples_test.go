@@ -10,21 +10,21 @@ import (
 	"github.com/slipramp/slipramp/internal/placement"
 )
 
-func TestKcloudOpsExample(t *testing.T) {
+func TestInfrastructureOpsExample(t *testing.T) {
 	t.Parallel()
 
-	exampleRoot := filepath.Join("..", "..", "examples", "kcloud-ops")
+	exampleRoot := filepath.Join("..", "..", "examples", "infrastructure-ops")
 	credentials := map[string]placement.CredentialSource{
-		"ops-ci": {
-			SecretRef: placement.SecretReference{Name: "ops-ci"},
+		"operations": {
+			SecretRef: placement.SecretReference{Name: "infrastructure-operations"},
 		},
-		"homelab-known-hosts": {
-			SecretRef: placement.SecretReference{Name: "kcloud-ops-known-hosts"},
+		"ssh-known-hosts": {
+			SecretRef: placement.SecretReference{Name: "infrastructure-known-hosts"},
 		},
 	}
 	placements, err := placement.NewSet(map[string]placement.Config{
-		"homelab-infrastructure": {
-			ClusterName:  "homelab",
+		"infrastructure-admin": {
+			ClusterName:  "primary",
 			JobNamespace: "slipramp-runs",
 			Credentials:  credentials,
 		},
@@ -50,12 +50,9 @@ func TestKcloudOpsExample(t *testing.T) {
 		targets[target.Metadata.Name] = target
 	}
 
-	nodeExporter := targets["homelab-node-exporter"]
+	nodeExporter := targets["node-exporter"]
 	if len(nodeExporter.Spec.Actions) != 3 {
-		t.Errorf(
-			"node_exporter action count = %d, want 3",
-			len(nodeExporter.Spec.Actions),
-		)
+		t.Errorf("node_exporter action count = %d, want 3", len(nodeExporter.Spec.Actions))
 	}
 	preview := nodeExporter.Spec.Actions["preview"]
 	wantPreviewCommand := []string{
@@ -64,14 +61,10 @@ func TestKcloudOpsExample(t *testing.T) {
 		"exporter_nodes",
 	}
 	if !slices.Equal(preview.Command, wantPreviewCommand) {
-		t.Errorf(
-			"node_exporter preview command = %q, want %q",
-			preview.Command,
-			wantPreviewCommand,
-		)
+		t.Errorf("node_exporter preview command = %q, want %q", preview.Command, wantPreviewCommand)
 	}
 
-	rustfs := targets["rustfs-homelab"]
+	rustfs := targets["rustfs-buckets"]
 	apply, found := rustfs.EffectiveAction("apply")
 	if !found {
 		t.Fatal("rustfs apply action not found")
@@ -85,12 +78,9 @@ func TestKcloudOpsExample(t *testing.T) {
 		)
 	}
 
-	upgrade := targets["homelab-kubernetes-upgrade"]
+	upgrade := targets["kubernetes-upgrade"]
 	if len(upgrade.Spec.Actions) != 4 {
-		t.Errorf(
-			"kubernetes upgrade action count = %d, want 4",
-			len(upgrade.Spec.Actions),
-		)
+		t.Errorf("kubernetes upgrade action count = %d, want 4", len(upgrade.Spec.Actions))
 	}
 	upgradeHost := upgrade.Spec.Actions["upgrade-node"].Parameters["host"]
 	if upgradeHost.Type != catalog.ParameterTypeEnum || !upgradeHost.Required {
@@ -101,11 +91,7 @@ func TestKcloudOpsExample(t *testing.T) {
 		t.Errorf("preview host parameter = %#v, want required enum", previewHost)
 	}
 	if !slices.Equal(previewHost.Values, upgradeHost.Values) {
-		t.Errorf(
-			"preview host values = %q, want %q",
-			previewHost.Values,
-			upgradeHost.Values,
-		)
+		t.Errorf("preview host values = %q, want %q", previewHost.Values, upgradeHost.Values)
 	}
 	for _, actionName := range []string{
 		"upgrade-node",
@@ -117,21 +103,13 @@ func TestKcloudOpsExample(t *testing.T) {
 		if aptUpgrade.Type != catalog.ParameterTypeBoolean ||
 			aptUpgrade.Argument == nil ||
 			aptUpgrade.Argument.Name != "--apt-upgrade" {
-			t.Errorf(
-				"%s apt-upgrade parameter = %#v, want --apt-upgrade boolean flag",
-				actionName,
-				aptUpgrade,
-			)
+			t.Errorf("%s apt-upgrade parameter = %#v, want --apt-upgrade boolean flag", actionName, aptUpgrade)
 		}
 		reboot := action.Parameters["reboot"]
 		if reboot.Type != catalog.ParameterTypeBoolean ||
 			reboot.Argument == nil ||
 			reboot.Argument.Name != "--reboot" {
-			t.Errorf(
-				"%s reboot parameter = %#v, want --reboot boolean flag",
-				actionName,
-				reboot,
-			)
+			t.Errorf("%s reboot parameter = %#v, want --reboot boolean flag", actionName, reboot)
 		}
 	}
 }

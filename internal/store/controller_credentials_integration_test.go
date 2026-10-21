@@ -24,10 +24,7 @@ func TestControllerCredentialPersistenceIntegration(t *testing.T) {
 		t.Fatalf("EnrollControllerCredential() error = %v", err)
 	}
 
-	clusterName, err := database.GetControllerClusterByCredentialSHA256(
-		ctx,
-		credential.SHA256,
-	)
+	clusterName, err := database.GetControllerClusterByCredentialSHA256(ctx, credential.SHA256)
 	if err != nil {
 		t.Fatalf("GetControllerClusterByCredentialSHA256() error = %v", err)
 	}
@@ -60,10 +57,7 @@ func TestControllerCredentialPersistenceIntegration(t *testing.T) {
 		t.Errorf("duplicate credential error = %v, want conflict", err)
 	}
 
-	_, err = database.GetControllerClusterByCredentialSHA256(
-		context.Background(),
-		strings.Repeat("c", 64),
-	)
+	_, err = database.GetControllerClusterByCredentialSHA256(context.Background(), strings.Repeat("c", 64))
 	if !errors.Is(err, controlleridentity.ErrCredentialNotFound) {
 		t.Errorf("unknown credential error = %v, want not found", err)
 	}

@@ -10,19 +10,12 @@ import (
 var ErrNotFound = errors.New("active catalog not found")
 
 type Store interface {
-	GetActiveCatalogRevision(
-		ctx context.Context,
-		repositoryID uuid.UUID,
-	) (Revision, error)
+	GetActiveCatalogRevision(ctx context.Context, repositoryID uuid.UUID) (Revision, error)
 	GetCatalogRevision(context.Context, uuid.UUID, uuid.UUID) (Revision, error)
 	ListActiveTargets(context.Context, TargetListFilter) (TargetList, error)
 }
 
-func (s *Service) GetRevision(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-	revisionID uuid.UUID,
-) (Revision, error) {
+func (s *Service) GetRevision(ctx context.Context, repositoryID uuid.UUID, revisionID uuid.UUID) (Revision, error) {
 	return s.catalogs.GetCatalogRevision(ctx, repositoryID, revisionID)
 }
 
@@ -34,16 +27,10 @@ func NewService(catalogs Store) *Service {
 	return &Service{catalogs: catalogs}
 }
 
-func (s *Service) GetActiveRevision(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-) (Revision, error) {
+func (s *Service) GetActiveRevision(ctx context.Context, repositoryID uuid.UUID) (Revision, error) {
 	return s.catalogs.GetActiveCatalogRevision(ctx, repositoryID)
 }
 
-func (s *Service) ListTargets(
-	ctx context.Context,
-	filter TargetListFilter,
-) (TargetList, error) {
+func (s *Service) ListTargets(ctx context.Context, filter TargetListFilter) (TargetList, error) {
 	return s.catalogs.ListActiveTargets(ctx, filter)
 }

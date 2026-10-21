@@ -4,7 +4,7 @@ metadata:
   name: pyinfra
   title: pyinfra operations image
 spec:
-  image: ghcr.io/ianunruh/kcloud-ops@sha256:e944138a392bd0900b391d38d411de78177584d4fa387b179ca871e24bdfb2cd
+  image: registry.example.com/infrastructure-toolbox:v1.0.0
   workingDirectory: /workspace
   environment:
     PYTHONUNBUFFERED: "1"
@@ -22,13 +22,13 @@ metadata:
   name: terraform-rustfs
   title: Terraform and RustFS operations image
 spec:
-  image: ghcr.io/ianunruh/kcloud-ops@sha256:e944138a392bd0900b391d38d411de78177584d4fa387b179ca871e24bdfb2cd
+  image: registry.example.com/infrastructure-toolbox:v1.0.0
   workingDirectory: /workspace
   environment:
     TF_IN_AUTOMATION: "true"
     TF_INPUT: "false"
   credentials:
-    ops-ci:
+    operations:
       inject:
         environment:
           AWS_ACCESS_KEY_ID:
@@ -46,12 +46,12 @@ metadata:
   name: kubernetes-upgrade
   title: Kubernetes upgrade operations image
 spec:
-  image: ghcr.io/ianunruh/kcloud-ops@sha256:e944138a392bd0900b391d38d411de78177584d4fa387b179ca871e24bdfb2cd
+  image: registry.example.com/infrastructure-toolbox:v1.0.0
   workingDirectory: /workspace
   environment:
     PYTHONUNBUFFERED: "1"
   credentials:
-    ops-ci:
+    operations:
       inject:
         files:
           - key: SSH_PRIVATE_KEY

@@ -14,18 +14,10 @@ import (
 func TestHealthEndpoint(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/healthz",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
-		response,
-		request,
-	)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
 	expectedBody := "{\"status\":\"ok\"}\n"
 
 	if response.Code != http.StatusOK {
@@ -33,37 +25,21 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	if response.Body.String() != expectedBody {
-		t.Errorf(
-			"body = %q, want %q",
-			response.Body.String(),
-			expectedBody,
-		)
+		t.Errorf("body = %q, want %q", response.Body.String(), expectedBody)
 	}
 
 	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
-		t.Errorf(
-			"Content-Type = %q, want %q",
-			contentType,
-			"application/json",
-		)
+		t.Errorf("Content-Type = %q, want %q", contentType, "application/json")
 	}
 }
 
 func TestHealthEndpointRejectsOtherMethods(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/healthz",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/healthz", nil)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
-		response,
-		request,
-	)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusMethodNotAllowed)
 }
@@ -71,12 +47,7 @@ func TestHealthEndpointRejectsOtherMethods(t *testing.T) {
 func TestHealthEndpointDoesNotCheckDependencies(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/healthz",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/healthz", nil)
 	response := httptest.NewRecorder()
 	httpHandler := newSystemTestHandler(readiness.Report{
 		Database:        readiness.DependencyUnavailable,
@@ -132,12 +103,7 @@ func TestReadinessEndpoint(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			request := httptest.NewRequestWithContext(
-				context.Background(),
-				http.MethodGet,
-				"/readyz",
-				nil,
-			)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/readyz", nil)
 			response := httptest.NewRecorder()
 			httpHandler := newSystemTestHandler(test.report)
 
@@ -158,18 +124,10 @@ func TestReadinessEndpoint(t *testing.T) {
 				t.Errorf("response status = %q, want %q", body.Status, test.wantReady)
 			}
 			if body.Database != api.DependencyStatus(test.report.Database) {
-				t.Errorf(
-					"database = %q, want %q",
-					body.Database,
-					test.report.Database,
-				)
+				t.Errorf("database = %q, want %q", body.Database, test.report.Database)
 			}
 			if body.ArtifactStorage != api.DependencyStatus(test.report.ArtifactStorage) {
-				t.Errorf(
-					"artifact storage = %q, want %q",
-					body.ArtifactStorage,
-					test.report.ArtifactStorage,
-				)
+				t.Errorf("artifact storage = %q, want %q", body.ArtifactStorage, test.report.ArtifactStorage)
 			}
 		})
 	}
@@ -178,18 +136,10 @@ func TestReadinessEndpoint(t *testing.T) {
 func TestReadinessEndpointRejectsOtherMethods(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/readyz",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/readyz", nil)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(
-		response,
-		request,
-	)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusMethodNotAllowed)
 }

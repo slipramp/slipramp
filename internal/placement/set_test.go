@@ -35,39 +35,25 @@ func TestSetOwnsConfig(t *testing.T) {
 	}
 
 	if cfg.NodeSelector["region"] != "west" {
-		t.Errorf(
-			"NodeSelector[region] = %q, want %q",
-			cfg.NodeSelector["region"],
-			"west",
-		)
+		t.Errorf("NodeSelector[region] = %q, want %q", cfg.NodeSelector["region"], "west")
 	}
 
 	cfg.Resources.Requests["cpu"] = "2"
 	cfg.PodTemplate.Labels["identity"] = "disabled"
 	cfg, _ = placements.Lookup("infrastructure")
 	if cfg.Resources.Requests["cpu"] != "100m" {
-		t.Errorf(
-			"Resources.Requests[cpu] = %q, want %q",
-			cfg.Resources.Requests["cpu"],
-			"100m",
-		)
+		t.Errorf("Resources.Requests[cpu] = %q, want %q", cfg.Resources.Requests["cpu"], "100m")
 	}
 
 	if cfg.PodTemplate.Labels["identity"] != "enabled" {
-		t.Errorf(
-			"PodTemplate.Labels[identity] = %q, want %q",
-			cfg.PodTemplate.Labels["identity"],
-			"enabled",
-		)
+		t.Errorf("PodTemplate.Labels[identity] = %q, want %q", cfg.PodTemplate.Labels["identity"], "enabled")
 	}
 }
 
 func TestNewSetRejectsInvalidPlacement(t *testing.T) {
 	t.Parallel()
 
-	_, err := NewSet(map[string]Config{
-		"Infrastructure": validConfig(),
-	})
+	_, err := NewSet(map[string]Config{"Infrastructure": validConfig()})
 	if err == nil {
 		t.Fatal("NewSet() error = nil, want an error")
 	}

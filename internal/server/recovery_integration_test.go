@@ -51,9 +51,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 	})
 
 	firstRunID, secondRunID := createRecoveryRuns(t, ctx, app.persistence.database)
-	productAuthorization := bearerAuthorization(
-		createRecoveryProductAPIKey(t, ctx, app.persistence.database, cfg),
-	)
+	productAuthorization := bearerAuthorization(createRecoveryProductAPIKey(t, ctx, app.persistence.database, cfg))
 	client := recoveryAPIClient(t, app.httpServer.Handler)
 	controllerAuthorization := bearerAuthorization(recoveryControllerToken)
 
@@ -147,11 +145,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 	}
 	requireRecoveryStatus(t, blocked, http.StatusNoContent)
 
-	cursor, err := client.GetRunLogCursorWithResponse(
-		ctx,
-		firstRunID,
-		controllerAuthorization,
-	)
+	cursor, err := client.GetRunLogCursorWithResponse(ctx, firstRunID, controllerAuthorization)
 	if err != nil {
 		t.Fatalf("get recovered log cursor: %v", err)
 	}
@@ -228,11 +222,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 		t.Fatalf("recovered Run = %#v", loaded.JSON200)
 	}
 
-	artifacts, err := client.ListRunArtifactsWithResponse(
-		ctx,
-		firstRunID,
-		productAuthorization,
-	)
+	artifacts, err := client.ListRunArtifactsWithResponse(ctx, firstRunID, productAuthorization)
 	if err != nil {
 		t.Fatalf("list recovered artifacts: %v", err)
 	}
@@ -244,11 +234,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 		t.Fatalf("recovered log artifact = %#v", logArtifact)
 	}
 
-	download, err := client.DownloadArtifactWithResponse(
-		ctx,
-		logArtifact.ID,
-		productAuthorization,
-	)
+	download, err := client.DownloadArtifactWithResponse(ctx, logArtifact.ID, productAuthorization)
 	if err != nil {
 		t.Fatalf("download recovered log: %v", err)
 	}
@@ -268,19 +254,11 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 	requireRecoveryStatus(t, nextAssignment, http.StatusOK)
 	if nextAssignment.JSON200 == nil || nextAssignment.JSON200.Assignment == nil ||
 		nextAssignment.JSON200.Assignment.ID != secondRunID {
-		t.Fatalf(
-			"assignment after recovery = %#v, want Run %s",
-			nextAssignment.JSON200,
-			secondRunID,
-		)
+		t.Fatalf("assignment after recovery = %#v, want Run %s", nextAssignment.JSON200, secondRunID)
 	}
 }
 
-func createRecoveryRuns(
-	t *testing.T,
-	ctx context.Context,
-	database *store.Database,
-) (uuid.UUID, uuid.UUID) {
+func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Database) (uuid.UUID, uuid.UUID) {
 	t.Helper()
 
 	repositoryID := uuid.New()
@@ -421,10 +399,7 @@ func recoveryIntegrationConfig(t *testing.T) Config {
 		cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if _, err := adminPool.Exec(
-			cleanupContext,
-			"DROP DATABASE "+identifier+" WITH (FORCE)",
-		); err != nil {
+		if _, err := adminPool.Exec(cleanupContext, "DROP DATABASE "+identifier+" WITH (FORCE)"); err != nil {
 			t.Errorf("drop recovery database: %v", err)
 		}
 	})
@@ -450,27 +425,14 @@ func recoveryIntegrationConfig(t *testing.T) Config {
 	return cfg
 }
 
-func createRecoveryProductAPIKey(
-	t *testing.T,
-	ctx context.Context,
-	database *store.Database,
-	cfg Config,
-) string {
+func createRecoveryProductAPIKey(t *testing.T, ctx context.Context, database *store.Database, cfg Config) string {
 	t.Helper()
 
-	service, err := productauth.NewService(
-		database,
-		recoveryOIDCProvider{},
-		cfg.ProductAuthentication,
-	)
+	service, err := productauth.NewService(database, recoveryOIDCProvider{}, cfg.ProductAuthentication)
 	if err != nil {
 		t.Fatalf("create recovery product authentication service: %v", err)
 	}
-	principal, err := service.CreateServiceAccount(
-		ctx,
-		"Recovery integration",
-		productidentity.RoleAdmin,
-	)
+	principal, err := service.CreateServiceAccount(ctx, "Recovery integration", productidentity.RoleAdmin)
 	if err != nil {
 		t.Fatalf("create recovery service account: %v", err)
 	}
@@ -495,12 +457,7 @@ func (recoveryOIDCProvider) AuthorizationURL(string, string, string) string {
 	return "http://slipramp.test/authorize"
 }
 
-func (recoveryOIDCProvider) Authenticate(
-	context.Context,
-	string,
-	string,
-	string,
-) (productauth.OIDCProfile, error) {
+func (recoveryOIDCProvider) Authenticate(context.Context, string, string, string) (productauth.OIDCProfile, error) {
 	return productauth.OIDCProfile{}, errors.New("recovery OIDC provider is not interactive")
 }
 
@@ -517,10 +474,7 @@ func (c recoveryHTTPClient) Do(request *http.Request) (*http.Response, error) {
 	return result, nil
 }
 
-func recoveryAPIClient(
-	t *testing.T,
-	handler http.Handler,
-) *api.ClientWithResponses {
+func recoveryAPIClient(t *testing.T, handler http.Handler) *api.ClientWithResponses {
 	t.Helper()
 
 	client, err := api.NewClientWithResponses(
@@ -547,20 +501,11 @@ type recoveryResponse interface {
 	StatusCode() int
 }
 
-func requireRecoveryStatus(
-	t *testing.T,
-	response recoveryResponse,
-	want int,
-) {
+func requireRecoveryStatus(t *testing.T, response recoveryResponse, want int) {
 	t.Helper()
 
 	if response.StatusCode() != want {
-		t.Fatalf(
-			"response status = %d, want %d: %s",
-			response.StatusCode(),
-			want,
-			response.GetBody(),
-		)
+		t.Fatalf("response status = %d, want %d: %s", response.StatusCode(), want, response.GetBody())
 	}
 }
 
@@ -589,10 +534,7 @@ func recoveryLogObjectKeys(
 	return keys
 }
 
-func recoveryLogArtifact(
-	t *testing.T,
-	list *api.ArtifactList,
-) api.Artifact {
+func recoveryLogArtifact(t *testing.T, list *api.ArtifactList) api.Artifact {
 	t.Helper()
 
 	if list == nil {

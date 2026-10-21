@@ -54,25 +54,12 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		"action":"preview",
 		"parameters":{"mode":"safe","refresh":true}
 	}`)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/runs",
-		body,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", body)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", "manual-network-preview")
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		&recordingClusterService{},
-		nil,
-		nil,
-		nil,
-		runs,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusCreated, response.Body)
@@ -145,12 +132,7 @@ func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
 		"target":"network",
 		"action":"preview"
 	}`)
-	createRequest := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/runs",
-		body,
-	)
+	createRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", body)
 	createRequest.Header.Set("Content-Type", "application/json")
 	createRequest.AddCookie(&http.Cookie{Name: "slipramp_session", Value: "session-token"})
 	createResponse := httptest.NewRecorder()
@@ -220,12 +202,7 @@ func TestAuthenticatedRunCreationDerivesAPISourceFromAPIKey(t *testing.T) {
 		"target":"network",
 		"action":"preview"
 	}`)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/runs",
-		body,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", body)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer slipramp_key_secret")
 	response := httptest.NewRecorder()
@@ -248,12 +225,7 @@ func TestConfiguredProductAuthenticationRejectsMissingSession(t *testing.T) {
 		&recordingClusterService{}, nil, nil, nil, &recordingRunService{}, nil, nil, nil,
 		&recordingProductAuthenticationService{}, nil,
 	)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/runs",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs", nil)
 	response := httptest.NewRecorder()
 	httpHandler.ServeHTTP(response, request)
 
@@ -301,12 +273,7 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 				"target":"network",
 				"action":"preview"
 			}`)
-			request := httptest.NewRequestWithContext(
-				context.Background(),
-				http.MethodPost,
-				"/api/v1/runs",
-				body,
-			)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", body)
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 			newAdminTestHandler(
@@ -395,12 +362,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 func TestListRunsRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/runs?limit=101",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs?limit=101", nil)
 	response := httptest.NewRecorder()
 
 	newAdminTestHandler(
@@ -437,15 +399,7 @@ func TestCancelRun(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		&recordingClusterService{},
-		nil,
-		nil,
-		nil,
-		runs,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
@@ -495,15 +449,7 @@ func TestGetRunReportsDerivedObservationState(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		clusters,
-		nil,
-		nil,
-		nil,
-		runs,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newAdminTestHandler(clusters, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
@@ -515,11 +461,7 @@ func TestGetRunReportsDerivedObservationState(t *testing.T) {
 	}
 	if result.ObservationState == nil ||
 		*result.ObservationState != api.RunObservationStateCurrent {
-		t.Errorf(
-			"observation state = %v, want %q",
-			result.ObservationState,
-			api.RunObservationStateCurrent,
-		)
+		t.Errorf("observation state = %v, want %q", result.ObservationState, api.RunObservationStateCurrent)
 	}
 }
 
@@ -591,26 +533,17 @@ type recordingRunService struct {
 	listError       error
 }
 
-func (s *recordingRunService) ListRuns(
-	_ context.Context,
-	filter run.ListFilter,
-) ([]run.Run, error) {
+func (s *recordingRunService) ListRuns(_ context.Context, filter run.ListFilter) ([]run.Run, error) {
 	s.listFilter = filter
 
 	return s.listed, s.listError
 }
 
-func (s *recordingRunService) GetRun(
-	_ context.Context,
-	_ uuid.UUID,
-) (run.Run, error) {
+func (s *recordingRunService) GetRun(_ context.Context, _ uuid.UUID) (run.Run, error) {
 	return s.loaded, s.loadError
 }
 
-func (s *recordingRunService) CancelRun(
-	_ context.Context,
-	request run.CancelRequest,
-) (run.Run, error) {
+func (s *recordingRunService) CancelRun(_ context.Context, request run.CancelRequest) (run.Run, error) {
 	s.cancelCalls++
 	s.cancelID = request.RunID
 	s.cancelRequest = request
@@ -618,10 +551,7 @@ func (s *recordingRunService) CancelRun(
 	return s.canceled, s.cancelError
 }
 
-func (s *recordingRunService) NextRunToCancel(
-	_ context.Context,
-	_ string,
-) (run.Run, error) {
+func (s *recordingRunService) NextRunToCancel(_ context.Context, _ string) (run.Run, error) {
 	s.nextCancelCalls++
 	if s.nextCancelError != nil {
 		return run.Run{}, s.nextCancelError
@@ -633,29 +563,20 @@ func (s *recordingRunService) NextRunToCancel(
 	return s.nextCancel, nil
 }
 
-func (s *recordingRunService) NextRunAssignment(
-	_ context.Context,
-	clusterName string,
-) (run.Run, error) {
+func (s *recordingRunService) NextRunAssignment(_ context.Context, clusterName string) (run.Run, error) {
 	s.nextCalls++
 	s.nextClusterName = clusterName
 
 	return s.next, s.nextError
 }
 
-func (s *recordingRunService) CreateRun(
-	_ context.Context,
-	request run.CreateRequest,
-) (run.Run, error) {
+func (s *recordingRunService) CreateRun(_ context.Context, request run.CreateRequest) (run.Run, error) {
 	s.request = request
 
 	return s.created, s.err
 }
 
-func (s *recordingRunService) ReportObservation(
-	_ context.Context,
-	observation run.Observation,
-) error {
+func (s *recordingRunService) ReportObservation(_ context.Context, observation run.Observation) error {
 	s.reportCalls++
 	s.observation = observation
 

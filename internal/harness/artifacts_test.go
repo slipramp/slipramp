@@ -95,12 +95,7 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 	return f(request)
 }
 
-func testHTTPResponse(
-	request *http.Request,
-	status int,
-	headers http.Header,
-	body string,
-) *http.Response {
+func testHTTPResponse(request *http.Request, status int, headers http.Header, body string) *http.Response {
 	return &http.Response{
 		StatusCode: status,
 		Header:     headers,

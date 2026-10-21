@@ -42,11 +42,7 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 	}
 
 	if cfg.ServerURL != "https://slipramp.example.com" {
-		t.Errorf(
-			"ServerURL = %q, want %q",
-			cfg.ServerURL,
-			"https://slipramp.example.com",
-		)
+		t.Errorf("ServerURL = %q, want %q", cfg.ServerURL, "https://slipramp.example.com")
 	}
 
 	if cfg.BearerToken != "controller-token" {

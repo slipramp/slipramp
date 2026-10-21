@@ -65,11 +65,7 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 		created.CreatedBy.DisplayName != actor.DisplayName ||
 		runs.idempotencyPrincipalID == nil ||
 		*runs.idempotencyPrincipalID != actor.ID {
-		t.Errorf(
-			"Run attribution = %#v, idempotency principal = %v",
-			created.CreatedBy,
-			runs.idempotencyPrincipalID,
-		)
+		t.Errorf("Run attribution = %#v, idempotency principal = %v", created.CreatedBy, runs.idempotencyPrincipalID)
 	}
 	if created.Snapshot.Repository.CloneURL !=
 		"https://github.com/example/infrastructure.git" ||
@@ -368,10 +364,7 @@ func TestListRunsRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 
 	service, _ := testService(t)
-	_, err := service.ListRuns(
-		context.Background(),
-		ListFilter{Limit: MaximumListLimit + 1},
-	)
+	_, err := service.ListRuns(context.Background(), ListFilter{Limit: MaximumListLimit + 1})
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
@@ -381,10 +374,7 @@ func TestListRunsRejectsTargetWithoutRepository(t *testing.T) {
 	t.Parallel()
 
 	service, _ := testService(t)
-	_, err := service.ListRuns(
-		context.Background(),
-		ListFilter{TargetName: "network"},
-	)
+	_, err := service.ListRuns(context.Background(), ListFilter{TargetName: "network"})
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
@@ -518,19 +508,13 @@ func (s *recordingRuns) GetRun(context.Context, uuid.UUID) (Run, error) {
 	return Run{}, ErrRunNotFound
 }
 
-func (s *recordingRuns) ListRuns(
-	_ context.Context,
-	filter ListFilter,
-) ([]Run, error) {
+func (s *recordingRuns) ListRuns(_ context.Context, filter ListFilter) ([]Run, error) {
 	s.listFilter = filter
 
 	return s.listed, s.listError
 }
 
-func (s *recordingRuns) GetArtifactInputCandidate(
-	_ context.Context,
-	artifactID uuid.UUID,
-) (ArtifactInput, error) {
+func (s *recordingRuns) GetArtifactInputCandidate(_ context.Context, artifactID uuid.UUID) (ArtifactInput, error) {
 	input, found := s.artifacts[artifactID]
 	if !found {
 		return ArtifactInput{}, ErrArtifactNotFound
@@ -580,20 +564,13 @@ func (s *recordingRuns) CancelRun(
 	return s.canceled, s.cancelError
 }
 
-func (s *recordingRuns) GetAssignedRunForCluster(
-	_ context.Context,
-	_ string,
-) (Run, error) {
+func (s *recordingRuns) GetAssignedRunForCluster(_ context.Context, _ string) (Run, error) {
 	s.assignedCalls++
 
 	return s.assigned, s.assignedError
 }
 
-func (s *recordingRuns) ClaimQueuedRun(
-	_ context.Context,
-	clusterName string,
-	claimedAt time.Time,
-) (Run, error) {
+func (s *recordingRuns) ClaimQueuedRun(_ context.Context, clusterName string, claimedAt time.Time) (Run, error) {
 	s.claimCalls++
 	s.claimClusterName = clusterName
 	s.claimedAt = claimedAt
@@ -601,10 +578,7 @@ func (s *recordingRuns) ClaimQueuedRun(
 	return s.claimed, s.claimError
 }
 
-func (s *recordingRuns) GetRunToCancelForCluster(
-	_ context.Context,
-	clusterName string,
-) (Run, error) {
+func (s *recordingRuns) GetRunToCancelForCluster(_ context.Context, clusterName string) (Run, error) {
 	s.nextCancelCalls++
 	s.nextCancelCluster = clusterName
 
@@ -628,10 +602,7 @@ type recordingRepositories struct {
 	err    error
 }
 
-func (s *recordingRepositories) GetRepository(
-	context.Context,
-	uuid.UUID,
-) (repository.Repository, error) {
+func (s *recordingRepositories) GetRepository(context.Context, uuid.UUID) (repository.Repository, error) {
 	return s.record, s.err
 }
 
@@ -640,18 +611,11 @@ type recordingCatalogs struct {
 	err      error
 }
 
-func (s *recordingCatalogs) GetActiveRevision(
-	context.Context,
-	uuid.UUID,
-) (catalog.Revision, error) {
+func (s *recordingCatalogs) GetActiveRevision(context.Context, uuid.UUID) (catalog.Revision, error) {
 	return s.revision, s.err
 }
 
-func (s *recordingCatalogs) GetRevision(
-	context.Context,
-	uuid.UUID,
-	uuid.UUID,
-) (catalog.Revision, error) {
+func (s *recordingCatalogs) GetRevision(context.Context, uuid.UUID, uuid.UUID) (catalog.Revision, error) {
 	return s.revision, s.err
 }
 

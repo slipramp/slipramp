@@ -35,11 +35,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	acceptedAt := createdAt.Add(time.Minute)
 	accepted := successfulCatalogRefresh(commitA, acceptedAt, revisionAID)
 	accepted.Revision.Catalog = persistedCatalog("1")
-	if err := database.RecordRepositoryRefresh(
-		ctx,
-		repositoryID,
-		accepted,
-	); err != nil {
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, accepted); err != nil {
 		t.Fatalf("record accepted catalog: %v", err)
 	}
 
@@ -89,11 +85,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 		AttemptedAt:   rejectedAt,
 		FailureReason: &rejectionReason,
 	}
-	if err := database.RecordRepositoryRefresh(
-		ctx,
-		repositoryID,
-		rejected,
-	); err != nil {
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, rejected); err != nil {
 		t.Fatalf("record rejected catalog: %v", err)
 	}
 
@@ -119,11 +111,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 		t.Errorf("refresh state after catalog rejection = %#v", refresh)
 	}
 
-	if err := database.RecordRepositoryRefresh(
-		ctx,
-		repositoryID,
-		rejected,
-	); err != nil {
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, rejected); err != nil {
 		t.Fatalf("repeat rejected catalog: %v", err)
 	}
 	assertValidationFailureCount(t, database, repositoryID, 1)
@@ -132,11 +120,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	recoveredAt := rejectedAt.Add(time.Minute)
 	recovered := successfulCatalogRefresh(commitB, recoveredAt, revisionBID)
 	recovered.Revision.Catalog = persistedCatalog("2")
-	if err := database.RecordRepositoryRefresh(
-		ctx,
-		repositoryID,
-		recovered,
-	); err != nil {
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, recovered); err != nil {
 		t.Fatalf("record recovered catalog: %v", err)
 	}
 
@@ -149,11 +133,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203"),
 	)
 	duplicate.Revision.Catalog = persistedCatalog("2")
-	if err := database.RecordRepositoryRefresh(
-		ctx,
-		repositoryID,
-		duplicate,
-	); err != nil {
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, duplicate); err != nil {
 		t.Fatalf("repeat accepted catalog: %v", err)
 	}
 
@@ -161,9 +141,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	assertCatalogCounts(t, database, repositoryID, 2, 2, 2)
 }
 
-func TestGetActiveCatalogRevisionRequiresActiveAcceptedCatalog(
-	t *testing.T,
-) {
+func TestGetActiveCatalogRevisionRequiresActiveAcceptedCatalog(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
 
@@ -182,21 +160,13 @@ func TestGetActiveCatalogRevisionRequiresActiveAcceptedCatalog(
 
 	_, err = database.GetActiveCatalogRevision(ctx, repositoryID)
 	if !errors.Is(err, catalog.ErrNotFound) {
-		t.Errorf(
-			"pending GetActiveCatalogRevision() error = %v, want %v",
-			err,
-			catalog.ErrNotFound,
-		)
+		t.Errorf("pending GetActiveCatalogRevision() error = %v, want %v", err, catalog.ErrNotFound)
 	}
 
 	missingID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1299")
 	_, err = database.GetActiveCatalogRevision(ctx, missingID)
 	if !errors.Is(err, catalog.ErrNotFound) {
-		t.Errorf(
-			"missing GetActiveCatalogRevision() error = %v, want %v",
-			err,
-			catalog.ErrNotFound,
-		)
+		t.Errorf("missing GetActiveCatalogRevision() error = %v, want %v", err, catalog.ErrNotFound)
 	}
 
 	commitSHA := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -204,11 +174,7 @@ func TestGetActiveCatalogRevisionRequiresActiveAcceptedCatalog(
 	if err := database.RecordRepositoryRefresh(
 		ctx,
 		repositoryID,
-		successfulCatalogRefresh(
-			commitSHA,
-			acceptedAt,
-			uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201"),
-		),
+		successfulCatalogRefresh(commitSHA, acceptedAt, uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")),
 	); err != nil {
 		t.Fatalf("record empty catalog: %v", err)
 	}
@@ -222,21 +188,13 @@ func TestGetActiveCatalogRevisionRequiresActiveAcceptedCatalog(
 		t.Errorf("empty active catalog = %#v", active.Catalog)
 	}
 
-	if err := database.RemoveRepository(
-		ctx,
-		repositoryID,
-		acceptedAt.Add(time.Minute),
-	); err != nil {
+	if err := database.RemoveRepository(ctx, repositoryID, acceptedAt.Add(time.Minute)); err != nil {
 		t.Fatalf("RemoveRepository() error = %v", err)
 	}
 
 	_, err = database.GetActiveCatalogRevision(ctx, repositoryID)
 	if !errors.Is(err, catalog.ErrNotFound) {
-		t.Errorf(
-			"removed GetActiveCatalogRevision() error = %v, want %v",
-			err,
-			catalog.ErrNotFound,
-		)
+		t.Errorf("removed GetActiveCatalogRevision() error = %v, want %v", err, catalog.ErrNotFound)
 	}
 }
 
@@ -402,11 +360,7 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	firstTarget.Spec.Placement = "infrastructure"
 	firstTarget.Spec.Actions["deploy"] = catalog.Action{Command: []string{"deploy"}}
 	firstRefresh.Revision.Catalog.Targets = []catalog.Target{firstTarget}
-	if err := database.RecordRepositoryRefresh(
-		ctx,
-		firstRepositoryID,
-		firstRefresh,
-	); err != nil {
+	if err := database.RecordRepositoryRefresh(ctx, firstRepositoryID, firstRefresh); err != nil {
 		t.Fatalf("record first catalog: %v", err)
 	}
 
@@ -419,18 +373,11 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	secondTarget := testCatalogTarget("backups", "backups/**")
 	secondTarget.Metadata.Title = "Backups"
 	secondRefresh.Revision.Catalog.Targets = []catalog.Target{secondTarget}
-	if err := database.RecordRepositoryRefresh(
-		ctx,
-		secondRepositoryID,
-		secondRefresh,
-	); err != nil {
+	if err := database.RecordRepositoryRefresh(ctx, secondRepositoryID, secondRefresh); err != nil {
 		t.Fatalf("record second catalog: %v", err)
 	}
 
-	page, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
-		Limit:  1,
-		Offset: 0,
-	})
+	page, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{Limit: 1, Offset: 0})
 	if err != nil {
 		t.Fatalf("ListActiveTargets() error = %v", err)
 	}
@@ -439,10 +386,7 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 		t.Errorf("first target page = %#v", page)
 	}
 
-	search, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
-		Query: "DEPLOY",
-		Limit: 25,
-	})
+	search, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{Query: "DEPLOY", Limit: 25})
 	if err != nil {
 		t.Fatalf("search active targets: %v", err)
 	}
@@ -466,11 +410,7 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	}
 }
 
-func successfulCatalogRefresh(
-	commitSHA string,
-	attemptedAt time.Time,
-	revisionID uuid.UUID,
-) repository.RefreshResult {
+func successfulCatalogRefresh(commitSHA string, attemptedAt time.Time, revisionID uuid.UUID) repository.RefreshResult {
 	return repository.RefreshResult{
 		CommitSHA:   &commitSHA,
 		AttemptedAt: attemptedAt,
@@ -531,12 +471,7 @@ func testCatalogTarget(name, watch string) catalog.Target {
 	}
 }
 
-func assertDesiredCommit(
-	t *testing.T,
-	revision catalog.Revision,
-	targetName string,
-	want string,
-) {
+func assertDesiredCommit(t *testing.T, revision catalog.Revision, targetName string, want string) {
 	t.Helper()
 
 	state, found := revision.TargetStates[targetName]
@@ -544,12 +479,7 @@ func assertDesiredCommit(
 		t.Fatalf("target state %q was not loaded", targetName)
 	}
 	if state.DesiredCommitSHA != want {
-		t.Errorf(
-			"target %q desired commit = %q, want %q",
-			targetName,
-			state.DesiredCommitSHA,
-			want,
-		)
+		t.Errorf("target %q desired commit = %q, want %q", targetName, state.DesiredCommitSHA, want)
 	}
 }
 
@@ -635,12 +565,7 @@ func assertCatalogCounts(
 	}
 }
 
-func assertValidationFailureCount(
-	t *testing.T,
-	database *Database,
-	repositoryID uuid.UUID,
-	want int,
-) {
+func assertValidationFailureCount(t *testing.T, database *Database, repositoryID uuid.UUID, want int) {
 	t.Helper()
 
 	var count int

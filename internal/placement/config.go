@@ -55,10 +55,7 @@ func (c Config) Validate() error {
 	}
 
 	if c.ServiceAccountName != "" {
-		if err := kubevalidate.DNSSubdomain(
-			"service account name",
-			c.ServiceAccountName,
-		); err != nil {
+		if err := kubevalidate.DNSSubdomain("service account name", c.ServiceAccountName); err != nil {
 			return err
 		}
 	}
@@ -80,10 +77,7 @@ func (c Config) Validate() error {
 	}
 
 	for _, credentialName := range slices.Sorted(maps.Keys(c.Credentials)) {
-		if err := kubevalidate.DNSLabel(
-			"credential source name",
-			credentialName,
-		); err != nil {
+		if err := kubevalidate.DNSLabel("credential source name", credentialName); err != nil {
 			return err
 		}
 
@@ -114,47 +108,28 @@ func validateResources(resources ResourceRequirements) error {
 		request := requests[resourceName]
 		limit, limited := limits[resourceName]
 		if limited && request.Cmp(limit) > 0 {
-			return fmt.Errorf(
-				"resource request %q must not exceed its limit",
-				resourceName,
-			)
+			return fmt.Errorf("resource request %q must not exceed its limit", resourceName)
 		}
 	}
 
 	return nil
 }
 
-func validateResourceList(
-	kind string,
-	resources map[string]string,
-) (map[string]resource.Quantity, error) {
+func validateResourceList(kind string, resources map[string]string) (map[string]resource.Quantity, error) {
 	quantities := make(map[string]resource.Quantity, len(resources))
 	for _, resourceName := range slices.Sorted(maps.Keys(resources)) {
-		if err := kubevalidate.LabelKey(
-			fmt.Sprintf("resource %s name", kind),
-			resourceName,
-		); err != nil {
+		if err := kubevalidate.LabelKey(fmt.Sprintf("resource %s name", kind), resourceName); err != nil {
 			return nil, err
 		}
 
 		quantityText := resources[resourceName]
 		quantity, err := resource.ParseQuantity(quantityText)
 		if err != nil {
-			return nil, fmt.Errorf(
-				"resource %s %q has invalid quantity %q: %w",
-				kind,
-				resourceName,
-				quantityText,
-				err,
-			)
+			return nil, fmt.Errorf("resource %s %q has invalid quantity %q: %w", kind, resourceName, quantityText, err)
 		}
 
 		if quantity.Sign() < 0 {
-			return nil, fmt.Errorf(
-				"resource %s %q must not be negative",
-				kind,
-				resourceName,
-			)
+			return nil, fmt.Errorf("resource %s %q must not be negative", kind, resourceName)
 		}
 
 		quantities[resourceName] = quantity
@@ -169,10 +144,7 @@ func validateNodeSelector(selector map[string]string) error {
 			return err
 		}
 
-		if err := kubevalidate.LabelValue(
-			fmt.Sprintf("node selector value for %q", key),
-			selector[key],
-		); err != nil {
+		if err := kubevalidate.LabelValue(fmt.Sprintf("node selector value for %q", key), selector[key]); err != nil {
 			return err
 		}
 	}
@@ -189,9 +161,7 @@ func validatePodTemplate(template *corev1.PodTemplateSpec) error {
 	metadata.Labels = nil
 	metadata.Annotations = nil
 	if !reflect.DeepEqual(*metadata, metav1.ObjectMeta{}) {
-		return fmt.Errorf(
-			"pod template metadata may only define labels and annotations",
-		)
+		return fmt.Errorf("pod template metadata may only define labels and annotations")
 	}
 
 	for _, key := range slices.Sorted(maps.Keys(template.Labels)) {
@@ -231,21 +201,15 @@ func validatePodTemplate(template *corev1.PodTemplateSpec) error {
 
 	if template.Spec.ServiceAccountName != "" ||
 		template.Spec.DeprecatedServiceAccount != "" {
-		return fmt.Errorf(
-			"pod template must not define a service account; use serviceAccountName",
-		)
+		return fmt.Errorf("pod template must not define a service account; use serviceAccountName")
 	}
 
 	if template.Spec.NodeSelector != nil {
-		return fmt.Errorf(
-			"pod template must not define a node selector; use nodeSelector",
-		)
+		return fmt.Errorf("pod template must not define a node selector; use nodeSelector")
 	}
 
 	if template.Spec.ActiveDeadlineSeconds != nil {
-		return fmt.Errorf(
-			"pod template must not define an active deadline; use timeout",
-		)
+		return fmt.Errorf("pod template must not define an active deadline; use timeout")
 	}
 
 	return nil

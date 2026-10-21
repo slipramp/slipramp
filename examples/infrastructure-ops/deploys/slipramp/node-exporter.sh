@@ -7,13 +7,13 @@ readonly limit="${2:-}"
 case "$mode" in
   plan | apply) ;;
   *)
-    echo "usage: $0 plan|apply exporter_nodes|flows1.den1.kcloud.zone" >&2
+    echo "usage: $0 plan|apply exporter_nodes|node01.example.com" >&2
     exit 64
     ;;
 esac
 
 case "$limit" in
-  exporter_nodes | flows1.den1.kcloud.zone) ;;
+  exporter_nodes | node01.example.com) ;;
   *)
     echo "unsupported node_exporter limit: $limit" >&2
     exit 64

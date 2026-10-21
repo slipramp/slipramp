@@ -22,10 +22,7 @@ type serviceMetadataStore struct {
 	context    RunContext
 }
 
-func (s *serviceMetadataStore) GetRunClusterName(
-	_ context.Context,
-	_ uuid.UUID,
-) (string, error) {
+func (s *serviceMetadataStore) GetRunClusterName(_ context.Context, _ uuid.UUID) (string, error) {
 	if s.runCluster == "" {
 		return "", ErrNotFound
 	}
@@ -33,10 +30,7 @@ func (s *serviceMetadataStore) GetRunClusterName(
 	return s.runCluster, nil
 }
 
-func (s *serviceMetadataStore) CreateArtifact(
-	_ context.Context,
-	record Artifact,
-) (Artifact, error) {
+func (s *serviceMetadataStore) CreateArtifact(_ context.Context, record Artifact) (Artifact, error) {
 	if s.record != nil {
 		return Artifact{}, ErrAlreadyExists
 	}
@@ -47,10 +41,7 @@ func (s *serviceMetadataStore) CreateArtifact(
 	return record, nil
 }
 
-func (s *serviceMetadataStore) GetArtifact(
-	_ context.Context,
-	_ uuid.UUID,
-) (Artifact, error) {
+func (s *serviceMetadataStore) GetArtifact(_ context.Context, _ uuid.UUID) (Artifact, error) {
 	if s.record == nil {
 		return Artifact{}, ErrNotFound
 	}
@@ -58,11 +49,7 @@ func (s *serviceMetadataStore) GetArtifact(
 	return *s.record, nil
 }
 
-func (s *serviceMetadataStore) GetArtifactByRunAndName(
-	context.Context,
-	uuid.UUID,
-	string,
-) (Artifact, error) {
+func (s *serviceMetadataStore) GetArtifactByRunAndName(context.Context, uuid.UUID, string) (Artifact, error) {
 	if s.record == nil {
 		return Artifact{}, ErrNotFound
 	}
@@ -70,10 +57,7 @@ func (s *serviceMetadataStore) GetArtifactByRunAndName(
 	return *s.record, nil
 }
 
-func (s *serviceMetadataStore) ListArtifactsForRun(
-	context.Context,
-	uuid.UUID,
-) ([]Artifact, error) {
+func (s *serviceMetadataStore) ListArtifactsForRun(context.Context, uuid.UUID) ([]Artifact, error) {
 	if s.record == nil {
 		return nil, nil
 	}
@@ -81,17 +65,11 @@ func (s *serviceMetadataStore) ListArtifactsForRun(
 	return []Artifact{*s.record}, nil
 }
 
-func (s *serviceMetadataStore) GetArtifactProvenance(
-	context.Context,
-	uuid.UUID,
-) (Provenance, error) {
+func (s *serviceMetadataStore) GetArtifactProvenance(context.Context, uuid.UUID) (Provenance, error) {
 	return Provenance{}, nil
 }
 
-func (s *serviceMetadataStore) GetRunArtifactContext(
-	context.Context,
-	uuid.UUID,
-) (RunContext, error) {
+func (s *serviceMetadataStore) GetRunArtifactContext(context.Context, uuid.UUID) (RunContext, error) {
 	if s.runCluster == "" {
 		return RunContext{}, ErrNotFound
 	}
@@ -99,18 +77,11 @@ func (s *serviceMetadataStore) GetRunArtifactContext(
 	return s.context, nil
 }
 
-func (s *serviceMetadataStore) GetRunInputArtifact(
-	context.Context,
-	uuid.UUID,
-	string,
-) (Artifact, error) {
+func (s *serviceMetadataStore) GetRunInputArtifact(context.Context, uuid.UUID, string) (Artifact, error) {
 	return Artifact{}, ErrNotFound
 }
 
-func (s *serviceMetadataStore) CreateLogChunk(
-	_ context.Context,
-	chunk LogChunk,
-) (LogChunk, error) {
+func (s *serviceMetadataStore) CreateLogChunk(_ context.Context, chunk LogChunk) (LogChunk, error) {
 	if s.events != nil {
 		*s.events = append(*s.events, "metadata")
 	}
@@ -126,11 +97,7 @@ func (s *serviceMetadataStore) CreateLogChunk(
 	return chunk, nil
 }
 
-func (s *serviceMetadataStore) GetLogChunk(
-	_ context.Context,
-	_ uuid.UUID,
-	offsetBytes int64,
-) (LogChunk, error) {
+func (s *serviceMetadataStore) GetLogChunk(_ context.Context, _ uuid.UUID, offsetBytes int64) (LogChunk, error) {
 	chunk, ok := s.chunks[offsetBytes]
 	if !ok {
 		return LogChunk{}, ErrNotFound
@@ -139,20 +106,14 @@ func (s *serviceMetadataStore) GetLogChunk(
 	return chunk, nil
 }
 
-func (s *serviceMetadataStore) ListLogChunks(
-	_ context.Context,
-	_ uuid.UUID,
-	fromOffset int64,
-) ([]LogChunk, error) {
+func (s *serviceMetadataStore) ListLogChunks(_ context.Context, _ uuid.UUID, fromOffset int64) ([]LogChunk, error) {
 	result := make([]LogChunk, 0, len(s.chunks))
 	for _, chunk := range s.chunks {
 		if chunk.EndOffset() > fromOffset {
 			result = append(result, chunk)
 		}
 	}
-	slices.SortFunc(result, func(left, right LogChunk) int {
-		return int(left.OffsetBytes - right.OffsetBytes)
-	})
+	slices.SortFunc(result, func(left, right LogChunk) int { return int(left.OffsetBytes - right.OffsetBytes) })
 
 	return result, nil
 }
@@ -215,10 +176,7 @@ func (s *serviceContentStore) Put(
 	return size, nil
 }
 
-func (s *serviceContentStore) Open(
-	_ context.Context,
-	key string,
-) (objectstore.Object, error) {
+func (s *serviceContentStore) Open(_ context.Context, key string) (objectstore.Object, error) {
 	contents := s.contents
 	if s.objects != nil {
 		contents = s.objects[key]
@@ -304,10 +262,7 @@ func TestServiceTreatsRepeatedLogChunkAsIdempotent(t *testing.T) {
 	}
 
 	request.Contents = []byte("different\n")
-	if err := service.AppendLogChunk(
-		context.Background(),
-		request,
-	); !errors.Is(err, ErrChunkConflict) {
+	if err := service.AppendLogChunk(context.Background(), request); !errors.Is(err, ErrChunkConflict) {
 		t.Errorf("conflicting AppendLogChunk() error = %v, want conflict", err)
 	}
 	if contents.puts != 1 {
@@ -341,10 +296,7 @@ func TestServiceRejectsLogChunkFromWrongCluster(t *testing.T) {
 func TestServiceRejectsOversizedLogChunk(t *testing.T) {
 	t.Parallel()
 
-	service := NewService(
-		&serviceMetadataStore{chunks: map[int64]LogChunk{}},
-		&serviceContentStore{},
-	)
+	service := NewService(&serviceMetadataStore{chunks: map[int64]LogChunk{}}, &serviceContentStore{})
 	err := service.AppendLogChunk(context.Background(), AppendLogChunkRequest{
 		RunID:       uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501"),
 		ClusterName: "colo",

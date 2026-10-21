@@ -172,11 +172,7 @@ func (i OIDCIdentity) Validate() error {
 		{label: "OIDC display name", value: i.DisplayName},
 	} {
 		if field.value != nil {
-			if err := validateName(
-				field.label,
-				*field.value,
-				maximumProfileFieldLength,
-			); err != nil {
+			if err := validateName(field.label, *field.value, maximumProfileFieldLength); err != nil {
 				return err
 			}
 		}

@@ -15,10 +15,7 @@ type identityStore struct {
 	err        error
 }
 
-func (s *identityStore) EnrollControllerCredential(
-	_ context.Context,
-	credential Credential,
-) error {
+func (s *identityStore) EnrollControllerCredential(_ context.Context, credential Credential) error {
 	s.credential = credential
 	return s.err
 }
@@ -48,11 +45,7 @@ func TestServiceEnrollsController(t *testing.T) {
 	service.now = func() time.Time { return now }
 	digest := sha256.Sum256([]byte("controller-token"))
 
-	err := service.EnrollController(
-		context.Background(),
-		"colo",
-		hex.EncodeToString(digest[:]),
-	)
+	err := service.EnrollController(context.Background(), "colo", hex.EncodeToString(digest[:]))
 	if err != nil {
 		t.Fatalf("EnrollController() error = %v", err)
 	}
@@ -67,10 +60,7 @@ func TestServiceAuthenticatesController(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(&identityStore{cluster: "colo"})
-	principal, err := service.AuthenticateController(
-		context.Background(),
-		"controller-token",
-	)
+	principal, err := service.AuthenticateController(context.Background(), "controller-token")
 	if err != nil {
 		t.Fatalf("AuthenticateController() error = %v", err)
 	}

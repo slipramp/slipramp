@@ -38,24 +38,11 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 		"refreshCredentialName":"github-server",
 		"checkoutCredentialName":"github-readonly"
 	}`)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/api/v1/repositories",
-		body,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/repositories", body)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		&recordingClusterService{},
-		nil,
-		repositories,
-		nil,
-		nil,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newAdminTestHandler(&recordingClusterService{}, nil, repositories, nil, nil, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusCreated)
@@ -205,22 +192,9 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 			},
 		},
 	}
-	httpHandler := newAdminTestHandler(
-		&recordingClusterService{},
-		nil,
-		repositories,
-		nil,
-		nil,
-		nil,
-		nil,
-	)
+	httpHandler := newAdminTestHandler(&recordingClusterService{}, nil, repositories, nil, nil, nil, nil)
 
-	listRequest := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/repositories",
-		nil,
-	)
+	listRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/repositories", nil)
 	listResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(listResponse, listRequest)
 
@@ -250,11 +224,7 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 	httpHandler.ServeHTTP(removeResponse, removeRequest)
 
 	if removeResponse.Code != http.StatusNoContent {
-		t.Fatalf(
-			"remove status = %d, want %d",
-			removeResponse.Code,
-			http.StatusNoContent,
-		)
+		t.Fatalf("remove status = %d, want %d", removeResponse.Code, http.StatusNoContent)
 	}
 
 	if repositories.removedID != repositoryID {
@@ -282,16 +252,11 @@ func (r *recordingRepositoryService) CreateRepository(
 	return r.created, r.createError
 }
 
-func (r *recordingRepositoryService) ListRepositories(
-	context.Context,
-) ([]repository.Repository, error) {
+func (r *recordingRepositoryService) ListRepositories(context.Context) ([]repository.Repository, error) {
 	return r.items, r.listError
 }
 
-func (r *recordingRepositoryService) RemoveRepository(
-	_ context.Context,
-	repositoryID uuid.UUID,
-) error {
+func (r *recordingRepositoryService) RemoveRepository(_ context.Context, repositoryID uuid.UUID) error {
 	r.removedID = repositoryID
 
 	return r.removeError

@@ -29,10 +29,5 @@ func valueError(subject, value string, problems []string) error {
 		return nil
 	}
 
-	return fmt.Errorf(
-		"%s %q is invalid: %s",
-		subject,
-		value,
-		strings.Join(problems, "; "),
-	)
+	return fmt.Errorf("%s %q is invalid: %s", subject, value, strings.Join(problems, "; "))
 }

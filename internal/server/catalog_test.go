@@ -86,15 +86,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		&recordingClusterService{},
-		nil,
-		nil,
-		catalogs,
-		nil,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -106,11 +98,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	}
 
 	if catalogs.repositoryID != repositoryID {
-		t.Errorf(
-			"repository ID = %s, want %s",
-			catalogs.repositoryID,
-			repositoryID,
-		)
+		t.Errorf("repository ID = %s, want %s", catalogs.repositoryID, repositoryID)
 	}
 	if body.ID != revisionID || body.CommitSha != commitSHA ||
 		!body.CreatedAt.Equal(createdAt) {
@@ -170,15 +158,7 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 	)
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		&recordingClusterService{},
-		nil,
-		nil,
-		catalogs,
-		nil,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
@@ -215,24 +195,11 @@ func TestListTargetsRejectsInvalidPagination(t *testing.T) {
 		"/api/v1/targets?q=%20%20",
 	}
 	for _, path := range tests {
-		request := httptest.NewRequestWithContext(
-			context.Background(),
-			http.MethodGet,
-			path,
-			nil,
-		)
+		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)
 		response := httptest.NewRecorder()
 		catalogs := &recordingCatalogService{}
 
-		newAdminTestHandler(
-			&recordingClusterService{},
-			nil,
-			nil,
-			catalogs,
-			nil,
-			nil,
-			nil,
-		).ServeHTTP(response, request)
+		newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).ServeHTTP(response, request)
 
 		assertProblem(t, response, http.StatusBadRequest)
 		if catalogs.listCalls != 0 {
@@ -280,12 +247,7 @@ func TestGetRepositoryCatalogMapsExpectedFailures(t *testing.T) {
 			t.Parallel()
 
 			catalogs := &recordingCatalogService{err: test.err}
-			request := httptest.NewRequestWithContext(
-				context.Background(),
-				http.MethodGet,
-				test.path,
-				nil,
-			)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, test.path, nil)
 			response := httptest.NewRecorder()
 
 			newAdminTestHandler(
@@ -300,11 +262,7 @@ func TestGetRepositoryCatalogMapsExpectedFailures(t *testing.T) {
 
 			assertProblem(t, response, test.wantStatus)
 			if catalogs.calls != test.wantCalls {
-				t.Errorf(
-					"catalog service calls = %d, want %d",
-					catalogs.calls,
-					test.wantCalls,
-				)
+				t.Errorf("catalog service calls = %d, want %d", catalogs.calls, test.wantCalls)
 			}
 			if test.privateDetail != "" &&
 				strings.Contains(response.Body.String(), test.privateDetail) {

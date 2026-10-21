@@ -23,11 +23,7 @@ func NewProblem(status int, detail string) api.Problem {
 	return problem
 }
 
-func WriteProblem(
-	writer http.ResponseWriter,
-	status int,
-	detail string,
-) {
+func WriteProblem(writer http.ResponseWriter, status int, detail string) {
 	writer.Header().Set("Content-Type", "application/problem+json")
 	writer.WriteHeader(status)
 

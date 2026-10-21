@@ -12,10 +12,7 @@ import (
 // CancelRun records cancel intent. Queued Runs finish without controller
 // involvement; active Runs remain active until their controller reports the
 // canceled outcome.
-func (s *Service) CancelRun(
-	ctx context.Context,
-	request CancelRequest,
-) (Run, error) {
+func (s *Service) CancelRun(ctx context.Context, request CancelRequest) (Run, error) {
 	if request.RunID == uuid.Nil {
 		return Run{}, fmt.Errorf("%w: Run ID is required", ErrInvalidRequest)
 	}
@@ -24,12 +21,7 @@ func (s *Service) CancelRun(
 		return Run{}, err
 	}
 
-	record, err := s.runs.CancelRun(
-		ctx,
-		request.RunID,
-		s.now().UTC(),
-		canceledBy,
-	)
+	record, err := s.runs.CancelRun(ctx, request.RunID, s.now().UTC(), canceledBy)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrRunNotFound), errors.Is(err, ErrRunFinished):
@@ -45,10 +37,7 @@ func (s *Service) CancelRun(
 // NextRunToCancel returns the oldest active cancel request for a cluster. The
 // Run remains available until the controller reports a terminal observation,
 // making a lost command or response safe to retry.
-func (s *Service) NextRunToCancel(
-	ctx context.Context,
-	clusterName string,
-) (Run, error) {
+func (s *Service) NextRunToCancel(ctx context.Context, clusterName string) (Run, error) {
 	if strings.TrimSpace(clusterName) == "" {
 		return Run{}, fmt.Errorf("%w: cluster name is required", ErrInvalidRequest)
 	}

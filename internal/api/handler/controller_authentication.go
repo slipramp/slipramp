@@ -11,10 +11,7 @@ import (
 )
 
 type ControllerAuthenticator interface {
-	AuthenticateController(
-		ctx context.Context,
-		bearerToken string,
-	) (controlleridentity.Principal, error)
+	AuthenticateController(ctx context.Context, bearerToken string) (controlleridentity.Principal, error)
 	AuthorizeControllerEnrollment(clusterName, bearerToken string) bool
 }
 
@@ -26,19 +23,9 @@ type executionRequestContext struct {
 	ContentLength int64
 }
 
-func ControllerAuthentication(
-	authenticator ControllerAuthenticator,
-) api.StrictMiddlewareFunc {
-	return func(
-		next api.StrictHandlerFunc,
-		_ string,
-	) api.StrictHandlerFunc {
-		return func(
-			ctx context.Context,
-			writer http.ResponseWriter,
-			request *http.Request,
-			value any,
-		) (any, error) {
+func ControllerAuthentication(authenticator ControllerAuthenticator) api.StrictMiddlewareFunc {
+	return func(next api.StrictHandlerFunc, _ string) api.StrictHandlerFunc {
+		return func(ctx context.Context, writer http.ResponseWriter, request *http.Request, value any) (any, error) {
 			switch controllerRequest := value.(type) {
 			case api.EnrollControllerRequestObject:
 				if controllerRequest.Body == nil {
@@ -46,10 +33,7 @@ func ControllerAuthentication(
 				}
 
 				token, ok := parseBearerToken(request.Header)
-				if ok && authenticator.AuthorizeControllerEnrollment(
-					controllerRequest.Body.ClusterName,
-					token,
-				) {
+				if ok && authenticator.AuthorizeControllerEnrollment(controllerRequest.Body.ClusterName, token) {
 					return next(ctx, writer, request, value)
 				}
 
@@ -95,9 +79,7 @@ func ControllerAuthentication(
 				return authenticateControllerRequest(
 					ctx, writer, request, value, authenticator, next,
 					func() any {
-						return api.SealRunLog401ApplicationProblemPlusJSONResponse(
-							controllerUnauthorizedProblem(),
-						)
+						return api.SealRunLog401ApplicationProblemPlusJSONResponse(controllerUnauthorizedProblem())
 					},
 				)
 			case api.ReportRunObservationRequestObject:
@@ -192,11 +174,7 @@ func authenticateControllerRequest(
 		return nil, err
 	}
 
-	principalContext := context.WithValue(
-		ctx,
-		controllerPrincipalContextKey{},
-		principal,
-	)
+	principalContext := context.WithValue(ctx, controllerPrincipalContextKey{}, principal)
 
 	return next(principalContext, writer, request, value)
 }
@@ -204,9 +182,7 @@ func authenticateControllerRequest(
 func controllerPrincipal(ctx context.Context) (controlleridentity.Principal, error) {
 	principal, ok := ctx.Value(controllerPrincipalContextKey{}).(controlleridentity.Principal)
 	if !ok {
-		return controlleridentity.Principal{}, errors.New(
-			"authenticated controller identity is missing",
-		)
+		return controlleridentity.Principal{}, errors.New("authenticated controller identity is missing")
 	}
 
 	return principal, nil
@@ -214,19 +190,13 @@ func controllerPrincipal(ctx context.Context) (controlleridentity.Principal, err
 
 func enrollmentUnauthorized(writer http.ResponseWriter) any {
 	writer.Header().Set("WWW-Authenticate", "Bearer")
-	problem := NewProblem(
-		http.StatusUnauthorized,
-		"The controller enrollment credential is missing or invalid.",
-	)
+	problem := NewProblem(http.StatusUnauthorized, "The controller enrollment credential is missing or invalid.")
 
 	return api.EnrollController401ApplicationProblemPlusJSONResponse(problem)
 }
 
 func controllerUnauthorizedProblem() api.Problem {
-	return NewProblem(
-		http.StatusUnauthorized,
-		"The controller credential is missing or invalid.",
-	)
+	return NewProblem(http.StatusUnauthorized, "The controller credential is missing or invalid.")
 }
 
 func parseBearerToken(header http.Header) (string, bool) {

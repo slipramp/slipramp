@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Illustrative wrapper for a repository-managed RustFS Terraform stack.
 set -euo pipefail
 
 readonly mode="${1:-}"

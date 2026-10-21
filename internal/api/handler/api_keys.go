@@ -15,14 +15,8 @@ import (
 )
 
 type AccessService interface {
-	AuthenticateAPIKey(
-		context.Context,
-		string,
-	) (productidentity.Authentication, error)
-	ListOwnAPIKeys(
-		context.Context,
-		productidentity.Authentication,
-	) ([]productidentity.APIKey, error)
+	AuthenticateAPIKey(context.Context, string) (productidentity.Authentication, error)
+	ListOwnAPIKeys(context.Context, productidentity.Authentication) ([]productidentity.APIKey, error)
 	CreateUserAPIKey(
 		context.Context,
 		productidentity.Authentication,
@@ -30,17 +24,9 @@ type AccessService interface {
 		[]productidentity.Scope,
 		*time.Time,
 	) (productauth.APIKeyCredential, error)
-	RevokeAPIKey(
-		context.Context,
-		productidentity.Authentication,
-		uuid.UUID,
-	) error
+	RevokeAPIKey(context.Context, productidentity.Authentication, uuid.UUID) error
 	ListServiceAccounts(context.Context) ([]productidentity.Principal, error)
-	CreateServiceAccount(
-		context.Context,
-		string,
-		productidentity.Role,
-	) (productidentity.Principal, error)
+	CreateServiceAccount(context.Context, string, productidentity.Role) (productidentity.Principal, error)
 	ListServiceAccountAPIKeys(context.Context, uuid.UUID) ([]productidentity.APIKey, error)
 	CreateServiceAccountAPIKey(
 		context.Context,

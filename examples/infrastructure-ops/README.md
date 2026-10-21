@@ -1,12 +1,12 @@
-# kcloud-ops catalog example
+# Infrastructure operations catalog example
 
-This directory sketches how three real homelab workloads can fit Slipramp's
-current catalog model:
+This directory sketches how three representative infrastructure workloads can
+fit Slipramp's current catalog model:
 
-- `homelab-node-exporter` manages node_exporter on a pyinfra inventory group.
-- `rustfs-homelab` manages RustFS buckets and bucket-scoped IAM users with
+- `node-exporter` manages node_exporter on a pyinfra inventory group.
+- `rustfs-buckets` manages RustFS buckets and bucket-scoped IAM users with
   Terraform.
-- `homelab-kubernetes-upgrade` performs guarded kubeadm previews and rolling
+- `kubernetes-upgrade` performs guarded kubeadm previews and rolling
   upgrades.
 
 It is shaped like the relevant parts of an operations repository. Slipramp
@@ -50,8 +50,8 @@ execution cluster:
 
 | Credential source | Secret keys | Runtime use |
 | --- | --- | --- |
-| `ops-ci` | `SSH_PRIVATE_KEY`, `TF_VAR_access_key`, `TF_VAR_secret_key`, `TF_STATE_ACCESS_KEY`, `TF_STATE_SECRET_KEY` | Host SSH and both RustFS credential pairs |
-| `homelab-known-hosts` | `known_hosts` | Strict host verification for Kubernetes upgrades |
+| `operations` | `SSH_PRIVATE_KEY`, `TF_VAR_access_key`, `TF_VAR_secret_key`, `TF_STATE_ACCESS_KEY`, `TF_STATE_SECRET_KEY` | Host SSH and both RustFS credential pairs |
+| `ssh-known-hosts` | `known_hosts` | Strict host verification for Kubernetes upgrades |
 
 Secret values stay in the execution cluster. The catalog contains only the
 logical bindings and injection conventions.
@@ -59,13 +59,14 @@ logical bindings and injection conventions.
 The upgrade launcher derives a temporary kubeconfig from the Run Pod's
 projected ServiceAccount token. The deployment must grant that ServiceAccount
 cluster-admin access because the example's infrastructure actions intentionally
-have full control of the homelab cluster. Use a narrower placement and
+have full control of the selected cluster. Use a narrower placement and
 ServiceAccount for repositories or actions that should not have that access.
 
 ## Prototype gaps
 
-The image digest is an illustrative private operations image and must contain
-pyinfra, Terraform, kubectl, the MinIO client (`mc`), Bash, and SSH. The RustFS
-state bucket must also be bootstrapped before the remote-backend workflow can
-run. Those details, the omitted workload source, and action approvals are
-outside this example; the checked-in catalog is covered by a Go test.
+The runtime image is an illustrative placeholder and must be replaced with an
+image containing pyinfra, Terraform, kubectl, the MinIO client (`mc`), Bash,
+and SSH. The RustFS state bucket must also be bootstrapped before the
+remote-backend workflow can run. Those details, the omitted workload source,
+and action approvals are outside this example; the checked-in catalog is
+covered by a Go test.

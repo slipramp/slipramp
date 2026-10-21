@@ -40,11 +40,7 @@ type Server struct {
 	artifactReconciler  *artifact.Reconciler
 }
 
-func New(
-	ctx context.Context,
-	cfg Config,
-	logger *slog.Logger,
-) (*Server, error) {
+func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -61,25 +57,14 @@ func New(
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database)
-	repositories := repository.NewService(
-		persistence.database,
-		cfg.RepositoryRefreshCredentials,
-	)
-	runs := run.NewService(
-		persistence.database,
-		repositories,
-		catalogs,
-		cfg.Placements,
-	)
+	repositories := repository.NewService(persistence.database, cfg.RepositoryRefreshCredentials)
+	runs := run.NewService(persistence.database, repositories, catalogs, cfg.Placements)
 	artifacts := artifact.NewService(
 		persistence.database,
 		persistence.artifactContents,
 		[]byte(cfg.ArtifactTokenSecret),
 	)
-	provider, err := productauth.DiscoverOIDCProvider(
-		ctx,
-		cfg.ProductAuthentication.OIDC,
-	)
+	provider, err := productauth.DiscoverOIDCProvider(ctx, cfg.ProductAuthentication.OIDC)
 	if err != nil {
 		persistence.Close()
 
@@ -112,10 +97,7 @@ func New(
 		cfg.ArtifactOrphanGracePeriod,
 		logger,
 	)
-	readinessService := readiness.NewService(
-		persistence.database,
-		persistence.artifactContents,
-	)
+	readinessService := readiness.NewService(persistence.database, persistence.artifactContents)
 	httpHandler := newHTTPHandler(
 		clusters,
 		identities,
@@ -136,11 +118,7 @@ func New(
 	return server, nil
 }
 
-func newServer(
-	cfg Config,
-	logger *slog.Logger,
-	handler http.Handler,
-) *Server {
+func newServer(cfg Config, logger *slog.Logger, handler http.Handler) *Server {
 	return &Server{
 		address:         cfg.Address,
 		shutdownTimeout: cfg.ShutdownTimeout,
@@ -224,10 +202,7 @@ func (s *Server) serve(ctx context.Context, listener net.Listener) error {
 		shutdownResult <- s.shutdown(ctx)
 	}()
 
-	s.logger.Info(
-		"server listening",
-		"address", listener.Addr().String(),
-	)
+	s.logger.Info("server listening", "address", listener.Addr().String())
 
 	serveError := s.httpServer.Serve(listener)
 	stop()
@@ -246,10 +221,7 @@ func (s *Server) serve(ctx context.Context, listener net.Listener) error {
 }
 
 func (s *Server) shutdown(ctx context.Context) error {
-	shutdownContext, cancel := context.WithTimeout(
-		context.WithoutCancel(ctx),
-		s.shutdownTimeout,
-	)
+	shutdownContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.shutdownTimeout)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(shutdownContext); err != nil {
@@ -275,19 +247,11 @@ func newHTTPHandler(
 	productAuthentication handler.ProductAuthenticationService,
 	logger *slog.Logger,
 ) http.Handler {
-	authenticator := newControllerAuthenticator(
-		identities,
-		controllerEnrollmentTokens,
-	)
+	authenticator := newControllerAuthenticator(identities, controllerEnrollmentTokens)
 	middleware := []api.StrictMiddlewareFunc{
 		handler.ControllerAuthentication(authenticator),
 	}
-	middleware = append(
-		middleware,
-		handler.ProductAuthentication(
-			newProductAuthenticator(productAuthentication),
-		),
-	)
+	middleware = append(middleware, handler.ProductAuthentication(newProductAuthenticator(productAuthentication)))
 	strictHandler := api.NewStrictHandlerWithOptions(
 		handler.New(
 			clusters,
@@ -301,22 +265,10 @@ func newHTTPHandler(
 		),
 		middleware,
 		api.StrictHTTPServerOptions{
-			RequestErrorHandlerFunc: func(
-				writer http.ResponseWriter,
-				_ *http.Request,
-				err error,
-			) {
-				handler.WriteProblem(
-					writer,
-					http.StatusBadRequest,
-					err.Error(),
-				)
+			RequestErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, err error) {
+				handler.WriteProblem(writer, http.StatusBadRequest, err.Error())
 			},
-			ResponseErrorHandlerFunc: func(
-				writer http.ResponseWriter,
-				request *http.Request,
-				err error,
-			) {
+			ResponseErrorHandlerFunc: func(writer http.ResponseWriter, request *http.Request, err error) {
 				if request.Context().Err() != nil {
 					return
 				}
@@ -344,16 +296,8 @@ func newHTTPHandler(
 		strictHandler,
 		api.StdHTTPServerOptions{
 			BaseRouter: mux,
-			ErrorHandlerFunc: func(
-				writer http.ResponseWriter,
-				_ *http.Request,
-				err error,
-			) {
-				handler.WriteProblem(
-					writer,
-					http.StatusBadRequest,
-					err.Error(),
-				)
+			ErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, err error) {
+				handler.WriteProblem(writer, http.StatusBadRequest, err.Error())
 			},
 		},
 	)
@@ -364,88 +308,28 @@ func newHTTPHandler(
 	registerMethodNotAllowed(mux, "/api/v1/auth/callback", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/auth/session", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/auth/logout", http.MethodPost)
-	registerMethodNotAllowed(
-		mux,
-		"/api/v1/auth/api-keys",
-		http.MethodGet,
-		http.MethodPost,
-	)
+	registerMethodNotAllowed(mux, "/api/v1/auth/api-keys", http.MethodGet, http.MethodPost)
 	registerMethodNotAllowed(mux, "/api/v1/auth/api-keys/{apiKeyId}", http.MethodDelete)
-	registerMethodNotAllowed(
-		mux,
-		"/api/v1/service-accounts",
-		http.MethodGet,
-		http.MethodPost,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/api/v1/service-accounts/{principalId}/api-keys",
-		http.MethodGet,
-		http.MethodPost,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/api/v1/repositories",
-		http.MethodGet,
-		http.MethodPost,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/api/v1/repositories/{repositoryId}",
-		http.MethodDelete,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/api/v1/repositories/{repositoryId}/catalog",
-		http.MethodGet,
-	)
+	registerMethodNotAllowed(mux, "/api/v1/service-accounts", http.MethodGet, http.MethodPost)
+	registerMethodNotAllowed(mux, "/api/v1/service-accounts/{principalId}/api-keys", http.MethodGet, http.MethodPost)
+	registerMethodNotAllowed(mux, "/api/v1/repositories", http.MethodGet, http.MethodPost)
+	registerMethodNotAllowed(mux, "/api/v1/repositories/{repositoryId}", http.MethodDelete)
+	registerMethodNotAllowed(mux, "/api/v1/repositories/{repositoryId}/catalog", http.MethodGet)
 	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
-	registerMethodNotAllowed(
-		mux,
-		"/api/v1/runs",
-		http.MethodGet,
-		http.MethodPost,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/controller/v1/enroll",
-		http.MethodPost,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/controller/v1/poll",
-		http.MethodPost,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/controller/v1/runs/{runId}/log-chunks",
-		http.MethodPost,
-	)
-	registerMethodNotAllowed(
-		mux,
-		"/controller/v1/runs/{runId}/observations",
-		http.MethodPost,
-	)
+	registerMethodNotAllowed(mux, "/api/v1/runs", http.MethodGet, http.MethodPost)
+	registerMethodNotAllowed(mux, "/controller/v1/enroll", http.MethodPost)
+	registerMethodNotAllowed(mux, "/controller/v1/poll", http.MethodPost)
+	registerMethodNotAllowed(mux, "/controller/v1/runs/{runId}/log-chunks", http.MethodPost)
+	registerMethodNotAllowed(mux, "/controller/v1/runs/{runId}/observations", http.MethodPost)
 	mux.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {
-		handler.WriteProblem(
-			writer,
-			http.StatusNotFound,
-			"The requested resource does not exist.",
-		)
+		handler.WriteProblem(writer, http.StatusNotFound, "The requested resource does not exist.")
 	})
 
 	return mux
 }
 
-func registerMethodNotAllowed(
-	mux *http.ServeMux,
-	pattern string,
-	allowedMethods ...string,
-) {
-	mux.HandleFunc(pattern, func(
-		writer http.ResponseWriter,
-		_ *http.Request,
-	) {
+func registerMethodNotAllowed(mux *http.ServeMux, pattern string, allowedMethods ...string) {
+	mux.HandleFunc(pattern, func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Allow", strings.Join(allowedMethods, ", "))
 		handler.WriteProblem(
 			writer,

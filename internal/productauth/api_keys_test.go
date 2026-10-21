@@ -53,9 +53,7 @@ func TestServiceCreatesAuthenticatesAndRevokesAPIKey(t *testing.T) {
 	if credential.Key.TokenPrefix != credential.Token[:len(apiKeyTokenMarker)+apiKeyDisplaySecretLength] {
 		t.Errorf("API key display prefix = %q", credential.Key.TokenPrefix)
 	}
-	if credential.Key.TokenDigest != productidentity.CredentialDigest(
-		sha256.Sum256([]byte(credential.Token)),
-	) {
+	if credential.Key.TokenDigest != productidentity.CredentialDigest(sha256.Sum256([]byte(credential.Token))) {
 		t.Error("API key digest does not match the returned token")
 	}
 	if credential.Key.Scopes[0] != productidentity.ScopeRead ||
@@ -66,10 +64,7 @@ func TestServiceCreatesAuthenticatesAndRevokesAPIKey(t *testing.T) {
 		t.Errorf("API key expiry = %v, want %v", credential.Key.ExpiresAt, expiresAt)
 	}
 
-	authentication, err := service.AuthenticateAPIKey(
-		context.Background(),
-		credential.Token,
-	)
+	authentication, err := service.AuthenticateAPIKey(context.Background(), credential.Token)
 	if err != nil {
 		t.Fatalf("AuthenticateAPIKey() error = %v", err)
 	}
@@ -84,22 +79,14 @@ func TestServiceCreatesAuthenticatesAndRevokesAPIKey(t *testing.T) {
 		t.Errorf("API key touch count = %d, want 1", store.keyTouches)
 	}
 
-	if err := service.RevokeAPIKey(
-		context.Background(),
-		session,
-		credential.Key.ID,
-	); err != nil {
+	if err := service.RevokeAPIKey(context.Background(), session, credential.Key.ID); err != nil {
 		t.Fatalf("RevokeAPIKey() error = %v", err)
 	}
 	revokedAt := store.apiKeys[credential.Key.TokenDigest].RevokedAt
 	if revokedAt == nil || !revokedAt.Equal(now) {
 		t.Errorf("API key revoked at = %v, want %v", revokedAt, now)
 	}
-	if err := service.RevokeAPIKey(
-		context.Background(),
-		session,
-		credential.Key.ID,
-	); err != nil {
+	if err := service.RevokeAPIKey(context.Background(), session, credential.Key.ID); err != nil {
 		t.Fatalf("second RevokeAPIKey() error = %v", err)
 	}
 	if store.apiKeys[credential.Key.TokenDigest].RevokedAt != revokedAt {
@@ -228,10 +215,7 @@ func TestServiceManagesUserAndServiceAccountAPIKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateServiceAccountAPIKey() error = %v", err)
 	}
-	serviceKeys, err := service.ListServiceAccountAPIKeys(
-		context.Background(),
-		serviceAccount.ID,
-	)
+	serviceKeys, err := service.ListServiceAccountAPIKeys(context.Background(), serviceAccount.ID)
 	if err != nil || len(serviceKeys) != 1 || serviceKeys[0].ID != serviceCredential.Key.ID {
 		t.Fatalf("ListServiceAccountAPIKeys() keys=%#v error=%v", serviceKeys, err)
 	}
@@ -241,26 +225,14 @@ func TestServiceManagesUserAndServiceAccountAPIKeys(t *testing.T) {
 		CredentialID: userCredential.Key.ID, CredentialLabel: userCredential.Key.Name,
 		Scopes: []productidentity.Scope{productidentity.ScopeRunsWrite},
 	}
-	err = service.RevokeAPIKey(
-		context.Background(),
-		runsOnlyUserKey,
-		serviceCredential.Key.ID,
-	)
+	err = service.RevokeAPIKey(context.Background(), runsOnlyUserKey, serviceCredential.Key.ID)
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatalf("cross-principal revoke error = %v, want forbidden", err)
 	}
-	if err := service.RevokeAPIKey(
-		context.Background(),
-		runsOnlyUserKey,
-		userCredential.Key.ID,
-	); err != nil {
+	if err := service.RevokeAPIKey(context.Background(), runsOnlyUserKey, userCredential.Key.ID); err != nil {
 		t.Fatalf("owner revoke error = %v", err)
 	}
-	if err := service.RevokeAPIKey(
-		context.Background(),
-		session,
-		serviceCredential.Key.ID,
-	); err != nil {
+	if err := service.RevokeAPIKey(context.Background(), session, serviceCredential.Key.ID); err != nil {
 		t.Fatalf("administrator revoke error = %v", err)
 	}
 }

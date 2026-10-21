@@ -11,31 +11,19 @@ import (
 )
 
 func validateRuntime(runtime Runtime) error {
-	if err := kubevalidate.DNSLabel(
-		"runtime metadata.name",
-		runtime.Metadata.Name,
-	); err != nil {
+	if err := kubevalidate.DNSLabel("runtime metadata.name", runtime.Metadata.Name); err != nil {
 		return validationError(runtime.Source, err)
 	}
 
 	if strings.TrimSpace(runtime.Spec.Image) == "" {
-		return validationError(
-			runtime.Source,
-			errors.New("runtime spec.image is required"),
-		)
+		return validationError(runtime.Source, errors.New("runtime spec.image is required"))
 	}
 	if strings.ContainsAny(runtime.Spec.Image, "\x00\t\r\n ") {
-		return validationError(
-			runtime.Source,
-			errors.New("runtime spec.image must not contain whitespace"),
-		)
+		return validationError(runtime.Source, errors.New("runtime spec.image must not contain whitespace"))
 	}
 
 	if runtime.Spec.WorkingDirectory != "" {
-		if err := validateContainerPath(
-			"runtime workingDirectory",
-			runtime.Spec.WorkingDirectory,
-		); err != nil {
+		if err := validateContainerPath("runtime workingDirectory", runtime.Spec.WorkingDirectory); err != nil {
 			return validationError(runtime.Source, err)
 		}
 	}
@@ -46,10 +34,7 @@ func validateRuntime(runtime Runtime) error {
 			return validationError(runtime.Source, err)
 		}
 		if strings.ContainsRune(runtime.Spec.Environment[name], '\x00') {
-			return validationError(
-				runtime.Source,
-				fmt.Errorf("runtime environment %q contains a null byte", name),
-			)
+			return validationError(runtime.Source, fmt.Errorf("runtime environment %q contains a null byte", name))
 		}
 
 		claimedEnvironment[name] = "runtime environment"
@@ -62,12 +47,7 @@ func validateRuntime(runtime Runtime) error {
 			return validationError(runtime.Source, err)
 		}
 
-		if err := validateCredentialInjection(
-			name,
-			credential.Inject,
-			claimedEnvironment,
-			claimedMounts,
-		); err != nil {
+		if err := validateCredentialInjection(name, credential.Inject, claimedEnvironment, claimedMounts); err != nil {
 			return validationError(runtime.Source, err)
 		}
 	}
@@ -85,10 +65,7 @@ func validateCredentialInjection(
 		!injection.EnvironmentFrom &&
 		len(injection.Files) == 0 &&
 		injection.Directory == nil {
-		return fmt.Errorf(
-			"runtime credential %q must define at least one injection",
-			credentialName,
-		)
+		return fmt.Errorf("runtime credential %q must define at least one injection", credentialName)
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(injection.Environment)) {
@@ -118,11 +95,7 @@ func validateCredentialInjection(
 	}
 
 	for index, file := range injection.Files {
-		subject := fmt.Sprintf(
-			"runtime credential %q file %d",
-			credentialName,
-			index+1,
-		)
+		subject := fmt.Sprintf("runtime credential %q file %d", credentialName, index+1)
 		if err := validateSecretKey(subject+" key", file.Key); err != nil {
 			return err
 		}
@@ -146,12 +119,7 @@ func validateCredentialInjection(
 		if err := validateFileMode(subject+" mode", directory.Mode); err != nil {
 			return err
 		}
-		if err := claimMount(
-			directory.Path,
-			subject,
-			true,
-			claimedMounts,
-		); err != nil {
+		if err := claimMount(directory.Path, subject, true, claimedMounts); err != nil {
 			return err
 		}
 	}

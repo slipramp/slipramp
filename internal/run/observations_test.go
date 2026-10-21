@@ -70,11 +70,7 @@ func TestReportObservationRecordsAllowedTransitions(t *testing.T) {
 			}
 			if !runs.observation.ObservedAt.Equal(reportedAt) ||
 				runs.observation.ObservedAt.Location() != time.UTC {
-				t.Errorf(
-					"observed at = %s, want %s in UTC",
-					runs.observation.ObservedAt,
-					reportedAt,
-				)
+				t.Errorf("observed at = %s, want %s in UTC", runs.observation.ObservedAt, reportedAt)
 			}
 		})
 	}

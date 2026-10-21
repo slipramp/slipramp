@@ -19,9 +19,7 @@ const (
 	controllerExecutionNamespacesEnvironment = "SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES"
 )
 
-func LoadController(
-	lookupEnvironment func(string) (string, bool),
-) (controller.Config, error) {
+func LoadController(lookupEnvironment func(string) (string, bool)) (controller.Config, error) {
 	if lookupEnvironment == nil {
 		return controller.Config{}, errors.New("environment lookup is required")
 	}
@@ -38,11 +36,7 @@ func LoadController(
 
 	if value, ok := lookupEnvironment(controllerExecutionNamespacesEnvironment); ok {
 		if err := json.Unmarshal([]byte(value), &cfg.ExecutionNamespaces); err != nil {
-			return controller.Config{}, fmt.Errorf(
-				"parse %s: %w",
-				controllerExecutionNamespacesEnvironment,
-				err,
-			)
+			return controller.Config{}, fmt.Errorf("parse %s: %w", controllerExecutionNamespacesEnvironment, err)
 		}
 		if cfg.ExecutionNamespaces == nil {
 			cfg.ExecutionNamespaces = []string{}
@@ -51,11 +45,7 @@ func LoadController(
 
 	if value, ok := lookupEnvironment(controllerGitCredentialsEnvironment); ok {
 		if err := json.Unmarshal([]byte(value), &cfg.GitCredentials); err != nil {
-			return controller.Config{}, fmt.Errorf(
-				"parse %s: %w",
-				controllerGitCredentialsEnvironment,
-				err,
-			)
+			return controller.Config{}, fmt.Errorf("parse %s: %w", controllerGitCredentialsEnvironment, err)
 		}
 		if cfg.GitCredentials == nil {
 			cfg.GitCredentials = map[string]string{}
@@ -63,10 +53,7 @@ func LoadController(
 	}
 
 	if err := cfg.Validate(); err != nil {
-		return controller.Config{}, fmt.Errorf(
-			"validate controller configuration: %w",
-			err,
-		)
+		return controller.Config{}, fmt.Errorf("validate controller configuration: %w", err)
 	}
 
 	return cfg, nil

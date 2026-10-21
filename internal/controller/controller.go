@@ -38,11 +38,7 @@ type commandPoller interface {
 }
 
 type runObservationReporter interface {
-	ReportObservation(
-		ctx context.Context,
-		runID uuid.UUID,
-		observation api.RunObservation,
-	) error
+	ReportObservation(ctx context.Context, runID uuid.UUID, observation api.RunObservation) error
 }
 
 type runLogReporter interface {
@@ -79,11 +75,7 @@ type Controller struct {
 	observers      sync.WaitGroup
 }
 
-func New(
-	cfg Config,
-	logger *slog.Logger,
-	kubeClient kubernetes.Interface,
-) (*Controller, error) {
+func New(cfg Config, logger *slog.Logger, kubeClient kubernetes.Interface) (*Controller, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -225,10 +217,7 @@ func (c *Controller) recoverRuns(ctx context.Context) bool {
 	}
 }
 
-func (c *Controller) handleCommand(
-	ctx context.Context,
-	command api.ControllerCommand,
-) error {
+func (c *Controller) handleCommand(ctx context.Context, command api.ControllerCommand) error {
 	switch command.Type {
 	case api.ControllerCommandTypeRunAssignment:
 		if command.Assignment == nil {

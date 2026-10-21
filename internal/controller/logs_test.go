@@ -22,11 +22,7 @@ func TestForwardLogResumesFromDurableCursor(t *testing.T) {
 	reporter := &memoryLogReporter{contents: bytes.Clone(payload[:prefixSize])}
 	controller := &Controller{logs: reporter, retryDelay: time.Millisecond}
 
-	summary, err := controller.forwardLog(
-		context.Background(),
-		uuid.New(),
-		bytes.NewReader(payload),
-	)
+	summary, err := controller.forwardLog(context.Background(), uuid.New(), bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("forwardLog() error = %v", err)
 	}
@@ -50,11 +46,7 @@ func TestForwardLogRetriesLostAppendResponseIdempotently(t *testing.T) {
 	controller := &Controller{logs: reporter, retryDelay: time.Millisecond}
 	payload := []byte("durable after a lost response\n")
 
-	_, err := controller.forwardLog(
-		context.Background(),
-		uuid.New(),
-		bytes.NewReader(payload),
-	)
+	_, err := controller.forwardLog(context.Background(), uuid.New(), bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("forwardLog() error = %v", err)
 	}
@@ -62,11 +54,7 @@ func TestForwardLogRetriesLostAppendResponseIdempotently(t *testing.T) {
 		t.Errorf("durable log = %q", reporter.bytes())
 	}
 	if reporter.appendAttempts != 2 || reporter.acceptedAppends != 1 {
-		t.Errorf(
-			"append attempts = %d, accepted = %d; want 2, 1",
-			reporter.appendAttempts,
-			reporter.acceptedAppends,
-		)
+		t.Errorf("append attempts = %d, accepted = %d; want 2, 1", reporter.appendAttempts, reporter.acceptedAppends)
 	}
 }
 
@@ -83,10 +71,7 @@ type memoryLogReporter struct {
 	acceptedAppends         int
 }
 
-func (r *memoryLogReporter) GetLogCursor(
-	context.Context,
-	uuid.UUID,
-) (logCursor, error) {
+func (r *memoryLogReporter) GetLogCursor(context.Context, uuid.UUID) (logCursor, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -104,12 +89,7 @@ func (r *memoryLogReporter) GetLogCursor(
 	}, nil
 }
 
-func (r *memoryLogReporter) AppendLogChunk(
-	_ context.Context,
-	_ uuid.UUID,
-	offset int64,
-	contents []byte,
-) error {
+func (r *memoryLogReporter) AppendLogChunk(_ context.Context, _ uuid.UUID, offset int64, contents []byte) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -138,12 +118,7 @@ func (r *memoryLogReporter) AppendLogChunk(
 	return nil
 }
 
-func (r *memoryLogReporter) SealLog(
-	_ context.Context,
-	_ uuid.UUID,
-	sizeBytes int64,
-	digest string,
-) error {
+func (r *memoryLogReporter) SealLog(_ context.Context, _ uuid.UUID, sizeBytes int64, digest string) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 

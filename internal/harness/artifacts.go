@@ -136,11 +136,7 @@ func (c ArtifactConfig) UploadArtifacts(ctx context.Context) error {
 	return nil
 }
 
-func (c ArtifactConfig) downloadInput(
-	ctx context.Context,
-	name string,
-	destination string,
-) error {
+func (c ArtifactConfig) downloadInput(ctx context.Context, name string, destination string) error {
 	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return fmt.Errorf("create input directory: %w", err)
 	}

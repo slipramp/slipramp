@@ -44,10 +44,7 @@ func matchRepositoryPattern(pattern, candidate string) bool {
 				matched = match(patternIndex, candidateIndex+1)
 			}
 		case candidateIndex < len(candidateParts):
-			segmentMatched, err := path.Match(
-				patternParts[patternIndex],
-				candidateParts[candidateIndex],
-			)
+			segmentMatched, err := path.Match(patternParts[patternIndex], candidateParts[candidateIndex])
 			matched = err == nil && segmentMatched &&
 				match(patternIndex+1, candidateIndex+1)
 		}

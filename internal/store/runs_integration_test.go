@@ -139,10 +139,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Errorf("filtered ListRuns() = %#v, want second", listed)
 	}
 
-	listed, err = database.ListRuns(
-		ctx,
-		run.ListFilter{TargetName: "missing", Limit: 10},
-	)
+	listed, err = database.ListRuns(ctx, run.ListFilter{TargetName: "missing", Limit: 10})
 	if err != nil {
 		t.Fatalf("empty ListRuns() error = %v", err)
 	}
@@ -291,14 +288,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		`SELECT phase, outcome, job_uid, outcome_reason, exit_code, last_observed_at
 		 FROM runs WHERE id = $1`,
 		record.ID,
-	).Scan(
-		&phase,
-		&outcome,
-		&storedJobUID,
-		&storedReason,
-		&storedExitCode,
-		&lastObservedAt,
-	); err != nil {
+	).Scan(&phase, &outcome, &storedJobUID, &storedReason, &storedExitCode, &lastObservedAt); err != nil {
 		t.Fatalf("load completed Run: %v", err)
 	}
 	if phase != "finished" || outcome == nil || *outcome != "succeeded" ||
@@ -317,11 +307,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		)
 	}
 
-	claimed, err = database.ClaimQueuedRun(
-		ctx,
-		"colo",
-		completedAt.Add(time.Minute),
-	)
+	claimed, err = database.ClaimQueuedRun(ctx, "colo", completedAt.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("claim unblocked Run: %v", err)
 	}
@@ -358,12 +344,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if pendingCancel.ID != second.ID {
 		t.Errorf("pending cancel ID = %s, want %s", pendingCancel.ID, second.ID)
 	}
-	repeated, err := database.CancelRun(
-		ctx,
-		second.ID,
-		cancelAt.Add(time.Minute),
-		nil,
-	)
+	repeated, err := database.CancelRun(ctx, second.ID, cancelAt.Add(time.Minute), nil)
 	if err != nil {
 		t.Fatalf("repeat CancelRun() error = %v", err)
 	}
@@ -385,12 +366,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	if _, err := database.GetRunToCancelForCluster(ctx, "colo"); !errors.Is(err, run.ErrNoRunToCancel) {
 		t.Errorf("completed cancel lookup error = %v, want no Run to cancel", err)
 	}
-	if _, err := database.CancelRun(
-		ctx,
-		record.ID,
-		cancelAt,
-		nil,
-	); !errors.Is(err, run.ErrRunFinished) {
+	if _, err := database.CancelRun(ctx, record.ID, cancelAt, nil); !errors.Is(err, run.ErrRunFinished) {
 		t.Errorf("finished Run cancel error = %v, want Run finished", err)
 	}
 
@@ -403,12 +379,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Fatalf("create third Run: %v", err)
 	}
 	queuedCancelAt := third.CreatedAt.Add(time.Minute)
-	canceledQueued, err := database.CancelRun(
-		ctx,
-		third.ID,
-		queuedCancelAt,
-		nil,
-	)
+	canceledQueued, err := database.CancelRun(ctx, third.ID, queuedCancelAt, nil)
 	if err != nil {
 		t.Fatalf("cancel queued Run: %v", err)
 	}
@@ -423,12 +394,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		*canceledQueued.OutcomeReason != run.ReasonCancelRequested {
 		t.Errorf("canceled queued Run = %#v", canceledQueued)
 	}
-	if _, err := database.CancelRun(
-		ctx,
-		third.ID,
-		queuedCancelAt.Add(time.Minute),
-		nil,
-	); err != nil {
+	if _, err := database.CancelRun(ctx, third.ID, queuedCancelAt.Add(time.Minute), nil); err != nil {
 		t.Fatalf("repeat queued Run cancel: %v", err)
 	}
 
@@ -559,12 +525,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 		t.Errorf("second principal Run ID = %s, want %s", createdSecond.ID, second.ID)
 	}
 
-	canceled, err := database.CancelRun(
-		ctx,
-		first.ID,
-		createdAt.Add(4*time.Minute),
-		&cancelerSnapshot,
-	)
+	canceled, err := database.CancelRun(ctx, first.ID, createdAt.Add(4*time.Minute), &cancelerSnapshot)
 	if err != nil {
 		t.Fatalf("cancel attributed Run: %v", err)
 	}
@@ -573,12 +534,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 		t.Errorf("canceled Run actor = %#v", canceled.CanceledBy)
 	}
 
-	repeated, err := database.CancelRun(
-		ctx,
-		first.ID,
-		createdAt.Add(5*time.Minute),
-		&creatorSnapshot,
-	)
+	repeated, err := database.CancelRun(ctx, first.ID, createdAt.Add(5*time.Minute), &creatorSnapshot)
 	if err != nil {
 		t.Fatalf("repeat attributed cancellation: %v", err)
 	}
@@ -587,12 +543,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 	}
 }
 
-func assertRunCounts(
-	t *testing.T,
-	database *Database,
-	wantRuns int,
-	wantTransitions int,
-) {
+func assertRunCounts(t *testing.T, database *Database, wantRuns int, wantTransitions int) {
 	t.Helper()
 
 	var runCount, transitionCount int

@@ -35,23 +35,15 @@ func NewGitFetcher(credentials RefreshCredentials) *GitFetcher {
 	return &GitFetcher{credentials: credentials}
 }
 
-func (f *GitFetcher) Fetch(
-	ctx context.Context,
-	repository Repository,
-) (FetchedCommit, error) {
-	gitConfigFile, err := f.credentials.gitConfigFile(
-		repository.RefreshCredentialName,
-	)
+func (f *GitFetcher) Fetch(ctx context.Context, repository Repository) (FetchedCommit, error) {
+	gitConfigFile, err := f.credentials.gitConfigFile(repository.RefreshCredentialName)
 	if err != nil {
 		return FetchedCommit{}, err
 	}
 
 	checkoutDirectory, err := os.MkdirTemp("", "slipramp-repository-*")
 	if err != nil {
-		return FetchedCommit{}, fmt.Errorf(
-			"create repository refresh directory: %w",
-			err,
-		)
+		return FetchedCommit{}, fmt.Errorf("create repository refresh directory: %w", err)
 	}
 	keepCheckout := false
 	defer func() {
@@ -61,13 +53,7 @@ func (f *GitFetcher) Fetch(
 	}()
 
 	environment := gitEnvironment(gitConfigFile)
-	if _, err := runGit(
-		ctx,
-		environment,
-		"init",
-		"--quiet",
-		checkoutDirectory,
-	); err != nil {
+	if _, err := runGit(ctx, environment, "init", "--quiet", checkoutDirectory); err != nil {
 		return FetchedCommit{}, err
 	}
 
@@ -85,32 +71,17 @@ func (f *GitFetcher) Fetch(
 		repository.CloneURL,
 		branchReference,
 	); err != nil {
-		return FetchedCommit{}, fmt.Errorf(
-			"fetch branch %q: %w",
-			repository.Branch,
-			err,
-		)
+		return FetchedCommit{}, fmt.Errorf("fetch branch %q: %w", repository.Branch, err)
 	}
 
-	output, err := runGit(
-		ctx,
-		environment,
-		"-C",
-		checkoutDirectory,
-		"rev-parse",
-		"--verify",
-		"FETCH_HEAD^{commit}",
-	)
+	output, err := runGit(ctx, environment, "-C", checkoutDirectory, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
 	if err != nil {
 		return FetchedCommit{}, fmt.Errorf("resolve fetched commit: %w", err)
 	}
 
 	commitSHA := strings.TrimSpace(output)
 	if !validCommitSHA(commitSHA) {
-		return FetchedCommit{}, fmt.Errorf(
-			"git returned invalid commit %q",
-			commitSHA,
-		)
+		return FetchedCommit{}, fmt.Errorf("git returned invalid commit %q", commitSHA)
 	}
 
 	changedPaths, err := changedRepositoryPaths(
@@ -135,10 +106,7 @@ func (f *GitFetcher) Fetch(
 		"--detach",
 		commitSHA,
 	); err != nil {
-		return FetchedCommit{}, fmt.Errorf(
-			"materialize fetched commit: %w",
-			err,
-		)
+		return FetchedCommit{}, fmt.Errorf("materialize fetched commit: %w", err)
 	}
 
 	keepCheckout = true
@@ -214,11 +182,7 @@ func splitNullTerminatedPaths(output string) []string {
 	return paths
 }
 
-func runGit(
-	ctx context.Context,
-	environment []string,
-	arguments ...string,
-) (string, error) {
+func runGit(ctx context.Context, environment []string, arguments ...string) (string, error) {
 	command := exec.CommandContext(ctx, "git", arguments...)
 	command.Env = environment
 
@@ -236,11 +200,7 @@ func runGit(
 
 func gitEnvironment(gitConfigFile string) []string {
 	environment := removeGitOverrides(os.Environ())
-	environment = append(
-		environment,
-		"GIT_CONFIG_NOSYSTEM=1",
-		"GIT_TERMINAL_PROMPT=0",
-	)
+	environment = append(environment, "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
 
 	if gitConfigFile == "" {
 		gitConfigFile = os.DevNull

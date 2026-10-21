@@ -12,10 +12,7 @@ import (
 )
 
 type ProductAuthenticator interface {
-	AuthenticateProductRequest(
-		ctx context.Context,
-		request *http.Request,
-	) (productidentity.Authentication, error)
+	AuthenticateProductRequest(ctx context.Context, request *http.Request) (productidentity.Authentication, error)
 }
 
 type productAuthenticationContextKey struct{}
@@ -52,13 +49,8 @@ var productAuthenticationOperations = map[string]struct{}{
 
 // ProductAuthentication establishes and authorizes product principals for
 // /api/v1 operations.
-func ProductAuthentication(
-	authenticator ProductAuthenticator,
-) api.StrictMiddlewareFunc {
-	return func(
-		next api.StrictHandlerFunc,
-		operationID string,
-	) api.StrictHandlerFunc {
+func ProductAuthentication(authenticator ProductAuthenticator) api.StrictMiddlewareFunc {
+	return func(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
 		if _, isAuthenticationOperation := productAuthenticationOperations[operationID]; isAuthenticationOperation {
 			return next
 		}
@@ -72,22 +64,14 @@ func ProductAuthentication(
 				value any,
 			) (any, error) {
 				if isProductPath(request.URL.Path) {
-					return nil, fmt.Errorf(
-						"product authorization permission is missing for operation %q",
-						operationID,
-					)
+					return nil, fmt.Errorf("product authorization permission is missing for operation %q", operationID)
 				}
 
 				return next(ctx, writer, request, value)
 			}
 		}
 
-		return func(
-			ctx context.Context,
-			writer http.ResponseWriter,
-			request *http.Request,
-			value any,
-		) (any, error) {
+		return func(ctx context.Context, writer http.ResponseWriter, request *http.Request, value any) (any, error) {
 			authentication, err := authenticator.AuthenticateProductRequest(ctx, request)
 			if errors.Is(err, productidentity.ErrUnauthenticated) {
 				writeProductUnauthorized(writer)
@@ -115,11 +99,7 @@ func ProductAuthentication(
 				return nil, nil
 			}
 
-			requestContext := context.WithValue(
-				ctx,
-				productAuthenticationContextKey{},
-				authentication,
-			)
+			requestContext := context.WithValue(ctx, productAuthenticationContextKey{}, authentication)
 
 			return next(requestContext, writer, request, value)
 		}
@@ -130,22 +110,16 @@ func isProductPath(path string) bool {
 	return path == "/api/v1" || strings.HasPrefix(path, "/api/v1/")
 }
 
-func currentProductAuthentication(
-	ctx context.Context,
-) (productidentity.Authentication, error) {
+func currentProductAuthentication(ctx context.Context) (productidentity.Authentication, error) {
 	authentication, ok := productAuthenticationFromContext(ctx)
 	if !ok {
-		return productidentity.Authentication{}, errors.New(
-			"authenticated product identity is missing",
-		)
+		return productidentity.Authentication{}, errors.New("authenticated product identity is missing")
 	}
 
 	return authentication, nil
 }
 
-func productAuthenticationFromContext(
-	ctx context.Context,
-) (productidentity.Authentication, bool) {
+func productAuthenticationFromContext(ctx context.Context) (productidentity.Authentication, bool) {
 	authentication, ok := ctx.Value(productAuthenticationContextKey{}).(productidentity.Authentication)
 
 	return authentication, ok
@@ -162,9 +136,5 @@ func currentProductPrincipal(ctx context.Context) *productidentity.Principal {
 
 func writeProductUnauthorized(writer http.ResponseWriter) {
 	writer.Header().Set("WWW-Authenticate", `Bearer realm="slipramp"`)
-	WriteProblem(
-		writer,
-		http.StatusUnauthorized,
-		"A valid product session or bearer credential is required.",
-	)
+	WriteProblem(writer, http.StatusUnauthorized, "A valid product session or bearer credential is required.")
 }

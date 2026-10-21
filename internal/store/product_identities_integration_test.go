@@ -66,9 +66,7 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		t.Fatalf("create service account: %v", err)
 	}
 
-	apiKeyDigest := productidentity.CredentialDigest(
-		sha256.Sum256([]byte("API key secret")),
-	)
+	apiKeyDigest := productidentity.CredentialDigest(sha256.Sum256([]byte("API key secret")))
 	expiresAt := now.Add(24 * time.Hour)
 	key, err := database.CreateAPIKey(ctx, productidentity.APIKey{
 		ID:                   uuid.New(),
@@ -141,9 +139,7 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		t.Errorf("TouchAPIKey() after revocation error = %v, want not found", err)
 	}
 
-	sessionDigest := productidentity.CredentialDigest(
-		sha256.Sum256([]byte("web session secret")),
-	)
+	sessionDigest := productidentity.CredentialDigest(sha256.Sum256([]byte("web session secret")))
 	session, err := database.CreateWebSession(ctx, productidentity.WebSession{
 		ID:          uuid.New(),
 		PrincipalID: user.ID,
@@ -159,10 +155,7 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		t.Errorf("created web session = %#v", session)
 	}
 
-	loadedSession, sessionPrincipal, err := database.GetWebSessionPrincipal(
-		ctx,
-		sessionDigest,
-	)
+	loadedSession, sessionPrincipal, err := database.GetWebSessionPrincipal(ctx, sessionDigest)
 	if err != nil {
 		t.Fatalf("GetWebSessionPrincipal() error = %v", err)
 	}
@@ -188,11 +181,7 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		t.Errorf("deleted session error = %v, want not found", err)
 	}
 
-	loadedUser, loadedIdentity, err := database.GetOIDCUser(
-		ctx,
-		identity.Issuer,
-		identity.Subject,
-	)
+	loadedUser, loadedIdentity, err := database.GetOIDCUser(ctx, identity.Issuer, identity.Subject)
 	if err != nil {
 		t.Fatalf("GetOIDCUser() error = %v", err)
 	}
@@ -203,11 +192,7 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 	loadedIdentity.PreferredUsername = &preferredUsername
 	loadedIdentity.LastAuthenticatedAt = loadedIdentity.LastAuthenticatedAt.Add(time.Minute)
 	loadedIdentity.UpdatedAt = loadedIdentity.UpdatedAt.Add(time.Minute)
-	updatedUser, updatedIdentity, err := database.UpdateOIDCUser(
-		ctx,
-		loadedUser,
-		loadedIdentity,
-	)
+	updatedUser, updatedIdentity, err := database.UpdateOIDCUser(ctx, loadedUser, loadedIdentity)
 	if err != nil {
 		t.Fatalf("UpdateOIDCUser() error = %v", err)
 	}

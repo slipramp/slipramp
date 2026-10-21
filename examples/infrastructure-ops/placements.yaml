@@ -1,8 +1,8 @@
 apiVersion: slipramp.com/v1alpha1
 kind: PlacementConfig
 placements:
-  homelab-infrastructure:
-    cluster: homelab
+  infrastructure-admin:
+    cluster: primary
     jobNamespace: slipramp-runs
     serviceAccountName: infrastructure-admin
     timeout: 45m
@@ -14,9 +14,9 @@ placements:
         cpu: "2"
         memory: 2Gi
     credentials:
-      ops-ci:
+      operations:
         secretRef:
-          name: ops-ci
-      homelab-known-hosts:
+          name: infrastructure-operations
+      ssh-known-hosts:
         secretRef:
-          name: kcloud-ops-known-hosts
+          name: infrastructure-known-hosts

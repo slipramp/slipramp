@@ -9,20 +9,10 @@ import (
 )
 
 type Store interface {
-	CreateRepository(
-		ctx context.Context,
-		repository Repository,
-	) (Repository, error)
+	CreateRepository(ctx context.Context, repository Repository) (Repository, error)
 	ListRepositories(ctx context.Context) ([]Repository, error)
-	GetRepository(
-		ctx context.Context,
-		repositoryID uuid.UUID,
-	) (Repository, error)
-	RemoveRepository(
-		ctx context.Context,
-		repositoryID uuid.UUID,
-		removedAt time.Time,
-	) error
+	GetRepository(ctx context.Context, repositoryID uuid.UUID) (Repository, error)
+	RemoveRepository(ctx context.Context, repositoryID uuid.UUID, removedAt time.Time) error
 }
 
 type Service struct {
@@ -32,10 +22,7 @@ type Service struct {
 	now          func() time.Time
 }
 
-func NewService(
-	repositories Store,
-	credentials RefreshCredentials,
-) *Service {
+func NewService(repositories Store, credentials RefreshCredentials) *Service {
 	return &Service{
 		repositories: repositories,
 		credentials:  credentials,
@@ -44,26 +31,13 @@ func NewService(
 	}
 }
 
-func (s *Service) CreateRepository(
-	ctx context.Context,
-	cfg Config,
-) (Repository, error) {
+func (s *Service) CreateRepository(ctx context.Context, cfg Config) (Repository, error) {
 	if err := cfg.Validate(); err != nil {
-		return Repository{}, fmt.Errorf(
-			"%w: %w",
-			ErrInvalidConfig,
-			err,
-		)
+		return Repository{}, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
 	}
 
-	if err := s.credentials.validateReference(
-		cfg.RefreshCredentialName,
-	); err != nil {
-		return Repository{}, fmt.Errorf(
-			"%w: %w",
-			ErrInvalidConfig,
-			err,
-		)
+	if err := s.credentials.validateReference(cfg.RefreshCredentialName); err != nil {
+		return Repository{}, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
 	}
 
 	record := Repository{
@@ -78,26 +52,14 @@ func (s *Service) CreateRepository(
 	return s.repositories.CreateRepository(ctx, record)
 }
 
-func (s *Service) ListRepositories(
-	ctx context.Context,
-) ([]Repository, error) {
+func (s *Service) ListRepositories(ctx context.Context) ([]Repository, error) {
 	return s.repositories.ListRepositories(ctx)
 }
 
-func (s *Service) GetRepository(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-) (Repository, error) {
+func (s *Service) GetRepository(ctx context.Context, repositoryID uuid.UUID) (Repository, error) {
 	return s.repositories.GetRepository(ctx, repositoryID)
 }
 
-func (s *Service) RemoveRepository(
-	ctx context.Context,
-	repositoryID uuid.UUID,
-) error {
-	return s.repositories.RemoveRepository(
-		ctx,
-		repositoryID,
-		s.now().UTC(),
-	)
+func (s *Service) RemoveRepository(ctx context.Context, repositoryID uuid.UUID) error {
+	return s.repositories.RemoveRepository(ctx, repositoryID, s.now().UTC())
 }

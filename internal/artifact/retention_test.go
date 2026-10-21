@@ -43,9 +43,7 @@ func (s *retentionMetadataStore) ExpireArtifacts(
 	return result, nil
 }
 
-func (s *retentionMetadataStore) ListExpiredArtifacts(
-	context.Context,
-) ([]Artifact, error) {
+func (s *retentionMetadataStore) ListExpiredArtifacts(context.Context) ([]Artifact, error) {
 	result := make([]Artifact, 0)
 	for _, record := range s.records {
 		if record.RetentionState == RetentionExpired {
@@ -56,17 +54,11 @@ func (s *retentionMetadataStore) ListExpiredArtifacts(
 	return result, nil
 }
 
-func (s *retentionMetadataStore) ListArtifactObjectKeys(
-	_ context.Context,
-	artifactID uuid.UUID,
-) ([]string, error) {
+func (s *retentionMetadataStore) ListArtifactObjectKeys(_ context.Context, artifactID uuid.UUID) ([]string, error) {
 	return slices.Clone(s.objectKeys[artifactID]), nil
 }
 
-func (s *retentionMetadataStore) MarkArtifactDeleted(
-	_ context.Context,
-	artifactID uuid.UUID,
-) error {
+func (s *retentionMetadataStore) MarkArtifactDeleted(_ context.Context, artifactID uuid.UUID) error {
 	record, ok := s.records[artifactID]
 	if !ok || record.RetentionState != RetentionExpired {
 		return ErrNotFound
@@ -78,10 +70,7 @@ func (s *retentionMetadataStore) MarkArtifactDeleted(
 	return nil
 }
 
-func (s *retentionMetadataStore) ArtifactObjectKeyExists(
-	_ context.Context,
-	key string,
-) (bool, error) {
+func (s *retentionMetadataStore) ArtifactObjectKeyExists(_ context.Context, key string) (bool, error) {
 	return s.references[key], nil
 }
 
@@ -102,10 +91,7 @@ func (s *retentionContentStore) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-func (s *retentionContentStore) List(
-	_ context.Context,
-	prefix string,
-) ([]objectstore.ObjectInfo, error) {
+func (s *retentionContentStore) List(_ context.Context, prefix string) ([]objectstore.ObjectInfo, error) {
 	result := make([]objectstore.ObjectInfo, 0, len(s.objects))
 	for _, object := range s.objects {
 		if len(object.Key) >= len(prefix) && object.Key[:len(prefix)] == prefix {
@@ -165,11 +151,7 @@ func TestReconcilerExpiresDeletesAndRemovesOldOrphans(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Reconcile() error = %v", err)
 	}
-	if result != (ReconciliationResult{
-		ExpiredArtifacts: 1,
-		DeletedArtifacts: 1,
-		DeletedOrphans:   1,
-	}) {
+	if result != (ReconciliationResult{ExpiredArtifacts: 1, DeletedArtifacts: 1, DeletedOrphans: 1}) {
 		t.Errorf("Reconcile() result = %#v", result)
 	}
 	if metadata.records[oldArtifactID].RetentionState != RetentionDeleted {
@@ -231,10 +213,7 @@ func TestReconcilerRetriesExpiredArtifactAfterObjectDeletionFailure(t *testing.T
 	}
 }
 
-func newTestReconciler(
-	metadata RetentionStore,
-	contents RetentionObjectStore,
-) *Reconciler {
+func newTestReconciler(metadata RetentionStore, contents RetentionObjectStore) *Reconciler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	return NewReconciler(

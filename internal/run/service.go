@@ -39,39 +39,19 @@ type Store interface {
 		sourceType SourceType,
 		idempotencyKey string,
 	) (Run, error)
-	GetAssignedRunForCluster(
-		ctx context.Context,
-		clusterName string,
-	) (Run, error)
-	ClaimQueuedRun(
-		ctx context.Context,
-		clusterName string,
-		claimedAt time.Time,
-	) (Run, error)
-	GetRunToCancelForCluster(
-		ctx context.Context,
-		clusterName string,
-	) (Run, error)
+	GetAssignedRunForCluster(ctx context.Context, clusterName string) (Run, error)
+	ClaimQueuedRun(ctx context.Context, clusterName string, claimedAt time.Time) (Run, error)
+	GetRunToCancelForCluster(ctx context.Context, clusterName string) (Run, error)
 	GetArtifactInputCandidate(context.Context, uuid.UUID) (ArtifactInput, error)
-	ApplyRunObservation(
-		ctx context.Context,
-		observation Observation,
-		allowedCurrentPhases []Phase,
-	) error
+	ApplyRunObservation(ctx context.Context, observation Observation, allowedCurrentPhases []Phase) error
 }
 
 type RepositoryService interface {
-	GetRepository(
-		ctx context.Context,
-		repositoryID uuid.UUID,
-	) (repository.Repository, error)
+	GetRepository(ctx context.Context, repositoryID uuid.UUID) (repository.Repository, error)
 }
 
 type CatalogService interface {
-	GetActiveRevision(
-		ctx context.Context,
-		repositoryID uuid.UUID,
-	) (catalog.Revision, error)
+	GetActiveRevision(ctx context.Context, repositoryID uuid.UUID) (catalog.Revision, error)
 	GetRevision(context.Context, uuid.UUID, uuid.UUID) (catalog.Revision, error)
 }
 
@@ -100,10 +80,7 @@ func NewService(
 	}
 }
 
-func (s *Service) CreateRun(
-	ctx context.Context,
-	request CreateRequest,
-) (Run, error) {
+func (s *Service) CreateRun(ctx context.Context, request CreateRequest) (Run, error) {
 	if request.Inputs == nil {
 		request.Inputs = map[string]uuid.UUID{}
 	}
@@ -140,10 +117,7 @@ func (s *Service) CreateRun(
 		}
 	}
 
-	repositoryRecord, err := s.repositories.GetRepository(
-		ctx,
-		request.RepositoryID,
-	)
+	repositoryRecord, err := s.repositories.GetRepository(ctx, request.RepositoryID)
 	if errors.Is(err, repository.ErrNotFound) {
 		return Run{}, ErrRepositoryNotFound
 	}
@@ -160,11 +134,7 @@ func (s *Service) CreateRun(
 	if pinnedRevisionID == uuid.Nil {
 		revision, err = s.catalogs.GetActiveRevision(ctx, request.RepositoryID)
 	} else {
-		revision, err = s.catalogs.GetRevision(
-			ctx,
-			request.RepositoryID,
-			pinnedRevisionID,
-		)
+		revision, err = s.catalogs.GetRevision(ctx, request.RepositoryID, pinnedRevisionID)
 	}
 	if errors.Is(err, catalog.ErrNotFound) {
 		return Run{}, ErrCatalogNotFound
@@ -224,12 +194,10 @@ func (s *Service) CreateRun(
 		CreatedBy:         createdBy,
 		Snapshot: Snapshot{
 			Repository: RepositorySnapshot{
-				Name:     repositoryRecord.Name,
-				CloneURL: repositoryRecord.CloneURL,
-				Branch:   repositoryRecord.Branch,
-				CheckoutCredentialName: cloneString(
-					repositoryRecord.CheckoutCredentialName,
-				),
+				Name:                   repositoryRecord.Name,
+				CloneURL:               repositoryRecord.CloneURL,
+				Branch:                 repositoryRecord.Branch,
+				CheckoutCredentialName: cloneString(repositoryRecord.CheckoutCredentialName),
 			},
 			Target:    target,
 			Action:    action,
@@ -266,10 +234,7 @@ func (s *Service) ListRuns(ctx context.Context, filter ListFilter) ([]Run, error
 		return nil, fmt.Errorf("%w: repository ID must not be empty", ErrInvalidRequest)
 	}
 	if filter.TargetName != strings.TrimSpace(filter.TargetName) {
-		return nil, fmt.Errorf(
-			"%w: target name must not have surrounding whitespace",
-			ErrInvalidRequest,
-		)
+		return nil, fmt.Errorf("%w: target name must not have surrounding whitespace", ErrInvalidRequest)
 	}
 	if filter.TargetName != "" && filter.RepositoryID == nil {
 		return nil, fmt.Errorf("%w: target filter requires a repository ID", ErrInvalidRequest)
@@ -278,11 +243,7 @@ func (s *Service) ListRuns(ctx context.Context, filter ListFilter) ([]Run, error
 		filter.Limit = DefaultListLimit
 	}
 	if filter.Limit < 1 || filter.Limit > MaximumListLimit {
-		return nil, fmt.Errorf(
-			"%w: limit must be between 1 and %d",
-			ErrInvalidRequest,
-			MaximumListLimit,
-		)
+		return nil, fmt.Errorf("%w: limit must be between 1 and %d", ErrInvalidRequest, MaximumListLimit)
 	}
 
 	records, err := s.runs.ListRuns(ctx, filter)
@@ -301,19 +262,12 @@ func (s *Service) resolveInputCandidates(
 	var revisionID uuid.UUID
 	for _, name := range slices.Sorted(maps.Keys(request.Inputs)) {
 		if strings.TrimSpace(name) == "" {
-			return nil, uuid.Nil, fmt.Errorf(
-				"%w: input name must not be blank",
-				ErrInvalidInputs,
-			)
+			return nil, uuid.Nil, fmt.Errorf("%w: input name must not be blank", ErrInvalidInputs)
 		}
 
 		artifactID := request.Inputs[name]
 		if artifactID == uuid.Nil {
-			return nil, uuid.Nil, fmt.Errorf(
-				"%w: input %q artifact ID is required",
-				ErrInvalidInputs,
-				name,
-			)
+			return nil, uuid.Nil, fmt.Errorf("%w: input %q artifact ID is required", ErrInvalidInputs, name)
 		}
 
 		candidate, err := s.runs.GetArtifactInputCandidate(ctx, artifactID)
@@ -350,27 +304,16 @@ func (s *Service) resolveInputCandidates(
 	return result, revisionID, nil
 }
 
-func validateArtifactInputs(
-	action catalog.EffectiveAction,
-	inputs map[string]ArtifactInput,
-) error {
+func validateArtifactInputs(action catalog.EffectiveAction, inputs map[string]ArtifactInput) error {
 	if len(inputs) != len(action.Inputs) {
-		return fmt.Errorf(
-			"%w: action requires %d explicit input bindings",
-			ErrInvalidInputs,
-			len(action.Inputs),
-		)
+		return fmt.Errorf("%w: action requires %d explicit input bindings", ErrInvalidInputs, len(action.Inputs))
 	}
 
 	for _, name := range slices.Sorted(maps.Keys(action.Inputs)) {
 		declaration := action.Inputs[name]
 		input, found := inputs[name]
 		if !found {
-			return fmt.Errorf(
-				"%w: required input %q was not supplied",
-				ErrInvalidInputs,
-				name,
-			)
+			return fmt.Errorf("%w: required input %q was not supplied", ErrInvalidInputs, name)
 		}
 
 		if input.Name != name || input.ActionName != declaration.Artifact.FromAction {
@@ -386,11 +329,7 @@ func validateArtifactInputs(
 
 	for name := range inputs {
 		if _, declared := action.Inputs[name]; !declared {
-			return fmt.Errorf(
-				"%w: input %q is not declared by the action",
-				ErrInvalidInputs,
-				name,
-			)
+			return fmt.Errorf("%w: input %q is not declared by the action", ErrInvalidInputs, name)
 		}
 	}
 
@@ -422,10 +361,7 @@ func validateRequest(request CreateRequest) error {
 	if request.IdempotencyKey != nil {
 		key := *request.IdempotencyKey
 		if strings.TrimSpace(key) == "" {
-			return fmt.Errorf(
-				"%w: idempotency key must not be blank",
-				ErrInvalidRequest,
-			)
+			return fmt.Errorf("%w: idempotency key must not be blank", ErrInvalidRequest)
 		}
 		if len(key) > maximumIdempotencyKeyLength {
 			return fmt.Errorf(
@@ -435,19 +371,14 @@ func validateRequest(request CreateRequest) error {
 			)
 		}
 		if strings.IndexFunc(key, unicode.IsControl) >= 0 {
-			return fmt.Errorf(
-				"%w: idempotency key must not contain control characters",
-				ErrInvalidRequest,
-			)
+			return fmt.Errorf("%w: idempotency key must not contain control characters", ErrInvalidRequest)
 		}
 	}
 
 	return nil
 }
 
-func actorSnapshot(
-	principal *productidentity.Principal,
-) (*productidentity.ActorSnapshot, error) {
+func actorSnapshot(principal *productidentity.Principal) (*productidentity.ActorSnapshot, error) {
 	if principal == nil {
 		return nil, nil
 	}
@@ -470,20 +401,13 @@ func actorPrincipalID(principal *productidentity.Principal) *uuid.UUID {
 	return &principalID
 }
 
-func validateParameters(
-	declarations map[string]catalog.Parameter,
-	values map[string]any,
-) (map[string]any, error) {
+func validateParameters(declarations map[string]catalog.Parameter, values map[string]any) (map[string]any, error) {
 	validated := make(map[string]any, len(values))
 
 	for _, name := range slices.Sorted(maps.Keys(values)) {
 		declaration, found := declarations[name]
 		if !found {
-			return nil, fmt.Errorf(
-				"%w: parameter %q is not declared by the action",
-				ErrInvalidParameters,
-				name,
-			)
+			return nil, fmt.Errorf("%w: parameter %q is not declared by the action", ErrInvalidParameters, name)
 		}
 
 		value, err := validateParameterValue(name, declaration, values[name])
@@ -497,11 +421,7 @@ func validateParameters(
 	for _, name := range slices.Sorted(maps.Keys(declarations)) {
 		if declarations[name].Required {
 			if _, supplied := validated[name]; !supplied {
-				return nil, fmt.Errorf(
-					"%w: required parameter %q was not supplied",
-					ErrInvalidParameters,
-					name,
-				)
+				return nil, fmt.Errorf("%w: required parameter %q was not supplied", ErrInvalidParameters, name)
 			}
 		}
 	}
@@ -535,11 +455,7 @@ func normalizeParameters(values map[string]any) (map[string]any, error) {
 	return normalized, nil
 }
 
-func validateParameterValue(
-	name string,
-	declaration catalog.Parameter,
-	value any,
-) (any, error) {
+func validateParameterValue(name string, declaration catalog.Parameter, value any) (any, error) {
 	switch declaration.Type {
 	case catalog.ParameterTypeString:
 		if typed, ok := value.(string); ok {
@@ -568,12 +484,7 @@ func validateParameterValue(
 		}
 	}
 
-	return nil, fmt.Errorf(
-		"%w: parameter %q must be a %s",
-		ErrInvalidParameters,
-		name,
-		declaration.Type,
-	)
+	return nil, fmt.Errorf("%w: parameter %q must be a %s", ErrInvalidParameters, name, declaration.Type)
 }
 
 func numberValue(value any) (float64, bool) {

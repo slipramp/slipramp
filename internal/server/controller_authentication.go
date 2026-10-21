@@ -14,10 +14,7 @@ type controllerAuthenticator struct {
 }
 
 type controllerIdentityService interface {
-	AuthenticateController(
-		ctx context.Context,
-		bearerToken string,
-	) (controlleridentity.Principal, error)
+	AuthenticateController(ctx context.Context, bearerToken string) (controlleridentity.Principal, error)
 }
 
 func newControllerAuthenticator(
@@ -42,16 +39,10 @@ func (a *controllerAuthenticator) AuthenticateController(
 	return a.identities.AuthenticateController(ctx, bearerToken)
 }
 
-func (a *controllerAuthenticator) AuthorizeControllerEnrollment(
-	clusterName string,
-	bearerToken string,
-) bool {
+func (a *controllerAuthenticator) AuthorizeControllerEnrollment(clusterName string, bearerToken string) bool {
 	expectedDigest, configured := a.enrollmentTokenDigests[clusterName]
 	providedDigest := sha256.Sum256([]byte(bearerToken))
-	digestsMatch := subtle.ConstantTimeCompare(
-		providedDigest[:],
-		expectedDigest[:],
-	) == 1
+	digestsMatch := subtle.ConstantTimeCompare(providedDigest[:], expectedDigest[:]) == 1
 
 	return configured && digestsMatch
 }

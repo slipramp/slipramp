@@ -40,10 +40,7 @@ type Service struct {
 	timeout         time.Duration
 }
 
-func NewService(
-	database Database,
-	artifactStorage ArtifactStorage,
-) *Service {
+func NewService(database Database, artifactStorage ArtifactStorage) *Service {
 	return &Service{
 		database:        database,
 		artifactStorage: artifactStorage,
@@ -56,10 +53,7 @@ func (s *Service) Check(ctx context.Context) Report {
 	defer cancel()
 
 	databaseResult := checkDependency(checkContext, s.database.Ping)
-	artifactStorageResult := checkDependency(
-		checkContext,
-		s.artifactStorage.Check,
-	)
+	artifactStorageResult := checkDependency(checkContext, s.artifactStorage.Check)
 
 	return Report{
 		Database:        dependencyStatus(checkContext, databaseResult),
@@ -67,10 +61,7 @@ func (s *Service) Check(ctx context.Context) Report {
 	}
 }
 
-func checkDependency(
-	ctx context.Context,
-	check func(context.Context) error,
-) <-chan DependencyStatus {
+func checkDependency(ctx context.Context, check func(context.Context) error) <-chan DependencyStatus {
 	result := make(chan DependencyStatus, 1)
 
 	go func() {
@@ -85,10 +76,7 @@ func checkDependency(
 	return result
 }
 
-func dependencyStatus(
-	ctx context.Context,
-	result <-chan DependencyStatus,
-) DependencyStatus {
+func dependencyStatus(ctx context.Context, result <-chan DependencyStatus) DependencyStatus {
 	select {
 	case status := <-result:
 		return status

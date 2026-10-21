@@ -73,11 +73,7 @@ func runValidationTests(t *testing.T, tests []validationTest) {
 
 			input := validCatalog()
 			test.configure(&input)
-			testcheck.ErrorContains(
-				t,
-				catalog.Validate(input, testPlacements(t)),
-				test.wantError,
-			)
+			testcheck.ErrorContains(t, catalog.Validate(input, testPlacements(t)), test.wantError)
 		})
 	}
 }

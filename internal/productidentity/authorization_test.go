@@ -134,11 +134,7 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 func TestDisabledAuthenticationAuthorizesNothing(t *testing.T) {
 	t.Parallel()
 
-	authentication := testAuthentication(
-		RoleAdmin,
-		AuthenticationMethodWebSession,
-		nil,
-	)
+	authentication := testAuthentication(RoleAdmin, AuthenticationMethodWebSession, nil)
 	disabledAt := time.Now().UTC()
 	authentication.Principal.DisabledAt = &disabledAt
 
@@ -185,11 +181,7 @@ func TestAuthenticationValidate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			authentication := testAuthentication(
-				RoleAdmin,
-				AuthenticationMethodWebSession,
-				nil,
-			)
+			authentication := testAuthentication(RoleAdmin, AuthenticationMethodWebSession, nil)
 			test.mutate(&authentication)
 
 			if err := authentication.Validate(); err == nil {
@@ -199,11 +191,7 @@ func TestAuthenticationValidate(t *testing.T) {
 	}
 }
 
-func testAuthentication(
-	role Role,
-	method AuthenticationMethod,
-	scopes []Scope,
-) Authentication {
+func testAuthentication(role Role, method AuthenticationMethod, scopes []Scope) Authentication {
 	now := time.Now().UTC()
 	credentialLabel := ""
 	if method == AuthenticationMethodAPIKey {

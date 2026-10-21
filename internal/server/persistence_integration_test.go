@@ -44,12 +44,7 @@ func TestPersistenceIntegration(t *testing.T) {
 	app.httpServer.Handler.ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
-		t.Fatalf(
-			"readiness status = %d, want %d: %s",
-			response.Code,
-			http.StatusOK,
-			response.Body.String(),
-		)
+		t.Fatalf("readiness status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
 	}
 	if responseBody := response.Body.String(); responseBody == "" {
 		t.Fatal("readiness response body is empty")

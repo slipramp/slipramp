@@ -25,21 +25,14 @@ type mountClaim struct {
 	directory bool
 }
 
-func validateParameters(
-	actionName string,
-	parameters map[string]Parameter,
-	runtime Runtime,
-) error {
+func validateParameters(actionName string, parameters map[string]Parameter, runtime Runtime) error {
 	environmentOwners := make(map[string]string, len(runtime.Spec.Environment))
 	for name := range runtime.Spec.Environment {
 		environmentOwners[name] = "runtime environment"
 	}
 	for credentialName, credential := range runtime.Spec.Credentials {
 		for name := range credential.Inject.Environment {
-			environmentOwners[name] = fmt.Sprintf(
-				"runtime credential %q",
-				credentialName,
-			)
+			environmentOwners[name] = fmt.Sprintf("runtime credential %q", credentialName)
 		}
 	}
 
@@ -71,35 +64,21 @@ func validateParameters(
 				seen[value] = struct{}{}
 			}
 		default:
-			return fmt.Errorf(
-				"%s type must be string, boolean, number, or enum",
-				subject,
-			)
+			return fmt.Errorf("%s type must be string, boolean, number, or enum", subject)
 		}
 
 		hasEnvironment := parameter.Environment != ""
 		hasArgument := parameter.Argument != nil
 		if hasEnvironment == hasArgument {
-			return fmt.Errorf(
-				"%s must define exactly one of environment or argument",
-				subject,
-			)
+			return fmt.Errorf("%s must define exactly one of environment or argument", subject)
 		}
 
 		if hasEnvironment {
-			if err := validateEnvironmentName(
-				subject+" environment",
-				parameter.Environment,
-			); err != nil {
+			if err := validateEnvironmentName(subject+" environment", parameter.Environment); err != nil {
 				return err
 			}
 			if owner, found := environmentOwners[parameter.Environment]; found {
-				return fmt.Errorf(
-					"%s environment %q conflicts with %s",
-					subject,
-					parameter.Environment,
-					owner,
-				)
+				return fmt.Errorf("%s environment %q conflicts with %s", subject, parameter.Environment, owner)
 			}
 			environmentOwners[parameter.Environment] = subject
 		}
@@ -127,11 +106,7 @@ func validateArtifacts(actionName string, artifacts map[string]Artifact) error {
 			return err
 		}
 		if previous, found := paths[artifact.Path]; found {
-			return fmt.Errorf(
-				"%s path conflicts with artifact %q",
-				subject,
-				previous,
-			)
+			return fmt.Errorf("%s path conflicts with artifact %q", subject, previous)
 		}
 		paths[artifact.Path] = name
 
@@ -153,30 +128,19 @@ func validateInputs(actionName string, inputs map[string]Input) error {
 		if err := kubevalidate.DNSLabel("input name", name); err != nil {
 			return err
 		}
-		if err := kubevalidate.DNSLabel(
-			subject+" source action",
-			input.Artifact.FromAction,
-		); err != nil {
+		if err := kubevalidate.DNSLabel(subject+" source action", input.Artifact.FromAction); err != nil {
 			return err
 		}
 		switch input.Artifact.Compatibility {
 		case "", ArtifactCompatibilityExactCatalogRevision:
 		default:
-			return fmt.Errorf(
-				"%s compatibility must be %q",
-				subject,
-				ArtifactCompatibilityExactCatalogRevision,
-			)
+			return fmt.Errorf("%s compatibility must be %q", subject, ArtifactCompatibilityExactCatalogRevision)
 		}
 		if err := validateContainerPath(subject+" mountPath", input.MountPath); err != nil {
 			return err
 		}
 		if previous, found := mountPaths[input.MountPath]; found {
-			return fmt.Errorf(
-				"%s mountPath conflicts with input %q",
-				subject,
-				previous,
-			)
+			return fmt.Errorf("%s mountPath conflicts with input %q", subject, previous)
 		}
 		mountPaths[input.MountPath] = name
 	}
@@ -232,10 +196,7 @@ func validateResources(subject string, resources ResourceRequirements) error {
 	return nil
 }
 
-func validateResourceList(
-	subject string,
-	values map[string]string,
-) (map[string]resource.Quantity, error) {
+func validateResourceList(subject string, values map[string]string) (map[string]resource.Quantity, error) {
 	quantities := make(map[string]resource.Quantity, len(values))
 	for _, name := range slices.Sorted(maps.Keys(values)) {
 		if err := kubevalidate.LabelKey(subject+" name", name); err != nil {
@@ -244,13 +205,7 @@ func validateResourceList(
 
 		quantity, err := resource.ParseQuantity(values[name])
 		if err != nil {
-			return nil, fmt.Errorf(
-				"%s %q has invalid quantity %q: %w",
-				subject,
-				name,
-				values[name],
-				err,
-			)
+			return nil, fmt.Errorf("%s %q has invalid quantity %q: %w", subject, name, values[name], err)
 		}
 		if quantity.Sign() < 0 {
 			return nil, fmt.Errorf("%s %q must not be negative", subject, name)
@@ -271,11 +226,7 @@ func validateEnvironmentName(subject, value string) error {
 		)
 	}
 	if strings.HasPrefix(value, "SLIPRAMP_") {
-		return fmt.Errorf(
-			"%s %q uses the reserved SLIPRAMP_ namespace",
-			subject,
-			value,
-		)
+		return fmt.Errorf("%s %q uses the reserved SLIPRAMP_ namespace", subject, value)
 	}
 
 	return nil
@@ -283,11 +234,7 @@ func validateEnvironmentName(subject, value string) error {
 
 func validateSecretKey(subject, value string) error {
 	if !secretKeyPattern.MatchString(value) {
-		return fmt.Errorf(
-			"%s %q must contain only letters, digits, dots, underscores, and hyphens",
-			subject,
-			value,
-		)
+		return fmt.Errorf("%s %q must contain only letters, digits, dots, underscores, and hyphens", subject, value)
 	}
 
 	return nil
@@ -312,23 +259,13 @@ func validateContainerPath(subject, value string) error {
 	return nil
 }
 
-func claimMount(
-	mountPath string,
-	subject string,
-	directory bool,
-	claimed map[string]mountClaim,
-) error {
+func claimMount(mountPath string, subject string, directory bool, claimed map[string]mountClaim) error {
 	for existingPath, existing := range claimed {
 		if mountPath == existingPath ||
 			directory && pathWithin(mountPath, existingPath) ||
 			existing.directory &&
 				pathWithin(existingPath, mountPath) {
-			return fmt.Errorf(
-				"%s path %q conflicts with %s",
-				subject,
-				mountPath,
-				existing.subject,
-			)
+			return fmt.Errorf("%s path %q conflicts with %s", subject, mountPath, existing.subject)
 		}
 	}
 

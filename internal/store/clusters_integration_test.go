@@ -66,12 +66,6 @@ func TestClusterPersistenceIntegration(t *testing.T) {
 	}
 
 	if clusters[0].Name != "backup" || clusters[1].Name != "colo" {
-		t.Errorf(
-			"cluster order = (%q, %q), want (%q, %q)",
-			clusters[0].Name,
-			clusters[1].Name,
-			"backup",
-			"colo",
-		)
+		t.Errorf("cluster order = (%q, %q), want (%q, %q)", clusters[0].Name, clusters[1].Name, "backup", "colo")
 	}
 }

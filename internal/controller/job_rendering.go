@@ -134,12 +134,8 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 	}
 	template.Spec.Containers = []corev1.Container{action}
 	template.Spec.RestartPolicy = corev1.RestartPolicyNever
-	template.Spec.ServiceAccountName = valueOrEmpty(
-		assignment.Placement.ServiceAccountName,
-	)
-	template.Spec.NodeSelector = cloneOptionalMap(
-		assignment.Placement.NodeSelector,
-	)
+	template.Spec.ServiceAccountName = valueOrEmpty(assignment.Placement.ServiceAccountName)
+	template.Spec.NodeSelector = cloneOptionalMap(assignment.Placement.NodeSelector)
 
 	deadline, err := assignmentDeadline(assignment)
 	if err != nil {
@@ -167,43 +163,30 @@ func runJobName(runID uuid.UUID) string {
 	return "slipramp-run-" + runID.String()
 }
 
-func assignmentPodTemplate(
-	encoded *map[string]any,
-) (corev1.PodTemplateSpec, error) {
+func assignmentPodTemplate(encoded *map[string]any) (corev1.PodTemplateSpec, error) {
 	if encoded == nil {
 		return corev1.PodTemplateSpec{}, nil
 	}
 
 	data, err := json.Marshal(encoded)
 	if err != nil {
-		return corev1.PodTemplateSpec{}, fmt.Errorf(
-			"encode assignment pod template: %w",
-			err,
-		)
+		return corev1.PodTemplateSpec{}, fmt.Errorf("encode assignment pod template: %w", err)
 	}
 
 	var template corev1.PodTemplateSpec
 	if err := json.Unmarshal(data, &template); err != nil {
-		return corev1.PodTemplateSpec{}, fmt.Errorf(
-			"decode assignment pod template: %w",
-			err,
-		)
+		return corev1.PodTemplateSpec{}, fmt.Errorf("decode assignment pod template: %w", err)
 	}
 
 	if len(template.Spec.Containers) != 0 ||
 		len(template.Spec.InitContainers) != 0 {
-		return corev1.PodTemplateSpec{}, fmt.Errorf(
-			"assignment pod template must not define containers",
-		)
+		return corev1.PodTemplateSpec{}, fmt.Errorf("assignment pod template must not define containers")
 	}
 
 	return template, nil
 }
 
-func checkoutContainer(
-	config Config,
-	assignment api.RunAssignment,
-) (corev1.Container, []corev1.Volume, error) {
+func checkoutContainer(config Config, assignment api.RunAssignment) (corev1.Container, []corev1.Volume, error) {
 	credentialPath := ""
 	volumes := []corev1.Volume{}
 	volumeMounts := []corev1.VolumeMount{
@@ -264,10 +247,7 @@ func checkoutContainer(
 	}, volumes, nil
 }
 
-func actionContainer(
-	config Config,
-	assignment api.RunAssignment,
-) (corev1.Container, []corev1.Volume, error) {
+func actionContainer(config Config, assignment api.RunAssignment) (corev1.Container, []corev1.Volume, error) {
 	arguments := append([]string(nil), assignment.Action.Command...)
 	environment := []corev1.EnvVar{
 		{
@@ -340,10 +320,7 @@ func actionContainer(
 	}, credentials.volumes, nil
 }
 
-func assignmentArtifactEnvironment(
-	config Config,
-	assignment api.RunAssignment,
-) ([]corev1.EnvVar, error) {
+func assignmentArtifactEnvironment(config Config, assignment api.RunAssignment) ([]corev1.EnvVar, error) {
 	artifacts, err := json.Marshal(assignment.Action.Artifacts)
 	if err != nil {
 		return nil, fmt.Errorf("encode artifact declarations: %w", err)
@@ -362,26 +339,18 @@ func assignmentArtifactEnvironment(
 	}, nil
 }
 
-func assignmentParameters(
-	assignment api.RunAssignment,
-) ([]corev1.EnvVar, []string, error) {
+func assignmentParameters(assignment api.RunAssignment) ([]corev1.EnvVar, []string, error) {
 	environment := []corev1.EnvVar{}
 	arguments := []string{}
 
 	for _, name := range slices.Sorted(maps.Keys(assignment.Parameters)) {
 		if assignment.Action.ParameterDefinitions == nil {
-			return nil, nil, fmt.Errorf(
-				"run parameter %q has no definition",
-				name,
-			)
+			return nil, nil, fmt.Errorf("run parameter %q has no definition", name)
 		}
 
 		definition, found := (*assignment.Action.ParameterDefinitions)[name]
 		if !found {
-			return nil, nil, fmt.Errorf(
-				"run parameter %q has no definition",
-				name,
-			)
+			return nil, nil, fmt.Errorf("run parameter %q has no definition", name)
 		}
 
 		value, boolean, err := parameterValue(definition.Type, assignment.Parameters[name])
@@ -390,18 +359,12 @@ func assignmentParameters(
 		}
 
 		if definition.Environment != nil {
-			environment = append(environment, corev1.EnvVar{
-				Name:  *definition.Environment,
-				Value: value,
-			})
+			environment = append(environment, corev1.EnvVar{Name: *definition.Environment, Value: value})
 			continue
 		}
 
 		if definition.Argument == nil {
-			return nil, nil, fmt.Errorf(
-				"run parameter %q has no execution mapping",
-				name,
-			)
+			return nil, nil, fmt.Errorf("run parameter %q has no execution mapping", name)
 		}
 
 		if definition.Argument.Name == nil {
@@ -422,10 +385,7 @@ func assignmentParameters(
 	return environment, arguments, nil
 }
 
-func parameterValue(
-	parameterType api.ParameterType,
-	value api.ParameterValue,
-) (string, bool, error) {
+func parameterValue(parameterType api.ParameterType, value api.ParameterValue) (string, bool, error) {
 	switch parameterType {
 	case api.ParameterTypeString, api.ParameterTypeEnum:
 		text, err := value.AsParameterValue0()
@@ -448,9 +408,7 @@ type renderedCredentials struct {
 	volumes         []corev1.Volume
 }
 
-func assignmentCredentials(
-	assignment api.RunAssignment,
-) (renderedCredentials, error) {
+func assignmentCredentials(assignment api.RunAssignment) (renderedCredentials, error) {
 	if assignment.Runtime.Credentials == nil {
 		return renderedCredentials{}, nil
 	}
@@ -467,9 +425,7 @@ func assignmentCredentials(
 		secretName := binding.SecretName
 
 		if injection.Environment != nil {
-			for _, environmentName := range slices.Sorted(
-				maps.Keys(*injection.Environment),
-			) {
+			for _, environmentName := range slices.Sorted(maps.Keys(*injection.Environment)) {
 				variable := (*injection.Environment)[environmentName]
 				result.environment = append(result.environment, corev1.EnvVar{
 					Name: environmentName,
@@ -499,11 +455,7 @@ func assignmentCredentials(
 			items := make([]corev1.KeyToPath, 0, len(*injection.Files))
 			for fileIndex, file := range *injection.Files {
 				itemPath := "file-" + strconv.Itoa(fileIndex)
-				items = append(items, corev1.KeyToPath{
-					Key:  file.Key,
-					Path: itemPath,
-					Mode: mode32(file.Mode),
-				})
+				items = append(items, corev1.KeyToPath{Key: file.Key, Path: itemPath, Mode: mode32(file.Mode)})
 				result.volumeMounts = append(result.volumeMounts, corev1.VolumeMount{
 					Name:      volumeName,
 					MountPath: file.Path,
@@ -572,9 +524,7 @@ func boundCredential(
 	return binding, credential, nil
 }
 
-func assignmentResources(
-	assignment api.RunAssignment,
-) (corev1.ResourceRequirements, error) {
+func assignmentResources(assignment api.RunAssignment) (corev1.ResourceRequirements, error) {
 	requests := map[string]string{}
 	limits := map[string]string{}
 	mergeResources(requests, limits, assignment.Placement.Resources)
@@ -595,11 +545,7 @@ func assignmentResources(
 	}, nil
 }
 
-func mergeResources(
-	requests map[string]string,
-	limits map[string]string,
-	resources *api.ResourceRequirements,
-) {
+func mergeResources(requests map[string]string, limits map[string]string, resources *api.ResourceRequirements) {
 	if resources == nil {
 		return
 	}
@@ -611,10 +557,7 @@ func mergeResources(
 	}
 }
 
-func parseResourceList(
-	kind string,
-	values map[string]string,
-) (corev1.ResourceList, error) {
+func parseResourceList(kind string, values map[string]string) (corev1.ResourceList, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
@@ -623,12 +566,7 @@ func parseResourceList(
 	for _, name := range slices.Sorted(maps.Keys(values)) {
 		quantity, err := resource.ParseQuantity(values[name])
 		if err != nil {
-			return nil, fmt.Errorf(
-				"parse resource %s %q: %w",
-				kind,
-				name,
-				err,
-			)
+			return nil, fmt.Errorf("parse resource %s %q: %w", kind, name, err)
 		}
 		result[corev1.ResourceName(name)] = quantity
 	}
@@ -665,10 +603,7 @@ func appendOwnedVolumes(spec *corev1.PodSpec, volumes []corev1.Volume) error {
 
 	for _, volume := range volumes {
 		if _, found := existing[volume.Name]; found {
-			return fmt.Errorf(
-				"assignment pod template volume %q conflicts with a Slipramp volume",
-				volume.Name,
-			)
+			return fmt.Errorf("assignment pod template volume %q conflicts with a Slipramp volume", volume.Name)
 		}
 		existing[volume.Name] = struct{}{}
 		spec.Volumes = append(spec.Volumes, volume)

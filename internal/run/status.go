@@ -4,11 +4,7 @@ import "time"
 
 const observationFreshnessWindow = time.Minute
 
-func DeriveObservationState(
-	record Run,
-	clusterConnected bool,
-	now time.Time,
-) (ObservationState, bool) {
+func DeriveObservationState(record Run, clusterConnected bool, now time.Time) (ObservationState, bool) {
 	switch record.Phase {
 	case PhaseAssigned, PhasePreparing, PhaseRunning:
 	case PhaseQueued, PhaseFinished:

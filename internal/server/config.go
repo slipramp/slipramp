@@ -64,9 +64,7 @@ func (c Config) Validate() error {
 
 	portNumber, err := strconv.ParseUint(port, 10, 16)
 	if err != nil || portNumber == 0 {
-		return fmt.Errorf(
-			"address must contain a numeric port between 1 and 65535",
-		)
+		return fmt.Errorf("address must contain a numeric port between 1 and 65535")
 	}
 
 	if c.ShutdownTimeout <= 0 {
@@ -87,18 +85,11 @@ func (c Config) Validate() error {
 
 	for clusterName, token := range c.ControllerEnrollmentTokens {
 		if err := cluster.ValidateName(clusterName); err != nil {
-			return fmt.Errorf(
-				"validate controller enrollment credential: %w",
-				err,
-			)
+			return fmt.Errorf("validate controller enrollment credential: %w", err)
 		}
 
 		if err := auth.ValidateBearerToken(token); err != nil {
-			return fmt.Errorf(
-				"controller enrollment token for cluster %q is invalid: %w",
-				clusterName,
-				err,
-			)
+			return fmt.Errorf("controller enrollment token for cluster %q is invalid: %w", clusterName, err)
 		}
 	}
 

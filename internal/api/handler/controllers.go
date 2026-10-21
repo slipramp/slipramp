@@ -37,11 +37,7 @@ func (h *Handler) EnrollController(
 		return api.EnrollController400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	err := h.identities.EnrollController(
-		ctx,
-		request.Body.ClusterName,
-		request.Body.CredentialSha256,
-	)
+	err := h.identities.EnrollController(ctx, request.Body.ClusterName, request.Body.CredentialSha256)
 	if err != nil {
 		switch {
 		case errors.Is(err, controlleridentity.ErrInvalid):
@@ -49,10 +45,7 @@ func (h *Handler) EnrollController(
 
 			return api.EnrollController400ApplicationProblemPlusJSONResponse(problem), nil
 		case errors.Is(err, controlleridentity.ErrEnrollmentConflict):
-			problem := NewProblem(
-				http.StatusConflict,
-				"The cluster is already enrolled with another credential.",
-			)
+			problem := NewProblem(http.StatusConflict, "The cluster is already enrolled with another credential.")
 
 			return api.EnrollController409ApplicationProblemPlusJSONResponse(problem), nil
 		default:
@@ -100,18 +93,12 @@ func (h *Handler) PollForControllerCommand(
 	}
 
 	if timeoutSeconds < 0 || timeoutSeconds > maximumControllerPollWaitSeconds {
-		problem := NewProblem(
-			http.StatusBadRequest,
-			"timeoutSeconds must be between 0 and 30",
-		)
+		problem := NewProblem(http.StatusBadRequest, "timeoutSeconds must be between 0 and 30")
 
 		return api.PollForControllerCommand400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	if err := h.clusters.RecordControllerContact(
-		ctx,
-		principal.ClusterName,
-	); err != nil {
+	if err := h.clusters.RecordControllerContact(ctx, principal.ClusterName); err != nil {
 		return nil, err
 	}
 
@@ -182,17 +169,11 @@ func (h *Handler) ReportRunObservation(
 
 			return api.ReportRunObservation400ApplicationProblemPlusJSONResponse(problem), nil
 		case errors.Is(err, run.ErrRunNotFound):
-			problem := NewProblem(
-				http.StatusNotFound,
-				"The Run is not assigned to this controller's cluster.",
-			)
+			problem := NewProblem(http.StatusNotFound, "The Run is not assigned to this controller's cluster.")
 
 			return api.ReportRunObservation404ApplicationProblemPlusJSONResponse(problem), nil
 		case errors.Is(err, run.ErrObservationConflict):
-			problem := NewProblem(
-				http.StatusConflict,
-				"The observation conflicts with the Run or its Kubernetes Job.",
-			)
+			problem := NewProblem(http.StatusConflict, "The observation conflicts with the Run or its Kubernetes Job.")
 
 			return api.ReportRunObservation409ApplicationProblemPlusJSONResponse(problem), nil
 		default:
@@ -216,9 +197,7 @@ func runObservationOutcome(value *api.RunObservationOutcome) *run.Outcome {
 	return &converted
 }
 
-func runAssignmentCommand(
-	assignment api.RunAssignment,
-) api.ControllerCommand {
+func runAssignmentCommand(assignment api.RunAssignment) api.ControllerCommand {
 	return api.ControllerCommand{
 		Type:       api.ControllerCommandTypeRunAssignment,
 		Assignment: &assignment,
@@ -236,10 +215,7 @@ func cancelRunCommand(record run.Run) api.ControllerCommand {
 	}
 }
 
-func (h *Handler) nextControllerCommand(
-	ctx context.Context,
-	clusterName string,
-) (*api.ControllerCommand, error) {
+func (h *Handler) nextControllerCommand(ctx context.Context, clusterName string) (*api.ControllerCommand, error) {
 	record, err := h.runs.NextRunToCancel(ctx, clusterName)
 	if err == nil {
 		command := cancelRunCommand(record)
@@ -263,10 +239,7 @@ func (h *Handler) nextControllerCommand(
 	return &command, nil
 }
 
-func (h *Handler) nextRunAssignment(
-	ctx context.Context,
-	clusterName string,
-) (api.RunAssignment, error) {
+func (h *Handler) nextRunAssignment(ctx context.Context, clusterName string) (api.RunAssignment, error) {
 	record, err := h.runs.NextRunAssignment(ctx, clusterName)
 	if err != nil {
 		return api.RunAssignment{}, err
@@ -282,9 +255,7 @@ func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, erro
 	}
 	token := h.artifacts.RunToken(record.ID)
 
-	podTemplate, err := assignmentPodTemplateResponse(
-		record.Snapshot.Placement.PodTemplate,
-	)
+	podTemplate, err := assignmentPodTemplateResponse(record.Snapshot.Placement.PodTemplate)
 	if err != nil {
 		return api.RunAssignment{}, err
 	}
@@ -294,9 +265,7 @@ func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, erro
 		CatalogRevisionID: record.CatalogRevisionID,
 		CommitSha:         record.CommitSHA,
 		Parameters:        parameters,
-		Repository: assignmentRepositoryResponse(
-			record.Snapshot.Repository,
-		),
+		Repository:        assignmentRepositoryResponse(record.Snapshot.Repository),
 		Target: api.RunAssignmentTarget{
 			Name: api.CatalogName(record.Snapshot.Target.Metadata.Name),
 			Path: optionalString(record.Snapshot.Target.Spec.Path),
@@ -310,9 +279,7 @@ func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, erro
 	}, nil
 }
 
-func assignmentRepositoryResponse(
-	repository run.RepositorySnapshot,
-) api.RunAssignmentRepository {
+func assignmentRepositoryResponse(repository run.RepositorySnapshot) api.RunAssignmentRepository {
 	var checkoutCredentialName *api.CatalogName
 	if repository.CheckoutCredentialName != nil {
 		name := api.CatalogName(*repository.CheckoutCredentialName)
@@ -327,9 +294,7 @@ func assignmentRepositoryResponse(
 	}
 }
 
-func assignmentActionResponse(
-	action catalog.EffectiveAction,
-) api.RunAssignmentAction {
+func assignmentActionResponse(action catalog.EffectiveAction) api.RunAssignmentAction {
 	credentials := make(map[string]api.CatalogName, len(action.Credentials))
 	for name, credential := range action.Credentials {
 		credentials[name] = api.CatalogName(credential)
@@ -350,9 +315,7 @@ func assignmentActionResponse(
 	}
 }
 
-func assignmentRuntimeResponse(
-	runtime catalog.Runtime,
-) api.RunAssignmentRuntime {
+func assignmentRuntimeResponse(runtime catalog.Runtime) api.RunAssignmentRuntime {
 	credentials := make(map[string]api.RuntimeCredential, len(runtime.Spec.Credentials))
 	for name, credential := range runtime.Spec.Credentials {
 		credentials[name] = api.RuntimeCredential{
@@ -373,10 +336,7 @@ func assignmentPlacementResponse(
 	placement run.PlacementSnapshot,
 	podTemplate *map[string]any,
 ) api.RunAssignmentPlacement {
-	credentials := make(
-		map[string]api.RunAssignmentCredential,
-		len(placement.Credentials),
-	)
+	credentials := make(map[string]api.RunAssignmentCredential, len(placement.Credentials))
 	for name, credential := range placement.Credentials {
 		credentials[name] = api.RunAssignmentCredential{
 			SecretName: credential.SecretName,
@@ -389,18 +349,14 @@ func assignmentPlacementResponse(
 		JobNamespace:       api.CatalogName(placement.JobNamespace),
 		ServiceAccountName: optionalString(placement.ServiceAccountName),
 		Timeout:            optionalString(placement.Timeout),
-		Resources: catalogResourceRequirementsResponse(
-			placement.Resources,
-		),
-		NodeSelector: optionalStringMap(placement.NodeSelector),
-		Credentials:  optionalMap(credentials),
-		PodTemplate:  podTemplate,
+		Resources:          catalogResourceRequirementsResponse(placement.Resources),
+		NodeSelector:       optionalStringMap(placement.NodeSelector),
+		Credentials:        optionalMap(credentials),
+		PodTemplate:        podTemplate,
 	}
 }
 
-func assignmentPodTemplateResponse(
-	podTemplate *corev1.PodTemplateSpec,
-) (*map[string]any, error) {
+func assignmentPodTemplateResponse(podTemplate *corev1.PodTemplateSpec) (*map[string]any, error) {
 	if podTemplate == nil {
 		return nil, nil
 	}

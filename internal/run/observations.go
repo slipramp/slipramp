@@ -9,10 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Service) ReportObservation(
-	ctx context.Context,
-	observation Observation,
-) error {
+func (s *Service) ReportObservation(ctx context.Context, observation Observation) error {
 	if observation.ID == uuid.Nil {
 		return fmt.Errorf("%w: Run ID is required", ErrInvalidRequest)
 	}
@@ -51,57 +48,35 @@ func validateObservation(observation Observation) ([]Phase, error) {
 	}
 	for _, field := range stringsToValidate {
 		if field.value != nil && strings.TrimSpace(*field.value) == "" {
-			return nil, fmt.Errorf(
-				"%w: %s must not be blank",
-				ErrInvalidRequest,
-				field.name,
-			)
+			return nil, fmt.Errorf("%w: %s must not be blank", ErrInvalidRequest, field.name)
 		}
 	}
 	if observation.ExitCode != nil && *observation.ExitCode < 0 {
-		return nil, fmt.Errorf(
-			"%w: exit code must not be negative",
-			ErrInvalidRequest,
-		)
+		return nil, fmt.Errorf("%w: exit code must not be negative", ErrInvalidRequest)
 	}
 
 	switch observation.Phase {
 	case PhasePreparing:
 		if hasTerminalDetails(observation) {
-			return nil, fmt.Errorf(
-				"%w: preparing Run must not have terminal details",
-				ErrInvalidRequest,
-			)
+			return nil, fmt.Errorf("%w: preparing Run must not have terminal details", ErrInvalidRequest)
 		}
 		if observation.JobUID == nil {
-			return nil, fmt.Errorf(
-				"%w: preparing Run requires a Job UID",
-				ErrInvalidRequest,
-			)
+			return nil, fmt.Errorf("%w: preparing Run requires a Job UID", ErrInvalidRequest)
 		}
 
 		return []Phase{PhaseAssigned, PhasePreparing}, nil
 	case PhaseRunning:
 		if hasTerminalDetails(observation) {
-			return nil, fmt.Errorf(
-				"%w: running Run must not have terminal details",
-				ErrInvalidRequest,
-			)
+			return nil, fmt.Errorf("%w: running Run must not have terminal details", ErrInvalidRequest)
 		}
 		if observation.JobUID == nil {
-			return nil, fmt.Errorf(
-				"%w: running Run requires a Job UID",
-				ErrInvalidRequest,
-			)
+			return nil, fmt.Errorf("%w: running Run requires a Job UID", ErrInvalidRequest)
 		}
 
 		return []Phase{PhaseAssigned, PhasePreparing, PhaseRunning}, nil
 	case PhaseFinished:
 		if observation.Outcome == nil || !validOutcome(*observation.Outcome) {
-			return nil, fmt.Errorf(
-				"%w: finished Run requires a valid outcome",
-				ErrInvalidRequest,
-			)
+			return nil, fmt.Errorf("%w: finished Run requires a valid outcome", ErrInvalidRequest)
 		}
 
 		return []Phase{
@@ -111,11 +86,7 @@ func validateObservation(observation Observation) ([]Phase, error) {
 			PhaseFinished,
 		}, nil
 	default:
-		return nil, fmt.Errorf(
-			"%w: controller cannot report Run phase %q",
-			ErrInvalidRequest,
-			observation.Phase,
-		)
+		return nil, fmt.Errorf("%w: controller cannot report Run phase %q", ErrInvalidRequest, observation.Phase)
 	}
 }
 

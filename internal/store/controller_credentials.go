@@ -13,10 +13,7 @@ import (
 
 var _ controlleridentity.Store = (*Database)(nil)
 
-func (d *Database) EnrollControllerCredential(
-	ctx context.Context,
-	credential controlleridentity.Credential,
-) error {
+func (d *Database) EnrollControllerCredential(ctx context.Context, credential controlleridentity.Credential) error {
 	if err := credential.Validate(); err != nil {
 		return err
 	}
@@ -30,10 +27,7 @@ func (d *Database) EnrollControllerCredential(
 	}()
 
 	queries := d.queries.WithTx(transaction)
-	existing, err := queries.GetControllerCredentialForUpdate(
-		ctx,
-		credential.ClusterName,
-	)
+	existing, err := queries.GetControllerCredentialForUpdate(ctx, credential.ClusterName)
 	credentialMissing := errors.Is(err, pgx.ErrNoRows)
 	if err == nil && existing.Sha256 != credential.SHA256 {
 		return controlleridentity.ErrEnrollmentConflict
@@ -66,10 +60,7 @@ func (d *Database) EnrollControllerCredential(
 		}
 
 		if rowsAffected == 0 {
-			existing, getErr := queries.GetControllerCredentialForUpdate(
-				ctx,
-				credential.ClusterName,
-			)
+			existing, getErr := queries.GetControllerCredentialForUpdate(ctx, credential.ClusterName)
 			if errors.Is(getErr, pgx.ErrNoRows) {
 				return controlleridentity.ErrEnrollmentConflict
 			}
@@ -93,10 +84,7 @@ func (d *Database) GetControllerClusterByCredentialSHA256(
 	ctx context.Context,
 	credentialSHA256 string,
 ) (string, error) {
-	clusterName, err := d.queries.GetControllerClusterByCredentialSHA256(
-		ctx,
-		credentialSHA256,
-	)
+	clusterName, err := d.queries.GetControllerClusterByCredentialSHA256(ctx, credentialSHA256)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", controlleridentity.ErrCredentialNotFound
 	}

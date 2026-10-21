@@ -28,11 +28,7 @@ type logSession struct {
 	result <-chan logStreamResult
 }
 
-func (c *Controller) startLogSession(
-	ctx context.Context,
-	handle jobHandle,
-	follow bool,
-) (*logSession, error) {
+func (c *Controller) startLogSession(ctx context.Context, handle jobHandle, follow bool) (*logSession, error) {
 	stream, err := c.jobs.OpenLog(ctx, handle, follow)
 	if err != nil {
 		return nil, err
@@ -51,11 +47,7 @@ func (c *Controller) startLogSession(
 	return &logSession{result: result}, nil
 }
 
-func (c *Controller) forwardLog(
-	ctx context.Context,
-	runID uuid.UUID,
-	stream io.Reader,
-) (logSummary, error) {
+func (c *Controller) forwardLog(ctx context.Context, runID uuid.UUID, stream io.Reader) (logSummary, error) {
 	cursor, err := c.getLogCursor(ctx, runID)
 	if err != nil {
 		return logSummary{}, err
@@ -89,12 +81,7 @@ func (c *Controller) forwardLog(
 				}
 
 				contents := chunk[chunkStart:]
-				if err := c.appendLogChunk(
-					ctx,
-					runID,
-					cursor.nextOffsetBytes,
-					contents,
-				); err != nil {
+				if err := c.appendLogChunk(ctx, runID, cursor.nextOffsetBytes, contents); err != nil {
 					return logSummary{}, err
 				}
 				cursor.nextOffsetBytes += int64(len(contents))
@@ -122,10 +109,7 @@ func (c *Controller) forwardLog(
 	}
 }
 
-func (c *Controller) getLogCursor(
-	ctx context.Context,
-	runID uuid.UUID,
-) (logCursor, error) {
+func (c *Controller) getLogCursor(ctx context.Context, runID uuid.UUID) (logCursor, error) {
 	for {
 		cursor, err := c.logs.GetLogCursor(ctx, runID)
 		if err == nil {
@@ -140,12 +124,7 @@ func (c *Controller) getLogCursor(
 	}
 }
 
-func (c *Controller) appendLogChunk(
-	ctx context.Context,
-	runID uuid.UUID,
-	offset int64,
-	contents []byte,
-) error {
+func (c *Controller) appendLogChunk(ctx context.Context, runID uuid.UUID, offset int64, contents []byte) error {
 	for {
 		err := c.logs.AppendLogChunk(ctx, runID, offset, contents)
 		if err == nil {
@@ -160,11 +139,7 @@ func (c *Controller) appendLogChunk(
 	}
 }
 
-func (c *Controller) sealLog(
-	ctx context.Context,
-	runID uuid.UUID,
-	summary logSummary,
-) error {
+func (c *Controller) sealLog(ctx context.Context, runID uuid.UUID, summary logSummary) error {
 	if summary.sealed {
 		return nil
 	}

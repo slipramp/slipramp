@@ -69,19 +69,11 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 
 	if cfg.Address != "127.0.0.1:9000" {
-		t.Errorf(
-			"Address = %q, want %q",
-			cfg.Address,
-			"127.0.0.1:9000",
-		)
+		t.Errorf("Address = %q, want %q", cfg.Address, "127.0.0.1:9000")
 	}
 
 	if cfg.ShutdownTimeout != 25*time.Second {
-		t.Errorf(
-			"ShutdownTimeout = %s, want %s",
-			cfg.ShutdownTimeout,
-			25*time.Second,
-		)
+		t.Errorf("ShutdownTimeout = %s, want %s", cfg.ShutdownTimeout, 25*time.Second)
 	}
 
 	if cfg.ControllerEnrollmentTokens["colo"] != "enrollment-token" {
@@ -94,35 +86,19 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 
 	if cfg.RepositoryRefreshInterval != 2*time.Minute {
-		t.Errorf(
-			"RepositoryRefreshInterval = %s, want %s",
-			cfg.RepositoryRefreshInterval,
-			2*time.Minute,
-		)
+		t.Errorf("RepositoryRefreshInterval = %s, want %s", cfg.RepositoryRefreshInterval, 2*time.Minute)
 	}
 
 	if cfg.RepositoryFetchTimeout != 45*time.Second {
-		t.Errorf(
-			"RepositoryFetchTimeout = %s, want %s",
-			cfg.RepositoryFetchTimeout,
-			45*time.Second,
-		)
+		t.Errorf("RepositoryFetchTimeout = %s, want %s", cfg.RepositoryFetchTimeout, 45*time.Second)
 	}
 
 	if cfg.Database.URL != environment[serverDatabaseURLEnvironment] {
-		t.Errorf(
-			"Database.URL = %q, want %q",
-			cfg.Database.URL,
-			environment[serverDatabaseURLEnvironment],
-		)
+		t.Errorf("Database.URL = %q, want %q", cfg.Database.URL, environment[serverDatabaseURLEnvironment])
 	}
 
 	if cfg.Database.ConnectTimeout != 8*time.Second {
-		t.Errorf(
-			"Database.ConnectTimeout = %s, want %s",
-			cfg.Database.ConnectTimeout,
-			8*time.Second,
-		)
+		t.Errorf("Database.ConnectTimeout = %s, want %s", cfg.Database.ConnectTimeout, 8*time.Second)
 	}
 
 	if cfg.ObjectStore.Endpoint != environment[serverS3EndpointEnvironment] {
@@ -138,19 +114,11 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 
 	if cfg.ObjectStore.Bucket != "slipramp-artifacts" {
-		t.Errorf(
-			"ObjectStore.Bucket = %q, want %q",
-			cfg.ObjectStore.Bucket,
-			"slipramp-artifacts",
-		)
+		t.Errorf("ObjectStore.Bucket = %q, want %q", cfg.ObjectStore.Bucket, "slipramp-artifacts")
 	}
 
 	if cfg.ObjectStore.AccessKeyID != "access-key" {
-		t.Errorf(
-			"ObjectStore.AccessKeyID = %q, want %q",
-			cfg.ObjectStore.AccessKeyID,
-			"access-key",
-		)
+		t.Errorf("ObjectStore.AccessKeyID = %q, want %q", cfg.ObjectStore.AccessKeyID, "access-key")
 	}
 
 	if cfg.ObjectStore.SecretAccessKey != "secret-key" {
@@ -158,11 +126,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 
 	if cfg.ObjectStore.StartupTimeout != 9*time.Second {
-		t.Errorf(
-			"ObjectStore.StartupTimeout = %s, want %s",
-			cfg.ObjectStore.StartupTimeout,
-			9*time.Second,
-		)
+		t.Errorf("ObjectStore.StartupTimeout = %s, want %s", cfg.ObjectStore.StartupTimeout, 9*time.Second)
 	}
 
 	if cfg.ArtifactRetentionPeriod != 720*time.Hour {
@@ -170,17 +134,11 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 
 	if cfg.ArtifactReconcileInterval != 30*time.Minute {
-		t.Errorf(
-			"ArtifactReconcileInterval = %s, want 30m",
-			cfg.ArtifactReconcileInterval,
-		)
+		t.Errorf("ArtifactReconcileInterval = %s, want 30m", cfg.ArtifactReconcileInterval)
 	}
 
 	if cfg.ArtifactOrphanGracePeriod != 48*time.Hour {
-		t.Errorf(
-			"ArtifactOrphanGracePeriod = %s, want 48h",
-			cfg.ArtifactOrphanGracePeriod,
-		)
+		t.Errorf("ArtifactOrphanGracePeriod = %s, want 48h", cfg.ArtifactOrphanGracePeriod)
 	}
 
 	if cfg.ProductAuthentication.OIDC.Issuer != "https://identity.example.com" ||
@@ -192,16 +150,10 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	}
 	if cfg.ProductAuthentication.OIDC.SubjectRoles["admin-subject"] != "admin" ||
 		cfg.ProductAuthentication.OIDC.SubjectRoles["operator-subject"] != "operator" {
-		t.Errorf(
-			"ProductAuthentication.OIDC.SubjectRoles = %v",
-			cfg.ProductAuthentication.OIDC.SubjectRoles,
-		)
+		t.Errorf("ProductAuthentication.OIDC.SubjectRoles = %v", cfg.ProductAuthentication.OIDC.SubjectRoles)
 	}
 	if cfg.ProductAuthentication.SessionLifetime != 8*time.Hour {
-		t.Errorf(
-			"ProductAuthentication.SessionLifetime = %s, want 8h",
-			cfg.ProductAuthentication.SessionLifetime,
-		)
+		t.Errorf("ProductAuthentication.SessionLifetime = %s, want 8h", cfg.ProductAuthentication.SessionLifetime)
 	}
 }
 

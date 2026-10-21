@@ -37,12 +37,7 @@ type Options struct {
 // Run starts command without an implicit shell, forwards received signals, and
 // returns the action's exit code. An error indicates that the action could not
 // be started or observed reliably, rather than an action failure.
-func Run(
-	ctx context.Context,
-	command []string,
-	streams Streams,
-	options Options,
-) (int, error) {
+func Run(ctx context.Context, command []string, streams Streams, options Options) (int, error) {
 	if ctx == nil {
 		return 0, errors.New("context is required")
 	}
@@ -96,18 +91,12 @@ func Run(
 
 			if err := process.Process.Signal(received); err != nil &&
 				!errors.Is(err, os.ErrProcessDone) {
-				signalError = errors.Join(
-					signalError,
-					fmt.Errorf("forward signal %s: %w", received, err),
-				)
+				signalError = errors.Join(signalError, fmt.Errorf("forward signal %s: %w", received, err))
 			}
 		case <-cancellationChecks:
 			requested, err := cancellationRequested(options.CancellationFile)
 			if err != nil {
-				signalError = errors.Join(
-					signalError,
-					fmt.Errorf("read cancellation file: %w", err),
-				)
+				signalError = errors.Join(signalError, fmt.Errorf("read cancellation file: %w", err))
 				continue
 			}
 			if !requested {
@@ -117,10 +106,7 @@ func Run(
 			cancellationChecks = nil
 			if err := process.Process.Signal(syscall.SIGTERM); err != nil &&
 				!errors.Is(err, os.ErrProcessDone) {
-				signalError = errors.Join(
-					signalError,
-					fmt.Errorf("forward cancellation signal: %w", err),
-				)
+				signalError = errors.Join(signalError, fmt.Errorf("forward cancellation signal: %w", err))
 			}
 			gracePeriod := options.cancellationGracePeriod
 			if gracePeriod <= 0 {
@@ -132,10 +118,7 @@ func Run(
 			forceKill = nil
 			if err := process.Process.Kill(); err != nil &&
 				!errors.Is(err, os.ErrProcessDone) {
-				signalError = errors.Join(
-					signalError,
-					fmt.Errorf("force canceled action to stop: %w", err),
-				)
+				signalError = errors.Join(signalError, fmt.Errorf("force canceled action to stop: %w", err))
 			}
 		}
 	}

@@ -37,12 +37,7 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 			},
 		},
 	}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/clusters",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/clusters", nil)
 	response := httptest.NewRecorder()
 
 	newAdminTestHandler(controllers, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
@@ -66,21 +61,11 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 	}
 
 	if item.ConnectionState != api.Connected {
-		t.Errorf(
-			"connection state = %q, want %q",
-			item.ConnectionState,
-			api.Connected,
-		)
+		t.Errorf("connection state = %q, want %q", item.ConnectionState, api.Connected)
 	}
 
 	if !item.FirstSeenAt.Equal(firstSeenAt) || !item.LastSeenAt.Equal(lastSeenAt) {
-		t.Errorf(
-			"observation = (%s, %s), want (%s, %s)",
-			item.FirstSeenAt,
-			item.LastSeenAt,
-			firstSeenAt,
-			lastSeenAt,
-		)
+		t.Errorf("observation = (%s, %s), want (%s, %s)", item.FirstSeenAt, item.LastSeenAt, firstSeenAt, lastSeenAt)
 	}
 }
 
@@ -90,12 +75,7 @@ func TestListClustersReturnsProblemWhenServiceFails(t *testing.T) {
 	controllers := &recordingClusterService{
 		listError: errors.New("database unavailable"),
 	}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/clusters",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/clusters", nil)
 	response := httptest.NewRecorder()
 
 	newAdminTestHandler(controllers, nil, nil, nil, nil, nil, nil).ServeHTTP(response, request)
@@ -134,12 +114,7 @@ func TestControllerEnrollmentRegistersCredentialDigest(t *testing.T) {
 	).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
-		t.Fatalf(
-			"status = %d, want %d: %s",
-			response.Code,
-			http.StatusNoContent,
-			response.Body,
-		)
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
 	}
 	if identities.enrolledCluster != "colo" || identities.enrolledDigest != digest {
 		t.Errorf(
@@ -241,25 +216,13 @@ func TestControllerPollReturnsNoContentWithoutWaiting(t *testing.T) {
 	).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
-		t.Errorf(
-			"status = %d, want %d",
-			response.Code,
-			http.StatusNoContent,
-		)
+		t.Errorf("status = %d, want %d", response.Code, http.StatusNoContent)
 	}
 	if controllers.clusterName != "colo" {
-		t.Errorf(
-			"cluster name = %q, want %q",
-			controllers.clusterName,
-			"colo",
-		)
+		t.Errorf("cluster name = %q, want %q", controllers.clusterName, "colo")
 	}
 	if runs.nextCalls != 1 || runs.nextClusterName != "colo" {
-		t.Errorf(
-			"next assignment calls = %d for %q, want 1 for colo",
-			runs.nextCalls,
-			runs.nextClusterName,
-		)
+		t.Errorf("next assignment calls = %d for %q, want 1 for colo", runs.nextCalls, runs.nextClusterName)
 	}
 }
 
@@ -269,12 +232,7 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 	record := runAssignmentRecord()
 	controllers := &recordingClusterService{}
 	runs := &recordingRunService{next: record}
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodPost,
-		"/controller/v1/poll",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/controller/v1/poll", nil)
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
@@ -449,11 +407,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 
 			assertProblem(t, response, http.StatusUnauthorized)
 			if challenge := response.Header().Get("WWW-Authenticate"); challenge != "Bearer" {
-				t.Errorf(
-					"WWW-Authenticate = %q, want %q",
-					challenge,
-					"Bearer",
-				)
+				t.Errorf("WWW-Authenticate = %q, want %q", challenge, "Bearer")
 			}
 
 			if controllers.calls != 0 {
@@ -494,12 +448,7 @@ func TestControllerPollMapsFailures(t *testing.T) {
 			t.Parallel()
 
 			controllers := &recordingClusterService{err: test.serviceError}
-			request := httptest.NewRequestWithContext(
-				context.Background(),
-				http.MethodPost,
-				test.path,
-				nil,
-			)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, test.path, nil)
 			request.Header.Set("Authorization", "Bearer controller-token")
 			response := httptest.NewRecorder()
 
@@ -515,11 +464,7 @@ func TestControllerPollMapsFailures(t *testing.T) {
 
 			assertProblem(t, response, test.wantStatus)
 			if controllers.calls != test.wantCalls {
-				t.Errorf(
-					"work wait calls = %d, want %d",
-					controllers.calls,
-					test.wantCalls,
-				)
+				t.Errorf("work wait calls = %d, want %d", controllers.calls, test.wantCalls)
 			}
 			if test.privateDetail != "" &&
 				strings.Contains(response.Body.String(), test.privateDetail) {
@@ -556,12 +501,7 @@ func TestControllerAppendsRunLogChunk(t *testing.T) {
 	).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
-		t.Fatalf(
-			"status = %d, want %d: %s",
-			response.Code,
-			http.StatusNoContent,
-			response.Body,
-		)
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
 	}
 	if artifacts.calls != 1 || artifacts.request.RunID != runID ||
 		artifacts.request.ClusterName != "colo" ||
@@ -570,11 +510,7 @@ func TestControllerAppendsRunLogChunk(t *testing.T) {
 		t.Errorf("append request = %#v", artifacts.request)
 	}
 	if controllers.calls != 1 || controllers.clusterName != "colo" {
-		t.Errorf(
-			"controller contacts = %d for %q, want 1 for colo",
-			controllers.calls,
-			controllers.clusterName,
-		)
+		t.Errorf("controller contacts = %d for %q, want 1 for colo", controllers.calls, controllers.clusterName)
 	}
 }
 
@@ -708,11 +644,7 @@ func TestControllerReportsRunObservation(t *testing.T) {
 		t.Errorf("observation = %#v", runs.observation)
 	}
 	if controllers.calls != 1 || controllers.clusterName != "colo" {
-		t.Errorf(
-			"controller contacts = %d for %q, want 1 for colo",
-			controllers.calls,
-			controllers.clusterName,
-		)
+		t.Errorf("controller contacts = %d for %q, want 1 for colo", controllers.calls, controllers.clusterName)
 	}
 }
 
@@ -818,28 +750,18 @@ type recordingArtifactService struct {
 	err     error
 }
 
-func (r *recordingArtifactService) AppendLogChunk(
-	_ context.Context,
-	request artifact.AppendLogChunkRequest,
-) error {
+func (r *recordingArtifactService) AppendLogChunk(_ context.Context, request artifact.AppendLogChunkRequest) error {
 	r.calls++
 	r.request = request
 
 	return r.err
 }
 
-func (*recordingArtifactService) GetLogCursor(
-	context.Context,
-	uuid.UUID,
-	string,
-) (artifact.LogCursor, error) {
+func (*recordingArtifactService) GetLogCursor(context.Context, uuid.UUID, string) (artifact.LogCursor, error) {
 	return artifact.LogCursor{}, artifact.ErrNotFound
 }
 
-func (*recordingArtifactService) SealLog(
-	context.Context,
-	artifact.SealLogRequest,
-) error {
+func (*recordingArtifactService) SealLog(context.Context, artifact.SealLogRequest) error {
 	return artifact.ErrNotFound
 }
 
@@ -849,47 +771,27 @@ func (*recordingArtifactService) AuthenticateRunToken(uuid.UUID, string) bool {
 	return false
 }
 
-func (*recordingArtifactService) Upload(
-	context.Context,
-	artifact.UploadRequest,
-) error {
+func (*recordingArtifactService) Upload(context.Context, artifact.UploadRequest) error {
 	return artifact.ErrNotFound
 }
 
-func (*recordingArtifactService) List(
-	context.Context,
-	uuid.UUID,
-) ([]artifact.Record, error) {
+func (*recordingArtifactService) List(context.Context, uuid.UUID) ([]artifact.Record, error) {
 	return nil, artifact.ErrNotFound
 }
 
-func (*recordingArtifactService) OpenArtifact(
-	context.Context,
-	uuid.UUID,
-) (artifact.Content, error) {
+func (*recordingArtifactService) OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error) {
 	return artifact.Content{}, artifact.ErrNotFound
 }
 
-func (*recordingArtifactService) OpenInput(
-	context.Context,
-	uuid.UUID,
-	string,
-) (artifact.Content, error) {
+func (*recordingArtifactService) OpenInput(context.Context, uuid.UUID, string) (artifact.Content, error) {
 	return artifact.Content{}, artifact.ErrNotFound
 }
 
-func (*recordingArtifactService) StreamLog(
-	context.Context,
-	uuid.UUID,
-	int64,
-) (io.ReadCloser, error) {
+func (*recordingArtifactService) StreamLog(context.Context, uuid.UUID, int64) (io.ReadCloser, error) {
 	return nil, artifact.ErrNotFound
 }
 
-func controllerIdentityFor(
-	token string,
-	clusterName string,
-) *recordingControllerIdentityService {
+func controllerIdentityFor(token string, clusterName string) *recordingControllerIdentityService {
 	return &recordingControllerIdentityService{
 		clusterByToken: map[string]string{token: clusterName},
 	}
@@ -922,19 +824,14 @@ func (r *recordingControllerIdentityService) EnrollController(
 	return r.enrollErr
 }
 
-func (r *recordingClusterService) RecordControllerContact(
-	_ context.Context,
-	clusterName string,
-) error {
+func (r *recordingClusterService) RecordControllerContact(_ context.Context, clusterName string) error {
 	r.calls++
 	r.clusterName = clusterName
 
 	return r.err
 }
 
-func (r *recordingClusterService) ListClusters(
-	context.Context,
-) ([]cluster.Status, error) {
+func (r *recordingClusterService) ListClusters(context.Context) ([]cluster.Status, error) {
 	return r.clusters, r.listError
 }
 
@@ -944,11 +841,9 @@ func runAssignmentRecord() run.Run {
 	podTemplate.Labels = map[string]string{"isolation": "sandboxed"}
 
 	return run.Run{
-		ID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200"),
-		CatalogRevisionID: uuid.MustParse(
-			"018f90ff-9fd8-7b5f-b7e1-f32ff54c1201",
-		),
-		CommitSHA: strings.Repeat("a", 40),
+		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200"),
+		CatalogRevisionID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201"),
+		CommitSHA:         strings.Repeat("a", 40),
 		Parameters: map[string]any{
 			"refresh": true,
 		},

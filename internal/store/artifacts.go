@@ -31,14 +31,8 @@ const (
 var _ artifact.Store = (*Database)(nil)
 var _ artifact.RetentionStore = (*Database)(nil)
 
-func (d *Database) GetRunClusterName(
-	ctx context.Context,
-	runID uuid.UUID,
-) (string, error) {
-	clusterName, err := d.queries.GetArtifactRunClusterName(
-		ctx,
-		databaseUUID(runID),
-	)
+func (d *Database) GetRunClusterName(ctx context.Context, runID uuid.UUID) (string, error) {
+	clusterName, err := d.queries.GetArtifactRunClusterName(ctx, databaseUUID(runID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", artifact.ErrNotFound
 	}
@@ -49,10 +43,7 @@ func (d *Database) GetRunClusterName(
 	return clusterName, nil
 }
 
-func (d *Database) CreateArtifact(
-	ctx context.Context,
-	record artifact.Artifact,
-) (artifact.Artifact, error) {
+func (d *Database) CreateArtifact(ctx context.Context, record artifact.Artifact) (artifact.Artifact, error) {
 	if err := record.Validate(); err != nil {
 		return artifact.Artifact{}, err
 	}
@@ -94,10 +85,7 @@ func (d *Database) CreateArtifact(
 	return artifactFromRow(row), nil
 }
 
-func (d *Database) GetArtifact(
-	ctx context.Context,
-	artifactID uuid.UUID,
-) (artifact.Artifact, error) {
+func (d *Database) GetArtifact(ctx context.Context, artifactID uuid.UUID) (artifact.Artifact, error) {
 	row, err := d.queries.GetArtifact(ctx, databaseUUID(artifactID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return artifact.Artifact{}, artifact.ErrNotFound
@@ -131,10 +119,7 @@ func (d *Database) GetArtifactByRunAndName(
 	return artifactFromRow(row), nil
 }
 
-func (d *Database) ListArtifactsForRun(
-	ctx context.Context,
-	runID uuid.UUID,
-) ([]artifact.Artifact, error) {
+func (d *Database) ListArtifactsForRun(ctx context.Context, runID uuid.UUID) ([]artifact.Artifact, error) {
 	rows, err := d.queries.ListArtifactsForRun(ctx, databaseUUID(runID))
 	if err != nil {
 		return nil, fmt.Errorf("list artifacts for Run: %w", err)
@@ -148,10 +133,7 @@ func (d *Database) ListArtifactsForRun(
 	return result, nil
 }
 
-func (d *Database) GetArtifactProvenance(
-	ctx context.Context,
-	runID uuid.UUID,
-) (artifact.Provenance, error) {
+func (d *Database) GetArtifactProvenance(ctx context.Context, runID uuid.UUID) (artifact.Provenance, error) {
 	row, err := d.queries.GetArtifactProvenance(ctx, databaseUUID(runID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return artifact.Provenance{}, artifact.ErrNotFound
@@ -170,10 +152,7 @@ func (d *Database) GetArtifactProvenance(
 	}, nil
 }
 
-func (d *Database) GetRunArtifactContext(
-	ctx context.Context,
-	runID uuid.UUID,
-) (artifact.RunContext, error) {
+func (d *Database) GetRunArtifactContext(ctx context.Context, runID uuid.UUID) (artifact.RunContext, error) {
 	row, err := d.queries.GetRunArtifactContext(ctx, databaseUUID(runID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return artifact.RunContext{}, artifact.ErrNotFound
@@ -186,10 +165,7 @@ func (d *Database) GetRunArtifactContext(
 	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil {
 		return artifact.RunContext{}, fmt.Errorf("decode Run artifact context: %w", err)
 	}
-	declarations := make(
-		map[string]artifact.Declaration,
-		len(snapshot.Action.Artifacts),
-	)
+	declarations := make(map[string]artifact.Declaration, len(snapshot.Action.Artifacts))
 	for name, declaration := range snapshot.Action.Artifacts {
 		declarations[name] = artifact.Declaration{
 			MediaType: declaration.MediaType,
@@ -225,10 +201,7 @@ func (d *Database) GetRunInputArtifact(
 	return artifactFromRow(row), nil
 }
 
-func (d *Database) CreateLogChunk(
-	ctx context.Context,
-	chunk artifact.LogChunk,
-) (artifact.LogChunk, error) {
+func (d *Database) CreateLogChunk(ctx context.Context, chunk artifact.LogChunk) (artifact.LogChunk, error) {
 	if err := chunk.Validate(); err != nil {
 		return artifact.LogChunk{}, err
 	}
@@ -242,10 +215,7 @@ func (d *Database) CreateLogChunk(
 	}()
 	queries := d.queries.WithTx(transaction)
 
-	record, err := queries.LockArtifactForLogAppend(
-		ctx,
-		databaseUUID(chunk.ArtifactID),
-	)
+	record, err := queries.LockArtifactForLogAppend(ctx, databaseUUID(chunk.ArtifactID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return artifact.LogChunk{}, artifact.ErrNotFound
 	}
@@ -277,11 +247,7 @@ func (d *Database) CreateLogChunk(
 		if errors.Is(err, pgx.ErrNoRows) {
 			return artifact.LogChunk{}, artifact.ErrNotFound
 		}
-		if constraintMatches(
-			err,
-			artifactLogChunksPrimaryKeyConstraint,
-			artifactLogChunksObjectKeyConstraint,
-		) {
+		if constraintMatches(err, artifactLogChunksPrimaryKeyConstraint, artifactLogChunksObjectKeyConstraint) {
 			return artifact.LogChunk{}, artifact.ErrAlreadyExists
 		}
 		if constraintMatches(err, artifactLogChunksForeignKeyConstraint) {
@@ -369,10 +335,7 @@ func (d *Database) GetLogChunk(
 	offsetBytes int64,
 ) (artifact.LogChunk, error) {
 	if offsetBytes < 0 {
-		return artifact.LogChunk{}, fmt.Errorf(
-			"%w: chunk offset must not be negative",
-			artifact.ErrInvalid,
-		)
+		return artifact.LogChunk{}, fmt.Errorf("%w: chunk offset must not be negative", artifact.ErrInvalid)
 	}
 
 	row, err := d.queries.GetArtifactLogChunk(
@@ -398,10 +361,7 @@ func (d *Database) ListLogChunks(
 	fromOffsetBytes int64,
 ) ([]artifact.LogChunk, error) {
 	if fromOffsetBytes < 0 {
-		return nil, fmt.Errorf(
-			"%w: starting chunk offset must not be negative",
-			artifact.ErrInvalid,
-		)
+		return nil, fmt.Errorf("%w: starting chunk offset must not be negative", artifact.ErrInvalid)
 	}
 
 	rows, err := d.queries.ListArtifactLogChunks(
@@ -447,9 +407,7 @@ func (d *Database) ExpireArtifacts(
 	return result, nil
 }
 
-func (d *Database) ListExpiredArtifacts(
-	ctx context.Context,
-) ([]artifact.Artifact, error) {
+func (d *Database) ListExpiredArtifacts(ctx context.Context) ([]artifact.Artifact, error) {
 	rows, err := d.queries.ListExpiredArtifacts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list expired artifacts: %w", err)
@@ -463,14 +421,8 @@ func (d *Database) ListExpiredArtifacts(
 	return result, nil
 }
 
-func (d *Database) ListArtifactObjectKeys(
-	ctx context.Context,
-	artifactID uuid.UUID,
-) ([]string, error) {
-	keys, err := d.queries.ListArtifactObjectKeys(
-		ctx,
-		databaseUUID(artifactID),
-	)
+func (d *Database) ListArtifactObjectKeys(ctx context.Context, artifactID uuid.UUID) ([]string, error) {
+	keys, err := d.queries.ListArtifactObjectKeys(ctx, databaseUUID(artifactID))
 	if err != nil {
 		return nil, fmt.Errorf("list artifact object keys: %w", err)
 	}
@@ -478,10 +430,7 @@ func (d *Database) ListArtifactObjectKeys(
 	return keys, nil
 }
 
-func (d *Database) MarkArtifactDeleted(
-	ctx context.Context,
-	artifactID uuid.UUID,
-) error {
+func (d *Database) MarkArtifactDeleted(ctx context.Context, artifactID uuid.UUID) error {
 	_, err := d.queries.MarkArtifactDeleted(ctx, databaseUUID(artifactID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return artifact.ErrNotFound
@@ -493,10 +442,7 @@ func (d *Database) MarkArtifactDeleted(
 	return nil
 }
 
-func (d *Database) ArtifactObjectKeyExists(
-	ctx context.Context,
-	key string,
-) (bool, error) {
+func (d *Database) ArtifactObjectKeyExists(ctx context.Context, key string) (bool, error) {
 	exists, err := d.queries.ArtifactObjectKeyExists(ctx, &key)
 	if err != nil {
 		return false, fmt.Errorf("check artifact object key: %w", err)

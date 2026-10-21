@@ -27,11 +27,7 @@ func Install(destination string) error {
 		_ = source.Close()
 	}()
 
-	destinationFile, err := os.OpenFile(
-		destination,
-		os.O_CREATE|os.O_TRUNC|os.O_WRONLY,
-		0o755,
-	)
+	destinationFile, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
 	if err != nil {
 		return fmt.Errorf("create installed harness: %w", err)
 	}

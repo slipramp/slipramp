@@ -37,9 +37,7 @@ const (
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
 )
 
-func LoadServer(
-	lookupEnvironment func(string) (string, bool),
-) (server.Config, error) {
+func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, error) {
 	if lookupEnvironment == nil {
 		return server.Config{}, errors.New("environment lookup is required")
 	}
@@ -51,10 +49,7 @@ func LoadServer(
 	}
 
 	if value, ok := lookupEnvironment(serverShutdownTimeoutEnvironment); ok {
-		timeout, err := parseDurationEnvironment(
-			serverShutdownTimeoutEnvironment,
-			value,
-		)
+		timeout, err := parseDurationEnvironment(serverShutdownTimeoutEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -65,11 +60,7 @@ func LoadServer(
 	if value, ok := lookupEnvironment(serverControllerEnrollmentTokensEnvironment); ok {
 		var enrollmentTokens map[string]string
 		if err := json.Unmarshal([]byte(value), &enrollmentTokens); err != nil {
-			return server.Config{}, fmt.Errorf(
-				"parse %s: %w",
-				serverControllerEnrollmentTokensEnvironment,
-				err,
-			)
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverControllerEnrollmentTokensEnvironment, err)
 		}
 
 		if enrollmentTokens == nil {
@@ -79,16 +70,10 @@ func LoadServer(
 		cfg.ControllerEnrollmentTokens = enrollmentTokens
 	}
 
-	if value, ok := lookupEnvironment(
-		serverRepositoryRefreshCredentialsEnvironment,
-	); ok {
+	if value, ok := lookupEnvironment(serverRepositoryRefreshCredentialsEnvironment); ok {
 		var credentials map[string]string
 		if err := json.Unmarshal([]byte(value), &credentials); err != nil {
-			return server.Config{}, fmt.Errorf(
-				"parse %s: %w",
-				serverRepositoryRefreshCredentialsEnvironment,
-				err,
-			)
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverRepositoryRefreshCredentialsEnvironment, err)
 		}
 
 		if credentials == nil {
@@ -98,13 +83,8 @@ func LoadServer(
 		cfg.RepositoryRefreshCredentials = credentials
 	}
 
-	if value, ok := lookupEnvironment(
-		serverRepositoryRefreshIntervalEnvironment,
-	); ok {
-		interval, err := parseDurationEnvironment(
-			serverRepositoryRefreshIntervalEnvironment,
-			value,
-		)
+	if value, ok := lookupEnvironment(serverRepositoryRefreshIntervalEnvironment); ok {
+		interval, err := parseDurationEnvironment(serverRepositoryRefreshIntervalEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -112,13 +92,8 @@ func LoadServer(
 		cfg.RepositoryRefreshInterval = interval
 	}
 
-	if value, ok := lookupEnvironment(
-		serverRepositoryFetchTimeoutEnvironment,
-	); ok {
-		timeout, err := parseDurationEnvironment(
-			serverRepositoryFetchTimeoutEnvironment,
-			value,
-		)
+	if value, ok := lookupEnvironment(serverRepositoryFetchTimeoutEnvironment); ok {
+		timeout, err := parseDurationEnvironment(serverRepositoryFetchTimeoutEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -129,12 +104,7 @@ func LoadServer(
 	if value, ok := lookupEnvironment(serverPlacementsFileEnvironment); ok {
 		placements, err := loadPlacementsFile(value)
 		if err != nil {
-			return server.Config{}, fmt.Errorf(
-				"load %s from %q: %w",
-				serverPlacementsFileEnvironment,
-				value,
-				err,
-			)
+			return server.Config{}, fmt.Errorf("load %s from %q: %w", serverPlacementsFileEnvironment, value, err)
 		}
 
 		cfg.Placements = placements
@@ -145,10 +115,7 @@ func LoadServer(
 	}
 
 	if value, ok := lookupEnvironment(serverDatabaseConnectTimeoutEnvironment); ok {
-		timeout, err := parseDurationEnvironment(
-			serverDatabaseConnectTimeoutEnvironment,
-			value,
-		)
+		timeout, err := parseDurationEnvironment(serverDatabaseConnectTimeoutEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -177,10 +144,7 @@ func LoadServer(
 	}
 
 	if value, ok := lookupEnvironment(serverS3StartupTimeoutEnvironment); ok {
-		timeout, err := parseDurationEnvironment(
-			serverS3StartupTimeoutEnvironment,
-			value,
-		)
+		timeout, err := parseDurationEnvironment(serverS3StartupTimeoutEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -193,10 +157,7 @@ func LoadServer(
 	}
 
 	if value, ok := lookupEnvironment(serverArtifactRetentionPeriodEnvironment); ok {
-		period, err := parseDurationEnvironment(
-			serverArtifactRetentionPeriodEnvironment,
-			value,
-		)
+		period, err := parseDurationEnvironment(serverArtifactRetentionPeriodEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -205,10 +166,7 @@ func LoadServer(
 	}
 
 	if value, ok := lookupEnvironment(serverArtifactReconcileIntervalEnvironment); ok {
-		period, err := parseDurationEnvironment(
-			serverArtifactReconcileIntervalEnvironment,
-			value,
-		)
+		period, err := parseDurationEnvironment(serverArtifactReconcileIntervalEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -217,10 +175,7 @@ func LoadServer(
 	}
 
 	if value, ok := lookupEnvironment(serverArtifactOrphanGracePeriodEnvironment); ok {
-		period, err := parseDurationEnvironment(
-			serverArtifactOrphanGracePeriodEnvironment,
-			value,
-		)
+		period, err := parseDurationEnvironment(serverArtifactOrphanGracePeriodEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -243,11 +198,7 @@ func LoadServer(
 	if value, ok := lookupEnvironment(serverOIDCSubjectRolesEnvironment); ok {
 		var subjectRoles map[string]productidentity.Role
 		if err := json.Unmarshal([]byte(value), &subjectRoles); err != nil {
-			return server.Config{}, fmt.Errorf(
-				"parse %s: %w",
-				serverOIDCSubjectRolesEnvironment,
-				err,
-			)
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverOIDCSubjectRolesEnvironment, err)
 		}
 		if subjectRoles == nil {
 			subjectRoles = map[string]productidentity.Role{}
@@ -256,10 +207,7 @@ func LoadServer(
 		cfg.ProductAuthentication.OIDC.SubjectRoles = subjectRoles
 	}
 	if value, ok := lookupEnvironment(serverProductSessionLifetimeEnvironment); ok {
-		lifetime, err := parseDurationEnvironment(
-			serverProductSessionLifetimeEnvironment,
-			value,
-		)
+		lifetime, err := parseDurationEnvironment(serverProductSessionLifetimeEnvironment, value)
 		if err != nil {
 			return server.Config{}, err
 		}
@@ -268,10 +216,7 @@ func LoadServer(
 	}
 
 	if err := cfg.Validate(); err != nil {
-		return server.Config{}, fmt.Errorf(
-			"validate server configuration: %w",
-			err,
-		)
+		return server.Config{}, fmt.Errorf("validate server configuration: %w", err)
 	}
 
 	return cfg, nil

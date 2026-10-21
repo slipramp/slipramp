@@ -26,16 +26,10 @@ type APIKeyCredential struct {
 }
 
 type accessStore interface {
-	CreatePrincipal(
-		context.Context,
-		productidentity.Principal,
-	) (productidentity.Principal, error)
+	CreatePrincipal(context.Context, productidentity.Principal) (productidentity.Principal, error)
 	GetPrincipal(context.Context, uuid.UUID) (productidentity.Principal, error)
 	ListServiceAccounts(context.Context) ([]productidentity.Principal, error)
-	CreateAPIKey(
-		context.Context,
-		productidentity.APIKey,
-	) (productidentity.APIKey, error)
+	CreateAPIKey(context.Context, productidentity.APIKey) (productidentity.APIKey, error)
 	GetAPIKey(context.Context, uuid.UUID) (productidentity.APIKey, error)
 	GetAPIKeyPrincipal(
 		context.Context,
@@ -58,10 +52,7 @@ func (s *Service) ListOwnAPIKeys(
 	return s.listAPIKeys(ctx, authentication.Principal.ID)
 }
 
-func (s *Service) listAPIKeys(
-	ctx context.Context,
-	principalID uuid.UUID,
-) ([]productidentity.APIKey, error) {
+func (s *Service) listAPIKeys(ctx context.Context, principalID uuid.UUID) ([]productidentity.APIKey, error) {
 	if principalID == uuid.Nil {
 		return nil, fmt.Errorf("%w: principal ID is required", productidentity.ErrInvalid)
 	}
@@ -88,19 +79,10 @@ func (s *Service) CreateUserAPIKey(
 		return APIKeyCredential{}, ErrForbidden
 	}
 
-	return s.createAPIKey(
-		ctx,
-		authentication.Principal.ID,
-		authentication.Principal.ID,
-		name,
-		scopes,
-		expiresAt,
-	)
+	return s.createAPIKey(ctx, authentication.Principal.ID, authentication.Principal.ID, name, scopes, expiresAt)
 }
 
-func (s *Service) ListServiceAccounts(
-	ctx context.Context,
-) ([]productidentity.Principal, error) {
+func (s *Service) ListServiceAccounts(ctx context.Context) ([]productidentity.Principal, error) {
 	principals, err := s.store.ListServiceAccounts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list product service accounts: %w", err)
@@ -158,14 +140,7 @@ func (s *Service) CreateServiceAccountAPIKey(
 		return APIKeyCredential{}, err
 	}
 
-	return s.createAPIKey(
-		ctx,
-		principalID,
-		createdByPrincipalID,
-		name,
-		scopes,
-		expiresAt,
-	)
+	return s.createAPIKey(ctx, principalID, createdByPrincipalID, name, scopes, expiresAt)
 }
 
 func (s *Service) RevokeAPIKey(
@@ -246,10 +221,7 @@ func (s *Service) createAPIKey(
 	return APIKeyCredential{}, productidentity.ErrCredentialConflict
 }
 
-func (s *Service) AuthenticateAPIKey(
-	ctx context.Context,
-	token string,
-) (productidentity.Authentication, error) {
+func (s *Service) AuthenticateAPIKey(ctx context.Context, token string) (productidentity.Authentication, error) {
 	digest, err := apiKeyDigest(token)
 	if err != nil {
 		return productidentity.Authentication{}, productidentity.ErrUnauthenticated
@@ -285,24 +257,15 @@ func (s *Service) AuthenticateAPIKey(
 		Scopes:          slices.Clone(key.Scopes),
 	}
 	if err := authentication.Validate(); err != nil {
-		return productidentity.Authentication{}, fmt.Errorf(
-			"validate product API key authentication: %w",
-			err,
-		)
+		return productidentity.Authentication{}, fmt.Errorf("validate product API key authentication: %w", err)
 	}
 
 	return authentication, nil
 }
 
-func (s *Service) serviceAccount(
-	ctx context.Context,
-	principalID uuid.UUID,
-) (productidentity.Principal, error) {
+func (s *Service) serviceAccount(ctx context.Context, principalID uuid.UUID) (productidentity.Principal, error) {
 	if principalID == uuid.Nil {
-		return productidentity.Principal{}, fmt.Errorf(
-			"%w: principal ID is required",
-			productidentity.ErrInvalid,
-		)
+		return productidentity.Principal{}, fmt.Errorf("%w: principal ID is required", productidentity.ErrInvalid)
 	}
 
 	principal, err := s.store.GetPrincipal(ctx, principalID)

@@ -22,16 +22,9 @@ const (
 )
 
 type RetentionStore interface {
-	ExpireArtifacts(
-		ctx context.Context,
-		sealedBefore time.Time,
-		limit int32,
-	) ([]Artifact, error)
+	ExpireArtifacts(ctx context.Context, sealedBefore time.Time, limit int32) ([]Artifact, error)
 	ListExpiredArtifacts(ctx context.Context) ([]Artifact, error)
-	ListArtifactObjectKeys(
-		ctx context.Context,
-		artifactID uuid.UUID,
-	) ([]string, error)
+	ListArtifactObjectKeys(ctx context.Context, artifactID uuid.UUID) ([]string, error)
 	MarkArtifactDeleted(ctx context.Context, artifactID uuid.UUID) error
 	ArtifactObjectKeyExists(ctx context.Context, key string) (bool, error)
 }
@@ -92,24 +85,15 @@ func (r *Reconciler) Run(ctx context.Context) {
 	}
 }
 
-func (r *Reconciler) Reconcile(
-	ctx context.Context,
-) (ReconciliationResult, error) {
+func (r *Reconciler) Reconcile(ctx context.Context) (ReconciliationResult, error) {
 	now := r.now().UTC()
 	result := ReconciliationResult{}
 	var reconciliationErr error
 
 	for {
-		expired, err := r.metadata.ExpireArtifacts(
-			ctx,
-			now.Add(-r.retentionPeriod),
-			reconciliationBatchSize,
-		)
+		expired, err := r.metadata.ExpireArtifacts(ctx, now.Add(-r.retentionPeriod), reconciliationBatchSize)
 		if err != nil {
-			reconciliationErr = errors.Join(
-				reconciliationErr,
-				fmt.Errorf("expire retained artifacts: %w", err),
-			)
+			reconciliationErr = errors.Join(reconciliationErr, fmt.Errorf("expire retained artifacts: %w", err))
 			break
 		}
 
@@ -125,10 +109,7 @@ func (r *Reconciler) Reconcile(
 		reconciliationErr = errors.Join(reconciliationErr, err)
 	}
 
-	deleted, err = r.deleteOrphans(
-		ctx,
-		now.Add(-r.orphanGracePeriod),
-	)
+	deleted, err = r.deleteOrphans(ctx, now.Add(-r.orphanGracePeriod))
 	result.DeletedOrphans = deleted
 	if err != nil {
 		reconciliationErr = errors.Join(reconciliationErr, err)
@@ -170,10 +151,7 @@ func (r *Reconciler) deleteExpiredArtifacts(ctx context.Context) (int, error) {
 	for _, record := range records {
 		keys, err := r.metadata.ListArtifactObjectKeys(ctx, record.ID)
 		if err != nil {
-			deletionErr = errors.Join(
-				deletionErr,
-				fmt.Errorf("list object keys for artifact %s: %w", record.ID, err),
-			)
+			deletionErr = errors.Join(deletionErr, fmt.Errorf("list object keys for artifact %s: %w", record.ID, err))
 			continue
 		}
 
@@ -181,10 +159,7 @@ func (r *Reconciler) deleteExpiredArtifacts(ctx context.Context) (int, error) {
 		for _, key := range keys {
 			if err := r.contents.Delete(ctx, key); err != nil {
 				contentsDeleted = false
-				deletionErr = errors.Join(
-					deletionErr,
-					fmt.Errorf("delete artifact object %q: %w", key, err),
-				)
+				deletionErr = errors.Join(deletionErr, fmt.Errorf("delete artifact object %q: %w", key, err))
 			}
 		}
 		if !contentsDeleted {
@@ -192,10 +167,7 @@ func (r *Reconciler) deleteExpiredArtifacts(ctx context.Context) (int, error) {
 		}
 
 		if err := r.metadata.MarkArtifactDeleted(ctx, record.ID); err != nil {
-			deletionErr = errors.Join(
-				deletionErr,
-				fmt.Errorf("finish deleting artifact %s: %w", record.ID, err),
-			)
+			deletionErr = errors.Join(deletionErr, fmt.Errorf("finish deleting artifact %s: %w", record.ID, err))
 			continue
 		}
 
@@ -205,10 +177,7 @@ func (r *Reconciler) deleteExpiredArtifacts(ctx context.Context) (int, error) {
 	return deleted, deletionErr
 }
 
-func (r *Reconciler) deleteOrphans(
-	ctx context.Context,
-	modifiedBefore time.Time,
-) (int, error) {
+func (r *Reconciler) deleteOrphans(ctx context.Context, modifiedBefore time.Time) (int, error) {
 	objects, err := r.contents.List(ctx, artifactObjectPrefix)
 	if err != nil {
 		return 0, fmt.Errorf("list artifact objects: %w", err)
@@ -223,10 +192,7 @@ func (r *Reconciler) deleteOrphans(
 
 		exists, err := r.metadata.ArtifactObjectKeyExists(ctx, object.Key)
 		if err != nil {
-			deletionErr = errors.Join(
-				deletionErr,
-				fmt.Errorf("check artifact object %q: %w", object.Key, err),
-			)
+			deletionErr = errors.Join(deletionErr, fmt.Errorf("check artifact object %q: %w", object.Key, err))
 			continue
 		}
 		if exists {

@@ -50,14 +50,7 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	refresher := NewRefresher(
-		repositories,
-		fetcher,
-		testRepositoryPlacements(t),
-		time.Minute,
-		10*time.Second,
-		logger,
-	)
+	refresher := NewRefresher(repositories, fetcher, testRepositoryPlacements(t), time.Minute, 10*time.Second, logger)
 	attemptedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	refresher.now = func() time.Time { return attemptedAt }
@@ -124,14 +117,7 @@ func TestRefresherRecordsCatalogValidationFailure(t *testing.T) {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	refresher := NewRefresher(
-		repositories,
-		fetcher,
-		testRepositoryPlacements(t),
-		time.Minute,
-		10*time.Second,
-		logger,
-	)
+	refresher := NewRefresher(repositories, fetcher, testRepositoryPlacements(t), time.Minute, 10*time.Second, logger)
 
 	refresher.refreshAll(context.Background())
 
@@ -156,14 +142,7 @@ func TestRefresherBoundsEachFetch(t *testing.T) {
 	}
 	fetcher := blockingFetcher{}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	refresher := NewRefresher(
-		repositories,
-		fetcher,
-		placement.Set{},
-		time.Minute,
-		10*time.Millisecond,
-		logger,
-	)
+	refresher := NewRefresher(repositories, fetcher, placement.Set{}, time.Minute, 10*time.Millisecond, logger)
 
 	refresher.refreshAll(context.Background())
 
@@ -252,11 +231,7 @@ func TestValidateRefreshResult(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			testcheck.ErrorContains(
-				t,
-				ValidateRefreshResult(test.result),
-				test.wantError,
-			)
+			testcheck.ErrorContains(t, ValidateRefreshResult(test.result), test.wantError)
 		})
 	}
 }
@@ -266,9 +241,7 @@ type recordingRefreshStore struct {
 	results map[RepositoryID]RefreshResult
 }
 
-func (s *recordingRefreshStore) ListRepositories(
-	context.Context,
-) ([]Repository, error) {
+func (s *recordingRefreshStore) ListRepositories(context.Context) ([]Repository, error) {
 	return s.items, nil
 }
 
@@ -291,19 +264,13 @@ type recordingFetcher struct {
 	errors  map[RepositoryID]error
 }
 
-func (f *recordingFetcher) Fetch(
-	_ context.Context,
-	repository Repository,
-) (FetchedCommit, error) {
+func (f *recordingFetcher) Fetch(_ context.Context, repository Repository) (FetchedCommit, error) {
 	return f.commits[repository.ID], f.errors[repository.ID]
 }
 
 type blockingFetcher struct{}
 
-func (blockingFetcher) Fetch(
-	ctx context.Context,
-	_ Repository,
-) (FetchedCommit, error) {
+func (blockingFetcher) Fetch(ctx context.Context, _ Repository) (FetchedCommit, error) {
 	<-ctx.Done()
 
 	return FetchedCommit{}, ctx.Err()

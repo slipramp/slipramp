@@ -241,12 +241,7 @@ func environmentValue(environment []corev1.EnvVar, name string) string {
 	return ""
 }
 
-func hasSecretEnvironment(
-	container corev1.Container,
-	name string,
-	secretName string,
-	key string,
-) bool {
+func hasSecretEnvironment(container corev1.Container, name string, secretName string, key string) bool {
 	for _, variable := range container.Env {
 		if variable.Name == name && variable.ValueFrom != nil &&
 			variable.ValueFrom.SecretKeyRef != nil &&

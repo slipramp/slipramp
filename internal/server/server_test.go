@@ -94,11 +94,7 @@ func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer controller-token")
 
 	transport := &http.Transport{
-		DialContext: func(
-			context.Context,
-			string,
-			string,
-		) (net.Conn, error) {
+		DialContext: func(context.Context, string, string) (net.Conn, error) {
 			return clientConnection, nil
 		},
 	}
@@ -146,18 +142,13 @@ type blockingClusterService struct {
 	started chan struct{}
 }
 
-func (p *blockingClusterService) RecordControllerContact(
-	_ context.Context,
-	_ string,
-) error {
+func (p *blockingClusterService) RecordControllerContact(_ context.Context, _ string) error {
 	close(p.started)
 
 	return nil
 }
 
-func (*blockingClusterService) ListClusters(
-	context.Context,
-) ([]cluster.Status, error) {
+func (*blockingClusterService) ListClusters(context.Context) ([]cluster.Status, error) {
 	return nil, nil
 }
 
@@ -169,9 +160,7 @@ type singleConnectionListener struct {
 	accepted   bool
 }
 
-func newSingleConnectionListener(
-	connection net.Conn,
-) *singleConnectionListener {
+func newSingleConnectionListener(connection net.Conn) *singleConnectionListener {
 	return &singleConnectionListener{
 		connection: connection,
 		closed:     make(chan struct{}),

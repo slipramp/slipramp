@@ -52,12 +52,7 @@ func TestRunConnectsStreamsAndPreservesArguments(t *testing.T) {
 func TestRunReturnsActionExitCode(t *testing.T) {
 	t.Setenv("SLIPRAMP_HARNESS_HELPER", "1")
 
-	exitCode, err := Run(
-		context.Background(),
-		helperCommand("exit"),
-		Streams{},
-		Options{},
-	)
+	exitCode, err := Run(context.Background(), helperCommand("exit"), Streams{}, Options{})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -190,12 +185,7 @@ func TestRunRejectsMissingInputs(t *testing.T) {
 func TestRunReportsStartFailure(t *testing.T) {
 	t.Parallel()
 
-	_, err := Run(
-		context.Background(),
-		[]string{"/path/that/does/not/exist"},
-		Streams{},
-		Options{},
-	)
+	_, err := Run(context.Background(), []string{"/path/that/does/not/exist"}, Streams{}, Options{})
 	testcheck.ErrorContains(t, err, "start action")
 }
 
@@ -225,9 +215,7 @@ func (w *readyWriter) Write(value []byte) (int, error) {
 
 	written, err := w.output.Write(value)
 	if strings.Contains(w.output.String(), w.wantReady) {
-		w.readyOnce.Do(func() {
-			close(w.ready)
-		})
+		w.readyOnce.Do(func() { close(w.ready) })
 	}
 
 	return written, err
@@ -274,12 +262,7 @@ func TestHarnessHelperProcess(t *testing.T) {
 			os.Exit(90)
 		}
 
-		_, _ = fmt.Fprintf(
-			os.Stdout,
-			"arguments=%q input=%q\n",
-			arguments,
-			input,
-		)
+		_, _ = fmt.Fprintf(os.Stdout, "arguments=%q input=%q\n", arguments, input)
 		_, _ = fmt.Fprintln(os.Stderr, "helper stderr")
 		os.Exit(0)
 	case "exit":

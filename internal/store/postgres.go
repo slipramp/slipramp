@@ -81,10 +81,7 @@ func Open(ctx context.Context, cfg Config) (*Database, error) {
 	return database, nil
 }
 
-func (d *Database) initialize(
-	ctx context.Context,
-	connectTimeout time.Duration,
-) error {
+func (d *Database) initialize(ctx context.Context, connectTimeout time.Duration) error {
 	connectContext, cancel := context.WithTimeout(ctx, connectTimeout)
 	err := d.Ping(connectContext)
 	cancel()

@@ -34,12 +34,7 @@ func TestServiceCompletesLoginAndAuthenticatesSession(t *testing.T) {
 		t.Errorf("AuthorizationURL = %q", login.AuthorizationURL)
 	}
 
-	credential, err := service.CompleteLogin(
-		context.Background(),
-		"authorization-code",
-		login.State,
-		login.State,
-	)
+	credential, err := service.CompleteLogin(context.Background(), "authorization-code", login.State, login.State)
 	if err != nil {
 		t.Fatalf("CompleteLogin() error = %v", err)
 	}
@@ -64,10 +59,7 @@ func TestServiceCompletesLoginAndAuthenticatesSession(t *testing.T) {
 		t.Errorf("created principal = %#v", principal)
 	}
 
-	authentication, err := service.AuthenticateSession(
-		context.Background(),
-		credential.Token,
-	)
+	authentication, err := service.AuthenticateSession(context.Background(), credential.Token)
 	if err != nil {
 		t.Fatalf("AuthenticateSession() error = %v", err)
 	}
@@ -158,23 +150,13 @@ func TestServiceRejectsInvalidExpiredAndReplayedLoginState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BeginLogin() error = %v", err)
 	}
-	_, err = service.CompleteLogin(
-		context.Background(),
-		"authorization-code",
-		login.State,
-		"other-state",
-	)
+	_, err = service.CompleteLogin(context.Background(), "authorization-code", login.State, "other-state")
 	if !errors.Is(err, ErrInvalidLogin) {
 		t.Fatalf("mismatched state error = %v, want invalid login", err)
 	}
 
 	service.now = func() time.Time { return now.Add(11 * time.Minute) }
-	_, err = service.CompleteLogin(
-		context.Background(),
-		"authorization-code",
-		login.State,
-		login.State,
-	)
+	_, err = service.CompleteLogin(context.Background(), "authorization-code", login.State, login.State)
 	if !errors.Is(err, ErrInvalidLogin) {
 		t.Fatalf("expired state error = %v, want invalid login", err)
 	}
@@ -192,12 +174,7 @@ func TestServiceRejectsInvalidExpiredAndReplayedLoginState(t *testing.T) {
 	); err != nil {
 		t.Fatalf("CompleteLogin() error = %v", err)
 	}
-	_, err = service.CompleteLogin(
-		context.Background(),
-		"authorization-code",
-		login.State,
-		login.State,
-	)
+	_, err = service.CompleteLogin(context.Background(), "authorization-code", login.State, login.State)
 	if !errors.Is(err, ErrInvalidLogin) {
 		t.Fatalf("replayed state error = %v, want invalid login", err)
 	}
@@ -207,12 +184,7 @@ func TestServiceLimitsActiveLoginTransactions(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 19, 12, 0, 0, 0, time.UTC)
-	service := newTestService(
-		t,
-		newProductAuthStore(),
-		&recordingOIDCProvider{},
-		now,
-	)
+	service := newTestService(t, newProductAuthStore(), &recordingOIDCProvider{}, now)
 	for index := range maximumLoginTransactions {
 		service.transactions[fmt.Sprintf("state-%d", index)] = loginTransaction{
 			expiresAt: now.Add(time.Minute),
@@ -280,12 +252,7 @@ func TestServiceRejectsUnenrolledAndNonUserOIDCIdentities(t *testing.T) {
 			if err != nil {
 				t.Fatalf("BeginLogin() error = %v", err)
 			}
-			_, err = service.CompleteLogin(
-				context.Background(),
-				"authorization-code",
-				login.State,
-				login.State,
-			)
+			_, err = service.CompleteLogin(context.Background(), "authorization-code", login.State, login.State)
 			if !errors.Is(err, test.want) {
 				t.Fatalf("CompleteLogin() error = %v, want %v", err, test.want)
 			}
@@ -354,12 +321,7 @@ func TestServiceRejectsInactiveSessions(t *testing.T) {
 	}
 }
 
-func newTestService(
-	t *testing.T,
-	store *productAuthStore,
-	provider OIDCProvider,
-	now time.Time,
-) *Service {
+func newTestService(t *testing.T, store *productAuthStore, provider OIDCProvider, now time.Time) *Service {
 	t.Helper()
 
 	cfg := DefaultConfig()
@@ -449,10 +411,7 @@ func (s *productAuthStore) CreatePrincipal(
 	return principal, nil
 }
 
-func (s *productAuthStore) GetPrincipal(
-	_ context.Context,
-	principalID uuid.UUID,
-) (productidentity.Principal, error) {
+func (s *productAuthStore) GetPrincipal(_ context.Context, principalID uuid.UUID) (productidentity.Principal, error) {
 	principal, found := s.principals[principalID]
 	if !found {
 		return productidentity.Principal{}, productidentity.ErrPrincipalNotFound
@@ -461,9 +420,7 @@ func (s *productAuthStore) GetPrincipal(
 	return principal, nil
 }
 
-func (s *productAuthStore) ListServiceAccounts(
-	context.Context,
-) ([]productidentity.Principal, error) {
+func (s *productAuthStore) ListServiceAccounts(context.Context) ([]productidentity.Principal, error) {
 	principals := make([]productidentity.Principal, 0)
 	for _, principal := range s.principals {
 		if principal.Kind == productidentity.KindServiceAccount {
@@ -532,10 +489,7 @@ func (s *productAuthStore) CreateAPIKey(
 	return key, nil
 }
 
-func (s *productAuthStore) GetAPIKey(
-	_ context.Context,
-	keyID uuid.UUID,
-) (productidentity.APIKey, error) {
+func (s *productAuthStore) GetAPIKey(_ context.Context, keyID uuid.UUID) (productidentity.APIKey, error) {
 	for _, key := range s.apiKeys {
 		if key.ID == keyID {
 			return key, nil
@@ -558,10 +512,7 @@ func (s *productAuthStore) GetAPIKeyPrincipal(
 	return key, s.principals[key.PrincipalID], nil
 }
 
-func (s *productAuthStore) ListAPIKeys(
-	_ context.Context,
-	principalID uuid.UUID,
-) ([]productidentity.APIKey, error) {
+func (s *productAuthStore) ListAPIKeys(_ context.Context, principalID uuid.UUID) ([]productidentity.APIKey, error) {
 	keys := make([]productidentity.APIKey, 0)
 	for _, key := range s.apiKeys {
 		if key.PrincipalID == principalID {
@@ -572,11 +523,7 @@ func (s *productAuthStore) ListAPIKeys(
 	return keys, nil
 }
 
-func (s *productAuthStore) TouchAPIKey(
-	_ context.Context,
-	keyID uuid.UUID,
-	lastUsedAt time.Time,
-) error {
+func (s *productAuthStore) TouchAPIKey(_ context.Context, keyID uuid.UUID, lastUsedAt time.Time) error {
 	for digest, key := range s.apiKeys {
 		if key.ID != keyID || key.RevokedAt != nil ||
 			(key.ExpiresAt != nil && !lastUsedAt.Before(*key.ExpiresAt)) {
@@ -592,11 +539,7 @@ func (s *productAuthStore) TouchAPIKey(
 	return productidentity.ErrCredentialNotFound
 }
 
-func (s *productAuthStore) RevokeAPIKey(
-	_ context.Context,
-	keyID uuid.UUID,
-	revokedAt time.Time,
-) error {
+func (s *productAuthStore) RevokeAPIKey(_ context.Context, keyID uuid.UUID, revokedAt time.Time) error {
 	for digest, key := range s.apiKeys {
 		if key.ID != keyID {
 			continue
@@ -637,11 +580,7 @@ func (s *productAuthStore) GetWebSessionPrincipal(
 	return session, s.principals[session.PrincipalID], nil
 }
 
-func (s *productAuthStore) TouchWebSession(
-	_ context.Context,
-	sessionID uuid.UUID,
-	lastSeenAt time.Time,
-) error {
+func (s *productAuthStore) TouchWebSession(_ context.Context, sessionID uuid.UUID, lastSeenAt time.Time) error {
 	for digest, session := range s.sessions {
 		if session.ID != sessionID {
 			continue
@@ -656,10 +595,7 @@ func (s *productAuthStore) TouchWebSession(
 	return productidentity.ErrCredentialNotFound
 }
 
-func (s *productAuthStore) DeleteWebSession(
-	_ context.Context,
-	sessionID uuid.UUID,
-) error {
+func (s *productAuthStore) DeleteWebSession(_ context.Context, sessionID uuid.UUID) error {
 	for digest, session := range s.sessions {
 		if session.ID == sessionID {
 			delete(s.sessions, digest)

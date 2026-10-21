@@ -25,11 +25,7 @@ func Load(files fs.FS, placements placement.Set) (Catalog, error) {
 	runtimeSources := map[string]Source{}
 	targetSources := map[string]Source{}
 
-	err := fs.WalkDir(files, Directory, func(
-		filePath string,
-		entry fs.DirEntry,
-		walkErr error,
-	) error {
+	err := fs.WalkDir(files, Directory, func(filePath string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -45,13 +41,7 @@ func Load(files fs.FS, placements placement.Set) (Catalog, error) {
 			return fmt.Errorf("read %s: %w", filePath, err)
 		}
 
-		return loadFile(
-			contents,
-			filePath,
-			&result,
-			runtimeSources,
-			targetSources,
-		)
+		return loadFile(contents, filePath, &result, runtimeSources, targetSources)
 	})
 	if err != nil {
 		return Catalog{}, fmt.Errorf("load catalog: %w", err)
@@ -112,11 +102,7 @@ func loadDocument(
 ) error {
 	root := document.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return documentError(
-			source.Path,
-			source.Document,
-			errors.New("resource must be an object"),
-		)
+		return documentError(source.Path, source.Document, errors.New("resource must be an object"))
 	}
 
 	var header documentHeader
@@ -125,29 +111,16 @@ func loadDocument(
 	}
 
 	if header.APIVersion != APIVersion {
-		return documentError(
-			source.Path,
-			source.Document,
-			fmt.Errorf("apiVersion must be %q", APIVersion),
-		)
+		return documentError(source.Path, source.Document, fmt.Errorf("apiVersion must be %q", APIVersion))
 	}
 
 	if header.Metadata.Name == "" {
-		return documentError(
-			source.Path,
-			source.Document,
-			errors.New("metadata.name is required"),
-		)
+		return documentError(source.Path, source.Document, errors.New("metadata.name is required"))
 	}
 
 	switch header.Kind {
 	case RuntimeKind:
-		if err := rejectDuplicate(
-			RuntimeKind,
-			header.Metadata.Name,
-			source,
-			runtimeSources,
-		); err != nil {
+		if err := rejectDuplicate(RuntimeKind, header.Metadata.Name, source, runtimeSources); err != nil {
 			return err
 		}
 
@@ -160,12 +133,7 @@ func loadDocument(
 		runtimeSources[runtime.Metadata.Name] = source
 
 	case TargetKind:
-		if err := rejectDuplicate(
-			TargetKind,
-			header.Metadata.Name,
-			source,
-			targetSources,
-		); err != nil {
+		if err := rejectDuplicate(TargetKind, header.Metadata.Name, source, targetSources); err != nil {
 			return err
 		}
 
@@ -200,12 +168,7 @@ func decodeStrict(document yaml.Node, result any) error {
 	return decoder.Decode(result)
 }
 
-func rejectDuplicate(
-	kind string,
-	name string,
-	source Source,
-	known map[string]Source,
-) error {
+func rejectDuplicate(kind string, name string, source Source, known map[string]Source) error {
 	previous, found := known[name]
 	if !found {
 		return nil
@@ -214,13 +177,7 @@ func rejectDuplicate(
 	return documentError(
 		source.Path,
 		source.Document,
-		fmt.Errorf(
-			"%s %q is already defined in %s document %d",
-			kind,
-			name,
-			previous.Path,
-			previous.Document,
-		),
+		fmt.Errorf("%s %q is already defined in %s document %d", kind, name, previous.Path, previous.Document),
 	)
 }
 

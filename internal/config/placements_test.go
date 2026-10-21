@@ -76,19 +76,11 @@ placements:
 	}
 
 	if configured.JobNamespace != "slipramp-runs" {
-		t.Errorf(
-			"JobNamespace = %q, want %q",
-			configured.JobNamespace,
-			"slipramp-runs",
-		)
+		t.Errorf("JobNamespace = %q, want %q", configured.JobNamespace, "slipramp-runs")
 	}
 
 	if configured.ServiceAccountName != "infrastructure-admin" {
-		t.Errorf(
-			"ServiceAccountName = %q, want %q",
-			configured.ServiceAccountName,
-			"infrastructure-admin",
-		)
+		t.Errorf("ServiceAccountName = %q, want %q", configured.ServiceAccountName, "infrastructure-admin")
 	}
 
 	if configured.Timeout != 30*time.Minute {
@@ -96,19 +88,11 @@ placements:
 	}
 
 	if configured.Resources.Requests["cpu"] != "100m" {
-		t.Errorf(
-			"Resources.Requests[cpu] = %q, want %q",
-			configured.Resources.Requests["cpu"],
-			"100m",
-		)
+		t.Errorf("Resources.Requests[cpu] = %q, want %q", configured.Resources.Requests["cpu"], "100m")
 	}
 
 	if configured.Resources.Limits["memory"] != "2Gi" {
-		t.Errorf(
-			"Resources.Limits[memory] = %q, want %q",
-			configured.Resources.Limits["memory"],
-			"2Gi",
-		)
+		t.Errorf("Resources.Limits[memory] = %q, want %q", configured.Resources.Limits["memory"], "2Gi")
 	}
 
 	if configured.NodeSelector["topology.kubernetes.io/zone"] != "us-west-2a" {
@@ -117,11 +101,7 @@ placements:
 
 	credential := configured.Credentials["terraform-backend"]
 	if credential.SecretRef.Name != "terraform-backend" {
-		t.Errorf(
-			"credential SecretRef.Name = %q, want %q",
-			credential.SecretRef.Name,
-			"terraform-backend",
-		)
+		t.Errorf("credential SecretRef.Name = %q, want %q", credential.SecretRef.Name, "terraform-backend")
 	}
 
 	if configured.PodTemplate == nil {
@@ -271,10 +251,7 @@ placements:
 			t.Parallel()
 
 			environment := map[string]string{
-				serverPlacementsFileEnvironment: writePlacementsFile(
-					t,
-					test.contents,
-				),
+				serverPlacementsFileEnvironment: writePlacementsFile(t, test.contents),
 			}
 			if test.registered {
 				environment[serverControllerEnrollmentTokensEnvironment] =

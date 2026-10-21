@@ -7,10 +7,7 @@ import (
 	"github.com/slipramp/slipramp/internal/readiness"
 )
 
-func (*Handler) GetHealth(
-	context.Context,
-	api.GetHealthRequestObject,
-) (api.GetHealthResponseObject, error) {
+func (*Handler) GetHealth(context.Context, api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {
 	return api.GetHealth200JSONResponse{
 		Status: api.Ok,
 	}, nil

@@ -22,14 +22,7 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 	remoteDirectory := filepath.Join(t.TempDir(), "remote.git")
 	runTestGit(t, "init", "--initial-branch=main", workingDirectory)
 	runTestGit(t, "-C", workingDirectory, "config", "user.name", "Slipramp Test")
-	runTestGit(
-		t,
-		"-C",
-		workingDirectory,
-		"config",
-		"user.email",
-		"slipramp@example.com",
-	)
+	runTestGit(t, "-C", workingDirectory, "config", "user.email", "slipramp@example.com")
 
 	trackedFile := filepath.Join(workingDirectory, "tracked.txt")
 	if err := os.WriteFile(trackedFile, []byte("main\n"), 0o600); err != nil {
@@ -38,9 +31,7 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 
 	runTestGit(t, "-C", workingDirectory, "add", "tracked.txt")
 	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-m", "main")
-	mainCommit := strings.TrimSpace(
-		runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"),
-	)
+	mainCommit := strings.TrimSpace(runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"))
 
 	runTestGit(t, "-C", workingDirectory, "switch", "--quiet", "-c", "other")
 	if err := os.WriteFile(trackedFile, []byte("other\n"), 0o600); err != nil {
@@ -56,20 +47,13 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 	}
 
 	credentialName := "local-test"
-	fetcher := NewGitFetcher(RefreshCredentials{
-		credentialName: gitConfigFile,
-	})
+	fetcher := NewGitFetcher(RefreshCredentials{credentialName: gitConfigFile})
 	cfg := Config{
 		CloneURL:              remoteDirectory,
 		Branch:                "main",
 		RefreshCredentialName: &credentialName,
 	}
-	fetched, err := fetcher.Fetch(
-		context.Background(),
-		Repository{
-			Config: cfg,
-		},
-	)
+	fetched, err := fetcher.Fetch(context.Background(), Repository{Config: cfg})
 	if err != nil {
 		t.Fatalf("Fetch() error = %v", err)
 	}
@@ -105,30 +89,19 @@ func TestGitFetcherComputesChangedPathsFromAcceptedCommit(t *testing.T) {
 	remoteDirectory := filepath.Join(t.TempDir(), "remote.git")
 	runTestGit(t, "init", "--initial-branch=main", workingDirectory)
 	runTestGit(t, "-C", workingDirectory, "config", "user.name", "Slipramp Test")
-	runTestGit(
-		t,
-		"-C",
-		workingDirectory,
-		"config",
-		"user.email",
-		"slipramp@example.com",
-	)
+	runTestGit(t, "-C", workingDirectory, "config", "user.email", "slipramp@example.com")
 
 	writeTestFile(t, workingDirectory, "docs/README.md", "unchanged\n")
 	writeTestFile(t, workingDirectory, "terraform/main.tf", "version = 1\n")
 	runTestGit(t, "-C", workingDirectory, "add", ".")
 	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-m", "initial")
-	acceptedCommit := strings.TrimSpace(
-		runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"),
-	)
+	acceptedCommit := strings.TrimSpace(runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"))
 
 	writeTestFile(t, workingDirectory, "terraform/main.tf", "version = 2\n")
 	writeTestFile(t, workingDirectory, "terraform/modules/network/main.tf", "module {}\n")
 	runTestGit(t, "-C", workingDirectory, "add", ".")
 	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-m", "update")
-	wantCommit := strings.TrimSpace(
-		runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"),
-	)
+	wantCommit := strings.TrimSpace(runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"))
 	runTestGit(t, "clone", "--quiet", "--bare", workingDirectory, remoteDirectory)
 
 	fetcher := NewGitFetcher(nil)
@@ -171,12 +144,7 @@ func TestGitFetcherRejectsUnknownCredential(t *testing.T) {
 		Branch:                "main",
 		RefreshCredentialName: &credentialName,
 	}
-	_, err := fetcher.Fetch(
-		context.Background(),
-		Repository{
-			Config: cfg,
-		},
-	)
+	_, err := fetcher.Fetch(context.Background(), Repository{Config: cfg})
 	if !errors.Is(err, ErrUnknownRefreshCredential) {
 		t.Fatalf("Fetch() error = %v, want %v", err, ErrUnknownRefreshCredential)
 	}
@@ -210,11 +178,7 @@ func TestRunGitDoesNotReturnStandardError(t *testing.T) {
 	}
 
 	const sensitiveOutput = "credential-secret-marker"
-	_, err := runGit(
-		context.Background(),
-		gitEnvironment(""),
-		sensitiveOutput,
-	)
+	_, err := runGit(context.Background(), gitEnvironment(""), sensitiveOutput)
 	if err == nil {
 		t.Fatal("runGit() error = nil, want an error")
 	}

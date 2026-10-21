@@ -16,10 +16,7 @@ import (
 )
 
 type CatalogService interface {
-	GetActiveRevision(
-		ctx context.Context,
-		repositoryID uuid.UUID,
-	) (catalog.Revision, error)
+	GetActiveRevision(ctx context.Context, repositoryID uuid.UUID) (catalog.Revision, error)
 	ListTargets(context.Context, catalog.TargetListFilter) (catalog.TargetList, error)
 }
 
@@ -33,10 +30,7 @@ func (h *Handler) ListTargets(
 			*request.Params.Limit > catalog.MaximumTargetListLimit {
 			problem := NewProblem(
 				http.StatusBadRequest,
-				fmt.Sprintf(
-					"limit must be between 1 and %d",
-					catalog.MaximumTargetListLimit,
-				),
+				fmt.Sprintf("limit must be between 1 and %d", catalog.MaximumTargetListLimit),
 			)
 
 			return api.ListTargets400ApplicationProblemPlusJSONResponse(problem), nil
@@ -48,10 +42,7 @@ func (h *Handler) ListTargets(
 	if request.Params.Offset != nil {
 		if *request.Params.Offset < 0 ||
 			*request.Params.Offset > catalog.MaximumTargetListOffset {
-			problem := NewProblem(
-				http.StatusBadRequest,
-				"offset must be between 0 and 2147483647",
-			)
+			problem := NewProblem(http.StatusBadRequest, "offset must be between 0 and 2147483647")
 
 			return api.ListTargets400ApplicationProblemPlusJSONResponse(problem), nil
 		}
@@ -62,10 +53,7 @@ func (h *Handler) ListTargets(
 	if request.Params.Q != nil {
 		query = strings.TrimSpace(*request.Params.Q)
 		if query == "" || len(query) > catalog.MaximumTargetSearchLength {
-			problem := NewProblem(
-				http.StatusBadRequest,
-				"q must contain between 1 and 200 characters",
-			)
+			problem := NewProblem(http.StatusBadRequest, "q must contain between 1 and 200 characters")
 
 			return api.ListTargets400ApplicationProblemPlusJSONResponse(problem), nil
 		}
@@ -112,10 +100,7 @@ func (h *Handler) GetRepositoryCatalog(
 	ctx context.Context,
 	request api.GetRepositoryCatalogRequestObject,
 ) (api.GetRepositoryCatalogResponseObject, error) {
-	revision, err := h.catalogs.GetActiveRevision(
-		ctx,
-		request.RepositoryID,
-	)
+	revision, err := h.catalogs.GetActiveRevision(ctx, request.RepositoryID)
 	if errors.Is(err, catalog.ErrNotFound) {
 		problem := NewProblem(
 			http.StatusNotFound,
@@ -128,9 +113,7 @@ func (h *Handler) GetRepositoryCatalog(
 		return nil, err
 	}
 
-	return api.GetRepositoryCatalog200JSONResponse(
-		catalogRevisionResponse(revision),
-	), nil
+	return api.GetRepositoryCatalog200JSONResponse(catalogRevisionResponse(revision)), nil
 }
 
 func catalogRevisionResponse(revision catalog.Revision) api.CatalogRevision {
@@ -141,13 +124,7 @@ func catalogRevisionResponse(revision catalog.Revision) api.CatalogRevision {
 
 	targets := make([]api.Target, 0, len(revision.Catalog.Targets))
 	for _, target := range revision.Catalog.Targets {
-		targets = append(
-			targets,
-			catalogTargetResponse(
-				target,
-				revision.TargetStates[target.Metadata.Name],
-			),
-		)
+		targets = append(targets, catalogTargetResponse(target, revision.TargetStates[target.Metadata.Name]))
 	}
 
 	return api.CatalogRevision{
@@ -181,12 +158,8 @@ func catalogRuntimeResponse(runtime catalog.Runtime) api.Runtime {
 	}
 }
 
-func catalogCredentialInjectionResponse(
-	injection catalog.CredentialInjection,
-) api.CredentialInjection {
-	environment := make(
-		map[string]api.CredentialEnvironmentVariable,
-	)
+func catalogCredentialInjectionResponse(injection catalog.CredentialInjection) api.CredentialInjection {
+	environment := make(map[string]api.CredentialEnvironmentVariable)
 	for name, variable := range injection.Environment {
 		environment[name] = api.CredentialEnvironmentVariable{
 			Key: variable.Key,
@@ -195,11 +168,7 @@ func catalogCredentialInjectionResponse(
 
 	files := make([]api.CredentialFile, 0, len(injection.Files))
 	for _, file := range injection.Files {
-		files = append(files, api.CredentialFile{
-			Key:  file.Key,
-			Path: file.Path,
-			Mode: optionalUint32(file.Mode),
-		})
+		files = append(files, api.CredentialFile{Key: file.Key, Path: file.Path, Mode: optionalUint32(file.Mode)})
 	}
 
 	var directory *api.CredentialDirectory
@@ -218,10 +187,7 @@ func catalogCredentialInjectionResponse(
 	}
 }
 
-func catalogTargetResponse(
-	target catalog.Target,
-	state catalog.TargetState,
-) api.Target {
+func catalogTargetResponse(target catalog.Target, state catalog.TargetState) api.Target {
 	return api.Target{
 		APIVersion: api.TargetAPIVersion(target.APIVersion),
 		Kind:       api.TargetKind(target.Kind),
@@ -233,10 +199,8 @@ func catalogTargetResponse(
 			Placement:   optionalString(target.Spec.Placement),
 			Credentials: optionalStringMap(target.Spec.Credentials),
 			Timeout:     optionalString(target.Spec.Timeout),
-			Resources: catalogResourceRequirementsResponse(
-				target.Spec.Resources,
-			),
-			Actions: catalogActionsResponse(target.Spec.Actions),
+			Resources:   catalogResourceRequirementsResponse(target.Spec.Resources),
+			Actions:     catalogActionsResponse(target.Spec.Actions),
 		},
 		Source: catalogSourceResponse(target.Source),
 		Status: api.TargetStatus{
@@ -245,9 +209,7 @@ func catalogTargetResponse(
 	}
 }
 
-func catalogActionsResponse(
-	actions map[string]catalog.Action,
-) map[string]api.Action {
+func catalogActionsResponse(actions map[string]catalog.Action) map[string]api.Action {
 	result := make(map[string]api.Action, len(actions))
 	for name, action := range actions {
 		result[name] = api.Action{
@@ -257,21 +219,17 @@ func catalogActionsResponse(
 			Placement:   optionalString(action.Placement),
 			Credentials: optionalStringMap(action.Credentials),
 			Timeout:     optionalString(action.Timeout),
-			Resources: catalogResourceRequirementsResponse(
-				action.Resources,
-			),
-			Parameters: catalogParametersResponse(action.Parameters),
-			Artifacts:  catalogArtifactsResponse(action.Artifacts),
-			Inputs:     catalogInputsResponse(action.Inputs),
+			Resources:   catalogResourceRequirementsResponse(action.Resources),
+			Parameters:  catalogParametersResponse(action.Parameters),
+			Artifacts:   catalogArtifactsResponse(action.Artifacts),
+			Inputs:      catalogInputsResponse(action.Inputs),
 		}
 	}
 
 	return result
 }
 
-func catalogResourceRequirementsResponse(
-	resources catalog.ResourceRequirements,
-) *api.ResourceRequirements {
+func catalogResourceRequirementsResponse(resources catalog.ResourceRequirements) *api.ResourceRequirements {
 	requests := optionalStringMap(resources.Requests)
 	limits := optionalStringMap(resources.Limits)
 	if requests == nil && limits == nil {
@@ -284,9 +242,7 @@ func catalogResourceRequirementsResponse(
 	}
 }
 
-func catalogParametersResponse(
-	parameters map[string]catalog.Parameter,
-) *map[string]api.Parameter {
+func catalogParametersResponse(parameters map[string]catalog.Parameter) *map[string]api.Parameter {
 	if len(parameters) == 0 {
 		return nil
 	}
@@ -312,9 +268,7 @@ func catalogParametersResponse(
 	return &result
 }
 
-func catalogArtifactsResponse(
-	artifacts map[string]catalog.Artifact,
-) *map[string]api.ArtifactDeclaration {
+func catalogArtifactsResponse(artifacts map[string]catalog.Artifact) *map[string]api.ArtifactDeclaration {
 	if len(artifacts) == 0 {
 		return nil
 	}
@@ -331,9 +285,7 @@ func catalogArtifactsResponse(
 	return &result
 }
 
-func catalogInputsResponse(
-	inputs map[string]catalog.Input,
-) *map[string]api.ArtifactInput {
+func catalogInputsResponse(inputs map[string]catalog.Input) *map[string]api.ArtifactInput {
 	if len(inputs) == 0 {
 		return nil
 	}
@@ -342,10 +294,8 @@ func catalogInputsResponse(
 	for name, input := range inputs {
 		result[name] = api.ArtifactInput{
 			Artifact: api.ArtifactInputSource{
-				FromAction: input.Artifact.FromAction,
-				Compatibility: optionalCatalogCompatibility(
-					input.Artifact.Compatibility,
-				),
+				FromAction:    input.Artifact.FromAction,
+				Compatibility: optionalCatalogCompatibility(input.Artifact.Compatibility),
 			},
 			MountPath: input.MountPath,
 		}
@@ -420,9 +370,7 @@ func optionalSlice[T any](value []T) *[]T {
 	return &cloned
 }
 
-func optionalCatalogCompatibility(
-	value string,
-) *api.ArtifactInputSourceCompatibility {
+func optionalCatalogCompatibility(value string) *api.ArtifactInputSourceCompatibility {
 	if value == "" {
 		return nil
 	}

@@ -88,10 +88,6 @@ func TestNextRunAssignmentRejectsBlankClusterName(t *testing.T) {
 		t.Fatalf("NextRunAssignment() error = %v, want %v", err, ErrInvalidRequest)
 	}
 	if runs.assignedCalls != 0 || runs.claimCalls != 0 {
-		t.Errorf(
-			"store calls = (%d, %d), want (0, 0)",
-			runs.assignedCalls,
-			runs.claimCalls,
-		)
+		t.Errorf("store calls = (%d, %d), want (0, 0)", runs.assignedCalls, runs.claimCalls)
 	}
 }

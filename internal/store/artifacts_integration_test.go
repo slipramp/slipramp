@@ -46,11 +46,7 @@ func TestArtifactTransferIntegration(t *testing.T) {
 
 	createdAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
 	runID := createArtifactTestRun(t, ctx, database, createdAt)
-	service := artifact.NewService(
-		database,
-		objects,
-		[]byte("integration-artifact-token-key-32-bytes"),
-	)
+	service := artifact.NewService(database, objects, []byte("integration-artifact-token-key-32-bytes"))
 
 	contents := []byte("durable plan contents")
 	digest := sha256.Sum256(contents)
@@ -226,10 +222,7 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 
 	duplicate := record
 	duplicate.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1404")
-	if _, err := database.CreateArtifact(ctx, duplicate); !errors.Is(
-		err,
-		artifact.ErrAlreadyExists,
-	) {
+	if _, err := database.CreateArtifact(ctx, duplicate); !errors.Is(err, artifact.ErrAlreadyExists) {
 		t.Errorf("duplicate CreateArtifact() error = %v, want already exists", err)
 	}
 
@@ -304,10 +297,7 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 		ObjectKey:   "runs/018f90ff/artifacts/log/chunks/0-a",
 		CreatedAt:   createdAt.Add(3 * time.Minute),
 	}
-	if _, err := database.CreateLogChunk(ctx, later); !errors.Is(
-		err,
-		artifact.ErrChunkConflict,
-	) {
+	if _, err := database.CreateLogChunk(ctx, later); !errors.Is(err, artifact.ErrChunkConflict) {
 		t.Errorf("gapped CreateLogChunk() error = %v, want conflict", err)
 	}
 	for _, chunk := range []artifact.LogChunk{first, later} {
@@ -320,19 +310,13 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 		}
 	}
 
-	if _, err := database.CreateLogChunk(ctx, first); !errors.Is(
-		err,
-		artifact.ErrAlreadyExists,
-	) {
+	if _, err := database.CreateLogChunk(ctx, first); !errors.Is(err, artifact.ErrAlreadyExists) {
 		t.Errorf("duplicate CreateLogChunk() error = %v, want already exists", err)
 	}
 	wrongArtifact := first
 	wrongArtifact.ArtifactID = output.ID
 	wrongArtifact.ObjectKey = "runs/018f90ff/artifacts/plan/chunks/0-a"
-	if _, err := database.CreateLogChunk(ctx, wrongArtifact); !errors.Is(
-		err,
-		artifact.ErrNotFound,
-	) {
+	if _, err := database.CreateLogChunk(ctx, wrongArtifact); !errors.Is(err, artifact.ErrNotFound) {
 		t.Errorf("output CreateLogChunk() error = %v, want not found", err)
 	}
 
@@ -361,13 +345,7 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	}
 
 	sealedAt := createdAt.Add(5 * time.Minute)
-	sealed, err := database.SealArtifact(
-		ctx,
-		artifactID,
-		11,
-		strings.Repeat("d", 64),
-		sealedAt,
-	)
+	sealed, err := database.SealArtifact(ctx, artifactID, 11, strings.Repeat("d", 64), sealedAt)
 	if err != nil {
 		t.Fatalf("SealArtifact() error = %v", err)
 	}
@@ -418,12 +396,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	if len(expired) != 0 {
 		t.Fatalf("ExpireArtifacts() with active producer = %#v, want none", expired)
 	}
-	if _, err := database.CancelRun(
-		ctx,
-		producerRunID,
-		sealedAt.Add(time.Minute),
-		nil,
-	); err != nil {
+	if _, err := database.CancelRun(ctx, producerRunID, sealedAt.Add(time.Minute), nil); err != nil {
 		t.Fatalf("finish producing Run: %v", err)
 	}
 
@@ -474,12 +447,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 		t.Fatalf("CreateRun() with expired input error = %v, want invalid inputs", err)
 	}
 
-	if _, err := database.CancelRun(
-		ctx,
-		consumerRunID,
-		sealedAt.Add(4*time.Minute),
-		nil,
-	); err != nil {
+	if _, err := database.CancelRun(ctx, consumerRunID, sealedAt.Add(4*time.Minute), nil); err != nil {
 		t.Fatalf("finish consuming Run: %v", err)
 	}
 	expired, err = database.ExpireArtifacts(ctx, sealedAt.Add(time.Hour), 10)
@@ -509,12 +477,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	}
 }
 
-func createArtifactTestRun(
-	t *testing.T,
-	ctx context.Context,
-	database *Database,
-	createdAt time.Time,
-) uuid.UUID {
+func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database, createdAt time.Time) uuid.UUID {
 	t.Helper()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1400")

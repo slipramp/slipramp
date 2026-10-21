@@ -49,18 +49,10 @@ func TestServiceReportsDependencyStatus(t *testing.T) {
 			report := service.Check(context.Background())
 
 			if report.Database != test.wantDatabase {
-				t.Errorf(
-					"Database = %q, want %q",
-					report.Database,
-					test.wantDatabase,
-				)
+				t.Errorf("Database = %q, want %q", report.Database, test.wantDatabase)
 			}
 			if report.ArtifactStorage != test.wantArtifactStorage {
-				t.Errorf(
-					"ArtifactStorage = %q, want %q",
-					report.ArtifactStorage,
-					test.wantArtifactStorage,
-				)
+				t.Errorf("ArtifactStorage = %q, want %q", report.ArtifactStorage, test.wantArtifactStorage)
 			}
 			if report.Ready() != test.wantReady {
 				t.Errorf("Ready() = %t, want %t", report.Ready(), test.wantReady)

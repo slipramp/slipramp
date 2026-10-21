@@ -37,23 +37,13 @@ func TestProductAuthenticationRejectsMissingAndInvalidCredentials(t *testing.T) 
 				err: test.err,
 			}
 			called := false
-			response := runProductMiddleware(
-				t,
-				authenticator,
-				"ListRuns",
-				func(context.Context) {
-					called = true
-				},
-			)
+			response := runProductMiddleware(t, authenticator, "ListRuns", func(context.Context) { called = true })
 
 			if response.Code != http.StatusUnauthorized {
 				t.Errorf("status = %d, want %d", response.Code, http.StatusUnauthorized)
 			}
 			if response.Header().Get("WWW-Authenticate") != `Bearer realm="slipramp"` {
-				t.Errorf(
-					"WWW-Authenticate = %q",
-					response.Header().Get("WWW-Authenticate"),
-				)
+				t.Errorf("WWW-Authenticate = %q", response.Header().Get("WWW-Authenticate"))
 			}
 			if called {
 				t.Error("next handler was called")
@@ -231,11 +221,7 @@ func TestSensitiveArtifactAuthorization(t *testing.T) {
 
 			ctx := context.Background()
 			if test.authentication != nil {
-				ctx = context.WithValue(
-					ctx,
-					productAuthenticationContextKey{},
-					*test.authentication,
-				)
+				ctx = context.WithValue(ctx, productAuthenticationContextKey{}, *test.authentication)
 			}
 			if got := canDownloadSensitiveArtifact(ctx); got != test.want {
 				t.Errorf("canDownloadSensitiveArtifact() = %t, want %t", got, test.want)
@@ -284,14 +270,7 @@ func TestProductAuthenticationLeavesAuthenticationOperationsAlone(t *testing.T) 
 		"Logout",
 	} {
 		called := false
-		response := runProductMiddleware(
-			t,
-			authenticator,
-			operationID,
-			func(context.Context) {
-				called = true
-			},
-		)
+		response := runProductMiddleware(t, authenticator, operationID, func(context.Context) { called = true })
 
 		if response.Code != http.StatusNoContent {
 			t.Errorf("%s status = %d, want %d", operationID, response.Code, http.StatusNoContent)
@@ -309,26 +288,13 @@ func TestProductAuthenticationFailsClosedForUnmappedProductOperation(t *testing.
 	t.Parallel()
 
 	authenticator := &recordingProductAuthenticator{}
-	next := func(
-		context.Context,
-		http.ResponseWriter,
-		*http.Request,
-		any,
-	) (any, error) {
+	next := func(context.Context, http.ResponseWriter, *http.Request, any) (any, error) {
 		t.Fatal("next handler was called")
 
 		return nil, nil
 	}
-	handler := ProductAuthentication(authenticator)(
-		api.StrictHandlerFunc(next),
-		"FutureProductOperation",
-	)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/api/v1/future",
-		nil,
-	)
+	handler := ProductAuthentication(authenticator)(api.StrictHandlerFunc(next), "FutureProductOperation")
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/future", nil)
 	response := httptest.NewRecorder()
 
 	if _, err := handler(request.Context(), response, request, struct{}{}); err == nil {
@@ -362,12 +328,7 @@ func runProductMiddleware(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 
-	next := func(
-		ctx context.Context,
-		writer http.ResponseWriter,
-		_ *http.Request,
-		_ any,
-	) (any, error) {
+	next := func(ctx context.Context, writer http.ResponseWriter, _ *http.Request, _ any) (any, error) {
 		inspectContext(ctx)
 		writer.WriteHeader(http.StatusNoContent)
 
@@ -375,12 +336,7 @@ func runProductMiddleware(
 	}
 	middleware := ProductAuthentication(authenticator)
 	handler := middleware(api.StrictHandlerFunc(next), operationID)
-	request := httptest.NewRequestWithContext(
-		context.Background(),
-		http.MethodGet,
-		"/",
-		nil,
-	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	response := httptest.NewRecorder()
 
 	if _, err := handler(request.Context(), response, request, struct{}{}); err != nil {

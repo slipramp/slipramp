@@ -21,10 +21,7 @@ type BrowserAuthenticationService interface {
 		state string,
 		cookieState string,
 	) (productauth.SessionCredential, error)
-	AuthenticateSession(
-		ctx context.Context,
-		token string,
-	) (productidentity.Authentication, error)
+	AuthenticateSession(ctx context.Context, token string) (productidentity.Authentication, error)
 	RevokeSession(context.Context, string) error
 	SecureCookies() bool
 }
@@ -35,10 +32,7 @@ func (h *Handler) BeginOIDCLogin(
 ) (api.BeginOIDCLoginResponseObject, error) {
 	login, err := h.productAuth.BeginLogin()
 	if errors.Is(err, productauth.ErrUnavailable) {
-		problem := NewProblem(
-			http.StatusServiceUnavailable,
-			"Browser authentication is temporarily unavailable.",
-		)
+		problem := NewProblem(http.StatusServiceUnavailable, "Browser authentication is temporarily unavailable.")
 
 		return api.BeginOIDCLogin503ApplicationProblemPlusJSONResponse(problem), nil
 	}
@@ -72,27 +66,16 @@ func (h *Handler) CompleteOIDCLogin(
 	if request.Params.SliprampOidcState != nil {
 		cookieState = *request.Params.SliprampOidcState
 	}
-	credential, err := h.productAuth.CompleteLogin(
-		ctx,
-		request.Params.Code,
-		request.Params.State,
-		cookieState,
-	)
+	credential, err := h.productAuth.CompleteLogin(ctx, request.Params.Code, request.Params.State, cookieState)
 	if err != nil {
 		switch {
 		case errors.Is(err, productauth.ErrInvalidLogin):
-			problem := NewProblem(
-				http.StatusBadRequest,
-				"The OIDC authorization response is invalid or expired.",
-			)
+			problem := NewProblem(http.StatusBadRequest, "The OIDC authorization response is invalid or expired.")
 
 			return api.CompleteOIDCLogin400ApplicationProblemPlusJSONResponse(problem), nil
 		case errors.Is(err, productauth.ErrEnrollmentDenied),
 			errors.Is(err, productidentity.ErrUnauthenticated):
-			problem := NewProblem(
-				http.StatusForbidden,
-				"The OIDC identity is not permitted to sign in.",
-			)
+			problem := NewProblem(http.StatusForbidden, "The OIDC identity is not permitted to sign in.")
 
 			return api.CompleteOIDCLogin403ApplicationProblemPlusJSONResponse(problem), nil
 		default:
@@ -129,10 +112,7 @@ func (h *Handler) GetCurrentPrincipal(
 	}
 	authentication, err := h.productAuth.AuthenticateSession(ctx, token)
 	if errors.Is(err, productidentity.ErrUnauthenticated) {
-		problem := NewProblem(
-			http.StatusUnauthorized,
-			"A valid product session is required.",
-		)
+		problem := NewProblem(http.StatusUnauthorized, "A valid product session is required.")
 
 		return api.GetCurrentPrincipal401ApplicationProblemPlusJSONResponse(problem), nil
 	}
@@ -148,15 +128,9 @@ func (h *Handler) GetCurrentPrincipal(
 	}, nil
 }
 
-func (h *Handler) Logout(
-	ctx context.Context,
-	request api.LogoutRequestObject,
-) (api.LogoutResponseObject, error) {
+func (h *Handler) Logout(ctx context.Context, request api.LogoutRequestObject) (api.LogoutResponseObject, error) {
 	if request.Params.XSliprampCSRF != "1" {
-		problem := NewProblem(
-			http.StatusForbidden,
-			"The CSRF protection header is invalid.",
-		)
+		problem := NewProblem(http.StatusForbidden, "The CSRF protection header is invalid.")
 
 		return api.Logout403ApplicationProblemPlusJSONResponse(problem), nil
 	}
@@ -167,10 +141,7 @@ func (h *Handler) Logout(
 	}
 	if err := h.productAuth.RevokeSession(ctx, token); err != nil {
 		if errors.Is(err, productidentity.ErrUnauthenticated) {
-			problem := NewProblem(
-				http.StatusUnauthorized,
-				"A valid product session is required.",
-			)
+			problem := NewProblem(http.StatusUnauthorized, "A valid product session is required.")
 
 			return api.Logout401ApplicationProblemPlusJSONResponse(problem), nil
 		}

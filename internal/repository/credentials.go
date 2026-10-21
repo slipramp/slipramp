@@ -20,17 +20,11 @@ func (c RefreshCredentials) Validate() error {
 		}
 
 		if gitConfigFile == "" {
-			return fmt.Errorf(
-				"refresh credential %q Git config file must not be empty",
-				name,
-			)
+			return fmt.Errorf("refresh credential %q Git config file must not be empty", name)
 		}
 
 		if !filepath.IsAbs(gitConfigFile) {
-			return fmt.Errorf(
-				"refresh credential %q Git config file must be absolute",
-				name,
-			)
+			return fmt.Errorf("refresh credential %q Git config file must be absolute", name)
 		}
 	}
 
@@ -44,11 +38,7 @@ func (c RefreshCredentials) gitConfigFile(name *string) (string, error) {
 
 	gitConfigFile, ok := c[*name]
 	if !ok {
-		return "", fmt.Errorf(
-			"%w: %q",
-			ErrUnknownRefreshCredential,
-			*name,
-		)
+		return "", fmt.Errorf("%w: %q", ErrUnknownRefreshCredential, *name)
 	}
 
 	return gitConfigFile, nil
