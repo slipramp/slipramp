@@ -17,6 +17,7 @@ type EffectiveAction struct {
 	Parameters  map[string]Parameter
 	Artifacts   map[string]Artifact
 	Inputs      map[string]Input
+	Triggers    []Trigger
 }
 
 func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
@@ -73,7 +74,25 @@ func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
 		Parameters: cloneParameters(action.Parameters),
 		Artifacts:  maps.Clone(action.Artifacts),
 		Inputs:     cloneInputs(action.Inputs),
+		Triggers:   cloneTriggers(action.Triggers),
 	}, true
+}
+
+func cloneTriggers(input []Trigger) []Trigger {
+	if input == nil {
+		return nil
+	}
+
+	cloned := make([]Trigger, len(input))
+	for index, trigger := range input {
+		cloned[index] = trigger
+		cloned[index].Parameters = maps.Clone(trigger.Parameters)
+		if trigger.Git != nil {
+			cloned[index].Git = &GitTrigger{}
+		}
+	}
+
+	return cloned
 }
 
 func cloneParameters(input map[string]Parameter) map[string]Parameter {

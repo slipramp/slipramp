@@ -194,7 +194,8 @@ func (d *Database) RecordRepositoryRefresh(
 
 	queries := d.queries.WithTx(transaction)
 	identifier := pgtype.UUID{Bytes: repositoryID, Valid: true}
-	if _, err := queries.LockActiveRepository(ctx, identifier); err != nil {
+	lockedRepository, err := queries.LockActiveRepository(ctx, identifier)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return repository.ErrNotFound
 		}
@@ -203,7 +204,13 @@ func (d *Database) RecordRepositoryRefresh(
 	}
 
 	if result.Revision != nil {
-		if err := recordCatalogRevision(ctx, queries, identifier, result); err != nil {
+		if err := recordCatalogRevision(
+			ctx,
+			queries,
+			identifier,
+			lockedRepository.ActiveCatalogRevisionID,
+			result,
+		); err != nil {
 			return err
 		}
 	} else {
@@ -223,6 +230,7 @@ func recordCatalogRevision(
 	ctx context.Context,
 	queries *storedb.Queries,
 	repositoryID pgtype.UUID,
+	previousRevisionID pgtype.UUID,
 	result repository.RefreshResult,
 ) error {
 	revision := *result.Revision
@@ -238,8 +246,17 @@ func recordCatalogRevision(
 		}
 	}
 
-	if err := updateTargetStates(ctx, queries, repositoryID, revisionID, result); err != nil {
+	targetChanges, err := updateTargetStates(ctx, queries, repositoryID, revisionID, result)
+	if err != nil {
 		return err
+	}
+	if err := coalesceSupersededGitWork(ctx, queries, repositoryID, targetChanges, result.AttemptedAt); err != nil {
+		return err
+	}
+	if previousRevisionID.Valid && previousRevisionID.Bytes != revisionID.Bytes {
+		if err := createGitTriggerDeliveries(ctx, queries, repositoryID, revisionID, result); err != nil {
+			return err
+		}
 	}
 
 	err = queries.ActivateCatalogRevision(
@@ -261,16 +278,22 @@ func recordCatalogRevision(
 	return nil
 }
 
+type targetStateChange struct {
+	name             string
+	desiredCommitSHA string
+	archived         bool
+}
+
 func updateTargetStates(
 	ctx context.Context,
 	queries *storedb.Queries,
 	repositoryID pgtype.UUID,
 	revisionID pgtype.UUID,
 	result repository.RefreshResult,
-) error {
+) ([]targetStateChange, error) {
 	existingRows, err := queries.ListRepositoryTargetStates(ctx, repositoryID)
 	if err != nil {
-		return fmt.Errorf("list repository target states: %w", err)
+		return nil, fmt.Errorf("list repository target states: %w", err)
 	}
 
 	type existingTargetState struct {
@@ -287,8 +310,20 @@ func updateTargetStates(
 
 	revision := *result.Revision
 	activeNames := make([]string, 0, len(revision.Catalog.Targets))
+	activeNameSet := make(map[string]struct{}, len(revision.Catalog.Targets))
 	for _, target := range revision.Catalog.Targets {
 		activeNames = append(activeNames, target.Metadata.Name)
+		activeNameSet[target.Metadata.Name] = struct{}{}
+	}
+
+	changes := make([]targetStateChange, 0, len(revision.Catalog.Targets))
+	for _, row := range existingRows {
+		if _, active := activeNameSet[row.Name]; !active && !row.ArchivedAt.Valid {
+			changes = append(changes, targetStateChange{
+				name:     row.Name,
+				archived: true,
+			})
+		}
 	}
 
 	updatedAt := pgtype.Timestamptz{Time: result.AttemptedAt, Valid: true}
@@ -300,7 +335,7 @@ func updateTargetStates(
 			ActiveNames:  activeNames,
 		},
 	); err != nil {
-		return fmt.Errorf("archive missing targets: %w", err)
+		return nil, fmt.Errorf("archive missing targets: %w", err)
 	}
 
 	for _, target := range revision.Catalog.Targets {
@@ -310,6 +345,12 @@ func updateTargetStates(
 		if found && !state.archived &&
 			!catalog.TargetAffected(target, result.ChangedPaths) {
 			desiredCommitSHA = state.desiredCommitSHA
+		}
+		if !found || state.archived || state.desiredCommitSHA != desiredCommitSHA {
+			changes = append(changes, targetStateChange{
+				name:             name,
+				desiredCommitSHA: desiredCommitSHA,
+			})
 		}
 
 		err := queries.UpsertTargetState(
@@ -323,11 +364,11 @@ func updateTargetStates(
 			},
 		)
 		if err != nil {
-			return fmt.Errorf("upsert target state %q: %w", name, err)
+			return nil, fmt.Errorf("upsert target state %q: %w", name, err)
 		}
 	}
 
-	return nil
+	return changes, nil
 }
 
 func findCatalogRevisionID(

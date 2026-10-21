@@ -11,7 +11,7 @@ CREATE TABLE runs (
     parameters jsonb NOT NULL,
     placement_name text NOT NULL,
     cluster_name text NOT NULL,
-    source_type text NOT NULL,
+    source jsonb NOT NULL,
     idempotency_key text,
     request_digest text NOT NULL,
     snapshot jsonb NOT NULL,
@@ -61,7 +61,31 @@ CREATE TABLE runs (
     CONSTRAINT runs_parameters_object CHECK (jsonb_typeof(parameters) = 'object'),
     CONSTRAINT runs_placement_name_not_empty CHECK (length(placement_name) > 0),
     CONSTRAINT runs_cluster_name_not_empty CHECK (length(cluster_name) > 0),
-    CONSTRAINT runs_source_type_valid CHECK (source_type IN ('manual', 'api')),
+    CONSTRAINT runs_source_object CHECK (jsonb_typeof(source) = 'object'),
+    CONSTRAINT runs_source_valid CHECK ((
+        (
+            source->>'type' IN ('manual', 'api')
+            AND source = jsonb_build_object('type', source->>'type')
+        )
+        OR (
+            source->>'type' = 'git'
+            AND length(source->'git'->>'triggerName') > 0
+            AND source->'git'->>'deliveryId' ~
+                '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND idempotency_key = source->'git'->>'deliveryId'
+            AND source = jsonb_build_object(
+                'type',
+                'git',
+                'git',
+                jsonb_build_object(
+                    'triggerName',
+                    source->'git'->>'triggerName',
+                    'deliveryId',
+                    source->'git'->>'deliveryId'
+                )
+            )
+        )
+    ) IS TRUE),
     CONSTRAINT runs_idempotency_key_valid CHECK (
         idempotency_key IS NULL OR length(idempotency_key) BETWEEN 1 AND 128
     ),
@@ -72,7 +96,7 @@ CREATE TABLE runs (
 );
 
 CREATE UNIQUE INDEX runs_source_idempotency_key
-ON runs (source_type, idempotency_key)
+ON runs ((source->>'type'), idempotency_key)
 WHERE idempotency_key IS NOT NULL;
 
 CREATE INDEX runs_repository_created_at

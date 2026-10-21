@@ -136,17 +136,62 @@ Removing a target definition archives it from the active catalog; it must never 
 
 ## Triggers
 
-Automated triggers are not part of the current baseline, but the run-creation boundary accommodates adding them without changing action execution.
+The implemented trigger baseline is deliberately limited to named Git
+triggers declared on actions. A Git trigger has the form `name` plus `git: {}`
+and an optional static `parameters` object, and uses the containing target's
+existing `watch` patterns. Trigger names are catalog names and are unique
+within their action. A target with a Git trigger must declare at least one
+watch pattern, and the triggered action cannot have artifact inputs. Trigger
+parameters are normalized and validated with the same string, boolean, number,
+enum, required, and declaration rules as ordinary Run creation while loading
+the catalog.
 
-An action is manually and programmatically invocable without declaring a trigger. Triggers are optional automation rules that turn external events into run requests for a particular target action.
+After initial indexing, each newly accepted repository head is compared with
+the previously accepted head. Definitions from the new catalog revision are
+evaluated against the changed paths, and each matching Git trigger records one
+delivery in the same PostgreSQL transaction that activates the catalog
+revision and updates target state. An unchanged head or rejected catalog
+records no delivery. Delivery is per accepted head rather than per underlying
+Git commit in a multi-commit fetch. Each delivery stores the normalized
+parameter object from that accepted catalog revision, so later refreshes cannot
+alter pending work.
 
-Each trigger has a stable name, one event source, source-specific filters, optional parameters, and delivery policy. Initial event sources may include Git changes, schedules, and authenticated webhooks. Additional sources can be added without changing how actions or runs work.
+Automatic Git-triggered work uses latest-wins coalescing per Repository and
+Target. In the catalog-activation transaction, advancing an affected Target's
+desired commit or archiving a removed Target marks older undispatched
+deliveries superseded and finishes its queued Git Runs as canceled with reason
+`SupersededByGitChange`. The transaction records finished phase transitions
+and, for an affected active Target, creates matching deliveries for the new
+revision. Superseded delivery rows remain as history but are excluded from
+pending delivery selection. Assigned, preparing, and running Git Runs are not
+automatically canceled. If an older Git Run is active, it finishes while only
+the newest queued Git revision is retained behind it. Manual and API Runs are
+never coalesced and retain ordinary FIFO scheduling among eligible Runs.
 
-Trigger handlers do not execute Kubernetes Jobs directly. They create immutable run requests through the same path used by a manual run request. The resulting run records the trigger definition, source event identity, selected Git commit and catalog revision, parameters, and scheduled or received time.
+A background dispatcher drains pending deliveries through the ordinary Run
+creation service. It pins each request to the delivery's exact catalog
+revision, uses the stable delivery ID as the Run idempotency identity, and
+passes the delivery's persisted parameters before recording the resulting Run
+ID on the delivery. Retries and Server restarts can therefore repeat dispatch
+without creating duplicate Runs. Trigger processing never creates Kubernetes
+Jobs directly. At Run insertion, a Git request locks and reads the durable
+Target state and requires its exact revision-pinned commit to equal the current
+desired commit. A stale request marks its delivery superseded and creates no
+Run, closing the refresh/dispatch race in PostgreSQL rather than relying on an
+in-memory precheck.
 
-A Git trigger may filter by branch. It uses the target's `watch` paths by default and may provide its own path filters instead. Its delivery policy determines whether rapid changes create a run for every commit or coalesce to the latest commit.
+Git Runs have a structured source containing only the trigger name and
+delivery ID and have no human actor. Repository, commit, catalog revision,
+branch snapshot, and creation time remain in their existing Run fields.
+Manual and API Run creation are unchanged and actions remain invocable without
+declaring a trigger.
 
-A schedule trigger includes an explicit time zone and records each intended occurrence with a stable idempotency key. Policies define whether missed occurrences are skipped or caught up and whether overlapping runs are queued, skipped, or replaced. Scheduled actions still become ordinary Slipramp runs and Kubernetes Jobs rather than separate Kubernetes CronJobs.
+Failed delivery-attempt metadata, bounded retry backoff, allowing later
+eligible deliveries to proceed when one delivery fails permanently, and
+restart-persistent retry scheduling remain later reliability work. Branch
+filters, trigger-specific path overrides, dynamic parameter values,
+configurable delivery policies, per-commit delivery, schedules, webhooks, and
+provider-specific integrations also remain later work.
 
 ## Execution
 
@@ -231,7 +276,11 @@ The control plane owns repository refresh, catalog validation, run scheduling, c
 
 Kubernetes clusters are execution backends rather than the source of truth for Slipramp's product state. In-cluster controllers own Job observation and report it to the Server. The Server stores lifecycle phase (`queued`, `assigned`, `preparing`, `running`, or `finished`), terminal outcome (`succeeded`, `failed`, `canceled`, or `timed-out`), cancellation intent, Job identity, diagnostic details, and observation freshness as separate facts. `unknown` is derived from stale observation and controller connectivity rather than stored as a phase. After either side restarts, stable run labels and idempotent observation reports allow central run state to be reconciled with Jobs that still exist in the cluster.
 
-PostgreSQL is the durable database for repositories, catalog revisions and current projections, run metadata, artifact metadata, and scheduler state. S3-compatible object storage is used only for artifact contents, including live and completed logs. Artifact metadata and object references remain in PostgreSQL.
+PostgreSQL is the durable database for repositories, catalog revisions and
+current projections, Git-trigger deliveries, run metadata, artifact metadata,
+and scheduler state. S3-compatible object storage is used only for artifact
+contents, including live and completed logs. Artifact metadata and object
+references remain in PostgreSQL.
 
 The Server exposes process-only liveness separately from dependency-aware
 readiness. Readiness checks PostgreSQL and artifact storage concurrently under
@@ -466,7 +515,24 @@ spec:
   actions:
     sync:
       intent: reconcile
-      command: [terraform, apply, -auto-approve]
+      command: [terraform, apply]
+      parameters:
+        environment:
+          type: enum
+          values: [staging, production]
+          required: true
+          argument:
+            name: --environment
+        auto-approve:
+          type: boolean
+          argument:
+            name: --auto-approve
+      triggers:
+        - name: reconcile-on-change
+          git: {}
+          parameters:
+            environment: production
+            auto-approve: true
     preview:
       intent: preview
       command:
@@ -589,6 +655,11 @@ The following product areas remain intentionally later work:
 
 - MCP integration and further identity-administration or audit capabilities
   beyond the implemented OIDC, API-key, authorization, and attribution model.
-- Git, schedule, and webhook trigger filtering, idempotency, missed-event, coalescing, and overlap semantics.
+- Git trigger branch/path overrides, dynamic parameter values, delivery
+  policies, per-commit delivery, and provider-specific integrations; schedule
+  and webhook triggers, including missed-event and overlap semantics.
+- Git-trigger delivery failure metadata, bounded retry backoff, isolation of a
+  permanently failing delivery from later eligible work, and restart-persistent
+  retry scheduling.
 - Explicit controller enrollment approvals and credential rotation workflows.
 - Controller high availability, fencing, leader election, and multiple active replicas for one cluster name.

@@ -40,6 +40,11 @@ func TestEffectiveActionAppliesDefaultsWithoutMutatingTarget(t *testing.T) {
 				MountPath: "/inputs/plan",
 			},
 		},
+		Triggers: []catalog.Trigger{{
+			Name:       "reconcile",
+			Git:        &catalog.GitTrigger{},
+			Parameters: map[string]any{"mode": "safe"},
+		}},
 	}
 
 	effective, found := target.EffectiveAction("preview")
@@ -65,12 +70,14 @@ func TestEffectiveActionAppliesDefaultsWithoutMutatingTarget(t *testing.T) {
 	parameter.Values[0] = "changed"
 	parameter.Argument.Name = "--changed"
 	effective.Parameters["mode"] = parameter
+	effective.Triggers[0].Parameters["mode"] = "changed"
 
 	original := target.Spec.Actions["preview"]
 	if original.Command[0] != "terraform" ||
 		target.Spec.Credentials["backend"] != "default-backend" ||
 		original.Parameters["mode"].Values[0] != "safe" ||
-		original.Parameters["mode"].Argument.Name != "--mode" {
+		original.Parameters["mode"].Argument.Name != "--mode" ||
+		original.Triggers[0].Parameters["mode"] != "safe" {
 		t.Fatal("EffectiveAction() mutated the source target")
 	}
 }

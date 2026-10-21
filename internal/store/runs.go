@@ -133,6 +133,11 @@ func (d *Database) GetRunByIdempotencyKey(
 }
 
 func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, error) {
+	source, err := json.Marshal(record.Source)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("marshal run source: %w", err)
+	}
+
 	parameters, err := json.Marshal(record.Parameters)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("marshal run parameters: %w", err)
@@ -157,6 +162,19 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 	}()
 
 	queries := d.queries.WithTx(transaction)
+	if record.Source.Type == run.SourceTypeGit {
+		superseded, err := supersedeStaleGitRun(ctx, queries, record)
+		if err != nil {
+			return run.Run{}, err
+		}
+		if superseded {
+			if err := transaction.Commit(ctx); err != nil {
+				return run.Run{}, fmt.Errorf("commit stale Git-trigger delivery: %w", err)
+			}
+
+			return run.Run{}, run.ErrGitRunSuperseded
+		}
+	}
 	row, err := queries.CreateRun(
 		ctx,
 		storedb.CreateRunParams{
@@ -170,7 +188,7 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 			Parameters:           parameters,
 			PlacementName:        record.PlacementName,
 			ClusterName:          record.ClusterName,
-			SourceType:           string(record.Source.Type),
+			Source:               source,
 			IdempotencyKey:       record.IdempotencyKey,
 			RequestDigest:        record.RequestDigest,
 			Snapshot:             snapshot,
@@ -556,6 +574,11 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		return run.Run{}, fmt.Errorf("decode run parameters: %w", err)
 	}
 
+	var source run.Source
+	if err := json.Unmarshal(row.Source, &source); err != nil {
+		return run.Run{}, fmt.Errorf("decode run source: %w", err)
+	}
+
 	var snapshot run.Snapshot
 	if err := json.Unmarshal(row.Snapshot, &snapshot); err != nil {
 		return run.Run{}, fmt.Errorf("decode run snapshot: %w", err)
@@ -582,7 +605,7 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		Parameters:              parameters,
 		PlacementName:           row.PlacementName,
 		ClusterName:             row.ClusterName,
-		Source:                  run.Source{Type: run.SourceType(row.SourceType)},
+		Source:                  source,
 		IdempotencyKey:          row.IdempotencyKey,
 		RequestDigest:           row.RequestDigest,
 		Snapshot:                snapshot,

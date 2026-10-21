@@ -89,6 +89,19 @@ type ControllerCredential struct {
 	EnrolledAt  pgtype.Timestamptz
 }
 
+type GitTriggerDelivery struct {
+	ID                pgtype.UUID
+	RepositoryID      pgtype.UUID
+	CatalogRevisionID pgtype.UUID
+	TargetName        string
+	ActionName        string
+	TriggerName       string
+	Parameters        []byte
+	CreatedAt         pgtype.Timestamptz
+	RunID             pgtype.UUID
+	SupersededAt      pgtype.Timestamptz
+}
+
 type OidcIdentity struct {
 	ID                  pgtype.UUID
 	PrincipalID         pgtype.UUID
@@ -141,7 +154,7 @@ type Run struct {
 	Parameters              []byte
 	PlacementName           string
 	ClusterName             string
-	SourceType              string
+	Source                  []byte
 	IdempotencyKey          *string
 	RequestDigest           string
 	Snapshot                []byte

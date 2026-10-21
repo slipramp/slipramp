@@ -67,6 +67,7 @@ func validateTarget(target Target, runtimes map[string]Runtime, placements place
 		effective, _ := target.EffectiveAction(name)
 		if err := validateAction(
 			target.Source,
+			target,
 			target.Spec.Actions[name],
 			effective,
 			runtimes,
@@ -84,6 +85,7 @@ func validateTarget(target Target, runtimes map[string]Runtime, placements place
 
 func validateAction(
 	source Source,
+	target Target,
 	action Action,
 	effective EffectiveAction,
 	runtimes map[string]Runtime,
@@ -94,8 +96,8 @@ func validateAction(
 		return validationError(source, err)
 	}
 
-	if len(action.Triggers) > 0 {
-		return validationError(source, fmt.Errorf("action %q declares triggers, which are not supported", name))
+	if err := validateTriggers(target, name, action); err != nil {
+		return validationError(source, err)
 	}
 
 	if err := validateIntent(name, action.Intent); err != nil {
@@ -202,6 +204,39 @@ func validateAction(
 					),
 				)
 			}
+		}
+	}
+
+	return nil
+}
+
+func validateTriggers(target Target, actionName string, action Action) error {
+	seen := make(map[string]struct{}, len(action.Triggers))
+	for _, trigger := range action.Triggers {
+		if err := kubevalidate.DNSLabel(fmt.Sprintf("action %q trigger name", actionName), trigger.Name); err != nil {
+			return err
+		}
+		if _, found := seen[trigger.Name]; found {
+			return fmt.Errorf("action %q trigger name %q is duplicated", actionName, trigger.Name)
+		}
+		seen[trigger.Name] = struct{}{}
+
+		if trigger.Git == nil {
+			return fmt.Errorf("action %q trigger %q must declare git", actionName, trigger.Name)
+		}
+		if len(target.Spec.Watch) == 0 {
+			return fmt.Errorf("action %q Git trigger %q requires target watch patterns", actionName, trigger.Name)
+		}
+		if _, err := NormalizeAndValidateParameterValues(action.Parameters, trigger.Parameters); err != nil {
+			return fmt.Errorf(
+				"action %q Git trigger %q has invalid parameters: %w",
+				actionName,
+				trigger.Name,
+				err,
+			)
+		}
+		if len(action.Inputs) > 0 {
+			return fmt.Errorf("action %q Git trigger %q cannot invoke an action with artifact inputs", actionName, trigger.Name)
 		}
 	}
 

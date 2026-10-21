@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import { listRepositories, listRuns, type Run } from "~/api/generated";
 import { pageTitle } from "~/page-title";
+import { runSourceLabel } from "~/run-source";
 
 import type { Route } from "./+types/runs";
 
@@ -121,6 +122,7 @@ function HistoryTable({
               <Table.Th>Repository</Table.Th>
               <Table.Th>Target / action</Table.Th>
               <Table.Th>Status</Table.Th>
+              <Table.Th>Source</Table.Th>
               <Table.Th>Cluster</Table.Th>
               <Table.Th>Commit</Table.Th>
               <Table.Th>Created</Table.Th>
@@ -164,6 +166,7 @@ function HistoryTable({
                     ) : null}
                   </Group>
                 </Table.Td>
+                <Table.Td>{runSourceLabel(run.source)}</Table.Td>
                 <Table.Td>{run.cluster}</Table.Td>
                 <Table.Td>
                   <Code>{run.commitSha.slice(0, 12)}</Code>

@@ -66,8 +66,13 @@ unknown fields and duplicate mapping keys. It validates repository and
 container paths, runtime credential injection, target defaults, Kubernetes
 resource quantities, timeouts, action intents and commands, typed parameter
 mapping, configured placement and credential-source references, artifact
-declarations, and artifact input provenance. Deferred trigger declarations are
-rejected. Effective actions deterministically merge target credential and
+declarations, artifact input provenance, and named Git triggers. A Git trigger
+uses its target's required `watch` patterns, may supply static values for its
+action's declared parameters, and may invoke only an action without artifact
+inputs. Trigger parameters use the same normalization and validation as manual
+and API Runs, including required, type, and enum checks. Other trigger sources
+are rejected.
+Effective actions deterministically merge target credential and
 resource defaults without mutating the source catalog. A valid commit produces
 one immutable PostgreSQL catalog revision containing its runtime and target
 definitions. Repeated refreshes reuse that revision. A rejected commit records
@@ -85,7 +90,31 @@ target's `watch` patterns, including recursive `**` segments. Slipramp stores
 the resulting desired commit in a durable target projection and shows it in
 the repository catalog and target detail screens. New and reactivated targets
 start at the commit where they become active, removed targets are archived,
-and invalid catalogs do not change target state or initiate Runs.
+and invalid catalogs do not change target state or initiate Runs. After the
+initial index, an accepted new head records one durable delivery for each Git
+trigger whose target watch patterns match. A background dispatcher submits
+each delivery through normal Run creation, pinned to that accepted catalog
+revision and made idempotent by the stable delivery ID. Each delivery freezes
+the trigger's normalized parameter object from that revision so a later
+repository refresh cannot change its parameters or revision pin.
+
+Automatic Git-triggered work is coalesced per Repository and Target when an
+affected Target's desired commit advances or the Target is removed. Older
+undispatched deliveries remain as superseded history, and stale queued Git Runs
+finish as canceled with reason `SupersededByGitChange` and a persisted phase
+transition. Assigned, preparing, and running Git Runs are allowed to finish;
+only the newest queued Git revision is retained behind them. Manual and API Runs
+are never superseded and retain ordinary FIFO scheduling with all other
+eligible Runs. Git Run insertion locks and reads current Target state in
+PostgreSQL and refuses a stale pinned commit, closing the refresh/dispatch race
+at the database boundary.
+
+Further delivery reliability work is intentionally not implemented yet. It
+includes persisting failed delivery-attempt metadata, bounded retry backoff,
+allowing later eligible deliveries to proceed past one permanently failing
+delivery, and restart-persistent retry scheduling. Branch/path overrides,
+per-commit delivery, schedules, webhooks, and configurable delivery policies
+also remain out of scope.
 
 `POST /api/v1/runs` resolves a requested action against the active catalog and
 persists an immutable queued Run with validated parameters, an optional
@@ -97,6 +126,12 @@ redelivered with the same identity until the controller reports the materialized
 Job UID and `preparing` phase. Lifecycle phase, terminal outcome, cancellation
 intent, Job identity, observation freshness, diagnostics, and exit code remain
 separate persisted facts.
+
+Run sources are stored as structured values. Manual and API Runs retain their
+existing source behavior; a Git source contains only the trigger name and
+delivery ID, while the Run's ordinary fields retain its repository, commit,
+catalog revision, branch snapshot, and creation time. Git-triggered Runs have
+no human actor.
 
 Target detail screens provide manual Run forms for actions without artifact
 inputs. The forms render string, boolean, number, and enum controls from the

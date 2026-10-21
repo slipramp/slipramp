@@ -238,7 +238,23 @@ RunSource:
       enum:
         - manual
         - api
+        - git
       description: Boundary that submitted the Run.
+    git:
+      $ref: "#/GitRunSource"
+
+GitRunSource:
+  type: object
+  required:
+    - triggerName
+    - deliveryId
+  properties:
+    triggerName:
+      $ref: "#/CatalogName"
+    deliveryId:
+      type: string
+      format: uuid
+      description: Stable Git-trigger delivery identity used for Run idempotency.
 
 RunActor:
   type: object

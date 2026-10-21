@@ -113,10 +113,15 @@ func (h *Handler) GetRepositoryCatalog(
 		return nil, err
 	}
 
-	return api.GetRepositoryCatalog200JSONResponse(catalogRevisionResponse(revision)), nil
+	body, err := catalogRevisionResponse(revision)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetRepositoryCatalog200JSONResponse(body), nil
 }
 
-func catalogRevisionResponse(revision catalog.Revision) api.CatalogRevision {
+func catalogRevisionResponse(revision catalog.Revision) (api.CatalogRevision, error) {
 	runtimes := make([]api.Runtime, 0, len(revision.Catalog.Runtimes))
 	for _, runtime := range revision.Catalog.Runtimes {
 		runtimes = append(runtimes, catalogRuntimeResponse(runtime))
@@ -124,7 +129,11 @@ func catalogRevisionResponse(revision catalog.Revision) api.CatalogRevision {
 
 	targets := make([]api.Target, 0, len(revision.Catalog.Targets))
 	for _, target := range revision.Catalog.Targets {
-		targets = append(targets, catalogTargetResponse(target, revision.TargetStates[target.Metadata.Name]))
+		converted, err := catalogTargetResponse(target, revision.TargetStates[target.Metadata.Name])
+		if err != nil {
+			return api.CatalogRevision{}, err
+		}
+		targets = append(targets, converted)
 	}
 
 	return api.CatalogRevision{
@@ -133,7 +142,7 @@ func catalogRevisionResponse(revision catalog.Revision) api.CatalogRevision {
 		CreatedAt: revision.CreatedAt,
 		Runtimes:  runtimes,
 		Targets:   targets,
-	}
+	}, nil
 }
 
 func catalogRuntimeResponse(runtime catalog.Runtime) api.Runtime {
@@ -187,7 +196,12 @@ func catalogCredentialInjectionResponse(injection catalog.CredentialInjection) a
 	}
 }
 
-func catalogTargetResponse(target catalog.Target, state catalog.TargetState) api.Target {
+func catalogTargetResponse(target catalog.Target, state catalog.TargetState) (api.Target, error) {
+	actions, err := catalogActionsResponse(target.Spec.Actions)
+	if err != nil {
+		return api.Target{}, err
+	}
+
 	return api.Target{
 		APIVersion: api.TargetAPIVersion(target.APIVersion),
 		Kind:       api.TargetKind(target.Kind),
@@ -200,18 +214,23 @@ func catalogTargetResponse(target catalog.Target, state catalog.TargetState) api
 			Credentials: optionalStringMap(target.Spec.Credentials),
 			Timeout:     optionalString(target.Spec.Timeout),
 			Resources:   catalogResourceRequirementsResponse(target.Spec.Resources),
-			Actions:     catalogActionsResponse(target.Spec.Actions),
+			Actions:     actions,
 		},
 		Source: catalogSourceResponse(target.Source),
 		Status: api.TargetStatus{
 			DesiredCommitSha: state.DesiredCommitSHA,
 		},
-	}
+	}, nil
 }
 
-func catalogActionsResponse(actions map[string]catalog.Action) map[string]api.Action {
+func catalogActionsResponse(actions map[string]catalog.Action) (map[string]api.Action, error) {
 	result := make(map[string]api.Action, len(actions))
 	for name, action := range actions {
+		triggers, err := catalogTriggersResponse(action.Triggers)
+		if err != nil {
+			return nil, fmt.Errorf("convert action %q triggers: %w", name, err)
+		}
+
 		result[name] = api.Action{
 			Intent:      optionalString(action.Intent),
 			Command:     append([]string(nil), action.Command...),
@@ -223,10 +242,37 @@ func catalogActionsResponse(actions map[string]catalog.Action) map[string]api.Ac
 			Parameters:  catalogParametersResponse(action.Parameters),
 			Artifacts:   catalogArtifactsResponse(action.Artifacts),
 			Inputs:      catalogInputsResponse(action.Inputs),
+			Triggers:    triggers,
 		}
 	}
 
-	return result
+	return result, nil
+}
+
+func catalogTriggersResponse(triggers []catalog.Trigger) (*[]api.ActionTrigger, error) {
+	if len(triggers) == 0 {
+		return nil, nil
+	}
+
+	result := make([]api.ActionTrigger, 0, len(triggers))
+	for _, trigger := range triggers {
+		var parameters *map[string]api.ParameterValue
+		if len(trigger.Parameters) > 0 {
+			converted, err := runParameterResponse(trigger.Parameters)
+			if err != nil {
+				return nil, fmt.Errorf("convert trigger %q parameters: %w", trigger.Name, err)
+			}
+			parameters = &converted
+		}
+
+		result = append(result, api.ActionTrigger{
+			Name:       api.CatalogName(trigger.Name),
+			Git:        api.GitTrigger{},
+			Parameters: parameters,
+		})
+	}
+
+	return &result, nil
 }
 
 func catalogResourceRequirementsResponse(resources catalog.ResourceRequirements) *api.ResourceRequirements {

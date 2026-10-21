@@ -116,6 +116,9 @@ ADD CONSTRAINT runs_creator_consistent CHECK (
 ADD CONSTRAINT runs_creator_snapshot_object CHECK (
     created_by_snapshot IS NULL OR jsonb_typeof(created_by_snapshot) = 'object'
 ),
+ADD CONSTRAINT runs_git_source_has_no_creator CHECK (
+    source->>'type' <> 'git' OR created_by_principal_id IS NULL
+),
 ADD CONSTRAINT runs_canceler_consistent CHECK (
     (canceled_by_principal_id IS NULL) = (canceled_by_snapshot IS NULL)
 ),
@@ -130,7 +133,7 @@ ON runs (created_by_principal_id, idempotency_key)
 WHERE created_by_principal_id IS NOT NULL AND idempotency_key IS NOT NULL;
 
 CREATE UNIQUE INDEX runs_unauthenticated_idempotency_key
-ON runs (source_type, idempotency_key)
+ON runs ((source->>'type'), idempotency_key)
 WHERE created_by_principal_id IS NULL AND idempotency_key IS NOT NULL;
 
 -- +goose Down
@@ -138,12 +141,13 @@ DROP INDEX runs_unauthenticated_idempotency_key;
 DROP INDEX runs_authenticated_idempotency_key;
 
 CREATE UNIQUE INDEX runs_source_idempotency_key
-ON runs (source_type, idempotency_key)
+ON runs ((source->>'type'), idempotency_key)
 WHERE idempotency_key IS NOT NULL;
 
 ALTER TABLE runs
 DROP CONSTRAINT runs_canceler_snapshot_object,
 DROP CONSTRAINT runs_canceler_consistent,
+DROP CONSTRAINT runs_git_source_has_no_creator,
 DROP CONSTRAINT runs_creator_snapshot_object,
 DROP CONSTRAINT runs_creator_consistent,
 DROP COLUMN canceled_by_snapshot,

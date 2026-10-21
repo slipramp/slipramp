@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -16,6 +15,7 @@ import (
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/readiness"
@@ -30,14 +30,15 @@ const (
 )
 
 type Server struct {
-	address             string
-	shutdownTimeout     time.Duration
-	placements          placement.Set
-	logger              *slog.Logger
-	httpServer          *http.Server
-	persistence         *persistence
-	repositoryRefresher *repository.Refresher
-	artifactReconciler  *artifact.Reconciler
+	address              string
+	shutdownTimeout      time.Duration
+	placements           placement.Set
+	logger               *slog.Logger
+	httpServer           *http.Server
+	persistence          *persistence
+	repositoryRefresher  *repository.Refresher
+	gitTriggerDispatcher *gittrigger.Dispatcher
+	artifactReconciler   *artifact.Reconciler
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
@@ -89,6 +90,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		cfg.RepositoryFetchTimeout,
 		logger,
 	)
+	gitTriggerDispatcher := gittrigger.NewDispatcher(
+		persistence.database,
+		runs,
+		gittrigger.DefaultDispatchInterval,
+		logger,
+	)
 	artifactReconciler := artifact.NewReconciler(
 		persistence.database,
 		persistence.artifactContents,
@@ -98,21 +105,30 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		logger,
 	)
 	readinessService := readiness.NewService(persistence.database, persistence.artifactContents)
-	httpHandler := newHTTPHandler(
-		clusters,
-		identities,
-		repositories,
-		catalogs,
-		runs,
-		artifacts,
-		readinessService,
-		cfg.ControllerEnrollmentTokens,
-		productAuthenticationService,
-		logger,
+	controllerAuthenticator := newControllerAuthenticator(identities, cfg.ControllerEnrollmentTokens)
+	httpHandler := handler.NewHTTP(
+		handler.New(handler.Dependencies{
+			Clusters:              clusters,
+			ControllerIdentities:  identities,
+			Repositories:          repositories,
+			Catalogs:              catalogs,
+			Runs:                  runs,
+			Artifacts:             artifacts,
+			Readiness:             readinessService,
+			ProductAuthentication: productAuthenticationService,
+		}),
+		handler.HTTPOptions{
+			Middlewares: []api.StrictMiddlewareFunc{
+				handler.ControllerAuthentication(controllerAuthenticator),
+				handler.ProductAuthentication(newProductAuthenticator(productAuthenticationService)),
+			},
+			Logger: logger,
+		},
 	)
 	server := newServer(cfg, logger, httpHandler)
 	server.persistence = persistence
 	server.repositoryRefresher = repositoryRefresher
+	server.gitTriggerDispatcher = gitTriggerDispatcher
 	server.artifactReconciler = artifactReconciler
 
 	return server, nil
@@ -149,6 +165,9 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.repositoryRefresher != nil {
 		workerCount++
 	}
+	if s.gitTriggerDispatcher != nil {
+		workerCount++
+	}
 	if s.artifactReconciler != nil {
 		workerCount++
 	}
@@ -163,6 +182,12 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.repositoryRefresher != nil {
 		go func() {
 			s.repositoryRefresher.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.gitTriggerDispatcher != nil {
+		go func() {
+			s.gitTriggerDispatcher.Run(runContext)
 			workersStopped <- struct{}{}
 		}()
 	}
@@ -233,110 +258,6 @@ func (s *Server) shutdown(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-func newHTTPHandler(
-	clusters handler.ClusterService,
-	identities handler.ControllerIdentityService,
-	repositories handler.RepositoryService,
-	catalogs handler.CatalogService,
-	runs handler.RunService,
-	artifacts handler.ArtifactService,
-	readinessService handler.ReadinessService,
-	controllerEnrollmentTokens map[string]string,
-	productAuthentication handler.ProductAuthenticationService,
-	logger *slog.Logger,
-) http.Handler {
-	authenticator := newControllerAuthenticator(identities, controllerEnrollmentTokens)
-	middleware := []api.StrictMiddlewareFunc{
-		handler.ControllerAuthentication(authenticator),
-	}
-	middleware = append(middleware, handler.ProductAuthentication(newProductAuthenticator(productAuthentication)))
-	strictHandler := api.NewStrictHandlerWithOptions(
-		handler.New(
-			clusters,
-			identities,
-			repositories,
-			catalogs,
-			runs,
-			artifacts,
-			readinessService,
-			productAuthentication,
-		),
-		middleware,
-		api.StrictHTTPServerOptions{
-			RequestErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, err error) {
-				handler.WriteProblem(writer, http.StatusBadRequest, err.Error())
-			},
-			ResponseErrorHandlerFunc: func(writer http.ResponseWriter, request *http.Request, err error) {
-				if request.Context().Err() != nil {
-					return
-				}
-
-				if logger != nil {
-					logger.Error(
-						"handle API request",
-						"method", request.Method,
-						"path", request.URL.Path,
-						"error", err,
-					)
-				}
-
-				handler.WriteProblem(
-					writer,
-					http.StatusInternalServerError,
-					"The server could not complete the request.",
-				)
-			},
-		},
-	)
-
-	mux := http.NewServeMux()
-	api.HandlerWithOptions(
-		strictHandler,
-		api.StdHTTPServerOptions{
-			BaseRouter: mux,
-			ErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, err error) {
-				handler.WriteProblem(writer, http.StatusBadRequest, err.Error())
-			},
-		},
-	)
-
-	registerMethodNotAllowed(mux, "/healthz", http.MethodGet)
-	registerMethodNotAllowed(mux, "/readyz", http.MethodGet)
-	registerMethodNotAllowed(mux, "/api/v1/auth/login", http.MethodGet)
-	registerMethodNotAllowed(mux, "/api/v1/auth/callback", http.MethodGet)
-	registerMethodNotAllowed(mux, "/api/v1/auth/session", http.MethodGet)
-	registerMethodNotAllowed(mux, "/api/v1/auth/logout", http.MethodPost)
-	registerMethodNotAllowed(mux, "/api/v1/auth/api-keys", http.MethodGet, http.MethodPost)
-	registerMethodNotAllowed(mux, "/api/v1/auth/api-keys/{apiKeyId}", http.MethodDelete)
-	registerMethodNotAllowed(mux, "/api/v1/service-accounts", http.MethodGet, http.MethodPost)
-	registerMethodNotAllowed(mux, "/api/v1/service-accounts/{principalId}/api-keys", http.MethodGet, http.MethodPost)
-	registerMethodNotAllowed(mux, "/api/v1/repositories", http.MethodGet, http.MethodPost)
-	registerMethodNotAllowed(mux, "/api/v1/repositories/{repositoryId}", http.MethodDelete)
-	registerMethodNotAllowed(mux, "/api/v1/repositories/{repositoryId}/catalog", http.MethodGet)
-	registerMethodNotAllowed(mux, "/api/v1/clusters", http.MethodGet)
-	registerMethodNotAllowed(mux, "/api/v1/runs", http.MethodGet, http.MethodPost)
-	registerMethodNotAllowed(mux, "/controller/v1/enroll", http.MethodPost)
-	registerMethodNotAllowed(mux, "/controller/v1/poll", http.MethodPost)
-	registerMethodNotAllowed(mux, "/controller/v1/runs/{runId}/log-chunks", http.MethodPost)
-	registerMethodNotAllowed(mux, "/controller/v1/runs/{runId}/observations", http.MethodPost)
-	mux.HandleFunc("/", func(writer http.ResponseWriter, _ *http.Request) {
-		handler.WriteProblem(writer, http.StatusNotFound, "The requested resource does not exist.")
-	})
-
-	return mux
-}
-
-func registerMethodNotAllowed(mux *http.ServeMux, pattern string, allowedMethods ...string) {
-	mux.HandleFunc(pattern, func(writer http.ResponseWriter, _ *http.Request) {
-		writer.Header().Set("Allow", strings.Join(allowedMethods, ", "))
-		handler.WriteProblem(
-			writer,
-			http.StatusMethodNotAllowed,
-			"The HTTP method is not supported for this resource.",
-		)
-	})
 }
 
 func normalizeServeError(err error) error {

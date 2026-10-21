@@ -26,6 +26,7 @@ import {
   type RunArtifactInput,
 } from "~/api/generated";
 import { pageTitle } from "~/page-title";
+import { runSourceLabel } from "~/run-source";
 
 import type { Route } from "./+types/run";
 
@@ -141,6 +142,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
           <Title order={1}>Run {run.id.slice(0, 8)}</Title>
           <Text c="dimmed">
             {run.target} · {run.action} · <Code>{run.commitSha.slice(0, 12)}</Code>
+          </Text>
+          <Text c="dimmed" size="sm">
+            Source: {runSourceLabel(run.source)}
           </Text>
         </Stack>
         <Group gap="sm">

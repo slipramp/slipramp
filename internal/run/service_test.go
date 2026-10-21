@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -34,10 +35,15 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	created, err := service.CreateRun(
 		context.Background(),
 		CreateRequest{
-			RepositoryID:   testRepositoryID,
-			TargetName:     "network",
-			ActionName:     "preview",
-			Parameters:     map[string]any{"mode": "safe", "refresh": true},
+			RepositoryID: testRepositoryID,
+			TargetName:   "network",
+			ActionName:   "preview",
+			Parameters: map[string]any{
+				"mode":    "safe",
+				"refresh": true,
+				"retries": 3,
+				"message": "preview",
+			},
 			Source:         Source{Type: SourceTypeManual},
 			IdempotencyKey: &idempotencyKey,
 			Actor:          &actor,
@@ -60,6 +66,15 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	}
 	if created.RequestDigest == "" || runs.created.RequestDigest == "" {
 		t.Error("request digest was not recorded")
+	}
+	wantParameters := map[string]any{
+		"mode":    "safe",
+		"refresh": true,
+		"retries": float64(3),
+		"message": "preview",
+	}
+	if !reflect.DeepEqual(created.Parameters, wantParameters) {
+		t.Errorf("normalized parameters = %#v, want %#v", created.Parameters, wantParameters)
 	}
 	if created.CreatedBy == nil || created.CreatedBy.PrincipalID != actor.ID ||
 		created.CreatedBy.DisplayName != actor.DisplayName ||
@@ -291,6 +306,125 @@ func TestCreateRunPinsArtifactInputToProducerRevision(t *testing.T) {
 	}
 }
 
+func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	pinnedRevision := testRevision()
+	pinnedRevision.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1302")
+	pinnedRevision.CommitSHA = strings.Repeat("b", 40)
+	pinnedRevision.Catalog.Targets[0].Spec.Actions["sync"] = catalog.Action{
+		Command: []string{"terraform", "apply"},
+	}
+	activeRevision := testRevision()
+	activeRevision.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1303")
+	activeRevision.CommitSHA = strings.Repeat("c", 40)
+	catalogs := &pinnedCatalogs{active: activeRevision, pinned: pinnedRevision}
+	service.catalogs = catalogs
+	deliveryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1304")
+	idempotencyKey := deliveryID.String()
+
+	created, err := service.CreateRun(context.Background(), CreateRequest{
+		RepositoryID:      testRepositoryID,
+		TargetName:        "network",
+		ActionName:        "sync",
+		CatalogRevisionID: &pinnedRevision.ID,
+		Source: Source{
+			Type: SourceTypeGit,
+			Git:  &GitRunSource{TriggerName: "reconcile", DeliveryID: deliveryID},
+		},
+		IdempotencyKey: &idempotencyKey,
+	})
+	if err != nil {
+		t.Fatalf("CreateRun() error = %v", err)
+	}
+	if catalogs.activeCalls != 0 || catalogs.pinnedCalls != 1 {
+		t.Errorf("catalog calls = active %d, pinned %d", catalogs.activeCalls, catalogs.pinnedCalls)
+	}
+	if created.CatalogRevisionID != pinnedRevision.ID || created.CommitSHA != pinnedRevision.CommitSHA {
+		t.Errorf("created Run pin = (%s, %s)", created.CatalogRevisionID, created.CommitSHA)
+	}
+}
+
+func TestCreateRunRejectsInvalidSourceMetadata(t *testing.T) {
+	t.Parallel()
+
+	deliveryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1304")
+	revisionID := testRevisionID
+	deliveryKey := deliveryID.String()
+	base := CreateRequest{
+		RepositoryID:      testRepositoryID,
+		TargetName:        "network",
+		ActionName:        "preview",
+		Parameters:        map[string]any{"mode": "safe"},
+		CatalogRevisionID: &revisionID,
+		Source: Source{
+			Type: SourceTypeGit,
+			Git:  &GitRunSource{TriggerName: "reconcile", DeliveryID: deliveryID},
+		},
+		IdempotencyKey: &deliveryKey,
+	}
+
+	tests := []struct {
+		name      string
+		configure func(*CreateRequest)
+		want      string
+	}{
+		{
+			name: "Git revision pin",
+			configure: func(request *CreateRequest) {
+				request.CatalogRevisionID = nil
+			},
+			want: "must pin a catalog revision",
+		},
+		{
+			name: "Git delivery idempotency",
+			configure: func(request *CreateRequest) {
+				key := "another-delivery"
+				request.IdempotencyKey = &key
+			},
+			want: "must use the delivery ID",
+		},
+		{
+			name: "Git actor",
+			configure: func(request *CreateRequest) {
+				request.Actor = &productidentity.Principal{
+					ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1305"),
+					Kind:        productidentity.KindUser,
+					DisplayName: "Ada Lovelace",
+					Role:        productidentity.RoleOperator,
+				}
+			},
+			want: "must not have an actor",
+		},
+		{
+			name: "manual revision pin",
+			configure: func(request *CreateRequest) {
+				request.Source = Source{Type: SourceTypeManual}
+				request.IdempotencyKey = nil
+			},
+			want: "only Git-triggered Runs may pin",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := base
+			test.configure(&request)
+			service, runs := testService(t)
+			_, err := service.CreateRun(context.Background(), request)
+			if !errors.Is(err, ErrInvalidRequest) || !strings.Contains(err.Error(), test.want) {
+				t.Errorf("CreateRun() error = %v, want %q", err, test.want)
+			}
+			if runs.calls != 0 {
+				t.Errorf("persistence calls = %d, want 0", runs.calls)
+			}
+		})
+	}
+}
+
 func TestCreateRunRejectsIncompatibleArtifactInput(t *testing.T) {
 	t.Parallel()
 
@@ -460,6 +594,14 @@ func testRevision() catalog.Revision {
 									Type:     catalog.ParameterTypeBoolean,
 									Argument: &catalog.ParameterArgument{Name: "--refresh"},
 								},
+								"retries": {
+									Type:     catalog.ParameterTypeNumber,
+									Argument: &catalog.ParameterArgument{Name: "--retries"},
+								},
+								"message": {
+									Type:     catalog.ParameterTypeString,
+									Argument: &catalog.ParameterArgument{Name: "--message"},
+								},
 							},
 						},
 					},
@@ -609,6 +751,28 @@ func (s *recordingRepositories) GetRepository(context.Context, uuid.UUID) (repos
 type recordingCatalogs struct {
 	revision catalog.Revision
 	err      error
+}
+
+type pinnedCatalogs struct {
+	active      catalog.Revision
+	pinned      catalog.Revision
+	activeCalls int
+	pinnedCalls int
+}
+
+func (s *pinnedCatalogs) GetActiveRevision(context.Context, uuid.UUID) (catalog.Revision, error) {
+	s.activeCalls++
+
+	return s.active, nil
+}
+
+func (s *pinnedCatalogs) GetRevision(_ context.Context, _ uuid.UUID, revisionID uuid.UUID) (catalog.Revision, error) {
+	s.pinnedCalls++
+	if revisionID != s.pinned.ID {
+		return catalog.Revision{}, catalog.ErrNotFound
+	}
+
+	return s.pinned, nil
 }
 
 func (s *recordingCatalogs) GetActiveRevision(context.Context, uuid.UUID) (catalog.Revision, error) {

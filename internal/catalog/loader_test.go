@@ -36,6 +36,7 @@ metadata:
   title: Home network
 spec:
   path: infrastructure/network
+  watch: [infrastructure/network/**]
   runtime: terraform
   placement: infrastructure-admin
   credentials:
@@ -44,6 +45,33 @@ spec:
     preview:
       intent: preview
       command: [terraform, plan]
+      parameters:
+        environment:
+          type: enum
+          values: [staging, production]
+          required: true
+          argument:
+            name: --environment
+        auto-approve:
+          type: boolean
+          argument:
+            name: --auto-approve
+        retries:
+          type: number
+          argument:
+            name: --retries
+        message:
+          type: string
+          argument:
+            name: --message
+      triggers:
+        - name: reconcile-on-change
+          git: {}
+          parameters:
+            environment: production
+            auto-approve: true
+            retries: 3
+            message: reconcile
       artifacts:
         plan:
           path: /slipramp/artifacts/plan.tfplan
@@ -83,6 +111,18 @@ spec:
 		plan.Path != "/slipramp/artifacts/plan.tfplan" ||
 		!plan.Sensitive {
 		t.Errorf("Target = %#v", target)
+	}
+	if len(preview.Triggers) != 1 ||
+		preview.Triggers[0].Name != "reconcile-on-change" ||
+		preview.Triggers[0].Git == nil {
+		t.Errorf("Action triggers = %#v", preview.Triggers)
+	}
+	triggerParameters := preview.Triggers[0].Parameters
+	if triggerParameters["environment"] != "production" ||
+		triggerParameters["auto-approve"] != true ||
+		triggerParameters["retries"] != 3 ||
+		triggerParameters["message"] != "reconcile" {
+		t.Errorf("trigger parameters = %#v", triggerParameters)
 	}
 
 	wantSource := catalog.Source{
@@ -169,6 +209,41 @@ spec:
   image: hashicorp/terraform:1.14.4
 `,
 			wantError: `mapping key "image" already defined`,
+		},
+		{
+			name: "unsupported trigger source",
+			contents: `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: network
+spec:
+  actions:
+    sync:
+      command: [sync]
+      triggers:
+        - name: nightly
+          schedule: {}
+`,
+			wantError: `field schedule not found`,
+		},
+		{
+			name: "unsupported Git trigger filter",
+			contents: `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: network
+spec:
+  actions:
+    sync:
+      command: [sync]
+      triggers:
+        - name: reconcile
+          git:
+            branch: main
+`,
+			wantError: `field branch not found`,
 		},
 	}
 

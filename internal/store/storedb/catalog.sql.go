@@ -493,18 +493,23 @@ func (q *Queries) ListRepositoryTargetStates(ctx context.Context, repositoryID p
 }
 
 const lockActiveRepository = `-- name: LockActiveRepository :one
-SELECT id
+SELECT id, active_catalog_revision_id
 FROM repositories
 WHERE id = $1
   AND removed_at IS NULL
 FOR UPDATE
 `
 
-func (q *Queries) LockActiveRepository(ctx context.Context, id pgtype.UUID) (pgtype.UUID, error) {
+type LockActiveRepositoryRow struct {
+	ID                      pgtype.UUID
+	ActiveCatalogRevisionID pgtype.UUID
+}
+
+func (q *Queries) LockActiveRepository(ctx context.Context, id pgtype.UUID) (LockActiveRepositoryRow, error) {
 	row := q.db.QueryRow(ctx, lockActiveRepository, id)
-	var id_2 pgtype.UUID
-	err := row.Scan(&id_2)
-	return id_2, err
+	var i LockActiveRepositoryRow
+	err := row.Scan(&i.ID, &i.ActiveCatalogRevisionID)
+	return i, err
 }
 
 const recordCatalogValidationFailure = `-- name: RecordCatalogValidationFailure :exec

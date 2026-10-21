@@ -20,6 +20,8 @@ The MVP established the complete operational loop:
 5. Stream logs live while retaining them as S3-backed artifacts.
 6. Publish and download declared artifacts.
 7. Reuse a preview artifact, such as a Terraform plan, in a later action.
+8. Start eligible actions from newly accepted Git heads through durable,
+   idempotent trigger delivery.
 
 The accepted deployment model is a single trusted Slipramp installation
 executing work across one or more Kubernetes clusters. Authentication and human
@@ -40,6 +42,8 @@ in as described in [AUTH.md](./AUTH.md).
 - Validate each fetched Git commit atomically and retain the previous valid catalog revision when a commit is invalid.
 - Show repository health, active catalog revision, last refresh result, and validation errors.
 - Compute changed paths between indexed Git commits for target `watch` evaluation.
+- Record matching named Git-trigger deliveries atomically when a non-initial,
+  changed repository head is accepted.
 
 ### Target and action model
 
@@ -50,6 +54,10 @@ in as described in [AUTH.md](./AUTH.md).
 - Support typed string, boolean, number, and enum parameters.
 - Map declared parameters to arguments or environment variables.
 - Resolve every run request against an immutable catalog revision and Git commit SHA.
+- Support named `git: {}` action triggers that use the target's `watch`
+  patterns, optionally supply static action parameters, and reject triggers on
+  actions with artifact inputs. Validate required, declared, typed, and enum
+  parameter constraints while loading the catalog.
 
 ### Controllers, placements, and credentials
 
@@ -144,9 +152,35 @@ in as described in [AUTH.md](./AUTH.md).
 - Treat manual and API run requests as always available unless the deployment later adds policy.
 - Route UI and API requests through one run-creation service rather than dispatching Jobs directly.
 - Record a structured run source and accept an optional idempotency key.
-- Keep the run-creation boundary independent from HTTP so future Git, schedule, and webhook triggers can call the same service.
-- Let repository refresh update the catalog and affected targets' desired Git commits without initiating actions.
-- Reject unsupported trigger declarations explicitly rather than silently ignoring them.
+- Keep the run-creation boundary independent from HTTP so Git delivery and
+  future schedule or webhook triggers call the same service.
+- Dispatch persisted Git-trigger deliveries with their exact catalog revision
+  and stable delivery ID as the Run idempotency identity. Persist the
+  normalized trigger parameter object on the delivery and pass that frozen
+  value through ordinary Run creation.
+- Keep initial indexing, unchanged commits, rejected catalogs, and
+  non-matching changed paths from producing deliveries.
+- Record Git Run sources with only their trigger name and delivery ID and no
+  human actor; keep manual and API behavior unchanged.
+- Reject unsupported trigger sources explicitly rather than silently ignoring them.
+
+## Incremental Behavior After the MVP
+
+Automatic Git-triggered work now uses latest-wins coalescing per Repository and
+Target. In the same transaction that activates a catalog revision and advances
+or archives Target state, Slipramp preserves superseded delivery records,
+excludes them from pending selection, finishes stale queued Git Runs as
+canceled with reason `SupersededByGitChange`, records the corresponding phase
+transitions, and creates matching deliveries for affected active Targets.
+Assigned, preparing, and running Git Runs continue to completion, with only the
+newest queued Git revision retained behind an active Run. Manual and API Runs
+remain ordinary FIFO work and are never superseded.
+
+Git Run insertion also locks and reads the durable Target state in PostgreSQL.
+If the delivery's exact catalog-revision pin resolves to a commit other than
+the Target's current desired commit, the delivery is marked superseded and no
+Run is created. This database boundary closes the refresh/dispatch race while
+preserving static trigger parameters and delivery-ID idempotency.
 
 ### API and web application
 
@@ -183,7 +217,7 @@ The repository remains a single project with a Go module at `github.com/slipramp
 - **Cluster controller:** Go process deployed into each execution cluster; it claims work outbound, manages local Jobs, and reports state and logs.
 - **Harness:** statically linked Go executable injected into runtime Jobs.
 - **Web:** React Router v8 SSR server and browser application using Mantine UI and the generated TypeScript API client.
-- **PostgreSQL:** repositories, catalog revisions, targets, controller credential digests, cluster observations, runs, phase transitions, run request idempotency, artifact metadata, and scheduler coordination.
+- **PostgreSQL:** repositories, catalog revisions, targets, Git-trigger deliveries, controller credential digests, cluster observations, runs, phase transitions, run request idempotency, artifact metadata, and scheduler coordination.
 - **S3-compatible storage:** log chunks and declared artifact contents only; RustFS is used locally.
 - **Kubernetes clusters:** controllers, execution Jobs, Secrets, ServiceAccounts, and workload placement in each registered destination.
 
@@ -197,6 +231,7 @@ The MVP PostgreSQL schema centers on these records:
 - clusters, enrolled controller credential digests, last-seen observations, and run assignments
 - runs and run phase transitions
 - run request idempotency keys
+- Git-trigger delivery outbox records and resulting Run IDs
 - target concurrency leases
 - artifacts and ordered log chunks
 
@@ -226,7 +261,9 @@ Accepted outcome: all components build, connect to their dependencies, and pass 
 - Implemented repository persistence and credential references.
 - Refreshed configured branches by fetching their latest commits.
 - Defined the discovery layout and parsed `Runtime` and `Target` documents.
-- Validated references, defaults, actions, parameters, credentials, and artifacts, and reported trigger declarations as unsupported.
+- Validated references, defaults, actions, parameters, credentials, artifacts,
+  and the focused Git-trigger declaration; unsupported trigger sources are
+  rejected.
 - Stored immutable catalog revisions and exposed current catalog APIs.
 - Built repository and target catalog screens.
 
@@ -267,7 +304,9 @@ Accepted outcome: a Terraform preview produces a plan artifact that can be selec
 
 ### 6. Operational hardening — complete baseline
 
-- Evaluated `watch` paths after catalog refresh and showed affected targets' desired Git commits without initiating actions.
+- Evaluated `watch` paths after catalog refresh, showed affected targets'
+  desired Git commits, and atomically recorded deliveries for matching declared
+  Git triggers.
 - Exercised Server and controller restart recovery while Runs were active.
 - Configured the artifact retention, reconciliation, and orphan grace periods;
   exercised expiration, retryable deletion, and orphaned-object reconciliation.
@@ -311,7 +350,8 @@ The accepted MVP baseline can:
 7. Upload and download declared artifacts.
 8. Apply an exact Terraform plan artifact from its producing Git commit and catalog revision.
 9. Cancel a run and recover run observation after either the Slipramp Server or cluster controller restarts.
-10. Detect relevant Git changes without automatically executing actions, while preserving a trigger-ready run-creation boundary.
+10. Detect relevant Git changes and durably create ordinary, revision-pinned
+    Runs for matching named Git triggers after the initial index.
 11. Generate the Go Server contract and TypeScript frontend client reproducibly from the validated split OpenAPI specification.
 12. Pass all formatting, linting, type checking, unit, integration, and build checks.
 13. Install the Server, web process, and one Controller through supported Helm
@@ -334,7 +374,12 @@ accepted status of the MVP:
 - Further identity administration, audit history, and MCP authentication beyond
   the implemented model in [AUTH.md](./AUTH.md)
 - Approval workflows and required previews
-- Git-change, scheduled, and webhook triggers
+- Git trigger filtering overrides, dynamic parameter values, per-commit
+  delivery, configurable delivery policies, and provider-specific integrations
+- Git-trigger failed delivery-attempt metadata, bounded retry backoff,
+  preventing one permanently failing delivery from blocking later eligible
+  deliveries, and restart-persistent retry scheduling
+- Scheduled and webhook triggers
 - High-availability Server and web deployments
 - Controller high availability, leader election, and multiple active replicas for one cluster name
 - Explicit controller enrollment approvals and credential rotation workflows

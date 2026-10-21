@@ -35,27 +35,29 @@ type ProductAuthenticationService interface {
 	AccessService
 }
 
+type Dependencies struct {
+	Clusters              ClusterService
+	ControllerIdentities  ControllerIdentityService
+	Repositories          RepositoryService
+	Catalogs              CatalogService
+	Runs                  RunService
+	Artifacts             ArtifactService
+	Readiness             ReadinessService
+	ProductAuthentication ProductAuthenticationService
+}
+
 var _ api.StrictServerInterface = (*Handler)(nil)
 
-func New(
-	clusters ClusterService,
-	identities ControllerIdentityService,
-	repositories RepositoryService,
-	catalogs CatalogService,
-	runs RunService,
-	artifacts ArtifactService,
-	readinessService ReadinessService,
-	productAuth ProductAuthenticationService,
-) *Handler {
+func New(dependencies Dependencies) *Handler {
 	return &Handler{
-		clusters:     clusters,
-		identities:   identities,
-		repositories: repositories,
-		catalogs:     catalogs,
-		runs:         runs,
-		artifacts:    artifacts,
-		readiness:    readinessService,
-		productAuth:  productAuth,
+		clusters:     dependencies.Clusters,
+		identities:   dependencies.ControllerIdentities,
+		repositories: dependencies.Repositories,
+		catalogs:     dependencies.Catalogs,
+		runs:         dependencies.Runs,
+		artifacts:    dependencies.Artifacts,
+		readiness:    dependencies.Readiness,
+		productAuth:  dependencies.ProductAuthentication,
 		now:          time.Now,
 	}
 }

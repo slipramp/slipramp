@@ -88,9 +88,9 @@ func (s *Service) CreateRun(ctx context.Context, request CreateRequest) (Run, er
 		return Run{}, err
 	}
 
-	parameters, err := normalizeParameters(request.Parameters)
+	parameters, err := catalog.NormalizeParameterValues(request.Parameters)
 	if err != nil {
-		return Run{}, err
+		return Run{}, invalidParameters(err)
 	}
 
 	digest, err := requestDigest(request, parameters)
@@ -130,6 +130,13 @@ func (s *Service) CreateRun(ctx context.Context, request CreateRequest) (Run, er
 		return Run{}, err
 	}
 
+	if request.CatalogRevisionID != nil {
+		if pinnedRevisionID != uuid.Nil && pinnedRevisionID != *request.CatalogRevisionID {
+			return Run{}, fmt.Errorf("%w: artifact inputs do not match the pinned catalog revision", ErrInvalidInputs)
+		}
+		pinnedRevisionID = *request.CatalogRevisionID
+	}
+
 	var revision catalog.Revision
 	if pinnedRevisionID == uuid.Nil {
 		revision, err = s.catalogs.GetActiveRevision(ctx, request.RepositoryID)
@@ -167,9 +174,9 @@ func (s *Service) CreateRun(ctx context.Context, request CreateRequest) (Run, er
 		return Run{}, ErrPlacementNotFound
 	}
 
-	parameters, err = validateParameters(action.Parameters, parameters)
+	parameters, err = catalog.ValidateParameterValues(action.Parameters, parameters)
 	if err != nil {
-		return Run{}, err
+		return Run{}, invalidParameters(err)
 	}
 
 	createdAt := s.now().UTC()
@@ -349,9 +356,14 @@ func validateRequest(request CreateRequest) error {
 		return fmt.Errorf("%w: action is required", ErrInvalidRequest)
 	}
 
-	if request.Source.Type != SourceTypeManual &&
-		request.Source.Type != SourceTypeAPI {
+	if err := validateSource(request.Source); err != nil {
 		return fmt.Errorf("%w: run source is invalid", ErrInvalidRequest)
+	}
+	if request.CatalogRevisionID != nil && *request.CatalogRevisionID == uuid.Nil {
+		return fmt.Errorf("%w: catalog revision ID must not be empty", ErrInvalidRequest)
+	}
+	if err := validateSourceRequest(request); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidRequest, err)
 	}
 
 	if _, err := actorSnapshot(request.Actor); err != nil {
@@ -373,6 +385,47 @@ func validateRequest(request CreateRequest) error {
 		if strings.IndexFunc(key, unicode.IsControl) >= 0 {
 			return fmt.Errorf("%w: idempotency key must not contain control characters", ErrInvalidRequest)
 		}
+	}
+
+	return nil
+}
+
+func validateSource(source Source) error {
+	switch source.Type {
+	case SourceTypeManual, SourceTypeAPI:
+		if source.Git != nil {
+			return errors.New("manual and API sources must not contain Git details")
+		}
+	case SourceTypeGit:
+		if source.Git == nil || source.Git.DeliveryID == uuid.Nil || strings.TrimSpace(source.Git.TriggerName) == "" {
+			return errors.New("git source requires a trigger name and delivery ID")
+		}
+	default:
+		return errors.New("unknown source type")
+	}
+
+	return nil
+}
+
+func validateSourceRequest(request CreateRequest) error {
+	if request.Source.Type != SourceTypeGit {
+		if request.CatalogRevisionID != nil {
+			return errors.New("only Git-triggered Runs may pin a catalog revision")
+		}
+
+		return nil
+	}
+
+	if request.Actor != nil {
+		return errors.New("git-triggered Runs must not have an actor")
+	}
+	if request.CatalogRevisionID == nil {
+		return errors.New("git-triggered Runs must pin a catalog revision")
+	}
+
+	deliveryKey := request.Source.Git.DeliveryID.String()
+	if request.IdempotencyKey == nil || *request.IdempotencyKey != deliveryKey {
+		return errors.New("git-triggered Runs must use the delivery ID as their idempotency key")
 	}
 
 	return nil
@@ -401,113 +454,8 @@ func actorPrincipalID(principal *productidentity.Principal) *uuid.UUID {
 	return &principalID
 }
 
-func validateParameters(declarations map[string]catalog.Parameter, values map[string]any) (map[string]any, error) {
-	validated := make(map[string]any, len(values))
-
-	for _, name := range slices.Sorted(maps.Keys(values)) {
-		declaration, found := declarations[name]
-		if !found {
-			return nil, fmt.Errorf("%w: parameter %q is not declared by the action", ErrInvalidParameters, name)
-		}
-
-		value, err := validateParameterValue(name, declaration, values[name])
-		if err != nil {
-			return nil, err
-		}
-
-		validated[name] = value
-	}
-
-	for _, name := range slices.Sorted(maps.Keys(declarations)) {
-		if declarations[name].Required {
-			if _, supplied := validated[name]; !supplied {
-				return nil, fmt.Errorf("%w: required parameter %q was not supplied", ErrInvalidParameters, name)
-			}
-		}
-	}
-
-	return validated, nil
-}
-
-func normalizeParameters(values map[string]any) (map[string]any, error) {
-	normalized := make(map[string]any, len(values))
-	for _, name := range slices.Sorted(maps.Keys(values)) {
-		value := values[name]
-		switch typed := value.(type) {
-		case string:
-			normalized[name] = typed
-		case bool:
-			normalized[name] = typed
-		default:
-			number, ok := numberValue(value)
-			if !ok {
-				return nil, fmt.Errorf(
-					"%w: parameter %q must be a string, boolean, or number",
-					ErrInvalidParameters,
-					name,
-				)
-			}
-
-			normalized[name] = number
-		}
-	}
-
-	return normalized, nil
-}
-
-func validateParameterValue(name string, declaration catalog.Parameter, value any) (any, error) {
-	switch declaration.Type {
-	case catalog.ParameterTypeString:
-		if typed, ok := value.(string); ok {
-			return typed, nil
-		}
-	case catalog.ParameterTypeBoolean:
-		if typed, ok := value.(bool); ok {
-			return typed, nil
-		}
-	case catalog.ParameterTypeNumber:
-		if typed, ok := numberValue(value); ok {
-			return typed, nil
-		}
-	case catalog.ParameterTypeEnum:
-		typed, ok := value.(string)
-		if ok && slices.Contains(declaration.Values, typed) {
-			return typed, nil
-		}
-		if ok {
-			return nil, fmt.Errorf(
-				"%w: parameter %q must be one of %s",
-				ErrInvalidParameters,
-				name,
-				strings.Join(declaration.Values, ", "),
-			)
-		}
-	}
-
-	return nil, fmt.Errorf("%w: parameter %q must be a %s", ErrInvalidParameters, name, declaration.Type)
-}
-
-func numberValue(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case float64:
-		return typed, true
-	case float32:
-		return float64(typed), true
-	case int:
-		return float64(typed), true
-	case int32:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	case uint:
-		return float64(typed), true
-	case uint32:
-		return float64(typed), true
-	case uint64:
-		return float64(typed), true
-	default:
-		return 0, false
-	}
+func invalidParameters(err error) error {
+	return fmt.Errorf("%w: %w", ErrInvalidParameters, err)
 }
 
 func requestDigest(request CreateRequest, parameters map[string]any) (string, error) {
@@ -516,19 +464,21 @@ func requestDigest(request CreateRequest, parameters map[string]any) (string, er
 		inputs = map[string]uuid.UUID{}
 	}
 	payload := struct {
-		RepositoryID uuid.UUID            `json:"repositoryId"`
-		Target       string               `json:"target"`
-		Action       string               `json:"action"`
-		Parameters   map[string]any       `json:"parameters"`
-		Inputs       map[string]uuid.UUID `json:"inputs"`
-		Source       Source               `json:"source"`
+		RepositoryID      uuid.UUID            `json:"repositoryId"`
+		CatalogRevisionID *uuid.UUID           `json:"catalogRevisionId,omitempty"`
+		Target            string               `json:"target"`
+		Action            string               `json:"action"`
+		Parameters        map[string]any       `json:"parameters"`
+		Inputs            map[string]uuid.UUID `json:"inputs"`
+		Source            Source               `json:"source"`
 	}{
-		RepositoryID: request.RepositoryID,
-		Target:       request.TargetName,
-		Action:       request.ActionName,
-		Parameters:   parameters,
-		Inputs:       inputs,
-		Source:       request.Source,
+		RepositoryID:      request.RepositoryID,
+		CatalogRevisionID: request.CatalogRevisionID,
+		Target:            request.TargetName,
+		Action:            request.ActionName,
+		Parameters:        parameters,
+		Inputs:            inputs,
+		Source:            request.Source,
 	}
 
 	encoded, err := json.Marshal(payload)

@@ -242,20 +242,18 @@ func runResponse(record run.Run) (api.Run, error) {
 	}
 
 	return api.Run{
-		ID:                record.ID,
-		Phase:             api.RunPhase(record.Phase),
-		Outcome:           apiRunOutcome(record.Outcome),
-		RepositoryID:      record.RepositoryID,
-		CatalogRevisionID: record.CatalogRevisionID,
-		CommitSha:         record.CommitSHA,
-		Target:            api.CatalogName(record.TargetName),
-		Action:            api.CatalogName(record.ActionName),
-		Parameters:        parameters,
-		Placement:         api.CatalogName(record.PlacementName),
-		Cluster:           api.CatalogName(record.ClusterName),
-		Source: api.RunSource{
-			Type: api.RunSourceType(record.Source.Type),
-		},
+		ID:                      record.ID,
+		Phase:                   api.RunPhase(record.Phase),
+		Outcome:                 apiRunOutcome(record.Outcome),
+		RepositoryID:            record.RepositoryID,
+		CatalogRevisionID:       record.CatalogRevisionID,
+		CommitSha:               record.CommitSHA,
+		Target:                  api.CatalogName(record.TargetName),
+		Action:                  api.CatalogName(record.ActionName),
+		Parameters:              parameters,
+		Placement:               api.CatalogName(record.PlacementName),
+		Cluster:                 api.CatalogName(record.ClusterName),
+		Source:                  apiRunSource(record.Source),
 		CreatedBy:               apiRunActor(record.CreatedBy),
 		CanceledBy:              apiRunActor(record.CanceledBy),
 		Inputs:                  runInputResponse(record.Snapshot.Inputs),
@@ -272,6 +270,18 @@ func runResponse(record run.Run) (api.Run, error) {
 		OutcomeMessage:          record.OutcomeMessage,
 		ExitCode:                record.ExitCode,
 	}, nil
+}
+
+func apiRunSource(source run.Source) api.RunSource {
+	response := api.RunSource{Type: api.RunSourceType(source.Type)}
+	if source.Git != nil {
+		response.Git = &api.GitRunSource{
+			TriggerName: api.CatalogName(source.Git.TriggerName),
+			DeliveryID:  source.Git.DeliveryID,
+		}
+	}
+
+	return response
 }
 
 func apiRunActor(value *productidentity.ActorSnapshot) *api.RunActor {

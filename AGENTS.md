@@ -40,7 +40,9 @@ Use the established names consistently:
 - Safety policy is opt-in. Direct actions such as an unreviewed `terraform apply` must remain valid when that is the operator's chosen workflow.
 - Preview and plan flows are optional capabilities, not mandatory approval gates.
 - Do not assume every Target has a `sync` Action.
-- Manual and API Run creation are supported. Git, schedule, and webhook triggers remain later work; keep the Run creation boundary ready for them without implementing them prematurely.
+- Manual and API Run creation are supported. Named Git triggers may start actions with static, validated parameters from newly accepted heads whose changed paths match the target's `watch` patterns. Git-triggered actions cannot require artifact inputs. Schedule and webhook triggers remain later work.
+- Automatic Git-triggered Runs use Target-scoped latest-wins coalescing. When an affected Target's desired commit advances, supersede older undispatched deliveries and finish older queued Git Runs as canceled; never cancel active Git Runs or supersede manual and API Runs. Preserve ordinary FIFO scheduling among eligible Runs.
+- Git-trigger delivery retry hardening remains later reliability work: failed-attempt metadata, bounded retry backoff, isolation of permanently failing deliveries so later eligible work can proceed, and restart-persistent retry scheduling. Do not add these piecemeal without an explicit design change.
 - Never interpret removing a Target as infrastructure destruction.
 - Serialize active Runs for the same Target by default and do not retry infrastructure commands implicitly.
 

@@ -30,8 +30,10 @@ const (
 
 	SourceTypeManual SourceType = "manual"
 	SourceTypeAPI    SourceType = "api"
+	SourceTypeGit    SourceType = "git"
 
-	ReasonCancelRequested = "CancelRequested"
+	ReasonCancelRequested       = "CancelRequested"
+	ReasonSupersededByGitChange = "SupersededByGitChange"
 )
 
 var (
@@ -51,6 +53,7 @@ var (
 	ErrNoRunToCancel       = errors.New("no run to cancel")
 	ErrObservationConflict = errors.New("run observation conflict")
 	ErrIdempotencyConflict = errors.New("run idempotency key conflict")
+	ErrGitRunSuperseded    = errors.New("git-triggered run superseded by a newer desired commit")
 )
 
 type Phase string
@@ -68,18 +71,27 @@ const (
 )
 
 type Source struct {
-	Type SourceType `json:"type"`
+	Type SourceType    `json:"type"`
+	Git  *GitRunSource `json:"git,omitempty"`
+}
+
+type GitRunSource struct {
+	TriggerName string    `json:"triggerName"`
+	DeliveryID  uuid.UUID `json:"deliveryId"`
 }
 
 type CreateRequest struct {
-	RepositoryID   uuid.UUID
-	TargetName     string
-	ActionName     string
-	Parameters     map[string]any
-	Inputs         map[string]uuid.UUID
-	Source         Source
-	IdempotencyKey *string
-	Actor          *productidentity.Principal
+	RepositoryID uuid.UUID
+	TargetName   string
+	ActionName   string
+	Parameters   map[string]any
+	Inputs       map[string]uuid.UUID
+	// CatalogRevisionID pins internal automated requests to an immutable
+	// accepted catalog revision. HTTP-created Runs leave it unset.
+	CatalogRevisionID *uuid.UUID
+	Source            Source
+	IdempotencyKey    *string
+	Actor             *productidentity.Principal
 }
 
 type CancelRequest struct {

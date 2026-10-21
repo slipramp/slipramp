@@ -1,8 +1,6 @@
 // Package catalog discovers and decodes repository-defined Slipramp resources.
 package catalog
 
-import "go.yaml.in/yaml/v3"
-
 const (
 	Directory  = ".slipramp"
 	APIVersion = "slipramp.com/v1alpha1"
@@ -104,8 +102,19 @@ type Action struct {
 	Parameters  map[string]Parameter `json:"parameters,omitempty"  yaml:"parameters,omitempty"`
 	Artifacts   map[string]Artifact  `json:"artifacts,omitempty"   yaml:"artifacts,omitempty"`
 	Inputs      map[string]Input     `json:"inputs,omitempty"      yaml:"inputs,omitempty"`
-	Triggers    []yaml.Node          `json:"-"                     yaml:"triggers,omitempty"`
+	Triggers    []Trigger            `json:"triggers,omitempty"    yaml:"triggers,omitempty"`
 }
+
+// Trigger declares one named source of automatic action Runs.
+type Trigger struct {
+	Name       string         `json:"name"                 yaml:"name"`
+	Git        *GitTrigger    `json:"git,omitempty"        yaml:"git,omitempty"`
+	Parameters map[string]any `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+}
+
+// GitTrigger uses the containing target's watch patterns. It is intentionally
+// empty until Git-specific filtering has an accepted product contract.
+type GitTrigger struct{}
 
 type ResourceRequirements struct {
 	Requests map[string]string `json:"requests,omitempty" yaml:"requests,omitempty"`

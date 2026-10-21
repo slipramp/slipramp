@@ -408,6 +408,7 @@ func (e RunObservationPhase) Valid() bool {
 // Defines values for RunSourceType.
 const (
 	API    RunSourceType = "api"
+	Git    RunSourceType = "git"
 	Manual RunSourceType = "manual"
 )
 
@@ -415,6 +416,8 @@ const (
 func (e RunSourceType) Valid() bool {
 	switch e {
 	case API:
+		return true
+	case Git:
 		return true
 	case Manual:
 		return true
@@ -558,6 +561,15 @@ type Action struct {
 	Resources   *ResourceRequirements           `json:"resources,omitempty"`
 	Runtime     *string                         `json:"runtime,omitempty"`
 	Timeout     *string                         `json:"timeout,omitempty"`
+	Triggers    *[]ActionTrigger                `json:"triggers,omitempty"`
+}
+
+// ActionTrigger defines model for ActionTrigger.
+type ActionTrigger struct {
+	// Git Runs the action when a newly accepted repository head changes a path matching the containing target's watch patterns.
+	Git        GitTrigger                 `json:"git"`
+	Name       string                     `json:"name"`
+	Parameters *map[string]ParameterValue `json:"parameters,omitempty"`
 }
 
 // Artifact defines model for Artifact.
@@ -729,6 +741,16 @@ type CredentialInjection struct {
 
 // DependencyStatus defines model for DependencyStatus.
 type DependencyStatus string
+
+// GitRunSource defines model for GitRunSource.
+type GitRunSource struct {
+	// DeliveryID Stable Git-trigger delivery identity used for Run idempotency.
+	DeliveryID  openapi_types.UUID `json:"deliveryId"`
+	TriggerName CatalogName        `json:"triggerName"`
+}
+
+// GitTrigger Runs the action when a newly accepted repository head changes a path matching the containing target's watch patterns.
+type GitTrigger = map[string]interface{}
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
@@ -1123,6 +1145,8 @@ type RunObservationPhase string
 
 // RunSource defines model for RunSource.
 type RunSource struct {
+	Git *GitRunSource `json:"git,omitempty"`
+
 	// Type Boundary that submitted the Run.
 	Type RunSourceType `json:"type"`
 }

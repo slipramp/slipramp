@@ -136,6 +136,97 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 	runValidationTests(t, tests)
 }
 
+func TestValidateGitTriggers(t *testing.T) {
+	t.Parallel()
+
+	addTrigger := func(input *catalog.Catalog, trigger catalog.Trigger) {
+		input.Targets[0].Spec.Watch = []string{"infrastructure/network/**"}
+		action := input.Targets[0].Spec.Actions["preview"]
+		action.Triggers = append(action.Triggers, trigger)
+		input.Targets[0].Spec.Actions["preview"] = action
+	}
+
+	tests := []validationTest{
+		{
+			name: "Git trigger",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{Name: "reconcile-on-change", Git: &catalog.GitTrigger{}})
+			},
+		},
+		{
+			name: "invalid name",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{Name: "Not Valid", Git: &catalog.GitTrigger{}})
+			},
+			wantError: "trigger name",
+		},
+		{
+			name: "duplicate name",
+			configure: func(input *catalog.Catalog) {
+				trigger := catalog.Trigger{Name: "reconcile", Git: &catalog.GitTrigger{}}
+				addTrigger(input, trigger)
+				addTrigger(input, trigger)
+			},
+			wantError: "is duplicated",
+		},
+		{
+			name: "missing source",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{Name: "reconcile"})
+			},
+			wantError: "must declare git",
+		},
+		{
+			name: "empty watch",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{Name: "reconcile", Git: &catalog.GitTrigger{}})
+				input.Targets[0].Spec.Watch = nil
+			},
+			wantError: "requires target watch patterns",
+		},
+		{
+			name: "required parameter missing",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{Name: "reconcile", Git: &catalog.GitTrigger{}})
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Parameters = map[string]catalog.Parameter{
+					"region": {
+						Type:     catalog.ParameterTypeString,
+						Required: true,
+						Argument: &catalog.ParameterArgument{},
+					},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: `required parameter "region" was not supplied`,
+		},
+		{
+			name: "undeclared parameter",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:       "reconcile",
+					Git:        &catalog.GitTrigger{},
+					Parameters: map[string]any{"region": "us-west-2"},
+				})
+			},
+			wantError: `parameter "region" is not declared by the action`,
+		},
+		{
+			name: "artifact inputs",
+			configure: func(input *catalog.Catalog) {
+				addPreviewAndApply(input)
+				input.Targets[0].Spec.Watch = []string{"infrastructure/network/**"}
+				action := input.Targets[0].Spec.Actions["apply"]
+				action.Triggers = []catalog.Trigger{{Name: "apply", Git: &catalog.GitTrigger{}}}
+				input.Targets[0].Spec.Actions["apply"] = action
+			},
+			wantError: "cannot invoke an action with artifact inputs",
+		},
+	}
+
+	runValidationTests(t, tests)
+}
+
 func TestValidateRejectsActionRequestAbovePlacementLimit(t *testing.T) {
 	t.Parallel()
 

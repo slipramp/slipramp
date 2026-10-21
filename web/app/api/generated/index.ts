@@ -39,6 +39,7 @@ export {
 } from "./sdk.gen";
 export type {
   Action,
+  ActionTrigger,
   ApiKey,
   ApiKeyCreate,
   ApiKeyCredential,
@@ -150,6 +151,8 @@ export type {
   GetRunLogCursorResponses,
   GetRunResponse,
   GetRunResponses,
+  GitRunSource,
+  GitTrigger,
   HealthResponse,
   ListApiKeysData,
   ListApiKeysError,

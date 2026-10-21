@@ -3,8 +3,6 @@ package catalog_test
 import (
 	"testing"
 
-	"go.yaml.in/yaml/v3"
-
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/testcheck"
@@ -49,15 +47,6 @@ func TestValidateRejectsIncompleteActions(t *testing.T) {
 				input.Targets[0].Spec.Actions["preview"] = action
 			},
 			wantError: `action "preview" command is required`,
-		},
-		{
-			name: "unsupported trigger",
-			configure: func(input *catalog.Catalog) {
-				action := input.Targets[0].Spec.Actions["preview"]
-				action.Triggers = []yaml.Node{{Kind: yaml.MappingNode}}
-				input.Targets[0].Spec.Actions["preview"] = action
-			},
-			wantError: "declares triggers, which are not supported",
 		},
 	}
 

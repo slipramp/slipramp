@@ -523,6 +523,23 @@ export type ArtifactInput = {
   mountPath: string;
 };
 
+/**
+ * Runs the action when a newly accepted repository head changes a path matching the containing target's watch patterns.
+ */
+export type GitTrigger = {
+  [key: string]: never;
+};
+
+export type ParameterValue = string | boolean | number;
+
+export type ActionTrigger = {
+  name: string;
+  git: GitTrigger;
+  parameters?: {
+    [key: string]: ParameterValue;
+  };
+};
+
 export type Action = {
   intent?: string;
   command: Array<string>;
@@ -542,6 +559,7 @@ export type Action = {
   inputs?: {
     [key: string]: ArtifactInput;
   };
+  triggers?: Array<ActionTrigger>;
 };
 
 export type TargetSpec = {
@@ -574,8 +592,6 @@ export type Target = {
   source: CatalogSource;
   status: TargetStatus;
 };
-
-export type ParameterValue = string | boolean | number;
 
 export type CatalogName = string;
 
@@ -662,11 +678,20 @@ export type LogSeal = {
   sha256: string;
 };
 
+export type GitRunSource = {
+  triggerName: CatalogName;
+  /**
+   * Stable Git-trigger delivery identity used for Run idempotency.
+   */
+  deliveryId: string;
+};
+
 export type RunSource = {
   /**
    * Boundary that submitted the Run.
    */
-  type: "manual" | "api";
+  type: "manual" | "api" | "git";
+  git?: GitRunSource;
 };
 
 export type RunArtifactInput = {

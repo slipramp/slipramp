@@ -10,7 +10,7 @@ INSERT INTO runs (
     parameters,
     placement_name,
     cluster_name,
-    source_type,
+    source,
     idempotency_key,
     request_digest,
     snapshot,
@@ -28,7 +28,7 @@ INSERT INTO runs (
     sqlc.arg(parameters),
     sqlc.arg(placement_name),
     sqlc.arg(cluster_name),
-    sqlc.arg(source_type),
+    sqlc.arg(source),
     sqlc.narg(idempotency_key),
     sqlc.arg(request_digest),
     sqlc.arg(snapshot),
@@ -51,7 +51,7 @@ WHERE idempotency_key = sqlc.arg(idempotency_key)
       OR (
           sqlc.narg(principal_id)::uuid IS NULL
           AND created_by_principal_id IS NULL
-          AND source_type = sqlc.arg(source_type)
+          AND source->>'type' = sqlc.arg(source_type)::text
       )
   );
 

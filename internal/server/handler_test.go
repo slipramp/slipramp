@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/api/handler"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/readiness"
@@ -88,6 +89,41 @@ func newAdminTestHandlerWithLogger(
 		}
 		httpHandler.ServeHTTP(writer, request)
 	})
+}
+
+func newHTTPHandler(
+	clusters handler.ClusterService,
+	identities handler.ControllerIdentityService,
+	repositories handler.RepositoryService,
+	catalogs handler.CatalogService,
+	runs handler.RunService,
+	artifacts handler.ArtifactService,
+	readinessService handler.ReadinessService,
+	controllerEnrollmentTokens map[string]string,
+	productAuthentication handler.ProductAuthenticationService,
+	logger *slog.Logger,
+) http.Handler {
+	controllerAuthenticator := newControllerAuthenticator(identities, controllerEnrollmentTokens)
+
+	return handler.NewHTTP(
+		handler.New(handler.Dependencies{
+			Clusters:              clusters,
+			ControllerIdentities:  identities,
+			Repositories:          repositories,
+			Catalogs:              catalogs,
+			Runs:                  runs,
+			Artifacts:             artifacts,
+			Readiness:             readinessService,
+			ProductAuthentication: productAuthentication,
+		}),
+		handler.HTTPOptions{
+			Middlewares: []api.StrictMiddlewareFunc{
+				handler.ControllerAuthentication(controllerAuthenticator),
+				handler.ProductAuthentication(newProductAuthenticator(productAuthentication)),
+			},
+			Logger: logger,
+		},
+	)
 }
 
 type staticReadinessService struct {

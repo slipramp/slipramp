@@ -357,6 +357,35 @@ Action:
       type: object
       additionalProperties:
         $ref: "#/ArtifactInput"
+    triggers:
+      type: array
+      items:
+        $ref: "#/ActionTrigger"
+
+ActionTrigger:
+  type: object
+  required:
+    - name
+    - git
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+    git:
+      $ref: "#/GitTrigger"
+    parameters:
+      type: object
+      additionalProperties:
+        $ref: ./runs.yaml#/ParameterValue
+
+GitTrigger:
+  type: object
+  additionalProperties: false
+  description: >-
+    Runs the action when a newly accepted repository head changes a path
+    matching the containing target's watch patterns.
 
 ResourceRequirements:
   type: object
