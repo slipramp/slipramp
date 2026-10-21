@@ -5,9 +5,9 @@ This document records the accepted first usable Slipramp release derived from
 baseline for ongoing development, not as an open delivery checklist.
 
 Acceptance combines the repository's automated quality, integration, and
-disposable-cluster suites with operator-reviewed testing against a real homelab
-cluster. Further resilience drills, deployment packaging, diagnostics, and
-operator guidance continue as normal product work without reopening the MVP.
+disposable-cluster suites. Further resilience drills, deployment packaging,
+diagnostics, and operator guidance continue as normal product work without
+reopening the MVP.
 
 ## Objective
 
@@ -269,8 +269,7 @@ Accepted outcome: a Terraform preview produces a plan artifact that can be selec
 - Configured the artifact retention, reconciliation, and orphan grace periods;
   exercised expiration, retryable deletion, and orphaned-object reconciliation.
 - Reported process liveness and per-cluster connection health.
-- Documented local development, disposable-cluster acceptance, and the initial
-  homelab operating flow.
+- Documented local development and disposable-cluster acceptance.
 
 Accepted outcome: the installation reports per-cluster health, preserves manual run request idempotency, and recovers active Runs across Server and controller restarts.
 
@@ -319,7 +318,7 @@ accepted status of the MVP:
   acceptance coverage
 - Dependency-aware readiness diagnostics and richer operational status
 - Generalized installation, upgrade, backup, recovery, and troubleshooting
-  guidance beyond the existing development, kind, and homelab flows
+  guidance beyond the existing development and kind flows
 - Evolution and compatibility policy for the pre-stable API, catalog, and
   database contracts
 - Further identity administration, audit history, and MCP authentication beyond

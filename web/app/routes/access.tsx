@@ -16,6 +16,7 @@ import {
 } from "@mantine/core";
 import { Form, useNavigation } from "react-router";
 
+import { apiKeyCreateBody, apiKeyScopeOptions } from "~/api-key-form";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   createApiKey,
@@ -33,12 +34,6 @@ import {
 import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/access";
-
-const scopeOptions = [
-  { label: "Read product state", value: "slipramp:read" },
-  { label: "Create and cancel Runs", value: "slipramp:runs:write" },
-  { label: "Administrator", value: "slipramp:admin" },
-] as const satisfies ReadonlyArray<{ label: string; value: ApiKeyScope }>;
 
 type ServiceAccountWithKeys = ServiceAccount & {
   apiKeys: ApiKey[];
@@ -96,7 +91,7 @@ export async function action({ request }: Route.ActionArgs) {
   switch (intent) {
     case "create-api-key": {
       const result = await createApiKey({
-        body: apiKeyBody(formData),
+        body: apiKeyCreateBody(formData),
         client,
       });
 
@@ -130,7 +125,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
     case "create-service-account-api-key": {
       const result = await createServiceAccountApiKey({
-        body: apiKeyBody(formData),
+        body: apiKeyCreateBody(formData),
         client,
         path: { principalId: formValue(formData, "principalId") },
       });
@@ -256,10 +251,10 @@ function APIKeyForm({
             placeholder="2027-01-01T00:00:00Z"
           />
         </SimpleGrid>
-        <Checkbox.Group label="Scopes" name="scopes" withAsterisk>
+        <Checkbox.Group label="Scopes" withAsterisk>
           <Group mt="xs">
-            {scopeOptions.map((scope) => (
-              <Checkbox key={scope.value} label={scope.label} value={scope.value} />
+            {apiKeyScopeOptions.map((scope) => (
+              <Checkbox key={scope.value} label={scope.label} name="scopes" value={scope.value} />
             ))}
           </Group>
         </Checkbox.Group>
@@ -415,18 +410,6 @@ function ServiceAccountPanel({
   );
 }
 
-function apiKeyBody(formData: FormData) {
-  const expiresAt = formValue(formData, "expiresAt");
-
-  return {
-    expiresAt: expiresAt || undefined,
-    name: formValue(formData, "name"),
-    scopes: formData
-      .getAll("scopes")
-      .filter((value): value is ApiKeyScope => scopeOptions.some((scope) => scope.value === value)),
-  };
-}
-
 function formValue(formData: FormData, name: string) {
   const value = formData.get(name);
 
@@ -438,7 +421,7 @@ function problemDetail(problem: { detail?: string; title?: string } | undefined,
 }
 
 function scopeLabel(scope: ApiKeyScope) {
-  return scopeOptions.find((option) => option.value === scope)?.label ?? scope;
+  return apiKeyScopeOptions.find((option) => option.value === scope)?.label ?? scope;
 }
 
 function formatTimestamp(value: string) {

@@ -14,9 +14,8 @@ incrementally from that baseline; the MVP document is a record of the delivered
 scope rather than an open checklist.
 
 The repository keeps formatting, linting, generation, unit, integration, build,
-and disposable-cluster acceptance checks in CI. The end-to-end suite and the
-operator-reviewed homelab flow are documented in
-[`deploy/e2e`](deploy/e2e/README.md).
+and disposable-cluster acceptance checks in CI. The kind-based end-to-end suite
+is documented in [`deploy/e2e`](deploy/e2e/README.md).
 
 ## Current implementation
 
@@ -358,11 +357,6 @@ task web:dev
 
 The controller is exercised through unit tests locally and runs with a
 Kubernetes service account in a cluster.
-
-The first real-cluster walkthrough uses a laptop-hosted Server over the trusted
-tailnet and a controller in the homelab cluster. See
-[`deploy/e2e/README.md`](deploy/e2e/README.md) for the image, credential,
-deployment, and `kcloud-ops` preview sequence.
 
 `task local:down` stops PostgreSQL and RustFS while retaining their named
 volumes. Database migrations live in `internal/store/migrations`, queries live
