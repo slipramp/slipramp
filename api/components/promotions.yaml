@@ -1,0 +1,485 @@
+PromotionStatus:
+  type: string
+  enum:
+    - preparing
+    - pending
+    - approved
+    - rejected
+    - expired
+    - error
+
+PromotionPolicyMode:
+  type: string
+  enum:
+    - automatic
+    - review-required
+
+KargoPromotionRequest:
+  type: object
+  additionalProperties: false
+  required:
+    - externalPromotionId
+    - project
+    - stage
+    - baseRevision
+    - candidateRevision
+    - candidateBranch
+  properties:
+    externalPromotionId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    project:
+      $ref: ./runs.yaml#/CatalogName
+    stage:
+      type: string
+      minLength: 1
+      maxLength: 253
+      pattern: ^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$
+    baseRevision:
+      $ref: "#/GitRevision"
+    candidateRevision:
+      $ref: "#/GitRevision"
+    candidateBranch:
+      type: string
+      minLength: 17
+      maxLength: 255
+      pattern: ^kargo/promotion/.+$
+
+KargoPromotionResponse:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - externalPromotionId
+    - status
+    - reviewRequired
+    - updatedAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    externalPromotionId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    status:
+      $ref: "#/PromotionStatus"
+    reviewRequired:
+      type: boolean
+    message:
+      type: string
+      minLength: 1
+      maxLength: 4096
+    updatedAt:
+      type: string
+      format: date-time
+
+PromotionStageObservation:
+  type: object
+  additionalProperties: false
+  required:
+    - project
+    - name
+    - kubernetesUid
+    - resourceVersion
+    - application
+    - environment
+    - repositoryUrl
+    - targetBranch
+    - sourcePaths
+    - freight
+  properties:
+    project:
+      $ref: ./runs.yaml#/CatalogName
+    name:
+      type: string
+      minLength: 1
+      maxLength: 253
+      pattern: ^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$
+    kubernetesUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+    resourceVersion:
+      type: string
+      minLength: 1
+      maxLength: 200
+    application:
+      type: string
+      minLength: 1
+      maxLength: 200
+    environment:
+      type: string
+      minLength: 1
+      maxLength: 200
+    repositoryUrl:
+      type: string
+      minLength: 1
+      maxLength: 2048
+    targetBranch:
+      type: string
+      minLength: 1
+      maxLength: 255
+    sourcePaths:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items:
+        type: string
+        minLength: 1
+        maxLength: 1024
+    freight:
+      type: object
+      additionalProperties: true
+    successfulRenderAcknowledgement:
+      type: object
+      additionalProperties: true
+
+KargoStageSnapshot:
+  type: object
+  additionalProperties: false
+  required:
+    - snapshotId
+    - observedAt
+    - stages
+  properties:
+    snapshotId:
+      type: string
+      format: uuid
+    observedAt:
+      type: string
+      format: date-time
+    stages:
+      type: array
+      items:
+        $ref: "#/PromotionStageObservation"
+
+PromotionStage:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - integration
+    - cluster
+    - project
+    - name
+    - kubernetesUid
+    - resourceVersion
+    - application
+    - environment
+    - repository
+    - repositoryUrl
+    - targetBranch
+    - sourcePaths
+    - freight
+    - policy
+    - pendingPromotionCount
+    - firstObservedAt
+    - lastObservedAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    project:
+      $ref: ./runs.yaml#/CatalogName
+    name:
+      type: string
+      minLength: 1
+      maxLength: 253
+    kubernetesUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+    resourceVersion:
+      type: string
+      minLength: 1
+      maxLength: 200
+    application:
+      type: string
+      minLength: 1
+      maxLength: 200
+    environment:
+      type: string
+      minLength: 1
+      maxLength: 200
+    repository:
+      $ref: ./runs.yaml#/CatalogName
+    repositoryUrl:
+      type: string
+      minLength: 1
+      maxLength: 2048
+    targetBranch:
+      type: string
+      minLength: 1
+      maxLength: 255
+    sourcePaths:
+      type: array
+      items:
+        type: string
+        minLength: 1
+        maxLength: 1024
+    freight:
+      type: object
+      additionalProperties: true
+    successfulRenderAcknowledgement:
+      type: object
+      additionalProperties: true
+    policy:
+      $ref: "#/PromotionStagePolicy"
+    pendingPromotionCount:
+      type: integer
+      minimum: 0
+    firstObservedAt:
+      type: string
+      format: date-time
+    lastObservedAt:
+      type: string
+      format: date-time
+    archivedAt:
+      type: string
+      format: date-time
+
+PromotionStageList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/PromotionStage"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+
+PromotionStagePolicy:
+  type: object
+  additionalProperties: false
+  required:
+    - configuredMode
+    - effectiveMode
+  properties:
+    configuredMode:
+      $ref: "#/PromotionPolicyMode"
+    effectiveMode:
+      $ref: "#/PromotionPolicyMode"
+    expiresAt:
+      type: string
+      format: date-time
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 4096
+    updatedBy:
+      $ref: ./runs.yaml#/RunActor
+    updatedAt:
+      type: string
+      format: date-time
+
+PromotionStagePolicyUpdate:
+  type: object
+  additionalProperties: false
+  required:
+    - mode
+  properties:
+    mode:
+      $ref: "#/PromotionPolicyMode"
+    expiresAt:
+      type: string
+      format: date-time
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 4096
+
+PromotionDecision:
+  type: object
+  additionalProperties: false
+  required:
+    - decision
+    - decidedBy
+    - decidedAt
+  properties:
+    decision:
+      type: string
+      enum:
+        - approved
+        - rejected
+    comment:
+      type: string
+      minLength: 1
+      maxLength: 4096
+    decidedBy:
+      $ref: ./runs.yaml#/RunActor
+    decidedAt:
+      type: string
+      format: date-time
+
+PromotionDecisionUpdate:
+  type: object
+  additionalProperties: false
+  required:
+    - decision
+  properties:
+    decision:
+      type: string
+      enum:
+        - approved
+        - rejected
+    comment:
+      type: string
+      minLength: 1
+      maxLength: 4096
+
+Promotion:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - integration
+    - externalPromotionId
+    - stageId
+    - stageSnapshot
+    - repositoryId
+    - repositorySnapshot
+    - baseRevision
+    - candidateRevision
+    - candidateBranch
+    - targetBranch
+    - policySnapshot
+    - reviewRequired
+    - status
+    - requestedBy
+    - createdAt
+    - updatedAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    externalPromotionId:
+      type: string
+      minLength: 1
+      maxLength: 200
+    stageId:
+      type: string
+      format: uuid
+    stageSnapshot:
+      type: object
+      additionalProperties: true
+    repositoryId:
+      type: string
+      format: uuid
+    repositorySnapshot:
+      type: object
+      additionalProperties: true
+    baseRevision:
+      $ref: "#/GitRevision"
+    candidateRevision:
+      $ref: "#/GitRevision"
+    candidateBranch:
+      type: string
+      minLength: 17
+      maxLength: 255
+    targetBranch:
+      type: string
+      minLength: 1
+      maxLength: 255
+    policySnapshot:
+      type: object
+      additionalProperties: true
+    reviewRequired:
+      type: boolean
+    status:
+      $ref: "#/PromotionStatus"
+    message:
+      type: string
+      minLength: 1
+      maxLength: 4096
+    preparationRunId:
+      type: string
+      format: uuid
+    preparationRun:
+      $ref: ./runs.yaml#/Run
+    gitDiffArtifactId:
+      type: string
+      format: uuid
+    gitDiffArtifact:
+      $ref: ./artifacts.yaml#/Artifact
+    argoDiffArtifactId:
+      type: string
+      format: uuid
+    argoDiffArtifact:
+      $ref: ./artifacts.yaml#/Artifact
+    requestedBy:
+      $ref: ./runs.yaml#/RunActor
+    decision:
+      $ref: "#/PromotionDecision"
+    createdAt:
+      type: string
+      format: date-time
+    preparationCompletedAt:
+      type: string
+      format: date-time
+    decidedAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+    updatedAt:
+      type: string
+      format: date-time
+
+PromotionList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/Promotion"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+
+PromotionRunSource:
+  type: object
+  additionalProperties: false
+  required:
+    - promotionId
+  properties:
+    promotionId:
+      type: string
+      format: uuid
+
+GitRevision:
+  type: string
+  pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$

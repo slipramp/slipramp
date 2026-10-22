@@ -281,7 +281,8 @@ Kubernetes clusters are execution backends rather than the source of truth for S
 
 PostgreSQL is the durable database for repositories, catalog revisions and
 current projections, Git-trigger deliveries, run metadata, artifact metadata,
-and scheduler state. S3-compatible object storage is used only for artifact
+Kargo Promotion Stages, policies, Promotions, decisions, and scheduler state.
+S3-compatible object storage is used only for artifact
 contents, including live and completed logs. Artifact metadata and object
 references remain in PostgreSQL.
 
@@ -642,6 +643,24 @@ Artifact inputs use the input name as the artifact name on `fromAction`. The
 source action must declare that output. The only currently supported
 compatibility policy is `exact-catalog-revision`, and it is the default when
 `compatibility` is omitted.
+
+The optional Kargo Promotions vertical has durable inventory and request
+dispatch. Each Controller can list `kargo.akuity.io/v1alpha1` Stages only in
+configured namespaces and submit authenticated complete snapshots. The Server
+matches repository URLs against the integration allowlist and atomically
+updates, revives, or archives Stage observations without Kubernetes access.
+The authenticated Kargo endpoint evaluates the current Stage, repository,
+policy, and requesting service account in one durable boundary; exact repeated
+requests recover the same Promotion, while conflicting reuse of an external
+identity is rejected. Automatic policy approves immediately. Review-required
+policy creates one restart-safe, revision-pinned ordinary Run with a
+`promotion` source, validates its sensitive Git and Argo CD diff artifacts,
+and transitions to `pending` or `error` without implicit command retries.
+The first-party `slipramp-kargo-tools` image now pins Git and Argo CD, validates
+the candidate ref without changing remote refs, and emits bounded deterministic
+Git and structured Argo CD diff files. Operational catalog wiring, real
+artifact-upload acceptance, and the operator review experience remain later
+work in [KARGO_PROMOTIONS.md](./KARGO_PROMOTIONS.md).
 
 ## Ongoing Design Work
 

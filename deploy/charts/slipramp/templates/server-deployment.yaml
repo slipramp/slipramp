@@ -135,6 +135,8 @@ spec:
               {{- $_ := set $credentials $name (printf "/var/run/slipramp/repository-credentials/%s/%s" $name $credential.gitConfigKey) }}
               {{- end }}
               value: {{ $credentials | toJson | quote }}
+            - name: SLIPRAMP_KARGO_INTEGRATIONS
+              value: {{ .Values.server.kargo.integrations | toJson | quote }}
           ports:
             - name: http
               containerPort: 8080

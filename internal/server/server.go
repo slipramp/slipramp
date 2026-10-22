@@ -17,6 +17,7 @@ import (
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/readiness"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -29,15 +30,16 @@ const (
 )
 
 type Server struct {
-	address              string
-	shutdownTimeout      time.Duration
-	placements           placement.Set
-	logger               *slog.Logger
-	httpServer           *http.Server
-	persistence          *persistence
-	repositoryRefresher  *repository.Refresher
-	gitTriggerDispatcher *gittrigger.Dispatcher
-	artifactReconciler   *artifact.Reconciler
+	address               string
+	shutdownTimeout       time.Duration
+	placements            placement.Set
+	logger                *slog.Logger
+	httpServer            *http.Server
+	persistence           *persistence
+	repositoryRefresher   *repository.Refresher
+	gitTriggerDispatcher  *gittrigger.Dispatcher
+	artifactReconciler    *artifact.Reconciler
+	promotionPreparations *promotion.PreparationCoordinator
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
@@ -115,6 +117,25 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		logger,
 	)
 	readinessService := readiness.NewService(persistence.database, persistence.artifactContents)
+	promotionStages := promotion.NewStageService(
+		cfg.KargoIntegrations,
+		repositories,
+		persistence.database,
+	)
+	promotionRequests := promotion.NewRequestService(cfg.KargoIntegrations, persistence.database)
+	var promotionPreparations *promotion.PreparationCoordinator
+	if len(cfg.KargoIntegrations) > 0 {
+		promotionPreparations = promotion.NewPreparationCoordinator(
+			cfg.KargoIntegrations,
+			repositories,
+			catalogs,
+			runs,
+			artifacts,
+			persistence.database,
+			promotion.DefaultPreparationInterval,
+			logger,
+		)
+	}
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
 			Clusters:              clusters,
@@ -123,6 +144,8 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			Catalogs:              catalogs,
 			Runs:                  runs,
 			Artifacts:             artifacts,
+			PromotionRequests:     promotionRequests,
+			PromotionStages:       promotionStages,
 			Readiness:             readinessService,
 			ProductAuthentication: productAuthenticationService,
 		},
@@ -136,6 +159,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	server.repositoryRefresher = repositoryRefresher
 	server.gitTriggerDispatcher = gitTriggerDispatcher
 	server.artifactReconciler = artifactReconciler
+	server.promotionPreparations = promotionPreparations
 
 	return server, nil
 }
@@ -177,6 +201,9 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.artifactReconciler != nil {
 		workerCount++
 	}
+	if s.promotionPreparations != nil {
+		workerCount++
+	}
 	if workerCount == 0 {
 		return s.serve(ctx, listener)
 	}
@@ -200,6 +227,12 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.artifactReconciler != nil {
 		go func() {
 			s.artifactReconciler.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.promotionPreparations != nil {
+		go func() {
+			s.promotionPreparations.Run(runContext)
 			workersStopped <- struct{}{}
 		}()
 	}

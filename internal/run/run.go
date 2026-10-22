@@ -28,9 +28,10 @@ const (
 	OutcomeCanceled  Outcome = "canceled"
 	OutcomeTimedOut  Outcome = "timed-out"
 
-	SourceTypeManual SourceType = "manual"
-	SourceTypeAPI    SourceType = "api"
-	SourceTypeGit    SourceType = "git"
+	SourceTypeManual    SourceType = "manual"
+	SourceTypeAPI       SourceType = "api"
+	SourceTypeGit       SourceType = "git"
+	SourceTypePromotion SourceType = "promotion"
 
 	ReasonCancelRequested       = "CancelRequested"
 	ReasonSupersededByGitChange = "SupersededByGitChange"
@@ -71,13 +72,18 @@ const (
 )
 
 type Source struct {
-	Type SourceType    `json:"type"`
-	Git  *GitRunSource `json:"git,omitempty"`
+	Type      SourceType          `json:"type"`
+	Git       *GitRunSource       `json:"git,omitempty"`
+	Promotion *PromotionRunSource `json:"promotion,omitempty"`
 }
 
 type GitRunSource struct {
 	TriggerName string    `json:"triggerName"`
 	DeliveryID  uuid.UUID `json:"deliveryId"`
+}
+
+type PromotionRunSource struct {
+	PromotionID uuid.UUID `json:"promotionId"`
 }
 
 type CreateRequest struct {

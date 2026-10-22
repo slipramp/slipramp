@@ -280,6 +280,11 @@ func apiRunSource(source run.Source) api.RunSource {
 			DeliveryID:  source.Git.DeliveryID,
 		}
 	}
+	if source.Promotion != nil {
+		response.Promotion = &api.PromotionRunSource{
+			PromotionID: source.Promotion.PromotionID,
+		}
+	}
 
 	return response
 }

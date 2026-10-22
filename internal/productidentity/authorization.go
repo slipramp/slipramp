@@ -15,6 +15,8 @@ const (
 	PermissionAdmin                  Permission = "admin"
 	PermissionAPIKeyRevoke           Permission = "api-keys:revoke"
 	PermissionSensitiveArtifactsRead Permission = "sensitive-artifacts:read"
+	PermissionPromotionsSubmit       Permission = "promotions:submit"
+	PermissionPromotionsWrite        Permission = "promotions:write"
 )
 
 type AuthenticationMethod string
@@ -89,6 +91,8 @@ func roleAuthorizes(role Role, permission Permission) bool {
 		return role == RoleViewer || role == RoleOperator || role == RoleAdmin
 	case PermissionRunsWrite:
 		return role == RoleOperator || role == RoleAdmin
+	case PermissionPromotionsSubmit, PermissionPromotionsWrite:
+		return role == RoleOperator || role == RoleAdmin
 	case PermissionAdmin:
 		return role == RoleAdmin
 	case PermissionAPIKeyRevoke:
@@ -117,6 +121,14 @@ func scopesAuthorize(scopes []Scope, permission Permission) bool {
 			}
 		case PermissionRunsWrite:
 			if scope == ScopeRunsWrite {
+				return true
+			}
+		case PermissionPromotionsSubmit:
+			if scope == ScopePromotionsSubmit {
+				return true
+			}
+		case PermissionPromotionsWrite:
+			if scope == ScopePromotionsWrite {
 				return true
 			}
 		case PermissionAPIKeyRevoke:

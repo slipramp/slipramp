@@ -3,6 +3,7 @@ package controller
 import (
 	"testing"
 
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
@@ -159,6 +160,22 @@ func TestConfigValidate(t *testing.T) {
 				}
 			},
 			wantError: "secret name",
+		},
+		{
+			name: "valid Kargo observer",
+			configure: func(settings *Config) {
+				settings.KargoIntegrations = []promotion.ObserverConfig{{
+					Name:            "prod",
+					StageNamespaces: []string{"kargo-core"},
+				}}
+			},
+		},
+		{
+			name: "Kargo observer without namespaces",
+			configure: func(settings *Config) {
+				settings.KargoIntegrations = []promotion.ObserverConfig{{Name: "prod"}}
+			},
+			wantError: "at least one Stage namespace",
 		},
 	}
 

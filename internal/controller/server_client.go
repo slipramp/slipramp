@@ -87,6 +87,12 @@ type controllerAPI interface {
 		body api.ReportRunObservationJSONRequestBody,
 		reqEditors ...api.RequestEditorFn,
 	) (*api.ReportRunObservationResponse, error)
+	ReplaceKargoStageSnapshotWithResponse(
+		ctx context.Context,
+		integration api.CatalogName,
+		body api.ReplaceKargoStageSnapshotJSONRequestBody,
+		reqEditors ...api.RequestEditorFn,
+	) (*api.ReplaceKargoStageSnapshotResponse, error)
 }
 
 func (c *serverClient) GetLogCursor(ctx context.Context, runID uuid.UUID) (logCursor, error) {
@@ -260,6 +266,33 @@ func (c *serverClient) ReportObservation(ctx context.Context, runID uuid.UUID, o
 		return rejectedServerResponse("report Run observation", response.StatusCode(), errRunObservationRejected)
 	default:
 		return rejectedServerResponse("report Run observation", response.StatusCode(), nil)
+	}
+}
+
+func (c *serverClient) ReplaceKargoStageSnapshot(
+	ctx context.Context,
+	integration string,
+	snapshot api.KargoStageSnapshot,
+) error {
+	response, err := c.api.ReplaceKargoStageSnapshotWithResponse(
+		ctx,
+		api.CatalogName(integration),
+		snapshot,
+		controllerAuthorization(c.bearerToken),
+	)
+	if err != nil {
+		return fmt.Errorf("replace Kargo Stage snapshot: %w", err)
+	}
+
+	switch response.StatusCode() {
+	case http.StatusNoContent:
+		return nil
+	case http.StatusUnauthorized:
+		return errControllerCredentialRejected
+	case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusConflict:
+		return rejectedServerResponse("replace Kargo Stage snapshot", response.StatusCode(), nil)
+	default:
+		return rejectedServerResponse("replace Kargo Stage snapshot", response.StatusCode(), nil)
 	}
 }
 

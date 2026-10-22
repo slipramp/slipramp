@@ -1,0 +1,116 @@
+package promotion
+
+import (
+	"encoding/json"
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/productidentity"
+)
+
+func TestPolicyModeEffective(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	future := now.Add(time.Hour)
+	past := now.Add(-time.Hour)
+
+	if got := PolicyModeReviewRequired.Effective(&future, now); got != PolicyModeReviewRequired {
+		t.Errorf("Effective(future) = %q", got)
+	}
+	if got := PolicyModeReviewRequired.Effective(&past, now); got != PolicyModeAutomatic {
+		t.Errorf("Effective(past) = %q", got)
+	}
+}
+
+func TestPromotionValidateAutomaticApproval(t *testing.T) {
+	t.Parallel()
+
+	promotion := validPromotion()
+	promotion.ReviewRequired = false
+	promotion.Status = StatusApproved
+	promotion.PreparationRepositoryID = nil
+	promotion.PreparationCatalogRevisionID = nil
+	promotion.PreparationRunID = nil
+	promotion.GitDiffArtifactID = nil
+	promotion.ArgoDiffArtifactID = nil
+	promotion.PreparationCompletedAt = nil
+
+	if err := promotion.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	promotion.Status = StatusPending
+	if err := promotion.Validate(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Validate() error = %v, want ErrInvalid", err)
+	}
+}
+
+func TestStagePolicyRejectsExpiredUpdate(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	principalID := uuid.New()
+	policy := StagePolicy{
+		StageID:              uuid.New(),
+		Mode:                 PolicyModeReviewRequired,
+		ExpiresAt:            new(now.Add(-time.Minute)),
+		UpdatedByPrincipalID: principalID,
+		UpdatedBySnapshot: productidentity.ActorSnapshot{
+			PrincipalID: principalID,
+			Kind:        productidentity.KindUser,
+			DisplayName: "Operator",
+		},
+		UpdatedAt: now,
+	}
+
+	if err := policy.Validate(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Validate() error = %v, want ErrInvalid", err)
+	}
+}
+
+func validPromotion() Promotion {
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	principalID := uuid.New()
+	runID := uuid.New()
+	preparationRepositoryID := uuid.New()
+	preparationRevisionID := uuid.New()
+	gitArtifactID := uuid.New()
+	argoArtifactID := uuid.New()
+
+	return Promotion{
+		ID:                           uuid.New(),
+		Integration:                  "prod",
+		ExternalPromotionID:          "external-dns-01jbe4q8",
+		RequestDigest:                RequestDigest{1},
+		StageID:                      uuid.New(),
+		StageSnapshot:                json.RawMessage(`{"name":"external-dns-prod"}`),
+		RepositoryID:                 uuid.New(),
+		RepositorySnapshot:           json.RawMessage(`{"name":"kcloud-ops"}`),
+		BaseRevision:                 "8b7f1d217a6b0000000000000000000000000000",
+		CandidateRevision:            "f4cb21a88e1d0000000000000000000000000000",
+		CandidateBranch:              "kargo/promotion/external-dns-01jbe4q8",
+		TargetBranch:                 "main",
+		PolicySnapshot:               json.RawMessage(`{"mode":"review-required"}`),
+		ReviewRequired:               true,
+		Status:                       StatusPending,
+		PreparationRepositoryID:      &preparationRepositoryID,
+		PreparationCatalogRevisionID: &preparationRevisionID,
+		PreparationRunID:             &runID,
+		GitDiffArtifactID:            &gitArtifactID,
+		ArgoDiffArtifactID:           &argoArtifactID,
+		RequestedByPrincipalID:       principalID,
+		RequestedBySnapshot: productidentity.ActorSnapshot{
+			PrincipalID: principalID,
+			Kind:        productidentity.KindServiceAccount,
+			DisplayName: "Kargo production",
+		},
+		CreatedAt:              now,
+		PreparationCompletedAt: new(now.Add(time.Minute)),
+		ExpiresAt:              new(now.Add(8 * 24 * time.Hour)),
+		UpdatedAt:              now.Add(time.Minute),
+	}
+}

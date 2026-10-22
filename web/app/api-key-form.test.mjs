@@ -28,3 +28,15 @@ test("accepts repeated scope fields and ignores unknown values", () => {
     scopes: ["slipramp:read"],
   });
 });
+
+test("accepts the Kargo Promotion scopes", () => {
+  const formData = new FormData();
+  formData.set("name", "kargo production");
+  formData.set("scopes", "slipramp:promotions:submit,slipramp:promotions:write");
+
+  assert.deepEqual(apiKeyCreateBody(formData), {
+    expiresAt: undefined,
+    name: "kargo production",
+    scopes: ["slipramp:promotions:submit", "slipramp:promotions:write"],
+  });
+});

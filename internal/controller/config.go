@@ -11,6 +11,7 @@ import (
 	"github.com/slipramp/slipramp/internal/auth"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
+	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 type Config struct {
@@ -22,6 +23,7 @@ type Config struct {
 	HarnessImage        string
 	GitCredentials      map[string]string
 	ExecutionNamespaces []string
+	KargoIntegrations   []promotion.ObserverConfig
 }
 
 func (c Config) Validate() error {
@@ -88,6 +90,10 @@ func (c Config) Validate() error {
 		); err != nil {
 			return err
 		}
+	}
+
+	if err := promotion.ValidateObserverConfigs(c.KargoIntegrations); err != nil {
+		return fmt.Errorf("validate Kargo observers: %w", err)
 	}
 
 	return nil

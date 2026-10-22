@@ -35,6 +35,9 @@ import type {
   CreateServiceAccountData,
   CreateServiceAccountErrors,
   CreateServiceAccountResponses,
+  DecidePromotionData,
+  DecidePromotionErrors,
+  DecidePromotionResponses,
   DownloadArtifactData,
   DownloadArtifactErrors,
   DownloadArtifactResponses,
@@ -50,6 +53,9 @@ import type {
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
+  GetPromotionData,
+  GetPromotionErrors,
+  GetPromotionResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -68,6 +74,12 @@ import type {
   ListClustersData,
   ListClustersErrors,
   ListClustersResponses,
+  ListPromotionsData,
+  ListPromotionsErrors,
+  ListPromotionsResponses,
+  ListPromotionStagesData,
+  ListPromotionStagesErrors,
+  ListPromotionStagesResponses,
   ListRepositoriesData,
   ListRepositoriesErrors,
   ListRepositoriesResponses,
@@ -95,6 +107,9 @@ import type {
   RemoveRepositoryData,
   RemoveRepositoryErrors,
   RemoveRepositoryResponses,
+  ReplaceKargoStageSnapshotData,
+  ReplaceKargoStageSnapshotErrors,
+  ReplaceKargoStageSnapshotResponses,
   ReportRunObservationData,
   ReportRunObservationErrors,
   ReportRunObservationResponses,
@@ -108,6 +123,12 @@ import type {
   StreamRunLogErrors,
   StreamRunLogResponse,
   StreamRunLogResponses,
+  SubmitKargoPromotionData,
+  SubmitKargoPromotionErrors,
+  SubmitKargoPromotionResponses,
+  UpdatePromotionStagePolicyData,
+  UpdatePromotionStagePolicyErrors,
+  UpdatePromotionStagePolicyResponses,
   UploadRunArtifactData,
   UploadRunArtifactErrors,
   UploadRunArtifactResponses,
@@ -941,6 +962,197 @@ export const createServiceAccountApiKey = <ThrowOnError extends boolean = false>
       },
     ],
     url: "/api/v1/service-accounts/{principalId}/api-keys",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Submit or poll a Kargo Promotion review request
+ */
+export const submitKargoPromotion = <ThrowOnError extends boolean = false>(
+  options: Options<SubmitKargoPromotionData, ThrowOnError>,
+): RequestResult<SubmitKargoPromotionResponses, SubmitKargoPromotionErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    SubmitKargoPromotionResponses,
+    SubmitKargoPromotionErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/kargo/{integration}/promotions",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Promotions
+ */
+export const listPromotions = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPromotionsData, ThrowOnError>,
+): RequestResult<ListPromotionsResponses, ListPromotionsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListPromotionsResponses, ListPromotionsErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotions",
+    ...options,
+  });
+
+/**
+ * Get a Promotion
+ */
+export const getPromotion = <ThrowOnError extends boolean = false>(
+  options: Options<GetPromotionData, ThrowOnError>,
+): RequestResult<GetPromotionResponses, GetPromotionErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetPromotionResponses, GetPromotionErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotions/{promotionId}",
+    ...options,
+  });
+
+/**
+ * Approve or reject a pending Promotion
+ */
+export const decidePromotion = <ThrowOnError extends boolean = false>(
+  options: Options<DecidePromotionData, ThrowOnError>,
+): RequestResult<DecidePromotionResponses, DecidePromotionErrors, ThrowOnError> =>
+  (options.client ?? client).put<DecidePromotionResponses, DecidePromotionErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotions/{promotionId}/decision",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * List observed Kargo Stages and their effective policies
+ */
+export const listPromotionStages = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPromotionStagesData, ThrowOnError>,
+): RequestResult<ListPromotionStagesResponses, ListPromotionStagesErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListPromotionStagesResponses,
+    ListPromotionStagesErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-stages",
+    ...options,
+  });
+
+/**
+ * Update review policy for an observed Kargo Stage
+ */
+export const updatePromotionStagePolicy = <ThrowOnError extends boolean = false>(
+  options: Options<UpdatePromotionStagePolicyData, ThrowOnError>,
+): RequestResult<
+  UpdatePromotionStagePolicyResponses,
+  UpdatePromotionStagePolicyErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdatePromotionStagePolicyResponses,
+    UpdatePromotionStagePolicyErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-stages/{stageId}/policy",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Submit one complete observed Kargo Stage snapshot
+ */
+export const replaceKargoStageSnapshot = <ThrowOnError extends boolean = false>(
+  options: Options<ReplaceKargoStageSnapshotData, ThrowOnError>,
+): RequestResult<
+  ReplaceKargoStageSnapshotResponses,
+  ReplaceKargoStageSnapshotErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    ReplaceKargoStageSnapshotResponses,
+    ReplaceKargoStageSnapshotErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "ControllerBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/controller/v1/kargo/{integration}/stages",
     ...options,
     headers: {
       "Content-Type": "application/json",

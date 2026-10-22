@@ -92,7 +92,7 @@ func (s *stubRunJobs) Delete(ctx context.Context, handle jobHandle) error {
 func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 	t.Parallel()
 
-	app, err := New(validConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), fake.NewClientset())
+	app, err := New(validConfig(), slog.New(slog.NewTextHandler(io.Discard, nil)), fake.NewClientset(), nil)
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}

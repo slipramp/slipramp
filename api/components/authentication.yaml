@@ -33,6 +33,8 @@ APIKeyScope:
   enum:
     - slipramp:read
     - slipramp:runs:write
+    - slipramp:promotions:submit
+    - slipramp:promotions:write
     - slipramp:admin
   x-go-type: string
 

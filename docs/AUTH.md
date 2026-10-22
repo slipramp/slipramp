@@ -148,7 +148,8 @@ web_sessions
 ```
 
 Credential digests are stored as 32-byte SHA-256 values. API-key scopes use a
-small validated set (`slipramp:read`, `slipramp:runs:write`, and
+small validated set (`slipramp:read`, `slipramp:runs:write`,
+`slipramp:promotions:submit`, `slipramp:promotions:write`, and
 `slipramp:admin`) without introducing resource grants or a policy language.
 Run creation and cancellation each store a principal foreign key plus an
 immutable snapshot containing the principal ID, kind, and display name.
@@ -241,6 +242,8 @@ The initial permission matrix is:
 | --- | --- | --- | --- |
 | `read` | List repositories, targets, clusters, Runs, logs, and artifact metadata; get catalogs and Runs; download non-sensitive artifacts | `viewer` | `slipramp:read` |
 | `runs:write` | Create and cancel Runs | `operator` | `slipramp:runs:write` |
+| `promotions:submit` | Submit or poll Kargo Promotion requests | `operator` service account | `slipramp:promotions:submit` |
+| `promotions:write` | Approve or reject Promotions and change Stage policy | `operator` | `slipramp:promotions:write` |
 | `admin` | Create and remove repositories; manage service accounts and their API keys | `admin` | `slipramp:admin` |
 | `api-keys:revoke` | Revoke an API key owned by the current principal | `viewer` | Any valid scope |
 
@@ -254,10 +257,11 @@ artifact contents. Sensitive downloads require an `operator` or `admin`
 principal and, for API keys, `slipramp:read`. This is a resource-sensitive
 check in addition to the download operation's ordinary `read` permission.
 
-Credentials may carry coarse scopes such as `slipramp:read`,
-`slipramp:runs:write`, and `slipramp:admin`. A credential scope can restrict the
-principal's role but cannot expand it. Custom roles, resource grants, deny
-rules, and a policy language remain out of scope.
+Credentials may carry the coarse scopes listed in the matrix. A credential
+scope can restrict the principal's role but cannot expand it. The Kargo machine
+endpoint additionally requires a service-account API key, preventing a user
+session or user-owned key from acting as the integration. Custom roles,
+resource grants, deny rules, and a policy language remain out of scope.
 
 All product endpoints except the OIDC login and callback boundary require
 authentication. Current-principal and logout authenticate their session inside

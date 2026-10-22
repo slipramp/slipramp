@@ -406,6 +406,93 @@ export type LogEvent = {
   contentsBase64: string;
 };
 
+export type Promotion = {
+  id: string;
+  integration: CatalogName;
+  externalPromotionId: string;
+  stageId: string;
+  stageSnapshot: {
+    [key: string]: unknown;
+  };
+  repositoryId: string;
+  repositorySnapshot: {
+    [key: string]: unknown;
+  };
+  baseRevision: GitRevision;
+  candidateRevision: GitRevision;
+  candidateBranch: string;
+  targetBranch: string;
+  policySnapshot: {
+    [key: string]: unknown;
+  };
+  reviewRequired: boolean;
+  status: PromotionStatus;
+  message?: string;
+  preparationRunId?: string;
+  preparationRun?: Run;
+  gitDiffArtifactId?: string;
+  gitDiffArtifact?: Artifact;
+  argoDiffArtifactId?: string;
+  argoDiffArtifact?: Artifact;
+  requestedBy: RunActor;
+  decision?: PromotionDecision;
+  createdAt: string;
+  preparationCompletedAt?: string;
+  decidedAt?: string;
+  expiresAt?: string;
+  updatedAt: string;
+};
+
+export type PromotionList = {
+  items: Array<Promotion>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PromotionStage = {
+  id: string;
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  name: string;
+  kubernetesUid: string;
+  resourceVersion: string;
+  application: string;
+  environment: string;
+  repository: CatalogName;
+  repositoryUrl: string;
+  targetBranch: string;
+  sourcePaths: Array<string>;
+  freight: {
+    [key: string]: unknown;
+  };
+  successfulRenderAcknowledgement?: {
+    [key: string]: unknown;
+  };
+  policy: PromotionStagePolicy;
+  pendingPromotionCount: number;
+  firstObservedAt: string;
+  lastObservedAt: string;
+  archivedAt?: string;
+};
+
+export type PromotionStageList = {
+  items: Array<PromotionStage>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PromotionStagePolicy = {
+  configuredMode: PromotionPolicyMode;
+  effectiveMode: PromotionPolicyMode;
+  expiresAt?: string;
+  reason?: string;
+  updatedBy?: RunActor;
+  updatedAt?: string;
+};
+
 export type RepositoryRefresh = {
   /**
    * Result of the most recent branch refresh attempt.
@@ -686,12 +773,17 @@ export type GitRunSource = {
   deliveryId: string;
 };
 
+export type PromotionRunSource = {
+  promotionId: string;
+};
+
 export type RunSource = {
   /**
    * Boundary that submitted the Run.
    */
-  type: "manual" | "api" | "git";
+  type: "manual" | "api" | "git" | "promotion";
   git?: GitRunSource;
+  promotion?: PromotionRunSource;
 };
 
 export type RunArtifactInput = {
@@ -721,7 +813,90 @@ export type ArtifactProvenance = {
   catalogRevisionId: string;
 };
 
-export type ApiKeyScope = "slipramp:read" | "slipramp:runs:write" | "slipramp:admin";
+export type ApiKeyScope =
+  | "slipramp:read"
+  | "slipramp:runs:write"
+  | "slipramp:promotions:submit"
+  | "slipramp:promotions:write"
+  | "slipramp:admin";
+
+export type GitRevision = string;
+
+export type KargoPromotionRequest = {
+  externalPromotionId: string;
+  project: CatalogName;
+  stage: string;
+  baseRevision: GitRevision;
+  candidateRevision: GitRevision;
+  candidateBranch: string;
+};
+
+export type PromotionStatus =
+  | "preparing"
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "error";
+
+export type KargoPromotionResponse = {
+  id: string;
+  externalPromotionId: string;
+  status: PromotionStatus;
+  reviewRequired: boolean;
+  message?: string;
+  updatedAt: string;
+};
+
+export type PromotionDecision = {
+  decision: "approved" | "rejected";
+  comment?: string;
+  decidedBy: RunActor;
+  decidedAt: string;
+};
+
+export type PromotionDecisionUpdate = {
+  decision: "approved" | "rejected";
+  comment?: string;
+};
+
+export type PromotionPolicyMode = "automatic" | "review-required";
+
+export type PromotionStagePolicyUpdate = {
+  mode: PromotionPolicyMode;
+  expiresAt?: string;
+  reason?: string;
+};
+
+export type PromotionStageObservation = {
+  project: CatalogName;
+  name: string;
+  kubernetesUid: string;
+  resourceVersion: string;
+  application: string;
+  environment: string;
+  repositoryUrl: string;
+  targetBranch: string;
+  sourcePaths: Array<string>;
+  freight: {
+    [key: string]: unknown;
+  };
+  successfulRenderAcknowledgement?: {
+    [key: string]: unknown;
+  };
+};
+
+export type KargoStageSnapshot = {
+  snapshotId: string;
+  observedAt: string;
+  stages: Array<PromotionStageObservation>;
+};
+
+export type Limit = number;
+
+export type Offset = number;
+
+export type PromotionId = string;
 
 export type GetHealthData = {
   body?: never;
@@ -2215,3 +2390,330 @@ export type CreateServiceAccountApiKeyResponses = {
 
 export type CreateServiceAccountApiKeyResponse =
   CreateServiceAccountApiKeyResponses[keyof CreateServiceAccountApiKeyResponses];
+
+export type SubmitKargoPromotionData = {
+  body: KargoPromotionRequest;
+  path: {
+    integration: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/kargo/{integration}/promotions";
+};
+
+export type SubmitKargoPromotionErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The request conflicts with durable Promotion state.
+   */
+  409: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+  /**
+   * A durable dependency is unavailable.
+   */
+  503: Problem;
+};
+
+export type SubmitKargoPromotionError =
+  SubmitKargoPromotionErrors[keyof SubmitKargoPromotionErrors];
+
+export type SubmitKargoPromotionResponses = {
+  /**
+   * The newly accepted or previously persisted Promotion state.
+   */
+  200: KargoPromotionResponse;
+};
+
+export type SubmitKargoPromotionResponse =
+  SubmitKargoPromotionResponses[keyof SubmitKargoPromotionResponses];
+
+export type ListPromotionsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    status?: PromotionStatus;
+    integration?: CatalogName;
+    cluster?: CatalogName;
+    project?: CatalogName;
+    stageId?: string;
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/promotions";
+};
+
+export type ListPromotionsErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type ListPromotionsError = ListPromotionsErrors[keyof ListPromotionsErrors];
+
+export type ListPromotionsResponses = {
+  /**
+   * Promotions ordered by creation time descending.
+   */
+  200: PromotionList;
+};
+
+export type ListPromotionsResponse = ListPromotionsResponses[keyof ListPromotionsResponses];
+
+export type GetPromotionData = {
+  body?: never;
+  path: {
+    promotionId: string;
+  };
+  query?: never;
+  url: "/api/v1/promotions/{promotionId}";
+};
+
+export type GetPromotionErrors = {
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type GetPromotionError = GetPromotionErrors[keyof GetPromotionErrors];
+
+export type GetPromotionResponses = {
+  /**
+   * Promotion detail with preparation and decision context.
+   */
+  200: Promotion;
+};
+
+export type GetPromotionResponse = GetPromotionResponses[keyof GetPromotionResponses];
+
+export type DecidePromotionData = {
+  body: PromotionDecisionUpdate;
+  path: {
+    promotionId: string;
+  };
+  query?: never;
+  url: "/api/v1/promotions/{promotionId}/decision";
+};
+
+export type DecidePromotionErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The request conflicts with durable Promotion state.
+   */
+  409: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type DecidePromotionError = DecidePromotionErrors[keyof DecidePromotionErrors];
+
+export type DecidePromotionResponses = {
+  /**
+   * The decided Promotion, including immutable attribution.
+   */
+  200: Promotion;
+};
+
+export type DecidePromotionResponse = DecidePromotionResponses[keyof DecidePromotionResponses];
+
+export type ListPromotionStagesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    integration?: CatalogName;
+    cluster?: CatalogName;
+    project?: CatalogName;
+    archived?: boolean;
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/promotion-stages";
+};
+
+export type ListPromotionStagesErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type ListPromotionStagesError = ListPromotionStagesErrors[keyof ListPromotionStagesErrors];
+
+export type ListPromotionStagesResponses = {
+  /**
+   * Observed Kargo Stages.
+   */
+  200: PromotionStageList;
+};
+
+export type ListPromotionStagesResponse =
+  ListPromotionStagesResponses[keyof ListPromotionStagesResponses];
+
+export type UpdatePromotionStagePolicyData = {
+  body: PromotionStagePolicyUpdate;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/promotion-stages/{stageId}/policy";
+};
+
+export type UpdatePromotionStagePolicyErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The request conflicts with durable Promotion state.
+   */
+  409: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type UpdatePromotionStagePolicyError =
+  UpdatePromotionStagePolicyErrors[keyof UpdatePromotionStagePolicyErrors];
+
+export type UpdatePromotionStagePolicyResponses = {
+  /**
+   * The updated configured and effective policy.
+   */
+  200: PromotionStagePolicy;
+};
+
+export type UpdatePromotionStagePolicyResponse =
+  UpdatePromotionStagePolicyResponses[keyof UpdatePromotionStagePolicyResponses];
+
+export type ReplaceKargoStageSnapshotData = {
+  body: KargoStageSnapshot;
+  path: {
+    integration: CatalogName;
+  };
+  query?: never;
+  url: "/controller/v1/kargo/{integration}/stages";
+};
+
+export type ReplaceKargoStageSnapshotErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The request conflicts with durable Promotion state.
+   */
+  409: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type ReplaceKargoStageSnapshotError =
+  ReplaceKargoStageSnapshotErrors[keyof ReplaceKargoStageSnapshotErrors];
+
+export type ReplaceKargoStageSnapshotResponses = {
+  /**
+   * The complete snapshot was accepted or had already been accepted.
+   */
+  204: void;
+};
+
+export type ReplaceKargoStageSnapshotResponse =
+  ReplaceKargoStageSnapshotResponses[keyof ReplaceKargoStageSnapshotResponses];

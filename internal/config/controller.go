@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/slipramp/slipramp/internal/controller"
+	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 	controllerHarnessImageEnvironment        = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
 	controllerGitCredentialsEnvironment      = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
 	controllerExecutionNamespacesEnvironment = "SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES"
+	controllerKargoIntegrationsEnvironment   = "SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS"
 )
 
 func LoadController(lookupEnvironment func(string) (string, bool)) (controller.Config, error) {
@@ -33,6 +35,7 @@ func LoadController(lookupEnvironment func(string) (string, bool)) (controller.C
 	cfg.HarnessImage, _ = lookupEnvironment(controllerHarnessImageEnvironment)
 	cfg.GitCredentials = map[string]string{}
 	cfg.ExecutionNamespaces = []string{}
+	cfg.KargoIntegrations = []promotion.ObserverConfig{}
 
 	if value, ok := lookupEnvironment(controllerExecutionNamespacesEnvironment); ok {
 		if err := json.Unmarshal([]byte(value), &cfg.ExecutionNamespaces); err != nil {
@@ -49,6 +52,15 @@ func LoadController(lookupEnvironment func(string) (string, bool)) (controller.C
 		}
 		if cfg.GitCredentials == nil {
 			cfg.GitCredentials = map[string]string{}
+		}
+	}
+
+	if value, ok := lookupEnvironment(controllerKargoIntegrationsEnvironment); ok {
+		if err := json.Unmarshal([]byte(value), &cfg.KargoIntegrations); err != nil {
+			return controller.Config{}, fmt.Errorf("parse %s: %w", controllerKargoIntegrationsEnvironment, err)
+		}
+		if cfg.KargoIntegrations == nil {
+			cfg.KargoIntegrations = []promotion.ObserverConfig{}
 		}
 	}
 

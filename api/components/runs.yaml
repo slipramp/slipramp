@@ -239,9 +239,12 @@ RunSource:
         - manual
         - api
         - git
+        - promotion
       description: Boundary that submitted the Run.
     git:
       $ref: "#/GitRunSource"
+    promotion:
+      $ref: ./promotions.yaml#/PromotionRunSource
 
 GitRunSource:
   type: object

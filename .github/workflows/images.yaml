@@ -7,6 +7,7 @@ on:
       - .github/workflows/images.yaml
       - cmd/slipramp-controller/**
       - cmd/slipramp-harness/**
+      - cmd/slipramp-kargo-tools/**
       - cmd/slipramp-server/**
       - internal/**
       - web/**
@@ -35,6 +36,7 @@ jobs:
           - checkout
           - controller
           - harness
+          - kargo-tools
           - server
           - web
     steps:

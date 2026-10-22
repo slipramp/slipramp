@@ -148,6 +148,25 @@ WITH candidates AS (
           WHERE run_artifact_inputs.artifact_id = artifacts.id
             AND runs.phase <> 'finished'
       )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM promotions
+          WHERE promotions.status IN ('preparing', 'pending')
+            AND artifacts.id IN (
+                promotions.git_diff_artifact_id,
+                promotions.argo_diff_artifact_id
+            )
+      )
+      AND NOT EXISTS (
+          SELECT 1
+          FROM runs AS promotion_run
+          JOIN promotions
+            ON promotions.id::text =
+               promotion_run.source->'promotion'->>'promotionId'
+          WHERE promotion_run.id = artifacts.run_id
+            AND promotion_run.source->>'type' = 'promotion'
+            AND promotions.status IN ('preparing', 'pending')
+      )
     ORDER BY artifacts.sealed_at, artifacts.id
     LIMIT sqlc.arg(result_limit)
     FOR UPDATE SKIP LOCKED

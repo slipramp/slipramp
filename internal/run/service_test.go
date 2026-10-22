@@ -346,6 +346,46 @@ func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
 	}
 }
 
+func TestCreateRunUsesPromotionSourceAndRequestingActor(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	revision := testRevision()
+	revision.Catalog.Targets[0].Spec.Actions["sync"] = catalog.Action{
+		Command: []string{"slipramp-kargo-tools", "prepare"},
+	}
+	service.catalogs = &recordingCatalogs{revision: revision}
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1310")
+	idempotencyKey := promotionID.String()
+	actor := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1311"),
+		Kind:        productidentity.KindServiceAccount,
+		DisplayName: "Kargo production",
+		Role:        productidentity.RoleOperator,
+	}
+
+	created, err := service.CreateRun(context.Background(), CreateRequest{
+		RepositoryID:      testRepositoryID,
+		TargetName:        "network",
+		ActionName:        "sync",
+		CatalogRevisionID: &revision.ID,
+		Source: Source{
+			Type:      SourceTypePromotion,
+			Promotion: &PromotionRunSource{PromotionID: promotionID},
+		},
+		IdempotencyKey: &idempotencyKey,
+		Actor:          &actor,
+	})
+	if err != nil {
+		t.Fatalf("CreateRun() error = %v", err)
+	}
+	if created.Source.Promotion == nil || created.Source.Promotion.PromotionID != promotionID ||
+		created.CreatedBy == nil || created.CreatedBy.PrincipalID != actor.ID ||
+		created.CatalogRevisionID != revision.ID {
+		t.Errorf("Promotion preparation Run = %#v", created)
+	}
+}
+
 func TestCreateRunRejectsInvalidSourceMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -403,7 +443,17 @@ func TestCreateRunRejectsInvalidSourceMetadata(t *testing.T) {
 				request.Source = Source{Type: SourceTypeManual}
 				request.IdempotencyKey = nil
 			},
-			want: "only Git-triggered Runs may pin",
+			want: "manual and API Runs cannot pin",
+		},
+		{
+			name: "Promotion missing actor",
+			configure: func(request *CreateRequest) {
+				request.Source = Source{
+					Type:      SourceTypePromotion,
+					Promotion: &PromotionRunSource{PromotionID: deliveryID},
+				}
+			},
+			want: "require the requesting actor",
 		},
 	}
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/server"
 )
 
@@ -35,7 +36,20 @@ const (
 	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
+	serverKargoIntegrationsEnvironment            = "SLIPRAMP_KARGO_INTEGRATIONS"
 )
+
+type serverKargoIntegration struct {
+	Cluster      string   `json:"cluster"`
+	Repositories []string `json:"repositories"`
+	Preparation  struct {
+		Repository string `json:"repository"`
+		Target     string `json:"target"`
+		Action     string `json:"action"`
+	} `json:"preparation"`
+	MaximumStageObservationAge string `json:"maximumStageObservationAge"`
+	PendingReviewRetention     string `json:"pendingReviewRetention"`
+}
 
 func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, error) {
 	if lookupEnvironment == nil {
@@ -214,12 +228,56 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 
 		cfg.ProductAuthentication.SessionLifetime = lifetime
 	}
+	if value, ok := lookupEnvironment(serverKargoIntegrationsEnvironment); ok {
+		integrations, err := parseServerKargoIntegrations(value)
+		if err != nil {
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverKargoIntegrationsEnvironment, err)
+		}
+
+		cfg.KargoIntegrations = integrations
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return server.Config{}, fmt.Errorf("validate server configuration: %w", err)
 	}
 
 	return cfg, nil
+}
+
+func parseServerKargoIntegrations(value string) (promotion.IntegrationSet, error) {
+	var encoded map[string]serverKargoIntegration
+	if err := json.Unmarshal([]byte(value), &encoded); err != nil {
+		return nil, err
+	}
+	if encoded == nil {
+		return promotion.IntegrationSet{}, nil
+	}
+
+	integrations := make(promotion.IntegrationSet, len(encoded))
+	for name, encodedIntegration := range encoded {
+		maximumAge, err := time.ParseDuration(encodedIntegration.MaximumStageObservationAge)
+		if err != nil {
+			return nil, fmt.Errorf("integration %q maximum Stage observation age: %w", name, err)
+		}
+		retention, err := time.ParseDuration(encodedIntegration.PendingReviewRetention)
+		if err != nil {
+			return nil, fmt.Errorf("integration %q pending review retention: %w", name, err)
+		}
+
+		integrations[name] = promotion.IntegrationConfig{
+			ClusterName:  encodedIntegration.Cluster,
+			Repositories: encodedIntegration.Repositories,
+			Preparation: promotion.PreparationConfig{
+				Repository: encodedIntegration.Preparation.Repository,
+				Target:     encodedIntegration.Preparation.Target,
+				Action:     encodedIntegration.Preparation.Action,
+			},
+			MaximumStageObservationAge: maximumAge,
+			PendingReviewRetention:     retention,
+		}
+	}
+
+	return integrations, nil
 }
 
 func parseDurationEnvironment(name, value string) (time.Duration, error) {

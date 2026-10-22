@@ -38,6 +38,12 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"CancelRun":                  productidentity.PermissionRunsWrite,
 	"CreateRepository":           productidentity.PermissionAdmin,
 	"RemoveRepository":           productidentity.PermissionAdmin,
+	"SubmitKargoPromotion":       productidentity.PermissionPromotionsSubmit,
+	"ListPromotions":             productidentity.PermissionRead,
+	"GetPromotion":               productidentity.PermissionRead,
+	"DecidePromotion":            productidentity.PermissionPromotionsWrite,
+	"ListPromotionStages":        productidentity.PermissionRead,
+	"UpdatePromotionStagePolicy": productidentity.PermissionPromotionsWrite,
 }
 
 var productAuthenticationOperations = map[string]struct{}{
@@ -94,6 +100,17 @@ func ProductAuthentication(authenticator ProductAuthenticator) api.StrictMiddlew
 					writer,
 					http.StatusForbidden,
 					"The authenticated principal is not authorized for this operation.",
+				)
+
+				return nil, nil
+			}
+			if operationID == "SubmitKargoPromotion" &&
+				(authentication.Method != productidentity.AuthenticationMethodAPIKey ||
+					authentication.Principal.Kind != productidentity.KindServiceAccount) {
+				WriteProblem(
+					writer,
+					http.StatusForbidden,
+					"Kargo Promotions must be submitted by a service-account API key.",
 				)
 
 				return nil, nil

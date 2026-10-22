@@ -132,6 +132,21 @@ assert_contains "$controller_render" 'value: "\[\\"runs-blue\\",\\"runs-green\\"
 assert_contains "$controller_render" 'name: slipramp-controller-credentials'
 assert_contains "$controller_render" 'github-readonly'
 
+kargo_controller_render="$test_directory/controller-kargo.yaml"
+"$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/controller-required.yaml" \
+  --set-json 'kargo.integrations=[{"name":"prod","stageNamespaces":["kargo-core","kargo-platform"]},{"name":"edge","stageNamespaces":["kargo-core"]}]' \
+  >"$kargo_controller_render"
+test "$(grep -Ec '^kind: Role$' "$kargo_controller_render")" = 3 || fail "Controller chart did not create one execution Role and one Role per distinct Kargo namespace"
+test "$(grep -Ec '^kind: RoleBinding$' "$kargo_controller_render")" = 3 || fail "Controller chart did not bind every namespaced Controller Role"
+assert_contains "$kargo_controller_render" 'namespace: kargo-core'
+assert_contains "$kargo_controller_render" 'namespace: kargo-platform'
+assert_contains "$kargo_controller_render" 'apiGroups: \[kargo.akuity.io\]'
+assert_contains "$kargo_controller_render" 'resources: \[stages\]'
+assert_contains "$kargo_controller_render" 'verbs: \[get, list\]'
+assert_not_contains "$kargo_controller_render" '^kind: ClusterRole'
+
 assert_render_fails "Missing required Server configuration" \
   invalid "$server_chart"
 assert_render_fails "Server replica count greater than one" \

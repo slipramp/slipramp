@@ -12,6 +12,7 @@
     "harnessImage",
     "credentials",
     "gitCredentials",
+    "kargo",
     "serviceAccount",
     "rbac",
     "imagePullSecrets",
@@ -52,6 +53,31 @@
       "type": "object",
       "propertyNames": { "$ref": "#/$defs/dnsLabel" },
       "additionalProperties": { "$ref": "#/$defs/dnsSubdomain" }
+    },
+    "kargo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["integrations"],
+      "properties": {
+        "integrations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "stageNamespaces"],
+            "properties": {
+              "name": { "$ref": "#/$defs/dnsLabel" },
+              "stageNamespaces": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "$ref": "#/$defs/dnsLabel" }
+              }
+            }
+          }
+        }
+      }
     },
     "serviceAccount": {
       "type": "object",

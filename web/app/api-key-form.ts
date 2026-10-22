@@ -3,6 +3,8 @@ import type { ApiKeyCreate, ApiKeyScope } from "~/api/generated";
 export const apiKeyScopeOptions = [
   { label: "Read product state", value: "slipramp:read" },
   { label: "Create and cancel Runs", value: "slipramp:runs:write" },
+  { label: "Submit Kargo Promotions", value: "slipramp:promotions:submit" },
+  { label: "Decide Promotions and change policy", value: "slipramp:promotions:write" },
   { label: "Administrator", value: "slipramp:admin" },
 ] as const satisfies ReadonlyArray<{ label: string; value: ApiKeyScope }>;
 

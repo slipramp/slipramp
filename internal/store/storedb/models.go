@@ -102,6 +102,14 @@ type GitTriggerDelivery struct {
 	SupersededAt      pgtype.Timestamptz
 }
 
+type KargoStageSnapshot struct {
+	SnapshotID  pgtype.UUID
+	Integration string
+	ClusterName string
+	ObservedAt  pgtype.Timestamptz
+	AcceptedAt  pgtype.Timestamptz
+}
+
 type OidcIdentity struct {
 	ID                  pgtype.UUID
 	PrincipalID         pgtype.UUID
@@ -123,6 +131,77 @@ type Principal struct {
 	DisabledAt  pgtype.Timestamptz
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+}
+
+type Promotion struct {
+	ID                           pgtype.UUID
+	Integration                  string
+	ExternalPromotionID          string
+	RequestDigest                []byte
+	StageID                      pgtype.UUID
+	StageSnapshot                []byte
+	RepositoryID                 pgtype.UUID
+	RepositorySnapshot           []byte
+	BaseRevision                 string
+	CandidateRevision            string
+	CandidateBranch              string
+	TargetBranch                 string
+	PolicySnapshot               []byte
+	ReviewRequired               bool
+	Status                       string
+	Message                      *string
+	PreparationRepositoryID      pgtype.UUID
+	PreparationCatalogRevisionID pgtype.UUID
+	PreparationRunID             pgtype.UUID
+	GitDiffArtifactID            pgtype.UUID
+	ArgoDiffArtifactID           pgtype.UUID
+	RequestedByPrincipalID       pgtype.UUID
+	RequestedBySnapshot          []byte
+	CreatedAt                    pgtype.Timestamptz
+	PreparationCompletedAt       pgtype.Timestamptz
+	DecidedAt                    pgtype.Timestamptz
+	ExpiresAt                    pgtype.Timestamptz
+	UpdatedAt                    pgtype.Timestamptz
+}
+
+type PromotionDecision struct {
+	PromotionID          pgtype.UUID
+	Decision             string
+	Comment              *string
+	DecidedByPrincipalID pgtype.UUID
+	DecidedBySnapshot    []byte
+	DecidedAt            pgtype.Timestamptz
+}
+
+type PromotionStage struct {
+	ID                              pgtype.UUID
+	Integration                     string
+	ClusterName                     string
+	Project                         string
+	Name                            string
+	KubernetesUid                   string
+	ResourceVersion                 string
+	Application                     string
+	Environment                     string
+	RepositoryName                  string
+	RepositoryUrl                   string
+	TargetBranch                    string
+	SourcePaths                     []string
+	FreightJson                     []byte
+	SuccessfulRenderAcknowledgement []byte
+	FirstObservedAt                 pgtype.Timestamptz
+	LastObservedAt                  pgtype.Timestamptz
+	ArchivedAt                      pgtype.Timestamptz
+}
+
+type PromotionStagePolicy struct {
+	StageID              pgtype.UUID
+	Mode                 string
+	ExpiresAt            pgtype.Timestamptz
+	Reason               *string
+	UpdatedByPrincipalID pgtype.UUID
+	UpdatedBySnapshot    []byte
+	UpdatedAt            pgtype.Timestamptz
 }
 
 type Repository struct {

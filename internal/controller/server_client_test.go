@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -159,6 +160,53 @@ func TestServerClientPollRejectsUnauthorizedResponse(t *testing.T) {
 	_, err = client.Poll(context.Background())
 	if !errors.Is(err, errControllerCredentialRejected) {
 		t.Fatalf("Poll() error = %v, want %v", err, errControllerCredentialRejected)
+	}
+}
+
+func TestServerClientSubmitsAuthenticatedKargoStageSnapshot(t *testing.T) {
+	t.Parallel()
+
+	var received receivedEnrollment
+	cfg := validConfig()
+	cfg.ServerURL = "https://slipramp.example.com/slipramp"
+	client, err := newServerClientWithHTTPClient(
+		cfg,
+		httpDoerFunc(func(request *http.Request) (*http.Response, error) {
+			body, readErr := io.ReadAll(request.Body)
+			if readErr != nil {
+				t.Fatalf("read request body: %v", readErr)
+			}
+			received = receivedEnrollment{
+				method:        request.Method,
+				path:          request.URL.Path,
+				authorization: request.Header.Get("Authorization"),
+				body:          string(body),
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+	}
+
+	snapshotID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1905")
+	err = client.ReplaceKargoStageSnapshot(context.Background(), "prod", api.KargoStageSnapshot{
+		SnapshotID: snapshotID,
+		ObservedAt: time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC),
+		Stages:     []api.PromotionStageObservation{},
+	})
+	if err != nil {
+		t.Fatalf("ReplaceKargoStageSnapshot() error = %v", err)
+	}
+	if received.method != http.MethodPut ||
+		received.path != "/slipramp/controller/v1/kargo/prod/stages" ||
+		received.authorization != "Bearer controller-token" ||
+		!strings.Contains(received.body, `"snapshotId":"`+snapshotID.String()+`"`) {
+		t.Errorf("snapshot request = %#v", received)
 	}
 }
 

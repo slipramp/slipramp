@@ -50,6 +50,28 @@ server:
 The resulting Git config path is
 `/var/run/slipramp/repository-credentials/github-readonly/gitconfig`.
 
+Optional Kargo promotion-review integrations are static Server configuration.
+Each integration selects a registered Cluster, a repository allowlist, and the
+repository-defined Target and Action that will prepare review artifacts:
+
+```yaml
+server:
+  kargo:
+    integrations:
+      prod:
+        cluster: prod
+        repositories: [kcloud-ops]
+        preparation:
+          repository: kcloud-ops
+          target: kargo-promotions
+          action: prepare-review
+        maximumStageObservationAge: 5m
+        pendingReviewRetention: 192h
+```
+
+The selected Cluster must also be present in `controllerEnrollmentTokens`.
+Changing Kargo integration configuration requires a Server rollout.
+
 ## Ingress and operation
 
 The optional Ingress uses one host. `/api`, `/controller`, `/execution`,

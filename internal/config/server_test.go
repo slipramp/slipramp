@@ -32,6 +32,7 @@ const (
 	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
+	serverKargoIntegrationsEnvironment            = "SLIPRAMP_KARGO_INTEGRATIONS"
 )
 
 func TestLoadServerFromEnvironment(t *testing.T) {
@@ -61,6 +62,10 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		serverOIDCRedirectURLEnvironment:              "https://slipramp.example.com/api/v1/auth/callback",
 		serverOIDCSubjectRolesEnvironment:             `{"admin-subject":"admin","operator-subject":"operator"}`,
 		serverProductSessionLifetimeEnvironment:       "8h",
+		serverKargoIntegrationsEnvironment: `{"prod":{"cluster":"colo","repositories":["kcloud-ops"],` +
+			`"preparation":{"repository":"kcloud-ops","target":"kargo-promotions",` +
+			`"action":"prepare-review"},"maximumStageObservationAge":"5m",` +
+			`"pendingReviewRetention":"192h"}}`,
 	}
 
 	cfg, err := config.LoadServer(mapEnvironment(environment))
@@ -155,6 +160,10 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	if cfg.ProductAuthentication.SessionLifetime != 8*time.Hour {
 		t.Errorf("ProductAuthentication.SessionLifetime = %s, want 8h", cfg.ProductAuthentication.SessionLifetime)
 	}
+	integration, ok := cfg.KargoIntegrations.Lookup("prod")
+	if !ok || integration.ClusterName != "colo" || integration.PendingReviewRetention != 192*time.Hour {
+		t.Errorf("KargoIntegrations[prod] = %#v, %t", integration, ok)
+	}
 }
 
 func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
@@ -197,6 +206,13 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 				serverOIDCSubjectRolesEnvironment: "not-json",
 			},
 			wantError: serverOIDCSubjectRolesEnvironment,
+		},
+		{
+			name: "malformed Kargo integrations",
+			environment: map[string]string{
+				serverKargoIntegrationsEnvironment: "not-json",
+			},
+			wantError: serverKargoIntegrationsEnvironment,
 		},
 	}
 

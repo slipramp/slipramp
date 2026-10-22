@@ -30,6 +30,8 @@ credentials:
       key: controller-token
 
 gitCredentials: {}
+kargo:
+  integrations: []
 
 serviceAccount:
   create: true

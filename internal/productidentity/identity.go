@@ -23,9 +23,11 @@ const (
 	RoleOperator Role = "operator"
 	RoleViewer   Role = "viewer"
 
-	ScopeRead      Scope = "slipramp:read"
-	ScopeRunsWrite Scope = "slipramp:runs:write"
-	ScopeAdmin     Scope = "slipramp:admin"
+	ScopeRead             Scope = "slipramp:read"
+	ScopeRunsWrite        Scope = "slipramp:runs:write"
+	ScopePromotionsSubmit Scope = "slipramp:promotions:submit"
+	ScopePromotionsWrite  Scope = "slipramp:promotions:write"
+	ScopeAdmin            Scope = "slipramp:admin"
 
 	maximumDisplayNameLength  = 200
 	maximumAPIKeyNameLength   = 200
@@ -258,7 +260,8 @@ func validateScopes(scopes []Scope) error {
 
 	seen := make(map[Scope]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if scope != ScopeRead && scope != ScopeRunsWrite && scope != ScopeAdmin {
+		if scope != ScopeRead && scope != ScopeRunsWrite && scope != ScopePromotionsSubmit &&
+			scope != ScopePromotionsWrite && scope != ScopeAdmin {
 			return fmt.Errorf("%w: API key scope %q is invalid", ErrInvalid, scope)
 		}
 		if _, found := seen[scope]; found {

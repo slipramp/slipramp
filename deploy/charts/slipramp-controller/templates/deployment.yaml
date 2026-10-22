@@ -55,6 +55,8 @@ spec:
               value: {{ .Values.gitCredentials | toJson | quote }}
             - name: SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES
               value: {{ .Values.executionNamespaces | toJson | quote }}
+            - name: SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS
+              value: {{ .Values.kargo.integrations | toJson | quote }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

@@ -62,6 +62,20 @@ paths:
     $ref: ./paths/authentication.yaml#/serviceAccounts
   /api/v1/service-accounts/{principalId}/api-keys:
     $ref: ./paths/authentication.yaml#/serviceAccountAPIKeys
+  /api/v1/kargo/{integration}/promotions:
+    $ref: ./paths/promotions.yaml#/kargoPromotion
+  /api/v1/promotions:
+    $ref: ./paths/promotions.yaml#/promotions
+  /api/v1/promotions/{promotionId}:
+    $ref: ./paths/promotions.yaml#/promotion
+  /api/v1/promotions/{promotionId}/decision:
+    $ref: ./paths/promotions.yaml#/promotionDecision
+  /api/v1/promotion-stages:
+    $ref: ./paths/promotions.yaml#/promotionStages
+  /api/v1/promotion-stages/{stageId}/policy:
+    $ref: ./paths/promotions.yaml#/promotionStagePolicy
+  /controller/v1/kargo/{integration}/stages:
+    $ref: ./paths/promotions.yaml#/controllerKargoStages
 components:
   securitySchemes:
     ProductSession:
@@ -149,3 +163,13 @@ components:
       $ref: ./components/artifacts.yaml#/LogCursor
     LogEvent:
       $ref: ./components/artifacts.yaml#/LogEvent
+    Promotion:
+      $ref: ./components/promotions.yaml#/Promotion
+    PromotionList:
+      $ref: ./components/promotions.yaml#/PromotionList
+    PromotionStage:
+      $ref: ./components/promotions.yaml#/PromotionStage
+    PromotionStageList:
+      $ref: ./components/promotions.yaml#/PromotionStageList
+    PromotionStagePolicy:
+      $ref: ./components/promotions.yaml#/PromotionStagePolicy

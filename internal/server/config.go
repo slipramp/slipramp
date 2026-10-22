@@ -13,6 +13,7 @@ import (
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/store"
 )
@@ -32,6 +33,7 @@ type Config struct {
 	ArtifactReconcileInterval    time.Duration
 	ArtifactOrphanGracePeriod    time.Duration
 	ProductAuthentication        productauth.Config
+	KargoIntegrations            promotion.IntegrationSet
 }
 
 func DefaultConfig() Config {
@@ -49,6 +51,7 @@ func DefaultConfig() Config {
 		ArtifactReconcileInterval:    artifact.DefaultReconcileInterval,
 		ArtifactOrphanGracePeriod:    artifact.DefaultOrphanGracePeriod,
 		ProductAuthentication:        productauth.DefaultConfig(),
+		KargoIntegrations:            promotion.IntegrationSet{},
 	}
 }
 
@@ -100,6 +103,20 @@ func (c Config) Validate() error {
 				"placement %q selects unregistered cluster %q",
 				placementName,
 				placementConfig.ClusterName,
+			)
+		}
+	}
+
+	if err := c.KargoIntegrations.Validate(); err != nil {
+		return fmt.Errorf("validate Kargo integrations: %w", err)
+	}
+	for _, integrationName := range c.KargoIntegrations.Names() {
+		integration, _ := c.KargoIntegrations.Lookup(integrationName)
+		if _, ok := c.ControllerEnrollmentTokens[integration.ClusterName]; !ok {
+			return fmt.Errorf(
+				"kargo integration %q selects unregistered cluster %q",
+				integrationName,
+				integration.ClusterName,
 			)
 		}
 	}

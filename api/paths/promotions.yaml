@@ -1,0 +1,337 @@
+kargoPromotion:
+  post:
+    operationId: submitKargoPromotion
+    summary: Submit or poll a Kargo Promotion review request
+    security:
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: integration
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/promotions.yaml#/KargoPromotionRequest
+    responses:
+      "200":
+        description: The newly accepted or previously persisted Promotion state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/KargoPromotionResponse
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "409":
+        $ref: "#/components/responses/Conflict"
+      "500":
+        $ref: "#/components/responses/InternalError"
+      "503":
+        $ref: "#/components/responses/KargoServiceUnavailable"
+
+promotions:
+  get:
+    operationId: listPromotions
+    summary: List Promotions
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: status
+        in: query
+        schema:
+          $ref: ../components/promotions.yaml#/PromotionStatus
+      - name: integration
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: cluster
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: project
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: stageId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - $ref: "#/components/parameters/Limit"
+      - $ref: "#/components/parameters/Offset"
+    responses:
+      "200":
+        description: Promotions ordered by creation time descending.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionList
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+promotion:
+  get:
+    operationId: getPromotion
+    summary: Get a Promotion
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - $ref: "#/components/parameters/PromotionId"
+    responses:
+      "200":
+        description: Promotion detail with preparation and decision context.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/Promotion
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+promotionDecision:
+  put:
+    operationId: decidePromotion
+    summary: Approve or reject a pending Promotion
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - $ref: "#/components/parameters/PromotionId"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/promotions.yaml#/PromotionDecisionUpdate
+    responses:
+      "200":
+        description: The decided Promotion, including immutable attribution.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/Promotion
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "409":
+        $ref: "#/components/responses/Conflict"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+promotionStages:
+  get:
+    operationId: listPromotionStages
+    summary: List observed Kargo Stages and their effective policies
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: integration
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: cluster
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: project
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: archived
+        in: query
+        schema:
+          type: boolean
+      - $ref: "#/components/parameters/Limit"
+      - $ref: "#/components/parameters/Offset"
+    responses:
+      "200":
+        description: Observed Kargo Stages.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionStageList
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+promotionStagePolicy:
+  put:
+    operationId: updatePromotionStagePolicy
+    summary: Update review policy for an observed Kargo Stage
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: stageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/promotions.yaml#/PromotionStagePolicyUpdate
+    responses:
+      "200":
+        description: The updated configured and effective policy.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionStagePolicy
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "409":
+        $ref: "#/components/responses/Conflict"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+controllerKargoStages:
+  put:
+    operationId: replaceKargoStageSnapshot
+    summary: Submit one complete observed Kargo Stage snapshot
+    security:
+      - ControllerBearer: []
+    tags: [Controllers, Promotions]
+    parameters:
+      - name: integration
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/promotions.yaml#/KargoStageSnapshot
+    responses:
+      "204":
+        description: The complete snapshot was accepted or had already been accepted.
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "409":
+        $ref: "#/components/responses/Conflict"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+components:
+  parameters:
+    PromotionId:
+      name: promotionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  responses:
+    BadRequest:
+      description: The request is malformed or invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    Unauthorized:
+      description: A valid credential is required.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    Forbidden:
+      description: The authenticated principal lacks the required role or scope.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    NotFound:
+      description: The requested integration, Stage, or Promotion does not exist.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    Conflict:
+      description: The request conflicts with durable Promotion state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    InternalError:
+      description: The operation could not be completed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    KargoServiceUnavailable:
+      description: A durable dependency is unavailable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem

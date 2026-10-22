@@ -16,6 +16,7 @@ const (
 	controllerHarnessImageEnvironment        = "SLIPRAMP_CONTROLLER_HARNESS_IMAGE"
 	controllerGitCredentialsEnvironment      = "SLIPRAMP_CONTROLLER_GIT_CREDENTIALS"
 	controllerExecutionNamespacesEnvironment = "SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES"
+	controllerKargoIntegrationsEnvironment   = "SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS"
 )
 
 func TestLoadControllerFromEnvironment(t *testing.T) {
@@ -30,6 +31,7 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 		controllerHarnessImageEnvironment:        "registry.example.com/slipramp-harness:1",
 		controllerGitCredentialsEnvironment:      `{"github-readonly":"github-readonly"}`,
 		controllerExecutionNamespacesEnvironment: `["runs-a","runs-b"]`,
+		controllerKargoIntegrationsEnvironment:   `[{"name":"prod","stageNamespaces":["kargo-core"]}]`,
 	}
 
 	cfg, err := config.LoadController(mapEnvironment(environment))
@@ -68,6 +70,10 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 	if len(cfg.ExecutionNamespaces) != 2 || cfg.ExecutionNamespaces[1] != "runs-b" {
 		t.Errorf("ExecutionNamespaces = %#v", cfg.ExecutionNamespaces)
 	}
+	if len(cfg.KargoIntegrations) != 1 || cfg.KargoIntegrations[0].Name != "prod" ||
+		cfg.KargoIntegrations[0].StageNamespaces[0] != "kargo-core" {
+		t.Errorf("KargoIntegrations = %#v", cfg.KargoIntegrations)
+	}
 }
 
 func TestLoadControllerRejectsInvalidEnvironment(t *testing.T) {
@@ -98,6 +104,13 @@ func TestLoadControllerRejectsInvalidEnvironment(t *testing.T) {
 				environment[controllerExecutionNamespacesEnvironment] = "not-json"
 			},
 			wantError: controllerExecutionNamespacesEnvironment,
+		},
+		{
+			name: "invalid Kargo integrations",
+			configure: func(environment map[string]string) {
+				environment[controllerKargoIntegrationsEnvironment] = "not-json"
+			},
+			wantError: controllerKargoIntegrationsEnvironment,
 		},
 	}
 

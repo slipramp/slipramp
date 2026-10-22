@@ -110,7 +110,27 @@ the exact base and candidate revisions and request the Argo CD diff. It emits:
 Both artifacts are sensitive by default. A successful Run must seal both,
 including an explicit empty result. Missing, malformed, oversized, expired, or
 deleted artifacts make preparation fail. A pending Promotion prevents its
-artifacts from expiring.
+artifacts from expiring. Each artifact is limited to 16 MiB when the Server
+validates the completed Run.
+
+The dispatcher supplies this stable set of string parameters to the configured
+preparation Action:
+
+| Parameter | Value |
+| --- | --- |
+| `promotion-id` | Slipramp Promotion UUID |
+| `external-promotion-id` | Kargo Promotion identity |
+| `project` | observed Kargo project/namespace |
+| `stage` | observed Kargo Stage name |
+| `application` | snapshotted application |
+| `environment` | snapshotted environment |
+| `repository-name` | matched Slipramp Repository name |
+| `repository-url` | snapshotted repository URL |
+| `base-revision` | validated full base Git object ID |
+| `candidate-revision` | validated full candidate Git object ID |
+| `candidate-branch` | validated candidate branch |
+| `target-branch` | snapshotted target branch |
+| `source-paths` | JSON array of snapshotted source paths |
 
 The preparation command is read-only and bounded by the Action timeout. A
 failed preparation Run moves the Promotion to `error`; it is not retried
@@ -196,10 +216,12 @@ Its durable fields include:
 - optional successful-render acknowledgement used by drift detection;
 - first-observed, last-observed, and archived timestamps.
 
-Application, environment, repository, target branch, and source paths are
+Application, environment, repository URL, target branch, and source paths are
 derived by the Controller from the Stage's labels, annotations, and promotion
-variables. The initial adapter retains the established `app`, `argoApp`,
-`overlay`, `gitopsRepo`, `kustomizePath`, and
+variables. The Server matches the observed repository URL to one of the
+integration's allowed Slipramp Repositories and stores its logical name. The
+initial adapter retains the established `app`, `argoApp`, `overlay`,
+`gitopsRepo`, `kustomizePath`, and
 `stageBranchKustomization` conventions. A
 `slipramp.com/promotion-source-paths` annotation may add unusual paths.
 
@@ -529,7 +551,7 @@ Controller or interfere with Run delivery.
 
 The first-party tools image:
 
-- contains pinned Git and Argo CD clients;
+- contains Git 2.53.0 and Argo CD 3.5.0 in an image pinned by digest;
 - accepts explicit argument arrays and never requires an implicit shell;
 - fetches and compares the exact revisions recorded on the Promotion;
 - verifies that the candidate branch resolves to the candidate revision;
@@ -540,6 +562,39 @@ The first-party tools image:
 Git and Argo CD credentials use ordinary Runtime credential declarations and
 Placement bindings. The image contains no Slipramp API integration; the Harness
 owns artifact transfer and log streaming.
+
+The image entrypoint is `slipramp-kargo-tools`. Its `prepare` command accepts
+the complete stable parameter set above as named flags. It writes the Git diff
+to `/slipramp/artifacts/git.diff` and the Argo CD diff to
+`/slipramp/artifacts/argo.json`; the paths can be overridden for local tests.
+An empty Git diff is a zero-byte file. An empty Argo CD diff is the canonical
+JSON document `{"resources":[]}\n`. Structured Argo CD resources use this
+shape:
+
+```json
+{
+  "resources": [
+    {
+      "group": "apps",
+      "kind": "Deployment",
+      "namespace": "default",
+      "name": "example",
+      "diff": "@@ -1 +1 @@\n-image: old\n+image: new",
+      "versionMetadataOnly": false
+    }
+  ]
+}
+```
+
+The Argo CD credential source mounts a target file at
+`/run/slipramp/credentials/argocd/targets.json`. Keys are normalized
+environment names. Each value supplies `server`, `authToken`, and optional
+`plaintext` and `grpcWeb` booleans. The command rejects an environment absent
+from this file and passes the token through `ARGOCD_AUTH_TOKEN`, never through
+the process argument list. Optional HTTPS Git basic authentication uses the
+`SLIPRAMP_KARGO_GIT_USERNAME` and `SLIPRAMP_KARGO_GIT_PASSWORD` credential
+environment variables. SSH and credential-helper access can use ordinary Git
+environment and configuration files injected by the Runtime.
 
 ## Web Application
 
@@ -579,15 +634,15 @@ documented. Do not land handwritten generated-code changes.
 
 ### 1. Contract, configuration, and persistence
 
-- [ ] Add and validate Server and Controller Kargo integration configuration.
-- [ ] Add promotion OpenAPI path and component files with machine, operator,
+- [x] Add and validate Server and Controller Kargo integration configuration.
+- [x] Add promotion OpenAPI path and component files with machine, operator,
       policy, Stage observation, and Run-source schemas.
-- [ ] Add promotion scopes and permission checks.
-- [ ] Add the migration, SQL queries, generated store code, and integration
+- [x] Add promotion scopes and permission checks.
+- [x] Add the migration, SQL queries, generated store code, and integration
       tests for Stages, policies, Promotions, decisions, and snapshots.
-- [ ] Add `internal/promotion` domain types and validation without HTTP or
+- [x] Add `internal/promotion` domain types and validation without HTTP or
       Kubernetes dependencies.
-- [ ] Update `PLAN.md`, `AUTH.md`, Helm values, schemas, and chart documentation
+- [x] Update `PLAN.md`, `AUTH.md`, Helm values, schemas, and chart documentation
       for the accepted configuration and permissions.
 
 Accepted outcome: generated clients compile and PostgreSQL durably enforces
@@ -595,13 +650,13 @@ Promotion identity, policy, decision, and transition invariants.
 
 ### 2. Controller Stage observation
 
-- [ ] Add optional namespaced Kargo Stage discovery to the Controller.
-- [ ] Normalize the established Stage labels, annotations, variables, Freight,
+- [x] Add optional namespaced Kargo Stage discovery to the Controller.
+- [x] Normalize the established Stage labels, annotations, variables, Freight,
       and successful-render acknowledgement.
-- [ ] Add the authenticated complete-snapshot handler and atomic persistence.
-- [ ] Archive missing Stages while preserving policy and history.
-- [ ] Add optional namespaced RBAC to the controller Helm chart.
-- [ ] Cover pagination, partial-list failure, repeated snapshots, stale
+- [x] Add the authenticated complete-snapshot handler and atomic persistence.
+- [x] Archive missing Stages while preserving policy and history.
+- [x] Add optional namespaced RBAC to the controller Helm chart.
+- [x] Cover pagination, partial-list failure, repeated snapshots, stale
       snapshots, namespace restrictions, and multi-cluster identity.
 
 Accepted outcome: the Server maintains a restart-safe, multi-cluster Stage
@@ -609,34 +664,35 @@ inventory without Kubernetes access.
 
 ### 3. Kargo request and preparation dispatch
 
-- [ ] Implement the Kargo machine endpoint and exact request-digest
+- [x] Implement the Kargo machine endpoint and exact request-digest
       idempotency behavior.
-- [ ] Snapshot the observed Stage, repository, policy, and requesting actor in
+- [x] Snapshot the observed Stage, repository, policy, and requesting actor in
       one durable request boundary.
-- [ ] Approve automatic requests immediately.
-- [ ] Add the restart-safe dispatcher that creates one revision-pinned Run for
+- [x] Approve automatic requests immediately.
+- [x] Add the restart-safe dispatcher that creates one revision-pinned Run for
       a guarded Promotion.
-- [ ] Add the `promotion` Run source and UI/API backlink.
-- [ ] Reconcile Run completion into `pending` or `error` without implicit
+- [x] Add the `promotion` Run source and UI/API backlink.
+- [x] Reconcile Run completion into `pending` or `error` without implicit
       retries.
-- [ ] Protect nonterminal Promotion artifacts from retention expiry.
+- [x] Protect nonterminal Promotion artifacts from retention expiry.
 
 Accepted outcome: repeated Kargo polls recover one durable Promotion, and a
 guarded request reaches `pending` through an ordinary Slipramp Run.
 
 ### 4. Diff runtime and artifacts
 
-- [ ] Move the reusable read-only Git and Argo CD diff logic from
+- [x] Move the reusable read-only Git and Argo CD diff logic from
       `kargo-gate` into the first-party Kargo tools command.
-- [ ] Build and pin its runtime image with Git and Argo CD versions.
+- [x] Build and pin its runtime image with Git and Argo CD versions.
 - [ ] Define the `kargo-promotions` Runtime, Target, and `prepare-review` Action
       in the operational repository.
-- [ ] Emit bounded Git and structured Argo CD diff artifacts, including
+- [x] Emit bounded Git and structured Argo CD diff artifacts, including
       deterministic empty results.
-- [ ] Validate candidate ref identity and fail closed for an unknown
+- [x] Validate candidate ref identity and fail closed for an unknown
       environment or Argo CD target.
-- [ ] Add unit tests for output parsing and an execution acceptance test using
-      real artifact upload.
+- [x] Add unit tests for output parsing and command execution against a real
+      Git repository.
+- [ ] Add an execution acceptance test using real artifact upload.
 
 Accepted outcome: a real guarded Promotion presents exact Git and Argo CD
 diffs retained through the normal artifact path.

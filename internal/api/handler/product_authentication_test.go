@@ -178,6 +178,38 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 	}
 }
 
+func TestKargoSubmissionRequiresServiceAccountAPIKey(t *testing.T) {
+	t.Parallel()
+
+	userAuthentication := productAuthentication(
+		productidentity.RoleOperator,
+		productidentity.AuthenticationMethodAPIKey,
+		[]productidentity.Scope{productidentity.ScopePromotionsSubmit},
+	)
+	called := false
+	response := runProductMiddleware(
+		t,
+		&recordingProductAuthenticator{authentication: userAuthentication},
+		"SubmitKargoPromotion",
+		func(context.Context) { called = true },
+	)
+	if response.Code != http.StatusForbidden || called {
+		t.Errorf("user API key status = %d, called = %t", response.Code, called)
+	}
+
+	serviceAccountAuthentication := userAuthentication
+	serviceAccountAuthentication.Principal.Kind = productidentity.KindServiceAccount
+	response = runProductMiddleware(
+		t,
+		&recordingProductAuthenticator{authentication: serviceAccountAuthentication},
+		"SubmitKargoPromotion",
+		func(context.Context) { called = true },
+	)
+	if response.Code != http.StatusNoContent || !called {
+		t.Errorf("service-account API key status = %d, called = %t", response.Code, called)
+	}
+}
+
 func TestSensitiveArtifactAuthorization(t *testing.T) {
 	t.Parallel()
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
@@ -183,6 +184,20 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "unregistered cluster",
 		},
 		{
+			name: "valid Kargo integration",
+			configure: func(settings *Config) {
+				settings.ControllerEnrollmentTokens["colo"] = "enrollment-token"
+				settings.KargoIntegrations = validKargoIntegrations()
+			},
+		},
+		{
+			name: "unregistered Kargo cluster",
+			configure: func(settings *Config) {
+				settings.KargoIntegrations = validKargoIntegrations()
+			},
+			wantError: "kargo integration \"prod\" selects unregistered cluster \"colo\"",
+		},
+		{
 			name: "invalid database",
 			configure: func(settings *Config) {
 				settings.Database.URL = ""
@@ -269,6 +284,22 @@ func TestConfigValidate(t *testing.T) {
 
 			testcheck.ErrorContains(t, settings.Validate(), test.wantError)
 		})
+	}
+}
+
+func validKargoIntegrations() promotion.IntegrationSet {
+	return promotion.IntegrationSet{
+		"prod": {
+			ClusterName:  "colo",
+			Repositories: []string{"kcloud-ops"},
+			Preparation: promotion.PreparationConfig{
+				Repository: "kcloud-ops",
+				Target:     "kargo-promotions",
+				Action:     "prepare-review",
+			},
+			MaximumStageObservationAge: 5 * time.Minute,
+			PendingReviewRetention:     8 * 24 * time.Hour,
+		},
 	}
 }
 

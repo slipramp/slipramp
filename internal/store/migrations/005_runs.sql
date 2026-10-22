@@ -85,6 +85,21 @@ CREATE TABLE runs (
                 )
             )
         )
+        OR (
+            source->>'type' = 'promotion'
+            AND source->'promotion'->>'promotionId' ~
+                '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            AND idempotency_key = source->'promotion'->>'promotionId'
+            AND source = jsonb_build_object(
+                'type',
+                'promotion',
+                'promotion',
+                jsonb_build_object(
+                    'promotionId',
+                    source->'promotion'->>'promotionId'
+                )
+            )
+        )
     ) IS TRUE),
     CONSTRAINT runs_idempotency_key_valid CHECK (
         idempotency_key IS NULL OR length(idempotency_key) BETWEEN 1 AND 128

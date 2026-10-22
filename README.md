@@ -227,6 +227,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_OIDC_REDIRECT_URL` | Required | Absolute provider callback URL ending at `/api/v1/auth/callback` |
 | `SLIPRAMP_OIDC_SUBJECT_ROLES` | Required | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME` | `12h` | Absolute lifetime of a local browser session |
+| `SLIPRAMP_KARGO_INTEGRATIONS` | `{}` | JSON object containing optional named Kargo promotion-review integrations |
 
 OIDC configuration is required for the Server to start. The subject-role map is
 the installation's enrollment and role authority: unknown subjects cannot sign
@@ -297,6 +298,28 @@ accepts Kubernetes pod metadata and spec extensions, but cannot replace
 Slipramp-owned containers, init containers, restart policy, service account,
 node selector, or run deadline.
 
+Configured Kargo integrations expose the authenticated
+`POST /api/v1/kargo/{integration}/promotions` machine endpoint. Exact repeated
+requests recover the same durable Promotion. Automatic policy approves the
+request immediately; review-required policy dispatches one ordinary,
+revision-pinned preparation Run under the requesting service account. The Run
+uses the configured Repository, Target, and Action, records a `promotion`
+source backlink, and must produce retained sensitive `git-diff` and
+`argo-diff` artifacts no larger than 16 MiB each. Successful preparation moves
+the Promotion to `pending`; a failed Run or invalid artifacts move it to
+`error` without an implicit retry. Nonterminal Promotion artifacts are exempt
+from normal retention expiry.
+
+The first-party `slipramp-kargo-tools prepare` command supplies the read-only
+preparation implementation. Its published image is pinned to Git 2.53.0 and
+Argo CD 3.5.0. It verifies that the remote candidate branch still resolves to
+the snapshotted candidate revision, produces a bounded textual Git diff, and
+normalizes Argo CD output into deterministic per-resource JSON. Argo CD targets
+come from a Runtime credential file and an unknown environment fails closed;
+tokens are passed through the child environment rather than command arguments.
+The normal Harness uploads the two declared output files, so the tools image
+has no Slipramp API integration.
+
 The Server emits structured JSON logs and shuts down gracefully on `SIGINT` or
 `SIGTERM`. Its liveness probe only reports that HTTP is serving. Readiness
 checks PostgreSQL and artifact storage concurrently under a two-second deadline
@@ -336,11 +359,18 @@ environment variables:
 | `SLIPRAMP_CONTROLLER_HARNESS_IMAGE` | Pinned image whose entrypoint is `slipramp-harness` |
 | `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS` | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
 | `SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES` | Required JSON array of exclusively owned execution namespaces |
+| `SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS` | JSON array of optional Kargo integration names and Stage namespaces; defaults to `[]` |
 
 The Controller validates every assignment against its configured execution
 namespaces and scans those namespaces individually during restart recovery.
 This permits namespace-scoped Roles instead of cluster-wide RBAC. The checkout
 init container materializes the exact commit into an `emptyDir`.
+Optional Kargo observers independently list every page of Stages in their
+configured namespaces and submit only complete snapshots. A failed namespace
+list leaves the Server's last durable inventory unchanged; successful
+snapshots archive missing Stages without removing policy or history. The
+Server matches each observed Git repository URL to the integration's allowed
+Slipramp Repositories and never receives Kubernetes credentials.
 The action container mounts it at the runtime's `workingDirectory`, or
 `/workspace` by default, and runs from the target's repository-relative path.
 The checkout is made writable inside the execution Pod so checkout and runtime
@@ -405,13 +435,13 @@ helm upgrade --install slipramp-controller oci://ghcr.io/slipramp/slipramp-chart
 Source checkouts remain installable from `deploy/charts/slipramp` and
 `deploy/charts/slipramp-controller`. GHCR creates new container packages as
 private by default. After the first release, a maintainer must verify that the
-five image packages and two chart packages are public for anonymous installs.
+six image packages and two chart packages are public for anonymous installs.
 Private packages require `helm registry login ghcr.io` and matching Kubernetes
 image pull credentials.
 
 To publish a release, update both charts' `version` and `appVersion` fields and
 every default image tag to the same version, then run the package check and
-push the matching Git tag. The release workflow publishes the five images
+push the matching Git tag. The release workflow publishes the six images
 first and only pushes the two OCI charts after every image succeeds.
 
 ```console

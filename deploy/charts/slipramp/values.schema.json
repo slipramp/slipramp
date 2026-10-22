@@ -30,6 +30,7 @@
         "artifacts",
         "oidc",
         "repositoryRefresh",
+        "kargo",
         "placements",
         "livenessProbe",
         "readinessProbe",
@@ -140,6 +141,18 @@
                   }
                 }
               }
+            }
+          }
+        },
+        "kargo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["integrations"],
+          "properties": {
+            "integrations": {
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/dnsLabel" },
+              "additionalProperties": { "$ref": "#/$defs/kargoIntegration" }
             }
           }
         },
@@ -355,6 +368,38 @@
           }
         },
         "podTemplate": { "type": "object" }
+      }
+    },
+    "kargoIntegration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cluster",
+        "repositories",
+        "preparation",
+        "maximumStageObservationAge",
+        "pendingReviewRetention"
+      ],
+      "properties": {
+        "cluster": { "$ref": "#/$defs/dnsLabel" },
+        "repositories": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/dnsLabel" }
+        },
+        "preparation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "target", "action"],
+          "properties": {
+            "repository": { "$ref": "#/$defs/dnsLabel" },
+            "target": { "$ref": "#/$defs/dnsLabel" },
+            "action": { "$ref": "#/$defs/dnsLabel" }
+          }
+        },
+        "maximumStageObservationAge": { "$ref": "#/$defs/duration" },
+        "pendingReviewRetention": { "$ref": "#/$defs/duration" }
       }
     }
   }

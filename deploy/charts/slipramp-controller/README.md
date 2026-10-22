@@ -49,6 +49,22 @@ them to a release tag or an immutable registry tag appropriate for the
 installation. The checkout image must contain `/bin/sh`, Git, and SSH; the
 Harness image entrypoint must be `slipramp-harness`.
 
+Kargo Stage observation is optional and configured separately from execution
+namespaces. For every distinct configured Stage namespace, the chart creates a
+dedicated Role and RoleBinding that can only get and list
+`kargo.akuity.io/v1alpha1` Stage resources. No cluster-wide Kargo permission is
+created.
+
+```yaml
+kargo:
+  integrations:
+    - name: prod
+      stageNamespaces:
+        - kargo-core
+        - kargo-devops
+        - kargo-platform
+```
+
 Released chart versions are published as OCI artifacts in GHCR. Pin the chart
 version explicitly; the same release version is the default Controller,
 checkout, and Harness image tag.

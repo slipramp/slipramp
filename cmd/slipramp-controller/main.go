@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -34,8 +35,13 @@ func main() {
 		logger.Error("initialize Kubernetes client", "error", err)
 		os.Exit(1)
 	}
+	dynamicClient, err := dynamic.NewForConfig(kubeConfig)
+	if err != nil {
+		logger.Error("initialize dynamic Kubernetes client", "error", err)
+		os.Exit(1)
+	}
 
-	app, err := controller.New(cfg, logger, kubeClient)
+	app, err := controller.New(cfg, logger, kubeClient, dynamicClient)
 	if err != nil {
 		logger.Error("initialize controller", "error", err)
 		os.Exit(1)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -74,9 +75,16 @@ type Controller struct {
 	observerMutex  sync.Mutex
 	observedRuns   map[uuid.UUID]*runObserver
 	observers      sync.WaitGroup
+	stageObservers []*kargoStageObserver
+	workers        sync.WaitGroup
 }
 
-func New(cfg Config, logger *slog.Logger, kubeClient kubernetes.Interface) (*Controller, error) {
+func New(
+	cfg Config,
+	logger *slog.Logger,
+	kubeClient kubernetes.Interface,
+	dynamicClient dynamic.Interface,
+) (*Controller, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -87,13 +95,16 @@ func New(cfg Config, logger *slog.Logger, kubeClient kubernetes.Interface) (*Con
 	if kubeClient == nil {
 		return nil, errors.New("kubernetes client is required")
 	}
+	if len(cfg.KargoIntegrations) > 0 && dynamicClient == nil {
+		return nil, errors.New("dynamic Kubernetes client is required for Kargo observation")
+	}
 
 	server, err := newServerClient(cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Controller{
+	controller := &Controller{
 		clusterName:    cfg.ClusterName,
 		serverURL:      cfg.ServerURL,
 		logger:         logger.With("component", "controller"),
@@ -107,13 +118,24 @@ func New(cfg Config, logger *slog.Logger, kubeClient kubernetes.Interface) (*Con
 		heartbeatEvery: observationHeartbeatPeriod,
 		now:            time.Now,
 		observedRuns:   make(map[uuid.UUID]*runObserver),
-	}, nil
+	}
+	if len(cfg.KargoIntegrations) > 0 {
+		controller.stageObservers = newKargoStageObservers(
+			cfg.KargoIntegrations,
+			dynamicClient,
+			server,
+			logger,
+		)
+	}
+
+	return controller, nil
 }
 
 func (c *Controller) Run(ctx context.Context) error {
 	observeContext, stopObservers := context.WithCancel(ctx)
 	defer func() {
 		stopObservers()
+		c.workers.Wait()
 		c.observers.Wait()
 	}()
 
@@ -127,6 +149,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	if err := c.enroll(ctx); err != nil {
 		return err
 	}
+	c.startStageObservers(observeContext)
 
 	if !c.recoverRuns(observeContext) {
 		return nil
@@ -168,6 +191,12 @@ func (c *Controller) Run(ctx context.Context) error {
 		if !waitForRetry(ctx, c.retryDelay) {
 			return nil
 		}
+	}
+}
+
+func (c *Controller) startStageObservers(ctx context.Context) {
+	for _, observer := range c.stageObservers {
+		c.workers.Go(func() { observer.Run(ctx) })
 	}
 }
 

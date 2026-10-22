@@ -20,6 +20,9 @@ RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     -o /out/slipramp-harness ./cmd/slipramp-harness
 RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     go build -trimpath -ldflags="-s -w" \
+    -o /out/slipramp-kargo-tools ./cmd/slipramp-kargo-tools
+RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
+    go build -trimpath -ldflags="-s -w" \
     -o /out/slipramp-server ./cmd/slipramp-server
 
 FROM scratch AS controller
@@ -54,6 +57,18 @@ ENTRYPOINT ["/slipramp-server"]
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS checkout
 
 RUN apk add --no-cache ca-certificates git openssh-client
+
+FROM quay.io/argoproj/argocd:v3.5.0@sha256:c298cedbaeb31532ba8d4e9904eba9e4987e067293fbd86400c5194e78f743d5 AS kargo-tools
+
+RUN test "$(git --version)" = "git version 2.53.0" \
+    && test "$(argocd version --client --short)" = "argocd: v3.5.0"
+
+COPY --from=go-build /out/slipramp-kargo-tools /usr/local/bin/slipramp-kargo-tools
+
+ENV HOME=/tmp
+
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/slipramp-kargo-tools"]
 
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS acceptance-git
 

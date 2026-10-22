@@ -67,6 +67,8 @@ server:
     interval: 1m
     fetchTimeout: 30s
     credentials: {}
+  kargo:
+    integrations: {}
   placements: {}
 
   livenessProbe:
