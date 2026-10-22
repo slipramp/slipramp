@@ -290,6 +290,42 @@ func (d *Database) ListPromotions(ctx context.Context) ([]promotion.Promotion, e
 	return records, nil
 }
 
+func (d *Database) GetPromotionDecision(
+	ctx context.Context,
+	promotionID uuid.UUID,
+) (promotion.Decision, error) {
+	row, err := d.queries.GetPromotionDecision(ctx, databaseUUID(promotionID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return promotion.Decision{}, promotion.ErrDecisionNotFound
+	}
+	if err != nil {
+		return promotion.Decision{}, fmt.Errorf("get Promotion decision: %w", err)
+	}
+
+	return promotionDecisionFromRow(row)
+}
+
+func (d *Database) ExpirePendingPromotions(
+	ctx context.Context,
+	expiredAt time.Time,
+) ([]promotion.Promotion, error) {
+	rows, err := d.queries.ExpirePendingPromotions(ctx, databaseTime(expiredAt))
+	if err != nil {
+		return nil, fmt.Errorf("expire pending Promotions: %w", err)
+	}
+
+	records := make([]promotion.Promotion, 0, len(rows))
+	for _, row := range rows {
+		record, decodeErr := promotionFromRow(row)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		records = append(records, record)
+	}
+
+	return records, nil
+}
+
 func (d *Database) AttachPromotionPreparationRun(
 	ctx context.Context,
 	promotionID uuid.UUID,
@@ -393,6 +429,25 @@ func (d *Database) DecidePromotion(
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, promotion.Decision{}, fmt.Errorf("get existing Promotion decision: %w", err)
+	}
+
+	if _, err := queries.ExpirePendingPromotion(
+		ctx,
+		storedb.ExpirePendingPromotionParams{
+			ExpiredAt: databaseTime(record.DecidedAt),
+			ID:        databaseUUID(record.PromotionID),
+		},
+	); err == nil {
+		if err := transaction.Commit(ctx); err != nil {
+			return promotion.Promotion{}, promotion.Decision{}, fmt.Errorf("commit Promotion expiry: %w", err)
+		}
+
+		return promotion.Promotion{}, promotion.Decision{}, promotion.ErrTransitionConflict
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return promotion.Promotion{}, promotion.Decision{}, fmt.Errorf(
+			"expire Promotion before decision: %w",
+			err,
+		)
 	}
 
 	if _, err := queries.LockPendingPromotion(ctx, databaseUUID(record.PromotionID)); err != nil {

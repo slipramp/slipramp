@@ -347,3 +347,22 @@ RETURNING *;
 SELECT *
 FROM promotion_decisions
 WHERE promotion_id = sqlc.arg(promotion_id);
+
+-- name: ExpirePendingPromotions :many
+UPDATE promotions
+SET status = 'expired',
+    message = 'The review window expired before a decision was recorded.',
+    updated_at = sqlc.arg(expired_at)
+WHERE status = 'pending'
+  AND expires_at <= sqlc.arg(expired_at)
+RETURNING *;
+
+-- name: ExpirePendingPromotion :one
+UPDATE promotions
+SET status = 'expired',
+    message = 'The review window expired before a decision was recorded.',
+    updated_at = sqlc.arg(expired_at)
+WHERE id = sqlc.arg(id)
+  AND status = 'pending'
+  AND expires_at <= sqlc.arg(expired_at)
+RETURNING *;

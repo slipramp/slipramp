@@ -6,8 +6,6 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
-	"github.com/slipramp/slipramp/internal/productidentity"
-	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/readiness"
 )
 
@@ -25,6 +23,7 @@ type Handler struct {
 	artifacts         ArtifactService
 	promotionRequests PromotionRequestService
 	promotionStages   PromotionStageService
+	promotionReviews  PromotionReviewService
 	readiness         ReadinessService
 	productAuth       ProductAuthenticationService
 	now               func() time.Time
@@ -32,24 +31,6 @@ type Handler struct {
 
 type ReadinessService interface {
 	Check(ctx context.Context) readiness.Report
-}
-
-type PromotionRequestService interface {
-	SubmitKargoPromotion(
-		ctx context.Context,
-		integrationName string,
-		request promotion.KargoRequest,
-		principal productidentity.Principal,
-	) (promotion.Promotion, error)
-}
-
-type PromotionStageService interface {
-	ReplaceStageSnapshot(
-		ctx context.Context,
-		integrationName string,
-		clusterName string,
-		replacement promotion.StageSnapshotReplacement,
-	) error
 }
 
 type ProductAuthenticationService interface {
@@ -66,6 +47,7 @@ type Dependencies struct {
 	Artifacts             ArtifactService
 	PromotionRequests     PromotionRequestService
 	PromotionStages       PromotionStageService
+	PromotionReviews      PromotionReviewService
 	Readiness             ReadinessService
 	ProductAuthentication ProductAuthenticationService
 }
@@ -82,6 +64,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		artifacts:         dependencies.Artifacts,
 		promotionRequests: dependencies.PromotionRequests,
 		promotionStages:   dependencies.PromotionStages,
+		promotionReviews:  dependencies.PromotionReviews,
 		readiness:         dependencies.Readiness,
 		productAuth:       dependencies.ProductAuthentication,
 		now:               time.Now,

@@ -699,15 +699,15 @@ diffs retained through the normal artifact path.
 
 ### 5. Operator review experience
 
-- [ ] Implement Promotion list, detail, Stage list, policy, and decision
+- [x] Implement Promotion list, detail, Stage list, policy, and decision
       handlers behind generated interfaces.
-- [ ] Add the Promotions and Stage React Router routes using the generated
+- [x] Add the Promotions and Stage React Router routes using the generated
       frontend client.
-- [ ] Render structured resource diffs with filtering and version-only hiding.
-- [ ] Enforce one immutable decision with actor attribution and conflict-safe
+- [x] Render structured resource diffs with filtering and version-only hiding.
+- [x] Enforce one immutable decision with actor attribution and conflict-safe
       retries.
-- [ ] Add pending-review expiry and clear terminal messages.
-- [ ] Cover role and scope behavior, sensitive artifact access, concurrent
+- [x] Add pending-review expiry and clear terminal messages.
+- [x] Cover role and scope behavior, sensitive artifact access, concurrent
       decisions, expiry races, and Server restart recovery.
 
 Accepted outcome: an authenticated operator can inspect, approve, reject, and

@@ -82,10 +82,36 @@ tasks:
       - '"{{.PNPM}}" --filter @slipramp/web run dev'
 
   local:up:
-    desc: Start local PostgreSQL and RustFS dependencies
+    desc: Start local PostgreSQL, RustFS, and Dex dependencies
     cmds:
-      - docker compose -f deploy/compose.yaml up -d --wait postgres rustfs
+      - docker compose -f deploy/compose.yaml up -d --wait postgres rustfs dex
       - docker compose -f deploy/compose.yaml run --rm rustfs-init
+      - |
+        for attempt in $(seq 1 30); do
+          if curl --fail --silent http://127.0.0.1:5556/dex/.well-known/openid-configuration >/dev/null; then
+            exit 0
+          fi
+          sleep 1
+        done
+        printf 'Dex did not become ready\n' >&2
+        exit 1
+
+  local:server:
+    desc: Run the Server with local Dex and kcloud-ops integration configuration
+    deps: [local:up]
+    env:
+      SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS: '{"homelab":"slipramp-local-homelab-enrollment-token"}'
+      SLIPRAMP_KARGO_INTEGRATIONS: '{"homelab":{"cluster":"homelab","repositories":["kcloud-ops"],"preparation":{"repository":"kcloud-ops","target":"kargo-promotions","action":"prepare-review"},"maximumStageObservationAge":"5m","pendingReviewRetention":"192h"}}'
+      SLIPRAMP_OIDC_CLIENT_ID: slipramp-local
+      SLIPRAMP_OIDC_CLIENT_SECRET: slipramp-local-client-secret
+      SLIPRAMP_OIDC_ISSUER: http://127.0.0.1:5556/dex
+      SLIPRAMP_OIDC_REDIRECT_URL: http://localhost:5173/api/v1/auth/callback
+      SLIPRAMP_OIDC_SUBJECT_ROLES: '{"ChRzbGlwcmFtcC1sb2NhbC1hZG1pbhIFbG9jYWw":"admin"}'
+      SLIPRAMP_PLACEMENTS_FILE: "{{.ROOT_DIR}}/deploy/local/placements.yaml"
+      SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS: '{"kcloud-ops":"{{.ROOT_DIR}}/deploy/local/kcloud-ops.gitconfig"}'
+      SLIPRAMP_REPOSITORY_REFRESH_INTERVAL: 10s
+    cmds:
+      - go run ./cmd/slipramp-server
 
   local:down:
     desc: Stop local dependencies without deleting their data

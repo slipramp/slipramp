@@ -91,6 +91,9 @@ export default function App({ loaderData }: Route.ComponentProps) {
             <Anchor component={Link} to="/runs">
               Runs
             </Anchor>
+            <Anchor component={Link} to="/promotions">
+              Promotions
+            </Anchor>
             {loaderData.principal ? (
               <>
                 <Anchor component={Link} to="/access">

@@ -342,6 +342,148 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	}
 }
 
+func TestPromotionDecisionAtExpiryPersistsExpiredStateIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	pending := preparePromotionForReview(
+		t,
+		fixture,
+		"expiry-race-01jbe4q8",
+		createdAt.Add(2*time.Minute),
+	)
+	if pending.ExpiresAt == nil {
+		t.Fatal("prepared Promotion expiry is nil")
+	}
+
+	decision := promotion.Decision{
+		PromotionID:          pending.ID,
+		Decision:             promotion.DecisionApproved,
+		DecidedByPrincipalID: fixture.principal.ID,
+		DecidedBySnapshot:    fixture.actor,
+		DecidedAt:            *pending.ExpiresAt,
+	}
+	if _, _, err := fixture.database.DecidePromotion(
+		fixture.ctx,
+		decision,
+	); !errors.Is(err, promotion.ErrTransitionConflict) {
+		t.Fatalf("DecidePromotion() expiry error = %v", err)
+	}
+
+	stored, err := fixture.database.GetPromotion(fixture.ctx, pending.ID)
+	if err != nil {
+		t.Fatalf("GetPromotion() error = %v", err)
+	}
+	if stored.Status != promotion.StatusExpired || stored.Message == nil ||
+		!strings.Contains(*stored.Message, "expired") {
+		t.Errorf("expired Promotion = %#v", stored)
+	}
+	if _, err := fixture.database.GetPromotionDecision(
+		fixture.ctx,
+		pending.ID,
+	); !errors.Is(err, promotion.ErrDecisionNotFound) {
+		t.Errorf("GetPromotionDecision() error = %v, want not found", err)
+	}
+}
+
+func TestConcurrentPromotionDecisionsRecordOneImmutableResultIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	pending := preparePromotionForReview(
+		t,
+		fixture,
+		"decision-race-01jbe4q8",
+		createdAt.Add(2*time.Minute),
+	)
+
+	type result struct {
+		decision promotion.DecisionValue
+		err      error
+	}
+	results := make(chan result, 2)
+	for _, value := range []promotion.DecisionValue{
+		promotion.DecisionApproved,
+		promotion.DecisionRejected,
+	} {
+		go func() {
+			_, _, err := fixture.database.DecidePromotion(
+				fixture.ctx,
+				promotion.Decision{
+					PromotionID:          pending.ID,
+					Decision:             value,
+					DecidedByPrincipalID: fixture.principal.ID,
+					DecidedBySnapshot:    fixture.actor,
+					DecidedAt:            createdAt.Add(10 * time.Minute),
+				},
+			)
+			results <- result{decision: value, err: err}
+		}()
+	}
+
+	first := <-results
+	second := <-results
+	succeeded := 0
+	conflicted := 0
+	for _, item := range []result{first, second} {
+		switch {
+		case item.err == nil:
+			succeeded++
+		case errors.Is(item.err, promotion.ErrDecisionConflict):
+			conflicted++
+		default:
+			t.Errorf("decision %s error = %v", item.decision, item.err)
+		}
+	}
+	if succeeded != 1 || conflicted != 1 {
+		t.Fatalf("concurrent results = %#v, %#v", first, second)
+	}
+
+	stored, err := fixture.database.GetPromotionDecision(fixture.ctx, pending.ID)
+	if err != nil {
+		t.Fatalf("GetPromotionDecision() error = %v", err)
+	}
+	current, err := fixture.database.GetPromotion(fixture.ctx, pending.ID)
+	if err != nil {
+		t.Fatalf("GetPromotion() error = %v", err)
+	}
+	if promotion.PromotionStatus(stored.Decision) != current.Status {
+		t.Errorf("decision = %s, Promotion status = %s", stored.Decision, current.Status)
+	}
+}
+
+func TestPromotionReviewStateSurvivesStoreRestartIntegration(t *testing.T) {
+	createdAt := time.Now().UTC().Truncate(time.Microsecond)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	pending := preparePromotionForReview(
+		t,
+		fixture,
+		"restart-review-01jbe4q8",
+		createdAt.Add(2*time.Minute),
+	)
+	fixture.database.Close()
+
+	reopened, err := Open(fixture.ctx, fixture.config)
+	if err != nil {
+		t.Fatalf("Open() after restart error = %v", err)
+	}
+	t.Cleanup(reopened.Close)
+	reviewService := promotion.NewReviewService(reopened)
+	review, err := reviewService.GetPromotion(fixture.ctx, pending.ID)
+	if err != nil {
+		t.Fatalf("GetPromotion() after restart error = %v", err)
+	}
+	if review.Promotion.Status != promotion.StatusPending || review.Decision != nil ||
+		review.Promotion.GitDiffArtifactID == nil || review.Promotion.ArgoDiffArtifactID == nil {
+		t.Errorf("review after restart = %#v", review)
+	}
+	policy, err := reopened.GetPromotionStagePolicy(fixture.ctx, fixture.stage.ID)
+	if err != nil {
+		t.Fatalf("GetPromotionStagePolicy() after restart error = %v", err)
+	}
+	if policy.Mode != promotion.PolicyModeReviewRequired {
+		t.Errorf("policy after restart = %#v", policy)
+	}
+}
+
 func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
@@ -449,8 +591,101 @@ func createPromotionArtifact(
 	return artifactID
 }
 
+func preparePromotionForReview(
+	t *testing.T,
+	fixture promotionIntegrationFixture,
+	externalID string,
+	acceptedAt time.Time,
+) promotion.Promotion {
+	t.Helper()
+
+	policy := promotion.StagePolicy{
+		StageID:              fixture.stage.ID,
+		Mode:                 promotion.PolicyModeReviewRequired,
+		UpdatedByPrincipalID: fixture.principal.ID,
+		UpdatedBySnapshot:    fixture.actor,
+		UpdatedAt:            acceptedAt.Add(-time.Second),
+	}
+	if _, err := fixture.database.UpsertPromotionStagePolicy(fixture.ctx, policy); err != nil {
+		t.Fatalf("create review policy: %v", err)
+	}
+	record, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx,
+		fixture.acceptance(t, fixture.request(externalID), acceptedAt),
+	)
+	if err != nil {
+		t.Fatalf("accept guarded Promotion: %v", err)
+	}
+
+	preparationRun, err := fixture.database.GetRun(fixture.ctx, fixture.runID)
+	if err != nil {
+		t.Fatalf("get preparation Run template: %v", err)
+	}
+	preparationRun.ID = uuid.New()
+	preparationRun.Source = run.Source{
+		Type:      run.SourceTypePromotion,
+		Promotion: &run.PromotionRunSource{PromotionID: record.ID},
+	}
+	idempotencyKey := record.ID.String()
+	preparationRun.IdempotencyKey = &idempotencyKey
+	preparationRun.RequestDigest = strings.Repeat("c", 64)
+	preparationRun.CreatedBy = &fixture.actor
+	preparationRun.CreatedAt = acceptedAt.Add(time.Second)
+	preparationRun, err = fixture.database.CreateRun(fixture.ctx, preparationRun)
+	if err != nil {
+		t.Fatalf("create preparation Run: %v", err)
+	}
+	if _, err := fixture.database.ReservePromotionPreparationRevision(
+		fixture.ctx,
+		record.ID,
+		preparationRun.RepositoryID,
+		preparationRun.CatalogRevisionID,
+		acceptedAt.Add(2*time.Second),
+	); err != nil {
+		t.Fatalf("reserve preparation revision: %v", err)
+	}
+	if _, err := fixture.database.AttachPromotionPreparationRun(
+		fixture.ctx,
+		record.ID,
+		preparationRun.ID,
+		acceptedAt.Add(3*time.Second),
+	); err != nil {
+		t.Fatalf("attach preparation Run: %v", err)
+	}
+	gitArtifactID := createPromotionArtifact(
+		t,
+		fixture.database,
+		preparationRun.ID,
+		promotion.GitDiffArtifactName,
+		promotion.GitDiffArtifactMediaType,
+		acceptedAt.Add(4*time.Second),
+	)
+	argoArtifactID := createPromotionArtifact(
+		t,
+		fixture.database,
+		preparationRun.ID,
+		promotion.ArgoDiffArtifactName,
+		promotion.ArgoDiffArtifactMediaType,
+		acceptedAt.Add(4*time.Second),
+	)
+	record, err = fixture.database.CompletePromotionPreparation(
+		fixture.ctx,
+		record.ID,
+		preparationRun.ID,
+		gitArtifactID,
+		argoArtifactID,
+		acceptedAt.Add(5*time.Second),
+	)
+	if err != nil {
+		t.Fatalf("complete Promotion preparation: %v", err)
+	}
+
+	return record
+}
+
 type promotionIntegrationFixture struct {
 	ctx          context.Context
+	config       Config
 	database     *Database
 	runID        uuid.UUID
 	repositoryID uuid.UUID
@@ -462,11 +697,12 @@ type promotionIntegrationFixture struct {
 func newPromotionIntegrationFixture(t *testing.T, createdAt time.Time) promotionIntegrationFixture {
 	t.Helper()
 
-	ctx, _, database := openIntegrationDatabase(t)
+	ctx, cfg, database := openIntegrationDatabase(t)
 	t.Cleanup(database.Close)
 
 	fixture := promotionIntegrationFixture{
 		ctx:          ctx,
+		config:       cfg,
 		database:     database,
 		runID:        createArtifactTestRun(t, ctx, database, createdAt),
 		repositoryID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1400"),

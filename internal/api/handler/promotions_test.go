@@ -24,6 +24,69 @@ type recordingPromotionService struct {
 	err         error
 }
 
+type recordingPromotionReviewService struct {
+	stageFilter     promotion.StageListFilter
+	promotionFilter promotion.PromotionListFilter
+	policyStageID   uuid.UUID
+	policyUpdate    promotion.PolicyUpdate
+	decision        promotion.DecisionRequest
+	stages          promotion.StageReviewList
+	promotions      promotion.PromotionReviewList
+	review          promotion.PromotionReview
+	policy          promotion.PolicyView
+	err             error
+}
+
+func (s *recordingPromotionReviewService) ExpirePending(context.Context) error {
+	return s.err
+}
+
+func (s *recordingPromotionReviewService) ListStages(
+	_ context.Context,
+	filter promotion.StageListFilter,
+) (promotion.StageReviewList, error) {
+	s.stageFilter = filter
+
+	return s.stages, s.err
+}
+
+func (s *recordingPromotionReviewService) UpdateStagePolicy(
+	_ context.Context,
+	stageID uuid.UUID,
+	update promotion.PolicyUpdate,
+	_ productidentity.Principal,
+) (promotion.PolicyView, error) {
+	s.policyStageID = stageID
+	s.policyUpdate = update
+
+	return s.policy, s.err
+}
+
+func (s *recordingPromotionReviewService) ListPromotions(
+	_ context.Context,
+	filter promotion.PromotionListFilter,
+) (promotion.PromotionReviewList, error) {
+	s.promotionFilter = filter
+
+	return s.promotions, s.err
+}
+
+func (s *recordingPromotionReviewService) GetPromotion(
+	context.Context,
+	uuid.UUID,
+) (promotion.PromotionReview, error) {
+	return s.review, s.err
+}
+
+func (s *recordingPromotionReviewService) Decide(
+	_ context.Context,
+	request promotion.DecisionRequest,
+) (promotion.PromotionReview, error) {
+	s.decision = request
+
+	return s.review, s.err
+}
+
 func (s *recordingPromotionService) SubmitKargoPromotion(
 	_ context.Context,
 	integration string,
@@ -232,4 +295,163 @@ func TestSubmitKargoPromotionMapsIneligibleStageToConflict(t *testing.T) {
 	httpHandler.ServeHTTP(response, request)
 
 	assertProblem(t, response, http.StatusConflict)
+}
+
+func TestListPromotionsUsesOperatorFilters(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1904")
+	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1905")
+	reviews := &recordingPromotionReviewService{
+		promotions: promotion.PromotionReviewList{
+			Items: []promotion.PromotionReview{{Promotion: promotion.Promotion{
+				ID:                     promotionID,
+				Integration:            "prod",
+				ExternalPromotionID:    "external-dns-01jbe4q8",
+				StageID:                stageID,
+				StageSnapshot:          []byte(`{"name":"external-dns-prod"}`),
+				RepositoryID:           uuid.New(),
+				RepositorySnapshot:     []byte(`{"name":"ops"}`),
+				BaseRevision:           "8b7f1d217a6b0000000000000000000000000000",
+				CandidateRevision:      "f4cb21a88e1d0000000000000000000000000000",
+				CandidateBranch:        "kargo/promotion/external-dns-01jbe4q8",
+				TargetBranch:           "stage/external-dns/prod",
+				PolicySnapshot:         []byte(`{"effectiveMode":"review-required"}`),
+				ReviewRequired:         true,
+				Status:                 promotion.StatusPending,
+				RequestedBySnapshot:    productidentity.ActorSnapshot{PrincipalID: uuid.New(), Kind: productidentity.KindServiceAccount, DisplayName: "Kargo"},
+				RequestedByPrincipalID: uuid.New(),
+				CreatedAt:              now,
+				UpdatedAt:              now,
+			}}},
+			Total:  1,
+			Limit:  10,
+			Offset: 2,
+		},
+	}
+	// The response snapshot is immutable and independently validated by the
+	// domain store. Keep the actor IDs aligned for the API conversion.
+	record := &reviews.promotions.Items[0].Promotion
+	record.RequestedByPrincipalID = record.RequestedBySnapshot.PrincipalID
+	httpHandler := NewHTTP(
+		Dependencies{
+			PromotionReviews: reviews,
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authentication: productAuthentication(
+					productidentity.RoleViewer,
+					productidentity.AuthenticationMethodAPIKey,
+					[]productidentity.Scope{productidentity.ScopeRead},
+				),
+			},
+		},
+		HTTPOptions{},
+	)
+	request := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/api/v1/promotions?status=pending&integration=prod&cluster=colo&project=kargo-core&stageId="+
+			stageID.String()+"&limit=10&offset=2",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer viewer-key")
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	if reviews.promotionFilter.Status != promotion.StatusPending ||
+		reviews.promotionFilter.Integration != "prod" || reviews.promotionFilter.Cluster != "colo" ||
+		reviews.promotionFilter.Project != "kargo-core" || reviews.promotionFilter.StageID == nil ||
+		*reviews.promotionFilter.StageID != stageID || reviews.promotionFilter.Limit != 10 ||
+		reviews.promotionFilter.Offset != 2 {
+		t.Errorf("Promotion filter = %#v", reviews.promotionFilter)
+	}
+	for _, expected := range []string{promotionID.String(), `"total":1`, `"status":"pending"`} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
+		}
+	}
+}
+
+func TestDecidePromotionUsesAuthenticatedActor(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1904")
+	actor := productidentity.ActorSnapshot{
+		PrincipalID: uuid.New(),
+		Kind:        productidentity.KindUser,
+		DisplayName: "Review operator",
+	}
+	comment := "Validated the RBAC migration"
+	reviews := &recordingPromotionReviewService{
+		review: promotion.PromotionReview{
+			Promotion: promotion.Promotion{
+				ID:                     promotionID,
+				Integration:            "prod",
+				ExternalPromotionID:    "external-dns-01jbe4q8",
+				StageID:                uuid.New(),
+				StageSnapshot:          []byte(`{"name":"external-dns-prod"}`),
+				RepositoryID:           uuid.New(),
+				RepositorySnapshot:     []byte(`{"name":"ops"}`),
+				BaseRevision:           "8b7f1d217a6b0000000000000000000000000000",
+				CandidateRevision:      "f4cb21a88e1d0000000000000000000000000000",
+				CandidateBranch:        "kargo/promotion/external-dns-01jbe4q8",
+				TargetBranch:           "stage/external-dns/prod",
+				PolicySnapshot:         []byte(`{"effectiveMode":"review-required"}`),
+				ReviewRequired:         true,
+				Status:                 promotion.StatusApproved,
+				RequestedByPrincipalID: uuid.New(),
+				RequestedBySnapshot:    productidentity.ActorSnapshot{PrincipalID: uuid.New(), Kind: productidentity.KindServiceAccount, DisplayName: "Kargo"},
+				CreatedAt:              now,
+				UpdatedAt:              now,
+			},
+			Decision: &promotion.Decision{
+				PromotionID:          promotionID,
+				Decision:             promotion.DecisionApproved,
+				Comment:              &comment,
+				DecidedByPrincipalID: actor.PrincipalID,
+				DecidedBySnapshot:    actor,
+				DecidedAt:            now,
+			},
+		},
+	}
+	reviews.review.Promotion.RequestedByPrincipalID = reviews.review.Promotion.RequestedBySnapshot.PrincipalID
+	authentication := productAuthentication(
+		productidentity.RoleOperator,
+		productidentity.AuthenticationMethodAPIKey,
+		[]productidentity.Scope{productidentity.ScopePromotionsWrite},
+	)
+	httpHandler := NewHTTP(
+		Dependencies{
+			PromotionReviews: reviews,
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authentication: authentication,
+			},
+		},
+		HTTPOptions{},
+	)
+	request := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodPut,
+		"/api/v1/promotions/"+promotionID.String()+"/decision",
+		strings.NewReader(`{"decision":"approved","comment":"Validated the RBAC migration"}`),
+	)
+	request.Header.Set("Authorization", "Bearer operator-key")
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	if reviews.decision.Principal.ID != authentication.Principal.ID ||
+		reviews.decision.Decision != promotion.DecisionApproved || reviews.decision.Comment == nil ||
+		*reviews.decision.Comment != comment {
+		t.Errorf("decision request = %#v", reviews.decision)
+	}
 }

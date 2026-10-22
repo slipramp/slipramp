@@ -658,9 +658,11 @@ policy creates one restart-safe, revision-pinned ordinary Run with a
 and transitions to `pending` or `error` without implicit command retries.
 The first-party `slipramp-kargo-tools` image now pins Git and Argo CD, validates
 the candidate ref without changing remote refs, and emits bounded deterministic
-Git and structured Argo CD diff files. Operational catalog wiring, real
-artifact-upload acceptance, and the operator review experience remain later
-work in [KARGO_PROMOTIONS.md](./KARGO_PROMOTIONS.md).
+Git and structured Argo CD diff files. The operator web experience lists
+Promotions and observed Stages, exposes policy and immutable decision controls,
+renders the sensitive Git and structured Argo CD artifacts, and durably expires
+pending reviews. Operational catalog wiring and real artifact-upload acceptance
+remain later work in [KARGO_PROMOTIONS.md](./KARGO_PROMOTIONS.md).
 
 ## Ongoing Design Work
 

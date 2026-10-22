@@ -1,0 +1,4 @@
+[url "git@github.com:"]
+	insteadOf = https://github.com/
+[core]
+	sshCommand = ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes

@@ -1,0 +1,22 @@
+issuer: http://127.0.0.1:5556/dex
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+telemetry:
+  http: 0.0.0.0:5558
+oauth2:
+  alwaysShowLoginScreen: true
+  skipApprovalScreen: true
+staticClients:
+  - id: slipramp-local
+    name: Slipramp Local
+    secret: slipramp-local-client-secret
+    redirectURIs:
+      - http://localhost:5173/api/v1/auth/callback
+enablePasswordDB: true
+staticPasswords:
+  - email: admin@slipramp.local
+    hash: $2y$10$vt2.fb7giUdF.GaiCdym3eTjmA/uNLw1muosPRZ9aW0YETes7Bra6
+    username: admin
+    userID: slipramp-local-admin

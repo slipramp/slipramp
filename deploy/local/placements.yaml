@@ -1,0 +1,28 @@
+apiVersion: slipramp.com/v1alpha1
+kind: PlacementConfig
+placements:
+  homelab-infrastructure:
+    cluster: homelab
+    jobNamespace: slipramp-runs
+    serviceAccountName: infrastructure-admin
+    timeout: 45m
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    credentials:
+      ops-ci:
+        secretRef:
+          name: ops-ci
+      homelab-known-hosts:
+        secretRef:
+          name: kcloud-ops-known-hosts
+      kcloud-ops-git:
+        secretRef:
+          name: kcloud-ops-git
+      kargo-argocd:
+        secretRef:
+          name: kargo-argocd

@@ -58,6 +58,17 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  dex:
+    image: ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
+    command: [dex, serve, /etc/dex/config.yaml]
+    ports:
+      - "127.0.0.1:5556:5556"
+      - "127.0.0.1:5558:5558"
+    volumes:
+      - ./local/dex.yaml:/etc/dex/config.yaml:ro
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
   postgres-data:
   rustfs-data:

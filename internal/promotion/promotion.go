@@ -56,6 +56,7 @@ var (
 	ErrIdentityConflict           = errors.New("external Promotion identity already exists")
 	ErrTransitionConflict         = errors.New("promotion state transition conflicts with current state")
 	ErrDecisionConflict           = errors.New("promotion already has a different decision")
+	ErrDecisionNotFound           = errors.New("promotion decision not found")
 	ErrInvalidPreparationArtifact = errors.New("promotion preparation artifact is invalid")
 )
 

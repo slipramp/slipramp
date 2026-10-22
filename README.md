@@ -310,6 +310,14 @@ the Promotion to `pending`; a failed Run or invalid artifacts move it to
 `error` without an implicit retry. Nonterminal Promotion artifacts are exempt
 from normal retention expiry.
 
+Authenticated users can review this state at `/promotions`, open a Promotion
+to inspect its preparation Run and sensitive Git and Argo CD diffs, and browse
+the observed inventory at `/promotion-stages`. Operators and administrators can
+record one immutable approval or rejection and update per-Stage automatic or
+review-required policy. Temporary review policies retain their audit context
+after expiry, while pending Promotions expire durably when their review window
+ends.
+
 The first-party `slipramp-kargo-tools prepare` command supplies the read-only
 preparation implementation. Its published image is pinned to Git 2.53.0 and
 Argo CD 3.5.0. It verifies that the remote candidate branch still resolves to
@@ -453,33 +461,61 @@ git push origin v0.1.0
 ## Development
 
 Go 1.27.2, Git, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
-required. Docker is required for the local PostgreSQL and RustFS services.
+required. Docker is required for the local PostgreSQL, RustFS, and Dex services.
 Development tool and package versions are pinned by `Taskfile.yml`, `go.mod`,
 `package.json`, and `pnpm-lock.yaml`; `task deps` installs the pinned Go tools
-and pnpm release into the ignored repository cache. The development credentials
-below are intentionally local-only. Configure the five required OIDC variables
-from the Server table before running `slipramp-server`; the disposable kind
-suite includes its own Dex provider and needs no external identity service.
+and pnpm release into the ignored repository cache. The local stack includes a
+Dex password database and development-only Server configuration for the
+`kcloud-ops` repository and homelab Controller. Run the Server and web process
+in separate terminals:
 
 ```console
 task deps
-task local:up
+task local:server
+task web:dev
 task generate
 task charts:check
 task charts:package CHART_VERSION=0.1.0
 task check
 task integration
 task acceptance:kind
-SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS='{"colo":"development-enrollment-token"}' \
-  go run ./cmd/slipramp-server
 go run ./cmd/slipramp-harness command argument
-task web:dev
 ```
+
+Open `http://localhost:5173` and sign in with
+`admin@slipramp.local` / `slipramp`. These credentials and the static OIDC
+client secret are only for local development. Dex stores its state in memory.
+
+Register the private operational repository with:
+
+- name `kcloud-ops`;
+- clone URL `https://github.com/ianunruh/kcloud-ops`;
+- branch `main`;
+- refresh credential `kcloud-ops`;
+- checkout credential `kcloud-ops`.
+
+The local refresh credential rewrites the HTTPS URL to SSH and uses the
+developer's existing SSH agent or default key and `known_hosts`. Confirm that
+`ssh -T git@github.com` can authenticate before registering the repository.
+The homelab Controller must use
+`slipramp-local-homelab-enrollment-token` as its enrollment token and continue
+mapping checkout credential `kcloud-ops` to Secret `kcloud-ops-git`.
+
+The local `homelab-infrastructure` Placement exposes the `ops-ci`,
+`homelab-known-hosts`, `kcloud-ops-git`, and `kargo-argocd` Secret sources in
+the `slipramp-runs` namespace. The Controller bootstrap remains responsible
+for materializing those Secrets and the private-GHCR pull credential. The
+configured Kargo integration is named `homelab`; configure the Controller's
+Stage observer and Kargo PromotionTask to use that same name. After signing in,
+create an operator service account and API key with
+`slipramp:promotions:submit` for the PromotionTask; there is intentionally no
+bootstrap API key in source control.
 
 The controller is exercised through unit tests locally and runs with a
 Kubernetes service account in a cluster.
 
-`task local:down` stops PostgreSQL and RustFS while retaining their named
+`task local:up` starts PostgreSQL, RustFS, and Dex without starting the Server.
+`task local:down` stops them while retaining the PostgreSQL and RustFS named
 volumes. Database migrations live in `internal/store/migrations`, queries live
 in `internal/store/queries`, and `task generate` refreshes both sqlc output and
 the OpenAPI-generated clients. While the repository and database contracts are

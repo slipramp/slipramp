@@ -354,6 +354,117 @@ func (q *Queries) CreatePromotion(ctx context.Context, arg CreatePromotionParams
 	return i, err
 }
 
+const expirePendingPromotion = `-- name: ExpirePendingPromotion :one
+UPDATE promotions
+SET status = 'expired',
+    message = 'The review window expired before a decision was recorded.',
+    updated_at = $1
+WHERE id = $2
+  AND status = 'pending'
+  AND expires_at <= $1
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at
+`
+
+type ExpirePendingPromotionParams struct {
+	ExpiredAt pgtype.Timestamptz
+	ID        pgtype.UUID
+}
+
+func (q *Queries) ExpirePendingPromotion(ctx context.Context, arg ExpirePendingPromotionParams) (Promotion, error) {
+	row := q.db.QueryRow(ctx, expirePendingPromotion, arg.ExpiredAt, arg.ID)
+	var i Promotion
+	err := row.Scan(
+		&i.ID,
+		&i.Integration,
+		&i.ExternalPromotionID,
+		&i.RequestDigest,
+		&i.StageID,
+		&i.StageSnapshot,
+		&i.RepositoryID,
+		&i.RepositorySnapshot,
+		&i.BaseRevision,
+		&i.CandidateRevision,
+		&i.CandidateBranch,
+		&i.TargetBranch,
+		&i.PolicySnapshot,
+		&i.ReviewRequired,
+		&i.Status,
+		&i.Message,
+		&i.PreparationRepositoryID,
+		&i.PreparationCatalogRevisionID,
+		&i.PreparationRunID,
+		&i.GitDiffArtifactID,
+		&i.ArgoDiffArtifactID,
+		&i.RequestedByPrincipalID,
+		&i.RequestedBySnapshot,
+		&i.CreatedAt,
+		&i.PreparationCompletedAt,
+		&i.DecidedAt,
+		&i.ExpiresAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const expirePendingPromotions = `-- name: ExpirePendingPromotions :many
+UPDATE promotions
+SET status = 'expired',
+    message = 'The review window expired before a decision was recorded.',
+    updated_at = $1
+WHERE status = 'pending'
+  AND expires_at <= $1
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at
+`
+
+func (q *Queries) ExpirePendingPromotions(ctx context.Context, expiredAt pgtype.Timestamptz) ([]Promotion, error) {
+	rows, err := q.db.Query(ctx, expirePendingPromotions, expiredAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Promotion
+	for rows.Next() {
+		var i Promotion
+		if err := rows.Scan(
+			&i.ID,
+			&i.Integration,
+			&i.ExternalPromotionID,
+			&i.RequestDigest,
+			&i.StageID,
+			&i.StageSnapshot,
+			&i.RepositoryID,
+			&i.RepositorySnapshot,
+			&i.BaseRevision,
+			&i.CandidateRevision,
+			&i.CandidateBranch,
+			&i.TargetBranch,
+			&i.PolicySnapshot,
+			&i.ReviewRequired,
+			&i.Status,
+			&i.Message,
+			&i.PreparationRepositoryID,
+			&i.PreparationCatalogRevisionID,
+			&i.PreparationRunID,
+			&i.GitDiffArtifactID,
+			&i.ArgoDiffArtifactID,
+			&i.RequestedByPrincipalID,
+			&i.RequestedBySnapshot,
+			&i.CreatedAt,
+			&i.PreparationCompletedAt,
+			&i.DecidedAt,
+			&i.ExpiresAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const failPromotionPreparation = `-- name: FailPromotionPreparation :one
 UPDATE promotions
 SET status = 'error',

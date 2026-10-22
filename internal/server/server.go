@@ -40,6 +40,7 @@ type Server struct {
 	gitTriggerDispatcher  *gittrigger.Dispatcher
 	artifactReconciler    *artifact.Reconciler
 	promotionPreparations *promotion.PreparationCoordinator
+	promotionExpirations  *promotion.ExpirationCoordinator
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
@@ -123,7 +124,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		persistence.database,
 	)
 	promotionRequests := promotion.NewRequestService(cfg.KargoIntegrations, persistence.database)
+	promotionReviews := promotion.NewReviewService(persistence.database)
 	var promotionPreparations *promotion.PreparationCoordinator
+	var promotionExpirations *promotion.ExpirationCoordinator
 	if len(cfg.KargoIntegrations) > 0 {
 		promotionPreparations = promotion.NewPreparationCoordinator(
 			cfg.KargoIntegrations,
@@ -133,6 +136,11 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			artifacts,
 			persistence.database,
 			promotion.DefaultPreparationInterval,
+			logger,
+		)
+		promotionExpirations = promotion.NewExpirationCoordinator(
+			persistence.database,
+			promotion.DefaultExpirationInterval,
 			logger,
 		)
 	}
@@ -146,6 +154,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			Artifacts:             artifacts,
 			PromotionRequests:     promotionRequests,
 			PromotionStages:       promotionStages,
+			PromotionReviews:      promotionReviews,
 			Readiness:             readinessService,
 			ProductAuthentication: productAuthenticationService,
 		},
@@ -160,6 +169,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	server.gitTriggerDispatcher = gitTriggerDispatcher
 	server.artifactReconciler = artifactReconciler
 	server.promotionPreparations = promotionPreparations
+	server.promotionExpirations = promotionExpirations
 
 	return server, nil
 }
@@ -204,6 +214,9 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.promotionPreparations != nil {
 		workerCount++
 	}
+	if s.promotionExpirations != nil {
+		workerCount++
+	}
 	if workerCount == 0 {
 		return s.serve(ctx, listener)
 	}
@@ -233,6 +246,12 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.promotionPreparations != nil {
 		go func() {
 			s.promotionPreparations.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.promotionExpirations != nil {
+		go func() {
+			s.promotionExpirations.Run(runContext)
 			workersStopped <- struct{}{}
 		}()
 	}
