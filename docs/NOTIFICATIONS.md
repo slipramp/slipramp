@@ -1,0 +1,475 @@
+# Notification Delivery Plan
+
+This document defines the intended design and delivery sequence for outbound
+Slipramp notifications. It is a planning aid for incremental implementation,
+not an implemented or stable external contract.
+
+Notification delivery is provider-neutral, with Slack as the first adapter.
+Notifications report durable domain transitions but never own or alter them.
+A failed notification must not change a Promotion, Run, repository, cluster,
+or other product resource.
+
+## Goals
+
+- Notify operators when a durable product transition requires attention.
+- Deliver newly pending Kargo Promotion reviews to Slack first.
+- Reuse the same delivery path for future Run reviews and operational events.
+- Persist delivery state, attempts, retry timing, and terminal failure.
+- Keep provider credentials out of PostgreSQL and product event payloads.
+- Preserve authenticated Slipramp as the boundary for decisions and sensitive
+  content.
+- Make notification failure visible without making it part of the originating
+  resource's state machine.
+
+## Non-goals
+
+The first implementation does not include:
+
+- a general event bus, workflow engine, or provider-plugin framework;
+- a generic approval resource or a rewrite of Kargo Promotion state;
+- Slack, email, or webhook actions that approve or reject a resource;
+- arbitrary routing expressions or user-managed notification preferences;
+- notification templates editable through the product;
+- sensitive artifact contents, logs, diffs, credentials, or secret values in
+  outbound messages;
+- guaranteed exactly-once delivery to an external provider;
+- notification success as a prerequisite for Promotion or Run progress.
+
+## Accepted Design Decisions
+
+### Events describe durable transitions
+
+A notification event is created only after a real domain transition, such as a
+Promotion moving to `pending`. Listing a resource, polling it, rendering the
+Inbox, or restarting the Server does not recreate the event.
+
+The event snapshots the channel-neutral content needed to explain the
+transition. Delivery workers do not reconstruct old messages from mutable
+current state. Each event has a stable deduplication key so concurrent or
+repeated transition handling cannot enqueue the same notification twice.
+
+The originating state change, event, and intended delivery records are written
+in one PostgreSQL transaction. A committed transition therefore cannot be
+silently lost between the domain service and the notification worker.
+
+### Delivery is provider-neutral and at least once
+
+Slack is one destination type behind a small delivery adapter boundary. Future
+signed HTTP webhooks and email delivery may implement the same boundary without
+changing Promotion, Run, or other domain services.
+
+External delivery is at least once. A process can stop after a provider accepts
+a message but before PostgreSQL records success, so a later retry may produce a
+duplicate. The event ID, deduplication key, and delivery history make this
+failure mode explicit. Slipramp does not claim exactly-once behavior from a
+provider that does not offer an idempotent request boundary.
+
+### Routing is small deployment configuration
+
+Notification destinations and routes are installation configuration loaded by
+the Slipramp Server. Routes initially match exact event types and name one or
+more destinations. They do not implement a general predicate language.
+
+Destination credentials use administrator-mounted files or environment-backed
+secret sources. PostgreSQL stores the destination name and non-secret delivery
+state, not webhook URLs, tokens, SMTP passwords, or signing secrets. The Server
+continues to avoid Kubernetes API access.
+
+An installation with enabled outbound delivery configures an explicit public
+Slipramp web URL for message links. The Server does not infer this URL from an
+incoming request Host header.
+
+An illustrative configuration is:
+
+```yaml
+notifications:
+  publicUrl: https://slipramp.example.com
+  destinations:
+    operations:
+      type: slack
+      webhookUrlFile: /var/run/secrets/slipramp/slack-operations-url
+  routes:
+    - events:
+        - review.requested
+      destinations:
+        - operations
+```
+
+The implementation milestone selects the exact Server environment or mounted
+file representation and corresponding Helm values. Configuration validation
+rejects unknown destination types, missing secret files, duplicate destination
+names, unknown route destinations, empty routes, and non-absolute public URLs.
+
+### Review notification is shared without sharing approval state
+
+Kargo Promotion review and a future Run review emit the same
+`review.requested` notification shape. The event identifies its subject type
+and stable ID, carries a channel-neutral presentation snapshot, and links to
+the authenticated Slipramp UI.
+
+This shared event does not require a generic Review table. A Kargo Promotion
+continues to own its snapshotted policy, preparation Run, decision, expiry, and
+state. A future reviewed Run may own separate approval state with different
+creation and scheduling semantics. The concrete state machines remain
+domain-specific until a second implemented approval flow demonstrates a useful
+shared persistence model.
+
+### External messages link back to Slipramp
+
+The first Slack adapter sends informational messages with a link to Slipramp.
+Approvals and rejections remain authenticated Slipramp operations with the
+existing role, scope, conflict, and actor-attribution rules.
+
+Interactive provider controls remain later work. Adding them would require
+request-signature validation, replay protection, an explicit mapping from the
+provider identity to a Slipramp principal, and the same authorization checks as
+the product API. A shared webhook credential must never become the actor for a
+human decision.
+
+## Core Model
+
+### Notification Event
+
+A notification event is the immutable outbound presentation of one durable
+transition. Its fields include:
+
+- stable UUID;
+- event type and schema version;
+- subject type and stable subject ID;
+- transition time;
+- deduplication key;
+- channel-neutral payload snapshot;
+- creation time.
+
+The initial event type is `review.requested`. Candidate later event types
+include `review.resolved`, `run.failed`, `repository.refresh-failed`,
+`cluster.unreachable`, and `run.observation-stale`. Each type is introduced
+only with defined transition, deduplication, recovery, and noise-suppression
+semantics.
+
+### Notification Delivery
+
+A notification delivery represents one event routed to one configured
+destination. Its fields include:
+
+- stable UUID;
+- event reference;
+- snapshotted destination name and type;
+- state: `pending`, `delivered`, or `failed`;
+- attempt count;
+- next-attempt time;
+- last non-sensitive error summary;
+- first-attempt, last-attempt, and delivered timestamps.
+
+The uniqueness boundary is `(event_id, destination_name)`. Retry updates the
+same delivery instead of inserting another logical delivery.
+
+`failed` is terminal after the configured bounded attempt policy is exhausted
+or the payload cannot be rendered for that destination. A failed delivery does
+not change the event's subject. Operators can diagnose it from the product and
+may receive an explicit retry operation in a later milestone.
+
+### Destination
+
+A destination is named deployment configuration. The persisted delivery
+snapshots its name and type, while the worker resolves the current secret
+material from Server configuration when sending.
+
+Removing or changing destination configuration does not erase delivery
+history. A pending delivery whose destination can no longer be resolved is
+retried according to the bounded policy and eventually becomes failed with a
+non-sensitive diagnostic.
+
+### Route
+
+A route selects exact event types and one or more destination names. Routes are
+resolved when the domain transaction enqueues an event, so later configuration
+changes do not silently redirect an already committed event.
+
+Initial routing is installation-wide. Typed filters such as Kargo integration,
+Repository, Target, or Cluster may be added only when a concrete deployment
+requires them. Arbitrary expressions, labels, and user subscriptions remain
+out of scope.
+
+## Event Contract
+
+The initial channel-neutral payload is:
+
+```json
+{
+  "type": "review.requested",
+  "schemaVersion": 1,
+  "subject": {
+    "type": "promotion",
+    "id": "b21eaf3e-dced-4a48-b57a-7a5fb4469cbd"
+  },
+  "title": "Promotion to production needs review",
+  "summary": "external-dns - candidate to production",
+  "facts": [
+    {
+      "label": "Repository",
+      "value": "kcloud-ops"
+    },
+    {
+      "label": "Expires",
+      "value": "2026-10-24T18:00:00Z"
+    }
+  ],
+  "action": {
+    "label": "Review in Slipramp",
+    "path": "/promotions/b21eaf3e-dced-4a48-b57a-7a5fb4469cbd"
+  },
+  "expiresAt": "2026-10-24T18:00:00Z"
+}
+```
+
+`subject.type` is an enumerated contract. The first value is `promotion`; a
+future Run review adds `run`. `action.path` is an application-relative path
+joined to the configured public URL by the destination adapter. Event payloads
+never accept an arbitrary external action URL from repository content.
+
+Facts are ordered, bounded label/value pairs intended for human context. The
+event producer supplies them from already-authorized domain state. Destination
+adapters may omit unsupported presentation details but may not add sensitive
+content by re-reading the subject.
+
+## Persistence
+
+Add one focused migration and group SQL in
+`internal/store/queries/notifications.sql`. The intended tables are:
+
+```text
+notification_events
+  id
+  event_type
+  schema_version
+  subject_type
+  subject_id
+  occurred_at
+  payload_json
+  deduplication_key UNIQUE
+  created_at
+
+notification_deliveries
+  id
+  event_id
+  destination_name
+  destination_type
+  state
+  attempt_count
+  next_attempt_at
+  last_error
+  first_attempted_at
+  last_attempted_at
+  delivered_at
+  created_at
+  UNIQUE (event_id, destination_name)
+```
+
+Domain data remains the audit and recovery source of truth. Notification
+events and deliveries are operational delivery records, not replacements for
+Promotion decisions, Run attribution, or a future administrative audit log.
+Terminal notification records may therefore use a bounded retention policy
+introduced with the implementation; pending records are never removed by
+retention.
+
+## Delivery and Retry
+
+A background dispatcher selects eligible pending deliveries in deterministic
+creation order. Claiming a delivery durably advances its attempt metadata and
+next eligible time before contacting the provider, allowing a Server restart
+to retry an ambiguous attempt without an in-memory lease.
+
+The dispatcher uses bounded exponential backoff with jitter. Configuration
+supplies a small maximum attempt count and maximum backoff. Permanent rendering
+or configuration errors may fail immediately; timeouts, connection errors,
+provider rate limits, and retryable provider responses remain pending until the
+attempt policy is exhausted.
+
+Provider response bodies are never persisted wholesale. Error summaries are
+bounded and scrubbed of configured secret values before logging or storage.
+
+The dispatcher does not block repository refresh, Run scheduling, Promotion
+reconciliation, or controller polling. One failing destination does not block
+deliveries to another destination.
+
+## Kargo Promotion Integration
+
+When a guarded Kargo Promotion preparation succeeds and its artifacts validate,
+the same transaction that moves the Promotion to `pending` enqueues one
+`review.requested` event and its configured deliveries.
+
+The deduplication key is derived from the stable Promotion ID and transition,
+for example `promotion:<id>:review-requested`. Repeated Kargo polls,
+preparation reconciliation, and Server restart recovery therefore preserve one
+logical notification event.
+
+Automatic Promotions do not emit `review.requested` because they never require
+a human decision. Preparation failures continue to move the Promotion to
+`error`; notification of such operational failures is a separate future event
+with its own routing and noise semantics.
+
+Notification delivery success or failure never changes the Promotion status,
+decision, expiry, or Kargo machine response.
+
+## Future Run Approval Integration
+
+Run approval remains a separate product-design milestone. The notification
+design assumes the following boundaries without implementing them:
+
+- A Run is created with its immutable catalog revision, commit, definitions,
+  parameters, placement, source, and actor snapshot.
+- Approval state is stored separately from the Run lifecycle phase and terminal
+  outcome.
+- A Run waiting for approval remains `queued`; the scheduler excludes it from
+  eligible assignments until approval is satisfied.
+- Rejection or expiry finishes the undispatched Run as canceled with a stable
+  reason such as `ReviewRejected` or `ReviewExpired`.
+- The transition into pending approval emits `review.requested` with subject
+  type `run` and an authenticated `/runs/{runId}` action path.
+- Direct Runs remain valid by default. Required review is an explicitly
+  configured policy rather than a universal gate.
+
+Do not add a separate invocation or request domain resource solely to support
+approval. Do not add `pending-approval` to the execution phase enum. Review is
+an orthogonal control fact, like cancellation intent, while the Run remains the
+immutable execution resource.
+
+## Authorization and Security
+
+Reading notification delivery status follows ordinary product read permission.
+Only non-sensitive destination names, states, timestamps, attempt counts, and
+bounded error summaries are exposed. Secret paths, URLs, tokens, and provider
+response bodies are not returned.
+
+Slack messages contain operational metadata already visible to the intended
+operator audience, but no sensitive artifact body. The linked Slipramp page
+still requires OIDC or API-key authentication and applies the ordinary role and
+scope checks. Sensitive Promotion diffs remain available only through the
+existing authorized artifact path.
+
+A later generic webhook destination must sign its stable event envelope and
+include replay-resistant request metadata. It must not reuse controller,
+artifact, product-session, or Kargo submission credentials.
+
+## API and Web Application
+
+OpenAPI remains the source of truth for any product endpoint. The initial
+operational surface should expose a filtered list of notification deliveries
+so the Inbox can show terminal delivery failures and operators can inspect
+attempt timing without reading Server logs.
+
+The first UI slice does not require a template editor, routing editor, or
+destination-secret management. Configuration remains deployment-owned. The UI
+shows the event type, subject link, destination name, state, attempts, last
+attempt, and redacted failure summary.
+
+An explicit operator retry endpoint may be added after automatic retry behavior
+is exercised. If added, it resets only the delivery schedule and never replays
+or changes the originating domain transition.
+
+## Delivery Milestones
+
+Each milestone leaves the repository generated, formatted, tested, and
+documented. Generated code is changed only through the repository generation
+command.
+
+### 1. Contract, configuration, and persistence
+
+- Add and validate notification destination, route, public URL, retry, and
+  retention configuration.
+- Add notification OpenAPI components and an operational delivery-list endpoint.
+- Add the migration, SQL queries, generated store code, and integration tests.
+- Add focused domain types and an enqueue boundary without provider logic.
+- Add Helm values, schemas, secret-file mounts, and deployment documentation.
+
+Accepted outcome: a domain transaction can idempotently persist a versioned
+event and its resolved destination deliveries without containing a provider
+credential.
+
+### 2. Slack delivery
+
+- Add a Slack destination adapter behind the provider-neutral sender boundary.
+- Render the channel-neutral title, summary, facts, expiry, and authenticated
+  action link into one bounded message.
+- Add restart-persistent bounded retry, jitter, rate-limit handling, and terminal
+  failure.
+- Keep response bodies and secret material out of PostgreSQL and logs.
+- Add a fake adapter for deterministic dispatcher tests.
+
+Accepted outcome: one persisted event is delivered to each configured Slack
+destination independently, and ambiguous attempts recover with documented
+at-least-once behavior.
+
+### 3. Kargo review notification
+
+- Enqueue `review.requested` atomically when a guarded Promotion becomes
+  `pending`.
+- Keep automatic, rejected, expired, and failed-preparation paths unchanged.
+- Show exhausted delivery failures in the operational Inbox.
+- Add a disposable-cluster acceptance path that verifies the message content
+  and authenticated review link without making delivery part of gate state.
+
+Accepted outcome: a newly pending Kargo review produces one durable Slack
+notification across repeated polls and Server restarts, while a notification
+outage cannot block or change the Promotion.
+
+### 4. Additional events and destinations
+
+Add events only with concrete transition and noise semantics. Likely candidates
+are review resolution, failed Runs, failed repository refreshes, unreachable
+Controllers, and stale active Run observations. A signed generic webhook is the
+next likely destination type; email follows only when a deployment requires it.
+
+Accepted outcome: additional event producers and destination adapters reuse the
+same persistence, routing, retry, and observability boundary without creating
+provider-specific domain state.
+
+### 5. Run review integration
+
+After the separate Run-approval policy and state design is accepted, emit the
+same `review.requested` contract with subject type `run`. Reassess shared review
+persistence only after both Kargo and Run review semantics exist in production.
+
+Accepted outcome: adding Run review requires a new event producer and message
+content, not a second notification subsystem or Slack-specific Run behavior.
+
+## Required Tests
+
+The implementation is not complete without focused coverage of:
+
+- event deduplication under concurrent transition handling;
+- atomic domain transition, event, and delivery insertion;
+- exact route resolution and duplicate destination rejection;
+- missing or changed destination configuration;
+- Slack success, timeout, retryable failure, rate limiting, and permanent
+  failure;
+- Server restart before send, during an attempt, and after provider acceptance;
+- one failing destination not blocking another;
+- bounded attempt count and backoff;
+- payload size and fact-count limits;
+- secret and provider-response redaction;
+- relative action-path validation and explicit public URL joining;
+- authorization and redaction on delivery-list responses;
+- Kargo automatic approval producing no review request;
+- one Kargo pending transition producing one event across repeated polls and
+  reconciliation;
+- notification failure leaving Promotion state unchanged;
+- OpenAPI, SQL, Helm schema, and generated-output freshness.
+
+## Deferred Decisions
+
+Resolve these when a concrete milestone needs them:
+
+- exact retention duration for terminal notification records;
+- whether operators need an explicit delivery retry API;
+- typed route filters beyond event type;
+- signed generic webhook envelope and replay-protection details;
+- email provider and formatting behavior;
+- provider-interactive decisions and principal mapping;
+- whether two implemented review domains justify shared review persistence;
+- whether notification delivery later participates in a broader audit-event
+  model.
+
+Do not turn notification delivery into a general event bus, policy language, or
+workflow engine while resolving these choices.

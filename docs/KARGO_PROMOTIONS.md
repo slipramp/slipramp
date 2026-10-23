@@ -811,8 +811,10 @@ standalone gate state or credential remains authoritative.
       acknowledgements.
 - [ ] Add candidate-branch expiry and cleanup as an explicit, observable
       operation with protected pending branches.
-- [ ] Add notification delivery for newly pending reviews, beginning with
-      Slack, without making notification success part of gate state.
+- [ ] Add provider-neutral notification delivery for newly pending reviews,
+      beginning with Slack and following
+      [NOTIFICATIONS.md](./NOTIFICATIONS.md), without making notification
+      success part of gate state.
 - [ ] Add status and troubleshooting documentation for Stage freshness, diff
       failures, expired reviews, and stale target pushes.
 
@@ -852,7 +854,6 @@ These choices remain deliberately outside the first review slice:
   Promotion identity through an explicit operator action;
 - whether policy changes need a general audit-event table beyond their current
   actor snapshot and Promotion history;
-- whether notification delivery becomes a reusable Slipramp facility;
 - whether a second integration justifies extracting provider-neutral review
   abstractions from the Kargo-specific contract.
 

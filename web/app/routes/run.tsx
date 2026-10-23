@@ -28,7 +28,7 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Form, Link, redirect, useNavigation, useRevalidator } from "react-router";
+import { Form, Link, redirect, useFetcher, useNavigation } from "react-router";
 
 import { ANSI_DEFAULT_BACKGROUND, ANSI_DEFAULT_FOREGROUND, parseAnsi } from "~/ansi";
 import { createServerAPIClient } from "~/api/client.server";
@@ -62,7 +62,7 @@ import { runSourceLabel } from "~/run-source";
 import type { Route } from "./+types/run";
 
 const elapsedTimerIntervalMs = 1000;
-const runRevalidationIntervalMs = 1000;
+const runRevalidationIntervalMs = 2000;
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const runName = loaderData?.run ? `Run ${loaderData.run.id.slice(0, 8)}` : "Run";
@@ -171,17 +171,22 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
 export default function RunDetail({ actionData, loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
-  const { revalidate, state: revalidationState } = useRevalidator();
-  const phase = loaderData.run?.phase;
+  const { data: pollerData, load: loadRun, state: pollingState } = useFetcher<typeof loader>();
+  const polledData = pollerData?.runId === loaderData.runId ? pollerData : undefined;
+  const currentData = polledData ?? loaderData;
+  const phase = currentData.run?.phase;
 
   useEffect(() => {
-    if (phase === undefined || phase === "finished" || revalidationState !== "idle") return;
+    if (phase === undefined || phase === "finished" || pollingState !== "idle") return;
 
-    const timer = window.setTimeout(() => void revalidate(), runRevalidationIntervalMs);
+    const timer = window.setTimeout(
+      () => void loadRun(`/runs/${loaderData.runId}`),
+      runRevalidationIntervalMs,
+    );
     return () => window.clearTimeout(timer);
-  }, [phase, revalidate, revalidationState]);
+  }, [loaderData.runId, loadRun, phase, pollingState]);
 
-  if (!loaderData.run) {
+  if (!currentData.run) {
     return (
       <Stack gap="md">
         <PageBackLink label="Back to run history" to="/runs" />
@@ -192,7 +197,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     );
   }
 
-  const run = loaderData.run;
+  const run = currentData.run;
   return (
     <Stack gap="lg">
       <PageHeader
@@ -204,7 +209,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                 <input
                   name="idempotencyKey"
                   type="hidden"
-                  value={`${loaderData.rerunKey}:exact`}
+                  value={`${currentData.rerunKey}:exact`}
                 />
                 <Button
                   leftSection={<IconRefresh aria-hidden size={16} />}
@@ -223,7 +228,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                 <input
                   name="idempotencyKey"
                   type="hidden"
-                  value={`${loaderData.rerunKey}:latest`}
+                  value={`${currentData.rerunKey}:latest`}
                 />
                 <Button
                   disabled={Object.keys(run.inputs).length > 0}
@@ -336,13 +341,13 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
       ) : null}
 
       <CommitDetails commit={run.commit} />
-      <RunOverview repositoryName={loaderData.repositoryName} run={run} />
+      <RunOverview repositoryName={currentData.repositoryName} run={run} />
       <ParameterTable parameters={run.parameters} />
 
       <InputTable inputs={run.inputs} />
       <LiveLog runId={run.id} />
       <ArtifactTable
-        artifacts={loaderData.artifacts ?? []}
+        artifacts={currentData.artifacts ?? []}
         consumers={run.artifactConsumers}
         producerSucceeded={run.outcome === "succeeded"}
       />

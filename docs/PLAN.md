@@ -7,6 +7,13 @@ to describe the product and architecture direction.
 The focused design and delivery plan for the optional Kargo promotion-review
 vertical is recorded in [KARGO_PROMOTIONS.md](./KARGO_PROMOTIONS.md).
 
+The focused design and delivery plan for the Server-composed operational Inbox
+and per-principal problem acknowledgements is recorded in
+[INBOX.md](./INBOX.md).
+
+The focused design and delivery plan for provider-neutral outbound
+notifications is recorded in [NOTIFICATIONS.md](./NOTIFICATIONS.md).
+
 ## Vision
 
 Slipramp is a GitOps-driven infrastructure control plane for homelabs and small teams. A user connects a Git repository and gets a catalog of targets and actions defined by YAML in that repository.
