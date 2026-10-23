@@ -110,6 +110,7 @@ type RunListFilter struct {
 	RepositoryID *uuid.UUID
 	TargetName   string
 	ClusterName  string
+	Phase        Phase
 	Limit        int32
 	Offset       int32
 }

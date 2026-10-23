@@ -122,7 +122,7 @@ export default function RepositoryCatalog({ loaderData }: Route.ComponentProps) 
                     component={Link}
                     leftSection={<IconListDetails size={16} />}
                     size="compact-md"
-                    to={`/?repositoryId=${encodeURIComponent(loaderData.repositoryId)}`}
+                    to={`/targets?repositoryId=${encodeURIComponent(loaderData.repositoryId)}`}
                     variant="light"
                   >
                     View targets

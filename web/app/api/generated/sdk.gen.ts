@@ -83,6 +83,9 @@ import type {
   ListPromotionPipelinesData,
   ListPromotionPipelinesErrors,
   ListPromotionPipelinesResponses,
+  ListPromotionProjectsData,
+  ListPromotionProjectsErrors,
+  ListPromotionProjectsResponses,
   ListPromotionsData,
   ListPromotionsErrors,
   ListPromotionsResponses,
@@ -1100,6 +1103,33 @@ export const decidePromotion = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * List Kargo Projects derived from active observed Stages
+ */
+export const listPromotionProjects = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPromotionProjectsData, ThrowOnError>,
+): RequestResult<ListPromotionProjectsResponses, ListPromotionProjectsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListPromotionProjectsResponses,
+    ListPromotionProjectsErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-projects",
+    ...options,
   });
 
 /**

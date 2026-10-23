@@ -146,6 +146,20 @@ func (s IntegrationSet) KargoStageURL(integration, project, stage string) *strin
 	return &value
 }
 
+func (s IntegrationSet) KargoProjectURL(integration, project string) *string {
+	config, ok := s.Lookup(integration)
+	if !ok || config.UIURL == "" {
+		return nil
+	}
+
+	value, err := url.JoinPath(config.UIURL, "project", project)
+	if err != nil {
+		return nil
+	}
+
+	return &value
+}
+
 func (s IntegrationSet) KargoPromotionURL(integration, project, promotion string) *string {
 	config, ok := s.Lookup(integration)
 	if !ok || config.UIURL == "" {

@@ -21,8 +21,10 @@ import {
   IconArrowsDiff,
   IconCheck,
   IconDeviceDesktop,
+  IconFolder,
   IconGitBranch,
   IconHistory,
+  IconInbox,
   IconKey,
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
@@ -52,7 +54,8 @@ type NavigationItem = {
 const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
   {
     items: [
-      { icon: IconTargetArrow, label: "Targets", to: "/" },
+      { icon: IconInbox, label: "Inbox", to: "/" },
+      { icon: IconTargetArrow, label: "Targets", to: "/targets" },
       { icon: IconHistory, label: "Runs", to: "/runs" },
     ],
     label: "Operate",
@@ -66,6 +69,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
   },
   {
     items: [
+      { icon: IconFolder, label: "Projects", to: "/promotion-projects" },
       { icon: IconRocket, label: "Promotions", to: "/promotions" },
       { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines" },
       { icon: IconArrowsDiff, label: "Branch drift", to: "/promotion-branch-drift" },

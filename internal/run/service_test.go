@@ -529,6 +529,7 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 			RepositoryID: &repositoryID,
 			TargetName:   "network",
 			ClusterName:  "colo",
+			Phase:        PhaseRunning,
 		},
 	)
 	if err != nil {
@@ -541,8 +542,19 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 		*runs.listFilter.RepositoryID != repositoryID ||
 		runs.listFilter.TargetName != "network" ||
 		runs.listFilter.ClusterName != "colo" ||
+		runs.listFilter.Phase != PhaseRunning ||
 		runs.listFilter.Limit != DefaultRunListLimit {
 		t.Errorf("ListRuns() filter = %#v", runs.listFilter)
+	}
+}
+
+func TestListRunsRejectsInvalidPhase(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(context.Background(), RunListFilter{Phase: "waiting"})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
 }
 

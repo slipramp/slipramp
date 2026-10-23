@@ -37,10 +37,15 @@ func (h *Handler) ListRepositories(
 	if request.Params.Q != nil {
 		query = strings.ToLower(strings.TrimSpace(*request.Params.Q))
 	}
+	refreshStatus := ""
+	if request.Params.RefreshStatus != nil {
+		refreshStatus = string(*request.Params.RefreshStatus)
+	}
 	filtered := repositories[:0]
 	for _, item := range repositories {
 		searchable := strings.ToLower(strings.Join([]string{item.Name, item.CloneURL, item.Branch}, "\n"))
-		if query == "" || strings.Contains(searchable, query) {
+		if (query == "" || strings.Contains(searchable, query)) &&
+			(refreshStatus == "" || string(item.Refresh.Status) == refreshStatus) {
 			filtered = append(filtered, item)
 		}
 	}

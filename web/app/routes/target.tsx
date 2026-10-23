@@ -67,7 +67,7 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   if (!loaderData.apiAvailable) {
     return (
       <Stack gap="md">
-        <PageBackLink label="Back to targets" to="/" />
+        <PageBackLink label="Back to targets" to="/targets" />
         <Alert color="red" title="API unavailable">
           The target definition could not be loaded.
         </Alert>
@@ -78,7 +78,7 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   if (loaderData.repositoryListAvailable && !loaderData.repository) {
     return (
       <Stack gap="md">
-        <PageBackLink label="Back to targets" to="/" />
+        <PageBackLink label="Back to targets" to="/targets" />
         <Alert color="red" title="Repository not found">
           This repository is not in the active repository list.
         </Alert>

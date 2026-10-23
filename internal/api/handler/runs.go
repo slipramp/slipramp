@@ -53,6 +53,10 @@ func (h *Handler) ListRuns(
 	if request.Params.Cluster != nil {
 		clusterName = string(*request.Params.Cluster)
 	}
+	phase := run.Phase("")
+	if request.Params.Phase != nil {
+		phase = run.Phase(*request.Params.Phase)
+	}
 	offset := int32(0)
 	if request.Params.Offset != nil {
 		if *request.Params.Offset < 0 || *request.Params.Offset > run.MaximumRunListOffset {
@@ -69,6 +73,7 @@ func (h *Handler) ListRuns(
 			RepositoryID: request.Params.RepositoryID,
 			TargetName:   targetName,
 			ClusterName:  clusterName,
+			Phase:        phase,
 			Limit:        limit,
 			Offset:       offset,
 		},

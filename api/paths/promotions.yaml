@@ -155,6 +155,45 @@ promotionDecision:
       "500":
         $ref: "#/components/responses/InternalError"
 
+promotionProjects:
+  get:
+    operationId: listPromotionProjects
+    summary: List Kargo Projects derived from active observed Stages
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: integration
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: cluster
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: project
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - $ref: "#/components/parameters/Limit"
+      - $ref: "#/components/parameters/Offset"
+    responses:
+      "200":
+        description: Active observed Kargo Projects with Stage inventory summaries.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionProjectList
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
 promotionStages:
   get:
     operationId: listPromotionStages

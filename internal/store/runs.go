@@ -56,11 +56,17 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 	if filter.ClusterName != "" {
 		clusterName = &filter.ClusterName
 	}
+	var phase *string
+	if filter.Phase != "" {
+		value := string(filter.Phase)
+		phase = &value
+	}
 
 	query := storedb.ListRunsParams{
 		RepositoryID: repositoryID,
 		TargetName:   targetName,
 		ClusterName:  clusterName,
+		Phase:        phase,
 		ResultLimit:  filter.Limit,
 		ResultOffset: filter.Offset,
 	}
@@ -75,6 +81,7 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		RepositoryID: repositoryID,
 		TargetName:   targetName,
 		ClusterName:  clusterName,
+		Phase:        phase,
 	})
 	if err != nil {
 		return run.RunList{}, fmt.Errorf("count Runs: %w", err)

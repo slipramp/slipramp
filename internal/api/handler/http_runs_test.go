@@ -325,7 +325,8 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		"/api/v1/runs?repositoryId="+repositoryID.String()+"&target=network&cluster=colo&limit=12&offset=4",
+		"/api/v1/runs?repositoryId="+repositoryID.String()+
+			"&target=network&cluster=colo&phase=running&limit=12&offset=4",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -339,6 +340,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		*runs.listFilter.RepositoryID != repositoryID ||
 		runs.listFilter.TargetName != "network" ||
 		runs.listFilter.ClusterName != "colo" ||
+		runs.listFilter.Phase != run.PhaseRunning ||
 		runs.listFilter.Limit != 12 ||
 		runs.listFilter.Offset != 4 {
 		t.Errorf("list filter = %#v", runs.listFilter)

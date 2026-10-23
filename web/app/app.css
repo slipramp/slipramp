@@ -192,6 +192,32 @@ a {
   background: var(--slipramp-hover);
 }
 
+.inbox-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.inbox-item::before {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  content: "";
+}
+
+.inbox-item[data-tone="critical"]::before {
+  background: var(--mantine-color-red-6);
+}
+
+.inbox-item[data-tone="warning"]::before {
+  background: var(--mantine-color-yellow-6);
+}
+
+.inbox-stat {
+  border: 1px solid var(--slipramp-border);
+  background: var(--slipramp-inset);
+}
+
 .run-log {
   border: 1px solid rgb(255 255 255 / 9%);
   border-radius: var(--mantine-radius-md);

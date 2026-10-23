@@ -275,6 +275,9 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	if filter.ClusterName != strings.TrimSpace(filter.ClusterName) {
 		return RunList{}, fmt.Errorf("%w: cluster name must not have surrounding whitespace", ErrInvalidRequest)
 	}
+	if filter.Phase != "" && !validPhase(filter.Phase) {
+		return RunList{}, fmt.Errorf("%w: phase is invalid", ErrInvalidRequest)
+	}
 	if filter.Limit == 0 {
 		filter.Limit = DefaultRunListLimit
 	}
@@ -291,6 +294,15 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	}
 
 	return records, nil
+}
+
+func validPhase(phase Phase) bool {
+	switch phase {
+	case PhaseQueued, PhaseAssigned, PhasePreparing, PhaseRunning, PhaseFinished:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Service) resolveInputCandidates(

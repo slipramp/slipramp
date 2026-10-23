@@ -163,16 +163,26 @@ AND (
     $3::text IS NULL
     OR cluster_name = $3
 )
+AND (
+    $4::text IS NULL
+    OR phase = $4
+)
 `
 
 type CountRunsParams struct {
 	RepositoryID pgtype.UUID
 	TargetName   *string
 	ClusterName  *string
+	Phase        *string
 }
 
 func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countRuns, arg.RepositoryID, arg.TargetName, arg.ClusterName)
+	row := q.db.QueryRow(ctx, countRuns,
+		arg.RepositoryID,
+		arg.TargetName,
+		arg.ClusterName,
+		arg.Phase,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -715,15 +725,20 @@ AND (
     $3::text IS NULL
     OR cluster_name = $3
 )
+AND (
+    $4::text IS NULL
+    OR phase = $4
+)
 ORDER BY created_at DESC, id DESC
-LIMIT $5
-OFFSET $4
+LIMIT $6
+OFFSET $5
 `
 
 type ListRunsParams struct {
 	RepositoryID pgtype.UUID
 	TargetName   *string
 	ClusterName  *string
+	Phase        *string
 	ResultOffset int32
 	ResultLimit  int32
 }
@@ -733,6 +748,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		arg.RepositoryID,
 		arg.TargetName,
 		arg.ClusterName,
+		arg.Phase,
 		arg.ResultOffset,
 		arg.ResultLimit,
 	)

@@ -178,6 +178,7 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 	t.Parallel()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	failedRepositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
 	commitSHA := "0123456789abcdef0123456789abcdef01234567"
 	attemptedAt := time.Date(2026, time.October, 16, 12, 5, 0, 0, time.UTC)
 	repositories := &recordingRepositoryService{
@@ -195,11 +196,26 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 					SucceededAt: &attemptedAt,
 				},
 			},
+			{
+				Name:      "broken",
+				CloneURL:  "https://github.com/example/broken.git",
+				Branch:    "main",
+				ID:        failedRepositoryID,
+				CreatedAt: time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC),
+				Refresh: repository.RefreshState{
+					Status: repository.RefreshStatusFailed,
+				},
+			},
 		},
 	}
 	httpHandler := newAdminTestHandler(&recordingClusterService{}, nil, repositories, nil, nil, nil, nil)
 
-	listRequest := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/repositories", nil)
+	listRequest := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/repositories?refreshStatus=succeeded",
+		nil,
+	)
 	listResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(listResponse, listRequest)
 
@@ -213,6 +229,7 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 	}
 
 	if len(list.Items) != 1 || list.Items[0].ID != repositoryID ||
+		list.Total != 1 ||
 		list.Items[0].Refresh.Status != api.RepositoryRefreshStatusSucceeded ||
 		list.Items[0].Refresh.Commit == nil ||
 		list.Items[0].Refresh.Commit.Sha != commitSHA {

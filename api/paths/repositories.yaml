@@ -14,6 +14,12 @@ repositories:
         schema:
           type: string
           maxLength: 200
+      - name: refreshStatus
+        in: query
+        description: Limit results to the latest repository refresh result.
+        schema:
+          type: string
+          enum: [pending, succeeded, failed]
       - name: limit
         in: query
         schema:

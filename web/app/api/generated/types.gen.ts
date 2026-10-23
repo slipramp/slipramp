@@ -505,6 +505,26 @@ export type PromotionList = {
   offset: number;
 };
 
+export type PromotionProject = {
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  stageCount: number;
+  applicationCount: number;
+  lastObservedAt: string;
+  /**
+   * Direct link to this Project in the configured Kargo UI.
+   */
+  kargoUrl?: string;
+};
+
+export type PromotionProjectList = {
+  items: Array<PromotionProject>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type PromotionStage = {
   id: string;
   integration: CatalogName;
@@ -1102,6 +1122,10 @@ export type ListRepositoriesData = {
   path?: never;
   query?: {
     q?: string;
+    /**
+     * Limit results to the latest repository refresh result.
+     */
+    refreshStatus?: "pending" | "succeeded" | "failed";
     limit?: number;
     offset?: number;
   };
@@ -1788,6 +1812,10 @@ export type ListRunsData = {
      * Limit results to Runs assigned to one execution cluster.
      */
     cluster?: CatalogName;
+    /**
+     * Limit results to one durable lifecycle phase.
+     */
+    phase?: "queued" | "assigned" | "preparing" | "running" | "finished";
     /**
      * Maximum number of recent Runs to return.
      */
@@ -2802,6 +2830,51 @@ export type DecidePromotionResponses = {
 };
 
 export type DecidePromotionResponse = DecidePromotionResponses[keyof DecidePromotionResponses];
+
+export type ListPromotionProjectsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    integration?: CatalogName;
+    cluster?: CatalogName;
+    project?: CatalogName;
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/promotion-projects";
+};
+
+export type ListPromotionProjectsErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type ListPromotionProjectsError =
+  ListPromotionProjectsErrors[keyof ListPromotionProjectsErrors];
+
+export type ListPromotionProjectsResponses = {
+  /**
+   * Active observed Kargo Projects with Stage inventory summaries.
+   */
+  200: PromotionProjectList;
+};
+
+export type ListPromotionProjectsResponse =
+  ListPromotionProjectsResponses[keyof ListPromotionProjectsResponses];
 
 export type ListPromotionStagesData = {
   body?: never;

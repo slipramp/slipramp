@@ -72,6 +72,8 @@ paths:
     $ref: ./paths/promotions.yaml#/promotion
   /api/v1/promotions/{promotionId}/decision:
     $ref: ./paths/promotions.yaml#/promotionDecision
+  /api/v1/promotion-projects:
+    $ref: ./paths/promotions.yaml#/promotionProjects
   /api/v1/promotion-stages:
     $ref: ./paths/promotions.yaml#/promotionStages
   /api/v1/promotion-stages/{stageId}/policy:
@@ -175,6 +177,10 @@ components:
       $ref: ./components/promotions.yaml#/Promotion
     PromotionList:
       $ref: ./components/promotions.yaml#/PromotionList
+    PromotionProject:
+      $ref: ./components/promotions.yaml#/PromotionProject
+    PromotionProjectList:
+      $ref: ./components/promotions.yaml#/PromotionProjectList
     PromotionStage:
       $ref: ./components/promotions.yaml#/PromotionStage
     PromotionStageList:

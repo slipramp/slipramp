@@ -32,6 +32,13 @@ runs:
         description: Limit results to Runs assigned to one execution cluster.
         schema:
           $ref: ../components/runs.yaml#/CatalogName
+      - name: phase
+        in: query
+        required: false
+        description: Limit results to one durable lifecycle phase.
+        schema:
+          type: string
+          enum: [queued, assigned, preparing, running, finished]
       - name: limit
         in: query
         required: false

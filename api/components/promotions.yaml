@@ -208,6 +208,60 @@ KargoStageSnapshot:
       items:
         $ref: "#/PromotionStageObservation"
 
+PromotionProject:
+  type: object
+  additionalProperties: false
+  required:
+    - integration
+    - cluster
+    - project
+    - stageCount
+    - applicationCount
+    - lastObservedAt
+  properties:
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    project:
+      $ref: ./runs.yaml#/CatalogName
+    stageCount:
+      type: integer
+      minimum: 1
+    applicationCount:
+      type: integer
+      minimum: 1
+    lastObservedAt:
+      type: string
+      format: date-time
+    kargoUrl:
+      type: string
+      format: uri
+      description: Direct link to this Project in the configured Kargo UI.
+
+PromotionProjectList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/PromotionProject"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+
 PromotionStage:
   type: object
   additionalProperties: false

@@ -75,6 +75,10 @@ AND (
     sqlc.narg(cluster_name)::text IS NULL
     OR cluster_name = sqlc.narg(cluster_name)
 )
+AND (
+    sqlc.narg(phase)::text IS NULL
+    OR phase = sqlc.narg(phase)
+)
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(result_limit)
 OFFSET sqlc.arg(result_offset);
@@ -93,6 +97,10 @@ AND (
 AND (
     sqlc.narg(cluster_name)::text IS NULL
     OR cluster_name = sqlc.narg(cluster_name)
+)
+AND (
+    sqlc.narg(phase)::text IS NULL
+    OR phase = sqlc.narg(phase)
 );
 
 -- name: CreateRunArtifactInput :execrows

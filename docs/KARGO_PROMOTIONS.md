@@ -159,7 +159,7 @@ Kargo integrations are named Server configuration loaded at startup, like
 Placements. Each integration selects:
 
 - one registered Slipramp Cluster;
-- an optional Kargo UI base URL for direct Stage and Promotion links;
+- an optional Kargo UI base URL for direct Project, Stage, and Promotion links;
 - the logical repository names allowed for observed Stages;
 - the ordered environments used by Freight pipeline comparisons;
 - the repository, Target, and Action used for review preparation;
@@ -631,6 +631,7 @@ environment and configuration files injected by the Runtime.
 Add a **Promotions** navigation item with these initial routes:
 
 ```text
+/promotion-projects
 /promotions
 /promotions/:promotionId
 /promotion-stages
@@ -638,9 +639,13 @@ Add a **Promotions** navigation item with these initial routes:
 /promotion-branch-drift
 ```
 
-The Promotions page shows pending work first, then recent terminal Promotions,
-with integration, Stage, application, revisions, age, status, and requesting
-actor filters. The detail page shows:
+The Promotion projects page groups active observed Stages by integration,
+Cluster, and Kargo project. It shows Stage and application counts, observation
+freshness, and a direct link to the configured Kargo project UI. Projects with
+no observed Stages are outside the Stage observer's inventory and are not
+listed. The Promotions page shows pending work first, then recent terminal
+Promotions, with integration, Stage, application, revisions, age, status, and
+requesting actor filters. The detail page shows:
 
 - Stage and repository context;
 - base and candidate revisions;
@@ -670,8 +675,8 @@ unknown status. Each row pairs the latest source-branch commit date with the
 last rendered stage-branch commit date; a successful no-op render remains in
 sync when no watched source path or rendered target changed. Status,
 integration, project, and Repository filters are evaluated by the Server.
-When an integration configures `uiUrl`, Promotion, Stage, pipeline, and branch
-drift views link directly to the corresponding resource in Kargo.
+When an integration configures `uiUrl`, project, Promotion, Stage, pipeline,
+and branch drift views link directly to the corresponding resource in Kargo.
 
 ## Delivery Milestones
 

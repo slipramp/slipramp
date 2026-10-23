@@ -2,6 +2,7 @@ import { index, route, type RouteConfig } from "@react-router/dev/routes";
 
 export default [
   index("routes/index.tsx"),
+  route("targets", "routes/targets.tsx"),
   route("api/v1/auth/login", "routes/auth-login.ts"),
   route("api/v1/auth/callback", "routes/auth-callback.ts"),
   route("logout", "routes/logout.ts"),
@@ -23,6 +24,7 @@ export default [
   route("runs/:runId", "routes/run.tsx"),
   route("promotions", "routes/promotions.tsx"),
   route("promotions/:promotionId", "routes/promotion.tsx"),
+  route("promotion-projects", "routes/promotion-projects.tsx"),
   route("promotion-stages", "routes/promotion-stages.tsx"),
   route("promotion-pipelines", "routes/promotion-pipelines.tsx"),
   route("promotion-branch-drift", "routes/promotion-branch-drift.tsx"),

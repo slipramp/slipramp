@@ -200,7 +200,10 @@ preserving static trigger parameters and delivery-ID idempotency.
 - Use Mantine UI v9 for application layout and components.
 - Present the Go API and web application through one origin in the deployment.
 - Provide these primary screens:
-  - Cross-repository Target index as the homepage, with server-side search,
+  - Role-aware operational Inbox as the homepage, composed from pending
+    Promotion reviews, failed repository refreshes, unreachable Controllers,
+    stale active Run observations, and dependency readiness; keep the
+    cross-repository Target index on its own screen with server-side search,
     repository filtering, pagination, and compact action summaries suitable for
     hundreds of targets
   - Repository list and connection form

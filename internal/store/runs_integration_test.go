@@ -130,6 +130,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		run.RunListFilter{
 			RepositoryID: &repositoryFilter,
 			TargetName:   "network",
+			Phase:        run.PhaseQueued,
 			Limit:        1,
 			Offset:       1,
 		},

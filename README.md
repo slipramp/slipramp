@@ -325,13 +325,15 @@ Freight comparison. Newly observed environments outside that list remain
 visible after the configured columns and do not invalidate a complete Stage
 snapshot.
 
-Authenticated users can review this state at `/promotions`, open a Promotion
-to inspect its preparation Run and sensitive Git and Argo CD diffs, browse the
-observed inventory at `/promotion-stages`, and compare current typed Freight
-across the configured environment order at `/promotion-pipelines`. The
-`/promotion-branch-drift` view shows cached source and target branch
-comparisons. Operators and administrators can record one immutable approval
-or rejection and update per-Stage automatic or review-required policy.
+Authenticated users can browse active Stage-backed Kargo projects at
+`/promotion-projects` and follow their configured Kargo UI links, review state
+at `/promotions`, open a Promotion to inspect its preparation Run and sensitive
+Git and Argo CD diffs, browse the observed inventory at `/promotion-stages`,
+and compare current typed Freight across the configured environment order at
+`/promotion-pipelines`. The `/promotion-branch-drift` view shows cached source
+and target branch comparisons. Operators and administrators can record one
+immutable approval or rejection and update per-Stage automatic or
+review-required policy.
 Temporary review policies retain their audit context after expiry, while
 pending Promotions expire durably when their review window ends.
 

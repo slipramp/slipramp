@@ -62,6 +62,10 @@ func TestIntegrationSetBuildsKargoLinks(t *testing.T) {
 	integrations := IntegrationSet{
 		"prod": {UIURL: "https://kargo.example.com/console/"},
 	}
+	projectURL := integrations.KargoProjectURL("prod", "kargo-core")
+	if projectURL == nil || *projectURL != "https://kargo.example.com/console/project/kargo-core" {
+		t.Errorf("KargoProjectURL() = %v", projectURL)
+	}
 	stageURL := integrations.KargoStageURL("prod", "kargo-core", "external-dns.prod")
 	if stageURL == nil || *stageURL != "https://kargo.example.com/console/project/kargo-core/stage/external-dns.prod" {
 		t.Errorf("KargoStageURL() = %v", stageURL)
@@ -72,6 +76,9 @@ func TestIntegrationSetBuildsKargoLinks(t *testing.T) {
 	}
 	if integrations.KargoStageURL("missing", "kargo-core", "prod") != nil {
 		t.Error("KargoStageURL() returned a URL for an unknown integration")
+	}
+	if integrations.KargoProjectURL("missing", "kargo-core") != nil {
+		t.Error("KargoProjectURL() returned a URL for an unknown integration")
 	}
 }
 

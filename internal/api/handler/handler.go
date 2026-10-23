@@ -26,6 +26,7 @@ type Handler struct {
 	promotionRequests  PromotionRequestService
 	promotionStages    PromotionStageService
 	promotionReviews   PromotionReviewService
+	promotionProjects  PromotionProjectService
 	promotionPipelines PromotionPipelineService
 	promotionDrift     PromotionBranchDriftService
 	kargoIntegrations  promotion.IntegrationSet
@@ -54,6 +55,7 @@ type Dependencies struct {
 	PromotionRequests     PromotionRequestService
 	PromotionStages       PromotionStageService
 	PromotionReviews      PromotionReviewService
+	PromotionProjects     PromotionProjectService
 	PromotionPipelines    PromotionPipelineService
 	PromotionBranchDrift  PromotionBranchDriftService
 	KargoIntegrations     promotion.IntegrationSet
@@ -75,6 +77,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		promotionRequests:  dependencies.PromotionRequests,
 		promotionStages:    dependencies.PromotionStages,
 		promotionReviews:   dependencies.PromotionReviews,
+		promotionProjects:  dependencies.PromotionProjects,
 		promotionPipelines: dependencies.PromotionPipelines,
 		promotionDrift:     dependencies.PromotionBranchDrift,
 		kargoIntegrations:  dependencies.KargoIntegrations,
