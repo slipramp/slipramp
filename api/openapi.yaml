@@ -14,6 +14,8 @@ paths:
     $ref: ./paths/repositories.yaml#/repositories
   /api/v1/repositories/{repositoryId}:
     $ref: ./paths/repositories.yaml#/repository
+  /api/v1/git-trigger-deliveries/failed:
+    $ref: ./paths/repositories.yaml#/failedGitTriggerDeliveries
   /api/v1/commits:
     $ref: ./paths/repositories.yaml#/repositoryCommits
   /api/v1/repositories/{repositoryId}/catalog:

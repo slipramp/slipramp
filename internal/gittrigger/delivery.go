@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrNoPendingDelivery = errors.New("no pending Git-trigger delivery")
+var ErrNoEligibleDelivery = errors.New("no eligible Git-trigger delivery")
 
 type Delivery struct {
 	ID                uuid.UUID

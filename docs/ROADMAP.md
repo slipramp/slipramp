@@ -124,18 +124,7 @@ attribution; and provider-neutral review abstractions if a second integration
 actually needs them. Current preparation failures require a new external
 Promotion identity; approval does not imply downstream success.
 
-## Git-trigger reliability
-
-Named Git triggers, validated static parameters, durable revision pins,
-delivery-ID idempotency, and Target-scoped latest-wins coalescing are implemented.
-The following form one coherent reliability change and must not be added
-piecemeal:
-
-- [ ] Persist failed delivery-attempt metadata.
-- [ ] Add bounded retry backoff and restart-persistent retry scheduling.
-- [ ] Isolate permanently failing deliveries so later eligible work proceeds.
-- [ ] Cover failure/restart behavior while preserving revision and parameter
-      pins, stale-delivery rejection, coalescing, and normal FIFO among eligible Runs.
+## Git-trigger extensions
 
 Trigger extensions remain separate design work: branch filters, trigger-specific
 path overrides, dynamic parameters, configurable delivery policies, per-commit

@@ -1003,6 +1003,31 @@ type CredentialInjection struct {
 // DependencyStatus defines model for DependencyStatus.
 type DependencyStatus string
 
+// FailedGitTriggerDelivery defines model for FailedGitTriggerDelivery.
+type FailedGitTriggerDelivery struct {
+	Action            string             `json:"action"`
+	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
+	CommitSha         string             `json:"commitSha"`
+
+	// Diagnostic Fixed non-sensitive explanation without underlying error details or parameters.
+	Diagnostic     string             `json:"diagnostic"`
+	FailedAt       time.Time          `json:"failedAt"`
+	FailureCount   int                `json:"failureCount"`
+	ID             openapi_types.UUID `json:"id"`
+	RepositoryID   openapi_types.UUID `json:"repositoryId"`
+	RepositoryName string             `json:"repositoryName"`
+	Target         string             `json:"target"`
+	Trigger        string             `json:"trigger"`
+}
+
+// FailedGitTriggerDeliveryList defines model for FailedGitTriggerDeliveryList.
+type FailedGitTriggerDeliveryList struct {
+	Items  []FailedGitTriggerDelivery `json:"items"`
+	Limit  int                        `json:"limit"`
+	Offset int                        `json:"offset"`
+	Total  int                        `json:"total"`
+}
+
 // GitCommit defines model for GitCommit.
 type GitCommit struct {
 	// Author Commit author name when it has been read from the Git object.
@@ -2007,6 +2032,12 @@ type ListCommitsParams struct {
 	Offset *int32  `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListFailedGitTriggerDeliveriesParams defines parameters for ListFailedGitTriggerDeliveries.
+type ListFailedGitTriggerDeliveriesParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListPromotionBranchDriftParams defines parameters for ListPromotionBranchDrift.
 type ListPromotionBranchDriftParams struct {
 	Integration *CatalogName                `form:"integration,omitempty" json:"integration,omitempty"`
@@ -2440,6 +2471,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/commits (the `ListCommits` operationId).
 	ListCommits(ctx context.Context, params *ListCommitsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
+	//
+	// Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
+	//
+	// Corresponds with GET /api/v1/git-trigger-deliveries/failed (the `ListFailedGitTriggerDeliveries` operationId).
+	ListFailedGitTriggerDeliveries(ctx context.Context, params *ListFailedGitTriggerDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SubmitKargoPromotionWithBody Submit or poll a Kargo Promotion review request
 	//
@@ -2982,6 +3020,23 @@ func (c *Client) ListClusters(ctx context.Context, params *ListClustersParams, r
 // Corresponds with GET /api/v1/commits (the `ListCommits` operationId).
 func (c *Client) ListCommits(ctx context.Context, params *ListCommitsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListCommitsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
+//
+// Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
+//
+// Corresponds with GET /api/v1/git-trigger-deliveries/failed (the `ListFailedGitTriggerDeliveries` operationId).
+func (c *Client) ListFailedGitTriggerDeliveries(ctx context.Context, params *ListFailedGitTriggerDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListFailedGitTriggerDeliveriesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4383,6 +4438,72 @@ func NewListCommitsRequest(server string, params *ListCommitsParams) (*http.Requ
 			}
 
 		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListFailedGitTriggerDeliveriesRequest constructs an http.Request for the ListFailedGitTriggerDeliveries method
+func NewListFailedGitTriggerDeliveriesRequest(server string, params *ListFailedGitTriggerDeliveriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/git-trigger-deliveries/failed")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
 
 		if params.Limit != nil {
 
@@ -6837,6 +6958,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/commits (the `ListCommits` operationId).
 	ListCommitsWithResponse(ctx context.Context, params *ListCommitsParams, reqEditors ...RequestEditorFn) (*ListCommitsResponse, error)
 
+	// ListFailedGitTriggerDeliveriesWithResponse List failed Git-trigger deliveries
+	//
+	// Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/git-trigger-deliveries/failed (the `ListFailedGitTriggerDeliveries` operationId).
+	ListFailedGitTriggerDeliveriesWithResponse(ctx context.Context, params *ListFailedGitTriggerDeliveriesParams, reqEditors ...RequestEditorFn) (*ListFailedGitTriggerDeliveriesResponse, error)
+
 	// SubmitKargoPromotionWithBodyWithResponse Submit or poll a Kargo Promotion review request
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -7993,6 +8123,82 @@ func (r ListCommitsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListCommitsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListFailedGitTriggerDeliveriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *FailedGitTriggerDeliveryList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListFailedGitTriggerDeliveriesResponse) GetJSON200() *FailedGitTriggerDeliveryList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListFailedGitTriggerDeliveriesResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListFailedGitTriggerDeliveriesResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListFailedGitTriggerDeliveriesResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListFailedGitTriggerDeliveriesResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListFailedGitTriggerDeliveriesResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListFailedGitTriggerDeliveriesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListFailedGitTriggerDeliveriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListFailedGitTriggerDeliveriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListFailedGitTriggerDeliveriesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -11041,6 +11247,21 @@ func (c *ClientWithResponses) ListCommitsWithResponse(ctx context.Context, param
 	return ParseListCommitsResponse(rsp)
 }
 
+// ListFailedGitTriggerDeliveriesWithResponse List failed Git-trigger deliveries
+//
+// Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/git-trigger-deliveries/failed (the `ListFailedGitTriggerDeliveries` operationId).
+func (c *ClientWithResponses) ListFailedGitTriggerDeliveriesWithResponse(ctx context.Context, params *ListFailedGitTriggerDeliveriesParams, reqEditors ...RequestEditorFn) (*ListFailedGitTriggerDeliveriesResponse, error) {
+	rsp, err := c.ListFailedGitTriggerDeliveries(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListFailedGitTriggerDeliveriesResponse(rsp)
+}
+
 // SubmitKargoPromotionWithBodyWithResponse Submit or poll a Kargo Promotion review request
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -12397,6 +12618,67 @@ func ParseListCommitsResponse(rsp *http.Response) (*ListCommitsResponse, error) 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest RepositoryCommitList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListFailedGitTriggerDeliveriesResponse parses an HTTP response from a ListFailedGitTriggerDeliveriesWithResponse call
+func ParseListFailedGitTriggerDeliveriesResponse(rsp *http.Response) (*ListFailedGitTriggerDeliveriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListFailedGitTriggerDeliveriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FailedGitTriggerDeliveryList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -14827,6 +15109,9 @@ type ServerInterface interface {
 	// ListCommits List indexed commits
 	// (GET /api/v1/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, params ListCommitsParams)
+	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
+	// (GET /api/v1/git-trigger-deliveries/failed)
+	ListFailedGitTriggerDeliveries(w http.ResponseWriter, r *http.Request, params ListFailedGitTriggerDeliveriesParams)
 	// SubmitKargoPromotion Submit or poll a Kargo Promotion review request
 	// (POST /api/v1/kargo/{integration}/promotions)
 	SubmitKargoPromotion(w http.ResponseWriter, r *http.Request, integration CatalogName)
@@ -15369,6 +15654,52 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListCommits(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListFailedGitTriggerDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListFailedGitTriggerDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFailedGitTriggerDeliveriesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFailedGitTriggerDeliveries(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17202,6 +17533,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.UpdateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/git-trigger-deliveries/failed", wrapper.ListFailedGitTriggerDeliveries)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
@@ -18166,6 +18498,98 @@ func (response ListCommits405ApplicationProblemPlusJSONResponse) VisitListCommit
 type ListCommits500ApplicationProblemPlusJSONResponse Problem
 
 func (response ListCommits500ApplicationProblemPlusJSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFailedGitTriggerDeliveriesRequestObject struct {
+	Params ListFailedGitTriggerDeliveriesParams
+}
+
+type ListFailedGitTriggerDeliveriesResponseObject interface {
+	VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListFailedGitTriggerDeliveries200JSONResponse FailedGitTriggerDeliveryList
+
+func (response ListFailedGitTriggerDeliveries200JSONResponse) VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFailedGitTriggerDeliveries400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListFailedGitTriggerDeliveries400ApplicationProblemPlusJSONResponse) VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFailedGitTriggerDeliveries401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListFailedGitTriggerDeliveries401ApplicationProblemPlusJSONResponse) VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFailedGitTriggerDeliveries403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListFailedGitTriggerDeliveries403ApplicationProblemPlusJSONResponse) VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFailedGitTriggerDeliveries405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListFailedGitTriggerDeliveries405ApplicationProblemPlusJSONResponse) VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListFailedGitTriggerDeliveries500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListFailedGitTriggerDeliveries500ApplicationProblemPlusJSONResponse) VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -21917,6 +22341,9 @@ type StrictServerInterface interface {
 	// ListCommits List indexed commits
 	// (GET /api/v1/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
+	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
+	// (GET /api/v1/git-trigger-deliveries/failed)
+	ListFailedGitTriggerDeliveries(ctx context.Context, request ListFailedGitTriggerDeliveriesRequestObject) (ListFailedGitTriggerDeliveriesResponseObject, error)
 	// SubmitKargoPromotion Submit or poll a Kargo Promotion review request
 	// (POST /api/v1/kargo/{integration}/promotions)
 	SubmitKargoPromotion(ctx context.Context, request SubmitKargoPromotionRequestObject) (SubmitKargoPromotionResponseObject, error)
@@ -22328,6 +22755,32 @@ func (sh *strictHandler) ListCommits(w http.ResponseWriter, r *http.Request, par
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListCommitsResponseObject); ok {
 		if err := validResponse.VisitListCommitsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListFailedGitTriggerDeliveries operation middleware
+func (sh *strictHandler) ListFailedGitTriggerDeliveries(w http.ResponseWriter, r *http.Request, params ListFailedGitTriggerDeliveriesParams) {
+	var request ListFailedGitTriggerDeliveriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListFailedGitTriggerDeliveries(ctx, request.(ListFailedGitTriggerDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListFailedGitTriggerDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListFailedGitTriggerDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListFailedGitTriggerDeliveriesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

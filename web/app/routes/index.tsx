@@ -28,6 +28,7 @@ import {
   getCurrentPrincipal,
   getReadiness,
   listClusters,
+  listFailedGitTriggerDeliveries,
   listPromotions,
   listRepositories,
   listRuns,
@@ -59,6 +60,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     assignedRunsResult,
     preparingRunsResult,
     runningRunsResult,
+    failedGitDeliveriesResult,
   ] = await Promise.all([
     getCurrentPrincipal({ client }),
     getReadiness({ client }),
@@ -82,6 +84,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     listRuns({ client, query: { limit: domainPageLimit, phase: "assigned" } }),
     listRuns({ client, query: { limit: domainPageLimit, phase: "preparing" } }),
     listRuns({ client, query: { limit: domainPageLimit, phase: "running" } }),
+    listFailedGitTriggerDeliveries({ client, query: { limit: domainPageLimit } }),
   ]);
 
   const runResults = [assignedRunsResult, preparingRunsResult, runningRunsResult];
@@ -92,6 +95,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const activeRuns = runResults.flatMap((result) => result.data?.items ?? []);
   const inbox = buildInbox({
     activeRuns,
+    failedGitDeliveries: failedGitDeliveriesResult.data?.items ?? [],
     principal: principalResult.data,
     promotions,
     readiness: readinessReport(readinessResult.data ?? readinessResult.error),
@@ -100,6 +104,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   });
 
   const unavailableSources = new Set<string>();
+  if (!failedGitDeliveriesResult.data) unavailableSources.add("Git-trigger failures");
   if (!principalResult.data) unavailableSources.add("your permissions");
   if (!readinessReport(readinessResult.data ?? readinessResult.error)) {
     unavailableSources.add("server readiness");
@@ -119,6 +124,12 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   }
 
   const limitedSources = new Set<string>();
+  if (
+    failedGitDeliveriesResult.data &&
+    failedGitDeliveriesResult.data.total > failedGitDeliveriesResult.data.items.length
+  ) {
+    limitedSources.add("Git-trigger failures");
+  }
   if (
     (pendingPromotionsResult.data?.total ?? 0) >
       (pendingPromotionsResult.data?.items.length ?? 0) ||
@@ -371,6 +382,7 @@ function itemPresentation(kind: InboxItemKind): {
       return { color: "red", icon: IconGitBranch, tone: "critical" };
     case "cluster-unreachable":
       return { color: "red", icon: IconServerOff, tone: "critical" };
+    case "git-trigger-failure":
     case "promotion-error":
     case "dependency-unavailable":
       return { color: "red", icon: IconAlertTriangle, tone: "critical" };

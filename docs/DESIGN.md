@@ -182,8 +182,30 @@ stable delivery ID for idempotency. At insertion, PostgreSQL locks and reads
 current Target state, refusing a pinned commit that no longer equals the
 desired commit and superseding its delivery. This closes the refresh/dispatch
 race at the durable boundary. A Git source contains the trigger name and
-delivery ID and has no human actor. Retry hardening and additional trigger
-forms remain on the [roadmap](./ROADMAP.md#git-trigger-reliability).
+delivery ID and has no human actor. Run insertion and delivery linkage commit
+atomically, including idempotent recovery after an ambiguous commit.
+
+Failed Run-creation attempts persist their count, safe diagnostic, and next due
+time in PostgreSQL. The single dispatcher drains other eligible
+deliveries after a failure, choosing creation order and ID among due deliveries.
+Backoff starts at five seconds, doubles to a five-minute cap, and becomes
+terminal on the eighth failure. Restarts retain both the count and due time.
+A newer desired commit can supersede a pending delivery waiting in backoff;
+terminal failures remain failed history. Storage failures stop the current drain
+until the ordinary dispatcher tick. There is no error-classification policy,
+jitter, per-trigger configuration, or manual delivery retry.
+
+Delivery retries only create the immutable Run. Slipramp never implicitly
+retries the resulting infrastructure command, even when that Run fails.
+`GET /api/v1/git-trigger-deliveries/failed` lists terminal failures with ordinary
+authenticated read permission, bounded limit/offset pagination, and
+newest-failure-first ordering. It returns Repository identity, revision and commit,
+Target/Action/trigger, attempt count, failure time, and a fixed non-sensitive
+diagnostic (at most 512 characters); underlying error text and parameter values
+are never persisted.
+The operational Inbox shows these failures and links to the Target, retaining
+its partial-source and result-limit notices. Additional trigger forms remain on
+the [roadmap](./ROADMAP.md#git-trigger-extensions).
 
 ## Controller and execution protocol
 

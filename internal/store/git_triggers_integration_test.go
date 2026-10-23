@@ -89,7 +89,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	}
 	assertActiveCatalog(t, database, repositoryID, revisionCID, commitC)
 	assertGitTriggerDeliveryCount(t, database, 1)
-	oldest, err := database.GetPendingGitTriggerDelivery(ctx)
+	oldest, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
 	if err != nil {
 		t.Fatalf("get first pending delivery: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	}
 	assertGitTriggerDeliveryCount(t, database, 2)
 	assertGitTriggerDeliveryState(t, database, oldest.ID, true, false)
-	pending, err := database.GetPendingGitTriggerDelivery(ctx)
+	pending, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
 	if err != nil {
 		t.Fatalf("get latest delivery after later refresh: %v", err)
 	}
@@ -145,20 +145,15 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 		Placements:    placements,
 	})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	failingStore := &failingGitTriggerCompletionStore{database: database}
-	dispatcher := gittrigger.NewDispatcher(failingStore, runs, time.Second, logger)
+	dispatcher := gittrigger.NewDispatcher(database, runs, time.Second, logger)
 	processed, err := dispatcher.ProcessNext(ctx)
-	if err == nil || processed {
-		t.Fatalf("first ProcessNext() = (%t, %v), want completion failure", processed, err)
-	}
-
-	// A fresh dispatcher retries after Run creation succeeded but before its ID
-	// was recorded on the delivery. The real Run store must recover the same Run
-	// by delivery idempotency rather than inserting another one.
-	dispatcher = gittrigger.NewDispatcher(database, runs, time.Second, logger)
-	processed, err = dispatcher.ProcessNext(ctx)
 	if err != nil || !processed {
-		t.Fatalf("retried ProcessNext() = (%t, %v), want success", processed, err)
+		t.Fatalf("ProcessNext() = (%t, %v), want success", processed, err)
+	}
+	// Creation and delivery linkage commit together; a new dispatcher has no work.
+	dispatcher = gittrigger.NewDispatcher(database, runs, time.Second, logger)
+	if processed, err := dispatcher.ProcessNext(ctx); err != nil || processed {
+		t.Fatalf("second ProcessNext() = (%t, %v), want no work", processed, err)
 	}
 
 	createdRuns, err := database.ListRuns(ctx, run.RunListFilter{RepositoryID: &repositoryID, Limit: 10})
@@ -179,7 +174,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	if !reflect.DeepEqual(createdRun.Parameters, wantLaterParameters) {
 		t.Errorf("Git-triggered Run parameters = %#v, want %#v", createdRun.Parameters, wantLaterParameters)
 	}
-	if _, err := database.GetPendingGitTriggerDelivery(ctx); !errors.Is(err, gittrigger.ErrNoPendingDelivery) {
+	if _, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now()); !errors.Is(err, gittrigger.ErrNoEligibleDelivery) {
 		t.Fatalf("get pending delivery after dispatch error = %v, want no pending delivery", err)
 	}
 }
@@ -189,7 +184,7 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 	defer database.Close()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1700")
-	baseTime := time.Now().UTC().Truncate(time.Second)
+	baseTime := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	_, err := database.CreateRepository(ctx, repository.Repository{
 		ID:             repositoryID,
 		Name:           "latest-wins",
@@ -306,7 +301,7 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 	}
 	assertSupersededRunTransition(t, database, runC.ID)
 
-	pendingD, err := database.GetPendingGitTriggerDelivery(ctx)
+	pendingD, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
 	if err != nil {
 		t.Fatalf("get revision D delivery: %v", err)
 	}
@@ -347,7 +342,7 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 	defer database.Close()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1750")
-	baseTime := time.Now().UTC().Truncate(time.Second)
+	baseTime := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	_, err := database.CreateRepository(ctx, repository.Repository{
 		ID: repositoryID, Name: "target-removal", CloneURL: "https://github.com/example/target-removal.git",
 		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: baseTime,
@@ -419,7 +414,7 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1800")
 	revisionAID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1801")
-	baseTime := time.Now().UTC().Truncate(time.Second)
+	baseTime := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	_, err := database.CreateRepository(ctx, repository.Repository{
 		ID: repositoryID, Name: "fifo", CloneURL: "https://github.com/example/fifo.git",
 		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: baseTime,
@@ -513,7 +508,7 @@ func TestGitRunCreationRejectsRefreshRaceAtDatabaseBoundaryIntegration(t *testin
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1900")
 	revisionAID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1901")
 	revisionBID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1902")
-	baseTime := time.Now().UTC().Truncate(time.Second)
+	baseTime := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
 	_, err := database.CreateRepository(ctx, repository.Repository{
 		ID: repositoryID, Name: "dispatch-race", CloneURL: "https://github.com/example/race.git",
 		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: baseTime,
@@ -537,7 +532,7 @@ func TestGitRunCreationRejectsRefreshRaceAtDatabaseBoundaryIntegration(t *testin
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refreshB); err != nil {
 		t.Fatalf("record revision B: %v", err)
 	}
-	delivery, err := database.GetPendingGitTriggerDelivery(ctx)
+	delivery, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
 	if err != nil {
 		t.Fatalf("capture revision B delivery: %v", err)
 	}
@@ -812,22 +807,4 @@ func assertGitTriggerDeliveryState(
 			wantRun,
 		)
 	}
-}
-
-type failingGitTriggerCompletionStore struct {
-	database *Database
-}
-
-func (s *failingGitTriggerCompletionStore) GetPendingGitTriggerDelivery(
-	ctx context.Context,
-) (gittrigger.Delivery, error) {
-	return s.database.GetPendingGitTriggerDelivery(ctx)
-}
-
-func (*failingGitTriggerCompletionStore) CompleteGitTriggerDelivery(
-	context.Context,
-	uuid.UUID,
-	uuid.UUID,
-) error {
-	return errors.New("simulated delivery completion failure")
 }

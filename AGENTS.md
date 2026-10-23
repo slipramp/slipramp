@@ -42,7 +42,7 @@ Use the established names consistently:
 - Do not assume every Target has a `sync` Action.
 - Manual and API Run creation are supported. Named Git triggers may start actions with static, validated parameters from newly accepted heads whose changed paths match the target's `watch` patterns. Git-triggered actions cannot require artifact inputs. Schedule and webhook triggers remain later work.
 - Automatic Git-triggered Runs use Target-scoped latest-wins coalescing. When an affected Target's desired commit advances, supersede older undispatched deliveries and finish older queued Git Runs as canceled; never cancel active Git Runs or supersede manual and API Runs. Preserve ordinary FIFO scheduling among eligible Runs.
-- Git-trigger delivery retry hardening remains later reliability work: failed-attempt metadata, bounded retry backoff, isolation of permanently failing deliveries so later eligible work can proceed, and restart-persistent retry scheduling. Do not add these piecemeal without an explicit design change.
+- Git-trigger delivery attempts use durable bounded backoff and terminal failure history; isolate failing deliveries so later eligible work proceeds. Run creation and delivery linkage commit atomically. Delivery retries never retry the resulting infrastructure command.
 - Never interpret removing a Target as infrastructure destruction.
 - Serialize active Runs for the same Target by default and do not retry infrastructure commands implicitly.
 

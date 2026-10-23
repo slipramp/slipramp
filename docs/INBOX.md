@@ -6,10 +6,10 @@ per-principal problem acknowledgements.
 
 The implemented architecture is described in [DESIGN.md](./DESIGN.md). The
 Inbox already exists as the web homepage, but the web process currently composes
-it from repository, cluster, Run, Promotion, readiness, and identity APIs. This
-design replaces that browser-facing composition with one authenticated Server
-read model. It does not turn Inbox problems into a second source of truth for
-the underlying domains.
+it from repository, cluster, Run, Git-trigger failure, Promotion, readiness, and
+identity APIs. This design replaces that browser-facing composition with one
+authenticated Server read model. It does not turn Inbox problems into a second
+source of truth for the underlying domains.
 
 Delivery tracking and deferred choices live in the
 [roadmap](./ROADMAP.md#operational-inbox). Update [DESIGN.md](./DESIGN.md) as
@@ -61,7 +61,7 @@ The web application consumes that projection instead of reconstructing product
 semantics from several paginated APIs.
 
 The Inbox is a read model over authoritative Repository, Cluster, Run,
-Promotion, readiness, principal, and acknowledgement state. It does not own or
+Git-trigger delivery, Promotion, readiness, principal, and acknowledgement state. It does not own or
 copy the lifecycle of those resources. Fixing the underlying condition removes
 the problem naturally on the next read.
 
@@ -114,6 +114,7 @@ The initial occurrence markers are:
 | `cluster-unreachable`    | Cluster name     | Controller `lastSeenAt`                               |
 | `run-observation`        | Run ID           | `lastObservedAt`, then `assignedAt`, then `createdAt` |
 | `promotion-error`        | Promotion ID     | error transition `updatedAt`                          |
+| `git-trigger-failure`    | delivery ID      | terminal delivery `failedAt`                          |
 | `dependency-unavailable` | dependency name  | first observed unavailable time                       |
 
 All timestamps use normalized UTC RFC 3339 with nanosecond precision in the
@@ -264,6 +265,7 @@ The initial item kinds are:
 
 - `promotion-review`;
 - `promotion-error`;
+- `git-trigger-failure`;
 - `repository-refresh`;
 - `cluster-unreachable`;
 - `run-observation`;

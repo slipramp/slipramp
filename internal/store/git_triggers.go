@@ -190,13 +190,13 @@ func markGitTriggerDeliverySuperseded(
 	return true, nil
 }
 
-func (d *Database) GetPendingGitTriggerDelivery(ctx context.Context) (gittrigger.Delivery, error) {
-	row, err := d.queries.GetPendingGitTriggerDelivery(ctx)
+func (d *Database) GetEligibleGitTriggerDelivery(ctx context.Context, now time.Time) (gittrigger.Delivery, error) {
+	row, err := d.queries.GetEligibleGitTriggerDelivery(ctx, databaseTime(now))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return gittrigger.Delivery{}, gittrigger.ErrNoPendingDelivery
+		return gittrigger.Delivery{}, gittrigger.ErrNoEligibleDelivery
 	}
 	if err != nil {
-		return gittrigger.Delivery{}, fmt.Errorf("get pending Git-trigger delivery: %w", err)
+		return gittrigger.Delivery{}, fmt.Errorf("get eligible Git-trigger delivery: %w", err)
 	}
 
 	delivery, err := gitTriggerDeliveryFromRow(row)
@@ -207,22 +207,97 @@ func (d *Database) GetPendingGitTriggerDelivery(ctx context.Context) (gittrigger
 	return delivery, nil
 }
 
-func (d *Database) CompleteGitTriggerDelivery(ctx context.Context, deliveryID uuid.UUID, runID uuid.UUID) error {
-	rowsAffected, err := d.queries.CompleteGitTriggerDelivery(
-		ctx,
-		storedb.CompleteGitTriggerDeliveryParams{
-			ID:    databaseUUID(deliveryID),
-			RunID: databaseUUID(runID),
-		},
-	)
+func (d *Database) RecordGitTriggerDeliveryFailure(
+	ctx context.Context, deliveryID uuid.UUID, now time.Time, diagnostic string,
+) (gittrigger.FailureState, bool, error) {
+	row, err := d.queries.RecordGitTriggerDeliveryFailure(ctx, storedb.RecordGitTriggerDeliveryFailureParams{
+		ID:                  databaseUUID(deliveryID),
+		AttemptedAt:         databaseTime(now),
+		Diagnostic:          &diagnostic,
+		FailureLimit:        gittrigger.FailureLimit,
+		InitialDelaySeconds: gittrigger.InitialRetryDelay.Seconds(),
+		MaxDelaySeconds:     gittrigger.MaximumRetryDelay.Seconds(),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return gittrigger.FailureState{}, false, nil
+	}
 	if err != nil {
-		return fmt.Errorf("complete Git-trigger delivery: %w", err)
+		return gittrigger.FailureState{}, false, fmt.Errorf("record Git-trigger delivery failure: %w", err)
 	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("complete Git-trigger delivery %s: delivery does not exist or has another Run", deliveryID)
-	}
+	return gittrigger.FailureState{
+		Count:    int(row.FailureCount),
+		Terminal: row.FailedAt.Valid,
+	}, true, nil
+}
 
+func linkGitTriggerRun(ctx context.Context, queries *storedb.Queries, record run.Run) error {
+	if record.Source.Type != run.SourceTypeGit {
+		return nil
+	}
+	if record.Source.Git == nil || record.IdempotencyKey == nil ||
+		*record.IdempotencyKey != record.Source.Git.DeliveryID.String() {
+		return errors.New("git Run must use its delivery identity")
+	}
+	affected, err := queries.LinkGitTriggerRun(ctx, storedb.LinkGitTriggerRunParams{
+		ID:                databaseUUID(record.Source.Git.DeliveryID),
+		RunID:             databaseUUID(record.ID),
+		RepositoryID:      databaseUUID(record.RepositoryID),
+		CatalogRevisionID: databaseUUID(record.CatalogRevisionID),
+		TargetName:        record.TargetName,
+		ActionName:        record.ActionName,
+		TriggerName:       record.Source.Git.TriggerName,
+		AttemptedAt:       databaseTime(record.CreatedAt),
+	})
+	if err != nil {
+		return fmt.Errorf("link Git-trigger Run: %w", err)
+	}
+	if affected != 1 {
+		return errors.New("git-trigger delivery is not eligible or has a different Run or definition")
+	}
 	return nil
+}
+
+func (d *Database) ListFailedGitTriggerDeliveries(
+	ctx context.Context, limit int, offset int,
+) (gittrigger.FailedDeliveryPage, error) {
+	if limit < 1 || limit > 200 || offset < 0 || offset > 2147483647 {
+		return gittrigger.FailedDeliveryPage{}, errors.New("invalid failed delivery list window")
+	}
+	rows, err := d.queries.ListFailedGitTriggerDeliveries(ctx, storedb.ListFailedGitTriggerDeliveriesParams{
+		ResultLimit:  int32(limit),
+		ResultOffset: int32(offset),
+	})
+	if err != nil {
+		return gittrigger.FailedDeliveryPage{}, fmt.Errorf("list failed Git-trigger deliveries: %w", err)
+	}
+	total, err := d.queries.CountFailedGitTriggerDeliveries(ctx)
+	if err != nil {
+		return gittrigger.FailedDeliveryPage{}, fmt.Errorf("count failed Git-trigger deliveries: %w", err)
+	}
+	page := gittrigger.FailedDeliveryPage{
+		Items: make([]gittrigger.FailedDelivery, 0, len(rows)),
+		Total: int(total),
+	}
+	for _, row := range rows {
+		diagnostic := ""
+		if row.Diagnostic != nil {
+			diagnostic = *row.Diagnostic
+		}
+		page.Items = append(page.Items, gittrigger.FailedDelivery{
+			ID:                uuid.UUID(row.ID.Bytes),
+			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
+			RepositoryName:    row.RepositoryName,
+			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
+			CommitSHA:         row.CommitSha,
+			TargetName:        row.TargetName,
+			ActionName:        row.ActionName,
+			TriggerName:       row.TriggerName,
+			FailureCount:      int(row.FailureCount),
+			Diagnostic:        diagnostic,
+			FailedAt:          row.FailedAt.Time.UTC(),
+		})
+	}
+	return page, nil
 }
 
 func gitTriggerDeliveryFromRow(row storedb.GitTriggerDelivery) (gittrigger.Delivery, error) {

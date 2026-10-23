@@ -166,6 +166,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			Clusters:              clusters,
 			ControllerIdentities:  identities,
 			Repositories:          repositories,
+			GitTriggerDeliveries:  persistence.database,
 			Commits:               persistence.database,
 			Catalogs:              catalogs,
 			Runs:                  runs,

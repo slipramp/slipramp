@@ -705,6 +705,30 @@ export type RepositoryRefresh = {
   failureReason?: string;
 };
 
+export type FailedGitTriggerDelivery = {
+  id: string;
+  repositoryId: string;
+  repositoryName: string;
+  catalogRevisionId: string;
+  commitSha: string;
+  target: string;
+  action: string;
+  trigger: string;
+  failureCount: number;
+  /**
+   * Fixed non-sensitive explanation without underlying error details or parameters.
+   */
+  diagnostic: string;
+  failedAt: string;
+};
+
+export type FailedGitTriggerDeliveryList = {
+  items: Array<FailedGitTriggerDelivery>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type ResourceMetadata = {
   name: string;
   title?: string;
@@ -1386,6 +1410,52 @@ export type UpdateRepositoryResponses = {
 };
 
 export type UpdateRepositoryResponse = UpdateRepositoryResponses[keyof UpdateRepositoryResponses];
+
+export type ListFailedGitTriggerDeliveriesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/git-trigger-deliveries/failed";
+};
+
+export type ListFailedGitTriggerDeliveriesErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Failed deliveries could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListFailedGitTriggerDeliveriesError =
+  ListFailedGitTriggerDeliveriesErrors[keyof ListFailedGitTriggerDeliveriesErrors];
+
+export type ListFailedGitTriggerDeliveriesResponses = {
+  /**
+   * Terminal failed Git-trigger deliveries.
+   */
+  200: FailedGitTriggerDeliveryList;
+};
+
+export type ListFailedGitTriggerDeliveriesResponse =
+  ListFailedGitTriggerDeliveriesResponses[keyof ListFailedGitTriggerDeliveriesResponses];
 
 export type ListCommitsData = {
   body?: never;

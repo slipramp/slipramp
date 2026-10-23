@@ -80,6 +80,9 @@ import type {
   ListCommitsData,
   ListCommitsErrors,
   ListCommitsResponses,
+  ListFailedGitTriggerDeliveriesData,
+  ListFailedGitTriggerDeliveriesErrors,
+  ListFailedGitTriggerDeliveriesResponses,
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
@@ -312,6 +315,39 @@ export const updateRepository = <ThrowOnError extends boolean = false>(
       },
     },
   );
+
+/**
+ * List failed Git-trigger deliveries
+ *
+ * Terminal failures creating automatic Runs, newest failure first. Delivery retries never retry execution of a Run. Diagnostics exclude underlying errors, credentials, and parameter values.
+ */
+export const listFailedGitTriggerDeliveries = <ThrowOnError extends boolean = false>(
+  options?: Options<ListFailedGitTriggerDeliveriesData, ThrowOnError>,
+): RequestResult<
+  ListFailedGitTriggerDeliveriesResponses,
+  ListFailedGitTriggerDeliveriesErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListFailedGitTriggerDeliveriesResponses,
+    ListFailedGitTriggerDeliveriesErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/git-trigger-deliveries/failed",
+    ...options,
+  });
 
 /**
  * List indexed commits

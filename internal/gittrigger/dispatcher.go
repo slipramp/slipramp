@@ -15,8 +15,13 @@ import (
 const DefaultDispatchInterval = time.Second
 
 type Store interface {
-	GetPendingGitTriggerDelivery(ctx context.Context) (Delivery, error)
-	CompleteGitTriggerDelivery(ctx context.Context, deliveryID uuid.UUID, runID uuid.UUID) error
+	GetEligibleGitTriggerDelivery(ctx context.Context, now time.Time) (Delivery, error)
+	RecordGitTriggerDeliveryFailure(
+		ctx context.Context,
+		deliveryID uuid.UUID,
+		now time.Time,
+		diagnostic string,
+	) (FailureState, bool, error)
 }
 
 type RunCreator interface {
@@ -28,11 +33,13 @@ type Dispatcher struct {
 	runs       RunCreator
 	interval   time.Duration
 	logger     *slog.Logger
+	now        func() time.Time
 }
 
 func NewDispatcher(deliveries Store, runs RunCreator, interval time.Duration, logger *slog.Logger) *Dispatcher {
 	return &Dispatcher{
 		deliveries: deliveries,
+		now:        time.Now,
 		runs:       runs,
 		interval:   interval,
 		logger:     logger.With("component", "git_trigger_dispatcher"),
@@ -71,14 +78,14 @@ func (d *Dispatcher) drain(ctx context.Context) {
 	}
 }
 
-// ProcessNext handles the oldest pending delivery, if one exists.
+// ProcessNext handles the oldest eligible delivery, if one exists.
 func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
-	delivery, err := d.deliveries.GetPendingGitTriggerDelivery(ctx)
-	if errors.Is(err, ErrNoPendingDelivery) {
+	delivery, err := d.deliveries.GetEligibleGitTriggerDelivery(ctx, d.now())
+	if errors.Is(err, ErrNoEligibleDelivery) {
 		return false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("get pending delivery: %w", err)
+		return false, fmt.Errorf("get eligible delivery: %w", err)
 	}
 
 	idempotencyKey := delivery.ID.String()
@@ -110,11 +117,35 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("create Run for delivery %s: %w", delivery.ID, err)
-	}
-
-	if err := d.deliveries.CompleteGitTriggerDelivery(ctx, delivery.ID, created.ID); err != nil {
-		return false, fmt.Errorf("complete delivery %s: %w", delivery.ID, err)
+		diagnostic := FailureDiagnostic(err)
+		failure, recorded, recordErr := d.deliveries.RecordGitTriggerDeliveryFailure(
+			ctx,
+			delivery.ID,
+			d.now(),
+			diagnostic,
+		)
+		if recordErr != nil {
+			return false, fmt.Errorf("record failed attempt for delivery %s: %w", delivery.ID, recordErr)
+		}
+		if !recorded {
+			d.logger.Info("Git-trigger delivery was resolved after Run creation failed",
+				"delivery", delivery.ID,
+				"repository", delivery.RepositoryID,
+				"target", delivery.TargetName,
+			)
+			return true, nil
+		}
+		d.logger.Warn("Git-trigger delivery could not create Run",
+			"delivery", delivery.ID,
+			"repository", delivery.RepositoryID,
+			"target", delivery.TargetName,
+			"action", delivery.ActionName,
+			"trigger", delivery.TriggerName,
+			"failure_count", failure.Count,
+			"terminal", failure.Terminal,
+			"diagnostic", diagnostic,
+		)
+		return true, nil
 	}
 
 	d.logger.Info(

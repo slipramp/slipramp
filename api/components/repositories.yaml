@@ -225,3 +225,70 @@ RepositoryCommit:
       type: string
     commit:
       $ref: ./common.yaml#/GitCommit
+
+FailedGitTriggerDelivery:
+  type: object
+  required:
+    - id
+    - repositoryId
+    - repositoryName
+    - catalogRevisionId
+    - commitSha
+    - target
+    - action
+    - trigger
+    - failureCount
+    - diagnostic
+    - failedAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    repositoryId:
+      type: string
+      format: uuid
+    repositoryName:
+      type: string
+    catalogRevisionId:
+      type: string
+      format: uuid
+    commitSha:
+      type: string
+    target:
+      type: string
+    action:
+      type: string
+    trigger:
+      type: string
+    failureCount:
+      type: integer
+      minimum: 1
+    diagnostic:
+      type: string
+      maxLength: 512
+      description: Fixed non-sensitive explanation without underlying error details or parameters.
+    failedAt:
+      type: string
+      format: date-time
+
+FailedGitTriggerDeliveryList:
+  type: object
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/FailedGitTriggerDelivery"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0

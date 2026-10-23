@@ -341,3 +341,69 @@ repositoryCommits:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+failedGitTriggerDeliveries:
+  get:
+    operationId: listFailedGitTriggerDeliveries
+    summary: List failed Git-trigger deliveries
+    description: >-
+      Terminal failures creating automatic Runs, newest failure first. Delivery
+      retries never retry execution of a Run. Diagnostics exclude underlying
+      errors, credentials, and parameter values.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Repositories
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Terminal failed Git-trigger deliveries.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/FailedGitTriggerDeliveryList
+      "400":
+        description: The list window is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Failed deliveries could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

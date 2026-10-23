@@ -17,6 +17,7 @@ const principal = (role) => ({ role });
 
 test("buildInbox exposes decisions only to principals who can decide them", () => {
   const input = {
+    failedGitDeliveries: [],
     activeRuns: [],
     promotions: [promotion("pending")],
     repositories: [],
@@ -30,6 +31,7 @@ test("buildInbox exposes decisions only to principals who can decide them", () =
 
 test("buildInbox groups unknown Runs under an unreachable cluster", () => {
   const result = buildInbox({
+    failedGitDeliveries: [],
     activeRuns: [
       {
         action: "apply",
@@ -61,6 +63,7 @@ test("buildInbox groups unknown Runs under an unreachable cluster", () => {
 
 test("buildInbox keeps stale observations on connected clusters visible", () => {
   const result = buildInbox({
+    failedGitDeliveries: [],
     activeRuns: [
       {
         action: "sync",
@@ -98,4 +101,33 @@ test("buildInbox keeps stale observations on connected clusters visible", () => 
     result.problems.map((item) => item.kind),
     ["dependency-unavailable", "promotion-error", "run-observation", "repository-refresh"],
   );
+});
+
+test("Inbox shows terminal Git-trigger failures with Target context and diagnosis", () => {
+  const failure = {
+    id: "delivery-1",
+    repositoryId: "repo-1",
+    repositoryName: "infra",
+    target: "network",
+    action: "sync",
+    trigger: "on-change",
+    failureCount: 8,
+    failedAt: "2026-10-22T10:00:00Z",
+    diagnostic: "run placement not found",
+  };
+  const inbox = buildInbox({
+    activeRuns: [],
+    promotions: [],
+    repositories: [],
+    unreachableClusters: [],
+    failedGitDeliveries: [failure],
+  });
+  assert.equal(inbox.problems.length, 1);
+  const item = inbox.problems[0];
+  assert.equal(item.kind, "git-trigger-failure");
+  assert.match(item.description, /could not create the automatic Run/);
+  assert.match(item.description, /infra · network · sync/);
+  assert.match(item.description, /run placement not found/);
+  assert.equal(item.href, "/repositories/repo-1/targets/network");
+  assert.equal(item.occurredAt, failure.failedAt);
 });

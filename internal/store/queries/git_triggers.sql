@@ -7,7 +7,8 @@ INSERT INTO git_trigger_deliveries (
     action_name,
     trigger_name,
     parameters,
-    created_at
+    created_at,
+    next_attempt_at
 ) VALUES (
     sqlc.arg(id),
     sqlc.arg(repository_id),
@@ -16,30 +17,67 @@ INSERT INTO git_trigger_deliveries (
     sqlc.arg(action_name),
     sqlc.arg(trigger_name),
     sqlc.arg(parameters),
+    sqlc.arg(created_at),
     sqlc.arg(created_at)
 );
 
--- name: GetPendingGitTriggerDelivery :one
+-- name: GetEligibleGitTriggerDelivery :one
 SELECT *
 FROM git_trigger_deliveries
 WHERE run_id IS NULL
   AND superseded_at IS NULL
+  AND failed_at IS NULL
+  AND next_attempt_at <= sqlc.arg(attempted_at)
 ORDER BY created_at, id
 LIMIT 1;
 
--- name: CompleteGitTriggerDelivery :execrows
+-- name: LinkGitTriggerRun :execrows
 UPDATE git_trigger_deliveries
 SET run_id = sqlc.arg(run_id)
 WHERE id = sqlc.arg(id)
+  AND repository_id = sqlc.arg(repository_id)
+  AND catalog_revision_id = sqlc.arg(catalog_revision_id)
+  AND target_name = sqlc.arg(target_name)
+  AND action_name = sqlc.arg(action_name)
+  AND trigger_name = sqlc.arg(trigger_name)
   AND superseded_at IS NULL
-  AND (run_id IS NULL OR run_id = sqlc.arg(run_id));
+  AND failed_at IS NULL
+  AND (run_id = sqlc.arg(run_id) OR (
+      run_id IS NULL AND next_attempt_at <= sqlc.arg(attempted_at)
+  ));
+
+-- name: RecordGitTriggerDeliveryFailure :one
+UPDATE git_trigger_deliveries
+SET failure_count = failure_count + 1,
+    diagnostic = sqlc.arg(diagnostic),
+    next_attempt_at = sqlc.arg(attempted_at)::timestamptz + make_interval(secs =>
+        LEAST(sqlc.arg(max_delay_seconds)::double precision,
+              sqlc.arg(initial_delay_seconds)::double precision * power(2, failure_count))),
+    failed_at = CASE WHEN failure_count + 1 >= sqlc.arg(failure_limit)::integer
+        THEN sqlc.arg(attempted_at)::timestamptz ELSE NULL END
+WHERE id = sqlc.arg(id)
+  AND run_id IS NULL AND superseded_at IS NULL AND failed_at IS NULL
+RETURNING failure_count, failed_at;
+
+-- name: ListFailedGitTriggerDeliveries :many
+SELECT delivery.*, repositories.name AS repository_name, catalog_revisions.commit_sha
+FROM git_trigger_deliveries AS delivery
+JOIN repositories ON repositories.id = delivery.repository_id
+JOIN catalog_revisions ON catalog_revisions.id = delivery.catalog_revision_id
+WHERE delivery.failed_at IS NOT NULL
+ORDER BY delivery.failed_at DESC, delivery.id DESC
+LIMIT sqlc.arg(result_limit) OFFSET sqlc.arg(result_offset);
+
+-- name: CountFailedGitTriggerDeliveries :one
+SELECT count(*) FROM git_trigger_deliveries WHERE failed_at IS NOT NULL;
 
 -- name: SupersedeGitTriggerDelivery :execrows
 UPDATE git_trigger_deliveries
 SET superseded_at = sqlc.arg(superseded_at)
 WHERE id = sqlc.arg(id)
   AND run_id IS NULL
-  AND superseded_at IS NULL;
+  AND superseded_at IS NULL
+  AND failed_at IS NULL;
 
 -- name: SupersedePendingGitTriggerDeliveries :exec
 UPDATE git_trigger_deliveries AS delivery
@@ -48,12 +86,7 @@ WHERE delivery.repository_id = sqlc.arg(repository_id)
   AND delivery.target_name = sqlc.arg(target_name)
   AND delivery.run_id IS NULL
   AND delivery.superseded_at IS NULL
-  AND NOT EXISTS (
-      SELECT 1
-      FROM runs
-      WHERE runs.source->>'type' = 'git'
-        AND runs.idempotency_key = delivery.id::text
-  );
+  AND delivery.failed_at IS NULL;
 
 -- name: LockTargetStateForGitRun :one
 SELECT desired_commit_sha, archived_at

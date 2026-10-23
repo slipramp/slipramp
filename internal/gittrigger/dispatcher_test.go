@@ -2,6 +2,8 @@ package gittrigger
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"reflect"
@@ -16,32 +18,19 @@ import (
 func TestProcessNextCreatesPinnedGitRun(t *testing.T) {
 	t.Parallel()
 
-	delivery := Delivery{
-		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200"),
-		RepositoryID:      uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201"),
-		CatalogRevisionID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
-		TargetName:        "network",
-		ActionName:        "sync",
-		TriggerName:       "reconcile-on-change",
-		Parameters: map[string]any{
-			"environment":  "production",
-			"auto-approve": true,
-			"retries":      float64(3),
-		},
-	}
-	store := &recordingDeliveryStore{delivery: delivery}
+	delivery := testDelivery()
+	store := &deliveryStore{queue: []Delivery{delivery}}
 	runs := &recordingRunCreator{
 		runID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203"),
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dispatcher := NewDispatcher(store, runs, time.Second, logger)
+	dispatcher := testDispatcher(store, runs)
 
-	processed, err := dispatcher.ProcessNext(context.Background())
+	processed, err := dispatcher.ProcessNext(t.Context())
 	if err != nil || !processed {
 		t.Fatalf("ProcessNext() = (%t, %v), want success", processed, err)
 	}
-	if store.completedRunID != runs.runID {
-		t.Errorf("completed Run ID = %s, want %s", store.completedRunID, runs.runID)
+	if store.failureCalls != 0 {
+		t.Fatal("successful creation recorded a failure")
 	}
 
 	request := runs.request
@@ -64,49 +53,101 @@ func TestProcessNextCreatesPinnedGitRun(t *testing.T) {
 	}
 }
 
-func TestDispatcherContinuesAfterDeliveryIsSupersededAtRunCreation(t *testing.T) {
+func TestProcessNextConsumesSupersededDeliveryWithoutRecordingFailure(t *testing.T) {
 	t.Parallel()
 
-	delivery := Delivery{
-		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1210"),
-		RepositoryID:      uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1211"),
-		CatalogRevisionID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1212"),
+	store := &deliveryStore{queue: []Delivery{testDelivery()}}
+	dispatcher := testDispatcher(store, runCreatorFunc(func(context.Context, run.CreateRequest) (run.Run, error) {
+		return run.Run{}, run.ErrGitRunSuperseded
+	}))
+
+	processed, err := dispatcher.ProcessNext(t.Context())
+	if err != nil || !processed {
+		t.Fatalf("ProcessNext() = (%t, %v), want consumed without error", processed, err)
+	}
+	if store.failureCalls != 0 {
+		t.Fatal("supersession recorded a failure")
+	}
+}
+
+func TestDispatcherContinuesAfterRunCreationFailure(t *testing.T) {
+	t.Parallel()
+
+	store := &deliveryStore{queue: []Delivery{{ID: uuid.New()}, {ID: uuid.New()}}}
+	createCalls := 0
+	creator := runCreatorFunc(func(context.Context, run.CreateRequest) (run.Run, error) {
+		createCalls++
+		if createCalls == 1 {
+			return run.Run{}, errors.New("configuration unavailable")
+		}
+		store.queue = store.queue[1:]
+		return run.Run{ID: uuid.New()}, nil
+	})
+
+	testDispatcher(store, creator).drain(t.Context())
+
+	if createCalls != 2 || store.failureCalls != 1 || len(store.queue) != 0 {
+		t.Fatalf("create calls=%d failure calls=%d remaining=%d", createCalls, store.failureCalls, len(store.queue))
+	}
+	if store.diagnostic != FailureDiagnostic(errors.New("configuration unavailable")) {
+		t.Errorf("diagnostic = %q", store.diagnostic)
+	}
+}
+
+func TestFailureDiagnostic(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "known error",
+			err:  fmt.Errorf("%w: parameter password=secret", run.ErrInvalidParameters),
+			want: run.ErrInvalidParameters.Error(),
+		},
+		{
+			name: "unknown error",
+			err:  errors.New("postgres://admin:secret@db private-token"),
+			want: "Run creation failed; check Server configuration and dependency health.",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := FailureDiagnostic(test.err); got != test.want {
+				t.Errorf("FailureDiagnostic() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func testDelivery() Delivery {
+	return Delivery{
+		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200"),
+		RepositoryID:      uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201"),
+		CatalogRevisionID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
 		TargetName:        "network",
 		ActionName:        "sync",
 		TriggerName:       "reconcile-on-change",
-		Parameters:        map[string]any{},
+		Parameters: map[string]any{
+			"environment":  "production",
+			"auto-approve": true,
+			"retries":      float64(3),
+		},
 	}
-	store := &recordingDeliveryStore{delivery: delivery}
-	runs := supersededRunCreator{}
+}
+
+func testDispatcher(store Store, creator RunCreator) *Dispatcher {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	dispatcher := NewDispatcher(store, runs, time.Second, logger)
-
-	processed, err := dispatcher.ProcessNext(context.Background())
-	if err != nil || !processed {
-		t.Fatalf("superseded dispatch = (%t, %v), want consumed without error", processed, err)
-	}
-	if store.completedRunID != uuid.Nil {
-		t.Errorf("completed Run ID = %s, want none", store.completedRunID)
-	}
+	return NewDispatcher(store, creator, time.Second, logger)
 }
 
-type recordingDeliveryStore struct {
-	delivery       Delivery
-	completedRunID uuid.UUID
-}
+type runCreatorFunc func(context.Context, run.CreateRequest) (run.Run, error)
 
-func (s *recordingDeliveryStore) GetPendingGitTriggerDelivery(context.Context) (Delivery, error) {
-	if s.completedRunID != uuid.Nil {
-		return Delivery{}, ErrNoPendingDelivery
-	}
-
-	return s.delivery, nil
-}
-
-func (s *recordingDeliveryStore) CompleteGitTriggerDelivery(_ context.Context, _ uuid.UUID, runID uuid.UUID) error {
-	s.completedRunID = runID
-
-	return nil
+func (f runCreatorFunc) CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error) {
+	return f(ctx, request)
 }
 
 type recordingRunCreator struct {
@@ -114,14 +155,32 @@ type recordingRunCreator struct {
 	request run.CreateRequest
 }
 
-type supersededRunCreator struct{}
-
-func (supersededRunCreator) CreateRun(context.Context, run.CreateRequest) (run.Run, error) {
-	return run.Run{}, run.ErrGitRunSuperseded
-}
-
 func (c *recordingRunCreator) CreateRun(_ context.Context, request run.CreateRequest) (run.Run, error) {
 	c.request = request
-
 	return run.Run{ID: c.runID}, nil
+}
+
+type deliveryStore struct {
+	queue        []Delivery
+	failureCalls int
+	diagnostic   string
+}
+
+func (s *deliveryStore) GetEligibleGitTriggerDelivery(context.Context, time.Time) (Delivery, error) {
+	if len(s.queue) == 0 {
+		return Delivery{}, ErrNoEligibleDelivery
+	}
+	return s.queue[0], nil
+}
+
+func (s *deliveryStore) RecordGitTriggerDeliveryFailure(
+	_ context.Context,
+	_ uuid.UUID,
+	_ time.Time,
+	diagnostic string,
+) (FailureState, bool, error) {
+	s.failureCalls++
+	s.diagnostic = diagnostic
+	s.queue = s.queue[1:]
+	return FailureState{Count: s.failureCalls}, true, nil
 }

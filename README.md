@@ -9,6 +9,20 @@ declared artifacts, pinned preview/apply flows, OIDC/API-key authentication, and
 optional Kargo Promotion reviews with Git and Argo CD diffs. Its Server has no
 Kubernetes access; in-cluster Controllers manage execution through outbound HTTP.
 
+Named Git-trigger deliveries retry Run creation with durable exponential backoff:
+five seconds initially, doubling to a five-minute cap, with terminal failure on
+the eighth failed attempt. Other eligible deliveries continue during backoff,
+and restart preserves attempt counts and due times. Latest-wins refreshes
+supersede pending retries; terminal failures remain history. Creating the Run
+and linking its delivery is one PostgreSQL transaction. Delivery retries only
+create the immutable Run; Slipramp never implicitly retries the resulting
+infrastructure command.
+
+The Inbox shows terminal Git-trigger failures with Target/Action context and
+safe diagnostics. The authenticated read API
+`GET /api/v1/git-trigger-deliveries/failed?limit=25&offset=0` returns newest
+failures first (`limit` 1–200). There is no manual delivery retry action.
+
 ## Documentation
 
 - [Design](docs/DESIGN.md): implemented architecture, domain model, trust

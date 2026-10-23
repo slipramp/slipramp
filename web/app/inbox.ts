@@ -1,5 +1,6 @@
 import type {
   Cluster,
+  FailedGitTriggerDelivery,
   ProductPrincipal,
   Promotion,
   ReadinessResponse,
@@ -8,6 +9,7 @@ import type {
 } from "~/api/generated";
 
 export type InboxItemKind =
+  | "git-trigger-failure"
   | "promotion-review"
   | "promotion-error"
   | "repository-refresh"
@@ -27,6 +29,7 @@ export type InboxItem = {
 
 type InboxInput = {
   activeRuns: Run[];
+  failedGitDeliveries: FailedGitTriggerDelivery[];
   principal?: ProductPrincipal;
   promotions: Promotion[];
   readiness?: ReadinessResponse;
@@ -45,6 +48,7 @@ export function buildInbox(input: InboxInput) {
 
   const problems: InboxItem[] = [
     ...dependencyItems(input.readiness),
+    ...input.failedGitDeliveries.map(gitTriggerFailureItem),
     ...input.repositories
       .filter((repository) => repository.refresh.status === "failed")
       .map(repositoryRefreshItem),
@@ -179,4 +183,16 @@ function newestFirst(left: InboxItem, right: InboxItem) {
   if (!left.occurredAt) return -1;
   if (!right.occurredAt) return 1;
   return right.occurredAt.localeCompare(left.occurredAt);
+}
+
+function gitTriggerFailureItem(delivery: FailedGitTriggerDelivery): InboxItem {
+  return {
+    actionLabel: "View target",
+    description: `Slipramp could not create the automatic Run for ${delivery.repositoryName} · ${delivery.target} · ${delivery.action} (trigger ${delivery.trigger}) after ${delivery.failureCount} attempts. ${delivery.diagnostic}`,
+    href: `/repositories/${delivery.repositoryId}/targets/${encodeURIComponent(delivery.target)}`,
+    id: `git-trigger-failure:${delivery.id}`,
+    kind: "git-trigger-failure",
+    occurredAt: delivery.failedAt,
+    title: `${delivery.target} · ${delivery.action} automatic Run could not be created`,
+  };
 }

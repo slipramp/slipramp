@@ -271,6 +271,10 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 		return run.Run{}, fmt.Errorf("record initial Run phase: %w", err)
 	}
 
+	if err := linkGitTriggerRun(ctx, queries, record); err != nil {
+		return run.Run{}, err
+	}
+
 	if err := transaction.Commit(ctx); err != nil {
 		return run.Run{}, fmt.Errorf("commit run transaction: %w", err)
 	}
@@ -305,13 +309,13 @@ func existingIdempotentRun(
 		return run.Run{}, run.ErrIdempotencyConflict
 	}
 
-	if err := transaction.Commit(ctx); err != nil {
-		return run.Run{}, fmt.Errorf("commit idempotent run transaction: %w", err)
-	}
-
 	existing, err := runFromRow(row)
 	if err != nil {
 		return run.Run{}, err
+	}
+
+	if err := transaction.Commit(ctx); err != nil {
+		return run.Run{}, fmt.Errorf("commit idempotent run transaction: %w", err)
 	}
 
 	return existing, nil

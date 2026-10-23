@@ -98,6 +98,10 @@ type GitTriggerDelivery struct {
 	TriggerName       string
 	Parameters        []byte
 	CreatedAt         pgtype.Timestamptz
+	FailureCount      int32
+	NextAttemptAt     pgtype.Timestamptz
+	Diagnostic        *string
+	FailedAt          pgtype.Timestamptz
 	RunID             pgtype.UUID
 	SupersededAt      pgtype.Timestamptz
 }
