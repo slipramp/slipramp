@@ -37,6 +37,7 @@ type Repository struct {
 	ID                     RepositoryID
 	CreatedAt              time.Time
 	Refresh                RefreshState
+	CommitHistoryIndex     *CommitHistoryIndex
 	ActiveCatalogCommitSHA *string
 }
 

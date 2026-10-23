@@ -56,6 +56,19 @@ func (d *Database) RecordRepositoryRefresh(
 			return err
 		}
 	}
+	if result.Commit != nil &&
+		repository.CommitIndexingMode(lockedRepository.CommitIndexingMode) ==
+			repository.CommitIndexingTrackedBranchHistory {
+		if err := queries.MarkRepositoryCommitHistoryPending(
+			ctx,
+			storedb.MarkRepositoryCommitHistoryPendingParams{
+				RepositoryID:   identifier,
+				DesiredHeadSha: &result.Commit.SHA,
+			},
+		); err != nil {
+			return fmt.Errorf("mark repository commit history pending: %w", err)
+		}
+	}
 
 	if result.Revision != nil {
 		if err := recordCatalogRevision(
@@ -145,6 +158,7 @@ func upsertRepositoryCommit(
 			Title:        commit.Title,
 			AuthorName:   commit.AuthorName,
 			AuthoredAt:   optionalDatabaseTime(commit.AuthoredAt),
+			CommittedAt:  optionalDatabaseTime(commit.CommittedAt),
 		},
 	)
 	if err != nil {

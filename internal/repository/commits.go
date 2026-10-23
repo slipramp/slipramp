@@ -24,11 +24,49 @@ type Commit struct {
 	Title        *string
 	AuthorName   *string
 	AuthoredAt   *time.Time
+	CommittedAt  *time.Time
 	URL          *string
+}
+
+type CommitHistoryIndexStatus string
+
+const (
+	CommitHistoryIndexPending   CommitHistoryIndexStatus = "pending"
+	CommitHistoryIndexSucceeded CommitHistoryIndexStatus = "succeeded"
+	CommitHistoryIndexFailed    CommitHistoryIndexStatus = "failed"
+)
+
+type CommitHistoryIndex struct {
+	Status          CommitHistoryIndexStatus
+	DesiredHeadSHA  *string
+	IndexedHeadSHA  *string
+	CommitCount     int
+	LastAttemptedAt *time.Time
+	LastSucceededAt *time.Time
+	FailureReason   *string
+}
+
+type CommitHistoryFilter struct {
+	RepositoryID *RepositoryID
+	Query        *string
+	Limit        int
+	Offset       int
+}
+
+type IndexedCommit struct {
+	RepositoryID   RepositoryID
+	RepositoryName string
+	Commit         Commit
+}
+
+type CommitHistoryPage struct {
+	Commits []IndexedCommit
+	Total   int
 }
 
 type CommitReader interface {
 	ListCommits(context.Context, []CommitKey) (map[CommitKey]Commit, error)
+	ListCommitHistory(context.Context, CommitHistoryFilter) (CommitHistoryPage, error)
 }
 
 func validateCommitURLTemplate(value *string) error {

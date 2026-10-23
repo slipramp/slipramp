@@ -34,6 +34,10 @@ export type GitCommit = {
    */
   authoredAt?: string;
   /**
+   * Commit timestamp when it has been read from the Git object.
+   */
+  committedAt?: string;
+  /**
    * Provider commit page when the repository supports web links.
    */
   url?: string;
@@ -136,6 +140,7 @@ export type Repository = RepositoryConfig & {
    */
   createdAt: string;
   refresh: RepositoryRefresh;
+  commitHistoryIndex?: RepositoryCommitHistoryIndex;
 };
 
 export type RepositoryList = {
@@ -143,6 +148,38 @@ export type RepositoryList = {
   total: number;
   limit: number;
   offset: number;
+};
+
+export type RepositoryCommitList = {
+  items: Array<RepositoryCommit>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type RepositoryCommit = {
+  repositoryId: string;
+  repositoryName: string;
+  commit: GitCommit;
+};
+
+export type RepositoryCommitHistoryIndex = {
+  status: "pending" | "succeeded" | "failed";
+  /**
+   * Current tracked branch head awaiting or represented by the index.
+   */
+  desiredHeadSha?: string;
+  /**
+   * Tracked branch head represented by the indexed commit set.
+   */
+  indexedHeadSha?: string;
+  /**
+   * Number of commits currently reachable from the indexed tracked branch head.
+   */
+  commitCount: number;
+  lastAttemptedAt?: string;
+  lastSucceededAt?: string;
+  failureReason?: string;
 };
 
 export type RepositoryConfig = {
@@ -1320,6 +1357,58 @@ export type UpdateRepositoryResponses = {
 };
 
 export type UpdateRepositoryResponse = UpdateRepositoryResponses[keyof UpdateRepositoryResponses];
+
+export type ListCommitsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Limit results to one repository registration.
+     */
+    repositoryId?: string;
+    /**
+     * Match a commit SHA, title, or author name.
+     */
+    q?: string;
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/commits";
+};
+
+export type ListCommitsErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Indexed commits could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListCommitsError = ListCommitsErrors[keyof ListCommitsErrors];
+
+export type ListCommitsResponses = {
+  /**
+   * Indexed commits reachable from the tracked branch.
+   */
+  200: RepositoryCommitList;
+};
+
+export type ListCommitsResponse = ListCommitsResponses[keyof ListCommitsResponses];
 
 export type GetRepositoryCatalogData = {
   body?: never;

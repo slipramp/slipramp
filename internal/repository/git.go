@@ -94,6 +94,7 @@ func (f *GitFetcher) Fetch(ctx context.Context, repository Repository) (FetchedC
 			commit.Title = &metadata.title
 			commit.AuthorName = &metadata.authorName
 			commit.AuthoredAt = &metadata.authoredAt
+			commit.CommittedAt = &metadata.committedAt
 		}
 	}
 
@@ -135,9 +136,10 @@ func (f *GitFetcher) Fetch(ctx context.Context, repository Repository) (FetchedC
 }
 
 type commitMetadata struct {
-	title      string
-	authorName string
-	authoredAt time.Time
+	title       string
+	authorName  string
+	authoredAt  time.Time
+	committedAt time.Time
 }
 
 func readCommitMetadata(
@@ -153,7 +155,7 @@ func readCommitMetadata(
 		checkoutDirectory,
 		"show",
 		"--quiet",
-		"--format=%H%x00%s%x00%an%x00%aI%x00",
+		"--format=%H%x00%s%x00%an%x00%aI%x00%cI%x00",
 		commitSHA,
 	)
 	if err != nil {
@@ -161,18 +163,23 @@ func readCommitMetadata(
 	}
 
 	fields := strings.Split(strings.TrimSuffix(output, "\n"), "\x00")
-	if len(fields) != 5 || fields[4] != "" || fields[0] != commitSHA {
+	if len(fields) != 6 || fields[5] != "" || fields[0] != commitSHA {
 		return commitMetadata{}, errors.New("git returned malformed commit metadata")
 	}
 	authoredAt, err := time.Parse(time.RFC3339, fields[3])
 	if err != nil {
 		return commitMetadata{}, fmt.Errorf("parse fetched commit author time: %w", err)
 	}
+	committedAt, err := time.Parse(time.RFC3339, fields[4])
+	if err != nil {
+		return commitMetadata{}, fmt.Errorf("parse fetched commit time: %w", err)
+	}
 
 	return commitMetadata{
-		title:      strings.ToValidUTF8(fields[1], "�"),
-		authorName: strings.ToValidUTF8(fields[2], "�"),
-		authoredAt: authoredAt.UTC(),
+		title:       strings.ToValidUTF8(fields[1], "�"),
+		authorName:  strings.ToValidUTF8(fields[2], "�"),
+		authoredAt:  authoredAt.UTC(),
+		committedAt: committedAt.UTC(),
 	}, nil
 }
 

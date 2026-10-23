@@ -149,7 +149,9 @@ func (s *recordingStore) UpdateRepositoryCommitIndexing(
 	s.updatedID = repositoryID
 	s.updatedMode = mode
 
-	return Repository{Config: Config{CommitIndexing: mode}}, nil
+	config := Config{CommitIndexing: mode}
+
+	return Repository{Config: config}, nil
 }
 
 func (*recordingStore) RemoveRepository(context.Context, uuid.UUID, time.Time) error {

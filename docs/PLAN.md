@@ -34,7 +34,9 @@ The initial environment is trusted and single-operator, but the core model shoul
 
 A repository contains versioned target, runtime, and action definitions. Slipramp tracks a configured branch and validates the repository as a unit. Each accepted Git commit produces an immutable catalog revision, and the repository exposes its latest valid catalog revision.
 
-Repositories are accessed through generic Git over SSH or HTTPS. Repository refresh credentials used by the Slipramp Server are named sources mounted into its deployment, such as files or environment variables populated from Kubernetes Secrets; the Server does not read the Kubernetes API to resolve them. Execution-side checkout credentials use logical names that each controller maps to cluster-local Kubernetes Secrets. Each repository tracks one configured branch and is refreshed periodically. Every fetched Git commit is indexed atomically so an invalid commit cannot partially replace the active catalog. The Server records the commit subject, author name, and author timestamp directly from available Git objects. Repository commit-page links are inferred for known public providers or produced from an optional commit URL template; missing presentation metadata never changes catalog acceptance or execution behavior.
+Repositories are accessed through generic Git over SSH or HTTPS. Repository refresh credentials used by the Slipramp Server are named sources mounted into its deployment, such as files or environment variables populated from Kubernetes Secrets; the Server does not read the Kubernetes API to resolve them. Execution-side checkout credentials use logical names that each controller maps to cluster-local Kubernetes Secrets. Each repository tracks one configured branch and is refreshed periodically. Every fetched branch head is validated atomically so an invalid commit cannot partially replace the active catalog.
+
+Commit metadata indexing is configured per repository. `disabled` records no presentation metadata, `observedHeads` records metadata for branch heads encountered during refresh and remains the default, and `trackedBranchHistory` asynchronously indexes every commit reachable from the tracked branch head. Full-history indexing records subject, author, author time, and commit time without creating catalog revisions or Git-trigger deliveries for historical commits. It catches up incrementally after refresh and replaces tracked-branch membership after a force push. Disabling indexing stops further metadata collection and removes the repository from commit browsing without erasing metadata already collected, so re-enabling can resume cleanly. Exact commit SHAs required by catalogs, Targets, Runs, and artifacts remain durable in every mode. Repository commit-page links are inferred for known public providers or produced from an optional commit URL template; missing presentation metadata never changes catalog acceptance or execution behavior.
 
 ### Target
 
@@ -132,6 +134,8 @@ Slipramp keeps repository refresh separate from target reconciliation:
 2. Target reconciliation invokes the optional `sync` action on targets that define it.
 
 Repository refresh does not imply target execution. Target actions may be started manually, through the API, from Git changes, or by other explicitly configured triggers.
+
+Complete tracked-branch history indexing is background presentation work. A successful branch refresh advances its desired history head and remains available even while the history worker is catching up or retrying a failure. The top-level commit history is searchable and paginated across repositories, and repository details expose the indexed count and worker status.
 
 The target-level `watch` field describes which repository paths affect that target. It advances the target's desired Git commit and can be reused by Git triggers, but it does not cause execution on its own.
 

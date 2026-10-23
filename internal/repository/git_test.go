@@ -64,7 +64,7 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 	}
 	if fetched.Commit.Title == nil || *fetched.Commit.Title != "main" ||
 		fetched.Commit.AuthorName == nil || *fetched.Commit.AuthorName != "Slipramp Test" ||
-		fetched.Commit.AuthoredAt == nil {
+		fetched.Commit.AuthoredAt == nil || fetched.Commit.CommittedAt == nil {
 		t.Errorf("Fetch() commit metadata = %#v", fetched.Commit)
 	}
 
@@ -93,7 +93,8 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 			t.Errorf("disabled FetchedCommit.Close() error = %v", closeErr)
 		}
 	}()
-	if disabled.Commit.Title != nil || disabled.Commit.AuthorName != nil || disabled.Commit.AuthoredAt != nil {
+	if disabled.Commit.Title != nil || disabled.Commit.AuthorName != nil ||
+		disabled.Commit.AuthoredAt != nil || disabled.Commit.CommittedAt != nil {
 		t.Errorf("disabled commit metadata = %#v", disabled.Commit)
 	}
 }

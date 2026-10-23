@@ -37,6 +37,7 @@ type Server struct {
 	httpServer            *http.Server
 	persistence           *persistence
 	repositoryRefresher   *repository.Refresher
+	commitHistoryIndexer  *repository.CommitHistoryIndexer
 	gitTriggerDispatcher  *gittrigger.Dispatcher
 	artifactReconciler    *artifact.Reconciler
 	promotionPreparations *promotion.PreparationCoordinator
@@ -100,6 +101,13 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
 		cfg.Placements,
 		cfg.RepositoryRefreshInterval,
+		cfg.RepositoryFetchTimeout,
+		logger,
+	)
+	commitHistoryIndexer := repository.NewCommitHistoryIndexer(
+		persistence.database,
+		repository.NewGitCommitHistoryFetcher(cfg.RepositoryRefreshCredentials),
+		repository.DefaultCommitHistoryIndexInterval,
 		cfg.RepositoryFetchTimeout,
 		logger,
 	)
@@ -180,6 +188,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	server := newServer(cfg, logger, httpHandler)
 	server.persistence = persistence
 	server.repositoryRefresher = repositoryRefresher
+	server.commitHistoryIndexer = commitHistoryIndexer
 	server.gitTriggerDispatcher = gitTriggerDispatcher
 	server.artifactReconciler = artifactReconciler
 	server.promotionPreparations = promotionPreparations
@@ -219,6 +228,9 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.repositoryRefresher != nil {
 		workerCount++
 	}
+	if s.commitHistoryIndexer != nil {
+		workerCount++
+	}
 	if s.gitTriggerDispatcher != nil {
 		workerCount++
 	}
@@ -242,6 +254,12 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.repositoryRefresher != nil {
 		go func() {
 			s.repositoryRefresher.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.commitHistoryIndexer != nil {
+		go func() {
+			s.commitHistoryIndexer.Run(runContext)
 			workersStopped <- struct{}{}
 		}()
 	}

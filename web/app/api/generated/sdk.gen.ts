@@ -77,6 +77,9 @@ import type {
   ListClustersData,
   ListClustersErrors,
   ListClustersResponses,
+  ListCommitsData,
+  ListCommitsErrors,
+  ListCommitsResponses,
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
@@ -306,6 +309,31 @@ export const updateRepository = <ThrowOnError extends boolean = false>(
       },
     },
   );
+
+/**
+ * List indexed commits
+ *
+ * Lists commits reachable from the most recently indexed tracked branch head, newest first. The result may lag the observed branch head while a history index is pending.
+ */
+export const listCommits = <ThrowOnError extends boolean = false>(
+  options?: Options<ListCommitsData, ThrowOnError>,
+): RequestResult<ListCommitsResponses, ListCommitsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListCommitsResponses, ListCommitsErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/commits",
+    ...options,
+  });
 
 /**
  * Get the active repository catalog

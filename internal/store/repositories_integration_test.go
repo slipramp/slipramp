@@ -114,6 +114,7 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 	refreshResult.Commit.Title = &commitTitle
 	refreshResult.Commit.AuthorName = &commitAuthor
 	refreshResult.Commit.AuthoredAt = &authoredAt
+	refreshResult.Commit.CommittedAt = &authoredAt
 	if err := database.RecordRepositoryRefresh(
 		ctx,
 		first.ID,
@@ -130,6 +131,7 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 	if commit.Title == nil || *commit.Title != commitTitle ||
 		commit.AuthorName == nil || *commit.AuthorName != commitAuthor ||
 		commit.AuthoredAt == nil || !commit.AuthoredAt.Equal(authoredAt) ||
+		commit.CommittedAt == nil || !commit.CommittedAt.Equal(authoredAt) ||
 		commit.URL == nil || *commit.URL != "https://github.com/example/infrastructure/commit/"+commitSHA {
 		t.Errorf("repository commit = %#v", commit)
 	}

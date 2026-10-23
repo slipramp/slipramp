@@ -174,6 +174,19 @@ func (h *Handler) RemoveRepository(
 }
 
 func repositoryResponse(item repository.Repository, commit *api.GitCommit) api.Repository {
+	var historyIndex *api.RepositoryCommitHistoryIndex
+	if item.CommitHistoryIndex != nil {
+		historyIndex = &api.RepositoryCommitHistoryIndex{
+			Status:          api.RepositoryCommitHistoryIndexStatus(item.CommitHistoryIndex.Status),
+			DesiredHeadSha:  item.CommitHistoryIndex.DesiredHeadSHA,
+			IndexedHeadSha:  item.CommitHistoryIndex.IndexedHeadSHA,
+			CommitCount:     item.CommitHistoryIndex.CommitCount,
+			LastAttemptedAt: item.CommitHistoryIndex.LastAttemptedAt,
+			LastSucceededAt: item.CommitHistoryIndex.LastSucceededAt,
+			FailureReason:   item.CommitHistoryIndex.FailureReason,
+		}
+	}
+
 	return api.Repository{
 		ID:                     item.ID,
 		Name:                   item.Name,
@@ -184,6 +197,7 @@ func repositoryResponse(item repository.Repository, commit *api.GitCommit) api.R
 		RefreshCredentialName:  item.RefreshCredentialName,
 		CheckoutCredentialName: item.CheckoutCredentialName,
 		CreatedAt:              item.CreatedAt,
+		CommitHistoryIndex:     historyIndex,
 		Refresh: api.RepositoryRefresh{
 			Status:        api.RepositoryRefreshStatus(item.Refresh.Status),
 			Commit:        commit,

@@ -51,6 +51,10 @@ GitCommit:
       type: string
       format: date-time
       description: Commit author timestamp when it has been read from the Git object.
+    committedAt:
+      type: string
+      format: date-time
+      description: Commit timestamp when it has been read from the Git object.
     url:
       type: string
       format: uri

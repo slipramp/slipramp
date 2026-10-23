@@ -58,9 +58,64 @@ func (d *Database) ListCommits(
 			Title:        row.Title,
 			AuthorName:   row.AuthorName,
 			AuthoredAt:   applicationTime(row.AuthoredAt),
+			CommittedAt:  applicationTime(row.CommittedAt),
 			URL:          repository.CommitURL(cfg, row.Sha),
 		}
 	}
 
 	return commits, nil
+}
+
+func (d *Database) ListCommitHistory(
+	ctx context.Context,
+	filter repository.CommitHistoryFilter,
+) (repository.CommitHistoryPage, error) {
+	var repositoryID pgtype.UUID
+	if filter.RepositoryID != nil {
+		repositoryID = databaseUUID(*filter.RepositoryID)
+	}
+
+	params := storedb.ListTrackedBranchCommitsParams{
+		RepositoryID: repositoryID,
+		Query:        filter.Query,
+		ResultLimit:  int32(filter.Limit),
+		ResultOffset: int32(filter.Offset),
+	}
+	rows, err := d.queries.ListTrackedBranchCommits(ctx, params)
+	if err != nil {
+		return repository.CommitHistoryPage{}, fmt.Errorf("list tracked branch commits: %w", err)
+	}
+	total, err := d.queries.CountTrackedBranchCommits(
+		ctx,
+		storedb.CountTrackedBranchCommitsParams{
+			RepositoryID: repositoryID,
+			Query:        filter.Query,
+		},
+	)
+	if err != nil {
+		return repository.CommitHistoryPage{}, fmt.Errorf("count tracked branch commits: %w", err)
+	}
+
+	commits := make([]repository.IndexedCommit, 0, len(rows))
+	for _, row := range rows {
+		cfg := repository.Config{
+			CloneURL:          row.CloneUrl,
+			CommitURLTemplate: row.CommitUrlTemplate,
+		}
+		commits = append(commits, repository.IndexedCommit{
+			RepositoryID:   row.RepositoryID.Bytes,
+			RepositoryName: row.RepositoryName,
+			Commit: repository.Commit{
+				RepositoryID: row.RepositoryID.Bytes,
+				SHA:          row.Sha,
+				Title:        row.Title,
+				AuthorName:   row.AuthorName,
+				AuthoredAt:   applicationTime(row.AuthoredAt),
+				CommittedAt:  applicationTime(row.CommittedAt),
+				URL:          repository.CommitURL(cfg, row.Sha),
+			},
+		})
+	}
+
+	return repository.CommitHistoryPage{Commits: commits, Total: int(total)}, nil
 }

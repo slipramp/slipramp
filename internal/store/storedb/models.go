@@ -229,6 +229,23 @@ type RepositoryCommit struct {
 	Title        *string
 	AuthorName   *string
 	AuthoredAt   pgtype.Timestamptz
+	CommittedAt  pgtype.Timestamptz
+}
+
+type RepositoryCommitHistoryIndex struct {
+	RepositoryID    pgtype.UUID
+	Status          string
+	DesiredHeadSha  *string
+	IndexedHeadSha  *string
+	CommitCount     int32
+	LastAttemptedAt pgtype.Timestamptz
+	LastSucceededAt pgtype.Timestamptz
+	FailureReason   *string
+}
+
+type RepositoryTrackedBranchCommit struct {
+	RepositoryID pgtype.UUID
+	CommitSha    string
 }
 
 type Run struct {

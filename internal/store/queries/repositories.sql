@@ -52,10 +52,19 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
-    catalog_revisions.commit_sha AS active_catalog_commit_sha
+    catalog_revisions.commit_sha AS active_catalog_commit_sha,
+    repository_commit_history_indexes.status AS commit_history_status,
+    repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
+    repository_commit_history_indexes.indexed_head_sha AS commit_history_indexed_head_sha,
+    repository_commit_history_indexes.commit_count AS commit_history_commit_count,
+    repository_commit_history_indexes.last_attempted_at AS commit_history_last_attempted_at,
+    repository_commit_history_indexes.last_succeeded_at AS commit_history_last_succeeded_at,
+    repository_commit_history_indexes.failure_reason AS commit_history_failure_reason
 FROM repositories
 LEFT JOIN catalog_revisions
   ON catalog_revisions.id = repositories.active_catalog_revision_id
+LEFT JOIN repository_commit_history_indexes
+  ON repository_commit_history_indexes.repository_id = repositories.id
 WHERE repositories.removed_at IS NULL
 ORDER BY repositories.name;
 
@@ -75,10 +84,19 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
-    catalog_revisions.commit_sha AS active_catalog_commit_sha
+    catalog_revisions.commit_sha AS active_catalog_commit_sha,
+    repository_commit_history_indexes.status AS commit_history_status,
+    repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
+    repository_commit_history_indexes.indexed_head_sha AS commit_history_indexed_head_sha,
+    repository_commit_history_indexes.commit_count AS commit_history_commit_count,
+    repository_commit_history_indexes.last_attempted_at AS commit_history_last_attempted_at,
+    repository_commit_history_indexes.last_succeeded_at AS commit_history_last_succeeded_at,
+    repository_commit_history_indexes.failure_reason AS commit_history_failure_reason
 FROM repositories
 LEFT JOIN catalog_revisions
   ON catalog_revisions.id = repositories.active_catalog_revision_id
+LEFT JOIN repository_commit_history_indexes
+  ON repository_commit_history_indexes.repository_id = repositories.id
 WHERE repositories.id = sqlc.arg(id)
   AND repositories.removed_at IS NULL;
 

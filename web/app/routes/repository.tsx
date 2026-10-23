@@ -2,23 +2,27 @@ import {
   Alert,
   Badge,
   Button,
+  Divider,
   Group,
   NativeSelect,
   Paper,
   Stack,
+  Table,
   Text,
   Title,
 } from "@mantine/core";
-import { IconListDetails, IconTrash } from "@tabler/icons-react";
+import { IconGitCommit, IconListDetails, IconTrash } from "@tabler/icons-react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getRepositoryCatalog,
+  listCommits,
   listRepositories,
   listRuns,
   type CatalogRevision,
   type Repository,
+  type RepositoryCommit,
   type RepositoryCommitIndexingMode,
   updateRepository,
 } from "~/api/generated";
@@ -38,12 +42,16 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request);
-  const [repositoriesResult, catalogResult, runsResult] = await Promise.all([
+  const [repositoriesResult, catalogResult, runsResult, commitsResult] = await Promise.all([
     listRepositories({ client, query: { limit: 200 } }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
     listRuns({
       client,
       query: { limit: recentRunLimit, repositoryId: params.repositoryId },
+    }),
+    listCommits({
+      client,
+      query: { limit: 5, repositoryId: params.repositoryId },
     }),
   ]);
   const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
@@ -55,6 +63,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     repositoryId: params.repositoryId,
     repositoryListAvailable: repositoriesResult.data !== undefined,
     recentRuns: runsResult.data?.items ?? [],
+    recentCommits: commitsResult.data?.items ?? [],
     runsAvailable: runsResult.data !== undefined,
   };
 }
@@ -178,6 +187,14 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         </>
       )}
 
+      {repository ? (
+        <CommitHistorySection
+          actionData={actionData}
+          commits={loaderData.recentCommits}
+          repository={repository}
+        />
+      ) : null}
+
       <RecentRuns
         available={loaderData.runsAvailable}
         description={`The latest ${recentRunLimit} executions from this repository.`}
@@ -185,57 +202,134 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         runs={loaderData.recentRuns}
         viewAllTo={`/runs?repositoryId=${encodeURIComponent(loaderData.repositoryId)}`}
       />
-
-      {repository ? (
-        <CommitIndexingSettings actionData={actionData} repository={repository} />
-      ) : null}
     </Stack>
   );
 }
 
-function CommitIndexingSettings({
+function CommitHistorySection({
   actionData,
+  commits,
   repository,
 }: Readonly<{
   actionData: Route.ComponentProps["actionData"];
+  commits: RepositoryCommit[];
   repository: Repository;
 }>) {
+  const index = repository.commitHistoryIndex;
   const navigation = useNavigation();
+  const colors = { failed: "red", pending: "yellow", succeeded: "green" } as const;
+  const tracksHistory = repository.commitIndexing === "trackedBranchHistory";
 
   return (
     <Stack gap="md">
-      <SectionHeader title="Commit indexing" />
+      <SectionHeader
+        actions={
+          tracksHistory ? (
+            <Button
+              component={Link}
+              leftSection={<IconGitCommit size={16} />}
+              size="compact-md"
+              to={`/commits?repositoryId=${encodeURIComponent(repository.id)}`}
+              variant="light"
+            >
+              View all commits
+            </Button>
+          ) : null
+        }
+        title="Commit history"
+      />
       <Paper p="md" withBorder>
-        <Form method="post">
-          <Stack gap="md">
-            {actionData?.error ? (
-              <Alert color="red" title="Commit indexing was not updated">
-                {actionData.error}
-              </Alert>
-            ) : null}
-            {actionData?.updated ? (
-              <Alert color="green" title="Commit indexing updated">
-                The new mode will be used by subsequent repository refreshes.
-              </Alert>
-            ) : null}
-            <NativeSelect
-              data={[
-                { label: "Disabled", value: "disabled" },
-                { label: "Observed branch heads", value: "observedHeads" },
-                { label: "Complete tracked branch history", value: "trackedBranchHistory" },
-              ]}
-              defaultValue={repository.commitIndexing}
-              description="Exact SHAs used by Runs and catalogs are retained in every mode. Disabling indexing does not erase metadata already collected."
-              label="Metadata collection"
-              name="commitIndexing"
-            />
-            <Group justify="flex-end">
-              <Button loading={navigation.state === "submitting"} size="compact-md" type="submit">
-                Save indexing mode
+        <Stack gap="md">
+          {actionData?.error ? (
+            <Alert color="red" title="Commit indexing was not updated">
+              {actionData.error}
+            </Alert>
+          ) : null}
+          {actionData?.updated ? (
+            <Alert color="green" title="Commit indexing updated">
+              The new mode will be used by subsequent repository refreshes.
+            </Alert>
+          ) : null}
+          <Form method="post">
+            <Group align="flex-end" wrap="wrap">
+              <NativeSelect
+                data={[
+                  { label: "Disabled", value: "disabled" },
+                  { label: "Observed branch heads", value: "observedHeads" },
+                  { label: "Complete tracked branch history", value: "trackedBranchHistory" },
+                ]}
+                defaultValue={repository.commitIndexing}
+                description="Exact SHAs used by Runs and catalogs are retained in every mode. Disabling indexing does not erase metadata already collected."
+                label="Indexing mode"
+                name="commitIndexing"
+                style={{ flex: "1 1 28rem" }}
+              />
+              <Button loading={navigation.state === "submitting"} type="submit">
+                Save
               </Button>
             </Group>
-          </Stack>
-        </Form>
+          </Form>
+
+          {tracksHistory ? (
+            <>
+              <Divider />
+              {index?.failureReason ? (
+                <Alert color="red" title="History indexing failed">
+                  {index.failureReason}
+                </Alert>
+              ) : null}
+              <Group justify="space-between">
+                <Stack gap={0}>
+                  <Text fw={600}>
+                    {index?.commitCount ?? 0} indexed commit
+                    {(index?.commitCount ?? 0) === 1 ? "" : "s"}
+                  </Text>
+                  <Text c="dimmed" size="sm">
+                    {index?.status === "pending"
+                      ? "Catching up to the latest observed branch head."
+                      : index?.status === "failed"
+                        ? "The previous successful index remains available."
+                        : "Reachable from the latest indexed branch head."}
+                  </Text>
+                </Stack>
+                {index ? (
+                  <Badge color={colors[index.status]} variant="light">
+                    {index.status}
+                  </Badge>
+                ) : null}
+              </Group>
+              {commits.length === 0 ? (
+                <Text c="dimmed">No commits have been indexed yet.</Text>
+              ) : (
+                <Table>
+                  <Table.Tbody>
+                    {commits.map((item) => (
+                      <Table.Tr key={item.commit.sha}>
+                        <Table.Td>
+                          <Text fw={600} lineClamp={1} title={item.commit.title}>
+                            {item.commit.title ?? "Untitled commit"}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <CommitReference commit={item.commit} />
+                        </Table.Td>
+                        <Table.Td>
+                          {(item.commit.committedAt ?? item.commit.authoredAt) ? (
+                            <Timestamp
+                              c="dimmed"
+                              size="sm"
+                              value={item.commit.committedAt ?? item.commit.authoredAt ?? ""}
+                            />
+                          ) : null}
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              )}
+            </>
+          ) : null}
+        </Stack>
       </Paper>
     </Stack>
   );

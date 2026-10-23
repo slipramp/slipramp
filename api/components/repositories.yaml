@@ -93,6 +93,46 @@ Repository:
           description: Time at which the repository was registered.
         refresh:
           $ref: "#/RepositoryRefresh"
+        commitHistoryIndex:
+          $ref: "#/RepositoryCommitHistoryIndex"
+
+RepositoryCommitHistoryIndex:
+  type: object
+  required:
+    - status
+    - commitCount
+  properties:
+    status:
+      type: string
+      enum:
+        - pending
+        - succeeded
+        - failed
+      x-enum-varnames:
+        - RepositoryCommitHistoryIndexStatusPending
+        - RepositoryCommitHistoryIndexStatusSucceeded
+        - RepositoryCommitHistoryIndexStatusFailed
+    desiredHeadSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+      description: Current tracked branch head awaiting or represented by the index.
+    indexedHeadSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+      description: Tracked branch head represented by the indexed commit set.
+    commitCount:
+      type: integer
+      minimum: 0
+      description: Number of commits currently reachable from the indexed tracked branch head.
+    lastAttemptedAt:
+      type: string
+      format: date-time
+    lastSucceededAt:
+      type: string
+      format: date-time
+    failureReason:
+      type: string
+      minLength: 1
 
 RepositoryRefresh:
   type: object
@@ -148,3 +188,40 @@ RepositoryList:
     offset:
       type: integer
       minimum: 0
+
+RepositoryCommitList:
+  type: object
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/RepositoryCommit"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+
+RepositoryCommit:
+  type: object
+  required:
+    - repositoryId
+    - repositoryName
+    - commit
+  properties:
+    repositoryId:
+      type: string
+      format: uuid
+    repositoryName:
+      type: string
+    commit:
+      $ref: ./common.yaml#/GitCommit

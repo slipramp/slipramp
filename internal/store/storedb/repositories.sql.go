@@ -127,30 +127,46 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
-    catalog_revisions.commit_sha AS active_catalog_commit_sha
+    catalog_revisions.commit_sha AS active_catalog_commit_sha,
+    repository_commit_history_indexes.status AS commit_history_status,
+    repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
+    repository_commit_history_indexes.indexed_head_sha AS commit_history_indexed_head_sha,
+    repository_commit_history_indexes.commit_count AS commit_history_commit_count,
+    repository_commit_history_indexes.last_attempted_at AS commit_history_last_attempted_at,
+    repository_commit_history_indexes.last_succeeded_at AS commit_history_last_succeeded_at,
+    repository_commit_history_indexes.failure_reason AS commit_history_failure_reason
 FROM repositories
 LEFT JOIN catalog_revisions
   ON catalog_revisions.id = repositories.active_catalog_revision_id
+LEFT JOIN repository_commit_history_indexes
+  ON repository_commit_history_indexes.repository_id = repositories.id
 WHERE repositories.id = $1
   AND repositories.removed_at IS NULL
 `
 
 type GetActiveRepositoryRow struct {
-	ID                     pgtype.UUID
-	Name                   string
-	CloneUrl               string
-	Branch                 string
-	CommitIndexingMode     string
-	CommitUrlTemplate      *string
-	RefreshCredentialName  *string
-	CheckoutCredentialName *string
-	CreatedAt              pgtype.Timestamptz
-	RefreshStatus          string
-	ObservedCommitSha      *string
-	LastRefreshAttemptedAt pgtype.Timestamptz
-	LastRefreshSucceededAt pgtype.Timestamptz
-	LastRefreshError       *string
-	ActiveCatalogCommitSha *string
+	ID                           pgtype.UUID
+	Name                         string
+	CloneUrl                     string
+	Branch                       string
+	CommitIndexingMode           string
+	CommitUrlTemplate            *string
+	RefreshCredentialName        *string
+	CheckoutCredentialName       *string
+	CreatedAt                    pgtype.Timestamptz
+	RefreshStatus                string
+	ObservedCommitSha            *string
+	LastRefreshAttemptedAt       pgtype.Timestamptz
+	LastRefreshSucceededAt       pgtype.Timestamptz
+	LastRefreshError             *string
+	ActiveCatalogCommitSha       *string
+	CommitHistoryStatus          *string
+	CommitHistoryDesiredHeadSha  *string
+	CommitHistoryIndexedHeadSha  *string
+	CommitHistoryCommitCount     *int32
+	CommitHistoryLastAttemptedAt pgtype.Timestamptz
+	CommitHistoryLastSucceededAt pgtype.Timestamptz
+	CommitHistoryFailureReason   *string
 }
 
 func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetActiveRepositoryRow, error) {
@@ -172,6 +188,13 @@ func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetA
 		&i.LastRefreshSucceededAt,
 		&i.LastRefreshError,
 		&i.ActiveCatalogCommitSha,
+		&i.CommitHistoryStatus,
+		&i.CommitHistoryDesiredHeadSha,
+		&i.CommitHistoryIndexedHeadSha,
+		&i.CommitHistoryCommitCount,
+		&i.CommitHistoryLastAttemptedAt,
+		&i.CommitHistoryLastSucceededAt,
+		&i.CommitHistoryFailureReason,
 	)
 	return i, err
 }
@@ -192,30 +215,46 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
-    catalog_revisions.commit_sha AS active_catalog_commit_sha
+    catalog_revisions.commit_sha AS active_catalog_commit_sha,
+    repository_commit_history_indexes.status AS commit_history_status,
+    repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
+    repository_commit_history_indexes.indexed_head_sha AS commit_history_indexed_head_sha,
+    repository_commit_history_indexes.commit_count AS commit_history_commit_count,
+    repository_commit_history_indexes.last_attempted_at AS commit_history_last_attempted_at,
+    repository_commit_history_indexes.last_succeeded_at AS commit_history_last_succeeded_at,
+    repository_commit_history_indexes.failure_reason AS commit_history_failure_reason
 FROM repositories
 LEFT JOIN catalog_revisions
   ON catalog_revisions.id = repositories.active_catalog_revision_id
+LEFT JOIN repository_commit_history_indexes
+  ON repository_commit_history_indexes.repository_id = repositories.id
 WHERE repositories.removed_at IS NULL
 ORDER BY repositories.name
 `
 
 type ListRepositoriesRow struct {
-	ID                     pgtype.UUID
-	Name                   string
-	CloneUrl               string
-	Branch                 string
-	CommitIndexingMode     string
-	CommitUrlTemplate      *string
-	RefreshCredentialName  *string
-	CheckoutCredentialName *string
-	CreatedAt              pgtype.Timestamptz
-	RefreshStatus          string
-	ObservedCommitSha      *string
-	LastRefreshAttemptedAt pgtype.Timestamptz
-	LastRefreshSucceededAt pgtype.Timestamptz
-	LastRefreshError       *string
-	ActiveCatalogCommitSha *string
+	ID                           pgtype.UUID
+	Name                         string
+	CloneUrl                     string
+	Branch                       string
+	CommitIndexingMode           string
+	CommitUrlTemplate            *string
+	RefreshCredentialName        *string
+	CheckoutCredentialName       *string
+	CreatedAt                    pgtype.Timestamptz
+	RefreshStatus                string
+	ObservedCommitSha            *string
+	LastRefreshAttemptedAt       pgtype.Timestamptz
+	LastRefreshSucceededAt       pgtype.Timestamptz
+	LastRefreshError             *string
+	ActiveCatalogCommitSha       *string
+	CommitHistoryStatus          *string
+	CommitHistoryDesiredHeadSha  *string
+	CommitHistoryIndexedHeadSha  *string
+	CommitHistoryCommitCount     *int32
+	CommitHistoryLastAttemptedAt pgtype.Timestamptz
+	CommitHistoryLastSucceededAt pgtype.Timestamptz
+	CommitHistoryFailureReason   *string
 }
 
 func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, error) {
@@ -243,6 +282,13 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 			&i.LastRefreshSucceededAt,
 			&i.LastRefreshError,
 			&i.ActiveCatalogCommitSha,
+			&i.CommitHistoryStatus,
+			&i.CommitHistoryDesiredHeadSha,
+			&i.CommitHistoryIndexedHeadSha,
+			&i.CommitHistoryCommitCount,
+			&i.CommitHistoryLastAttemptedAt,
+			&i.CommitHistoryLastSucceededAt,
+			&i.CommitHistoryFailureReason,
 		); err != nil {
 			return nil, err
 		}

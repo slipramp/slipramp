@@ -263,3 +263,81 @@ repository:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+repositoryCommits:
+  get:
+    operationId: listCommits
+    summary: List indexed commits
+    description: >-
+      Lists commits reachable from the most recently indexed tracked branch
+      head, newest first. The result may lag the observed branch head while a
+      history index is pending.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Repositories
+    parameters:
+      - name: repositoryId
+        in: query
+        description: Limit results to one repository registration.
+        schema:
+          type: string
+          format: uuid
+      - name: q
+        in: query
+        description: Match a commit SHA, title, or author name.
+        schema:
+          type: string
+          maxLength: 200
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Indexed commits reachable from the tracked branch.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/RepositoryCommitList
+      "400":
+        description: The list window is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Indexed commits could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

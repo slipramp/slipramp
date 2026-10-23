@@ -27,6 +27,7 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"ListServiceAccountAPIKeys":  productidentity.PermissionAdmin,
 	"CreateServiceAccountAPIKey": productidentity.PermissionAdmin,
 	"ListRepositories":           productidentity.PermissionRead,
+	"ListCommits":                productidentity.PermissionRead,
 	"GetRepositoryCatalog":       productidentity.PermissionRead,
 	"ListTargets":                productidentity.PermissionRead,
 	"ListClusters":               productidentity.PermissionRead,

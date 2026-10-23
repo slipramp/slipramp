@@ -169,6 +169,19 @@ in as described in [AUTH.md](./AUTH.md).
 
 ## Incremental Behavior After the MVP
 
+Repositories now select one of three commit metadata modes. The default
+`observedHeads` behavior preserves the MVP baseline, `disabled` skips optional
+commit presentation metadata, and `trackedBranchHistory` asynchronously
+indexes every commit reachable from the configured branch. The full-history
+worker advances incrementally, detects rewritten ancestry, records durable
+pending/succeeded/failed state, and does not block repository refresh or turn
+historical commits into catalog revisions or Git-trigger deliveries. Disabling
+the mode pauses collection and hides that repository from commit browsing while
+retaining already collected metadata for a later resume. Exact SHAs needed by
+catalogs and execution remain durable in every mode. The web application adds a
+searchable, paginated, cross-repository commit history and repository-level
+index status.
+
 Automatic Git-triggered work now uses latest-wins coalescing per Repository and
 Target. In the same transaction that activates a catalog revision and advances
 or archives Target state, Slipramp preserves superseded delivery records,
@@ -208,6 +221,7 @@ preserving static trigger parameters and delivery-ID idempotency.
     hundreds of targets
   - Repository list and connection form
   - Repository status and validation errors
+  - Cross-repository commit history with repository and text filters
   - Controller and cluster health on a dedicated screen
   - Target detail with collapsible action definitions and run forms
   - Action run form
@@ -233,6 +247,7 @@ The MVP PostgreSQL schema centers on these records:
 
 - repositories and repository refresh state
 - repository-scoped Git commit metadata
+- tracked-branch commit membership and durable history-index progress
 - immutable catalog revisions and validation results
 - current target and runtime projections
 - clusters, enrolled controller credential digests, last-seen observations, and run assignments

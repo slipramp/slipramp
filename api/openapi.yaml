@@ -14,6 +14,8 @@ paths:
     $ref: ./paths/repositories.yaml#/repositories
   /api/v1/repositories/{repositoryId}:
     $ref: ./paths/repositories.yaml#/repository
+  /api/v1/commits:
+    $ref: ./paths/repositories.yaml#/repositoryCommits
   /api/v1/repositories/{repositoryId}/catalog:
     $ref: ./paths/catalog.yaml#/repositoryCatalog
   /api/v1/targets:
@@ -135,6 +137,12 @@ components:
       $ref: ./components/repositories.yaml#/Repository
     RepositoryList:
       $ref: ./components/repositories.yaml#/RepositoryList
+    RepositoryCommitList:
+      $ref: ./components/repositories.yaml#/RepositoryCommitList
+    RepositoryCommit:
+      $ref: ./components/repositories.yaml#/RepositoryCommit
+    RepositoryCommitHistoryIndex:
+      $ref: ./components/repositories.yaml#/RepositoryCommitHistoryIndex
     RepositoryConfig:
       $ref: ./components/repositories.yaml#/RepositoryConfig
     RepositoryCommitIndexingMode:

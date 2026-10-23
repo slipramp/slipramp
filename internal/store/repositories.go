@@ -20,7 +20,16 @@ const activeRepositoryNameConstraint = "repositories_active_name_key"
 var _ repository.Store = (*Database)(nil)
 
 func (d *Database) CreateRepository(ctx context.Context, record repository.Repository) (repository.Repository, error) {
-	row, err := d.queries.CreateRepository(
+	transaction, err := d.pool.Begin(ctx)
+	if err != nil {
+		return repository.Repository{}, fmt.Errorf("begin create repository transaction: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+	queries := d.queries.WithTx(transaction)
+
+	row, err := queries.CreateRepository(
 		ctx,
 		storedb.CreateRepositoryParams{
 			ID: pgtype.UUID{
@@ -49,8 +58,23 @@ func (d *Database) CreateRepository(ctx context.Context, record repository.Repos
 
 		return repository.Repository{}, fmt.Errorf("create repository: %w", err)
 	}
+	if record.CommitIndexing == repository.CommitIndexingTrackedBranchHistory {
+		if err := queries.InitializeRepositoryCommitHistory(ctx, databaseUUID(record.ID)); err != nil {
+			return repository.Repository{}, fmt.Errorf("initialize repository commit history: %w", err)
+		}
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return repository.Repository{}, fmt.Errorf("commit create repository: %w", err)
+	}
 
-	return repositoryFromCreateRow(row), nil
+	created := repositoryFromCreateRow(row)
+	if record.CommitIndexing == repository.CommitIndexingTrackedBranchHistory {
+		created.CommitHistoryIndex = &repository.CommitHistoryIndex{
+			Status: repository.CommitHistoryIndexPending,
+		}
+	}
+
+	return created, nil
 }
 
 func (d *Database) ListRepositories(ctx context.Context) ([]repository.Repository, error) {
@@ -77,6 +101,15 @@ func (d *Database) ListRepositories(ctx context.Context) ([]repository.Repositor
 				row.LastRefreshAttemptedAt,
 				row.LastRefreshSucceededAt,
 				row.LastRefreshError,
+			),
+			CommitHistoryIndex: commitHistoryIndex(
+				row.CommitHistoryStatus,
+				row.CommitHistoryDesiredHeadSha,
+				row.CommitHistoryIndexedHeadSha,
+				row.CommitHistoryCommitCount,
+				row.CommitHistoryLastAttemptedAt,
+				row.CommitHistoryLastSucceededAt,
+				row.CommitHistoryFailureReason,
 			),
 			ActiveCatalogCommitSHA: row.ActiveCatalogCommitSha,
 		})
@@ -111,6 +144,15 @@ func (d *Database) GetRepository(ctx context.Context, repositoryID uuid.UUID) (r
 			row.LastRefreshSucceededAt,
 			row.LastRefreshError,
 		),
+		CommitHistoryIndex: commitHistoryIndex(
+			row.CommitHistoryStatus,
+			row.CommitHistoryDesiredHeadSha,
+			row.CommitHistoryIndexedHeadSha,
+			row.CommitHistoryCommitCount,
+			row.CommitHistoryLastAttemptedAt,
+			row.CommitHistoryLastSucceededAt,
+			row.CommitHistoryFailureReason,
+		),
 		ActiveCatalogCommitSHA: row.ActiveCatalogCommitSha,
 	}, nil
 }
@@ -120,7 +162,16 @@ func (d *Database) UpdateRepositoryCommitIndexing(
 	repositoryID uuid.UUID,
 	mode repository.CommitIndexingMode,
 ) (repository.Repository, error) {
-	rowsAffected, err := d.queries.UpdateRepositoryCommitIndexing(
+	transaction, err := d.pool.Begin(ctx)
+	if err != nil {
+		return repository.Repository{}, fmt.Errorf("begin update repository transaction: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+	queries := d.queries.WithTx(transaction)
+
+	rowsAffected, err := queries.UpdateRepositoryCommitIndexing(
 		ctx,
 		storedb.UpdateRepositoryCommitIndexingParams{
 			CommitIndexingMode: string(mode),
@@ -132,6 +183,14 @@ func (d *Database) UpdateRepositoryCommitIndexing(
 	}
 	if rowsAffected == 0 {
 		return repository.Repository{}, repository.ErrNotFound
+	}
+	if mode == repository.CommitIndexingTrackedBranchHistory {
+		if err := queries.InitializeRepositoryCommitHistory(ctx, databaseUUID(repositoryID)); err != nil {
+			return repository.Repository{}, fmt.Errorf("initialize repository commit history: %w", err)
+		}
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return repository.Repository{}, fmt.Errorf("commit update repository: %w", err)
 	}
 
 	return d.GetRepository(ctx, repositoryID)
@@ -196,6 +255,35 @@ func refreshState(
 		AttemptedAt:   optionalTime(attemptedAt),
 		SucceededAt:   optionalTime(succeededAt),
 		FailureReason: failureReason,
+	}
+}
+
+func commitHistoryIndex(
+	status *string,
+	desiredHeadSHA *string,
+	indexedHeadSHA *string,
+	commitCount *int32,
+	lastAttemptedAt pgtype.Timestamptz,
+	lastSucceededAt pgtype.Timestamptz,
+	failureReason *string,
+) *repository.CommitHistoryIndex {
+	if status == nil {
+		return nil
+	}
+
+	count := 0
+	if commitCount != nil {
+		count = int(*commitCount)
+	}
+
+	return &repository.CommitHistoryIndex{
+		Status:          repository.CommitHistoryIndexStatus(*status),
+		DesiredHeadSHA:  desiredHeadSHA,
+		IndexedHeadSHA:  indexedHeadSHA,
+		CommitCount:     count,
+		LastAttemptedAt: optionalTime(lastAttemptedAt),
+		LastSucceededAt: optionalTime(lastSucceededAt),
+		FailureReason:   failureReason,
 	}
 }
 

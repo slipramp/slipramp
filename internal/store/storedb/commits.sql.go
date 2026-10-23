@@ -11,6 +11,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countTrackedBranchCommits = `-- name: CountTrackedBranchCommits :one
+SELECT count(*)
+FROM repository_tracked_branch_commits
+JOIN repository_commits
+  ON repository_commits.repository_id = repository_tracked_branch_commits.repository_id
+ AND repository_commits.sha = repository_tracked_branch_commits.commit_sha
+JOIN repositories ON repositories.id = repository_tracked_branch_commits.repository_id
+WHERE repositories.removed_at IS NULL
+  AND repositories.commit_indexing_mode = 'trackedBranchHistory'
+  AND (
+      $1::uuid IS NULL
+      OR repository_tracked_branch_commits.repository_id = $1
+  )
+  AND (
+      $2::text IS NULL
+      OR repository_commits.sha ILIKE '%' || $2 || '%'
+      OR repository_commits.title ILIKE '%' || $2 || '%'
+      OR repository_commits.author_name ILIKE '%' || $2 || '%'
+  )
+`
+
+type CountTrackedBranchCommitsParams struct {
+	RepositoryID pgtype.UUID
+	Query        *string
+}
+
+func (q *Queries) CountTrackedBranchCommits(ctx context.Context, arg CountTrackedBranchCommitsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countTrackedBranchCommits, arg.RepositoryID, arg.Query)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const listRepositoryCommits = `-- name: ListRepositoryCommits :many
 WITH requested AS (
     SELECT repository_ids.repository_id, commit_shas.sha
@@ -26,6 +59,7 @@ SELECT
     repository_commits.title,
     repository_commits.author_name,
     repository_commits.authored_at,
+    repository_commits.committed_at,
     repositories.clone_url,
     repositories.commit_url_template
 FROM requested
@@ -47,6 +81,7 @@ type ListRepositoryCommitsRow struct {
 	Title             *string
 	AuthorName        *string
 	AuthoredAt        pgtype.Timestamptz
+	CommittedAt       pgtype.Timestamptz
 	CloneUrl          string
 	CommitUrlTemplate *string
 }
@@ -66,6 +101,96 @@ func (q *Queries) ListRepositoryCommits(ctx context.Context, arg ListRepositoryC
 			&i.Title,
 			&i.AuthorName,
 			&i.AuthoredAt,
+			&i.CommittedAt,
+			&i.CloneUrl,
+			&i.CommitUrlTemplate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTrackedBranchCommits = `-- name: ListTrackedBranchCommits :many
+SELECT
+    repository_commits.repository_id,
+    repositories.name AS repository_name,
+    repository_commits.sha,
+    repository_commits.title,
+    repository_commits.author_name,
+    repository_commits.authored_at,
+    repository_commits.committed_at,
+    repositories.clone_url,
+    repositories.commit_url_template
+FROM repository_tracked_branch_commits
+JOIN repository_commits
+  ON repository_commits.repository_id = repository_tracked_branch_commits.repository_id
+ AND repository_commits.sha = repository_tracked_branch_commits.commit_sha
+JOIN repositories ON repositories.id = repository_tracked_branch_commits.repository_id
+WHERE repositories.removed_at IS NULL
+  AND repositories.commit_indexing_mode = 'trackedBranchHistory'
+  AND (
+      $1::uuid IS NULL
+      OR repository_tracked_branch_commits.repository_id = $1
+  )
+  AND (
+      $2::text IS NULL
+      OR repository_commits.sha ILIKE '%' || $2 || '%'
+      OR repository_commits.title ILIKE '%' || $2 || '%'
+      OR repository_commits.author_name ILIKE '%' || $2 || '%'
+  )
+ORDER BY
+    repository_commits.committed_at DESC NULLS LAST,
+    repository_commits.sha DESC
+LIMIT $4
+OFFSET $3
+`
+
+type ListTrackedBranchCommitsParams struct {
+	RepositoryID pgtype.UUID
+	Query        *string
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+type ListTrackedBranchCommitsRow struct {
+	RepositoryID      pgtype.UUID
+	RepositoryName    string
+	Sha               string
+	Title             *string
+	AuthorName        *string
+	AuthoredAt        pgtype.Timestamptz
+	CommittedAt       pgtype.Timestamptz
+	CloneUrl          string
+	CommitUrlTemplate *string
+}
+
+func (q *Queries) ListTrackedBranchCommits(ctx context.Context, arg ListTrackedBranchCommitsParams) ([]ListTrackedBranchCommitsRow, error) {
+	rows, err := q.db.Query(ctx, listTrackedBranchCommits,
+		arg.RepositoryID,
+		arg.Query,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTrackedBranchCommitsRow
+	for rows.Next() {
+		var i ListTrackedBranchCommitsRow
+		if err := rows.Scan(
+			&i.RepositoryID,
+			&i.RepositoryName,
+			&i.Sha,
+			&i.Title,
+			&i.AuthorName,
+			&i.AuthoredAt,
+			&i.CommittedAt,
 			&i.CloneUrl,
 			&i.CommitUrlTemplate,
 		); err != nil {
@@ -85,18 +210,21 @@ INSERT INTO repository_commits (
     sha,
     title,
     author_name,
-    authored_at
+    authored_at,
+    committed_at
 ) VALUES (
     $1,
     $2,
     $3,
     $4,
-    $5
+    $5,
+    $6
 )
 ON CONFLICT (repository_id, sha) DO UPDATE
 SET title = COALESCE(repository_commits.title, EXCLUDED.title),
     author_name = COALESCE(repository_commits.author_name, EXCLUDED.author_name),
-    authored_at = COALESCE(repository_commits.authored_at, EXCLUDED.authored_at)
+    authored_at = COALESCE(repository_commits.authored_at, EXCLUDED.authored_at),
+    committed_at = COALESCE(repository_commits.committed_at, EXCLUDED.committed_at)
 `
 
 type UpsertRepositoryCommitParams struct {
@@ -105,6 +233,7 @@ type UpsertRepositoryCommitParams struct {
 	Title        *string
 	AuthorName   *string
 	AuthoredAt   pgtype.Timestamptz
+	CommittedAt  pgtype.Timestamptz
 }
 
 func (q *Queries) UpsertRepositoryCommit(ctx context.Context, arg UpsertRepositoryCommitParams) error {
@@ -114,6 +243,65 @@ func (q *Queries) UpsertRepositoryCommit(ctx context.Context, arg UpsertReposito
 		arg.Title,
 		arg.AuthorName,
 		arg.AuthoredAt,
+		arg.CommittedAt,
+	)
+	return err
+}
+
+const upsertRepositoryCommitHistory = `-- name: UpsertRepositoryCommitHistory :exec
+INSERT INTO repository_commits (
+    repository_id,
+    sha,
+    title,
+    author_name,
+    authored_at,
+    committed_at
+)
+SELECT
+    $1,
+    commits.sha,
+    titles.title,
+    authors.author_name,
+    author_times.authored_at,
+    commit_times.committed_at
+FROM unnest($2::text[])
+    WITH ORDINALITY AS commits(sha, ordinal)
+JOIN unnest($3::text[])
+    WITH ORDINALITY AS titles(title, ordinal)
+  USING (ordinal)
+JOIN unnest($4::text[])
+    WITH ORDINALITY AS authors(author_name, ordinal)
+  USING (ordinal)
+JOIN unnest($5::timestamptz[])
+    WITH ORDINALITY AS author_times(authored_at, ordinal)
+  USING (ordinal)
+JOIN unnest($6::timestamptz[])
+    WITH ORDINALITY AS commit_times(committed_at, ordinal)
+  USING (ordinal)
+ON CONFLICT (repository_id, sha) DO UPDATE
+SET title = EXCLUDED.title,
+    author_name = EXCLUDED.author_name,
+    authored_at = EXCLUDED.authored_at,
+    committed_at = EXCLUDED.committed_at
+`
+
+type UpsertRepositoryCommitHistoryParams struct {
+	RepositoryID pgtype.UUID
+	Shas         []string
+	Titles       []string
+	AuthorNames  []string
+	AuthoredAts  []pgtype.Timestamptz
+	CommittedAts []pgtype.Timestamptz
+}
+
+func (q *Queries) UpsertRepositoryCommitHistory(ctx context.Context, arg UpsertRepositoryCommitHistoryParams) error {
+	_, err := q.db.Exec(ctx, upsertRepositoryCommitHistory,
+		arg.RepositoryID,
+		arg.Shas,
+		arg.Titles,
+		arg.AuthorNames,
+		arg.AuthoredAts,
+		arg.CommittedAts,
 	)
 	return err
 }
