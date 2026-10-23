@@ -32,11 +32,26 @@ RunList:
   type: object
   required:
     - items
+    - limit
+    - offset
+    - total
   properties:
     items:
       type: array
       items:
         $ref: "#/Run"
+    limit:
+      type: integer
+      minimum: 1
+      description: Maximum number of Runs requested for this page.
+    offset:
+      type: integer
+      minimum: 0
+      description: Zero-based offset used for this page.
+    total:
+      type: integer
+      minimum: 0
+      description: Total matching Runs across all pages.
 
 Run:
   type: object
@@ -45,7 +60,7 @@ Run:
     - phase
     - repositoryId
     - catalogRevisionId
-    - commitSha
+    - commit
     - target
     - action
     - parameters
@@ -99,9 +114,8 @@ Run:
     catalogRevisionId:
       type: string
       format: uuid
-    commitSha:
-      type: string
-      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    commit:
+      $ref: ./common.yaml#/GitCommit
     target:
       $ref: "#/CatalogName"
     action:
@@ -181,7 +195,7 @@ RunArtifactInput:
     - sha256
     - sensitive
     - retentionState
-    - commitSha
+    - commit
     - catalogRevisionId
   properties:
     artifactId:
@@ -210,9 +224,8 @@ RunArtifactInput:
         - retained
         - expired
         - deleted
-    commitSha:
-      type: string
-      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    commit:
+      $ref: ./common.yaml#/GitCommit
     catalogRevisionId:
       type: string
       format: uuid

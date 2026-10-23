@@ -35,7 +35,10 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	fetcher := &recordingFetcher{
 		commits: map[RepositoryID]FetchedCommit{
 			succeededID: {
-				CommitSHA:    "0123456789abcdef0123456789abcdef01234567",
+				Commit: Commit{
+					RepositoryID: succeededID,
+					SHA:          "0123456789abcdef0123456789abcdef01234567",
+				},
 				ChangedPaths: changedPaths,
 				Files:        validCatalogFiles(),
 				cleanup: func() error {
@@ -63,8 +66,8 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	}
 
 	succeeded := repositories.results[succeededID]
-	if succeeded.CommitSHA == nil ||
-		*succeeded.CommitSHA != fetcher.commits[succeededID].CommitSHA ||
+	if succeeded.Commit == nil ||
+		succeeded.Commit.SHA != fetcher.commits[succeededID].Commit.SHA ||
 		succeeded.FailureReason != nil ||
 		!succeeded.AttemptedAt.Equal(attemptedAt) ||
 		succeeded.Revision == nil {
@@ -75,7 +78,7 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	}
 	if succeeded.Revision != nil &&
 		(succeeded.Revision.ID != revisionID ||
-			succeeded.Revision.CommitSHA != *succeeded.CommitSHA ||
+			succeeded.Revision.CommitSHA != succeeded.Commit.SHA ||
 			!succeeded.Revision.CreatedAt.Equal(attemptedAt) ||
 			len(succeeded.Revision.Catalog.Runtimes) != 1 ||
 			len(succeeded.Revision.Catalog.Targets) != 1) {
@@ -86,7 +89,7 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	}
 
 	failed := repositories.results[failedID]
-	if failed.CommitSHA != nil || failed.FailureReason == nil ||
+	if failed.Commit != nil || failed.FailureReason == nil ||
 		*failed.FailureReason != "remote branch does not exist" ||
 		!failed.AttemptedAt.Equal(attemptedAt) {
 		t.Errorf("failed refresh = %#v", failed)
@@ -107,7 +110,10 @@ func TestRefresherRecordsCatalogValidationFailure(t *testing.T) {
 	fetcher := &recordingFetcher{
 		commits: map[RepositoryID]FetchedCommit{
 			repositoryID: {
-				CommitSHA: commitSHA,
+				Commit: Commit{
+					RepositoryID: repositoryID,
+					SHA:          commitSHA,
+				},
 				Files: fstest.MapFS{
 					".slipramp/catalog.yaml": {
 						Data: []byte("apiVersion: ["),
@@ -122,7 +128,7 @@ func TestRefresherRecordsCatalogValidationFailure(t *testing.T) {
 	refresher.refreshAll(context.Background())
 
 	result := repositories.results[repositoryID]
-	if result.CommitSHA == nil || *result.CommitSHA != commitSHA ||
+	if result.Commit == nil || result.Commit.SHA != commitSHA ||
 		result.Revision != nil || result.FailureReason == nil ||
 		!strings.Contains(*result.FailureReason, ".slipramp/catalog.yaml") {
 		t.Errorf("invalid catalog refresh = %#v", result)
@@ -165,6 +171,7 @@ func TestValidateRefreshResult(t *testing.T) {
 		CommitSHA: commitSHA,
 		CreatedAt: attemptedAt,
 	}
+	validCommit := &Commit{SHA: commitSHA}
 
 	tests := []struct {
 		name      string
@@ -174,7 +181,7 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "accepted catalog",
 			result: RefreshResult{
-				CommitSHA:   &commitSHA,
+				Commit:      validCommit,
 				AttemptedAt: attemptedAt,
 				Revision:    validRevision,
 			},
@@ -189,7 +196,7 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "catalog rejection",
 			result: RefreshResult{
-				CommitSHA:     &commitSHA,
+				Commit:        validCommit,
 				AttemptedAt:   attemptedAt,
 				FailureReason: &failureReason,
 			},
@@ -197,7 +204,7 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "success without revision",
 			result: RefreshResult{
-				CommitSHA:   &commitSHA,
+				Commit:      validCommit,
 				AttemptedAt: attemptedAt,
 			},
 			wantError: "catalog revision",
@@ -205,7 +212,7 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "failure with revision",
 			result: RefreshResult{
-				CommitSHA:     &commitSHA,
+				Commit:        validCommit,
 				AttemptedAt:   attemptedAt,
 				FailureReason: &failureReason,
 				Revision:      validRevision,
@@ -215,7 +222,7 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "mismatched revision commit",
 			result: RefreshResult{
-				CommitSHA:   &commitSHA,
+				Commit:      validCommit,
 				AttemptedAt: attemptedAt,
 				Revision: &catalog.Revision{
 					ID:        revisionID,

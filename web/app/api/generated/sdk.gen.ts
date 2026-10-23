@@ -68,6 +68,9 @@ import type {
   GetRunLogCursorErrors,
   GetRunLogCursorResponses,
   GetRunResponses,
+  GetServiceAccountData,
+  GetServiceAccountErrors,
+  GetServiceAccountResponses,
   ListApiKeysData,
   ListApiKeysErrors,
   ListApiKeysResponses,
@@ -537,7 +540,7 @@ export const downloadRunInput = <ThrowOnError extends boolean = false>(
 /**
  * List recent Runs
  *
- * Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+ * Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
  */
 export const listRuns = <ThrowOnError extends boolean = false>(
   options?: Options<ListRunsData, ThrowOnError>,
@@ -906,6 +909,31 @@ export const createServiceAccount = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Get a service account
+ */
+export const getServiceAccount = <ThrowOnError extends boolean = false>(
+  options: Options<GetServiceAccountData, ThrowOnError>,
+): RequestResult<GetServiceAccountResponses, GetServiceAccountErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetServiceAccountResponses, GetServiceAccountErrors, ThrowOnError>(
+    {
+      security: [
+        {
+          in: "cookie",
+          name: "slipramp_session",
+          type: "apiKey",
+        },
+        {
+          key: "ProductBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/api/v1/service-accounts/{principalId}",
+      ...options,
+    },
+  );
 
 /**
  * List API keys for a service account

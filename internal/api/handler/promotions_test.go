@@ -297,6 +297,47 @@ func TestSubmitKargoPromotionMapsIneligibleStageToConflict(t *testing.T) {
 	assertProblem(t, response, http.StatusConflict)
 }
 
+func TestListPromotionStagesUsesScopeFilters(t *testing.T) {
+	t.Parallel()
+
+	reviews := &recordingPromotionReviewService{
+		stages: promotion.StageReviewList{Items: []promotion.StageReview{}, Total: 0, Limit: 10, Offset: 2},
+	}
+	httpHandler := NewHTTP(
+		Dependencies{
+			PromotionReviews: reviews,
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authentication: productAuthentication(
+					productidentity.RoleViewer,
+					productidentity.AuthenticationMethodAPIKey,
+					[]productidentity.Scope{productidentity.ScopeRead},
+				),
+			},
+		},
+		HTTPOptions{},
+	)
+	request := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/api/v1/promotion-stages?integration=prod&project=kargo-core&application=external-dns&cluster=colo&archived=false&limit=10&offset=2",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer viewer-key")
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	if reviews.stageFilter.Integration != "prod" || reviews.stageFilter.Project != "kargo-core" ||
+		reviews.stageFilter.Application != "external-dns" || reviews.stageFilter.Cluster != "colo" ||
+		reviews.stageFilter.Archived == nil || *reviews.stageFilter.Archived ||
+		reviews.stageFilter.Limit != 10 || reviews.stageFilter.Offset != 2 {
+		t.Errorf("Stage filter = %#v", reviews.stageFilter)
+	}
+}
+
 func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 	t.Parallel()
 
@@ -310,7 +351,7 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 				Integration:            "prod",
 				ExternalPromotionID:    "external-dns-01jbe4q8",
 				StageID:                stageID,
-				StageSnapshot:          []byte(`{"name":"external-dns-prod"}`),
+				StageSnapshot:          []byte(`{"project":"kargo-core","name":"external-dns-prod","application":"external-dns"}`),
 				RepositoryID:           uuid.New(),
 				RepositorySnapshot:     []byte(`{"name":"ops"}`),
 				BaseRevision:           "8b7f1d217a6b0000000000000000000000000000",
@@ -337,6 +378,9 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 	httpHandler := NewHTTP(
 		Dependencies{
 			PromotionReviews: reviews,
+			KargoIntegrations: promotion.IntegrationSet{
+				"prod": {UIURL: "https://kargo.example.com"},
+			},
 			ProductAuthentication: &recordingProductAuthenticationService{
 				authentication: productAuthentication(
 					productidentity.RoleViewer,
@@ -350,7 +394,7 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 	request := httptest.NewRequestWithContext(
 		t.Context(),
 		http.MethodGet,
-		"/api/v1/promotions?status=pending&integration=prod&cluster=colo&project=kargo-core&stageId="+
+		"/api/v1/promotions?status=pending&integration=prod&cluster=colo&project=kargo-core&application=external-dns&stageId="+
 			stageID.String()+"&limit=10&offset=2",
 		nil,
 	)
@@ -364,12 +408,18 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 	}
 	if reviews.promotionFilter.Status != promotion.StatusPending ||
 		reviews.promotionFilter.Integration != "prod" || reviews.promotionFilter.Cluster != "colo" ||
-		reviews.promotionFilter.Project != "kargo-core" || reviews.promotionFilter.StageID == nil ||
+		reviews.promotionFilter.Project != "kargo-core" ||
+		reviews.promotionFilter.Application != "external-dns" || reviews.promotionFilter.StageID == nil ||
 		*reviews.promotionFilter.StageID != stageID || reviews.promotionFilter.Limit != 10 ||
 		reviews.promotionFilter.Offset != 2 {
 		t.Errorf("Promotion filter = %#v", reviews.promotionFilter)
 	}
-	for _, expected := range []string{promotionID.String(), `"total":1`, `"status":"pending"`} {
+	for _, expected := range []string{
+		promotionID.String(),
+		`"total":1`,
+		`"status":"pending"`,
+		`"kargoUrl":"https://kargo.example.com/project/kargo-core/promotion/external-dns-01jbe4q8"`,
+	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
 		}

@@ -26,6 +26,7 @@ type AccessService interface {
 	) (productauth.APIKeyCredential, error)
 	RevokeAPIKey(context.Context, productidentity.Authentication, uuid.UUID) error
 	ListServiceAccounts(context.Context) ([]productidentity.Principal, error)
+	GetServiceAccount(context.Context, uuid.UUID) (productidentity.Principal, error)
 	CreateServiceAccount(context.Context, string, productidentity.Role) (productidentity.Principal, error)
 	ListServiceAccountAPIKeys(context.Context, uuid.UUID) ([]productidentity.APIKey, error)
 	CreateServiceAccountAPIKey(
@@ -40,8 +41,14 @@ type AccessService interface {
 
 func (h *Handler) ListAPIKeys(
 	ctx context.Context,
-	_ api.ListAPIKeysRequestObject,
+	request api.ListAPIKeysRequestObject,
 ) (api.ListAPIKeysResponseObject, error) {
+	limit, offset, windowErr := listWindow(request.Params.Limit, request.Params.Offset)
+	if windowErr != nil {
+		return api.ListAPIKeys400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, windowErr.Error()),
+		), nil
+	}
 	authentication, err := currentProductAuthentication(ctx)
 	if err != nil {
 		return nil, err
@@ -52,7 +59,12 @@ func (h *Handler) ListAPIKeys(
 		return nil, err
 	}
 
-	return api.ListAPIKeys200JSONResponse{Items: apiKeyResponses(keys)}, nil
+	total := len(keys)
+	keys = listPage(keys, offset, limit)
+
+	return api.ListAPIKeys200JSONResponse{
+		Items: apiKeyResponses(keys), Total: total, Limit: limit, Offset: offset,
+	}, nil
 }
 
 func (h *Handler) CreateAPIKey(
@@ -136,19 +148,44 @@ func (h *Handler) RevokeAPIKey(
 
 func (h *Handler) ListServiceAccounts(
 	ctx context.Context,
-	_ api.ListServiceAccountsRequestObject,
+	request api.ListServiceAccountsRequestObject,
 ) (api.ListServiceAccountsResponseObject, error) {
+	limit, offset, windowErr := listWindow(request.Params.Limit, request.Params.Offset)
+	if windowErr != nil {
+		return api.ListServiceAccounts400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, windowErr.Error()),
+		), nil
+	}
 	principals, err := h.productAuth.ListServiceAccounts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	total := len(principals)
+	principals = listPage(principals, offset, limit)
 	items := make([]api.ServiceAccount, 0, len(principals))
 	for _, principal := range principals {
 		items = append(items, serviceAccountResponse(principal))
 	}
 
-	return api.ListServiceAccounts200JSONResponse{Items: items}, nil
+	return api.ListServiceAccounts200JSONResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func (h *Handler) GetServiceAccount(
+	ctx context.Context,
+	request api.GetServiceAccountRequestObject,
+) (api.GetServiceAccountResponseObject, error) {
+	principal, err := h.productAuth.GetServiceAccount(ctx, request.PrincipalID)
+	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
+		return api.GetServiceAccount404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The service account does not exist."),
+		), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetServiceAccount200JSONResponse(serviceAccountResponse(principal)), nil
 }
 
 func (h *Handler) CreateServiceAccount(
@@ -182,6 +219,12 @@ func (h *Handler) ListServiceAccountAPIKeys(
 	ctx context.Context,
 	request api.ListServiceAccountAPIKeysRequestObject,
 ) (api.ListServiceAccountAPIKeysResponseObject, error) {
+	limit, offset, windowErr := listWindow(request.Params.Limit, request.Params.Offset)
+	if windowErr != nil {
+		return api.ListServiceAccountAPIKeys400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, windowErr.Error()),
+		), nil
+	}
 	keys, err := h.productAuth.ListServiceAccountAPIKeys(ctx, request.PrincipalID)
 	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
 		problem := NewProblem(http.StatusNotFound, "The service account does not exist.")
@@ -197,7 +240,12 @@ func (h *Handler) ListServiceAccountAPIKeys(
 		return nil, err
 	}
 
-	return api.ListServiceAccountAPIKeys200JSONResponse{Items: apiKeyResponses(keys)}, nil
+	total := len(keys)
+	keys = listPage(keys, offset, limit)
+
+	return api.ListServiceAccountAPIKeys200JSONResponse{
+		Items: apiKeyResponses(keys), Total: total, Limit: limit, Offset: offset,
+	}, nil
 }
 
 func (h *Handler) CreateServiceAccountAPIKey(

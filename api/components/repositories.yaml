@@ -21,6 +21,14 @@ RepositoryConfig:
       minLength: 1
       maxLength: 255
       description: Git branch tracked by repository refresh.
+    commitUrlTemplate:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: >-
+        Optional absolute HTTP or HTTPS commit-page template containing one
+        {sha} placeholder. Known public Git providers are inferred when this is
+        omitted.
     refreshCredentialName:
       type: string
       minLength: 1
@@ -75,9 +83,9 @@ RepositoryRefresh:
         - RepositoryRefreshStatusSucceeded
         - RepositoryRefreshStatusFailed
       description: Result of the most recent branch refresh attempt.
-    commitSha:
-      type: string
-      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    commit:
+      allOf:
+        - $ref: ./common.yaml#/GitCommit
       description: Most recently fetched commit, retained when a later refresh fails.
     attemptedAt:
       type: string
@@ -96,8 +104,20 @@ RepositoryList:
   type: object
   required:
     - items
+    - total
+    - limit
+    - offset
   properties:
     items:
       type: array
       items:
         $ref: "#/Repository"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0

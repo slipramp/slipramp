@@ -48,19 +48,25 @@ promotions:
       - ProductBearer: []
     tags: [Promotions]
     parameters:
-      - name: status
-        in: query
-        schema:
-          $ref: ../components/promotions.yaml#/PromotionStatus
       - name: integration
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
-      - name: cluster
+      - name: project
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
-      - name: project
+      - name: application
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: status
+        in: query
+        schema:
+          $ref: ../components/promotions.yaml#/PromotionStatus
+      - name: cluster
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
@@ -162,11 +168,17 @@ promotionStages:
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
-      - name: cluster
+      - name: project
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
-      - name: project
+      - name: application
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: cluster
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
@@ -246,15 +258,7 @@ promotionPipelines:
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
-      - name: cluster
-        in: query
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
       - name: project
-        in: query
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
-      - name: repository
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
@@ -264,6 +268,14 @@ promotionPipelines:
           type: string
           minLength: 1
           maxLength: 200
+      - name: cluster
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: repository
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
       - $ref: "#/components/parameters/Limit"
       - $ref: "#/components/parameters/Offset"
     responses:
@@ -295,6 +307,20 @@ promotionBranchDrift:
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
+      - name: project
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: application
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: status
+        in: query
+        schema:
+          $ref: ../components/promotions.yaml#/PromotionBranchDriftStatus
       - name: repository
         in: query
         schema:

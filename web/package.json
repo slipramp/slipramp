@@ -13,10 +13,13 @@
     "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource-variable/manrope": "5.3.0",
     "@mantine/core": "9.7.2",
     "@mantine/hooks": "9.7.2",
+    "@mantine/notifications": "9.7.2",
     "@react-router/node": "8.4.0",
     "@react-router/serve": "8.4.0",
+    "@tabler/icons-react": "3.49.0",
     "isbot": "5.2.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",

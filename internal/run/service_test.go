@@ -525,21 +525,23 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 
 	listed, err := service.ListRuns(
 		context.Background(),
-		ListFilter{
+		RunListFilter{
 			RepositoryID: &repositoryID,
 			TargetName:   "network",
+			ClusterName:  "colo",
 		},
 	)
 	if err != nil {
 		t.Fatalf("ListRuns() error = %v", err)
 	}
-	if len(listed) != 1 || listed[0].ID != want[0].ID {
+	if len(listed.Items) != 1 || listed.Items[0].ID != want[0].ID || listed.Total != 1 {
 		t.Errorf("ListRuns() = %#v, want %#v", listed, want)
 	}
 	if runs.listFilter.RepositoryID == nil ||
 		*runs.listFilter.RepositoryID != repositoryID ||
 		runs.listFilter.TargetName != "network" ||
-		runs.listFilter.Limit != DefaultListLimit {
+		runs.listFilter.ClusterName != "colo" ||
+		runs.listFilter.Limit != DefaultRunListLimit {
 		t.Errorf("ListRuns() filter = %#v", runs.listFilter)
 	}
 }
@@ -548,7 +550,17 @@ func TestListRunsRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 
 	service, _ := testService(t)
-	_, err := service.ListRuns(context.Background(), ListFilter{Limit: MaximumListLimit + 1})
+	_, err := service.ListRuns(context.Background(), RunListFilter{Limit: MaximumRunListLimit + 1})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
+	}
+}
+
+func TestListRunsRejectsNegativeOffset(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(context.Background(), RunListFilter{Offset: -1})
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
@@ -558,7 +570,7 @@ func TestListRunsRejectsTargetWithoutRepository(t *testing.T) {
 	t.Parallel()
 
 	service, _ := testService(t)
-	_, err := service.ListRuns(context.Background(), ListFilter{TargetName: "network"})
+	_, err := service.ListRuns(context.Background(), RunListFilter{TargetName: "network"})
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
@@ -670,7 +682,7 @@ type recordingRuns struct {
 	getError               error
 	idempotencyPrincipalID *uuid.UUID
 	artifacts              map[uuid.UUID]ArtifactInput
-	listFilter             ListFilter
+	listFilter             RunListFilter
 	listed                 []Run
 	listError              error
 }
@@ -679,10 +691,10 @@ func (s *recordingRuns) GetRun(context.Context, uuid.UUID) (Run, error) {
 	return Run{}, ErrRunNotFound
 }
 
-func (s *recordingRuns) ListRuns(_ context.Context, filter ListFilter) ([]Run, error) {
+func (s *recordingRuns) ListRuns(_ context.Context, filter RunListFilter) (RunList, error) {
 	s.listFilter = filter
 
-	return s.listed, s.listError
+	return RunList{Items: s.listed, Total: int64(len(s.listed))}, s.listError
 }
 
 func (s *recordingRuns) GetArtifactInputCandidate(_ context.Context, artifactID uuid.UUID) (ArtifactInput, error) {

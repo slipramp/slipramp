@@ -3,22 +3,26 @@ import {
   Anchor,
   Badge,
   Button,
-  Code,
   Group,
+  Menu,
   NativeSelect,
-  Pagination,
   Paper,
   Stack,
   Table,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
-import { Form, Link, useSearchParams } from "react-router";
+import { IconChevronDown, IconPlayerPlay } from "@tabler/icons-react";
+import { Link, redirect } from "react-router";
 
+import { actionRunPath } from "~/action-run";
 import { createServerAPIClient } from "~/api/client.server";
 import { listRepositories, listTargets } from "~/api/generated";
+import { ListPagination, SearchParamFilters } from "~/components/list-controls";
+import { CommitReference } from "~/components/git-commit";
+import { EmptyState, PageHeader } from "~/components/page";
 import { pageTitle } from "~/page-title";
+import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/index";
 
@@ -32,11 +36,11 @@ export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
   const repositoryId = url.searchParams.get("repositoryId")?.trim() ?? "";
-  const requestedPage = positiveInteger(url.searchParams.get("page"));
+  const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request);
   const offset = (requestedPage - 1) * pageSize;
   const [repositoriesResult, initialTargetsResult] = await Promise.all([
-    listRepositories({ client }),
+    listRepositories({ client, query: { limit: 200 } }),
     listTargets({
       client,
       query: {
@@ -67,70 +71,52 @@ export async function loader({ request }: Route.LoaderArgs) {
     };
   }
   const pageCount = Math.ceil(initialTargetsResult.data.total / pageSize);
-  const page = pageCount === 0 ? 1 : Math.min(requestedPage, pageCount);
-  let targetData = initialTargetsResult.data;
-
-  if (page !== requestedPage) {
-    const targetsResult = await listTargets({
-      client,
-      query: {
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-        q: query || undefined,
-        repositoryId: repositoryId || undefined,
-      },
-    });
-    if (targetsResult.data) targetData = targetsResult.data;
+  const lastPage = Math.max(1, pageCount);
+  if (requestedPage > lastPage) {
+    if (lastPage === 1) {
+      url.searchParams.delete("page");
+    } else {
+      url.searchParams.set("page", String(lastPage));
+    }
+    return redirect(`${url.pathname}${url.search}`);
   }
 
   return {
     available: true,
     error: undefined,
-    filteredTargetCount: targetData.total,
-    page,
+    filteredTargetCount: initialTargetsResult.data.total,
+    page: requestedPage,
     pageCount,
     query,
     repositories,
     repositoryId,
-    targets: targetData.items,
-    totalTargetCount: targetData.total,
+    targets: initialTargetsResult.data.items,
+    totalTargetCount: initialTargetsResult.data.total,
   };
 }
 
 export default function TargetIndex({ loaderData }: Route.ComponentProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const firstTarget = (loaderData.page - 1) * pageSize + 1;
-  const lastTarget = firstTarget + loaderData.targets.length - 1;
   const filtered = Boolean(loaderData.query || loaderData.repositoryId);
-
-  function changePage(page: number) {
-    const nextSearchParams = new URLSearchParams(searchParams);
-    if (page === 1) {
-      nextSearchParams.delete("page");
-    } else {
-      nextSearchParams.set("page", String(page));
-    }
-    setSearchParams(nextSearchParams);
-  }
 
   return (
     <Stack gap="lg">
-      <Group align="flex-start" justify="space-between">
-        <Stack gap={2}>
-          <Title order={1}>Targets</Title>
-          <Text c="dimmed">Browse actions across every active repository catalog.</Text>
-        </Stack>
-        {loaderData.available ? (
-          <Group gap="xs">
-            <Badge size="lg" variant="light">
-              {loaderData.totalTargetCount} {filtered ? "matching" : "targets"}
-            </Badge>
-            <Badge size="lg" variant="outline">
-              {loaderData.repositories.length} repositories
-            </Badge>
-          </Group>
-        ) : null}
-      </Group>
+      <PageHeader
+        actions={
+          loaderData.available ? (
+            <Group gap="xs">
+              <Badge size="lg" variant="light">
+                {loaderData.totalTargetCount}{" "}
+                {filtered ? "matching" : targetNoun(loaderData.totalTargetCount)}
+              </Badge>
+              <Badge size="lg" variant="outline">
+                {loaderData.repositories.length} {repositoryNoun(loaderData.repositories.length)}
+              </Badge>
+            </Group>
+          ) : null
+        }
+        description="Browse actions across every active repository catalog."
+        title="Targets"
+      />
 
       {!loaderData.available ? (
         <Alert color="red" title="Targets unavailable">
@@ -145,15 +131,9 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
           />
 
           {loaderData.targets.length === 0 ? (
-            <Paper p="lg" withBorder>
-              <Stack align="flex-start" gap="xs">
-                <Text fw={600}>{filtered ? "No matching targets" : "No targets available"}</Text>
-                <Text c="dimmed" size="sm">
-                  {filtered
-                    ? "Try a different target, action, or repository filter."
-                    : "Connect a repository with an accepted catalog to populate this view."}
-                </Text>
-                {filtered ? (
+            <EmptyState
+              action={
+                filtered ? (
                   <Anchor component={Link} to="/">
                     Clear filters
                   </Anchor>
@@ -161,21 +141,26 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                   <Anchor component={Link} to="/repositories">
                     Manage repositories
                   </Anchor>
-                )}
-              </Stack>
-            </Paper>
+                )
+              }
+              description={
+                filtered
+                  ? "Try a different target, action, or repository filter."
+                  : "Connect a repository with an accepted catalog to populate this view."
+              }
+              title={filtered ? "No matching targets" : "No targets available"}
+            />
           ) : (
             <>
               <Paper withBorder>
-                <Table.ScrollContainer minWidth={980}>
+                <Table.ScrollContainer minWidth={820} type="native">
                   <Table highlightOnHover verticalSpacing="sm">
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>Target</Table.Th>
-                        <Table.Th>Repository</Table.Th>
-                        <Table.Th>Actions</Table.Th>
-                        <Table.Th>Execution</Table.Th>
-                        <Table.Th>Desired commit</Table.Th>
+                        <Table.Th>Runtime / placement</Table.Th>
+                        <Table.Th>Desired revision</Table.Th>
+                        <Table.Th aria-label="Actions" />
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -195,22 +180,14 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                                   {target.name}
                                 </Text>
                               ) : null}
-                            </Stack>
-                          </Table.Td>
-                          <Table.Td>
-                            <Anchor component={Link} to={`/repositories/${target.repositoryId}`}>
-                              {target.repositoryName}
-                            </Anchor>
-                          </Table.Td>
-                          <Table.Td>
-                            <Stack gap={2}>
-                              <Badge variant="light">
-                                {target.actions.length} action
-                                {target.actions.length === 1 ? "" : "s"}
-                              </Badge>
-                              <Text c="dimmed" lineClamp={2} maw={360} size="xs">
-                                {target.actions.join(", ") || "No actions"}
-                              </Text>
+                              <Anchor
+                                c="dimmed"
+                                component={Link}
+                                size="xs"
+                                to={`/repositories/${target.repositoryId}`}
+                              >
+                                {target.repositoryName}
+                              </Anchor>
                             </Stack>
                           </Table.Td>
                           <Table.Td>
@@ -225,13 +202,39 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                           </Table.Td>
                           <Table.Td>
                             <Stack gap={0}>
-                              <Code>{shortCommit(target.desiredCommitSha)}</Code>
-                              {target.desiredCommitSha !== target.catalogCommitSha ? (
+                              <CommitReference commit={target.desiredCommit} />
+                              {target.desiredCommit.sha !== target.catalogCommit.sha ? (
                                 <Text c="dimmed" size="xs">
                                   differs from catalog
                                 </Text>
                               ) : null}
                             </Stack>
+                          </Table.Td>
+                          <Table.Td>
+                            <Menu position="bottom-end" shadow="md" width={220}>
+                              <Menu.Target>
+                                <Button
+                                  rightSection={<IconChevronDown aria-hidden size={14} />}
+                                  size="compact-sm"
+                                  variant="light"
+                                >
+                                  Run action
+                                </Button>
+                              </Menu.Target>
+                              <Menu.Dropdown>
+                                <Menu.Label>Choose an action</Menu.Label>
+                                {target.actions.map((action) => (
+                                  <Menu.Item
+                                    component={Link}
+                                    key={action}
+                                    leftSection={<IconPlayerPlay aria-hidden size={14} />}
+                                    to={actionRunPath(target.repositoryId, target.name, action)}
+                                  >
+                                    {action}
+                                  </Menu.Item>
+                                ))}
+                              </Menu.Dropdown>
+                            </Menu>
                           </Table.Td>
                         </Table.Tr>
                       ))}
@@ -240,19 +243,13 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                 </Table.ScrollContainer>
               </Paper>
 
-              <Group justify="space-between">
-                <Text c="dimmed" size="sm">
-                  Showing {firstTarget}–{lastTarget} of {loaderData.filteredTargetCount}
-                </Text>
-                {loaderData.pageCount > 1 ? (
-                  <Pagination
-                    onChange={changePage}
-                    total={loaderData.pageCount}
-                    value={loaderData.page}
-                    withEdges
-                  />
-                ) : null}
-              </Group>
+              <ListPagination
+                itemCount={loaderData.targets.length}
+                noun="targets"
+                page={loaderData.page}
+                pageSize={pageSize}
+                total={loaderData.filteredTargetCount}
+              />
             </>
           )}
         </>
@@ -271,50 +268,38 @@ function TargetFilters({
   repositoryId: string;
 }>) {
   return (
-    <Paper p="md" withBorder>
-      <Form method="get">
-        <Group align="flex-end" wrap="wrap">
-          <TextInput
-            defaultValue={query}
-            key={`query:${query}`}
-            label="Search"
-            name="q"
-            placeholder="Target, action, or repository"
-            style={{ flex: "1 1 280px" }}
-          />
-          <NativeSelect
-            data={[
-              { label: "All repositories", value: "" },
-              ...repositories.map((repository) => ({
-                label: repository.name,
-                value: repository.id,
-              })),
-            ]}
-            defaultValue={repositoryId}
-            key={`repository:${repositoryId}`}
-            label="Repository"
-            name="repositoryId"
-            style={{ flex: "0 1 260px" }}
-          />
-          <Button type="submit">Filter</Button>
-          {query || repositoryId ? (
-            <Button component={Link} to="/" variant="subtle">
-              Clear
-            </Button>
-          ) : null}
-        </Group>
-      </Form>
-    </Paper>
+    <SearchParamFilters active={Boolean(query || repositoryId)} clearTo="/">
+      <TextInput
+        defaultValue={query}
+        key={`query:${query}`}
+        label="Search"
+        name="q"
+        placeholder="Target, action, or repository"
+        style={{ flex: "1 1 300px" }}
+        type="search"
+      />
+      <NativeSelect
+        data={[
+          { label: "All repositories", value: "" },
+          ...repositories.map((repository) => ({
+            label: repository.name,
+            value: repository.id,
+          })),
+        ]}
+        defaultValue={repositoryId}
+        key={`repository:${repositoryId}`}
+        label="Repository"
+        name="repositoryId"
+        style={{ flex: "0 1 280px" }}
+      />
+    </SearchParamFilters>
   );
 }
 
-function positiveInteger(value: string | null) {
-  if (!value) return 1;
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+function repositoryNoun(count: number) {
+  return count === 1 ? "repository" : "repositories";
 }
 
-function shortCommit(commit: string) {
-  return commit.slice(0, 12);
+function targetNoun(count: number) {
+  return count === 1 ? "target" : "targets";
 }

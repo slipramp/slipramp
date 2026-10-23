@@ -11,6 +11,7 @@ func TestIntegrationSetValidate(t *testing.T) {
 	integrations := IntegrationSet{
 		"prod": {
 			ClusterName:      "prod",
+			UIURL:            "https://kargo.example.com/console/",
 			Repositories:     []string{"kcloud-ops"},
 			EnvironmentOrder: []string{"homelab", "prod"},
 			Preparation: PreparationConfig{
@@ -45,6 +46,32 @@ func TestIntegrationSetValidate(t *testing.T) {
 	integrations["prod"] = integration
 	if err := integrations.Validate(); err == nil {
 		t.Fatal("Validate() error = nil for duplicate environment")
+	}
+
+	integration.EnvironmentOrder = []string{"homelab", "prod"}
+	integration.UIURL = "ftp://kargo.example.com"
+	integrations["prod"] = integration
+	if err := integrations.Validate(); err == nil {
+		t.Fatal("Validate() error = nil for non-HTTP Kargo UI URL")
+	}
+}
+
+func TestIntegrationSetBuildsKargoLinks(t *testing.T) {
+	t.Parallel()
+
+	integrations := IntegrationSet{
+		"prod": {UIURL: "https://kargo.example.com/console/"},
+	}
+	stageURL := integrations.KargoStageURL("prod", "kargo-core", "external-dns.prod")
+	if stageURL == nil || *stageURL != "https://kargo.example.com/console/project/kargo-core/stage/external-dns.prod" {
+		t.Errorf("KargoStageURL() = %v", stageURL)
+	}
+	promotionURL := integrations.KargoPromotionURL("prod", "kargo-core", "promotion-01")
+	if promotionURL == nil || *promotionURL != "https://kargo.example.com/console/project/kargo-core/promotion/promotion-01" {
+		t.Errorf("KargoPromotionURL() = %v", promotionURL)
+	}
+	if integrations.KargoStageURL("missing", "kargo-core", "prod") != nil {
+		t.Error("KargoStageURL() returned a URL for an unknown integration")
 	}
 }
 

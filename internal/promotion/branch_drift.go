@@ -24,7 +24,10 @@ const (
 
 type BranchDriftListFilter struct {
 	Integration string
+	Project     string
+	Application string
 	Repository  string
+	Status      BranchDriftStatus
 	Limit       int
 	Offset      int
 }
@@ -35,7 +38,9 @@ type BranchDriftStage struct {
 	AcknowledgedSourceRevision     string
 	AcknowledgedRenderBaseRevision string
 	AcknowledgedRenderRevision     string
+	AcknowledgedRenderAuthoredAt   *time.Time
 	SourceBranchRevision           string
+	SourceBranchAuthoredAt         *time.Time
 	TargetBranchRevision           string
 	SourceDrift                    bool
 	TargetDrift                    bool
@@ -83,7 +88,9 @@ type branchDriftCacheEntry struct {
 type branchDriftEvidence struct {
 	status               BranchDriftStatus
 	acknowledgement      successfulRenderAcknowledgement
+	acknowledgedTargetAt *time.Time
 	sourceBranchRevision string
+	sourceBranchAt       *time.Time
 	targetBranchRevision string
 	sourceDrift          bool
 	targetDrift          bool
@@ -122,6 +129,9 @@ func (s *BranchDriftService) List(
 	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
 		return BranchDriftList{}, err
 	}
+	if filter.Status != "" && !filter.Status.Valid() {
+		return BranchDriftList{}, fmt.Errorf("%w: branch drift status filter is invalid", ErrInvalid)
+	}
 
 	stages, err := s.store.ListPromotionStages(ctx)
 	if err != nil {
@@ -153,7 +163,9 @@ func (s *BranchDriftService) List(
 
 	names := slices.Sorted(maps.Keys(matchingRepositories))
 	total := len(names)
-	names = page(names, filter.Offset, filter.Limit)
+	if filter.Status == "" {
+		names = page(names, filter.Offset, filter.Limit)
+	}
 
 	select {
 	case s.scanLock <- struct{}{}:
@@ -167,31 +179,47 @@ func (s *BranchDriftService) List(
 		groupStages := stagesByRepository[name]
 		slices.SortFunc(groupStages, compareBranchDriftStages)
 		record, ok := repositoriesByName[name]
+		var item BranchDriftRepository
 		if !ok {
-			items = append(items, missingBranchDriftRepository(name, groupStages, filter, s.currentTime()))
-			continue
-		}
-
-		entry, scanErr := s.cachedScan(ctx, record, groupStages)
-		if scanErr != nil {
-			return BranchDriftList{}, scanErr
-		}
-		item := BranchDriftRepository{
-			Repository: record,
-			ScannedAt:  entry.scannedAt,
-			Error:      entry.error,
-			Stages:     make([]BranchDriftStage, 0, len(groupStages)),
-		}
-		for _, stage := range groupStages {
-			if !stageMatchesBranchDriftFilter(stage, filter) {
-				continue
+			item = missingBranchDriftRepository(name, groupStages, filter, s.currentTime())
+		} else {
+			entry, scanErr := s.cachedScan(ctx, record, groupStages)
+			if scanErr != nil {
+				return BranchDriftList{}, scanErr
 			}
-			item.Stages = append(item.Stages, branchDriftStage(stage, entry.stages[stage.ID]))
+			item = BranchDriftRepository{
+				Repository: record,
+				ScannedAt:  entry.scannedAt,
+				Error:      entry.error,
+				Stages:     make([]BranchDriftStage, 0, len(groupStages)),
+			}
+			for _, stage := range groupStages {
+				if !stageMatchesBranchDriftFilter(stage, filter) {
+					continue
+				}
+				item.Stages = append(item.Stages, branchDriftStage(stage, entry.stages[stage.ID]))
+			}
 		}
-		items = append(items, item)
+		item.Stages = filterBranchDriftStages(item.Stages, filter.Status)
+		if len(item.Stages) > 0 {
+			items = append(items, item)
+		}
+	}
+	if filter.Status != "" {
+		total = len(items)
+		items = page(items, filter.Offset, filter.Limit)
 	}
 
 	return BranchDriftList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+func (s BranchDriftStatus) Valid() bool {
+	switch s {
+	case BranchDriftStatusCurrent, BranchDriftStatusDrifted, BranchDriftStatusUnknown:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *BranchDriftService) cachedScan(
@@ -258,7 +286,9 @@ func (s *BranchDriftService) cachedScan(
 				stageID := requestStageIDs[index]
 				evidence := entry.stages[stageID]
 				evidence.sourceBranchRevision = comparison.SourceBranchCommit
+				evidence.sourceBranchAt = comparison.SourceBranchAuthoredAt
 				evidence.targetBranchRevision = comparison.TargetBranchCommit
+				evidence.acknowledgedTargetAt = comparison.AcknowledgedTargetAuthoredAt
 				evidence.sourceDrift = comparison.SourceDrift
 				evidence.targetDrift = comparison.TargetDrift
 				if comparison.Error != "" {
@@ -312,7 +342,9 @@ func branchDriftStage(stage Stage, evidence branchDriftEvidence) BranchDriftStag
 		AcknowledgedSourceRevision:     evidence.acknowledgement.SourceRevision,
 		AcknowledgedRenderBaseRevision: evidence.acknowledgement.TargetRevision,
 		AcknowledgedRenderRevision:     evidence.acknowledgement.ResultRevision,
+		AcknowledgedRenderAuthoredAt:   evidence.acknowledgedTargetAt,
 		SourceBranchRevision:           evidence.sourceBranchRevision,
+		SourceBranchAuthoredAt:         evidence.sourceBranchAt,
 		TargetBranchRevision:           evidence.targetBranchRevision,
 		SourceDrift:                    evidence.sourceDrift,
 		TargetDrift:                    evidence.targetDrift,
@@ -384,7 +416,24 @@ func missingBranchDriftRepository(
 
 func stageMatchesBranchDriftFilter(stage Stage, filter BranchDriftListFilter) bool {
 	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
+		(filter.Project == "" || stage.Project == filter.Project) &&
+		(filter.Application == "" || stage.Application == filter.Application) &&
 		(filter.Repository == "" || stage.RepositoryName == filter.Repository)
+}
+
+func filterBranchDriftStages(stages []BranchDriftStage, status BranchDriftStatus) []BranchDriftStage {
+	if status == "" {
+		return stages
+	}
+
+	filtered := make([]BranchDriftStage, 0, len(stages))
+	for _, stage := range stages {
+		if stage.Status == status {
+			filtered = append(filtered, stage)
+		}
+	}
+
+	return filtered
 }
 
 func compareBranchDriftStages(left, right Stage) int {

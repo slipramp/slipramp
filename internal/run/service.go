@@ -36,7 +36,7 @@ type CreationStore interface {
 
 type HistoryStore interface {
 	GetRun(context.Context, uuid.UUID) (Run, error)
-	ListRuns(context.Context, ListFilter) ([]Run, error)
+	ListRuns(context.Context, RunListFilter) (RunList, error)
 }
 
 type AssignmentStore interface {
@@ -262,26 +262,32 @@ func (s *Service) GetRun(ctx context.Context, runID uuid.UUID) (Run, error) {
 	return record, nil
 }
 
-func (s *Service) ListRuns(ctx context.Context, filter ListFilter) ([]Run, error) {
+func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, error) {
 	if filter.RepositoryID != nil && *filter.RepositoryID == uuid.Nil {
-		return nil, fmt.Errorf("%w: repository ID must not be empty", ErrInvalidRequest)
+		return RunList{}, fmt.Errorf("%w: repository ID must not be empty", ErrInvalidRequest)
 	}
 	if filter.TargetName != strings.TrimSpace(filter.TargetName) {
-		return nil, fmt.Errorf("%w: target name must not have surrounding whitespace", ErrInvalidRequest)
+		return RunList{}, fmt.Errorf("%w: target name must not have surrounding whitespace", ErrInvalidRequest)
 	}
 	if filter.TargetName != "" && filter.RepositoryID == nil {
-		return nil, fmt.Errorf("%w: target filter requires a repository ID", ErrInvalidRequest)
+		return RunList{}, fmt.Errorf("%w: target filter requires a repository ID", ErrInvalidRequest)
+	}
+	if filter.ClusterName != strings.TrimSpace(filter.ClusterName) {
+		return RunList{}, fmt.Errorf("%w: cluster name must not have surrounding whitespace", ErrInvalidRequest)
 	}
 	if filter.Limit == 0 {
-		filter.Limit = DefaultListLimit
+		filter.Limit = DefaultRunListLimit
 	}
-	if filter.Limit < 1 || filter.Limit > MaximumListLimit {
-		return nil, fmt.Errorf("%w: limit must be between 1 and %d", ErrInvalidRequest, MaximumListLimit)
+	if filter.Limit < 1 || filter.Limit > MaximumRunListLimit {
+		return RunList{}, fmt.Errorf("%w: limit must be between 1 and %d", ErrInvalidRequest, MaximumRunListLimit)
+	}
+	if filter.Offset < 0 || filter.Offset > MaximumRunListOffset {
+		return RunList{}, fmt.Errorf("%w: offset must be between 0 and %d", ErrInvalidRequest, MaximumRunListOffset)
 	}
 
 	records, err := s.history.ListRuns(ctx, filter)
 	if err != nil {
-		return nil, fmt.Errorf("list Runs: %w", err)
+		return RunList{}, fmt.Errorf("list Runs: %w", err)
 	}
 
 	return records, nil

@@ -219,6 +219,15 @@ type Repository struct {
 	LastRefreshSucceededAt  pgtype.Timestamptz
 	LastRefreshError        *string
 	ActiveCatalogRevisionID pgtype.UUID
+	CommitUrlTemplate       *string
+}
+
+type RepositoryCommit struct {
+	RepositoryID pgtype.UUID
+	Sha          string
+	Title        *string
+	AuthorName   *string
+	AuthoredAt   pgtype.Timestamptz
 }
 
 type Run struct {

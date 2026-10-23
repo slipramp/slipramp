@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var commitSHAPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
@@ -17,7 +19,7 @@ type GitFetcher struct {
 }
 
 type FetchedCommit struct {
-	CommitSHA    string
+	Commit       Commit
 	ChangedPaths []string
 	Files        fs.FS
 	cleanup      func() error
@@ -83,6 +85,15 @@ func (f *GitFetcher) Fetch(ctx context.Context, repository Repository) (FetchedC
 	if !validCommitSHA(commitSHA) {
 		return FetchedCommit{}, fmt.Errorf("git returned invalid commit %q", commitSHA)
 	}
+	commit := Commit{
+		RepositoryID: repository.ID,
+		SHA:          commitSHA,
+	}
+	if metadata, metadataErr := readCommitMetadata(ctx, environment, checkoutDirectory, commitSHA); metadataErr == nil {
+		commit.Title = &metadata.title
+		commit.AuthorName = &metadata.authorName
+		commit.AuthoredAt = &metadata.authoredAt
+	}
 
 	changedPaths, err := changedRepositoryPaths(
 		ctx,
@@ -112,12 +123,54 @@ func (f *GitFetcher) Fetch(ctx context.Context, repository Repository) (FetchedC
 	keepCheckout = true
 
 	return FetchedCommit{
-		CommitSHA:    commitSHA,
+		Commit:       commit,
 		ChangedPaths: changedPaths,
 		Files:        os.DirFS(checkoutDirectory),
 		cleanup: func() error {
 			return os.RemoveAll(checkoutDirectory)
 		},
+	}, nil
+}
+
+type commitMetadata struct {
+	title      string
+	authorName string
+	authoredAt time.Time
+}
+
+func readCommitMetadata(
+	ctx context.Context,
+	environment []string,
+	checkoutDirectory string,
+	commitSHA string,
+) (commitMetadata, error) {
+	output, err := runGit(
+		ctx,
+		environment,
+		"-C",
+		checkoutDirectory,
+		"show",
+		"--quiet",
+		"--format=%H%x00%s%x00%an%x00%aI%x00",
+		commitSHA,
+	)
+	if err != nil {
+		return commitMetadata{}, fmt.Errorf("read fetched commit metadata: %w", err)
+	}
+
+	fields := strings.Split(strings.TrimSuffix(output, "\n"), "\x00")
+	if len(fields) != 5 || fields[4] != "" || fields[0] != commitSHA {
+		return commitMetadata{}, errors.New("git returned malformed commit metadata")
+	}
+	authoredAt, err := time.Parse(time.RFC3339, fields[3])
+	if err != nil {
+		return commitMetadata{}, fmt.Errorf("parse fetched commit author time: %w", err)
+	}
+
+	return commitMetadata{
+		title:      strings.ToValidUTF8(fields[1], "�"),
+		authorName: strings.ToValidUTF8(fields[2], "�"),
+		authoredAt: authoredAt.UTC(),
 	}, nil
 }
 

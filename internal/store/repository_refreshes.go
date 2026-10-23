@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -42,6 +43,17 @@ func (d *Database) RecordRepositoryRefresh(
 		}
 
 		return fmt.Errorf("lock repository for refresh: %w", err)
+	}
+	if result.Commit != nil {
+		commit := *result.Commit
+		if commit.RepositoryID == uuid.Nil {
+			commit.RepositoryID = repositoryID
+		} else if commit.RepositoryID != repositoryID {
+			return errors.New("fetched commit repository does not match refresh repository")
+		}
+		if err := upsertRepositoryCommit(ctx, queries, commit); err != nil {
+			return err
+		}
 	}
 
 	if result.Revision != nil {
@@ -103,7 +115,7 @@ func recordCatalogRevision(
 	err = queries.ActivateCatalogRevision(
 		ctx,
 		storedb.ActivateCatalogRevisionParams{
-			CommitSha: result.CommitSHA,
+			CommitSha: &result.Commit.SHA,
 			AttemptedAt: pgtype.Timestamptz{
 				Time:  result.AttemptedAt,
 				Valid: true,
@@ -114,6 +126,28 @@ func recordCatalogRevision(
 	)
 	if err != nil {
 		return fmt.Errorf("activate catalog revision: %w", err)
+	}
+
+	return nil
+}
+
+func upsertRepositoryCommit(
+	ctx context.Context,
+	queries *storedb.Queries,
+	commit repository.Commit,
+) error {
+	err := queries.UpsertRepositoryCommit(
+		ctx,
+		storedb.UpsertRepositoryCommitParams{
+			RepositoryID: databaseUUID(commit.RepositoryID),
+			Sha:          commit.SHA,
+			Title:        commit.Title,
+			AuthorName:   commit.AuthorName,
+			AuthoredAt:   optionalDatabaseTime(commit.AuthoredAt),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("record repository commit: %w", err)
 	}
 
 	return nil
@@ -313,12 +347,12 @@ func recordRefreshFailure(
 		Time:  result.AttemptedAt,
 		Valid: true,
 	}
-	if result.CommitSHA != nil {
+	if result.Commit != nil {
 		err := queries.RecordCatalogValidationFailure(
 			ctx,
 			storedb.RecordCatalogValidationFailureParams{
 				RepositoryID:  repositoryID,
-				CommitSha:     *result.CommitSHA,
+				CommitSha:     result.Commit.SHA,
 				RecordedAt:    attemptedAt,
 				FailureReason: *result.FailureReason,
 			},
@@ -331,7 +365,7 @@ func recordRefreshFailure(
 	err := queries.RecordRepositoryRefreshFailure(
 		ctx,
 		storedb.RecordRepositoryRefreshFailureParams{
-			ObservedCommitSha: result.CommitSHA,
+			ObservedCommitSha: optionalCommitSHA(result.Commit),
 			AttemptedAt:       attemptedAt,
 			RefreshError:      result.FailureReason,
 			ID:                repositoryID,
@@ -342,4 +376,12 @@ func recordRefreshFailure(
 	}
 
 	return nil
+}
+
+func optionalCommitSHA(commit *repository.Commit) *string {
+	if commit == nil {
+		return nil
+	}
+
+	return &commit.SHA
 }

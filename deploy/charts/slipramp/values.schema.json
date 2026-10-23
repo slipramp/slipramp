@@ -383,6 +383,7 @@
       ],
       "properties": {
         "cluster": { "$ref": "#/$defs/dnsLabel" },
+        "uiUrl": { "type": "string", "format": "uri" },
         "repositories": {
           "type": "array",
           "minItems": 1,

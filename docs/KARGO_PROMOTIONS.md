@@ -159,6 +159,7 @@ Kargo integrations are named Server configuration loaded at startup, like
 Placements. Each integration selects:
 
 - one registered Slipramp Cluster;
+- an optional Kargo UI base URL for direct Stage and Promotion links;
 - the logical repository names allowed for observed Stages;
 - the ordered environments used by Freight pipeline comparisons;
 - the repository, Target, and Action used for review preparation;
@@ -177,6 +178,7 @@ kargo:
   integrations:
     prod:
       cluster: prod
+      uiUrl: https://kargo.example.com
       repositories: [kcloud-ops]
       environmentOrder: [homelab, prod]
       preparation:
@@ -663,9 +665,13 @@ or Git ancestry ordering.
 
 Branch drift becomes an additional view after the Stage inventory and review
 flow are accepted. It presents one section per Repository, the cached scan
-time and any repository-level failure, and per-Stage source and target drift.
-Successful no-op renders are labeled explicitly so an unchanged target branch
-does not look stale after Kargo acknowledged a newer source revision.
+time and any repository-level failure, and one per-Stage in-sync, behind, or
+unknown status. Each row pairs the latest source-branch commit date with the
+last rendered stage-branch commit date; a successful no-op render remains in
+sync when no watched source path or rendered target changed. Status,
+integration, project, and Repository filters are evaluated by the Server.
+When an integration configures `uiUrl`, Promotion, Stage, pipeline, and branch
+drift views link directly to the corresponding resource in Kargo.
 
 ## Delivery Milestones
 

@@ -3,6 +3,7 @@ package promotion
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -119,6 +120,21 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 		t.Errorf("no-op Stage = %#v", result.Items[0].Stages[1])
 	}
 
+	drifted, err := service.List(t.Context(), BranchDriftListFilter{
+		Status: BranchDriftStatusDrifted,
+		Limit:  DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("status-filtered List() error = %v", err)
+	}
+	if drifted.Total != 1 || len(drifted.Items) != 1 || len(drifted.Items[0].Stages) != 1 ||
+		drifted.Items[0].Stages[0].Stage.ID != driftedStage.ID {
+		t.Errorf("status-filtered List() = %#v", drifted)
+	}
+	if len(scanner.calls) != 1 {
+		t.Errorf("status-filtered repository scans = %d, want cached scan", len(scanner.calls))
+	}
+
 	store.stages[0].LastObservedAt = now.Add(time.Second)
 	clock = now.Add(30 * time.Second)
 	if _, err := service.List(t.Context(), BranchDriftListFilter{Limit: DefaultListLimit}); err != nil {
@@ -137,14 +153,80 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 	}
 }
 
+func TestBranchDriftServiceRejectsInvalidStatusFilter(t *testing.T) {
+	t.Parallel()
+
+	service := NewBranchDriftService(
+		IntegrationSet{},
+		&branchDriftTestStore{},
+		&recordingBranchScanner{},
+		time.Minute,
+		30*time.Second,
+	)
+
+	_, err := service.List(t.Context(), BranchDriftListFilter{
+		Status: "stale",
+		Limit:  DefaultListLimit,
+	})
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("List() error = %v, want ErrInvalid", err)
+	}
+}
+
+func TestBranchDriftServiceAppliesStatusFilterToMissingRepositories(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
+	store := &branchDriftTestStore{stages: []Stage{branchDriftTestStage(
+		"prod",
+		"missing",
+		"app-prod",
+		strings.Repeat("a", 40),
+		strings.Repeat("b", 40),
+		strings.Repeat("c", 40),
+		now,
+	)}}
+	service := NewBranchDriftService(
+		IntegrationSet{"prod": {}},
+		store,
+		&recordingBranchScanner{},
+		time.Minute,
+		30*time.Second,
+	)
+	service.now = func() time.Time { return now }
+
+	current, err := service.List(t.Context(), BranchDriftListFilter{
+		Status: BranchDriftStatusCurrent,
+		Limit:  DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("current List() error = %v", err)
+	}
+	if current.Total != 0 || len(current.Items) != 0 {
+		t.Errorf("current List() = %#v", current)
+	}
+
+	unknown, err := service.List(t.Context(), BranchDriftListFilter{
+		Status: BranchDriftStatusUnknown,
+		Limit:  DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("unknown List() error = %v", err)
+	}
+	if unknown.Total != 1 || len(unknown.Items) != 1 || len(unknown.Items[0].Stages) != 1 {
+		t.Errorf("unknown List() = %#v", unknown)
+	}
+}
+
 func TestBranchDriftServiceUsesAcknowledgementsAndFiltersWithoutScanningUnknownStages(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
 	unknownStage := branchDriftTestStage("prod", "ops", "unknown", "", "", "", now)
 	unknownStage.SuccessfulRenderAcknowledgement = nil
+	unknownStage.Project = "wanted"
 	otherStage := branchDriftTestStage(
-		"edge",
+		"prod",
 		"ops",
 		"other",
 		strings.Repeat("a", 40),
@@ -152,6 +234,9 @@ func TestBranchDriftServiceUsesAcknowledgementsAndFiltersWithoutScanningUnknownS
 		strings.Repeat("c", 40),
 		now,
 	)
+	otherStage.Project = "wanted"
+	unknownStage.Application = "wanted-app"
+	otherStage.Application = "other-app"
 	store := &branchDriftTestStore{
 		stages: []Stage{unknownStage, otherStage},
 		repositories: []repository.Repository{{
@@ -178,6 +263,8 @@ func TestBranchDriftServiceUsesAcknowledgementsAndFiltersWithoutScanningUnknownS
 
 	result, err := service.List(t.Context(), BranchDriftListFilter{
 		Integration: "prod",
+		Project:     "wanted",
+		Application: "wanted-app",
 		Limit:       DefaultListLimit,
 	})
 	if err != nil {

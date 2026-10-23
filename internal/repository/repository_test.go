@@ -40,6 +40,7 @@ func TestConfigValidationRejectsInvalidValues(t *testing.T) {
 	t.Parallel()
 
 	invalidCredential := "Embedded Secret"
+	invalidCommitURLTemplate := "https://git.example.com/team/repository/commit"
 
 	tests := []struct {
 		name      string
@@ -66,6 +67,13 @@ func TestConfigValidationRejectsInvalidValues(t *testing.T) {
 				cfg.CloneURL = "https://token@example.com/repository.git"
 			},
 			wantError: "embedded HTTPS credentials",
+		},
+		{
+			name: "commit URL template without SHA placeholder",
+			configure: func(cfg *Config) {
+				cfg.CommitURLTemplate = &invalidCommitURLTemplate
+			},
+			wantError: "exactly one {sha} placeholder",
 		},
 		{
 			name: "invalid branch",
@@ -97,6 +105,45 @@ func TestConfigValidationRejectsInvalidValues(t *testing.T) {
 			cfg := validRepositoryConfig()
 			test.configure(&cfg)
 			testcheck.ErrorContains(t, cfg.Validate(), test.wantError)
+		})
+	}
+}
+
+func TestCommitURL(t *testing.T) {
+	t.Parallel()
+
+	sha := "0123456789abcdef0123456789abcdef01234567"
+	template := "https://git.internal.example/team/ops/-/commit/{sha}"
+	tests := []struct {
+		name     string
+		config   Config
+		expected string
+	}{
+		{
+			name:     "GitHub HTTPS",
+			config:   Config{CloneURL: "https://github.com/example/ops.git"},
+			expected: "https://github.com/example/ops/commit/" + sha,
+		},
+		{
+			name:     "GitLab SSH",
+			config:   Config{CloneURL: "git@gitlab.com:example/ops.git"},
+			expected: "https://gitlab.com/example/ops/-/commit/" + sha,
+		},
+		{
+			name:     "configured self-hosted provider",
+			config:   Config{CommitURLTemplate: &template},
+			expected: "https://git.internal.example/team/ops/-/commit/" + sha,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			actual := CommitURL(test.config, sha)
+			if actual == nil || *actual != test.expected {
+				t.Errorf("CommitURL() = %v, want %q", actual, test.expected)
+			}
 		})
 	}
 }

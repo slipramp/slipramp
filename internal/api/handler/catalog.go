@@ -13,6 +13,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type CatalogService interface {
@@ -71,14 +72,26 @@ func (h *Handler) ListTargets(
 	if err != nil {
 		return nil, err
 	}
+	keys := make([]repository.CommitKey, 0, len(targets.Items)*2)
+	for _, item := range targets.Items {
+		keys = append(
+			keys,
+			commitKey(item.RepositoryID, item.CatalogCommitSHA),
+			commitKey(item.RepositoryID, item.DesiredCommitSHA),
+		)
+	}
+	commits, err := h.commitResponses(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]api.TargetSummary, 0, len(targets.Items))
 	for _, item := range targets.Items {
 		items = append(items, api.TargetSummary{
 			Actions:           slices.Sorted(maps.Keys(item.Target.Spec.Actions)),
-			CatalogCommitSha:  item.CatalogCommitSHA,
+			CatalogCommit:     commits[commitKey(item.RepositoryID, item.CatalogCommitSHA)],
 			CatalogRevisionID: item.CatalogRevisionID,
-			DesiredCommitSha:  item.DesiredCommitSHA,
+			DesiredCommit:     commits[commitKey(item.RepositoryID, item.DesiredCommitSHA)],
 			Name:              item.Target.Metadata.Name,
 			Placement:         optionalString(item.Target.Spec.Placement),
 			RepositoryID:      item.RepositoryID,
@@ -113,7 +126,16 @@ func (h *Handler) GetRepositoryCatalog(
 		return nil, err
 	}
 
-	body, err := catalogRevisionResponse(revision)
+	keys := []repository.CommitKey{commitKey(request.RepositoryID, revision.CommitSHA)}
+	for _, state := range revision.TargetStates {
+		keys = append(keys, commitKey(request.RepositoryID, state.DesiredCommitSHA))
+	}
+	commits, err := h.commitResponses(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := catalogRevisionResponse(request.RepositoryID, revision, commits)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +143,11 @@ func (h *Handler) GetRepositoryCatalog(
 	return api.GetRepositoryCatalog200JSONResponse(body), nil
 }
 
-func catalogRevisionResponse(revision catalog.Revision) (api.CatalogRevision, error) {
+func catalogRevisionResponse(
+	repositoryID uuid.UUID,
+	revision catalog.Revision,
+	commits map[repository.CommitKey]api.GitCommit,
+) (api.CatalogRevision, error) {
 	runtimes := make([]api.Runtime, 0, len(revision.Catalog.Runtimes))
 	for _, runtime := range revision.Catalog.Runtimes {
 		runtimes = append(runtimes, catalogRuntimeResponse(runtime))
@@ -129,7 +155,12 @@ func catalogRevisionResponse(revision catalog.Revision) (api.CatalogRevision, er
 
 	targets := make([]api.Target, 0, len(revision.Catalog.Targets))
 	for _, target := range revision.Catalog.Targets {
-		converted, err := catalogTargetResponse(target, revision.TargetStates[target.Metadata.Name])
+		converted, err := catalogTargetResponse(
+			target,
+			revision.TargetStates[target.Metadata.Name],
+			commits,
+			repositoryID,
+		)
 		if err != nil {
 			return api.CatalogRevision{}, err
 		}
@@ -138,7 +169,7 @@ func catalogRevisionResponse(revision catalog.Revision) (api.CatalogRevision, er
 
 	return api.CatalogRevision{
 		ID:        revision.ID,
-		CommitSha: revision.CommitSHA,
+		Commit:    commits[commitKey(repositoryID, revision.CommitSHA)],
 		CreatedAt: revision.CreatedAt,
 		Runtimes:  runtimes,
 		Targets:   targets,
@@ -196,7 +227,12 @@ func catalogCredentialInjectionResponse(injection catalog.CredentialInjection) a
 	}
 }
 
-func catalogTargetResponse(target catalog.Target, state catalog.TargetState) (api.Target, error) {
+func catalogTargetResponse(
+	target catalog.Target,
+	state catalog.TargetState,
+	commits map[repository.CommitKey]api.GitCommit,
+	repositoryID uuid.UUID,
+) (api.Target, error) {
 	actions, err := catalogActionsResponse(target.Spec.Actions)
 	if err != nil {
 		return api.Target{}, err
@@ -218,7 +254,7 @@ func catalogTargetResponse(target catalog.Target, state catalog.TargetState) (ap
 		},
 		Source: catalogSourceResponse(target.Source),
 		Status: api.TargetStatus{
-			DesiredCommitSha: state.DesiredCommitSHA,
+			DesiredCommit: commits[commitKey(repositoryID, state.DesiredCommitSHA)],
 		},
 	}, nil
 }

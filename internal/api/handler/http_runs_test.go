@@ -325,7 +325,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		"/api/v1/runs?repositoryId="+repositoryID.String()+"&target=network&limit=12",
+		"/api/v1/runs?repositoryId="+repositoryID.String()+"&target=network&cluster=colo&limit=12&offset=4",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -338,7 +338,9 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	if runs.listFilter.RepositoryID == nil ||
 		*runs.listFilter.RepositoryID != repositoryID ||
 		runs.listFilter.TargetName != "network" ||
-		runs.listFilter.Limit != 12 {
+		runs.listFilter.ClusterName != "colo" ||
+		runs.listFilter.Limit != 12 ||
+		runs.listFilter.Offset != 4 {
 		t.Errorf("list filter = %#v", runs.listFilter)
 	}
 
@@ -348,6 +350,9 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	}
 	if len(result.Items) != 2 || result.Items[0].ID != newestID || result.Items[1].ID != olderID {
 		t.Fatalf("Run list = %#v", result.Items)
+	}
+	if result.Limit != 12 || result.Offset != 4 || result.Total != 2 {
+		t.Errorf("Run list page = limit %d, offset %d, total %d", result.Limit, result.Offset, result.Total)
 	}
 	if result.Items[0].ObservationState == nil ||
 		*result.Items[0].ObservationState != api.RunObservationStateCurrent {
@@ -363,6 +368,25 @@ func TestListRunsRejectsInvalidLimit(t *testing.T) {
 	t.Parallel()
 
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs?limit=101", nil)
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(
+		&recordingClusterService{},
+		nil,
+		nil,
+		nil,
+		&recordingRunService{},
+		nil,
+		nil,
+	).ServeHTTP(response, request)
+
+	assertProblem(t, response, http.StatusBadRequest)
+}
+
+func TestListRunsRejectsNegativeOffset(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs?offset=-1", nil)
 	response := httptest.NewRecorder()
 
 	newAdminTestHandler(
@@ -528,15 +552,15 @@ type recordingRunService struct {
 	nextCancel      run.Run
 	nextCancelError error
 	nextCancelCalls int
-	listFilter      run.ListFilter
+	listFilter      run.RunListFilter
 	listed          []run.Run
 	listError       error
 }
 
-func (s *recordingRunService) ListRuns(_ context.Context, filter run.ListFilter) ([]run.Run, error) {
+func (s *recordingRunService) ListRuns(_ context.Context, filter run.RunListFilter) (run.RunList, error) {
 	s.listFilter = filter
 
-	return s.listed, s.listError
+	return run.RunList{Items: s.listed, Total: int64(len(s.listed))}, s.listError
 }
 
 func (s *recordingRunService) GetRun(_ context.Context, _ uuid.UUID) (run.Run, error) {

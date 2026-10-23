@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -19,19 +20,50 @@ type RepositoryService interface {
 
 func (h *Handler) ListRepositories(
 	ctx context.Context,
-	_ api.ListRepositoriesRequestObject,
+	request api.ListRepositoriesRequestObject,
 ) (api.ListRepositoriesResponseObject, error) {
+	limit, offset, windowErr := listWindow(request.Params.Limit, request.Params.Offset)
+	if windowErr != nil {
+		return api.ListRepositories400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, windowErr.Error()),
+		), nil
+	}
 	repositories, err := h.repositories.ListRepositories(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	items := make([]api.Repository, 0, len(repositories))
+	query := ""
+	if request.Params.Q != nil {
+		query = strings.ToLower(strings.TrimSpace(*request.Params.Q))
+	}
+	filtered := repositories[:0]
 	for _, item := range repositories {
-		items = append(items, repositoryResponse(item))
+		searchable := strings.ToLower(strings.Join([]string{item.Name, item.CloneURL, item.Branch}, "\n"))
+		if query == "" || strings.Contains(searchable, query) {
+			filtered = append(filtered, item)
+		}
+	}
+	total := len(filtered)
+	filtered = listPage(filtered, offset, limit)
+
+	keys := make([]repository.CommitKey, 0, len(filtered))
+	for _, item := range filtered {
+		if item.Refresh.CommitSHA != nil {
+			keys = append(keys, commitKey(item.ID, *item.Refresh.CommitSHA))
+		}
+	}
+	commits, err := h.commitResponses(ctx, keys)
+	if err != nil {
+		return nil, err
 	}
 
-	return api.ListRepositories200JSONResponse{Items: items}, nil
+	items := make([]api.Repository, 0, len(filtered))
+	for _, item := range filtered {
+		items = append(items, repositoryResponse(item, repositoryRefreshCommit(item, commits)))
+	}
+
+	return api.ListRepositories200JSONResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 func (h *Handler) CreateRepository(
@@ -42,6 +74,7 @@ func (h *Handler) CreateRepository(
 		Name:                   request.Body.Name,
 		CloneURL:               request.Body.CloneURL,
 		Branch:                 request.Body.Branch,
+		CommitURLTemplate:      request.Body.CommitURLTemplate,
 		RefreshCredentialName:  request.Body.RefreshCredentialName,
 		CheckoutCredentialName: request.Body.CheckoutCredentialName,
 	}
@@ -65,7 +98,7 @@ func (h *Handler) CreateRepository(
 	location := "/api/v1/repositories/" + created.ID.String()
 
 	return api.CreateRepository201JSONResponse{
-		Body: repositoryResponse(created),
+		Body: repositoryResponse(created, nil),
 		Headers: api.CreateRepository201ResponseHeaders{
 			Location: &location,
 		},
@@ -90,21 +123,35 @@ func (h *Handler) RemoveRepository(
 	return api.RemoveRepository204Response{}, nil
 }
 
-func repositoryResponse(item repository.Repository) api.Repository {
+func repositoryResponse(item repository.Repository, commit *api.GitCommit) api.Repository {
 	return api.Repository{
 		ID:                     item.ID,
 		Name:                   item.Name,
 		CloneURL:               item.CloneURL,
 		Branch:                 item.Branch,
+		CommitURLTemplate:      item.CommitURLTemplate,
 		RefreshCredentialName:  item.RefreshCredentialName,
 		CheckoutCredentialName: item.CheckoutCredentialName,
 		CreatedAt:              item.CreatedAt,
 		Refresh: api.RepositoryRefresh{
 			Status:        api.RepositoryRefreshStatus(item.Refresh.Status),
-			CommitSha:     item.Refresh.CommitSHA,
+			Commit:        commit,
 			AttemptedAt:   item.Refresh.AttemptedAt,
 			SucceededAt:   item.Refresh.SucceededAt,
 			FailureReason: item.Refresh.FailureReason,
 		},
 	}
+}
+
+func repositoryRefreshCommit(
+	item repository.Repository,
+	commits map[repository.CommitKey]api.GitCommit,
+) *api.GitCommit {
+	if item.Refresh.CommitSHA == nil {
+		return nil
+	}
+
+	commit := commits[commitKey(item.ID, *item.Refresh.CommitSHA)]
+
+	return &commit
 }

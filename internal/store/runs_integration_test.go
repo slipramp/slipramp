@@ -49,7 +49,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		Phase:             run.PhaseQueued,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
-		CommitSHA:         *refresh.CommitSHA,
+		CommitSHA:         refresh.Commit.SHA,
 		TargetName:        "network",
 		ActionName:        "preview",
 		Parameters:        map[string]any{"refresh": true},
@@ -115,35 +115,45 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Fatalf("create second Run: %v", err)
 	}
 
-	listed, err := database.ListRuns(ctx, run.ListFilter{Limit: 10})
+	listed, err := database.ListRuns(ctx, run.RunListFilter{Limit: 10})
 	if err != nil {
 		t.Fatalf("ListRuns() error = %v", err)
 	}
-	if len(listed) != 2 || listed[0].ID != second.ID || listed[1].ID != record.ID {
+	if len(listed.Items) != 2 || listed.Items[0].ID != second.ID || listed.Items[1].ID != record.ID ||
+		listed.Total != 2 {
 		t.Errorf("ListRuns() = %#v, want second then first", listed)
 	}
 
 	repositoryFilter := repositoryID
 	listed, err = database.ListRuns(
 		ctx,
-		run.ListFilter{
+		run.RunListFilter{
 			RepositoryID: &repositoryFilter,
 			TargetName:   "network",
 			Limit:        1,
+			Offset:       1,
 		},
 	)
 	if err != nil {
 		t.Fatalf("filtered ListRuns() error = %v", err)
 	}
-	if len(listed) != 1 || listed[0].ID != second.ID {
-		t.Errorf("filtered ListRuns() = %#v, want second", listed)
+	if len(listed.Items) != 1 || listed.Items[0].ID != record.ID || listed.Total != 2 {
+		t.Errorf("filtered ListRuns() = %#v, want first Run on second page", listed)
 	}
 
-	listed, err = database.ListRuns(ctx, run.ListFilter{TargetName: "missing", Limit: 10})
+	listed, err = database.ListRuns(ctx, run.RunListFilter{ClusterName: "other", Limit: 10})
+	if err != nil {
+		t.Fatalf("cluster-filtered ListRuns() error = %v", err)
+	}
+	if len(listed.Items) != 0 || listed.Total != 0 {
+		t.Errorf("cluster-filtered ListRuns() = %#v, want no Runs", listed)
+	}
+
+	listed, err = database.ListRuns(ctx, run.RunListFilter{TargetName: "missing", Limit: 10})
 	if err != nil {
 		t.Fatalf("empty ListRuns() error = %v", err)
 	}
-	if len(listed) != 0 {
+	if len(listed.Items) != 0 || listed.Total != 0 {
 		t.Errorf("empty ListRuns() = %#v, want no Runs", listed)
 	}
 
@@ -463,7 +473,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 		Phase:             run.PhaseQueued,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
-		CommitSHA:         *refresh.CommitSHA,
+		CommitSHA:         refresh.Commit.SHA,
 		TargetName:        "network",
 		ActionName:        "preview",
 		Parameters:        map[string]any{},

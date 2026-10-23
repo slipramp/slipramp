@@ -57,6 +57,11 @@ func (h *Handler) ListPromotionPipelines(
 				Freight:               freight,
 				PendingPromotionCount: pipelineStage.PendingPromotionCount,
 				LastObservedAt:        pipelineStage.Stage.LastObservedAt,
+				KargoURL: h.kargoIntegrations.KargoStageURL(
+					pipeline.Integration,
+					pipeline.Project,
+					pipelineStage.Stage.Name,
+				),
 			})
 		}
 		items = append(items, api.PromotionPipeline{

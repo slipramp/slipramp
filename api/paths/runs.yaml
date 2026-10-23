@@ -3,8 +3,8 @@ runs:
     operationId: listRuns
     summary: List recent Runs
     description: >-
-      Lists the most recent Runs in descending creation order. Repository and
-      target filters expose history at both catalog levels.
+      Lists Runs in descending creation order with offset pagination.
+      Repository, target, and cluster filters scope execution history.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -26,6 +26,12 @@ runs:
           Requires repositoryId.
         schema:
           $ref: ../components/runs.yaml#/CatalogName
+      - name: cluster
+        in: query
+        required: false
+        description: Limit results to Runs assigned to one execution cluster.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
       - name: limit
         in: query
         required: false
@@ -35,6 +41,15 @@ runs:
           minimum: 1
           maximum: 100
           default: 50
+      - name: offset
+        in: query
+        required: false
+        description: Zero-based offset into the matching Runs.
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
     responses:
       "200":
         description: Recent Runs matching the requested filters.
@@ -43,7 +58,7 @@ runs:
             schema:
               $ref: ../components/runs.yaml#/RunList
       "400":
-        description: A filter or limit is invalid.
+        description: A filter or pagination value is invalid.
         content:
           application/problem+json:
             schema:

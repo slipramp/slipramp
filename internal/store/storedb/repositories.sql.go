@@ -17,6 +17,7 @@ INSERT INTO repositories (
     name,
     clone_url,
     branch,
+    commit_url_template,
     refresh_credential_name,
     checkout_credential_name,
     created_at
@@ -27,13 +28,15 @@ INSERT INTO repositories (
     $4,
     $5,
     $6,
-    $7
+    $7,
+    $8
 )
 RETURNING
     id,
     name,
     clone_url,
     branch,
+    commit_url_template,
     refresh_credential_name,
     checkout_credential_name,
     created_at,
@@ -49,6 +52,7 @@ type CreateRepositoryParams struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
 	CreatedAt              pgtype.Timestamptz
@@ -59,6 +63,7 @@ type CreateRepositoryRow struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
 	CreatedAt              pgtype.Timestamptz
@@ -75,6 +80,7 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 		arg.Name,
 		arg.CloneUrl,
 		arg.Branch,
+		arg.CommitUrlTemplate,
 		arg.RefreshCredentialName,
 		arg.CheckoutCredentialName,
 		arg.CreatedAt,
@@ -85,6 +91,7 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 		&i.Name,
 		&i.CloneUrl,
 		&i.Branch,
+		&i.CommitUrlTemplate,
 		&i.RefreshCredentialName,
 		&i.CheckoutCredentialName,
 		&i.CreatedAt,
@@ -103,6 +110,7 @@ SELECT
     repositories.name,
     repositories.clone_url,
     repositories.branch,
+    repositories.commit_url_template,
     repositories.refresh_credential_name,
     repositories.checkout_credential_name,
     repositories.created_at,
@@ -124,6 +132,7 @@ type GetActiveRepositoryRow struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
 	CreatedAt              pgtype.Timestamptz
@@ -143,6 +152,7 @@ func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetA
 		&i.Name,
 		&i.CloneUrl,
 		&i.Branch,
+		&i.CommitUrlTemplate,
 		&i.RefreshCredentialName,
 		&i.CheckoutCredentialName,
 		&i.CreatedAt,
@@ -162,6 +172,7 @@ SELECT
     repositories.name,
     repositories.clone_url,
     repositories.branch,
+    repositories.commit_url_template,
     repositories.refresh_credential_name,
     repositories.checkout_credential_name,
     repositories.created_at,
@@ -183,6 +194,7 @@ type ListRepositoriesRow struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
 	CreatedAt              pgtype.Timestamptz
@@ -208,6 +220,7 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 			&i.Name,
 			&i.CloneUrl,
 			&i.Branch,
+			&i.CommitUrlTemplate,
 			&i.RefreshCredentialName,
 			&i.CheckoutCredentialName,
 			&i.CreatedAt,

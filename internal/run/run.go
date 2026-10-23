@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	DefaultListLimit = 50
-	MaximumListLimit = 100
+	DefaultRunListLimit  = 50
+	MaximumRunListLimit  = 100
+	MaximumRunListOffset = 2_147_483_647
 
 	PhaseQueued    Phase = "queued"
 	PhaseAssigned  Phase = "assigned"
@@ -105,10 +106,17 @@ type CancelRequest struct {
 	Actor *productidentity.Principal
 }
 
-type ListFilter struct {
+type RunListFilter struct {
 	RepositoryID *uuid.UUID
 	TargetName   string
+	ClusterName  string
 	Limit        int32
+	Offset       int32
+}
+
+type RunList struct {
+	Items []Run
+	Total int64
 }
 
 type Observation struct {

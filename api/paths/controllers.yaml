@@ -11,6 +11,31 @@ clusters:
       - ProductBearer: []
     tags:
       - Controllers
+    parameters:
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+      - name: connection
+        in: query
+        schema:
+          type: string
+          enum: [connected, unreachable]
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
     responses:
       "200":
         description: Execution clusters ordered by name.
@@ -26,6 +51,12 @@ clusters:
               $ref: ../components/common.yaml#/Problem
       "403":
         description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "400":
+        description: The list window is invalid.
         content:
           application/problem+json:
             schema:

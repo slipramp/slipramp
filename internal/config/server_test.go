@@ -63,7 +63,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		serverOIDCSubjectRolesEnvironment:             `{"admin-subject":"admin","operator-subject":"operator"}`,
 		serverProductSessionLifetimeEnvironment:       "8h",
 		serverKargoIntegrationsEnvironment: `{"prod":{"cluster":"colo","repositories":["kcloud-ops"],` +
-			`"environmentOrder":["homelab","prod"],` +
+			`"uiUrl":"https://kargo.example.com","environmentOrder":["homelab","prod"],` +
 			`"preparation":{"repository":"kcloud-ops","target":"kargo-promotions",` +
 			`"action":"prepare-review"},"maximumStageObservationAge":"5m",` +
 			`"pendingReviewRetention":"192h"}}`,
@@ -162,7 +162,8 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		t.Errorf("ProductAuthentication.SessionLifetime = %s, want 8h", cfg.ProductAuthentication.SessionLifetime)
 	}
 	integration, ok := cfg.KargoIntegrations.Lookup("prod")
-	if !ok || integration.ClusterName != "colo" || integration.PendingReviewRetention != 192*time.Hour ||
+	if !ok || integration.ClusterName != "colo" || integration.UIURL != "https://kargo.example.com" ||
+		integration.PendingReviewRetention != 192*time.Hour ||
 		len(integration.EnvironmentOrder) != 2 || integration.EnvironmentOrder[0] != "homelab" {
 		t.Errorf("KargoIntegrations[prod] = %#v, %t", integration, ok)
 	}

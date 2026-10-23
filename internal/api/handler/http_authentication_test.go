@@ -468,6 +468,19 @@ func (s *recordingProductAuthenticationService) ListServiceAccounts(
 	return s.serviceAccounts, nil
 }
 
+func (s *recordingProductAuthenticationService) GetServiceAccount(
+	_ context.Context,
+	principalID uuid.UUID,
+) (productidentity.Principal, error) {
+	for _, principal := range s.serviceAccounts {
+		if principal.ID == principalID {
+			return principal, nil
+		}
+	}
+
+	return productidentity.Principal{}, productidentity.ErrPrincipalNotFound
+}
+
 func (s *recordingProductAuthenticationService) CreateServiceAccount(
 	_ context.Context,
 	displayName string,

@@ -38,6 +38,7 @@ type Config struct {
 	Name                   string
 	CloneURL               string
 	Branch                 string
+	CommitURLTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
 }
@@ -53,6 +54,9 @@ func (c Config) Validate() error {
 
 	if err := validateBranch(c.Branch); err != nil {
 		return fmt.Errorf("branch: %w", err)
+	}
+	if err := validateCommitURLTemplate(c.CommitURLTemplate); err != nil {
+		return fmt.Errorf("commit URL template: %w", err)
 	}
 
 	if err := validateCredential("refresh credential name", c.RefreshCredentialName); err != nil {

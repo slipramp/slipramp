@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 )
 
 type BranchComparisonRequest struct {
@@ -19,11 +20,13 @@ type BranchComparisonRequest struct {
 }
 
 type BranchComparison struct {
-	SourceBranchCommit string
-	TargetBranchCommit string
-	SourceDrift        bool
-	TargetDrift        bool
-	Error              string
+	AcknowledgedTargetAuthoredAt *time.Time
+	SourceBranchCommit           string
+	SourceBranchAuthoredAt       *time.Time
+	TargetBranchCommit           string
+	SourceDrift                  bool
+	TargetDrift                  bool
+	Error                        string
 }
 
 type BranchScanner interface {
@@ -134,6 +137,22 @@ func (s *GitBranchScanner) ScanBranches(
 	if fetchedSource != sourceCommit {
 		return nil, errors.New("source branch changed while branch drift was scanned")
 	}
+	authoredAtCache := make(map[string]*time.Time)
+	commitAuthoredAt := func(commit string) *time.Time {
+		if value, ok := authoredAtCache[commit]; ok {
+			return value
+		}
+		metadata, metadataErr := readCommitMetadata(ctx, environment, repositoryPath, commit)
+		if metadataErr != nil {
+			authoredAtCache[commit] = nil
+
+			return nil
+		}
+		value := metadata.authoredAt
+		authoredAtCache[commit] = &value
+
+		return &value
+	}
 
 	for index, request := range requests {
 		if comparisons[index].Error != "" {
@@ -186,10 +205,12 @@ func (s *GitBranchScanner) ScanBranches(
 		}
 
 		comparisons[index] = BranchComparison{
-			SourceBranchCommit: sourceCommit,
-			TargetBranchCommit: targetCommit,
-			SourceDrift:        diffStatus == 1,
-			TargetDrift:        targetCommit != request.AcknowledgedTargetCommit,
+			AcknowledgedTargetAuthoredAt: commitAuthoredAt(request.AcknowledgedTargetCommit),
+			SourceBranchCommit:           sourceCommit,
+			SourceBranchAuthoredAt:       commitAuthoredAt(sourceCommit),
+			TargetBranchCommit:           targetCommit,
+			SourceDrift:                  diffStatus == 1,
+			TargetDrift:                  targetCommit != request.AcknowledgedTargetCommit,
 		}
 	}
 

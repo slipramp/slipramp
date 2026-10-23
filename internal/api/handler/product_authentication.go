@@ -22,6 +22,7 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"CreateAPIKey":               productidentity.PermissionRead,
 	"RevokeAPIKey":               productidentity.PermissionAPIKeyRevoke,
 	"ListServiceAccounts":        productidentity.PermissionAdmin,
+	"GetServiceAccount":          productidentity.PermissionAdmin,
 	"CreateServiceAccount":       productidentity.PermissionAdmin,
 	"ListServiceAccountAPIKeys":  productidentity.PermissionAdmin,
 	"CreateServiceAccountAPIKey": productidentity.PermissionAdmin,

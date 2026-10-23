@@ -1,38 +1,37 @@
 import {
   Accordion,
   Alert,
-  Anchor,
   Badge,
   Button,
   Code,
   Divider,
   Group,
-  NativeSelect,
-  NumberInput,
   Paper,
   SimpleGrid,
   Stack,
   Table,
   Text,
-  TextInput,
   Title,
 } from "@mantine/core";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { IconPlayerPlay } from "@tabler/icons-react";
+import { Link } from "react-router";
 
+import { actionRunPath, effectiveAction, parameterDelivery, sortedEntries } from "~/action-run";
 import { createServerAPIClient } from "~/api/client.server";
 import {
-  createRun,
   getRepositoryCatalog,
   listRepositories,
   type Action,
   type ArtifactDeclaration,
   type ArtifactInput,
   type Parameter,
-  type ParameterValue,
-  type ResourceRequirements,
   type Target,
 } from "~/api/generated";
 import { pageTitle } from "~/page-title";
+import { CommitReference } from "~/components/git-commit";
+import { PageBackLink } from "~/components/page-back-link";
+import { PageHeader, SectionHeader } from "~/components/page";
+import { RunHistoryButton } from "~/components/run-history-button";
 
 import type { Route } from "./+types/target";
 
@@ -46,7 +45,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export async function loader({ params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request);
   const [repositoriesResult, catalogResult] = await Promise.all([
-    listRepositories({ client }),
+    listRepositories({ client, query: { limit: 200 } }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
   ]);
   const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
@@ -64,72 +63,26 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ params, request }: Route.ActionArgs) {
-  const formData = await request.formData();
-  const actionName = stringFormValue(formData, "actionName");
-  if (!actionName) {
-    return runFormError("", "The selected action is missing.");
-  }
-
-  const catalogResult = await getRepositoryCatalog({
-    client: createServerAPIClient(request),
-    path: { repositoryId: params.repositoryId },
-  });
-  const target = catalogResult.data?.targets.find(
-    (candidate) => candidate.metadata.name === params.targetName,
-  );
-  const actionDefinition = target?.spec.actions[actionName];
-  if (!target || !actionDefinition) {
-    return runFormError(actionName, "The selected action is no longer available.");
-  }
-
-  if (Object.keys(actionDefinition.inputs ?? {}).length > 0) {
-    return runFormError(
-      actionName,
-      "This action requires artifact inputs and must be started from a compatible producing Run.",
-    );
-  }
-
-  const submission = decodeParameters(formData, actionDefinition.parameters);
-  if (submission.error) {
-    return runFormError(actionName, submission.error, submission.values);
-  }
-
-  const result = await createRun({
-    body: {
-      action: actionName,
-      inputs: {},
-      parameters: submission.parameters,
-      repositoryId: params.repositoryId,
-      target: params.targetName,
-    },
-    client: createServerAPIClient(request),
-  });
-  if (result.data) {
-    return redirect(`/runs/${result.data.id}`);
-  }
-
-  return runFormError(
-    actionName,
-    result.error?.detail ?? result.error?.title ?? "The Run could not be created.",
-    submission.values,
-  );
-}
-
-export default function TargetDetail({ actionData, loaderData }: Route.ComponentProps) {
+export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   if (!loaderData.apiAvailable) {
     return (
-      <Alert color="red" title="API unavailable">
-        The target definition could not be loaded.
-      </Alert>
+      <Stack gap="md">
+        <PageBackLink label="Back to targets" to="/" />
+        <Alert color="red" title="API unavailable">
+          The target definition could not be loaded.
+        </Alert>
+      </Stack>
     );
   }
 
   if (loaderData.repositoryListAvailable && !loaderData.repository) {
     return (
-      <Alert color="red" title="Repository not found">
-        This repository is not in the active repository list.
-      </Alert>
+      <Stack gap="md">
+        <PageBackLink label="Back to targets" to="/" />
+        <Alert color="red" title="Repository not found">
+          This repository is not in the active repository list.
+        </Alert>
+      </Stack>
     );
   }
 
@@ -166,52 +119,49 @@ export default function TargetDetail({ actionData, loaderData }: Route.Component
 
   return (
     <Stack gap="lg">
-      <Stack gap="xs">
-        <RepositoryLink
-          repositoryId={loaderData.repositoryId}
-          repositoryName={loaderData.repository?.name}
-        />
-        <Group align="flex-start" justify="space-between">
-          <Stack gap={2}>
-            <Title order={1}>{target.metadata.title ?? target.metadata.name}</Title>
-            {target.metadata.title ? <Text c="dimmed">{target.metadata.name}</Text> : null}
+      <PageHeader
+        actions={
+          <RunHistoryButton
+            to={`/runs?repositoryId=${loaderData.repositoryId}&target=${encodeURIComponent(target.metadata.name)}`}
+          />
+        }
+        back={
+          <RepositoryLink
+            repositoryId={loaderData.repositoryId}
+            repositoryName={loaderData.repository?.name}
+          />
+        }
+        badges={
+          <Badge variant="outline">
+            {actions.length} action{actions.length === 1 ? "" : "s"}
+          </Badge>
+        }
+        description={target.metadata.title ? target.metadata.name : "Operational target"}
+        details={
+          <Stack gap={0}>
             <Text c="dimmed" size="sm">
               {target.source.path} · document {target.source.document}
             </Text>
-          </Stack>
-          <Stack align="flex-end" gap="xs">
-            <Badge size="lg" variant="outline">
-              {actions.length} actions
-            </Badge>
             <Text c="dimmed" size="xs">
-              Desired <Code>{shortCommit(target.status.desiredCommitSha)}</Code>
+              Desired <CommitReference commit={target.status.desiredCommit} /> · Catalog{" "}
+              <CommitReference commit={loaderData.catalog.commit} />
             </Text>
-            <Text c="dimmed" size="xs">
-              Catalog <Code>{shortCommit(loaderData.catalog.commitSha)}</Code>
-            </Text>
-            <Anchor
-              component={Link}
-              size="sm"
-              to={`/runs?repositoryId=${loaderData.repositoryId}&target=${encodeURIComponent(target.metadata.name)}`}
-            >
-              View Run history
-            </Anchor>
           </Stack>
-        </Group>
-      </Stack>
+        }
+        title={target.metadata.title ?? target.metadata.name}
+      />
 
       <TargetDefaults target={target} />
 
       <Stack gap="md">
-        <Title order={2}>Actions</Title>
-        <Accordion defaultValue={actionData?.actionName} variant="separated">
+        <SectionHeader title="Actions" />
+        <Accordion chevronPosition="left" variant="separated">
           {actions.map(([name, actionDefinition]) => (
             <ActionAccordionItem
               actionDefinition={actionDefinition}
-              error={actionData?.actionName === name ? actionData.error : undefined}
               key={name}
               name={name}
-              submittedValues={actionData?.actionName === name ? actionData.values : undefined}
+              repositoryId={loaderData.repositoryId}
               target={target}
             />
           ))}
@@ -226,9 +176,10 @@ function RepositoryLink({
   repositoryName,
 }: Readonly<{ repositoryId: string; repositoryName?: string }>) {
   return (
-    <Anchor component={Link} size="sm" to={`/repositories/${repositoryId}`}>
-      ← {repositoryName ?? "Repository"}
-    </Anchor>
+    <PageBackLink
+      label={`Back to ${repositoryName ?? "repository"}`}
+      to={`/repositories/${repositoryId}`}
+    />
   );
 }
 
@@ -273,15 +224,13 @@ function TargetDefaults({ target }: Readonly<{ target: Target }>) {
 
 function ActionAccordionItem({
   actionDefinition,
-  error,
   name,
-  submittedValues,
+  repositoryId,
   target,
 }: Readonly<{
   actionDefinition: Action;
-  error?: string;
   name: string;
-  submittedValues?: Record<string, string>;
+  repositoryId: string;
   target: Target;
 }>) {
   const parameterCount = Object.keys(actionDefinition.parameters ?? {}).length;
@@ -289,37 +238,45 @@ function ActionAccordionItem({
   const inputCount = Object.keys(actionDefinition.inputs ?? {}).length;
 
   return (
-    <Accordion.Item value={name}>
-      <Accordion.Control>
-        <Stack gap="xs">
-          <Group justify="space-between">
-            <Group gap="xs">
-              <Text fw={600}>{name}</Text>
-              {actionDefinition.intent ? (
-                <Badge variant="outline">{actionDefinition.intent}</Badge>
-              ) : null}
+    <Accordion.Item id={`action-${name}`} value={name}>
+      <Group align="center" gap="sm" pr="sm" wrap="nowrap">
+        <Accordion.Control style={{ flex: 1 }}>
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Group gap="xs">
+                <Text fw={600}>{name}</Text>
+                {actionDefinition.intent ? (
+                  <Badge variant="outline">{actionDefinition.intent}</Badge>
+                ) : null}
+              </Group>
+              <Group gap="xs">
+                {parameterCount > 0 ? (
+                  <Badge variant="light">{parameterCount} parameters</Badge>
+                ) : null}
+                {artifactCount > 0 ? (
+                  <Badge variant="light">{artifactCount} artifacts</Badge>
+                ) : null}
+                {inputCount > 0 ? <Badge variant="light">{inputCount} inputs</Badge> : null}
+              </Group>
             </Group>
-            <Group gap="xs">
-              {parameterCount > 0 ? (
-                <Badge variant="light">{parameterCount} parameters</Badge>
-              ) : null}
-              {artifactCount > 0 ? <Badge variant="light">{artifactCount} artifacts</Badge> : null}
-              {inputCount > 0 ? <Badge variant="light">{inputCount} inputs</Badge> : null}
-            </Group>
-          </Group>
-          <Text c="dimmed" lineClamp={1} size="sm">
-            {actionDefinition.command.join(" ")}
-          </Text>
-        </Stack>
-      </Accordion.Control>
+            <Text c="dimmed" lineClamp={1} size="sm">
+              {actionDefinition.command.join(" ")}
+            </Text>
+          </Stack>
+        </Accordion.Control>
+        <Button
+          component={Link}
+          leftSection={<IconPlayerPlay aria-hidden size={15} />}
+          size="xs"
+          style={{ flexShrink: 0 }}
+          to={actionRunPath(repositoryId, target.metadata.name, name)}
+          variant="light"
+        >
+          Run
+        </Button>
+      </Group>
       <Accordion.Panel>
-        <ActionDetail
-          actionDefinition={actionDefinition}
-          error={error}
-          name={name}
-          submittedValues={submittedValues}
-          target={target}
-        />
+        <ActionDetail actionDefinition={actionDefinition} target={target} />
       </Accordion.Panel>
     </Accordion.Item>
   );
@@ -327,18 +284,12 @@ function ActionAccordionItem({
 
 function ActionDetail({
   actionDefinition,
-  error,
-  name,
-  submittedValues,
   target,
 }: Readonly<{
   actionDefinition: Action;
-  error?: string;
-  name: string;
-  submittedValues?: Record<string, string>;
   target: Target;
 }>) {
-  const effective = resolveAction(target, actionDefinition);
+  const effective = effectiveAction(target, actionDefinition);
   const parameters = sortedEntries(actionDefinition.parameters);
   const artifacts = sortedEntries(actionDefinition.artifacts);
   const inputs = sortedEntries(actionDefinition.inputs);
@@ -380,12 +331,11 @@ function ActionDetail({
         requests={sortedEntries(effective.resources.requests)}
       />
 
-      <ActionRunForm
-        actionDefinition={actionDefinition}
-        error={error}
-        name={name}
-        submittedValues={submittedValues}
-      />
+      {inputs.length > 0 ? (
+        <Alert color="blue" title="Artifact input required">
+          Start this action from a compatible artifact on its producing Run.
+        </Alert>
+      ) : null}
 
       <Divider />
       <DefinitionTable
@@ -410,113 +360,6 @@ function ActionDetail({
       />
     </Stack>
   );
-}
-
-function ActionRunForm({
-  actionDefinition,
-  error,
-  name,
-  submittedValues,
-}: Readonly<{
-  actionDefinition: Action;
-  error?: string;
-  name: string;
-  submittedValues?: Record<string, string>;
-}>) {
-  const navigation = useNavigation();
-  const inputs = sortedEntries(actionDefinition.inputs);
-  const parameters = sortedEntries(actionDefinition.parameters);
-  const isSubmitting =
-    navigation.state === "submitting" && navigation.formData?.get("actionName") === name;
-
-  if (inputs.length > 0) {
-    return (
-      <Alert color="blue" title="Artifact input required">
-        Start this action from a compatible artifact on its producing Run.
-      </Alert>
-    );
-  }
-
-  return (
-    <Paper p="md" withBorder>
-      <Form method="post">
-        <Stack gap="md">
-          <Stack gap={2}>
-            <Title order={4}>Run action</Title>
-            <Text c="dimmed" size="sm">
-              Create a Run from the active catalog revision and its exact Git commit.
-            </Text>
-          </Stack>
-
-          {error ? (
-            <Alert color="red" title="Run not created">
-              {error}
-            </Alert>
-          ) : null}
-
-          <input name="actionName" type="hidden" value={name} />
-          {parameters.length === 0 ? (
-            <Text c="dimmed" size="sm">
-              This action has no parameters.
-            </Text>
-          ) : (
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              {parameters.map(([parameterName, parameter]) => (
-                <ParameterControl
-                  key={parameterName}
-                  name={parameterName}
-                  parameter={parameter}
-                  submittedValue={submittedValues?.[parameterName]}
-                />
-              ))}
-            </SimpleGrid>
-          )}
-
-          <Group justify="flex-end">
-            <Button loading={isSubmitting} type="submit">
-              Run {name}
-            </Button>
-          </Group>
-        </Stack>
-      </Form>
-    </Paper>
-  );
-}
-
-function ParameterControl({
-  name,
-  parameter,
-  submittedValue,
-}: Readonly<{ name: string; parameter: Parameter; submittedValue?: string }>) {
-  const common = {
-    description: parameter.required ? "Required" : "Optional",
-    label: name,
-    name: parameterFieldName(name),
-    required: parameter.required,
-  };
-
-  switch (parameter.type) {
-    case "boolean":
-      return (
-        <NativeSelect
-          {...common}
-          data={selectOptions(parameter.required, ["true", "false"])}
-          defaultValue={submittedValue ?? ""}
-        />
-      );
-    case "enum":
-      return (
-        <NativeSelect
-          {...common}
-          data={selectOptions(parameter.required, parameter.values ?? [])}
-          defaultValue={submittedValue ?? ""}
-        />
-      );
-    case "number":
-      return <NumberInput {...common} defaultValue={submittedValue ?? ""} />;
-    case "string":
-      return <TextInput {...common} defaultValue={submittedValue ?? ""} />;
-  }
 }
 
 function DefinitionValue({ label, value }: Readonly<{ label: string; value: string }>) {
@@ -612,7 +455,7 @@ function DefinitionTable({
           {empty}
         </Text>
       ) : (
-        <Table.ScrollContainer minWidth={640}>
+        <Table.ScrollContainer minWidth={640} type="native">
           <Table verticalSpacing="xs">
             <Table.Thead>
               <Table.Tr>
@@ -637,44 +480,12 @@ function DefinitionTable({
   );
 }
 
-function resolveAction(target: Target, actionDefinition: Action) {
-  return {
-    credentials: {
-      ...target.spec.credentials,
-      ...actionDefinition.credentials,
-    },
-    placement: actionDefinition.placement ?? target.spec.placement,
-    resources: {
-      limits: {
-        ...target.spec.resources?.limits,
-        ...actionDefinition.resources?.limits,
-      },
-      requests: {
-        ...target.spec.resources?.requests,
-        ...actionDefinition.resources?.requests,
-      },
-    } satisfies ResourceRequirements,
-    runtime: actionDefinition.runtime ?? target.spec.runtime,
-    timeout: actionDefinition.timeout ?? target.spec.timeout,
-  };
-}
-
 function parameterRow(name: string, parameter: Parameter) {
-  let delivery = "Not mapped";
-
-  if (parameter.environment) {
-    delivery = `Environment ${parameter.environment}`;
-  } else if (parameter.argument) {
-    delivery = parameter.argument.name
-      ? `Argument ${parameter.argument.name}`
-      : "Positional argument";
-  }
-
   return [
     name,
     parameter.type,
     parameter.required ? "Yes" : "No",
-    delivery,
+    parameterDelivery(parameter),
     parameter.values?.join(", ") ?? "—",
   ];
 }
@@ -695,98 +506,4 @@ function inputRow(name: string, input: ArtifactInput) {
     input.mountPath,
     input.artifact.compatibility ?? "exact-catalog-revision",
   ];
-}
-
-function decodeParameters(formData: FormData, declarations: Record<string, Parameter> | undefined) {
-  const parameters: Record<string, ParameterValue> = {};
-  const values: Record<string, string> = {};
-
-  for (const [name, declaration] of sortedEntries(declarations)) {
-    const value = stringFormValue(formData, parameterFieldName(name));
-    values[name] = value;
-
-    if (value === "") {
-      if (declaration.required) {
-        return {
-          error: `Parameter “${name}” is required.`,
-          parameters,
-          values,
-        };
-      }
-
-      continue;
-    }
-
-    switch (declaration.type) {
-      case "boolean":
-        if (value !== "true" && value !== "false") {
-          return {
-            error: `Parameter “${name}” must be true or false.`,
-            parameters,
-            values,
-          };
-        }
-        parameters[name] = value === "true";
-        break;
-      case "enum":
-        if (!declaration.values?.includes(value)) {
-          return {
-            error: `Parameter “${name}” must be one of its allowed values.`,
-            parameters,
-            values,
-          };
-        }
-        parameters[name] = value;
-        break;
-      case "number": {
-        const number = Number(value);
-        if (!Number.isFinite(number)) {
-          return {
-            error: `Parameter “${name}” must be a number.`,
-            parameters,
-            values,
-          };
-        }
-        parameters[name] = number;
-        break;
-      }
-      case "string":
-        parameters[name] = value;
-        break;
-    }
-  }
-
-  return { error: undefined, parameters, values };
-}
-
-function runFormError(actionName: string, error: string, values: Record<string, string> = {}) {
-  return { actionName, error, values };
-}
-
-function parameterFieldName(name: string) {
-  return `parameter:${name}`;
-}
-
-function selectOptions(required: boolean | undefined, values: string[]) {
-  return [
-    {
-      disabled: required,
-      label: required ? "Select a value" : "Not set",
-      value: "",
-    },
-    ...values.map((value) => ({ label: value, value })),
-  ];
-}
-
-function stringFormValue(formData: FormData, name: string) {
-  const value = formData.get(name);
-  return typeof value === "string" ? value : "";
-}
-
-function sortedEntries<T>(values: Record<string, T> | undefined) {
-  return Object.entries(values ?? {}).toSorted(([left], [right]) => left.localeCompare(right));
-}
-
-function shortCommit(commit: string) {
-  return commit.slice(0, 12);
 }

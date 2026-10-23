@@ -22,6 +22,7 @@ type StageListFilter struct {
 	Integration string
 	Cluster     string
 	Project     string
+	Application string
 	Archived    *bool
 	Limit       int
 	Offset      int
@@ -32,6 +33,7 @@ type PromotionListFilter struct {
 	Integration string
 	Cluster     string
 	Project     string
+	Application string
 	StageID     *uuid.UUID
 	Limit       int
 	Offset      int
@@ -234,6 +236,15 @@ func (s *ReviewService) ListPromotions(
 		items = append(items, PromotionReview{Promotion: record})
 	}
 	slices.SortFunc(items, func(left, right PromotionReview) int {
+		leftPending := left.Promotion.Status == StatusPending
+		rightPending := right.Promotion.Status == StatusPending
+		if leftPending != rightPending {
+			if leftPending {
+				return -1
+			}
+
+			return 1
+		}
 		if value := right.Promotion.CreatedAt.Compare(left.Promotion.CreatedAt); value != 0 {
 			return value
 		}
@@ -352,6 +363,9 @@ func stageMatchesFilter(stage Stage, filter StageListFilter) bool {
 	if filter.Project != "" && stage.Project != filter.Project {
 		return false
 	}
+	if filter.Application != "" && stage.Application != filter.Application {
+		return false
+	}
 	if filter.Archived != nil && (stage.ArchivedAt != nil) != *filter.Archived {
 		return false
 	}
@@ -369,7 +383,7 @@ func promotionMatchesFilter(record Promotion, filter PromotionListFilter) (bool,
 	if filter.StageID != nil && record.StageID != *filter.StageID {
 		return false, nil
 	}
-	if filter.Cluster == "" && filter.Project == "" {
+	if filter.Cluster == "" && filter.Project == "" && filter.Application == "" {
 		return true, nil
 	}
 
@@ -381,6 +395,9 @@ func promotionMatchesFilter(record Promotion, filter PromotionListFilter) (bool,
 		return false, nil
 	}
 	if filter.Project != "" && snapshot.Project != filter.Project {
+		return false, nil
+	}
+	if filter.Application != "" && snapshot.Application != filter.Application {
 		return false, nil
 	}
 

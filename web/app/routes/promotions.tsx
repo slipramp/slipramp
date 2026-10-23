@@ -2,27 +2,32 @@ import {
   Alert,
   Anchor,
   Badge,
-  Button,
-  Code,
   Group,
   NativeSelect,
   Paper,
-  SimpleGrid,
   Stack,
   Table,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
-import { Form, Link } from "react-router";
+import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { listPromotions, type Promotion, type PromotionStatus } from "~/api/generated";
+import { RelativeTime } from "~/components/display";
+import { CommitReference } from "~/components/git-commit";
+import { Identity } from "~/components/identity";
+import { KargoLink } from "~/components/kargo-link";
+import { ListPagination, SearchParamFilters } from "~/components/list-controls";
+import { PageHeader } from "~/components/page";
+import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
+import { abbreviateMiddle } from "~/display";
 import { pageTitle } from "~/page-title";
+import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/promotions";
 
-const promotionLimit = 100;
+const pageSize = 25;
 
 export function meta() {
   return [{ title: pageTitle("Promotions") }];
@@ -30,58 +35,51 @@ export function meta() {
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
-  const status = optionalStatus(url.searchParams.get("status"));
   const integration = optionalValue(url.searchParams.get("integration"));
   const project = optionalValue(url.searchParams.get("project"));
+  const application = optionalValue(url.searchParams.get("application"));
+  const status = optionalStatus(url.searchParams.get("status"));
   const stageId = optionalValue(url.searchParams.get("stageId"));
+  const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request);
-  const query = { integration, limit: promotionLimit, project, stageId, status };
-  const [result, pendingResult] = await Promise.all([
-    listPromotions({ client, query }),
-    status
-      ? Promise.resolve(undefined)
-      : listPromotions({ client, query: { ...query, status: "pending" } }),
-  ]);
-  const promotions = pendingResult?.data
-    ? [
-        ...pendingResult.data.items,
-        ...(result.data?.items.filter((promotion) => promotion.status !== "pending") ?? []),
-      ]
-    : (result.data?.items ?? []);
+  const result = await listPromotions({
+    client,
+    query: {
+      application,
+      integration,
+      limit: pageSize,
+      offset: (requestedPage - 1) * pageSize,
+      project,
+      stageId,
+      status,
+    },
+  });
+
+  if (result.data) {
+    const lastPage = Math.max(1, Math.ceil(result.data.total / pageSize));
+    if (requestedPage > lastPage) {
+      setPage(url, lastPage);
+      return redirect(`${url.pathname}${url.search}`);
+    }
+  }
 
   return {
-    available:
-      result.data !== undefined &&
-      (pendingResult === undefined || pendingResult.data !== undefined),
-    error:
-      result.error?.detail ??
-      result.error?.title ??
-      pendingResult?.error?.detail ??
-      pendingResult?.error?.title,
-    filters: { integration, project, stageId, status },
-    promotions,
+    available: result.data !== undefined,
+    error: result.error?.detail ?? result.error?.title,
+    filters: { application, integration, project, stageId, status },
+    page: requestedPage,
+    promotions: result.data?.items ?? [],
     total: result.data?.total ?? 0,
   };
 }
 
 export default function Promotions({ loaderData }: Route.ComponentProps) {
-  const promotions = loaderData.promotions.toSorted((left, right) => {
-    const leftPending = left.status === "pending" ? 0 : 1;
-    const rightPending = right.status === "pending" ? 0 : 1;
-    return leftPending - rightPending || right.createdAt.localeCompare(left.createdAt);
-  });
-
   return (
     <Stack gap="lg">
-      <Group align="flex-start" justify="space-between">
-        <Stack gap={2}>
-          <Title order={1}>Promotions</Title>
-          <Text c="dimmed">Kargo promotion preparation and operator review.</Text>
-        </Stack>
-        <Anchor component={Link} to="/promotion-stages">
-          Manage Stage policies
-        </Anchor>
-      </Group>
+      <PageHeader
+        description="Kargo promotion preparation and operator review."
+        title="Promotions"
+      />
 
       <PromotionFilters filters={loaderData.filters} />
 
@@ -89,18 +87,22 @@ export default function Promotions({ loaderData }: Route.ComponentProps) {
         <Alert color="red" title="Promotions unavailable">
           {loaderData.error ?? "The Slipramp API could not be reached."}
         </Alert>
-      ) : promotions.length === 0 ? (
+      ) : loaderData.promotions.length === 0 ? (
         <Paper p="md" withBorder>
           <Text c="dimmed">No Promotions match these filters.</Text>
         </Paper>
       ) : (
-        <PromotionTable promotions={promotions} />
+        <PromotionTable promotions={loaderData.promotions} />
       )}
 
-      {loaderData.available && loaderData.total > promotions.length ? (
-        <Text c="dimmed" size="sm">
-          Showing the first {promotions.length} of {loaderData.total} matching Promotions.
-        </Text>
+      {loaderData.available && loaderData.total > 0 ? (
+        <ListPagination
+          itemCount={loaderData.promotions.length}
+          noun="Promotions"
+          page={loaderData.page}
+          pageSize={pageSize}
+          total={loaderData.total}
+        />
       ) : null}
     </Stack>
   );
@@ -110,6 +112,7 @@ function PromotionFilters({
   filters,
 }: Readonly<{
   filters: {
+    application?: string;
     integration?: string;
     project?: string;
     stageId?: string;
@@ -119,59 +122,50 @@ function PromotionFilters({
   const filtered = Object.values(filters).some((value) => value !== undefined);
 
   return (
-    <Paper p="md" withBorder>
-      <Form method="get">
-        <Stack gap="sm">
-          <SimpleGrid cols={{ base: 1, md: 4 }}>
-            <NativeSelect
-              defaultValue={filters.status ?? ""}
-              label="Status"
-              name="status"
-              data={[
-                { label: "All statuses", value: "" },
-                { label: "Pending review", value: "pending" },
-                { label: "Preparing", value: "preparing" },
-                { label: "Approved", value: "approved" },
-                { label: "Rejected", value: "rejected" },
-                { label: "Expired", value: "expired" },
-                { label: "Error", value: "error" },
-              ]}
-            />
-            <TextInput defaultValue={filters.integration} label="Integration" name="integration" />
-            <TextInput defaultValue={filters.project} label="Project" name="project" />
-            <TextInput defaultValue={filters.stageId} label="Stage ID" name="stageId" />
-          </SimpleGrid>
-          <Group justify="flex-end">
-            {filtered ? (
-              <Button component={Link} to="/promotions" variant="subtle">
-                Clear
-              </Button>
-            ) : null}
-            <Button type="submit" variant="light">
-              Apply filters
-            </Button>
-          </Group>
-        </Stack>
-      </Form>
-    </Paper>
+    <SearchParamFilters active={filtered} clearTo="/promotions">
+      <PromotionScopeFilters
+        application={filters.application}
+        integration={filters.integration}
+        project={filters.project}
+      />
+      <NativeSelect
+        defaultValue={filters.status ?? ""}
+        label="Status"
+        name="status"
+        data={[
+          { label: "All statuses", value: "" },
+          { label: "Pending review", value: "pending" },
+          { label: "Preparing", value: "preparing" },
+          { label: "Approved", value: "approved" },
+          { label: "Rejected", value: "rejected" },
+          { label: "Expired", value: "expired" },
+          { label: "Error", value: "error" },
+        ]}
+        style={{ flex: "1 1 160px" }}
+      />
+      <TextInput
+        defaultValue={filters.stageId}
+        label="Stage ID"
+        name="stageId"
+        style={{ flex: "1 1 160px" }}
+        type="search"
+      />
+    </SearchParamFilters>
   );
 }
 
 function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={1100}>
+      <Table.ScrollContainer minWidth={960} type="native">
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Promotion</Table.Th>
-              <Table.Th>Integration</Table.Th>
-              <Table.Th>Stage</Table.Th>
+              <Table.Th>Promotion / Stage</Table.Th>
               <Table.Th>Application</Table.Th>
-              <Table.Th>Revisions</Table.Th>
-              <Table.Th>Requested by</Table.Th>
+              <Table.Th>Change</Table.Th>
               <Table.Th>Status</Table.Th>
-              <Table.Th>Created</Table.Th>
+              <Table.Th>Requested</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -195,44 +189,63 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
     <Table.Tr>
       <Table.Td>
         <Stack gap={0}>
-          <Anchor component={Link} fw={600} to={`/promotions/${promotion.id}`}>
-            {promotion.externalPromotionId}
+          <Anchor
+            component={Link}
+            fw={600}
+            title={promotion.externalPromotionId}
+            to={`/promotions/${promotion.id}`}
+          >
+            {abbreviateMiddle(promotion.externalPromotionId, 26)}
           </Anchor>
-          <Text c="dimmed" size="xs">
-            {promotion.id.slice(0, 8)}
-          </Text>
-        </Stack>
-      </Table.Td>
-      <Table.Td>{promotion.integration}</Table.Td>
-      <Table.Td>
-        <Stack gap={0}>
-          <Text>{stageName}</Text>
-          {project ? (
+          <Group gap="xs" wrap="wrap">
             <Text c="dimmed" size="xs">
-              {project}
+              {stageName}
+              {project ? ` · ${project}` : ""}
             </Text>
-          ) : null}
+            {promotion.kargoUrl ? (
+              <KargoLink size="xs" url={promotion.kargoUrl}>
+                Kargo
+              </KargoLink>
+            ) : null}
+          </Group>
         </Stack>
       </Table.Td>
-      <Table.Td>{application}</Table.Td>
       <Table.Td>
         <Stack gap={0}>
-          <Code>{promotion.baseRevision.slice(0, 12)}</Code>
+          <Text>{application}</Text>
           <Text c="dimmed" size="xs">
-            to <Code>{promotion.candidateRevision.slice(0, 12)}</Code>
+            {promotion.integration}
           </Text>
         </Stack>
       </Table.Td>
-      <Table.Td>{promotion.requestedBy.displayName}</Table.Td>
+      <Table.Td>
+        <Stack gap={0}>
+          <Text size="sm">
+            <Text component="span" inherit title={promotion.candidateBranch}>
+              {abbreviateMiddle(promotion.candidateBranch, 30)}
+            </Text>{" "}
+            → {promotion.targetBranch}
+          </Text>
+          <Text c="dimmed" size="xs">
+            <CommitReference commit={promotion.baseCommit} length={10} /> →{" "}
+            <CommitReference commit={promotion.candidateCommit} length={10} />
+          </Text>
+        </Stack>
+      </Table.Td>
       <Table.Td>
         <Badge color={promotionStatusColor(promotion.status)} variant="light">
           {promotionStatusLabel(promotion.status)}
         </Badge>
       </Table.Td>
       <Table.Td>
-        <Text component="time" dateTime={promotion.createdAt} size="sm">
-          {formatTimestamp(promotion.createdAt)}
-        </Text>
+        <Stack gap={0}>
+          <Identity
+            avatarSize={24}
+            name={promotion.requestedBy.displayName}
+            nameProps={{ fw: 500, size: "sm" }}
+          />
+          <RelativeTime c="dimmed" size="xs" value={promotion.createdAt} />
+        </Stack>
       </Table.Td>
     </Table.Tr>
   );
@@ -290,12 +303,11 @@ function optionalStatus(value: string | null): PromotionStatus | undefined {
   }
 }
 
-function optionalValue(value: string | null) {
-  return value?.trim() || undefined;
+function setPage(url: URL, page: number) {
+  if (page === 1) url.searchParams.delete("page");
+  else url.searchParams.set("page", String(page));
 }
 
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value),
-  );
+function optionalValue(value: string | null) {
+  return value?.trim() || undefined;
 }

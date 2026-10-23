@@ -37,6 +37,9 @@ in as described in [AUTH.md](./AUTH.md).
 - Assign a logical checkout credential to private repositories and resolve it to a cluster-local Kubernetes Secret in each execution cluster.
 - Refresh one configured branch per repository on an interval.
 - Fetch and index exact commit SHAs.
+- Record available commit subjects, author names, and author timestamps during
+  refresh, and expose provider commit links when they can be inferred or are
+  configured explicitly.
 - Never copy repository contents, source bundles, or Git source archives into S3; execution Jobs clone their exact commit directly from Git.
 - Discover versioned `Runtime` and `Target` documents from a documented repository layout.
 - Validate each fetched Git commit atomically and retain the previous valid catalog revision when a commit is invalid.
@@ -217,7 +220,7 @@ The repository remains a single project with a Go module at `github.com/slipramp
 - **Cluster controller:** Go process deployed into each execution cluster; it claims work outbound, manages local Jobs, and reports state and logs.
 - **Harness:** statically linked Go executable injected into runtime Jobs.
 - **Web:** React Router v8 SSR server and browser application using Mantine UI and the generated TypeScript API client.
-- **PostgreSQL:** repositories, catalog revisions, targets, Git-trigger deliveries, controller credential digests, cluster observations, runs, phase transitions, run request idempotency, artifact metadata, and scheduler coordination.
+- **PostgreSQL:** repositories, repository-scoped Git commit metadata, catalog revisions, targets, Git-trigger deliveries, controller credential digests, cluster observations, runs, phase transitions, run request idempotency, artifact metadata, and scheduler coordination.
 - **S3-compatible storage:** log chunks and declared artifact contents only; RustFS is used locally.
 - **Kubernetes clusters:** controllers, execution Jobs, Secrets, ServiceAccounts, and workload placement in each registered destination.
 
@@ -226,6 +229,7 @@ The repository remains a single project with a Go module at `github.com/slipramp
 The MVP PostgreSQL schema centers on these records:
 
 - repositories and repository refresh state
+- repository-scoped Git commit metadata
 - immutable catalog revisions and validation results
 - current target and runtime projections
 - clusters, enrolled controller credential digests, last-seen observations, and run assignments

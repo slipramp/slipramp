@@ -42,7 +42,7 @@ func (d *Database) GetRun(ctx context.Context, runID uuid.UUID) (run.Run, error)
 	return record, nil
 }
 
-func (d *Database) ListRuns(ctx context.Context, filter run.ListFilter) ([]run.Run, error) {
+func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.RunList, error) {
 	var repositoryID pgtype.UUID
 	if filter.RepositoryID != nil {
 		repositoryID = databaseUUID(*filter.RepositoryID)
@@ -52,30 +52,45 @@ func (d *Database) ListRuns(ctx context.Context, filter run.ListFilter) ([]run.R
 	if filter.TargetName != "" {
 		targetName = &filter.TargetName
 	}
+	var clusterName *string
+	if filter.ClusterName != "" {
+		clusterName = &filter.ClusterName
+	}
 
+	query := storedb.ListRunsParams{
+		RepositoryID: repositoryID,
+		TargetName:   targetName,
+		ClusterName:  clusterName,
+		ResultLimit:  filter.Limit,
+		ResultOffset: filter.Offset,
+	}
 	rows, err := d.queries.ListRuns(
 		ctx,
-		storedb.ListRunsParams{
-			RepositoryID: repositoryID,
-			TargetName:   targetName,
-			ResultLimit:  filter.Limit,
-		},
+		query,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("list Runs: %w", err)
+		return run.RunList{}, fmt.Errorf("list Runs: %w", err)
+	}
+	total, err := d.queries.CountRuns(ctx, storedb.CountRunsParams{
+		RepositoryID: repositoryID,
+		TargetName:   targetName,
+		ClusterName:  clusterName,
+	})
+	if err != nil {
+		return run.RunList{}, fmt.Errorf("count Runs: %w", err)
 	}
 
 	records := make([]run.Run, 0, len(rows))
 	for _, row := range rows {
 		record, err := runFromRow(row)
 		if err != nil {
-			return nil, err
+			return run.RunList{}, err
 		}
 
 		records = append(records, record)
 	}
 
-	return records, nil
+	return run.RunList{Items: records, Total: total}, nil
 }
 
 func (d *Database) GetArtifactInputCandidate(ctx context.Context, artifactID uuid.UUID) (run.ArtifactInput, error) {

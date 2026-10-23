@@ -60,6 +60,7 @@ server:
     integrations:
       prod:
         cluster: prod
+        uiUrl: https://kargo.example.com
         repositories: [kcloud-ops]
         environmentOrder: [homelab, prod]
         preparation:
@@ -71,6 +72,7 @@ server:
 ```
 
 The selected Cluster must also be present in `controllerEnrollmentTokens`.
+The optional `uiUrl` enables direct Stage and Promotion links from the web UI.
 `environmentOrder` is required and controls Freight comparison columns.
 Observed environments that are absent from the list remain visible after the
 configured columns. Changing Kargo integration configuration requires a Server

@@ -148,6 +148,36 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) 
 	return i, err
 }
 
+const countRuns = `-- name: CountRuns :one
+SELECT count(*)
+FROM runs
+WHERE (
+    $1::uuid IS NULL
+    OR repository_id = $1
+)
+AND (
+    $2::text IS NULL
+    OR target_name = $2
+)
+AND (
+    $3::text IS NULL
+    OR cluster_name = $3
+)
+`
+
+type CountRunsParams struct {
+	RepositoryID pgtype.UUID
+	TargetName   *string
+	ClusterName  *string
+}
+
+func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countRuns, arg.RepositoryID, arg.TargetName, arg.ClusterName)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRun = `-- name: CreateRun :one
 INSERT INTO runs (
     id,
@@ -681,18 +711,31 @@ AND (
     $2::text IS NULL
     OR target_name = $2
 )
+AND (
+    $3::text IS NULL
+    OR cluster_name = $3
+)
 ORDER BY created_at DESC, id DESC
-LIMIT $3
+LIMIT $5
+OFFSET $4
 `
 
 type ListRunsParams struct {
 	RepositoryID pgtype.UUID
 	TargetName   *string
+	ClusterName  *string
+	ResultOffset int32
 	ResultLimit  int32
 }
 
 func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
-	rows, err := q.db.Query(ctx, listRuns, arg.RepositoryID, arg.TargetName, arg.ResultLimit)
+	rows, err := q.db.Query(ctx, listRuns,
+		arg.RepositoryID,
+		arg.TargetName,
+		arg.ClusterName,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
 	if err != nil {
 		return nil, err
 	}

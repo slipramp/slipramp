@@ -58,8 +58,13 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
-	if fetched.CommitSHA != mainCommit {
-		t.Errorf("Fetch() commit = %q, want %q", fetched.CommitSHA, mainCommit)
+	if fetched.Commit.SHA != mainCommit {
+		t.Errorf("Fetch() commit = %q, want %q", fetched.Commit.SHA, mainCommit)
+	}
+	if fetched.Commit.Title == nil || *fetched.Commit.Title != "main" ||
+		fetched.Commit.AuthorName == nil || *fetched.Commit.AuthorName != "Slipramp Test" ||
+		fetched.Commit.AuthoredAt == nil {
+		t.Errorf("Fetch() commit metadata = %#v", fetched.Commit)
 	}
 
 	contents, err := fs.ReadFile(fetched.Files, "tracked.txt")
@@ -122,8 +127,8 @@ func TestGitFetcherComputesChangedPathsFromAcceptedCommit(t *testing.T) {
 		}
 	})
 
-	if fetched.CommitSHA != wantCommit {
-		t.Errorf("Fetch() commit = %q, want %q", fetched.CommitSHA, wantCommit)
+	if fetched.Commit.SHA != wantCommit {
+		t.Errorf("Fetch() commit = %q, want %q", fetched.Commit.SHA, wantCommit)
 	}
 	wantPaths := []string{
 		"terraform/main.tf",

@@ -291,6 +291,7 @@ func validKargoIntegrations() promotion.IntegrationSet {
 	return promotion.IntegrationSet{
 		"prod": {
 			ClusterName:      "colo",
+			UIURL:            "https://kargo.example.com",
 			Repositories:     []string{"kcloud-ops"},
 			EnvironmentOrder: []string{"homelab", "prod"},
 			Preparation: promotion.PreparationConfig{

@@ -88,11 +88,23 @@ APIKeyList:
   additionalProperties: false
   required:
     - items
+    - total
+    - limit
+    - offset
   properties:
     items:
       type: array
       items:
         $ref: "#/APIKey"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
 
 APIKeyCreate:
   type: object
@@ -160,11 +172,23 @@ ServiceAccountList:
   additionalProperties: false
   required:
     - items
+    - total
+    - limit
+    - offset
   properties:
     items:
       type: array
       items:
         $ref: "#/ServiceAccount"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
 
 ServiceAccountCreate:
   type: object

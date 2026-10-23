@@ -62,6 +62,9 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 	httpHandler := NewHTTP(
 		Dependencies{
 			PromotionPipelines: pipelines,
+			KargoIntegrations: promotion.IntegrationSet{
+				"prod": {UIURL: "https://kargo.example.com"},
+			},
 			ProductAuthentication: &recordingProductAuthenticationService{
 				authentication: productAuthentication(
 					productidentity.RoleViewer,
@@ -98,6 +101,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		`"environmentOrder":["homelab","prod"]`,
 		`"version":"1.2.3"`,
 		`"pendingPromotionCount":1`,
+		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/external-dns-prod"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)

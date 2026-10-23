@@ -57,6 +57,10 @@ func TestGitBranchScannerComparesRepositoryBranchesAndAcknowledgedRender(t *test
 		comparisons[0].TargetBranchCommit != acknowledgedTarget {
 		t.Errorf("no-op branch revisions = %#v", comparisons[0])
 	}
+	if comparisons[0].AcknowledgedTargetAuthoredAt == nil ||
+		comparisons[0].SourceBranchAuthoredAt == nil {
+		t.Errorf("no-op branch commit dates = %#v", comparisons[0])
+	}
 
 	writeTestFile(t, workingDirectory, "apps/example/base/deployment.yaml", "version: two\n")
 	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-am", "relevant source update")

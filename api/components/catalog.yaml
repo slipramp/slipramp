@@ -2,7 +2,7 @@ CatalogRevision:
   type: object
   required:
     - id
-    - commitSha
+    - commit
     - createdAt
     - runtimes
     - targets
@@ -11,9 +11,8 @@ CatalogRevision:
       type: string
       format: uuid
       description: Stable identity of the immutable catalog revision.
-    commitSha:
-      type: string
-      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    commit:
+      $ref: ./common.yaml#/GitCommit
       description: Exact Git commit from which the catalog was accepted.
     createdAt:
       type: string
@@ -58,10 +57,10 @@ TargetSummary:
     - repositoryId
     - repositoryName
     - catalogRevisionId
-    - catalogCommitSha
+    - catalogCommit
     - name
     - actions
-    - desiredCommitSha
+    - desiredCommit
   properties:
     repositoryId:
       type: string
@@ -72,9 +71,8 @@ TargetSummary:
     catalogRevisionId:
       type: string
       format: uuid
-    catalogCommitSha:
-      type: string
-      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    catalogCommit:
+      $ref: ./common.yaml#/GitCommit
     name:
       type: string
       minLength: 1
@@ -96,9 +94,8 @@ TargetSummary:
     placement:
       type: string
       minLength: 1
-    desiredCommitSha:
-      type: string
-      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    desiredCommit:
+      $ref: ./common.yaml#/GitCommit
 
 Runtime:
   type: object
@@ -162,11 +159,10 @@ Target:
 TargetStatus:
   type: object
   required:
-    - desiredCommitSha
+    - desiredCommit
   properties:
-    desiredCommitSha:
-      type: string
-      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+    desiredCommit:
+      $ref: ./common.yaml#/GitCommit
       description: >-
         Latest accepted Git commit whose changed paths matched this target's
         watch patterns, or the commit where the target most recently became

@@ -89,12 +89,35 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 
 	commitSHA := "0123456789abcdef0123456789abcdef01234567"
 	succeededAt := createdAt.Add(90 * time.Second)
+	commitTitle := "Update network routes"
+	commitAuthor := "Example Operator"
+	authoredAt := createdAt.Add(-time.Hour)
+	refreshResult := successfulCatalogRefresh(
+		commitSHA,
+		succeededAt,
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1210"),
+	)
+	refreshResult.Commit.Title = &commitTitle
+	refreshResult.Commit.AuthorName = &commitAuthor
+	refreshResult.Commit.AuthoredAt = &authoredAt
 	if err := database.RecordRepositoryRefresh(
 		ctx,
 		first.ID,
-		successfulCatalogRefresh(commitSHA, succeededAt, uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1210")),
+		refreshResult,
 	); err != nil {
 		t.Fatalf("record successful repository refresh: %v", err)
+	}
+	commitKey := repository.CommitKey{RepositoryID: first.ID, SHA: commitSHA}
+	commits, err := database.ListCommits(ctx, []repository.CommitKey{commitKey})
+	if err != nil {
+		t.Fatalf("ListCommits() error = %v", err)
+	}
+	commit := commits[commitKey]
+	if commit.Title == nil || *commit.Title != commitTitle ||
+		commit.AuthorName == nil || *commit.AuthorName != commitAuthor ||
+		commit.AuthoredAt == nil || !commit.AuthoredAt.Equal(authoredAt) ||
+		commit.URL == nil || *commit.URL != "https://github.com/example/infrastructure/commit/"+commitSHA {
+		t.Errorf("repository commit = %#v", commit)
 	}
 
 	failureReason := "remote branch does not exist"

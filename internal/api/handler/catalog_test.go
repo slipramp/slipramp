@@ -100,7 +100,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	if catalogs.repositoryID != repositoryID {
 		t.Errorf("repository ID = %s, want %s", catalogs.repositoryID, repositoryID)
 	}
-	if body.ID != revisionID || body.CommitSha != commitSHA ||
+	if body.ID != revisionID || body.Commit.Sha != commitSHA ||
 		!body.CreatedAt.Equal(createdAt) {
 		t.Errorf("catalog revision = %#v", body)
 	}
@@ -111,7 +111,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	}
 	if len(body.Targets) != 1 ||
 		body.Targets[0].Metadata.Name != "network" ||
-		body.Targets[0].Status.DesiredCommitSha != commitSHA ||
+		body.Targets[0].Status.DesiredCommit.Sha != commitSHA ||
 		len(body.Targets[0].Spec.Actions["preview"].Command) != 2 ||
 		body.Targets[0].Spec.Actions["preview"].Artifacts == nil {
 		t.Errorf("catalog targets = %#v", body.Targets)

@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type PromotionBranchDriftService interface {
@@ -19,8 +21,15 @@ func (h *Handler) ListPromotionBranchDrift(
 ) (api.ListPromotionBranchDriftResponseObject, error) {
 	filter := promotion.BranchDriftListFilter{
 		Integration: optionalCatalogName(request.Params.Integration),
+		Project:     optionalCatalogName(request.Params.Project),
 		Repository:  optionalCatalogName(request.Params.Repository),
 		Limit:       promotion.DefaultListLimit,
+	}
+	if request.Params.Application != nil {
+		filter.Application = *request.Params.Application
+	}
+	if request.Params.Status != nil {
+		filter.Status = promotion.BranchDriftStatus(*request.Params.Status)
 	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
@@ -40,6 +49,26 @@ func (h *Handler) ListPromotionBranchDrift(
 	if err != nil {
 		return nil, err
 	}
+	keys := make([]repository.CommitKey, 0)
+	for _, item := range result.Items {
+		for _, stage := range item.Stages {
+			for _, sha := range []string{
+				stage.AcknowledgedSourceRevision,
+				stage.AcknowledgedRenderBaseRevision,
+				stage.AcknowledgedRenderRevision,
+				stage.SourceBranchRevision,
+				stage.TargetBranchRevision,
+			} {
+				if sha != "" {
+					keys = append(keys, commitKey(item.Repository.ID, sha))
+				}
+			}
+		}
+	}
+	commits, commitErr := h.commitResponses(ctx, keys)
+	if commitErr != nil {
+		commits = commitFallbacks(keys)
+	}
 
 	items := make([]api.PromotionBranchDriftRepository, 0, len(result.Items))
 	for _, item := range result.Items {
@@ -57,14 +86,42 @@ func (h *Handler) ListPromotionBranchDrift(
 				SourcePaths:    stage.Stage.SourcePaths,
 				Status:         api.PromotionBranchDriftStatus(stage.Status),
 				LastObservedAt: stage.Stage.LastObservedAt,
+				KargoURL: h.kargoIntegrations.KargoStageURL(
+					stage.Stage.Integration,
+					stage.Stage.Project,
+					stage.Stage.Name,
+				),
 			}
-			response.AcknowledgedSourceRevision = optionalGitRevision(stage.AcknowledgedSourceRevision)
-			response.AcknowledgedRenderBaseRevision = optionalGitRevision(
-				stage.AcknowledgedRenderBaseRevision,
+			response.AcknowledgedSourceCommit = optionalGitCommit(
+				item.Repository.ID,
+				stage.AcknowledgedSourceRevision,
+				nil,
+				commits,
 			)
-			response.AcknowledgedRenderRevision = optionalGitRevision(stage.AcknowledgedRenderRevision)
-			response.SourceBranchRevision = optionalGitRevision(stage.SourceBranchRevision)
-			response.TargetBranchRevision = optionalGitRevision(stage.TargetBranchRevision)
+			response.AcknowledgedRenderBaseCommit = optionalGitCommit(
+				item.Repository.ID,
+				stage.AcknowledgedRenderBaseRevision,
+				nil,
+				commits,
+			)
+			response.AcknowledgedRenderCommit = optionalGitCommit(
+				item.Repository.ID,
+				stage.AcknowledgedRenderRevision,
+				stage.AcknowledgedRenderAuthoredAt,
+				commits,
+			)
+			response.SourceBranchCommit = optionalGitCommit(
+				item.Repository.ID,
+				stage.SourceBranchRevision,
+				stage.SourceBranchAuthoredAt,
+				commits,
+			)
+			response.TargetBranchCommit = optionalGitCommit(
+				item.Repository.ID,
+				stage.TargetBranchRevision,
+				nil,
+				commits,
+			)
 			if stage.AcknowledgedSourceRevision != "" {
 				response.NoOpRender = new(stage.NoOpRender)
 			}
@@ -100,12 +157,20 @@ func (h *Handler) ListPromotionBranchDrift(
 	}, nil
 }
 
-func optionalGitRevision(value string) *api.GitRevision {
+func optionalGitCommit(
+	repositoryID repository.RepositoryID,
+	value string,
+	authoredAt *time.Time,
+	commits map[repository.CommitKey]api.GitCommit,
+) *api.GitCommit {
 	if value == "" {
 		return nil
 	}
 
-	revision := api.GitRevision(value)
+	commit := commits[commitKey(repositoryID, value)]
+	if commit.AuthoredAt == nil {
+		commit.AuthoredAt = authoredAt
+	}
 
-	return &revision
+	return &commit
 }

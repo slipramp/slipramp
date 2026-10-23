@@ -15,13 +15,14 @@ import (
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
 type RunService interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
 	GetRun(context.Context, uuid.UUID) (run.Run, error)
-	ListRuns(context.Context, run.ListFilter) ([]run.Run, error)
+	ListRuns(context.Context, run.RunListFilter) (run.RunList, error)
 	CancelRun(ctx context.Context, request run.CancelRequest) (run.Run, error)
 	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
 	NextRunToCancel(ctx context.Context, clusterName string) (run.Run, error)
@@ -32,12 +33,12 @@ func (h *Handler) ListRuns(
 	ctx context.Context,
 	request api.ListRunsRequestObject,
 ) (api.ListRunsResponseObject, error) {
-	limit := int32(run.DefaultListLimit)
+	limit := int32(run.DefaultRunListLimit)
 	if request.Params.Limit != nil {
-		if *request.Params.Limit < 1 || *request.Params.Limit > run.MaximumListLimit {
+		if *request.Params.Limit < 1 || *request.Params.Limit > run.MaximumRunListLimit {
 			problem := NewProblem(
 				http.StatusBadRequest,
-				fmt.Sprintf("limit must be between 1 and %d", run.MaximumListLimit),
+				fmt.Sprintf("limit must be between 1 and %d", run.MaximumRunListLimit),
 			)
 
 			return api.ListRuns400ApplicationProblemPlusJSONResponse(problem), nil
@@ -48,13 +49,28 @@ func (h *Handler) ListRuns(
 	if request.Params.Target != nil {
 		targetName = string(*request.Params.Target)
 	}
+	clusterName := ""
+	if request.Params.Cluster != nil {
+		clusterName = string(*request.Params.Cluster)
+	}
+	offset := int32(0)
+	if request.Params.Offset != nil {
+		if *request.Params.Offset < 0 || *request.Params.Offset > run.MaximumRunListOffset {
+			problem := NewProblem(http.StatusBadRequest, "offset must be between 0 and 2147483647")
+
+			return api.ListRuns400ApplicationProblemPlusJSONResponse(problem), nil
+		}
+		offset = *request.Params.Offset
+	}
 
 	records, err := h.runs.ListRuns(
 		ctx,
-		run.ListFilter{
+		run.RunListFilter{
 			RepositoryID: request.Params.RepositoryID,
 			TargetName:   targetName,
+			ClusterName:  clusterName,
 			Limit:        limit,
+			Offset:       offset,
 		},
 	)
 	if errors.Is(err, run.ErrInvalidRequest) {
@@ -66,12 +82,17 @@ func (h *Handler) ListRuns(
 		return nil, err
 	}
 
-	items, err := h.runResponses(ctx, records)
+	items, err := h.runResponses(ctx, records.Items)
 	if err != nil {
 		return nil, err
 	}
 
-	return api.ListRuns200JSONResponse{Items: items}, nil
+	return api.ListRuns200JSONResponse{
+		Items:  items,
+		Limit:  int(limit),
+		Offset: int(offset),
+		Total:  int(records.Total),
+	}, nil
 }
 
 func (h *Handler) CreateRun(
@@ -235,7 +256,10 @@ func runParameters(values *map[string]api.ParameterValue) (map[string]any, error
 	return parameters, nil
 }
 
-func runResponse(record run.Run) (api.Run, error) {
+func runResponse(
+	record run.Run,
+	commits map[repository.CommitKey]api.GitCommit,
+) (api.Run, error) {
 	parameters, err := runParameterResponse(record.Parameters)
 	if err != nil {
 		return api.Run{}, err
@@ -247,7 +271,7 @@ func runResponse(record run.Run) (api.Run, error) {
 		Outcome:                 apiRunOutcome(record.Outcome),
 		RepositoryID:            record.RepositoryID,
 		CatalogRevisionID:       record.CatalogRevisionID,
-		CommitSha:               record.CommitSHA,
+		Commit:                  commits[commitKey(record.RepositoryID, record.CommitSHA)],
 		Target:                  api.CatalogName(record.TargetName),
 		Action:                  api.CatalogName(record.ActionName),
 		Parameters:              parameters,
@@ -256,7 +280,7 @@ func runResponse(record run.Run) (api.Run, error) {
 		Source:                  apiRunSource(record.Source),
 		CreatedBy:               apiRunActor(record.CreatedBy),
 		CanceledBy:              apiRunActor(record.CanceledBy),
-		Inputs:                  runInputResponse(record.Snapshot.Inputs),
+		Inputs:                  runInputResponse(record.Snapshot.Inputs, commits),
 		ArtifactConsumers:       runArtifactConsumers(record.Snapshot),
 		CreatedAt:               record.CreatedAt,
 		AssignedAt:              record.AssignedAt,
@@ -311,6 +335,18 @@ func (h *Handler) runResponse(ctx context.Context, record run.Run) (api.Run, err
 }
 
 func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Run, error) {
+	commitKeys := make([]repository.CommitKey, 0, len(records))
+	for _, record := range records {
+		commitKeys = append(commitKeys, commitKey(record.RepositoryID, record.CommitSHA))
+		for _, input := range record.Snapshot.Inputs {
+			commitKeys = append(commitKeys, commitKey(input.RepositoryID, input.CommitSHA))
+		}
+	}
+	commits, err := h.commitResponses(ctx, commitKeys)
+	if err != nil {
+		return nil, err
+	}
+
 	needsClusterStatus := false
 	for _, record := range records {
 		if record.Phase != run.PhaseQueued && record.Phase != run.PhaseFinished {
@@ -334,7 +370,7 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 	items := make([]api.Run, 0, len(records))
 	now := h.now().UTC()
 	for _, record := range records {
-		body, err := runResponse(record)
+		body, err := runResponse(record, commits)
 		if err != nil {
 			return nil, err
 		}
@@ -387,7 +423,10 @@ func hasRequiredParameters(action catalog.Action) bool {
 	return false
 }
 
-func runInputResponse(values map[string]run.ArtifactInput) map[string]api.RunArtifactInput {
+func runInputResponse(
+	values map[string]run.ArtifactInput,
+	commits map[repository.CommitKey]api.GitCommit,
+) map[string]api.RunArtifactInput {
 	result := make(map[string]api.RunArtifactInput, len(values))
 	for name, value := range values {
 		result[name] = api.RunArtifactInput{
@@ -399,7 +438,7 @@ func runInputResponse(values map[string]run.ArtifactInput) map[string]api.RunArt
 			Sha256:            value.SHA256,
 			Sensitive:         value.Sensitive,
 			RetentionState:    api.RunArtifactInputRetentionState(value.RetentionState),
-			CommitSha:         value.CommitSHA,
+			Commit:            commits[commitKey(value.RepositoryID, value.CommitSHA)],
 			CatalogRevisionID: value.CatalogRevisionID,
 		}
 	}

@@ -34,7 +34,7 @@ The initial environment is trusted and single-operator, but the core model shoul
 
 A repository contains versioned target, runtime, and action definitions. Slipramp tracks a configured branch and validates the repository as a unit. Each accepted Git commit produces an immutable catalog revision, and the repository exposes its latest valid catalog revision.
 
-Repositories are accessed through generic Git over SSH or HTTPS. Repository refresh credentials used by the Slipramp Server are named sources mounted into its deployment, such as files or environment variables populated from Kubernetes Secrets; the Server does not read the Kubernetes API to resolve them. Execution-side checkout credentials use logical names that each controller maps to cluster-local Kubernetes Secrets. Each repository tracks one configured branch and is refreshed periodically. Every fetched Git commit is indexed atomically so an invalid commit cannot partially replace the active catalog.
+Repositories are accessed through generic Git over SSH or HTTPS. Repository refresh credentials used by the Slipramp Server are named sources mounted into its deployment, such as files or environment variables populated from Kubernetes Secrets; the Server does not read the Kubernetes API to resolve them. Execution-side checkout credentials use logical names that each controller maps to cluster-local Kubernetes Secrets. Each repository tracks one configured branch and is refreshed periodically. Every fetched Git commit is indexed atomically so an invalid commit cannot partially replace the active catalog. The Server records the commit subject, author name, and author timestamp directly from available Git objects. Repository commit-page links are inferred for known public providers or produced from an optional commit URL template; missing presentation metadata never changes catalog acceptance or execution behavior.
 
 ### Target
 
@@ -279,7 +279,7 @@ The control plane owns repository refresh, catalog validation, run scheduling, c
 
 Kubernetes clusters are execution backends rather than the source of truth for Slipramp's product state. In-cluster controllers own Job observation and report it to the Server. The Server stores lifecycle phase (`queued`, `assigned`, `preparing`, `running`, or `finished`), terminal outcome (`succeeded`, `failed`, `canceled`, or `timed-out`), cancellation intent, Job identity, diagnostic details, and observation freshness as separate facts. `unknown` is derived from stale observation and controller connectivity rather than stored as a phase. After either side restarts, stable run labels and idempotent observation reports allow central run state to be reconciled with Jobs that still exist in the cluster.
 
-PostgreSQL is the durable database for repositories, catalog revisions and
+PostgreSQL is the durable database for repositories, repository-scoped Git commit metadata, catalog revisions and
 current projections, Git-trigger deliveries, run metadata, artifact metadata,
 Kargo Promotion Stages, policies, Promotions, decisions, and scheduler state.
 S3-compatible object storage is used only for artifact
@@ -662,11 +662,14 @@ Git and structured Argo CD diff files. The operator web experience lists
 Promotions and observed Stages, exposes policy and immutable decision controls,
 renders the sensitive Git and structured Argo CD artifacts, durably expires
 pending reviews, and compares typed Freight across a configured environment
-order without treating the comparison as an execution workflow. A read-only
+order without treating the comparison as an execution workflow. Promotion
+inventory views share server-side integration, project, and application
+filters, followed by the filters specific to each view. A read-only
 branch-drift view groups active Stages by Repository, caches one bounded Git
 scan per group for the repository refresh interval, distinguishes source-path
 and target-branch drift, and treats equal target/result revisions as an
-acknowledged no-op render. The operational catalog is wired, and disposable
+acknowledged no-op render. Its additional status and repository filters keep
+the operational view focused. The operational catalog is wired, and disposable
 kind acceptance covers automatic approval and guarded preparation through
 real artifact uploads, including empty Git diffs. The remaining live cutover
 cases and operational views are tracked in

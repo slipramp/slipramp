@@ -515,7 +515,7 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 		Phase:             run.PhaseQueued,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
-		CommitSHA:         *refresh.CommitSHA,
+		CommitSHA:         refresh.Commit.SHA,
 		TargetName:        "network",
 		ActionName:        "preview",
 		Parameters:        map[string]any{},

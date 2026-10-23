@@ -6,6 +6,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/readiness"
 )
 
@@ -18,6 +19,7 @@ type Handler struct {
 	clusters           ClusterService
 	identities         ControllerIdentityService
 	repositories       RepositoryService
+	commits            CommitService
 	catalogs           CatalogService
 	runs               RunService
 	artifacts          ArtifactService
@@ -26,6 +28,7 @@ type Handler struct {
 	promotionReviews   PromotionReviewService
 	promotionPipelines PromotionPipelineService
 	promotionDrift     PromotionBranchDriftService
+	kargoIntegrations  promotion.IntegrationSet
 	readiness          ReadinessService
 	productAuth        ProductAuthenticationService
 	now                func() time.Time
@@ -44,6 +47,7 @@ type Dependencies struct {
 	Clusters              ClusterService
 	ControllerIdentities  ControllerIdentityService
 	Repositories          RepositoryService
+	Commits               CommitService
 	Catalogs              CatalogService
 	Runs                  RunService
 	Artifacts             ArtifactService
@@ -52,6 +56,7 @@ type Dependencies struct {
 	PromotionReviews      PromotionReviewService
 	PromotionPipelines    PromotionPipelineService
 	PromotionBranchDrift  PromotionBranchDriftService
+	KargoIntegrations     promotion.IntegrationSet
 	Readiness             ReadinessService
 	ProductAuthentication ProductAuthenticationService
 }
@@ -63,6 +68,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		clusters:           dependencies.Clusters,
 		identities:         dependencies.ControllerIdentities,
 		repositories:       dependencies.Repositories,
+		commits:            dependencies.Commits,
 		catalogs:           dependencies.Catalogs,
 		runs:               dependencies.Runs,
 		artifacts:          dependencies.Artifacts,
@@ -71,6 +77,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		promotionReviews:   dependencies.PromotionReviews,
 		promotionPipelines: dependencies.PromotionPipelines,
 		promotionDrift:     dependencies.PromotionBranchDrift,
+		kargoIntegrations:  dependencies.KargoIntegrations,
 		readiness:          dependencies.Readiness,
 		productAuth:        dependencies.ProductAuthentication,
 		now:                time.Now,

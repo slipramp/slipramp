@@ -81,7 +81,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	rejectionReason := "load catalog: placement \"missing\" is not defined"
 	rejectedAt := acceptedAt.Add(time.Minute)
 	rejected := repository.RefreshResult{
-		CommitSHA:     &commitB,
+		Commit:        &repository.Commit{SHA: commitB},
 		AttemptedAt:   rejectedAt,
 		FailureReason: &rejectionReason,
 	}

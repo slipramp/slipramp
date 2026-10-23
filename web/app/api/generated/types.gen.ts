@@ -16,6 +16,29 @@ export type ReadinessResponse = {
 
 export type DependencyStatus = "available" | "unavailable";
 
+export type GitCommit = {
+  /**
+   * Exact Git object identity.
+   */
+  sha: string;
+  /**
+   * Commit subject when it has been read from the Git object.
+   */
+  title?: string;
+  /**
+   * Commit author name when it has been read from the Git object.
+   */
+  author?: string;
+  /**
+   * Commit author timestamp when it has been read from the Git object.
+   */
+  authoredAt?: string;
+  /**
+   * Provider commit page when the repository supports web links.
+   */
+  url?: string;
+};
+
 /**
  * An RFC 9457 problem detail.
  */
@@ -66,6 +89,9 @@ export type ApiKey = {
 
 export type ApiKeyList = {
   items: Array<ApiKey>;
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type ApiKeyCreate = {
@@ -90,6 +116,9 @@ export type ServiceAccount = {
 
 export type ServiceAccountList = {
   items: Array<ServiceAccount>;
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type ServiceAccountCreate = {
@@ -111,6 +140,9 @@ export type Repository = RepositoryConfig & {
 
 export type RepositoryList = {
   items: Array<Repository>;
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type RepositoryConfig = {
@@ -126,6 +158,10 @@ export type RepositoryConfig = {
    * Git branch tracked by repository refresh.
    */
   branch: string;
+  /**
+   * Optional absolute HTTP or HTTPS commit-page template containing one {sha} placeholder. Known public Git providers are inferred when this is omitted.
+   */
+  commitUrlTemplate?: string;
   /**
    * Optional name of a Server credential source used to refresh this repository. The referenced secret value is never persisted in PostgreSQL.
    */
@@ -144,7 +180,7 @@ export type CatalogRevision = {
   /**
    * Exact Git commit from which the catalog was accepted.
    */
-  commitSha: string;
+  commit: GitCommit;
   /**
    * Time at which the catalog revision was first accepted.
    */
@@ -157,13 +193,13 @@ export type TargetSummary = {
   repositoryId: string;
   repositoryName: string;
   catalogRevisionId: string;
-  catalogCommitSha: string;
+  catalogCommit: GitCommit;
   name: string;
   title?: string;
   actions: Array<string>;
   runtime?: string;
   placement?: string;
-  desiredCommitSha: string;
+  desiredCommit: GitCommit;
 };
 
 export type TargetSummaryList = {
@@ -197,6 +233,9 @@ export type Cluster = {
 
 export type ClusterList = {
   items: Array<Cluster>;
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type RunAssignment = {
@@ -298,7 +337,7 @@ export type Run = {
   outcome?: "succeeded" | "failed" | "canceled" | "timed-out";
   repositoryId: string;
   catalogRevisionId: string;
-  commitSha: string;
+  commit: GitCommit;
   target: CatalogName;
   action: CatalogName;
   parameters: {
@@ -339,6 +378,18 @@ export type Run = {
 
 export type RunList = {
   items: Array<Run>;
+  /**
+   * Maximum number of Runs requested for this page.
+   */
+  limit: number;
+  /**
+   * Zero-based offset used for this page.
+   */
+  offset: number;
+  /**
+   * Total matching Runs across all pages.
+   */
+  total: number;
 };
 
 export type RunCreate = {
@@ -418,8 +469,8 @@ export type Promotion = {
   repositorySnapshot: {
     [key: string]: unknown;
   };
-  baseRevision: GitRevision;
-  candidateRevision: GitRevision;
+  baseCommit: GitCommit;
+  candidateCommit: GitCommit;
   candidateBranch: string;
   targetBranch: string;
   policySnapshot: {
@@ -441,6 +492,10 @@ export type Promotion = {
   decidedAt?: string;
   expiresAt?: string;
   updatedAt: string;
+  /**
+   * Direct link to this Promotion in the configured Kargo UI.
+   */
+  kargoUrl?: string;
 };
 
 export type PromotionList = {
@@ -473,6 +528,10 @@ export type PromotionStage = {
   firstObservedAt: string;
   lastObservedAt: string;
   archivedAt?: string;
+  /**
+   * Direct link to this Stage in the configured Kargo UI.
+   */
+  kargoUrl?: string;
 };
 
 export type PromotionStageList = {
@@ -535,7 +594,7 @@ export type RepositoryRefresh = {
   /**
    * Most recently fetched commit, retained when a later refresh fails.
    */
-  commitSha?: string;
+  commit?: GitCommit;
   /**
    * Time of the most recent refresh attempt.
    */
@@ -702,7 +761,7 @@ export type TargetStatus = {
   /**
    * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
    */
-  desiredCommitSha: string;
+  desiredCommit: GitCommit;
 };
 
 export type Target = {
@@ -829,7 +888,7 @@ export type RunArtifactInput = {
   sha256: string;
   sensitive: boolean;
   retentionState: "retained" | "expired" | "deleted";
-  commitSha: string;
+  commit: GitCommit;
   catalogRevisionId: string;
 };
 
@@ -843,7 +902,7 @@ export type ArtifactProvenance = {
   repositoryId: string;
   target: CatalogName;
   action: CatalogName;
-  commitSha: string;
+  commit: GitCommit;
   catalogRevisionId: string;
 };
 
@@ -921,6 +980,10 @@ export type PromotionPipelineStage = {
   freight: PromotionFreight;
   pendingPromotionCount: number;
   lastObservedAt: string;
+  /**
+   * Direct link to this Stage in the configured Kargo UI.
+   */
+  kargoUrl?: string;
 };
 
 export type PromotionBranchDriftStatus = "current" | "drifted" | "unknown";
@@ -936,16 +999,20 @@ export type PromotionBranchDriftStage = {
   targetBranch: string;
   sourcePaths: Array<string>;
   status: PromotionBranchDriftStatus;
-  acknowledgedSourceRevision?: GitRevision;
-  acknowledgedRenderBaseRevision?: GitRevision;
-  acknowledgedRenderRevision?: GitRevision;
-  sourceBranchRevision?: GitRevision;
-  targetBranchRevision?: GitRevision;
+  acknowledgedSourceCommit?: GitCommit;
+  acknowledgedRenderBaseCommit?: GitCommit;
+  acknowledgedRenderCommit?: GitCommit;
+  sourceBranchCommit?: GitCommit;
+  targetBranchCommit?: GitCommit;
   sourceDrift?: boolean;
   targetDrift?: boolean;
   noOpRender?: boolean;
   message?: string;
   lastObservedAt: string;
+  /**
+   * Direct link to this Stage in the configured Kargo UI.
+   */
+  kargoUrl?: string;
 };
 
 export type PromotionStageObservation = {
@@ -1033,11 +1100,19 @@ export type GetReadinessResponse = GetReadinessResponses[keyof GetReadinessRespo
 export type ListRepositoriesData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    q?: string;
+    limit?: number;
+    offset?: number;
+  };
   url: "/api/v1/repositories";
 };
 
 export type ListRepositoriesErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
   /**
    * A valid product session or bearer credential is required.
    */
@@ -1275,11 +1350,20 @@ export type ListTargetsResponse = ListTargetsResponses[keyof ListTargetsResponse
 export type ListClustersData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    q?: string;
+    connection?: "connected" | "unreachable";
+    limit?: number;
+    offset?: number;
+  };
   url: "/api/v1/clusters";
 };
 
 export type ListClustersErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
   /**
    * A valid product session or bearer credential is required.
    */
@@ -1701,16 +1785,24 @@ export type ListRunsData = {
      */
     target?: CatalogName;
     /**
+     * Limit results to Runs assigned to one execution cluster.
+     */
+    cluster?: CatalogName;
+    /**
      * Maximum number of recent Runs to return.
      */
     limit?: number;
+    /**
+     * Zero-based offset into the matching Runs.
+     */
+    offset?: number;
   };
   url: "/api/v1/runs";
 };
 
 export type ListRunsErrors = {
   /**
-   * A filter or limit is invalid.
+   * A filter or pagination value is invalid.
    */
   400: Problem;
   /**
@@ -2168,11 +2260,18 @@ export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
 export type ListApiKeysData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
   url: "/api/v1/auth/api-keys";
 };
 
 export type ListApiKeysErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
   /**
    * A valid product session or bearer credential is required.
    */
@@ -2293,11 +2392,18 @@ export type RevokeApiKeyResponse = RevokeApiKeyResponses[keyof RevokeApiKeyRespo
 export type ListServiceAccountsData = {
   body?: never;
   path?: never;
-  query?: never;
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
   url: "/api/v1/service-accounts";
 };
 
 export type ListServiceAccountsErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
   /**
    * A valid product session or bearer credential is required.
    */
@@ -2371,12 +2477,55 @@ export type CreateServiceAccountResponses = {
 export type CreateServiceAccountResponse =
   CreateServiceAccountResponses[keyof CreateServiceAccountResponses];
 
-export type ListServiceAccountApiKeysData = {
+export type GetServiceAccountData = {
   body?: never;
   path: {
     principalId: string;
   };
   query?: never;
+  url: "/api/v1/service-accounts/{principalId}";
+};
+
+export type GetServiceAccountErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The service account does not exist.
+   */
+  404: Problem;
+  /**
+   * The service account could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetServiceAccountError = GetServiceAccountErrors[keyof GetServiceAccountErrors];
+
+export type GetServiceAccountResponses = {
+  /**
+   * Service-account identity.
+   */
+  200: ServiceAccount;
+};
+
+export type GetServiceAccountResponse =
+  GetServiceAccountResponses[keyof GetServiceAccountResponses];
+
+export type ListServiceAccountApiKeysData = {
+  body?: never;
+  path: {
+    principalId: string;
+  };
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
   url: "/api/v1/service-accounts/{principalId}/api-keys";
 };
 
@@ -2526,10 +2675,11 @@ export type ListPromotionsData = {
   body?: never;
   path?: never;
   query?: {
-    status?: PromotionStatus;
     integration?: CatalogName;
-    cluster?: CatalogName;
     project?: CatalogName;
+    application?: string;
+    status?: PromotionStatus;
+    cluster?: CatalogName;
     stageId?: string;
     limit?: number;
     offset?: number;
@@ -2658,8 +2808,9 @@ export type ListPromotionStagesData = {
   path?: never;
   query?: {
     integration?: CatalogName;
-    cluster?: CatalogName;
     project?: CatalogName;
+    application?: string;
+    cluster?: CatalogName;
     archived?: boolean;
     limit?: number;
     offset?: number;
@@ -2752,10 +2903,10 @@ export type ListPromotionPipelinesData = {
   path?: never;
   query?: {
     integration?: CatalogName;
-    cluster?: CatalogName;
     project?: CatalogName;
-    repository?: CatalogName;
     application?: string;
+    cluster?: CatalogName;
+    repository?: CatalogName;
     limit?: number;
     offset?: number;
   };
@@ -2799,6 +2950,9 @@ export type ListPromotionBranchDriftData = {
   path?: never;
   query?: {
     integration?: CatalogName;
+    project?: CatalogName;
+    application?: string;
+    status?: PromotionBranchDriftStatus;
     repository?: CatalogName;
     limit?: number;
     offset?: number;

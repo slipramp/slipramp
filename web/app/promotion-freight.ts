@@ -19,6 +19,8 @@ export type FreightComparisonRow = {
   values: Record<string, string[]>;
 };
 
+export type FreightComparisonStatus = "equal" | "different";
+
 export function buildFreightColumns(pipeline: PromotionPipeline): FreightColumn[] {
   const configured = new Set(pipeline.environmentOrder);
   const byEnvironment = new Map<string, PromotionPipelineStage[]>();
@@ -105,4 +107,15 @@ export function freightRowMatches(row: FreightComparisonRow, columns: FreightCol
   const values = columns.map((column) => (row.values[column.key] ?? []).join("\n"));
 
   return values.length > 0 && values.every((value) => value !== "" && value === values[0]);
+}
+
+export function filterFreightRows(
+  rows: FreightComparisonRow[],
+  columns: FreightColumn[],
+  status?: FreightComparisonStatus,
+) {
+  if (!status) return rows;
+
+  const matches = status === "equal";
+  return rows.filter((row) => freightRowMatches(row, columns) === matches);
 }

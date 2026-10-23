@@ -3,17 +3,19 @@ import {
   Anchor,
   Badge,
   Button,
-  Code,
   Group,
+  Modal,
   NativeSelect,
   Paper,
   Stack,
   Table,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
-import { Form, Link, useNavigation } from "react-router";
+import { notifications } from "@mantine/notifications";
+import { IconSettings } from "@tabler/icons-react";
+import { useCallback, useEffect, useRef } from "react";
+import { Form, Link, redirect, useNavigation, useSearchParams } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -24,14 +26,23 @@ import {
   type PromotionStage,
   type PromotionPolicyMode,
 } from "~/api/generated";
+import { RelativeTime } from "~/components/display";
+import { Identity } from "~/components/identity";
+import { KargoLink } from "~/components/kargo-link";
+import { ListPagination, SearchParamFilters } from "~/components/list-controls";
+import { PageHeader } from "~/components/page";
+import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
+import { abbreviateMiddle } from "~/display";
+import { formValue, optionalFormValue } from "~/form-data";
 import { pageTitle } from "~/page-title";
+import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/promotion-stages";
 
-const stageLimit = 200;
+const pageSize = 25;
 
 export function meta() {
-  return [{ title: pageTitle("Promotion Stages") }];
+  return [{ title: pageTitle("Promotion stages") }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -39,25 +50,43 @@ export async function loader({ request }: Route.LoaderArgs) {
   const archivedFilter = url.searchParams.get("archived") ?? "active";
   const integration = optionalValue(url.searchParams.get("integration"));
   const project = optionalValue(url.searchParams.get("project"));
+  const application = optionalValue(url.searchParams.get("application"));
+  const cluster = optionalValue(url.searchParams.get("cluster"));
+  const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request);
   const [stagesResult, principalResult] = await Promise.all([
     listPromotionStages({
       client,
       query: {
         archived: archivedFilter === "all" ? undefined : archivedFilter === "archived",
+        application,
+        cluster,
         integration,
-        limit: stageLimit,
+        limit: pageSize,
+        offset: (requestedPage - 1) * pageSize,
         project,
       },
     }),
     getCurrentPrincipal({ client }),
   ]);
 
+  if (stagesResult.data) {
+    const lastPage = Math.max(1, Math.ceil(stagesResult.data.total / pageSize));
+    if (requestedPage > lastPage) {
+      if (lastPage === 1) url.searchParams.delete("page");
+      else url.searchParams.set("page", String(lastPage));
+      return redirect(`${url.pathname}${url.search}`);
+    }
+  }
+
   return {
     archivedFilter,
+    application,
     available: stagesResult.data !== undefined,
+    cluster,
     error: stagesResult.error?.detail ?? stagesResult.error?.title,
     integration,
+    page: requestedPage,
     principal: principalResult.data,
     project,
     stages: stagesResult.data?.items ?? [],
@@ -69,8 +98,8 @@ export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
   const stageId = formValue(formData, "stageId");
   const mode = formValue(formData, "mode") as PromotionPolicyMode;
-  const reason = optionalValue(formValue(formData, "reason"));
-  const expiresAtValue = optionalValue(formValue(formData, "expiresAt"));
+  const reason = optionalFormValue(formData, "reason");
+  const expiresAtValue = optionalFormValue(formData, "expiresAt");
   const result = await updatePromotionStagePolicy({
     body: {
       mode,
@@ -82,10 +111,11 @@ export async function action({ request }: Route.ActionArgs) {
   });
 
   return result.data
-    ? { message: "The Stage policy was updated." }
+    ? { message: "The Stage policy was updated.", stageId }
     : {
         error:
           result.error?.detail ?? result.error?.title ?? "The Stage policy could not be updated.",
+        stageId,
       };
 }
 
@@ -94,57 +124,39 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
 
   return (
     <Stack gap="lg">
-      <Group align="flex-start" justify="space-between">
-        <Stack gap={2}>
-          <Title order={1}>Promotion Stages</Title>
-          <Text c="dimmed">Observed Kargo inventory and review policy.</Text>
-        </Stack>
-        <Group>
-          <Anchor component={Link} to="/promotion-pipelines">
-            Compare Freight
-          </Anchor>
-          <Anchor component={Link} to="/promotion-branch-drift">
-            Branch drift
-          </Anchor>
-          <Anchor component={Link} to="/promotions">
-            View Promotions
-          </Anchor>
-        </Group>
-      </Group>
-
-      {actionData?.error ? (
-        <Alert color="red" title="Policy update failed">
-          {actionData.error}
-        </Alert>
-      ) : null}
-      {actionData?.message ? (
-        <Alert color="green" title="Policy updated">
-          {actionData.message}
-        </Alert>
-      ) : null}
+      <PageHeader
+        description="Observed Kargo inventory and review policy."
+        title="Promotion stages"
+      />
 
       <StageFilters
         archivedFilter={loaderData.archivedFilter}
+        application={loaderData.application}
+        cluster={loaderData.cluster}
         integration={loaderData.integration}
         project={loaderData.project}
       />
 
       {!loaderData.available ? (
-        <Alert color="red" title="Promotion Stages unavailable">
+        <Alert color="red" title="Promotion stages unavailable">
           {loaderData.error ?? "The Slipramp API could not be reached."}
         </Alert>
       ) : loaderData.stages.length === 0 ? (
         <Paper p="md" withBorder>
-          <Text c="dimmed">No observed Stages match these filters.</Text>
+          <Text c="dimmed">No observed stages match these filters.</Text>
         </Paper>
       ) : (
-        <StageTable canWrite={canWrite} stages={loaderData.stages} />
+        <StageTable actionData={actionData} canWrite={canWrite} stages={loaderData.stages} />
       )}
 
-      {loaderData.available && loaderData.total > loaderData.stages.length ? (
-        <Text c="dimmed" size="sm">
-          Showing the first {loaderData.stages.length} of {loaderData.total} matching Stages.
-        </Text>
+      {loaderData.available && loaderData.total > 0 ? (
+        <ListPagination
+          itemCount={loaderData.stages.length}
+          noun="Stages"
+          page={loaderData.page}
+          pageSize={pageSize}
+          total={loaderData.total}
+        />
       ) : null}
     </Stack>
   );
@@ -152,70 +164,168 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
 
 function StageFilters({
   archivedFilter,
+  application,
+  cluster,
   integration,
   project,
-}: Readonly<{ archivedFilter: string; integration?: string; project?: string }>) {
+}: Readonly<{
+  archivedFilter: string;
+  application?: string;
+  cluster?: string;
+  integration?: string;
+  project?: string;
+}>) {
   return (
-    <Paper p="md" withBorder>
-      <Form method="get">
-        <Group align="flex-end">
-          <NativeSelect
-            defaultValue={archivedFilter}
-            label="Inventory"
-            name="archived"
-            data={[
-              { label: "Active Stages", value: "active" },
-              { label: "Archived Stages", value: "archived" },
-              { label: "All Stages", value: "all" },
-            ]}
-          />
-          <TextInput defaultValue={integration} label="Integration" name="integration" />
-          <TextInput defaultValue={project} label="Project" name="project" />
-          <Button type="submit" variant="light">
-            Apply filters
-          </Button>
-        </Group>
-      </Form>
-    </Paper>
+    <SearchParamFilters
+      active={
+        archivedFilter !== "active" || Boolean(application || cluster || integration || project)
+      }
+      clearTo="/promotion-stages"
+    >
+      <PromotionScopeFilters
+        application={application}
+        integration={integration}
+        project={project}
+      />
+      <NativeSelect
+        defaultValue={archivedFilter}
+        label="Status"
+        name="archived"
+        data={[
+          { label: "Active Stages", value: "active" },
+          { label: "Archived Stages", value: "archived" },
+          { label: "All Stages", value: "all" },
+        ]}
+        style={{ flex: "1 1 160px" }}
+      />
+      <TextInput
+        defaultValue={cluster}
+        label="Cluster"
+        name="cluster"
+        style={{ flex: "1 1 160px" }}
+        type="search"
+      />
+    </SearchParamFilters>
   );
 }
 
 function StageTable({
+  actionData,
   canWrite,
   stages,
-}: Readonly<{ canWrite: boolean; stages: PromotionStage[] }>) {
+}: Readonly<{
+  actionData: Route.ComponentProps["actionData"];
+  canWrite: boolean;
+  stages: PromotionStage[];
+}>) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedStageId = searchParams.get("policy") ?? undefined;
+  const selectedStage = stages.find((stage) => stage.id === selectedStageId);
+  const handledActionData = useRef<unknown>(actionData);
+
+  const setSelectedStageId = useCallback(
+    (stageId: string | undefined, replace = false) => {
+      const nextSearchParams = new URLSearchParams(searchParams);
+      if (stageId) {
+        nextSearchParams.set("policy", stageId);
+      } else {
+        nextSearchParams.delete("policy");
+      }
+      setSearchParams(nextSearchParams, { preventScrollReset: true, replace });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  useEffect(() => {
+    if (!actionData || handledActionData.current === actionData) {
+      return;
+    }
+
+    handledActionData.current = actionData;
+    if (actionData.stageId === selectedStageId && actionData.message) {
+      notifications.show({
+        color: "green",
+        message: actionData.message,
+        title: "Policy updated",
+      });
+      setSelectedStageId(undefined, true);
+    }
+  }, [actionData, selectedStageId, setSelectedStageId]);
+
   return (
-    <Paper withBorder>
-      <Table.ScrollContainer minWidth={1400}>
-        <Table verticalSpacing="sm">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Stage</Table.Th>
-              <Table.Th>Application</Table.Th>
-              <Table.Th>Freight</Table.Th>
-              <Table.Th>Observation</Table.Th>
-              <Table.Th>Reviews</Table.Th>
-              <Table.Th>Policy</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {stages.map((stage) => (
-              <StageRow canWrite={canWrite} key={stage.id} stage={stage} />
-            ))}
-          </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
-    </Paper>
+    <>
+      <Paper withBorder>
+        <Table.ScrollContainer minWidth={1060} type="native">
+          <Table verticalSpacing="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Stage</Table.Th>
+                <Table.Th>Application</Table.Th>
+                <Table.Th>Freight</Table.Th>
+                <Table.Th>Activity</Table.Th>
+                <Table.Th>Policy</Table.Th>
+                <Table.Th aria-label="Actions" />
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {stages.map((stage) => (
+                <StageRow
+                  canWrite={canWrite}
+                  key={stage.id}
+                  onEditPolicy={() => setSelectedStageId(stage.id)}
+                  stage={stage}
+                />
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      </Paper>
+
+      <Modal
+        centered
+        onClose={() => setSelectedStageId(undefined, true)}
+        opened={selectedStage !== undefined}
+        size="lg"
+        title={selectedStage ? `Policy · ${selectedStage.name}` : "Stage policy"}
+      >
+        {selectedStage ? (
+          <Stack gap="md">
+            <Text c="dimmed" size="sm">
+              {selectedStage.application} · {selectedStage.environment} · {selectedStage.cluster}
+            </Text>
+            {actionData?.stageId === selectedStage.id && actionData.error ? (
+              <Alert color="red" title="Policy update failed">
+                {actionData.error}
+              </Alert>
+            ) : null}
+            <PolicyForm
+              onCancel={() => setSelectedStageId(undefined, true)}
+              stage={selectedStage}
+            />
+          </Stack>
+        ) : null}
+      </Modal>
+    </>
   );
 }
 
-function StageRow({ canWrite, stage }: Readonly<{ canWrite: boolean; stage: PromotionStage }>) {
+function StageRow({
+  canWrite,
+  onEditPolicy,
+  stage,
+}: Readonly<{ canWrite: boolean; onEditPolicy: () => void; stage: PromotionStage }>) {
   return (
     <Table.Tr>
       <Table.Td>
         <Stack gap={0}>
           <Group gap="xs">
-            <Text fw={600}>{stage.name}</Text>
+            {stage.kargoUrl ? (
+              <KargoLink fw={600} size="sm" url={stage.kargoUrl}>
+                {stage.name}
+              </KargoLink>
+            ) : (
+              <Text fw={600}>{stage.name}</Text>
+            )}
             {stage.archivedAt ? (
               <Badge color="gray" size="sm" variant="light">
                 Archived
@@ -239,49 +349,98 @@ function StageRow({ canWrite, stage }: Readonly<{ canWrite: boolean; stage: Prom
         </Stack>
       </Table.Td>
       <Table.Td>
-        <Code block maw={320} style={{ maxHeight: 120, overflow: "auto" }}>
-          {JSON.stringify(stage.freight, null, 2)}
-        </Code>
+        <FreightSummary stage={stage} />
       </Table.Td>
       <Table.Td>
         <Stack gap={0}>
-          <Text component="time" dateTime={stage.lastObservedAt} size="sm">
-            {formatTimestamp(stage.lastObservedAt)}
-          </Text>
+          <RelativeTime size="sm" value={stage.lastObservedAt} />
           <Text c="dimmed" size="xs">
-            Resource version {stage.resourceVersion}
+            {stage.pendingPromotionCount} pending review
           </Text>
         </Stack>
       </Table.Td>
       <Table.Td>
-        <Anchor component={Link} to={`/promotions?stageId=${stage.id}`}>
-          {stage.pendingPromotionCount} pending
-        </Anchor>
+        <PolicySummary stage={stage} />
       </Table.Td>
-      <Table.Td>
+      <Table.Td ta="right">
         {canWrite && !stage.archivedAt ? (
-          <PolicyForm stage={stage} />
-        ) : (
-          <PolicySummary stage={stage} />
-        )}
+          <Button
+            leftSection={<IconSettings size={14} />}
+            onClick={onEditPolicy}
+            size="compact-xs"
+            variant="light"
+          >
+            Edit policy
+          </Button>
+        ) : null}
       </Table.Td>
     </Table.Tr>
   );
 }
 
-function PolicyForm({ stage }: Readonly<{ stage: PromotionStage }>) {
+function FreightSummary({ stage }: Readonly<{ stage: PromotionStage }>) {
+  if (stage.freight.items.length === 0) {
+    return (
+      <Text c="dimmed" size="sm">
+        No Freight reported
+      </Text>
+    );
+  }
+
+  return (
+    <Stack gap={4} maw={360}>
+      {stage.freight.items.slice(0, 3).map((item) => (
+        <Stack gap={3} key={`${item.origin}:${item.name}`}>
+          <Group gap={4}>
+            {item.artifacts.length === 0 ? (
+              <Badge color="gray" size="sm" variant="light">
+                No artifacts
+              </Badge>
+            ) : (
+              item.artifacts.map((artifact) => (
+                <Badge
+                  key={`${artifact.kind}:${artifact.repository ?? ""}:${artifact.version}`}
+                  size="sm"
+                  title={`Freight ${item.name} · ${artifact.kind}${artifact.repository ? ` · ${artifact.repository}` : ""}`}
+                  variant="light"
+                >
+                  {abbreviateMiddle(artifact.version, 20)}
+                </Badge>
+              ))
+            )}
+          </Group>
+          <Text c="dimmed" lineClamp={1} size="xs" title={item.origin}>
+            {item.origin.replace(/^Warehouse\//, "")}
+          </Text>
+        </Stack>
+      ))}
+      {stage.freight.items.length > 3 ? (
+        <Text c="dimmed" size="xs">
+          +{stage.freight.items.length - 3} more
+        </Text>
+      ) : null}
+      <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
+        View promotion history
+      </Anchor>
+    </Stack>
+  );
+}
+
+function PolicyForm({
+  onCancel,
+  stage,
+}: Readonly<{ onCancel: () => void; stage: PromotionStage }>) {
   const navigation = useNavigation();
   const submittingStage = navigation.formData?.get("stageId") === stage.id;
 
   return (
     <Form method="post">
-      <Stack gap="xs" miw={300}>
+      <Stack gap="md">
         <input name="stageId" type="hidden" value={stage.id} />
         <NativeSelect
           defaultValue={stage.policy.configuredMode}
           label="Mode"
           name="mode"
-          size="xs"
           data={[
             { label: "Automatic", value: "automatic" },
             { label: "Review required", value: "review-required" },
@@ -292,20 +451,23 @@ function PolicyForm({ stage }: Readonly<{ stage: PromotionStage }>) {
           description="Optional RFC 3339 time for review-required mode"
           label="Expires at"
           name="expiresAt"
-          size="xs"
         />
         <TextInput
           defaultValue={stage.policy.reason}
           label="Reason"
           maxLength={4096}
           name="reason"
-          size="xs"
         />
         <Group justify="space-between">
           <Badge variant="light">Effective: {policyLabel(stage.policy.effectiveMode)}</Badge>
-          <Button loading={submittingStage} size="compact-xs" type="submit" variant="light">
-            Save
-          </Button>
+          <Group gap="sm">
+            <Button onClick={onCancel} type="button" variant="default">
+              Cancel
+            </Button>
+            <Button loading={submittingStage} type="submit">
+              Save policy
+            </Button>
+          </Group>
         </Group>
       </Stack>
     </Form>
@@ -328,9 +490,16 @@ function PolicySummary({ stage }: Readonly<{ stage: PromotionStage }>) {
       ) : null}
       {stage.policy.reason ? <Text size="xs">{stage.policy.reason}</Text> : null}
       {stage.policy.updatedBy ? (
-        <Text c="dimmed" size="xs">
-          Updated by {stage.policy.updatedBy.displayName}
-        </Text>
+        <Group gap={4}>
+          <Text c="dimmed" size="xs">
+            Updated by
+          </Text>
+          <Identity
+            avatarSize={20}
+            name={stage.policy.updatedBy.displayName}
+            nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
+          />
+        </Group>
       ) : null}
     </Stack>
   );
@@ -346,15 +515,4 @@ function canWritePromotions(principal?: ProductPrincipal) {
 
 function optionalValue(value: string | null) {
   return value?.trim() || undefined;
-}
-
-function formValue(formData: FormData, name: string) {
-  const value = formData.get(name);
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value),
-  );
 }

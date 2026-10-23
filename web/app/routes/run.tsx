@@ -1,4 +1,5 @@
 import {
+  Accordion,
   Alert,
   Anchor,
   Badge,
@@ -6,12 +7,26 @@ import {
   Code,
   Group,
   Paper,
+  SimpleGrid,
   Stack,
   Table,
   Text,
+  Timeline,
   Title,
 } from "@mantine/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  IconBan,
+  IconCheck,
+  IconClock,
+  IconClockExclamation,
+  IconLoader2,
+  IconPlayerPlay,
+  IconPlayerStop,
+  IconServer2,
+  IconX,
+  type TablerIcon,
+} from "@tabler/icons-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Form, Link, redirect, useNavigation, useRevalidator } from "react-router";
 
 import { ANSI_DEFAULT_BACKGROUND, ANSI_DEFAULT_FOREGROUND, parseAnsi } from "~/ansi";
@@ -20,12 +35,21 @@ import {
   cancelRun,
   createRun,
   getRun,
+  listRepositories,
   listRunArtifacts,
   type Artifact,
+  type Run,
   type RunArtifactConsumer,
   type RunArtifactInput,
 } from "~/api/generated";
+import { RelativeTime, Timestamp } from "~/components/display";
+import { CommitDetails, CommitReference } from "~/components/git-commit";
+import { Identity } from "~/components/identity";
+import { PageBackLink } from "~/components/page-back-link";
+import { PageHeader, SectionHeader } from "~/components/page";
+import { formatBinarySize, formatDuration, shortIdentifier } from "~/display";
 import { pageTitle } from "~/page-title";
+import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 
 import type { Route } from "./+types/run";
@@ -39,13 +63,17 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request);
-  const [runResult, artifactResult] = await Promise.all([
+  const [runResult, artifactResult, repositoriesResult] = await Promise.all([
     getRun({ client, path: { runId: params.runId } }),
     listRunArtifacts({ client, path: { runId: params.runId } }),
+    listRepositories({ client, query: { limit: 200 } }),
   ]);
 
   return {
     artifacts: artifactResult.data?.items,
+    repositoryName: repositoriesResult.data?.items.find(
+      (repository) => repository.id === runResult.data?.repositoryId,
+    )?.name,
     run: runResult.data,
     runId: params.runId,
   };
@@ -128,52 +156,64 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
   if (!loaderData.run) {
     return (
-      <Alert color="red" title="Run not found">
-        The Run could not be loaded.
-      </Alert>
+      <Stack gap="md">
+        <PageBackLink label="Back to run history" to="/runs" />
+        <Alert color="red" title="Run not found">
+          The Run could not be loaded.
+        </Alert>
+      </Stack>
     );
   }
 
   const run = loaderData.run;
   return (
     <Stack gap="lg">
-      <Group justify="space-between">
-        <Stack gap={2}>
-          <Title order={1}>Run {run.id.slice(0, 8)}</Title>
-          <Text c="dimmed">
-            {run.target} · {run.action} · <Code>{run.commitSha.slice(0, 12)}</Code>
-          </Text>
-          <Text c="dimmed" size="sm">
-            Source: {runSourceLabel(run.source)}
-          </Text>
-        </Stack>
-        <Group gap="sm">
-          {run.phase !== "finished" && run.cancellationRequestedAt === undefined ? (
+      <PageHeader
+        actions={
+          run.phase !== "finished" && run.cancellationRequestedAt === undefined ? (
             <Form method="post">
               <input name="intent" type="hidden" value="cancel" />
               <Button
                 color="red"
+                leftSection={<IconPlayerStop size={16} />}
                 loading={
                   navigation.state === "submitting" &&
                   navigation.formData?.get("intent") === "cancel"
                 }
+                size="compact-md"
                 type="submit"
-                variant="light"
+                variant="subtle"
               >
-                Cancel Run
+                Cancel run
               </Button>
             </Form>
-          ) : null}
-          {run.phase !== "finished" && run.cancellationRequestedAt !== undefined ? (
-            <Badge color="yellow" size="lg" variant="light">
-              Cancellation requested
+          ) : null
+        }
+        back={<PageBackLink label="Back to run history" to="/runs" />}
+        badges={
+          <>
+            <Badge color={runStatusColor(run)} variant="light">
+              {run.outcome ?? run.phase}
             </Badge>
-          ) : null}
-          <Badge color={run.outcome === "failed" ? "red" : undefined} size="lg">
-            {run.outcome ?? run.phase}
-          </Badge>
-        </Group>
-      </Group>
+            {run.phase !== "finished" && run.cancellationRequestedAt !== undefined ? (
+              <Badge color="yellow" variant="outline">
+                Cancellation requested
+              </Badge>
+            ) : null}
+          </>
+        }
+        description={
+          <Text c="dimmed">
+            {run.target} · {run.action} · <CommitReference commit={run.commit} />
+          </Text>
+        }
+        details={
+          <Text c="dimmed" size="sm">
+            Source: {runSourceLabel(run.source)}
+          </Text>
+        }
+        title={`Run ${run.id.slice(0, 8)}`}
+      />
 
       {actionData?.error ? (
         <Alert color="red" title="Run operation failed">
@@ -188,6 +228,42 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
+      {run.cancellationRequestedAt ? (
+        <Alert color="yellow" title="Cancellation requested">
+          <Group gap="xs" wrap="wrap">
+            <Text span>This Run was asked to stop</Text>
+            <RelativeTime span value={run.cancellationRequestedAt} />
+            {run.canceledBy ? (
+              <>
+                <Text span>by</Text>
+                <Identity
+                  avatarSize={22}
+                  name={run.canceledBy.displayName}
+                  nameProps={{ fw: 500, size: "sm" }}
+                />
+              </>
+            ) : null}
+          </Group>
+        </Alert>
+      ) : null}
+
+      {run.phase === "finished" && (run.outcomeReason || run.outcomeMessage) ? (
+        <Alert color={runStatusColor(run)} title={run.outcomeReason ?? "Run finished"}>
+          <Stack gap={4}>
+            {run.outcomeMessage ? <Text>{run.outcomeMessage}</Text> : null}
+            {run.exitCode !== undefined ? (
+              <Text size="sm">
+                Process exit code <Code>{run.exitCode}</Code>
+              </Text>
+            ) : null}
+          </Stack>
+        </Alert>
+      ) : null}
+
+      <CommitDetails commit={run.commit} />
+      <RunOverview repositoryName={loaderData.repositoryName} run={run} />
+      <ParameterTable parameters={run.parameters} />
+
       <InputTable inputs={run.inputs} />
       <LiveLog runId={run.id} />
       <ArtifactTable
@@ -199,6 +275,350 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
   );
 }
 
+function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string; run: Run }>) {
+  const actor = run.createdBy?.displayName ?? (run.source.type === "git" ? "Automation" : "System");
+
+  return (
+    <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
+      <Paper p="lg" withBorder>
+        <Stack gap="lg">
+          <Title order={2}>Execution context</Title>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+            <Fact label="Repository">
+              <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
+                {repositoryName ?? shortIdentifier(run.repositoryId)}
+              </Anchor>
+            </Fact>
+            <Fact label="Target / action">
+              <Anchor
+                component={Link}
+                to={`/repositories/${run.repositoryId}/targets/${encodeURIComponent(run.target)}`}
+              >
+                {run.target} · {run.action}
+              </Anchor>
+            </Fact>
+            <Fact label="Cluster / placement">
+              <Text size="sm">
+                {run.cluster} · {run.placement}
+              </Text>
+            </Fact>
+            <Fact label="Source / actor">
+              <Stack gap={4}>
+                <Text size="sm">{runSourceLabel(run.source)}</Text>
+                <Identity avatarSize={24} name={actor} nameProps={{ fw: 500, size: "xs" }} />
+              </Stack>
+            </Fact>
+            <Fact label="Git revision">
+              <CommitReference commit={run.commit} />
+            </Fact>
+            <Fact label="Catalog revision">
+              <Code title={run.catalogRevisionId}>
+                {shortIdentifier(run.catalogRevisionId, 12)}
+              </Code>
+            </Fact>
+            <Fact label="Run ID">
+              <Code style={{ overflowWrap: "anywhere" }}>{run.id}</Code>
+            </Fact>
+            <Fact label="Job UID">
+              {run.jobUid ? (
+                <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
+              ) : (
+                <Text c="dimmed" size="sm">
+                  Not materialized
+                </Text>
+              )}
+            </Fact>
+          </SimpleGrid>
+          {run.lastObservedAt ? (
+            <Group gap={4}>
+              <Text c="dimmed" size="xs">
+                Controller observation {run.observationState ?? "current"} · last seen
+              </Text>
+              <RelativeTime c="dimmed" size="xs" value={run.lastObservedAt} />
+            </Group>
+          ) : null}
+        </Stack>
+      </Paper>
+
+      <Paper p="lg" withBorder>
+        <RunLifecycle run={run} />
+      </Paper>
+    </SimpleGrid>
+  );
+}
+
+function Fact({ children, label }: Readonly<{ children: ReactNode; label: string }>) {
+  return (
+    <Stack gap={3}>
+      <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+        {label}
+      </Text>
+      {children}
+    </Stack>
+  );
+}
+
+function RunLifecycle({ run }: Readonly<{ run: Run }>) {
+  const activeStep = lifecycleActiveStep(run);
+  const steps: Array<{
+    detail: ReactNode;
+    icon: TablerIcon;
+    label: string;
+    value?: string;
+  }> = [
+    {
+      detail: lifecycleDuration(
+        run.createdAt,
+        run.assignedAt,
+        activeStep === 0,
+        "Waiting for assignment",
+        "Waited",
+      ),
+      icon: IconClock,
+      label: "Queued",
+      value: run.createdAt,
+    },
+    {
+      detail: lifecycleDuration(
+        run.assignedAt,
+        run.preparingAt,
+        activeStep === 1,
+        "Waiting for Job materialization",
+        "Job materialized in",
+      ),
+      icon: IconServer2,
+      label: "Assigned",
+      value: run.assignedAt,
+    },
+    {
+      detail: lifecycleDuration(
+        run.preparingAt,
+        run.startedAt,
+        activeStep === 2,
+        "Preparing checkout and inputs",
+        "Prepared in",
+      ),
+      icon: IconLoader2,
+      label: "Preparing",
+      value: run.preparingAt,
+    },
+    {
+      detail: lifecycleDuration(
+        run.startedAt,
+        run.finishedAt,
+        activeStep === 3,
+        "Action is executing",
+        "Executed for",
+      ),
+      icon: IconPlayerPlay,
+      label: "Running",
+      value: run.startedAt,
+    },
+    {
+      detail: run.finishedAt
+        ? `Run ${run.outcome ?? "finished"}${run.exitCode === undefined ? "" : ` with exit code ${run.exitCode}`}`
+        : "Terminal outcome not recorded",
+      icon: finishedIcon(run),
+      label: "Finished",
+      value: run.finishedAt,
+    },
+  ];
+  const summary = [
+    run.assignedAt ? `Queue ${formatDuration(run.createdAt, run.assignedAt)}` : undefined,
+    run.startedAt ? `To start ${formatDuration(run.createdAt, run.startedAt)}` : undefined,
+    run.startedAt && run.finishedAt
+      ? `Runtime ${formatDuration(run.startedAt, run.finishedAt)}`
+      : undefined,
+  ].filter((value): value is string => value !== undefined);
+
+  return (
+    <Stack gap="lg">
+      <SectionHeader
+        actions={
+          <Group gap="xs">
+            {summary.map((value) => (
+              <Badge key={value} tt="none" variant="light">
+                {value}
+              </Badge>
+            ))}
+          </Group>
+        }
+        title="Lifecycle"
+      />
+      <Timeline
+        active={activeStep}
+        bulletSize={34}
+        className="lifecycle-timeline"
+        color={run.phase === "finished" ? runStatusColor(run) : "lilac"}
+        lineWidth={3}
+      >
+        {steps.map((step, index) => (
+          <LifecycleStep
+            active={activeStep === index && run.phase !== "finished"}
+            complete={step.value !== undefined && (index < activeStep || run.phase === "finished")}
+            icon={step.icon}
+            key={step.label}
+            label={step.label}
+            status={index === 4 && run.outcome ? run.outcome : undefined}
+            value={step.value}
+          >
+            {step.detail}
+          </LifecycleStep>
+        ))}
+      </Timeline>
+    </Stack>
+  );
+}
+
+function LifecycleStep({
+  active,
+  children,
+  complete,
+  icon: Icon,
+  label,
+  status,
+  value,
+}: Readonly<{
+  active: boolean;
+  children: ReactNode;
+  complete: boolean;
+  icon: TablerIcon;
+  label: string;
+  status?: Run["outcome"];
+  value?: string;
+}>) {
+  const state = status ?? (active ? "Current" : complete ? "Complete" : "Waiting");
+  const color = status ? runOutcomeColor(status) : active ? "lilac" : "gray";
+
+  return (
+    <Timeline.Item
+      bullet={<Icon aria-hidden size={17} stroke={2.2} />}
+      className="lifecycle-step"
+      title={
+        <Group gap="xs" justify="space-between" wrap="nowrap">
+          <Text fw={650}>{label}</Text>
+          <Badge color={color} size="xs" variant={active || status ? "light" : "outline"}>
+            {state}
+          </Badge>
+        </Group>
+      }
+    >
+      {value ? (
+        <Stack gap={3}>
+          <Timestamp c="dimmed" size="sm" value={value} />
+          <Text c="dimmed" size="xs">
+            {children}
+          </Text>
+        </Stack>
+      ) : (
+        <Text c="dimmed" size="sm">
+          Not reached
+        </Text>
+      )}
+    </Timeline.Item>
+  );
+}
+
+function runOutcomeColor(outcome: NonNullable<Run["outcome"]>) {
+  switch (outcome) {
+    case "succeeded":
+      return "green";
+    case "failed":
+      return "red";
+    case "canceled":
+      return "gray";
+    case "timed-out":
+      return "orange";
+  }
+}
+
+function lifecycleDuration(
+  start: string | undefined,
+  end: string | undefined,
+  active: boolean,
+  activeLabel: string,
+  completeLabel: string,
+) {
+  if (!start) return "Not reached";
+  if (end) return `${completeLabel} ${formatDuration(start, end)}`;
+  if (active) return activeLabel;
+  return "Transition timestamp unavailable";
+}
+
+function finishedIcon(run: Run): TablerIcon {
+  switch (run.outcome) {
+    case "succeeded":
+      return IconCheck;
+    case "failed":
+      return IconX;
+    case "canceled":
+      return IconBan;
+    case "timed-out":
+      return IconClockExclamation;
+    default:
+      return IconCheck;
+  }
+}
+
+function lifecycleActiveStep(run: Run) {
+  switch (run.phase) {
+    case "queued":
+      return 0;
+    case "assigned":
+      return 1;
+    case "preparing":
+      return 2;
+    case "running":
+      return 3;
+    case "finished":
+      return 4;
+  }
+}
+
+function ParameterTable({ parameters }: Readonly<{ parameters: Run["parameters"] }>) {
+  const entries = Object.entries(parameters).toSorted(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  if (entries.length === 0) return null;
+
+  return (
+    <Accordion className="run-parameters" defaultValue={null} order={2} variant="contained">
+      <Accordion.Item value="parameters">
+        <Accordion.Control>
+          <Group gap="sm">
+            <Text fw={650} size="lg">
+              Parameters
+            </Text>
+            <Badge variant="light">{entries.length}</Badge>
+          </Group>
+        </Accordion.Control>
+        <Accordion.Panel>
+          <Table.ScrollContainer minWidth={520} type="native">
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Name</Table.Th>
+                  <Table.Th>Value</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {entries.map(([name, value]) => (
+                  <Table.Tr key={name}>
+                    <Table.Td>{name}</Table.Td>
+                    <Table.Td>
+                      <Code>{String(value)}</Code>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Accordion.Panel>
+      </Accordion.Item>
+    </Accordion>
+  );
+}
+
 function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInput> }>) {
   const entries = Object.entries(inputs).toSorted(([left], [right]) => left.localeCompare(right));
   if (entries.length === 0) return null;
@@ -207,7 +627,7 @@ function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInp
     <Paper p="md" withBorder>
       <Stack gap="sm">
         <Title order={2}>Inputs</Title>
-        <Table.ScrollContainer minWidth={720}>
+        <Table.ScrollContainer minWidth={720} type="native">
           <Table>
             <Table.Thead>
               <Table.Tr>
@@ -235,13 +655,13 @@ function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInp
                       {input.producerRunId.slice(0, 8)}
                     </Anchor>
                   </Table.Td>
-                  <Table.Td>{formatBytes(input.sizeBytes)}</Table.Td>
+                  <Table.Td>{formatBinarySize(input.sizeBytes)}</Table.Td>
                   <Table.Td>
-                    <Code>{input.sha256.slice(0, 12)}</Code>
+                    <Code>{shortIdentifier(input.sha256, 12)}</Code>
                   </Table.Td>
                   <Table.Td>
                     <Stack gap={0}>
-                      <Code>{input.commitSha.slice(0, 12)}</Code>
+                      <CommitReference commit={input.commit} />
                       <Text c="dimmed" size="xs">
                         Catalog {input.catalogRevisionId.slice(0, 8)}
                       </Text>
@@ -259,6 +679,7 @@ function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInp
 
 function LiveLog({ runId }: Readonly<{ runId: string }>) {
   const [contents, setContents] = useState("");
+  const [receivedBytes, setReceivedBytes] = useState(0);
   const [status, setStatus] = useState("Connecting");
   const outputRef = useRef<HTMLElement>(null);
   const logSegments = useMemo(() => parseAnsi(contents), [contents]);
@@ -292,6 +713,7 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
         const binary = atob(payload.contentsBase64);
         const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
         nextOffsetBytes = payload.nextOffsetBytes;
+        setReceivedBytes(nextOffsetBytes);
         setContents((current) => current + decoder.decode(bytes, { stream: true }));
       });
       source.addEventListener("sealed", () => {
@@ -328,9 +750,15 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
       <Stack gap="sm">
         <Group justify="space-between">
           <Title order={2}>Logs</Title>
-          <Badge variant="light">{status}</Badge>
+          <Group gap="xs">
+            <Text c="dimmed" size="xs">
+              {formatBinarySize(receivedBytes)} received
+            </Text>
+            <Badge variant="light">{status}</Badge>
+          </Group>
         </Group>
         <Code
+          className="run-log"
           ref={outputRef}
           block
           mah={480}
@@ -373,7 +801,7 @@ function ArtifactTable({
         {artifacts.length === 0 ? (
           <Text c="dimmed">No artifacts have been published.</Text>
         ) : (
-          <Table.ScrollContainer minWidth={760}>
+          <Table.ScrollContainer minWidth={760} type="native">
             <Table>
               <Table.Thead>
                 <Table.Tr>
@@ -405,9 +833,9 @@ function ArtifactTable({
                         </Text>
                       </Stack>
                     </Table.Td>
-                    <Table.Td>{formatBytes(artifact.sizeBytes)}</Table.Td>
+                    <Table.Td>{formatBinarySize(artifact.sizeBytes)}</Table.Td>
                     <Table.Td>
-                      <Code>{artifact.sha256?.slice(0, 12) ?? "—"}</Code>
+                      <Code>{artifact.sha256 ? shortIdentifier(artifact.sha256, 12) : "—"}</Code>
                     </Table.Td>
                     <Table.Td>
                       <Stack gap={0}>
@@ -415,8 +843,8 @@ function ArtifactTable({
                           {artifact.provenance.target} · {artifact.provenance.action}
                         </Text>
                         <Text c="dimmed" size="xs">
-                          <Code>{artifact.provenance.commitSha.slice(0, 12)}</Code> · Catalog{" "}
-                          {artifact.provenance.catalogRevisionId.slice(0, 8)}
+                          <CommitReference commit={artifact.provenance.commit} /> · Catalog{" "}
+                          {shortIdentifier(artifact.provenance.catalogRevisionId)}
                         </Text>
                       </Stack>
                     </Table.Td>
@@ -484,10 +912,4 @@ function ArtifactAction({
       </Button>
     </Form>
   );
-}
-
-function formatBytes(value: number) {
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }

@@ -91,6 +91,13 @@ func (s *Service) ListServiceAccounts(ctx context.Context) ([]productidentity.Pr
 	return principals, nil
 }
 
+func (s *Service) GetServiceAccount(
+	ctx context.Context,
+	principalID uuid.UUID,
+) (productidentity.Principal, error) {
+	return s.serviceAccount(ctx, principalID)
+}
+
 func (s *Service) CreateServiceAccount(
 	ctx context.Context,
 	displayName string,

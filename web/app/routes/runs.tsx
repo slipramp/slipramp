@@ -1,14 +1,40 @@
-import { Alert, Anchor, Badge, Code, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
-import { Link } from "react-router";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Group,
+  NativeSelect,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+} from "@mantine/core";
+import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { listRepositories, listRuns, type Run } from "~/api/generated";
+import {
+  listClusters,
+  listRepositories,
+  listRuns,
+  type Cluster,
+  type Repository,
+  type Run,
+} from "~/api/generated";
+import { RelativeTime, Timestamp } from "~/components/display";
+import { CommitReference } from "~/components/git-commit";
+import { Identity } from "~/components/identity";
+import { ListPagination, SearchParamFilters } from "~/components/list-controls";
+import { PageHeader } from "~/components/page";
+import { formatDuration, shortIdentifier } from "~/display";
 import { pageTitle } from "~/page-title";
+import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
+import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/runs";
 
-const historyLimit = 50;
+const pageSize = 25;
 
 export function meta() {
   return [{ title: pageTitle("Run history") }];
@@ -17,27 +43,66 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const repositoryId = optionalSearchValue(url, "repositoryId");
-  const target = optionalSearchValue(url, "target");
+  const target = repositoryId ? optionalSearchValue(url, "target") : undefined;
+  const cluster = optionalSearchValue(url, "cluster");
+  const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
+  const offset = (requestedPage - 1) * pageSize;
   const client = createServerAPIClient(request);
-  const [runsResult, repositoriesResult] = await Promise.all([
+  const [initialRunsResult, repositoriesResult, clustersResult] = await Promise.all([
     listRuns({
       client,
       query: {
-        limit: historyLimit,
+        cluster,
+        limit: pageSize,
+        offset,
         repositoryId,
         target,
       },
     }),
-    listRepositories({ client }),
+    listRepositories({ client, query: { limit: 200 } }),
+    listClusters({ client, query: { limit: 200 } }),
   ]);
 
+  if (!initialRunsResult.data) {
+    return {
+      available: false,
+      cluster,
+      clusters: clustersResult.data?.items ?? [],
+      error:
+        initialRunsResult.error?.detail ??
+        initialRunsResult.error?.title ??
+        "Run history could not be loaded.",
+      page: 1,
+      repositoryId,
+      repositories: repositoriesResult.data?.items ?? [],
+      runs: [],
+      target,
+      total: 0,
+    };
+  }
+
+  const pageCount = Math.ceil(initialRunsResult.data.total / pageSize);
+  const lastPage = Math.max(1, pageCount);
+  if (requestedPage > lastPage) {
+    if (lastPage === 1) {
+      url.searchParams.delete("page");
+    } else {
+      url.searchParams.set("page", String(lastPage));
+    }
+    return redirect(`${url.pathname}${url.search}`);
+  }
+
   return {
-    available: runsResult.data !== undefined,
-    error: runsResult.error?.detail ?? runsResult.error?.title,
+    available: true,
+    cluster,
+    clusters: clustersResult.data?.items ?? [],
+    error: undefined,
+    page: requestedPage,
     repositoryId,
     repositories: repositoriesResult.data?.items ?? [],
-    runs: runsResult.data?.items ?? [],
+    runs: initialRunsResult.data.items,
     target,
+    total: initialRunsResult.data.total,
   };
 }
 
@@ -45,27 +110,15 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
   const repositoryNames = new Map(
     loaderData.repositories.map((repository) => [repository.id, repository.name]),
   );
-  const repositoryName = loaderData.repositoryId
-    ? repositoryNames.get(loaderData.repositoryId)
-    : undefined;
-
   return (
     <Stack gap="lg">
-      <Group align="flex-start" justify="space-between">
-        <Stack gap={2}>
-          <Title order={1}>Run history</Title>
-          <Text c="dimmed">Up to {historyLimit} recent Runs, newest first.</Text>
-        </Stack>
-        {loaderData.repositoryId || loaderData.target ? (
-          <Anchor component={Link} to="/runs">
-            Clear filters
-          </Anchor>
-        ) : null}
-      </Group>
+      <PageHeader description="Immutable action executions, newest first." title="Run history" />
 
       <HistoryFilters
+        cluster={loaderData.cluster}
+        clusters={loaderData.clusters}
         repositoryId={loaderData.repositoryId}
-        repositoryName={repositoryName}
+        repositories={loaderData.repositories}
         target={loaderData.target}
       />
 
@@ -74,29 +127,77 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
           {loaderData.error ?? "The Slipramp API could not be reached."}
         </Alert>
       ) : (
-        <HistoryTable repositoryNames={repositoryNames} runs={loaderData.runs} />
+        <>
+          <HistoryTable repositoryNames={repositoryNames} runs={loaderData.runs} />
+          {loaderData.total > 0 ? (
+            <ListPagination
+              itemCount={loaderData.runs.length}
+              noun="Runs"
+              page={loaderData.page}
+              pageSize={pageSize}
+              total={loaderData.total}
+            />
+          ) : null}
+        </>
       )}
     </Stack>
   );
 }
 
 function HistoryFilters({
+  cluster,
+  clusters,
   repositoryId,
-  repositoryName,
+  repositories,
   target,
-}: Readonly<{ repositoryId?: string; repositoryName?: string; target?: string }>) {
-  if (!repositoryId && !target) return null;
-
+}: Readonly<{
+  cluster?: string;
+  clusters: Cluster[];
+  repositoryId?: string;
+  repositories: Repository[];
+  target?: string;
+}>) {
   return (
-    <Group gap="xs">
-      <Text c="dimmed" size="sm">
-        Filtered by
-      </Text>
-      {repositoryId ? (
-        <Badge variant="light">Repository: {repositoryName ?? repositoryId.slice(0, 8)}</Badge>
-      ) : null}
-      {target ? <Badge variant="light">Target: {target}</Badge> : null}
-    </Group>
+    <SearchParamFilters active={Boolean(cluster || repositoryId || target)} clearTo="/runs">
+      <NativeSelect
+        data={[
+          { label: "All repositories", value: "" },
+          ...repositories.map((repository) => ({ label: repository.name, value: repository.id })),
+        ]}
+        defaultValue={repositoryId ?? ""}
+        key={`repository:${repositoryId ?? ""}`}
+        label="Repository"
+        name="repositoryId"
+        onChange={(event) => {
+          if (event.currentTarget.value !== "") return;
+
+          const targetInput = event.currentTarget.form?.elements.namedItem("target");
+          if (targetInput instanceof HTMLInputElement) targetInput.value = "";
+        }}
+        style={{ flex: "1 1 260px" }}
+      />
+      <TextInput
+        defaultValue={target}
+        disabled={!repositoryId}
+        key={`target:${repositoryId ?? ""}:${target ?? ""}`}
+        label="Target"
+        name="target"
+        placeholder={repositoryId ? "Target name" : "Select a repository first"}
+        style={{ flex: "1 1 260px" }}
+        type="search"
+      />
+      <NativeSelect
+        data={[
+          { label: "All clusters", value: "" },
+          ...clusters.map((item) => ({ label: item.name, value: item.name })),
+        ]}
+        defaultValue={cluster ?? ""}
+        key={`cluster:${cluster ?? ""}`}
+        label="Cluster"
+        name="cluster"
+        style={{ flex: "1 1 220px" }}
+      />
+    </SearchParamFilters>
   );
 }
 
@@ -114,18 +215,16 @@ function HistoryTable({
 
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={960}>
+      <Table.ScrollContainer minWidth={1080} type="native">
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Run</Table.Th>
-              <Table.Th>Repository</Table.Th>
-              <Table.Th>Target / action</Table.Th>
+              <Table.Th>Run / workload</Table.Th>
               <Table.Th>Status</Table.Th>
-              <Table.Th>Source</Table.Th>
-              <Table.Th>Cluster</Table.Th>
-              <Table.Th>Commit</Table.Th>
-              <Table.Th>Created</Table.Th>
+              <Table.Th>Source / actor</Table.Th>
+              <Table.Th>Execution</Table.Th>
+              <Table.Th>Timing</Table.Th>
+              <Table.Th>Revision</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -133,30 +232,25 @@ function HistoryTable({
               <Table.Tr key={run.id}>
                 <Table.Td>
                   <Anchor component={Link} fw={600} to={`/runs/${run.id}`}>
-                    {run.id.slice(0, 8)}
+                    {run.target} · {run.action}
                   </Anchor>
-                </Table.Td>
-                <Table.Td>
-                  <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
-                    {repositoryNames.get(run.repositoryId) ?? run.repositoryId.slice(0, 8)}
-                  </Anchor>
-                </Table.Td>
-                <Table.Td>
-                  <Stack gap={0}>
+                  <Group gap="xs">
                     <Anchor
+                      c="dimmed"
                       component={Link}
+                      size="xs"
                       to={`/repositories/${run.repositoryId}/targets/${encodeURIComponent(run.target)}`}
                     >
-                      {run.target}
+                      {repositoryNames.get(run.repositoryId) ?? shortIdentifier(run.repositoryId)}
                     </Anchor>
                     <Text c="dimmed" size="xs">
-                      {run.action}
+                      Run {shortIdentifier(run.id)}
                     </Text>
-                  </Stack>
+                  </Group>
                 </Table.Td>
                 <Table.Td>
                   <Group gap="xs" wrap="nowrap">
-                    <Badge color={statusColor(run)} variant="light">
+                    <Badge color={runStatusColor(run)} variant="light">
                       {run.outcome ?? run.phase}
                     </Badge>
                     {run.observationState === "unknown" ? (
@@ -166,15 +260,47 @@ function HistoryTable({
                     ) : null}
                   </Group>
                 </Table.Td>
-                <Table.Td>{runSourceLabel(run.source)}</Table.Td>
-                <Table.Td>{run.cluster}</Table.Td>
                 <Table.Td>
-                  <Code>{run.commitSha.slice(0, 12)}</Code>
+                  <Stack gap={0}>
+                    <Text size="sm">{runSourceLabel(run.source)}</Text>
+                    <Identity
+                      avatarSize={22}
+                      name={run.createdBy?.displayName ?? "System"}
+                      nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
+                    />
+                  </Stack>
                 </Table.Td>
                 <Table.Td>
-                  <Text component="time" dateTime={run.createdAt} size="sm">
-                    {formatTimestamp(run.createdAt)}
-                  </Text>
+                  <Stack gap={0}>
+                    <Text size="sm">{run.cluster}</Text>
+                    <Text c="dimmed" size="xs">
+                      {run.placement}
+                    </Text>
+                  </Stack>
+                </Table.Td>
+                <Table.Td>
+                  <Stack gap={0}>
+                    <RelativeTime size="sm" value={run.createdAt} />
+                    {run.startedAt && run.finishedAt ? (
+                      <Text c="dimmed" size="xs">
+                        {formatDuration(run.startedAt, run.finishedAt)} runtime
+                      </Text>
+                    ) : run.startedAt ? (
+                      <Timestamp c="dimmed" size="xs" value={run.startedAt} />
+                    ) : (
+                      <Text c="dimmed" size="xs">
+                        Not started
+                      </Text>
+                    )}
+                  </Stack>
+                </Table.Td>
+                <Table.Td>
+                  <Stack gap={0}>
+                    <CommitReference commit={run.commit} />
+                    <Text c="dimmed" size="xs">
+                      Catalog {shortIdentifier(run.catalogRevisionId)}
+                    </Text>
+                  </Stack>
                 </Table.Td>
               </Table.Tr>
             ))}
@@ -185,32 +311,6 @@ function HistoryTable({
   );
 }
 
-function statusColor(run: Run) {
-  if (run.observationState === "unknown") return "yellow";
-
-  switch (run.outcome ?? run.phase) {
-    case "succeeded":
-      return "green";
-    case "failed":
-      return "red";
-    case "timed-out":
-      return "orange";
-    case "running":
-      return "blue";
-    case "preparing":
-      return "cyan";
-    default:
-      return "gray";
-  }
-}
-
 function optionalSearchValue(url: URL, name: string) {
   return url.searchParams.get(name)?.trim() || undefined;
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }

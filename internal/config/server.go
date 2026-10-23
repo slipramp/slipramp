@@ -41,6 +41,7 @@ const (
 
 type serverKargoIntegration struct {
 	Cluster          string   `json:"cluster"`
+	UIURL            string   `json:"uiUrl"`
 	Repositories     []string `json:"repositories"`
 	EnvironmentOrder []string `json:"environmentOrder"`
 	Preparation      struct {
@@ -267,6 +268,7 @@ func parseServerKargoIntegrations(value string) (promotion.IntegrationSet, error
 
 		integrations[name] = promotion.IntegrationConfig{
 			ClusterName:      encodedIntegration.Cluster,
+			UIURL:            encodedIntegration.UIURL,
 			Repositories:     encodedIntegration.Repositories,
 			EnvironmentOrder: encodedIntegration.EnvironmentOrder,
 			Preparation: promotion.PreparationConfig{

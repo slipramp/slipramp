@@ -2,63 +2,86 @@ import {
   Alert,
   Anchor,
   Badge,
-  Button,
   Code,
   Group,
+  NativeSelect,
   Paper,
+  SimpleGrid,
   Stack,
-  Table,
   Text,
   TextInput,
+  ThemeIcon,
   Title,
+  Tooltip,
 } from "@mantine/core";
-import { Form, Link } from "react-router";
+import { IconArrowsDiff, IconCheck } from "@tabler/icons-react";
+import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { listPromotionPipelines, type PromotionPipeline } from "~/api/generated";
+import { KargoLink } from "~/components/kargo-link";
+import { ListPagination, SearchParamFilters } from "~/components/list-controls";
+import { PageHeader } from "~/components/page";
+import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
 import { pageTitle } from "~/page-title";
+import { pageFromSearchParam } from "~/search-params";
 import {
   buildFreightColumns,
   buildFreightRows,
-  freightNames,
+  filterFreightRows,
   freightRowMatches,
   type FreightColumn,
   type FreightComparisonRow,
+  type FreightComparisonStatus,
 } from "~/promotion-freight";
 
 import type { Route } from "./+types/promotion-pipelines";
 
-const pipelineLimit = 50;
+const pageSize = 25;
 
 export function meta() {
-  return [{ title: pageTitle("Promotion Pipelines") }];
+  return [{ title: pageTitle("Promotion pipelines") }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
-  const application = optionalValue(url.searchParams.get("application"));
   const integration = optionalValue(url.searchParams.get("integration"));
   const project = optionalValue(url.searchParams.get("project"));
+  const application = optionalValue(url.searchParams.get("application"));
   const repository = optionalValue(url.searchParams.get("repository"));
+  const status = optionalFreightStatus(url.searchParams.get("status"));
+  const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listPromotionPipelines({
     client: createServerAPIClient(request),
     query: {
       application,
       integration,
-      limit: pipelineLimit,
+      limit: pageSize,
+      offset: (requestedPage - 1) * pageSize,
       project,
       repository,
     },
   });
+
+  if (result.data) {
+    const lastPage = Math.max(1, Math.ceil(result.data.total / pageSize));
+    if (requestedPage > lastPage) {
+      if (lastPage === 1) url.searchParams.delete("page");
+      else url.searchParams.set("page", String(lastPage));
+      return redirect(`${url.pathname}${url.search}`);
+    }
+  }
 
   return {
     application,
     available: result.data !== undefined,
     error: result.error?.detail ?? result.error?.title,
     integration,
+    page: requestedPage,
     pipelines: result.data?.items ?? [],
     project,
     repository,
+    status,
     total: result.data?.total ?? 0,
   };
 }
@@ -66,29 +89,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function PromotionPipelines({ loaderData }: Route.ComponentProps) {
   return (
     <Stack gap="lg">
-      <Group align="flex-start" justify="space-between">
-        <Stack gap={2}>
-          <Title order={1}>Promotion Pipelines</Title>
-          <Text c="dimmed">Current Freight compared across configured Kargo environments.</Text>
-        </Stack>
-        <Group>
-          <Anchor component={Link} to="/promotion-branch-drift">
-            Branch drift
-          </Anchor>
-          <Anchor component={Link} to="/promotion-stages">
-            Stage inventory
-          </Anchor>
-          <Anchor component={Link} to="/promotions">
-            Promotions
-          </Anchor>
-        </Group>
-      </Group>
+      <PageHeader
+        description="Current Freight compared across configured Kargo environments."
+        title="Promotion pipelines"
+      />
 
       <PipelineFilters
         application={loaderData.application}
         integration={loaderData.integration}
         project={loaderData.project}
         repository={loaderData.repository}
+        status={loaderData.status}
       />
 
       {!loaderData.available ? (
@@ -101,14 +112,22 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
         </Paper>
       ) : (
         loaderData.pipelines.map((pipeline) => (
-          <PipelineComparison key={pipelineKey(pipeline)} pipeline={pipeline} />
+          <PipelineComparison
+            key={pipelineKey(pipeline)}
+            pipeline={pipeline}
+            status={loaderData.status}
+          />
         ))
       )}
 
-      {loaderData.available && loaderData.total > loaderData.pipelines.length ? (
-        <Text c="dimmed" size="sm">
-          Showing the first {loaderData.pipelines.length} of {loaderData.total} matching pipelines.
-        </Text>
+      {loaderData.available && loaderData.total > 0 ? (
+        <ListPagination
+          itemCount={loaderData.pipelines.length}
+          noun="Pipelines"
+          page={loaderData.page}
+          pageSize={pageSize}
+          total={loaderData.total}
+        />
       ) : null}
     </Stack>
   );
@@ -119,37 +138,57 @@ function PipelineFilters({
   integration,
   project,
   repository,
+  status,
 }: Readonly<{
   application?: string;
   integration?: string;
   project?: string;
   repository?: string;
+  status?: FreightComparisonStatus;
 }>) {
+  const active = Boolean(application || integration || project || repository || status);
+
   return (
-    <Paper p="md" withBorder>
-      <Form method="get">
-        <Group align="flex-end">
-          <TextInput defaultValue={integration} label="Integration" name="integration" />
-          <TextInput defaultValue={repository} label="Repository" name="repository" />
-          <TextInput defaultValue={project} label="Project" name="project" />
-          <TextInput defaultValue={application} label="Application" name="application" />
-          <Button type="submit" variant="light">
-            Apply filters
-          </Button>
-        </Group>
-      </Form>
-    </Paper>
+    <SearchParamFilters active={active} clearTo="/promotion-pipelines">
+      <PromotionScopeFilters
+        application={application}
+        integration={integration}
+        project={project}
+      />
+      <NativeSelect
+        defaultValue={status ?? ""}
+        label="Status"
+        name="status"
+        data={[
+          { label: "All statuses", value: "" },
+          { label: "Equal", value: "equal" },
+          { label: "Different", value: "different" },
+        ]}
+        style={{ flex: "1 1 160px" }}
+      />
+      <TextInput
+        defaultValue={repository}
+        label="Repository"
+        name="repository"
+        style={{ flex: "1 1 160px" }}
+        type="search"
+      />
+    </SearchParamFilters>
   );
 }
 
-function PipelineComparison({ pipeline }: Readonly<{ pipeline: PromotionPipeline }>) {
+function PipelineComparison({
+  pipeline,
+  status,
+}: Readonly<{ pipeline: PromotionPipeline; status?: FreightComparisonStatus }>) {
   const columns = buildFreightColumns(pipeline);
-  const rows = buildFreightRows(columns);
+  const rows = filterFreightRows(buildFreightRows(columns), columns, status);
+  const differentCount = rows.filter((row) => !freightRowMatches(row, columns)).length;
 
   return (
-    <Paper withBorder>
-      <Stack gap={0}>
-        <Group justify="space-between" p="md">
+    <Paper p="md" withBorder>
+      <Stack gap="md">
+        <Group align="flex-start" justify="space-between" wrap="wrap">
           <Stack gap={0}>
             <Title order={2} size="h3">
               {pipeline.application}
@@ -159,141 +198,167 @@ function PipelineComparison({ pipeline }: Readonly<{ pipeline: PromotionPipeline
               {pipeline.repository}
             </Text>
           </Stack>
-          <Text c="dimmed" size="sm">
-            {columns.length} environment {columns.length === 1 ? "column" : "columns"}
-          </Text>
+          <Group gap="xs">
+            {differentCount > 0 ? (
+              <Badge color="yellow" variant="light">
+                {differentCount} different
+              </Badge>
+            ) : rows.length > 0 ? (
+              <Badge color="green" variant="light">
+                Freight aligned
+              </Badge>
+            ) : null}
+            <Badge color="gray" variant="outline">
+              {columns.length} environment{columns.length === 1 ? "" : "s"}
+            </Badge>
+          </Group>
         </Group>
-        <Table.ScrollContainer minWidth={Math.max(900, 300 + columns.length * 260)}>
-          <Table horizontalSpacing="md" verticalSpacing="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th miw={280}>Freight artifact</Table.Th>
-                {columns.map((column) => (
-                  <Table.Th key={column.key} miw={240}>
-                    <PipelineColumnHeader column={column} pipeline={pipeline} />
-                  </Table.Th>
-                ))}
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {rows.length === 0 ? (
-                <Table.Tr>
-                  <Table.Td colSpan={columns.length + 1}>
-                    <Text c="dimmed">No Freight artifacts are currently reported.</Text>
-                  </Table.Td>
-                </Table.Tr>
-              ) : (
-                rows.map((row) => <FreightRow columns={columns} key={row.key} row={row} />)
-              )}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
+        {rows.length === 0 ? (
+          <Text c="dimmed">
+            {status
+              ? `No ${status} Freight artifacts match this filter.`
+              : "No Freight artifacts are currently reported."}
+          </Text>
+        ) : (
+          <SimpleGrid
+            className="pipeline-flow"
+            cols={{ base: 1, sm: 2, xl: Math.max(1, Math.min(columns.length, 4)) }}
+            spacing="md"
+          >
+            {columns.map((column, index) => (
+              <PipelineStageCard
+                column={column}
+                columns={columns}
+                index={index}
+                key={column.key}
+                rows={rows}
+              />
+            ))}
+          </SimpleGrid>
+        )}
       </Stack>
     </Paper>
   );
 }
 
-function PipelineColumnHeader({
+function PipelineStageCard({
   column,
-  pipeline,
-}: Readonly<{ column: FreightColumn; pipeline: PromotionPipeline }>) {
-  if (!column.stage) {
-    return (
-      <Stack gap={2}>
-        <Text fw={600}>{column.environment}</Text>
-        <Badge color="gray" size="sm" variant="light">
-          No Stage
-        </Badge>
-      </Stack>
-    );
-  }
-
-  const names = freightNames(column.stage);
+  columns,
+  index,
+  rows,
+}: Readonly<{
+  column: FreightColumn;
+  columns: FreightColumn[];
+  index: number;
+  rows: FreightComparisonRow[];
+}>) {
+  const stage = column.stage;
 
   return (
-    <Stack gap={2}>
-      <Group gap="xs">
-        <Text fw={600}>{column.environment}</Text>
-        {!column.configured ? (
-          <Badge color="orange" size="sm" variant="light">
-            Unconfigured
-          </Badge>
-        ) : null}
-      </Group>
-      <Text size="sm">{column.stage.name}</Text>
-      {names.length > 0 ? (
-        <Text c="dimmed" size="xs">
-          {names.join(", ")}
-        </Text>
-      ) : null}
-      <Text c="dimmed" component="time" dateTime={column.stage.lastObservedAt} size="xs">
-        Observed {formatTimestamp(column.stage.lastObservedAt)}
-      </Text>
-      {column.stage.pendingPromotionCount > 0 ? (
-        <Anchor component={Link} size="xs" to={`/promotions?stageId=${column.stage.id}`}>
-          {column.stage.pendingPromotionCount} pending
-        </Anchor>
-      ) : (
-        <Anchor
-          component={Link}
-          size="xs"
-          to={`/promotion-stages?integration=${encodeURIComponent(pipeline.integration)}&project=${encodeURIComponent(pipeline.project)}`}
-        >
-          View Stage inventory
-        </Anchor>
-      )}
-    </Stack>
+    <Paper className="pipeline-stage-card" p="md" withBorder>
+      <Stack gap="md">
+        <Group align="flex-start" justify="space-between" wrap="nowrap">
+          <Group align="flex-start" gap="xs" wrap="nowrap">
+            <ThemeIcon radius="xl" size={30} variant="light">
+              {index + 1}
+            </ThemeIcon>
+            <Stack gap={1}>
+              <Group gap={6}>
+                <Text fw={700}>{column.environment}</Text>
+                {!column.configured ? (
+                  <Badge color="orange" size="xs" variant="light">
+                    Unconfigured
+                  </Badge>
+                ) : null}
+              </Group>
+              {stage ? (
+                stage.kargoUrl ? (
+                  <KargoLink size="sm" url={stage.kargoUrl}>
+                    {stage.name}
+                  </KargoLink>
+                ) : (
+                  <Text size="sm">{stage.name}</Text>
+                )
+              ) : (
+                <Badge color="gray" size="sm" variant="light">
+                  No Stage
+                </Badge>
+              )}
+            </Stack>
+          </Group>
+          {stage?.pendingPromotionCount ? (
+            <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
+              {stage.pendingPromotionCount} pending
+            </Anchor>
+          ) : null}
+        </Group>
+
+        {stage ? (
+          <Stack gap="xs">
+            {rows.map((row) => (
+              <FreightArtifactCard column={column} columns={columns} key={row.key} row={row} />
+            ))}
+          </Stack>
+        ) : (
+          <Text c="dimmed" size="sm">
+            Freight has not reached this configured environment.
+          </Text>
+        )}
+      </Stack>
+    </Paper>
   );
 }
 
-function FreightRow({
+function FreightArtifactCard({
+  column,
   columns,
   row,
-}: Readonly<{ columns: FreightColumn[]; row: FreightComparisonRow }>) {
+}: Readonly<{
+  column: FreightColumn;
+  columns: FreightColumn[];
+  row: FreightComparisonRow;
+}>) {
   const matches = freightRowMatches(row, columns);
+  const versions = row.values[column.key] ?? [];
 
   return (
-    <Table.Tr>
-      <Table.Td>
-        <Stack gap={2}>
-          <Group gap="xs">
-            <Badge color={matches ? "green" : "yellow"} size="sm" variant="light">
-              {matches ? "Equal" : "Different"}
-            </Badge>
-            <Badge color="gray" size="sm" variant="outline">
-              {row.kind}
-            </Badge>
-          </Group>
-          <Text fw={600} size="sm">
-            {row.origin}
+    <Stack className="pipeline-freight-card" gap={5} p="xs">
+      <Group justify="space-between" wrap="nowrap">
+        <Group gap={5} wrap="nowrap">
+          <Badge color="gray" size="xs" variant="outline">
+            {row.kind}
+          </Badge>
+          <Text fw={600} lineClamp={1} size="xs" title={row.origin}>
+            {row.origin.replace(/^Warehouse\//, "")}
           </Text>
-          {row.repository ? (
-            <Text c="dimmed" size="xs">
-              {row.repository}
-            </Text>
-          ) : null}
-        </Stack>
-      </Table.Td>
-      {columns.map((column) => {
-        const versions = row.values[column.key] ?? [];
-
-        return (
-          <Table.Td key={column.key}>
-            {versions.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                Missing
-              </Text>
+        </Group>
+        <Tooltip label={matches ? "Equal in every environment" : "Differs across environments"}>
+          <ThemeIcon color={matches ? "green" : "yellow"} radius="xl" size={22} variant="light">
+            {matches ? (
+              <IconCheck aria-hidden size={13} />
             ) : (
-              <Stack gap={4}>
-                {versions.map((version) => (
-                  <Code key={version}>{version}</Code>
-                ))}
-              </Stack>
+              <IconArrowsDiff aria-hidden size={13} />
             )}
-          </Table.Td>
-        );
-      })}
-    </Table.Tr>
+          </ThemeIcon>
+        </Tooltip>
+      </Group>
+      {row.repository ? (
+        <Text c="dimmed" lineClamp={1} size="xs" title={row.repository}>
+          {row.repository}
+        </Text>
+      ) : null}
+      {versions.length === 0 ? (
+        <Text c="dimmed" size="sm">
+          Missing
+        </Text>
+      ) : (
+        <Group gap={4}>
+          {versions.map((version) => (
+            <Code key={version}>{version}</Code>
+          ))}
+        </Group>
+      )}
+    </Stack>
   );
 }
 
@@ -307,8 +372,6 @@ function optionalValue(value: string | null) {
   return value?.trim() || undefined;
 }
 
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value),
-  );
+function optionalFreightStatus(value: string | null): FreightComparisonStatus | undefined {
+  return value === "equal" || value === "different" ? value : undefined;
 }

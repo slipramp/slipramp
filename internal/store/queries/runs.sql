@@ -71,8 +71,29 @@ AND (
     sqlc.narg(target_name)::text IS NULL
     OR target_name = sqlc.narg(target_name)
 )
+AND (
+    sqlc.narg(cluster_name)::text IS NULL
+    OR cluster_name = sqlc.narg(cluster_name)
+)
 ORDER BY created_at DESC, id DESC
-LIMIT sqlc.arg(result_limit);
+LIMIT sqlc.arg(result_limit)
+OFFSET sqlc.arg(result_offset);
+
+-- name: CountRuns :one
+SELECT count(*)
+FROM runs
+WHERE (
+    sqlc.narg(repository_id)::uuid IS NULL
+    OR repository_id = sqlc.narg(repository_id)
+)
+AND (
+    sqlc.narg(target_name)::text IS NULL
+    OR target_name = sqlc.narg(target_name)
+)
+AND (
+    sqlc.narg(cluster_name)::text IS NULL
+    OR cluster_name = sqlc.narg(cluster_name)
+);
 
 -- name: CreateRunArtifactInput :execrows
 INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)

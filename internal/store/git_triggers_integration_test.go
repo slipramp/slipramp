@@ -61,7 +61,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	commitB := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	rejectionReason := "catalog is invalid"
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, repository.RefreshResult{
-		CommitSHA:     &commitB,
+		Commit:        &repository.Commit{SHA: commitB},
 		AttemptedAt:   createdAt.Add(3 * time.Minute),
 		FailureReason: &rejectionReason,
 	}); err != nil {
@@ -160,14 +160,14 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 		t.Fatalf("retried ProcessNext() = (%t, %v), want success", processed, err)
 	}
 
-	createdRuns, err := database.ListRuns(ctx, run.ListFilter{RepositoryID: &repositoryID, Limit: 10})
+	createdRuns, err := database.ListRuns(ctx, run.RunListFilter{RepositoryID: &repositoryID, Limit: 10})
 	if err != nil {
 		t.Fatalf("ListRuns() error = %v", err)
 	}
-	if len(createdRuns) != 1 {
-		t.Fatalf("created Runs = %d, want 1", len(createdRuns))
+	if len(createdRuns.Items) != 1 {
+		t.Fatalf("created Runs = %d, want 1", len(createdRuns.Items))
 	}
-	createdRun := createdRuns[0]
+	createdRun := createdRuns.Items[0]
 	if createdRun.CatalogRevisionID != revisionDID || createdRun.CommitSHA != commitD {
 		t.Errorf("Run pin = (%s, %s), want (%s, %s)", createdRun.CatalogRevisionID, createdRun.CommitSHA, revisionDID, commitD)
 	}
@@ -224,11 +224,11 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 		t.Fatalf("dispatch revision B = (%t, %v), want success", processed, err)
 	}
 
-	listed, err := database.ListRuns(ctx, run.ListFilter{RepositoryID: &repositoryID, Limit: 10})
-	if err != nil || len(listed) != 1 {
-		t.Fatalf("list revision B Run = (%d, %v), want one Run", len(listed), err)
+	listed, err := database.ListRuns(ctx, run.RunListFilter{RepositoryID: &repositoryID, Limit: 10})
+	if err != nil || len(listed.Items) != 1 {
+		t.Fatalf("list revision B Run = (%d, %v), want one Run", len(listed.Items), err)
 	}
-	runB := listed[0]
+	runB := listed.Items[0]
 	assignedAt := baseTime.Add(3 * time.Minute)
 	if _, err := database.ClaimQueuedRun(ctx, "colo", assignedAt); err != nil {
 		t.Fatalf("claim revision B Run: %v", err)
@@ -267,11 +267,11 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 		t.Fatalf("dispatch revision C = (%t, %v), want success", processed, err)
 	}
 
-	listed, err = database.ListRuns(ctx, run.ListFilter{RepositoryID: &repositoryID, Limit: 10})
-	if err != nil || len(listed) != 2 {
-		t.Fatalf("list revisions B and C Runs = (%d, %v), want two Runs", len(listed), err)
+	listed, err = database.ListRuns(ctx, run.RunListFilter{RepositoryID: &repositoryID, Limit: 10})
+	if err != nil || len(listed.Items) != 2 {
+		t.Fatalf("list revisions B and C Runs = (%d, %v), want two Runs", len(listed.Items), err)
 	}
-	runC := listed[0]
+	runC := listed.Items[0]
 	if runC.CommitSHA != commitC || runC.Phase != run.PhaseQueued {
 		t.Fatalf("revision C Run = %#v", runC)
 	}
@@ -379,9 +379,9 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 	if processed, err := dispatcher.ProcessNext(ctx); err != nil || !processed {
 		t.Fatalf("dispatch changed catalog = (%t, %v), want success", processed, err)
 	}
-	listed, err := runs.ListRuns(ctx, run.ListFilter{RepositoryID: &repositoryID, Limit: 10})
-	if err != nil || len(listed) != 1 {
-		t.Fatalf("list queued Git Run = (%d, %v), want one Run", len(listed), err)
+	listed, err := runs.ListRuns(ctx, run.RunListFilter{RepositoryID: &repositoryID, Limit: 10})
+	if err != nil || len(listed.Items) != 1 {
+		t.Fatalf("list queued Git Run = (%d, %v), want one Run", len(listed.Items), err)
 	}
 
 	removed := successfulCatalogRefresh(
@@ -396,7 +396,7 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 		t.Fatalf("record target removal: %v", err)
 	}
 
-	stored, err := runs.GetRun(ctx, listed[0].ID)
+	stored, err := runs.GetRun(ctx, listed.Items[0].ID)
 	if err != nil {
 		t.Fatalf("get queued Git Run after target removal: %v", err)
 	}

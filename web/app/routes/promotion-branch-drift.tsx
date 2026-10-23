@@ -1,10 +1,8 @@
 import {
   Alert,
-  Anchor,
   Badge,
-  Button,
-  Code,
   Group,
+  NativeSelect,
   Paper,
   Stack,
   Table,
@@ -12,39 +10,72 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { Form, Link } from "react-router";
-
+import { redirect } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   listPromotionBranchDrift,
+  type GitCommit,
   type PromotionBranchDriftRepository,
   type PromotionBranchDriftStage,
+  type PromotionBranchDriftStatus,
 } from "~/api/generated";
+import { RelativeTime, Timestamp } from "~/components/display";
+import { CommitReference } from "~/components/git-commit";
+import { KargoLink } from "~/components/kargo-link";
+import { ListPagination, SearchParamFilters } from "~/components/list-controls";
+import { PageHeader } from "~/components/page";
+import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
 import { pageTitle } from "~/page-title";
+import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/promotion-branch-drift";
 
-const repositoryLimit = 50;
+const pageSize = 25;
 
 export function meta() {
-  return [{ title: pageTitle("Promotion Branch Drift") }];
+  return [{ title: pageTitle("Promotion branch drift") }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const integration = optionalValue(url.searchParams.get("integration"));
+  const project = optionalValue(url.searchParams.get("project"));
+  const application = optionalValue(url.searchParams.get("application"));
   const repository = optionalValue(url.searchParams.get("repository"));
+  const status = optionalStatus(url.searchParams.get("status"));
+  const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listPromotionBranchDrift({
     client: createServerAPIClient(request),
-    query: { integration, limit: repositoryLimit, repository },
+    query: {
+      application,
+      integration,
+      limit: pageSize,
+      offset: (requestedPage - 1) * pageSize,
+      project,
+      repository,
+      status,
+    },
   });
+
+  if (result.data) {
+    const lastPage = Math.max(1, Math.ceil(result.data.total / pageSize));
+    if (requestedPage > lastPage) {
+      if (lastPage === 1) url.searchParams.delete("page");
+      else url.searchParams.set("page", String(lastPage));
+      return redirect(`${url.pathname}${url.search}`);
+    }
+  }
 
   return {
     available: result.data !== undefined,
+    application,
     error: result.error?.detail ?? result.error?.title,
     integration,
+    page: requestedPage,
+    project,
     repositories: result.data?.items ?? [],
     repository,
+    status,
     total: result.data?.total ?? 0,
   };
 }
@@ -52,41 +83,18 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function PromotionBranchDrift({ loaderData }: Route.ComponentProps) {
   return (
     <Stack gap="lg">
-      <Group align="flex-start" justify="space-between">
-        <Stack gap={2}>
-          <Title order={1}>Promotion Branch Drift</Title>
-          <Text c="dimmed">
-            Cached source-path and target-branch comparisons from successful Kargo renders.
-          </Text>
-        </Stack>
-        <Group>
-          <Anchor component={Link} to="/promotion-pipelines">
-            Compare Freight
-          </Anchor>
-          <Anchor component={Link} to="/promotion-stages">
-            Stage inventory
-          </Anchor>
-          <Anchor component={Link} to="/promotions">
-            Promotions
-          </Anchor>
-        </Group>
-      </Group>
+      <PageHeader
+        description="Cached source-path and target-branch comparisons from successful Kargo renders."
+        title="Promotion branch drift"
+      />
 
-      <Paper p="md" withBorder>
-        <Form method="get">
-          <Group align="flex-end">
-            <TextInput
-              defaultValue={loaderData.integration}
-              label="Integration"
-              name="integration"
-            />
-            <TextInput defaultValue={loaderData.repository} label="Repository" name="repository" />
-            <Button type="submit" variant="light">
-              Apply filters
-            </Button>
-          </Group>
-        </Form>
-      </Paper>
+      <BranchDriftFilters
+        application={loaderData.application}
+        integration={loaderData.integration}
+        project={loaderData.project}
+        repository={loaderData.repository}
+        status={loaderData.status}
+      />
 
       {!loaderData.available ? (
         <Alert color="red" title="Promotion branch drift unavailable">
@@ -102,19 +110,74 @@ export default function PromotionBranchDrift({ loaderData }: Route.ComponentProp
         ))
       )}
 
-      {loaderData.available && loaderData.total > loaderData.repositories.length ? (
-        <Text c="dimmed" size="sm">
-          Showing the first {loaderData.repositories.length} of {loaderData.total} matching
-          repositories.
-        </Text>
+      {loaderData.available && loaderData.total > 0 ? (
+        <ListPagination
+          itemCount={loaderData.repositories.length}
+          noun="Repositories"
+          page={loaderData.page}
+          pageSize={pageSize}
+          total={loaderData.total}
+        />
       ) : null}
     </Stack>
+  );
+}
+
+function BranchDriftFilters({
+  application,
+  integration,
+  project,
+  repository,
+  status,
+}: Readonly<{
+  application?: string;
+  integration?: string;
+  project?: string;
+  repository?: string;
+  status?: PromotionBranchDriftStatus;
+}>) {
+  const filtered =
+    application !== undefined ||
+    integration !== undefined ||
+    project !== undefined ||
+    repository !== undefined ||
+    status !== undefined;
+
+  return (
+    <SearchParamFilters active={filtered} clearTo="/promotion-branch-drift">
+      <PromotionScopeFilters
+        application={application}
+        integration={integration}
+        project={project}
+      />
+      <NativeSelect
+        defaultValue={status ?? ""}
+        label="Status"
+        name="status"
+        data={[
+          { label: "All statuses", value: "" },
+          { label: "In sync", value: "current" },
+          { label: "Behind", value: "drifted" },
+          { label: "Unknown", value: "unknown" },
+        ]}
+        style={{ flex: "1 1 150px" }}
+      />
+      <TextInput
+        defaultValue={repository}
+        label="Repository"
+        name="repository"
+        style={{ flex: "1 1 160px" }}
+        type="search"
+      />
+    </SearchParamFilters>
   );
 }
 
 function BranchDriftRepository({
   repository,
 }: Readonly<{ repository: PromotionBranchDriftRepository }>) {
+  const sharedSourcePaths = commonSourcePaths(repository.stages);
+
   return (
     <Paper withBorder>
       <Stack gap={0}>
@@ -126,31 +189,46 @@ function BranchDriftRepository({
             <Text c="dimmed" size="sm">
               Source branch {repository.sourceBranch ?? "unavailable"}
             </Text>
+            {sharedSourcePaths.length > 0 ? (
+              <Group gap="xs" mt={4} wrap="wrap">
+                <Text c="dimmed" size="xs">
+                  {sharedSourcePaths.length === 1 ? "Shared watch path" : "Shared watch paths"}
+                </Text>
+                {sharedSourcePaths.map((path) => (
+                  <Text ff="monospace" key={path} size="xs">
+                    {path}
+                  </Text>
+                ))}
+              </Group>
+            ) : null}
           </Stack>
-          <Text c="dimmed" component="time" dateTime={repository.scannedAt} size="sm">
-            Scanned {formatTimestamp(repository.scannedAt)}
-          </Text>
+          <Group gap={4}>
+            <Text c="dimmed" size="sm">
+              Scanned
+            </Text>
+            <RelativeTime c="dimmed" size="sm" value={repository.scannedAt} />
+          </Group>
         </Group>
         {repository.error ? (
           <Alert color="red" m="md" mt={0} title="Repository scan failed">
             {repository.error}
           </Alert>
         ) : null}
-        <Table.ScrollContainer minWidth={1100}>
+        <Table.ScrollContainer minWidth={840} type="native">
           <Table horizontalSpacing="md" verticalSpacing="sm">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Stage</Table.Th>
                 <Table.Th>Status</Table.Th>
-                <Table.Th>Source branch</Table.Th>
-                <Table.Th>Target branch</Table.Th>
-                <Table.Th>Observed</Table.Th>
+                <Table.Th>Source updated</Table.Th>
+                <Table.Th>Last rendered</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {repository.stages.map((stage) => (
                 <BranchDriftRow
                   key={stage.id}
+                  sharedSourcePaths={sharedSourcePaths}
                   sourceBranch={repository.sourceBranch}
                   stage={stage}
                 />
@@ -164,35 +242,45 @@ function BranchDriftRepository({
 }
 
 function BranchDriftRow({
+  sharedSourcePaths,
   sourceBranch,
   stage,
-}: Readonly<{ sourceBranch?: string; stage: PromotionBranchDriftStage }>) {
+}: Readonly<{
+  sharedSourcePaths: string[];
+  sourceBranch?: string;
+  stage: PromotionBranchDriftStage;
+}>) {
+  const stageSpecificPaths = stage.sourcePaths.filter((path) => !sharedSourcePaths.includes(path));
+
   return (
     <Table.Tr>
       <Table.Td>
         <Stack gap={0}>
-          <Text fw={600}>{stage.name}</Text>
+          {stage.kargoUrl ? (
+            <KargoLink fw={600} size="sm" url={stage.kargoUrl}>
+              {stage.name}
+            </KargoLink>
+          ) : (
+            <Text fw={600}>{stage.name}</Text>
+          )}
           <Text size="sm">
             {stage.application} · {stage.environment}
           </Text>
           <Text c="dimmed" size="xs">
             {stage.integration} · {stage.cluster} · {stage.project}
           </Text>
-          <Text c="dimmed" size="xs">
-            {stage.sourcePaths.join(", ")}
-          </Text>
+          {stageSpecificPaths.length > 0 ? (
+            <Text c="dimmed" size="xs">
+              Also watches {stageSpecificPaths.join(", ")}
+            </Text>
+          ) : null}
         </Stack>
       </Table.Td>
       <Table.Td>
         <Stack align="flex-start" gap="xs">
           <Badge color={statusColor(stage.status)} variant="light">
-            {stage.status}
+            {statusLabel(stage.status)}
           </Badge>
-          {stage.noOpRender ? (
-            <Badge color="blue" size="sm" variant="outline">
-              No-op render acknowledged
-            </Badge>
-          ) : null}
           {stage.message ? (
             <Text c="dimmed" maw={300} size="xs">
               {stage.message}
@@ -201,58 +289,43 @@ function BranchDriftRow({
         </Stack>
       </Table.Td>
       <Table.Td>
-        <RevisionComparison
-          branch={sourceBranch}
-          current={stage.sourceBranchRevision}
-          drift={stage.sourceDrift}
-          expected={stage.acknowledgedSourceRevision}
-        />
+        <CommitMoment branch={sourceBranch} commit={stage.sourceBranchCommit} />
       </Table.Td>
       <Table.Td>
-        <RevisionComparison
-          branch={stage.targetBranch}
-          current={stage.targetBranchRevision}
-          drift={stage.targetDrift}
-          expected={stage.acknowledgedRenderRevision}
-        />
-      </Table.Td>
-      <Table.Td>
-        <Text component="time" dateTime={stage.lastObservedAt} size="sm">
-          {formatTimestamp(stage.lastObservedAt)}
-        </Text>
+        <CommitMoment branch={stage.targetBranch} commit={stage.acknowledgedRenderCommit} />
       </Table.Td>
     </Table.Tr>
   );
 }
 
-function RevisionComparison({
+function CommitMoment({
   branch,
-  current,
-  drift,
-  expected,
+  commit,
 }: Readonly<{
   branch?: string;
-  current?: string;
-  drift?: boolean;
-  expected?: string;
+  commit?: GitCommit;
 }>) {
   return (
     <Stack gap={2}>
-      <Group gap="xs">
-        <Text size="sm">{branch ?? "Unavailable"}</Text>
-        {drift !== undefined ? (
-          <Badge color={drift ? "yellow" : "green"} size="sm" variant="light">
-            {drift ? "Drifted" : "Current"}
-          </Badge>
-        ) : null}
+      <Text fw={600} size="sm">
+        {branch ?? "Unknown branch"}
+      </Text>
+      <Group gap="xs" wrap="wrap">
+        <Text c="dimmed" size="xs">
+          Commit
+        </Text>
+        {commit ? <CommitReference commit={commit} /> : <Text size="xs">Unknown</Text>}
       </Group>
-      <Text c="dimmed" size="xs">
-        Current {current ? <Code title={current}>{shortRevision(current)}</Code> : "unknown"}
-      </Text>
-      <Text c="dimmed" size="xs">
-        Acknowledged{" "}
-        {expected ? <Code title={expected}>{shortRevision(expected)}</Code> : "unknown"}
-      </Text>
+      <Group gap="xs" wrap="wrap">
+        <Text c="dimmed" size="xs">
+          Date
+        </Text>
+        {commit?.authoredAt ? (
+          <Timestamp size="xs" value={commit.authoredAt} />
+        ) : (
+          <Text size="xs">Unknown</Text>
+        )}
+      </Group>
     </Stack>
   );
 }
@@ -268,16 +341,39 @@ function statusColor(status: PromotionBranchDriftStage["status"]) {
   }
 }
 
-function shortRevision(revision: string) {
-  return revision.slice(0, 12);
+function statusLabel(status: PromotionBranchDriftStage["status"]) {
+  switch (status) {
+    case "current":
+      return "In sync";
+    case "drifted":
+      return "Behind";
+    default:
+      return "Unknown";
+  }
+}
+
+function commonSourcePaths(stages: PromotionBranchDriftStage[]) {
+  const [firstStage, ...remainingStages] = stages;
+  if (!firstStage) {
+    return [];
+  }
+
+  return firstStage.sourcePaths.filter((path) =>
+    remainingStages.every((stage) => stage.sourcePaths.includes(path)),
+  );
 }
 
 function optionalValue(value: string | null) {
   return value?.trim() || undefined;
 }
 
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value),
-  );
+function optionalStatus(value: string | null): PromotionBranchDriftStatus | undefined {
+  switch (value) {
+    case "current":
+    case "drifted":
+    case "unknown":
+      return value;
+    default:
+      return undefined;
+  }
 }

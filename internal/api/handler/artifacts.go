@@ -13,6 +13,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type ArtifactService interface {
@@ -198,10 +199,19 @@ func (h *Handler) ListRunArtifacts(
 	if err != nil {
 		return nil, err
 	}
+	keys := make([]repository.CommitKey, 0, len(records))
+	for _, record := range records {
+		keys = append(keys, commitKey(record.Provenance.RepositoryID, record.Provenance.CommitSHA))
+	}
+	commits, err := h.commitResponses(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
 
 	items := make([]api.Artifact, 0, len(records))
 	for _, record := range records {
-		items = append(items, artifactResponse(record))
+		commit := commits[commitKey(record.Provenance.RepositoryID, record.Provenance.CommitSHA)]
+		items = append(items, artifactResponse(record, commit))
 	}
 
 	return api.ListRunArtifacts200JSONResponse{Items: items}, nil
@@ -321,7 +331,7 @@ func (h *Handler) StreamRunLog(
 	return api.StreamRunLog200TextEventStreamResponse{Body: stream}, nil
 }
 
-func artifactResponse(record artifact.Record) api.Artifact {
+func artifactResponse(record artifact.Record, commit api.GitCommit) api.Artifact {
 	return api.Artifact{
 		ID:             record.ID,
 		RunID:          record.RunID,
@@ -339,7 +349,7 @@ func artifactResponse(record artifact.Record) api.Artifact {
 			ProducerRunID:     record.Provenance.ProducerRunID,
 			RepositoryID:      record.Provenance.RepositoryID,
 			CatalogRevisionID: record.Provenance.CatalogRevisionID,
-			CommitSha:         record.Provenance.CommitSHA,
+			Commit:            commit,
 			Target:            api.CatalogName(record.Provenance.TargetName),
 			Action:            api.CatalogName(record.Provenance.ActionName),
 		},

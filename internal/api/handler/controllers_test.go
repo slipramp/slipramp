@@ -60,8 +60,12 @@ func TestListClustersReturnsObservedHealth(t *testing.T) {
 		t.Errorf("cluster name = %q, want %q", item.Name, "colo")
 	}
 
-	if item.ConnectionState != api.Connected {
-		t.Errorf("connection state = %q, want %q", item.ConnectionState, api.Connected)
+	if item.ConnectionState != api.ClusterConnectionStateConnected {
+		t.Errorf(
+			"connection state = %q, want %q",
+			item.ConnectionState,
+			api.ClusterConnectionStateConnected,
+		)
 	}
 
 	if !item.FirstSeenAt.Equal(firstSeenAt) || !item.LastSeenAt.Equal(lastSeenAt) {

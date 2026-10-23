@@ -98,16 +98,16 @@ func (e ArtifactInputSourceCompatibility) Valid() bool {
 
 // Defines values for ClusterConnectionState.
 const (
-	Connected   ClusterConnectionState = "connected"
-	Unreachable ClusterConnectionState = "unreachable"
+	ClusterConnectionStateConnected   ClusterConnectionState = "connected"
+	ClusterConnectionStateUnreachable ClusterConnectionState = "unreachable"
 )
 
 // Valid indicates whether the value is a known member of the ClusterConnectionState enum.
 func (e ClusterConnectionState) Valid() bool {
 	switch e {
-	case Connected:
+	case ClusterConnectionStateConnected:
 		return true
-	case Unreachable:
+	case ClusterConnectionStateUnreachable:
 		return true
 	default:
 		return false
@@ -630,6 +630,24 @@ func (e LogoutParamsXSliprampCSRF) Valid() bool {
 	}
 }
 
+// Defines values for ListClustersParamsConnection.
+const (
+	ListClustersParamsConnectionConnected   ListClustersParamsConnection = "connected"
+	ListClustersParamsConnectionUnreachable ListClustersParamsConnection = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the ListClustersParamsConnection enum.
+func (e ListClustersParamsConnection) Valid() bool {
+	switch e {
+	case ListClustersParamsConnectionConnected:
+		return true
+	case ListClustersParamsConnectionUnreachable:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIKey defines model for APIKey.
 type APIKey struct {
 	CreatedAt   time.Time          `json:"createdAt"`
@@ -672,7 +690,10 @@ type APIKeyCredential struct {
 
 // APIKeyList defines model for APIKeyList.
 type APIKeyList struct {
-	Items []APIKey `json:"items"`
+	Items  []APIKey `json:"items"`
+	Limit  int      `json:"limit"`
+	Offset int      `json:"offset"`
+	Total  int      `json:"total"`
 }
 
 // APIKeyScope defines model for APIKeyScope.
@@ -758,7 +779,7 @@ type ArtifactList struct {
 type ArtifactProvenance struct {
 	Action            CatalogName        `json:"action"`
 	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
-	CommitSha         string             `json:"commitSha"`
+	Commit            GitCommit          `json:"commit"`
 	ProducerRunID     openapi_types.UUID `json:"producerRunId"`
 	RepositoryID      openapi_types.UUID `json:"repositoryId"`
 	Target            CatalogName        `json:"target"`
@@ -779,8 +800,8 @@ type CatalogName = string
 
 // CatalogRevision defines model for CatalogRevision.
 type CatalogRevision struct {
-	// CommitSha Exact Git commit from which the catalog was accepted.
-	CommitSha string `json:"commitSha"`
+	// Commit Exact Git commit from which the catalog was accepted.
+	Commit GitCommit `json:"commit"`
 
 	// CreatedAt Time at which the catalog revision was first accepted.
 	CreatedAt time.Time `json:"createdAt"`
@@ -817,7 +838,10 @@ type ClusterConnectionState string
 
 // ClusterList defines model for ClusterList.
 type ClusterList struct {
-	Items []Cluster `json:"items"`
+	Items  []Cluster `json:"items"`
+	Limit  int       `json:"limit"`
+	Offset int       `json:"offset"`
+	Total  int       `json:"total"`
 }
 
 // ControllerCommand defines model for ControllerCommand.
@@ -870,6 +894,24 @@ type CredentialInjection struct {
 
 // DependencyStatus defines model for DependencyStatus.
 type DependencyStatus string
+
+// GitCommit defines model for GitCommit.
+type GitCommit struct {
+	// Author Commit author name when it has been read from the Git object.
+	Author *string `json:"author,omitempty"`
+
+	// AuthoredAt Commit author timestamp when it has been read from the Git object.
+	AuthoredAt *time.Time `json:"authoredAt,omitempty"`
+
+	// Sha Exact Git object identity.
+	Sha string `json:"sha"`
+
+	// Title Commit subject when it has been read from the Git object.
+	Title *string `json:"title,omitempty"`
+
+	// URL Provider commit page when the repository supports web links.
+	URL *string `json:"url,omitempty"`
+}
 
 // GitRevision defines model for GitRevision.
 type GitRevision = string
@@ -994,20 +1036,23 @@ type ProductPrincipal struct {
 
 // Promotion defines model for Promotion.
 type Promotion struct {
-	ArgoDiffArtifact       *Artifact              `json:"argoDiffArtifact,omitempty"`
-	ArgoDiffArtifactID     *openapi_types.UUID    `json:"argoDiffArtifactId,omitempty"`
-	BaseRevision           GitRevision            `json:"baseRevision"`
-	CandidateBranch        string                 `json:"candidateBranch"`
-	CandidateRevision      GitRevision            `json:"candidateRevision"`
-	CreatedAt              time.Time              `json:"createdAt"`
-	DecidedAt              *time.Time             `json:"decidedAt,omitempty"`
-	Decision               *PromotionDecision     `json:"decision,omitempty"`
-	ExpiresAt              *time.Time             `json:"expiresAt,omitempty"`
-	ExternalPromotionID    string                 `json:"externalPromotionId"`
-	GitDiffArtifact        *Artifact              `json:"gitDiffArtifact,omitempty"`
-	GitDiffArtifactID      *openapi_types.UUID    `json:"gitDiffArtifactId,omitempty"`
-	ID                     openapi_types.UUID     `json:"id"`
-	Integration            CatalogName            `json:"integration"`
+	ArgoDiffArtifact    *Artifact           `json:"argoDiffArtifact,omitempty"`
+	ArgoDiffArtifactID  *openapi_types.UUID `json:"argoDiffArtifactId,omitempty"`
+	BaseCommit          GitCommit           `json:"baseCommit"`
+	CandidateBranch     string              `json:"candidateBranch"`
+	CandidateCommit     GitCommit           `json:"candidateCommit"`
+	CreatedAt           time.Time           `json:"createdAt"`
+	DecidedAt           *time.Time          `json:"decidedAt,omitempty"`
+	Decision            *PromotionDecision  `json:"decision,omitempty"`
+	ExpiresAt           *time.Time          `json:"expiresAt,omitempty"`
+	ExternalPromotionID string              `json:"externalPromotionId"`
+	GitDiffArtifact     *Artifact           `json:"gitDiffArtifact,omitempty"`
+	GitDiffArtifactID   *openapi_types.UUID `json:"gitDiffArtifactId,omitempty"`
+	ID                  openapi_types.UUID  `json:"id"`
+	Integration         CatalogName         `json:"integration"`
+
+	// KargoURL Direct link to this Promotion in the configured Kargo UI.
+	KargoURL               *string                `json:"kargoUrl,omitempty"`
 	Message                *string                `json:"message,omitempty"`
 	PolicySnapshot         map[string]interface{} `json:"policySnapshot"`
 	PreparationCompletedAt *time.Time             `json:"preparationCompletedAt,omitempty"`
@@ -1043,26 +1088,29 @@ type PromotionBranchDriftRepository struct {
 
 // PromotionBranchDriftStage defines model for PromotionBranchDriftStage.
 type PromotionBranchDriftStage struct {
-	AcknowledgedRenderBaseRevision *GitRevision               `json:"acknowledgedRenderBaseRevision,omitempty"`
-	AcknowledgedRenderRevision     *GitRevision               `json:"acknowledgedRenderRevision,omitempty"`
-	AcknowledgedSourceRevision     *GitRevision               `json:"acknowledgedSourceRevision,omitempty"`
-	Application                    string                     `json:"application"`
-	Cluster                        CatalogName                `json:"cluster"`
-	Environment                    string                     `json:"environment"`
-	ID                             openapi_types.UUID         `json:"id"`
-	Integration                    CatalogName                `json:"integration"`
-	LastObservedAt                 time.Time                  `json:"lastObservedAt"`
-	Message                        *string                    `json:"message,omitempty"`
-	Name                           string                     `json:"name"`
-	NoOpRender                     *bool                      `json:"noOpRender,omitempty"`
-	Project                        CatalogName                `json:"project"`
-	SourceBranchRevision           *GitRevision               `json:"sourceBranchRevision,omitempty"`
-	SourceDrift                    *bool                      `json:"sourceDrift,omitempty"`
-	SourcePaths                    []string                   `json:"sourcePaths"`
-	Status                         PromotionBranchDriftStatus `json:"status"`
-	TargetBranch                   string                     `json:"targetBranch"`
-	TargetBranchRevision           *GitRevision               `json:"targetBranchRevision,omitempty"`
-	TargetDrift                    *bool                      `json:"targetDrift,omitempty"`
+	AcknowledgedRenderBaseCommit *GitCommit         `json:"acknowledgedRenderBaseCommit,omitempty"`
+	AcknowledgedRenderCommit     *GitCommit         `json:"acknowledgedRenderCommit,omitempty"`
+	AcknowledgedSourceCommit     *GitCommit         `json:"acknowledgedSourceCommit,omitempty"`
+	Application                  string             `json:"application"`
+	Cluster                      CatalogName        `json:"cluster"`
+	Environment                  string             `json:"environment"`
+	ID                           openapi_types.UUID `json:"id"`
+	Integration                  CatalogName        `json:"integration"`
+
+	// KargoURL Direct link to this Stage in the configured Kargo UI.
+	KargoURL           *string                    `json:"kargoUrl,omitempty"`
+	LastObservedAt     time.Time                  `json:"lastObservedAt"`
+	Message            *string                    `json:"message,omitempty"`
+	Name               string                     `json:"name"`
+	NoOpRender         *bool                      `json:"noOpRender,omitempty"`
+	Project            CatalogName                `json:"project"`
+	SourceBranchCommit *GitCommit                 `json:"sourceBranchCommit,omitempty"`
+	SourceDrift        *bool                      `json:"sourceDrift,omitempty"`
+	SourcePaths        []string                   `json:"sourcePaths"`
+	Status             PromotionBranchDriftStatus `json:"status"`
+	TargetBranch       string                     `json:"targetBranch"`
+	TargetBranchCommit *GitCommit                 `json:"targetBranchCommit,omitempty"`
+	TargetDrift        *bool                      `json:"targetDrift,omitempty"`
 }
 
 // PromotionBranchDriftStatus defines model for PromotionBranchDriftStatus.
@@ -1139,12 +1187,15 @@ type PromotionPipelineList struct {
 
 // PromotionPipelineStage defines model for PromotionPipelineStage.
 type PromotionPipelineStage struct {
-	Environment           string             `json:"environment"`
-	Freight               PromotionFreight   `json:"freight"`
-	ID                    openapi_types.UUID `json:"id"`
-	LastObservedAt        time.Time          `json:"lastObservedAt"`
-	Name                  string             `json:"name"`
-	PendingPromotionCount int                `json:"pendingPromotionCount"`
+	Environment string             `json:"environment"`
+	Freight     PromotionFreight   `json:"freight"`
+	ID          openapi_types.UUID `json:"id"`
+
+	// KargoURL Direct link to this Stage in the configured Kargo UI.
+	KargoURL              *string   `json:"kargoUrl,omitempty"`
+	LastObservedAt        time.Time `json:"lastObservedAt"`
+	Name                  string    `json:"name"`
+	PendingPromotionCount int       `json:"pendingPromotionCount"`
 }
 
 // PromotionPolicyMode defines model for PromotionPolicyMode.
@@ -1157,14 +1208,17 @@ type PromotionRunSource struct {
 
 // PromotionStage defines model for PromotionStage.
 type PromotionStage struct {
-	Application                     string                  `json:"application"`
-	ArchivedAt                      *time.Time              `json:"archivedAt,omitempty"`
-	Cluster                         CatalogName             `json:"cluster"`
-	Environment                     string                  `json:"environment"`
-	FirstObservedAt                 time.Time               `json:"firstObservedAt"`
-	Freight                         PromotionFreight        `json:"freight"`
-	ID                              openapi_types.UUID      `json:"id"`
-	Integration                     CatalogName             `json:"integration"`
+	Application     string             `json:"application"`
+	ArchivedAt      *time.Time         `json:"archivedAt,omitempty"`
+	Cluster         CatalogName        `json:"cluster"`
+	Environment     string             `json:"environment"`
+	FirstObservedAt time.Time          `json:"firstObservedAt"`
+	Freight         PromotionFreight   `json:"freight"`
+	ID              openapi_types.UUID `json:"id"`
+	Integration     CatalogName        `json:"integration"`
+
+	// KargoURL Direct link to this Stage in the configured Kargo UI.
+	KargoURL                        *string                 `json:"kargoUrl,omitempty"`
 	KubernetesUID                   string                  `json:"kubernetesUid"`
 	LastObservedAt                  time.Time               `json:"lastObservedAt"`
 	Name                            string                  `json:"name"`
@@ -1243,6 +1297,9 @@ type Repository struct {
 	// CloneURL HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
 	CloneURL string `json:"cloneUrl"`
 
+	// CommitURLTemplate Optional absolute HTTP or HTTPS commit-page template containing one {sha} placeholder. Known public Git providers are inferred when this is omitted.
+	CommitURLTemplate *string `json:"commitUrlTemplate,omitempty"`
+
 	// CreatedAt Time at which the repository was registered.
 	CreatedAt time.Time `json:"createdAt"`
 
@@ -1268,6 +1325,9 @@ type RepositoryConfig struct {
 	// CloneURL HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
 	CloneURL string `json:"cloneUrl"`
 
+	// CommitURLTemplate Optional absolute HTTP or HTTPS commit-page template containing one {sha} placeholder. Known public Git providers are inferred when this is omitted.
+	CommitURLTemplate *string `json:"commitUrlTemplate,omitempty"`
+
 	// Name Unique human-readable name of the active repository.
 	Name string `json:"name"`
 
@@ -1277,7 +1337,10 @@ type RepositoryConfig struct {
 
 // RepositoryList defines model for RepositoryList.
 type RepositoryList struct {
-	Items []Repository `json:"items"`
+	Items  []Repository `json:"items"`
+	Limit  int          `json:"limit"`
+	Offset int          `json:"offset"`
+	Total  int          `json:"total"`
 }
 
 // RepositoryRefresh defines model for RepositoryRefresh.
@@ -1285,8 +1348,8 @@ type RepositoryRefresh struct {
 	// AttemptedAt Time of the most recent refresh attempt.
 	AttemptedAt *time.Time `json:"attemptedAt,omitempty"`
 
-	// CommitSha Most recently fetched commit, retained when a later refresh fails.
-	CommitSha *string `json:"commitSha,omitempty"`
+	// Commit Most recently fetched commit, retained when a later refresh fails.
+	Commit *GitCommit `json:"commit,omitempty"`
 
 	// FailureReason Diagnostic from the most recent failed refresh attempt.
 	FailureReason *string `json:"failureReason,omitempty"`
@@ -1324,7 +1387,7 @@ type Run struct {
 	CancellationRequestedAt *time.Time                       `json:"cancellationRequestedAt,omitempty"`
 	CatalogRevisionID       openapi_types.UUID               `json:"catalogRevisionId"`
 	Cluster                 CatalogName                      `json:"cluster"`
-	CommitSha               string                           `json:"commitSha"`
+	Commit                  GitCommit                        `json:"commit"`
 	CreatedAt               time.Time                        `json:"createdAt"`
 	CreatedBy               *RunActor                        `json:"createdBy,omitempty"`
 	ExitCode                *int32                           `json:"exitCode,omitempty"`
@@ -1397,7 +1460,7 @@ type RunArtifactConsumer struct {
 type RunArtifactInput struct {
 	ArtifactID        openapi_types.UUID             `json:"artifactId"`
 	CatalogRevisionID openapi_types.UUID             `json:"catalogRevisionId"`
-	CommitSha         string                         `json:"commitSha"`
+	Commit            GitCommit                      `json:"commit"`
 	MediaType         string                         `json:"mediaType"`
 	Name              CatalogName                    `json:"name"`
 	ProducerRunID     openapi_types.UUID             `json:"producerRunId"`
@@ -1508,6 +1571,15 @@ type RunCreate struct {
 // RunList defines model for RunList.
 type RunList struct {
 	Items []Run `json:"items"`
+
+	// Limit Maximum number of Runs requested for this page.
+	Limit int `json:"limit"`
+
+	// Offset Zero-based offset used for this page.
+	Offset int `json:"offset"`
+
+	// Total Total matching Runs across all pages.
+	Total int `json:"total"`
 }
 
 // RunObservation defines model for RunObservation.
@@ -1588,7 +1660,10 @@ type ServiceAccountCreate struct {
 
 // ServiceAccountList defines model for ServiceAccountList.
 type ServiceAccountList struct {
-	Items []ServiceAccount `json:"items"`
+	Items  []ServiceAccount `json:"items"`
+	Limit  int              `json:"limit"`
+	Offset int              `json:"offset"`
+	Total  int              `json:"total"`
 }
 
 // Target defines model for Target.
@@ -1621,16 +1696,16 @@ type TargetSpec struct {
 
 // TargetStatus defines model for TargetStatus.
 type TargetStatus struct {
-	// DesiredCommitSha Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
-	DesiredCommitSha string `json:"desiredCommitSha"`
+	// DesiredCommit Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
+	DesiredCommit GitCommit `json:"desiredCommit"`
 }
 
 // TargetSummary defines model for TargetSummary.
 type TargetSummary struct {
 	Actions           []string           `json:"actions"`
-	CatalogCommitSha  string             `json:"catalogCommitSha"`
+	CatalogCommit     GitCommit          `json:"catalogCommit"`
 	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
-	DesiredCommitSha  string             `json:"desiredCommitSha"`
+	DesiredCommit     GitCommit          `json:"desiredCommit"`
 	Name              string             `json:"name"`
 	Placement         *string            `json:"placement,omitempty"`
 	RepositoryID      openapi_types.UUID `json:"repositoryId"`
@@ -1679,6 +1754,12 @@ type NotFound = Problem
 // Unauthorized An RFC 9457 problem detail.
 type Unauthorized = Problem
 
+// ListAPIKeysParams defines parameters for ListAPIKeys.
+type ListAPIKeysParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // CompleteOIDCLoginParams defines parameters for CompleteOIDCLogin.
 type CompleteOIDCLoginParams struct {
 	Code              string  `form:"code" json:"code"`
@@ -1700,21 +1781,35 @@ type GetCurrentPrincipalParams struct {
 	SliprampSession *string `form:"slipramp_session,omitempty" json:"slipramp_session,omitempty"`
 }
 
+// ListClustersParams defines parameters for ListClusters.
+type ListClustersParams struct {
+	Q          *string                       `form:"q,omitempty" json:"q,omitempty"`
+	Connection *ListClustersParamsConnection `form:"connection,omitempty" json:"connection,omitempty"`
+	Limit      *int                          `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset     *int32                        `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListClustersParamsConnection defines parameters for ListClusters.
+type ListClustersParamsConnection string
+
 // ListPromotionBranchDriftParams defines parameters for ListPromotionBranchDrift.
 type ListPromotionBranchDriftParams struct {
-	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
-	Repository  *CatalogName `form:"repository,omitempty" json:"repository,omitempty"`
-	Limit       *Limit       `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset      *Offset      `form:"offset,omitempty" json:"offset,omitempty"`
+	Integration *CatalogName                `form:"integration,omitempty" json:"integration,omitempty"`
+	Project     *CatalogName                `form:"project,omitempty" json:"project,omitempty"`
+	Application *string                     `form:"application,omitempty" json:"application,omitempty"`
+	Status      *PromotionBranchDriftStatus `form:"status,omitempty" json:"status,omitempty"`
+	Repository  *CatalogName                `form:"repository,omitempty" json:"repository,omitempty"`
+	Limit       *Limit                      `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset      *Offset                     `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListPromotionPipelinesParams defines parameters for ListPromotionPipelines.
 type ListPromotionPipelinesParams struct {
 	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
-	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
-	Repository  *CatalogName `form:"repository,omitempty" json:"repository,omitempty"`
 	Application *string      `form:"application,omitempty" json:"application,omitempty"`
+	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
+	Repository  *CatalogName `form:"repository,omitempty" json:"repository,omitempty"`
 	Limit       *Limit       `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset      *Offset      `form:"offset,omitempty" json:"offset,omitempty"`
 }
@@ -1722,8 +1817,9 @@ type ListPromotionPipelinesParams struct {
 // ListPromotionStagesParams defines parameters for ListPromotionStages.
 type ListPromotionStagesParams struct {
 	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
-	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
+	Application *string      `form:"application,omitempty" json:"application,omitempty"`
+	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Archived    *bool        `form:"archived,omitempty" json:"archived,omitempty"`
 	Limit       *Limit       `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset      *Offset      `form:"offset,omitempty" json:"offset,omitempty"`
@@ -1731,13 +1827,21 @@ type ListPromotionStagesParams struct {
 
 // ListPromotionsParams defines parameters for ListPromotions.
 type ListPromotionsParams struct {
-	Status      *PromotionStatus    `form:"status,omitempty" json:"status,omitempty"`
 	Integration *CatalogName        `form:"integration,omitempty" json:"integration,omitempty"`
-	Cluster     *CatalogName        `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Project     *CatalogName        `form:"project,omitempty" json:"project,omitempty"`
+	Application *string             `form:"application,omitempty" json:"application,omitempty"`
+	Status      *PromotionStatus    `form:"status,omitempty" json:"status,omitempty"`
+	Cluster     *CatalogName        `form:"cluster,omitempty" json:"cluster,omitempty"`
 	StageID     *openapi_types.UUID `form:"stageId,omitempty" json:"stageId,omitempty"`
 	Limit       *Limit              `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset      *Offset             `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListRepositoriesParams defines parameters for ListRepositories.
+type ListRepositoriesParams struct {
+	Q      *string `form:"q,omitempty" json:"q,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32  `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListRunsParams defines parameters for ListRuns.
@@ -1748,8 +1852,14 @@ type ListRunsParams struct {
 	// Target Limit results to a target name within the selected repository. Requires repositoryId.
 	Target *CatalogName `form:"target,omitempty" json:"target,omitempty"`
 
+	// Cluster Limit results to Runs assigned to one execution cluster.
+	Cluster *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
+
 	// Limit Maximum number of recent Runs to return.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Zero-based offset into the matching Runs.
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // CreateRunParams defines parameters for CreateRun.
@@ -1762,6 +1872,18 @@ type CreateRunParams struct {
 type StreamRunLogParams struct {
 	OffsetBytes *int64  `form:"offsetBytes,omitempty" json:"offsetBytes,omitempty"`
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
+}
+
+// ListServiceAccountsParams defines parameters for ListServiceAccounts.
+type ListServiceAccountsParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListServiceAccountAPIKeysParams defines parameters for ListServiceAccountAPIKeys.
+type ListServiceAccountAPIKeysParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListTargetsParams defines parameters for ListTargets.
@@ -2004,7 +2126,7 @@ type ClientInterface interface {
 	// Lists credential metadata without exposing API key secrets.
 	//
 	// Corresponds with GET /api/v1/auth/api-keys (the `ListAPIKeys` operationId).
-	ListAPIKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListAPIKeys(ctx context.Context, params *ListAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateAPIKeyWithBody Create an API key for the current user
 	//
@@ -2062,7 +2184,7 @@ type ClientInterface interface {
 	// Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
 	//
 	// Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
-	ListClusters(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListClusters(ctx context.Context, params *ListClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SubmitKargoPromotionWithBody Submit or poll a Kargo Promotion review request
 	//
@@ -2136,7 +2258,7 @@ type ClientInterface interface {
 	// Lists active repository registrations ordered by name.
 	//
 	// Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
-	ListRepositories(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListRepositories(ctx context.Context, params *ListRepositoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateRepositoryWithBody Register a repository
 	//
@@ -2172,7 +2294,7 @@ type ClientInterface interface {
 
 	// ListRuns List recent Runs
 	//
-	// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+	// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
 	//
 	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2222,7 +2344,7 @@ type ClientInterface interface {
 	// ListServiceAccounts List service accounts
 	//
 	// Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-	ListServiceAccounts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListServiceAccounts(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateServiceAccountWithBody Create a service account
 	//
@@ -2238,10 +2360,15 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/service-accounts (the `CreateServiceAccount` operationId).
 	CreateServiceAccount(ctx context.Context, body CreateServiceAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetServiceAccount Get a service account
+	//
+	// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
+	GetServiceAccount(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListServiceAccountAPIKeys List API keys for a service account
 	//
 	// Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-	ListServiceAccountAPIKeys(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ListServiceAccountAPIKeys(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateServiceAccountAPIKeyWithBody Create an API key for a service account
 	//
@@ -2400,8 +2527,8 @@ func (c *Client) DownloadArtifact(ctx context.Context, artifactID openapi_types.
 // Lists credential metadata without exposing API key secrets.
 //
 // Corresponds with GET /api/v1/auth/api-keys (the `ListAPIKeys` operationId).
-func (c *Client) ListAPIKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListAPIKeysRequest(c.Server)
+func (c *Client) ListAPIKeys(ctx context.Context, params *ListAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAPIKeysRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2538,8 +2665,8 @@ func (c *Client) GetCurrentPrincipal(ctx context.Context, params *GetCurrentPrin
 // Lists clusters observed through authenticated controller requests and reports whether each controller has checked in recently enough to be considered connected.
 //
 // Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
-func (c *Client) ListClusters(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListClustersRequest(c.Server)
+func (c *Client) ListClusters(ctx context.Context, params *ListClustersParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListClustersRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2732,8 +2859,8 @@ func (c *Client) DecidePromotion(ctx context.Context, promotionID PromotionID, b
 // Lists active repository registrations ordered by name.
 //
 // Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
-func (c *Client) ListRepositories(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListRepositoriesRequest(c.Server)
+func (c *Client) ListRepositories(ctx context.Context, params *ListRepositoriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRepositoriesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2818,7 +2945,7 @@ func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_
 
 // ListRuns List recent Runs
 //
-// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
 //
 // Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2938,8 +3065,8 @@ func (c *Client) StreamRunLog(ctx context.Context, runID openapi_types.UUID, par
 // ListServiceAccounts List service accounts
 //
 // Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-func (c *Client) ListServiceAccounts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServiceAccountsRequest(c.Server)
+func (c *Client) ListServiceAccounts(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListServiceAccountsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2984,11 +3111,26 @@ func (c *Client) CreateServiceAccount(ctx context.Context, body CreateServiceAcc
 	return c.Client.Do(req)
 }
 
+// GetServiceAccount Get a service account
+//
+// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
+func (c *Client) GetServiceAccount(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetServiceAccountRequest(c.Server, principalID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListServiceAccountAPIKeys List API keys for a service account
 //
 // Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-func (c *Client) ListServiceAccountAPIKeys(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServiceAccountAPIKeysRequest(c.Server, principalID)
+func (c *Client) ListServiceAccountAPIKeys(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListServiceAccountAPIKeysRequest(c.Server, principalID, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3350,7 +3492,7 @@ func NewDownloadArtifactRequest(server string, artifactID openapi_types.UUID) (*
 }
 
 // NewListAPIKeysRequest constructs an http.Request for the ListAPIKeys method
-func NewListAPIKeysRequest(server string) (*http.Request, error) {
+func NewListAPIKeysRequest(server string, params *ListAPIKeysParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3366,6 +3508,45 @@ func NewListAPIKeysRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3654,7 +3835,7 @@ func NewGetCurrentPrincipalRequest(server string, params *GetCurrentPrincipalPar
 }
 
 // NewListClustersRequest constructs an http.Request for the ListClusters method
-func NewListClustersRequest(server string) (*http.Request, error) {
+func NewListClustersRequest(server string, params *ListClustersParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -3670,6 +3851,69 @@ func NewListClustersRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Connection != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "connection", *params.Connection, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3758,6 +4002,42 @@ func NewListPromotionBranchDriftRequest(server string, params *ListPromotionBran
 		if params.Integration != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "integration", *params.Integration, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Project != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Application != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "application", *params.Application, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3857,18 +4137,6 @@ func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipeli
 
 		}
 
-		if params.Cluster != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
 		if params.Project != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -3881,9 +4149,9 @@ func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipeli
 
 		}
 
-		if params.Repository != nil {
+		if params.Application != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repository", *params.Repository, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "application", *params.Application, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3893,9 +4161,21 @@ func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipeli
 
 		}
 
-		if params.Application != nil {
+		if params.Cluster != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "application", *params.Application, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Repository != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repository", *params.Repository, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3983,9 +4263,9 @@ func NewListPromotionStagesRequest(server string, params *ListPromotionStagesPar
 
 		}
 
-		if params.Cluster != nil {
+		if params.Project != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -3995,9 +4275,21 @@ func NewListPromotionStagesRequest(server string, params *ListPromotionStagesPar
 
 		}
 
-		if params.Project != nil {
+		if params.Application != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "application", *params.Application, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cluster != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4132,18 +4424,6 @@ func NewListPromotionsRequest(server string, params *ListPromotionsParams) (*htt
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if params.Status != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
 		if params.Integration != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "integration", *params.Integration, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -4156,9 +4436,9 @@ func NewListPromotionsRequest(server string, params *ListPromotionsParams) (*htt
 
 		}
 
-		if params.Cluster != nil {
+		if params.Project != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4168,9 +4448,33 @@ func NewListPromotionsRequest(server string, params *ListPromotionsParams) (*htt
 
 		}
 
-		if params.Project != nil {
+		if params.Application != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "application", *params.Application, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cluster != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4312,7 +4616,7 @@ func NewDecidePromotionRequestWithBody(server string, promotionID PromotionID, c
 }
 
 // NewListRepositoriesRequest constructs an http.Request for the ListRepositories method
-func NewListRepositoriesRequest(server string) (*http.Request, error) {
+func NewListRepositoriesRequest(server string, params *ListRepositoriesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4328,6 +4632,57 @@ func NewListRepositoriesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Q != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", *params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4498,9 +4853,33 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
+		if params.Cluster != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -4758,7 +5137,7 @@ func NewStreamRunLogRequest(server string, runID openapi_types.UUID, params *Str
 }
 
 // NewListServiceAccountsRequest constructs an http.Request for the ListServiceAccounts method
-func NewListServiceAccountsRequest(server string) (*http.Request, error) {
+func NewListServiceAccountsRequest(server string, params *ListServiceAccountsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4774,6 +5153,45 @@ func NewListServiceAccountsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4824,8 +5242,42 @@ func NewCreateServiceAccountRequestWithBody(server string, contentType string, b
 	return req, nil
 }
 
+// NewGetServiceAccountRequest constructs an http.Request for the GetServiceAccount method
+func NewGetServiceAccountRequest(server string, principalID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/service-accounts/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListServiceAccountAPIKeysRequest constructs an http.Request for the ListServiceAccountAPIKeys method
-func NewListServiceAccountAPIKeysRequest(server string, principalID openapi_types.UUID) (*http.Request, error) {
+func NewListServiceAccountAPIKeysRequest(server string, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4848,6 +5300,45 @@ func NewListServiceAccountAPIKeysRequest(server string, principalID openapi_type
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5532,7 +6023,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/auth/api-keys (the `ListAPIKeys` operationId).
-	ListAPIKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIKeysResponse, error)
+	ListAPIKeysWithResponse(ctx context.Context, params *ListAPIKeysParams, reqEditors ...RequestEditorFn) (*ListAPIKeysResponse, error)
 
 	// CreateAPIKeyWithBodyWithResponse Create an API key for the current user
 	//
@@ -5602,7 +6093,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
-	ListClustersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListClustersResponse, error)
+	ListClustersWithResponse(ctx context.Context, params *ListClustersParams, reqEditors ...RequestEditorFn) (*ListClustersResponse, error)
 
 	// SubmitKargoPromotionWithBodyWithResponse Submit or poll a Kargo Promotion review request
 	//
@@ -5688,7 +6179,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
-	ListRepositoriesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRepositoriesResponse, error)
+	ListRepositoriesWithResponse(ctx context.Context, params *ListRepositoriesParams, reqEditors ...RequestEditorFn) (*ListRepositoriesResponse, error)
 
 	// CreateRepositoryWithBodyWithResponse Register a repository
 	//
@@ -5728,7 +6219,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListRunsWithResponse List recent Runs
 	//
-	// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+	// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -5790,7 +6281,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-	ListServiceAccountsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServiceAccountsResponse, error)
+	ListServiceAccountsWithResponse(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*ListServiceAccountsResponse, error)
 
 	// CreateServiceAccountWithBodyWithResponse Create a service account
 	//
@@ -5806,12 +6297,19 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/service-accounts (the `CreateServiceAccount` operationId).
 	CreateServiceAccountWithResponse(ctx context.Context, body CreateServiceAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateServiceAccountResponse, error)
 
+	// GetServiceAccountWithResponse Get a service account
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
+	GetServiceAccountWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetServiceAccountResponse, error)
+
 	// ListServiceAccountAPIKeysWithResponse List API keys for a service account
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-	ListServiceAccountAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListServiceAccountAPIKeysResponse, error)
+	ListServiceAccountAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*ListServiceAccountAPIKeysResponse, error)
 
 	// CreateServiceAccountAPIKeyWithBodyWithResponse Create an API key for a service account
 	//
@@ -6051,6 +6549,8 @@ type ListAPIKeysResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *APIKeyList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationProblemJSON401 *Problem
 	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -6064,6 +6564,11 @@ type ListAPIKeysResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListAPIKeysResponse) GetJSON200() *APIKeyList {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListAPIKeysResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
 }
 
 // GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -6560,6 +7065,8 @@ type ListClustersResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *ClusterList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationProblemJSON401 *Problem
 	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -6573,6 +7080,11 @@ type ListClustersResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListClustersResponse) GetJSON200() *ClusterList {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListClustersResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
 }
 
 // GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -7230,6 +7742,8 @@ type ListRepositoriesResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *RepositoryList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationProblemJSON401 *Problem
 	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -7243,6 +7757,11 @@ type ListRepositoriesResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListRepositoriesResponse) GetJSON200() *RepositoryList {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListRepositoriesResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
 }
 
 // GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -8025,6 +8544,8 @@ type ListServiceAccountsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *ServiceAccountList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationProblemJSON401 *Problem
 	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -8038,6 +8559,11 @@ type ListServiceAccountsResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r ListServiceAccountsResponse) GetJSON200() *ServiceAccountList {
 	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListServiceAccountsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
 }
 
 // GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -8159,6 +8685,75 @@ func (r CreateServiceAccountResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateServiceAccountResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetServiceAccountResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ServiceAccount
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetServiceAccountResponse) GetJSON200() *ServiceAccount {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetServiceAccountResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetServiceAccountResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetServiceAccountResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetServiceAccountResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetServiceAccountResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetServiceAccountResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetServiceAccountResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetServiceAccountResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9200,8 +9795,8 @@ func (c *ClientWithResponses) DownloadArtifactWithResponse(ctx context.Context, 
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/auth/api-keys (the `ListAPIKeys` operationId).
-func (c *ClientWithResponses) ListAPIKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListAPIKeysResponse, error) {
-	rsp, err := c.ListAPIKeys(ctx, reqEditors...)
+func (c *ClientWithResponses) ListAPIKeysWithResponse(ctx context.Context, params *ListAPIKeysParams, reqEditors ...RequestEditorFn) (*ListAPIKeysResponse, error) {
+	rsp, err := c.ListAPIKeys(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9318,8 +9913,8 @@ func (c *ClientWithResponses) GetCurrentPrincipalWithResponse(ctx context.Contex
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/clusters (the `ListClusters` operationId).
-func (c *ClientWithResponses) ListClustersWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListClustersResponse, error) {
-	rsp, err := c.ListClusters(ctx, reqEditors...)
+func (c *ClientWithResponses) ListClustersWithResponse(ctx context.Context, params *ListClustersParams, reqEditors ...RequestEditorFn) (*ListClustersResponse, error) {
+	rsp, err := c.ListClusters(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9476,8 +10071,8 @@ func (c *ClientWithResponses) DecidePromotionWithResponse(ctx context.Context, p
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/repositories (the `ListRepositories` operationId).
-func (c *ClientWithResponses) ListRepositoriesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListRepositoriesResponse, error) {
-	rsp, err := c.ListRepositories(ctx, reqEditors...)
+func (c *ClientWithResponses) ListRepositoriesWithResponse(ctx context.Context, params *ListRepositoriesParams, reqEditors ...RequestEditorFn) (*ListRepositoriesResponse, error) {
+	rsp, err := c.ListRepositories(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9546,7 +10141,7 @@ func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Conte
 
 // ListRunsWithResponse List recent Runs
 //
-// Lists the most recent Runs in descending creation order. Repository and target filters expose history at both catalog levels.
+// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -9650,8 +10245,8 @@ func (c *ClientWithResponses) StreamRunLogWithResponse(ctx context.Context, runI
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-func (c *ClientWithResponses) ListServiceAccountsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListServiceAccountsResponse, error) {
-	rsp, err := c.ListServiceAccounts(ctx, reqEditors...)
+func (c *ClientWithResponses) ListServiceAccountsWithResponse(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*ListServiceAccountsResponse, error) {
+	rsp, err := c.ListServiceAccounts(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9684,13 +10279,26 @@ func (c *ClientWithResponses) CreateServiceAccountWithResponse(ctx context.Conte
 	return ParseCreateServiceAccountResponse(rsp)
 }
 
+// GetServiceAccountWithResponse Get a service account
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
+func (c *ClientWithResponses) GetServiceAccountWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetServiceAccountResponse, error) {
+	rsp, err := c.GetServiceAccount(ctx, principalID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetServiceAccountResponse(rsp)
+}
+
 // ListServiceAccountAPIKeysWithResponse List API keys for a service account
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-func (c *ClientWithResponses) ListServiceAccountAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*ListServiceAccountAPIKeysResponse, error) {
-	rsp, err := c.ListServiceAccountAPIKeys(ctx, principalID, reqEditors...)
+func (c *ClientWithResponses) ListServiceAccountAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*ListServiceAccountAPIKeysResponse, error) {
+	rsp, err := c.ListServiceAccountAPIKeys(ctx, principalID, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -10054,6 +10662,13 @@ func ParseListAPIKeysResponse(rsp *http.Response) (*ListAPIKeysResponse, error) 
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
@@ -10530,6 +11145,13 @@ func ParseListClustersResponse(rsp *http.Response) (*ListClustersResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
@@ -11065,6 +11687,13 @@ func ParseListRepositoriesResponse(rsp *http.Response) (*ListRepositoriesRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
@@ -11720,6 +12349,13 @@ func ParseListServiceAccountsResponse(rsp *http.Response) (*ListServiceAccountsR
 		}
 		response.JSON200 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -11801,6 +12437,60 @@ func ParseCreateServiceAccountResponse(rsp *http.Response) (*CreateServiceAccoun
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetServiceAccountResponse parses an HTTP response from a GetServiceAccountWithResponse call
+func ParseGetServiceAccountResponse(rsp *http.Response) (*GetServiceAccountResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetServiceAccountResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServiceAccount
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -12659,7 +13349,7 @@ type ServerInterface interface {
 	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID)
 	// ListAPIKeys List API keys for the current principal
 	// (GET /api/v1/auth/api-keys)
-	ListAPIKeys(w http.ResponseWriter, r *http.Request)
+	ListAPIKeys(w http.ResponseWriter, r *http.Request, params ListAPIKeysParams)
 	// CreateAPIKey Create an API key for the current user
 	// (POST /api/v1/auth/api-keys)
 	CreateAPIKey(w http.ResponseWriter, r *http.Request)
@@ -12680,7 +13370,7 @@ type ServerInterface interface {
 	GetCurrentPrincipal(w http.ResponseWriter, r *http.Request, params GetCurrentPrincipalParams)
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
-	ListClusters(w http.ResponseWriter, r *http.Request)
+	ListClusters(w http.ResponseWriter, r *http.Request, params ListClustersParams)
 	// SubmitKargoPromotion Submit or poll a Kargo Promotion review request
 	// (POST /api/v1/kargo/{integration}/promotions)
 	SubmitKargoPromotion(w http.ResponseWriter, r *http.Request, integration CatalogName)
@@ -12707,7 +13397,7 @@ type ServerInterface interface {
 	DecidePromotion(w http.ResponseWriter, r *http.Request, promotionID PromotionID)
 	// ListRepositories List repositories
 	// (GET /api/v1/repositories)
-	ListRepositories(w http.ResponseWriter, r *http.Request)
+	ListRepositories(w http.ResponseWriter, r *http.Request, params ListRepositoriesParams)
 	// CreateRepository Register a repository
 	// (POST /api/v1/repositories)
 	CreateRepository(w http.ResponseWriter, r *http.Request)
@@ -12737,13 +13427,16 @@ type ServerInterface interface {
 	StreamRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params StreamRunLogParams)
 	// ListServiceAccounts List service accounts
 	// (GET /api/v1/service-accounts)
-	ListServiceAccounts(w http.ResponseWriter, r *http.Request)
+	ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams)
 	// CreateServiceAccount Create a service account
 	// (POST /api/v1/service-accounts)
 	CreateServiceAccount(w http.ResponseWriter, r *http.Request)
+	// GetServiceAccount Get a service account
+	// (GET /api/v1/service-accounts/{principalId})
+	GetServiceAccount(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
 	// ListServiceAccountAPIKeys List API keys for a service account
 	// (GET /api/v1/service-accounts/{principalId}/api-keys)
-	ListServiceAccountAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
+	ListServiceAccountAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID, params ListServiceAccountAPIKeysParams)
 	// CreateServiceAccountAPIKey Create an API key for a service account
 	// (POST /api/v1/service-accounts/{principalId}/api-keys)
 	CreateServiceAccountAPIKey(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
@@ -12823,8 +13516,40 @@ func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *ht
 // ListAPIKeys operation middleware
 func (siw *ServerInterfaceWrapper) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAPIKeysParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAPIKeys(w, r)
+		siw.Handler.ListAPIKeys(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13047,8 +13772,66 @@ func (siw *ServerInterfaceWrapper) GetCurrentPrincipal(w http.ResponseWriter, r 
 // ListClusters operation middleware
 func (siw *ServerInterfaceWrapper) ListClusters(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListClustersParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "connection" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "connection", r.URL.Query(), &params.Connection, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "connection"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connection", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListClusters(w, r)
+		siw.Handler.ListClusters(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13102,6 +13885,45 @@ func (siw *ServerInterfaceWrapper) ListPromotionBranchDrift(w http.ResponseWrite
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "integration"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "integration", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "project" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "application" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "application", r.URL.Query(), &params.Application, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "application"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "application", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
 		}
 		return
 	}
@@ -13178,19 +14000,6 @@ func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter,
 		return
 	}
 
-	// ------------- Optional query parameter "cluster" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		}
-		return
-	}
-
 	// ------------- Optional query parameter "project" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -13204,19 +14013,6 @@ func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter,
 		return
 	}
 
-	// ------------- Optional query parameter "repository" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "repository", r.URL.Query(), &params.Repository, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repository"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository", Err: err})
-		}
-		return
-	}
-
 	// ------------- Optional query parameter "application" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "application", r.URL.Query(), &params.Application, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -13226,6 +14022,32 @@ func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter,
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "application"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "application", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cluster" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "repository" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repository", r.URL.Query(), &params.Repository, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repository"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository", Err: err})
 		}
 		return
 	}
@@ -13289,19 +14111,6 @@ func (siw *ServerInterfaceWrapper) ListPromotionStages(w http.ResponseWriter, r 
 		return
 	}
 
-	// ------------- Optional query parameter "cluster" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		}
-		return
-	}
-
 	// ------------- Optional query parameter "project" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -13311,6 +14120,32 @@ func (siw *ServerInterfaceWrapper) ListPromotionStages(w http.ResponseWriter, r 
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "application" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "application", r.URL.Query(), &params.Application, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "application"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "application", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cluster" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
 		}
 		return
 	}
@@ -13400,19 +14235,6 @@ func (siw *ServerInterfaceWrapper) ListPromotions(w http.ResponseWriter, r *http
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListPromotionsParams
 
-	// ------------- Optional query parameter "status" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
-		}
-		return
-	}
-
 	// ------------- Optional query parameter "integration" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "integration", r.URL.Query(), &params.Integration, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -13426,19 +14248,6 @@ func (siw *ServerInterfaceWrapper) ListPromotions(w http.ResponseWriter, r *http
 		return
 	}
 
-	// ------------- Optional query parameter "cluster" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		}
-		return
-	}
-
 	// ------------- Optional query parameter "project" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -13448,6 +14257,45 @@ func (siw *ServerInterfaceWrapper) ListPromotions(w http.ResponseWriter, r *http
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "application" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "application", r.URL.Query(), &params.Application, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "application"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "application", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cluster" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
 		}
 		return
 	}
@@ -13557,8 +14405,53 @@ func (siw *ServerInterfaceWrapper) DecidePromotion(w http.ResponseWriter, r *htt
 // ListRepositories operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositories(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoriesParams
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListRepositories(w, r)
+		siw.Handler.ListRepositories(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13669,6 +14562,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// ------------- Optional query parameter "cluster" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "limit" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
@@ -13678,6 +14584,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
 		}
 		return
 	}
@@ -13878,8 +14797,40 @@ func (siw *ServerInterfaceWrapper) StreamRunLog(w http.ResponseWriter, r *http.R
 // ListServiceAccounts operation middleware
 func (siw *ServerInterfaceWrapper) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListServiceAccountsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListServiceAccounts(w, r)
+		siw.Handler.ListServiceAccounts(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13894,6 +14845,32 @@ func (siw *ServerInterfaceWrapper) CreateServiceAccount(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateServiceAccount(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetServiceAccount operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principalId" -------------
+	var principalID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetServiceAccount(w, r, principalID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13918,8 +14895,37 @@ func (siw *ServerInterfaceWrapper) ListServiceAccountAPIKeys(w http.ResponseWrit
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListServiceAccountAPIKeysParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListServiceAccountAPIKeys(w, r, principalID)
+		siw.Handler.ListServiceAccountAPIKeys(w, r, principalID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14498,6 +15504,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/auth/api-keys/{apiKeyId}", wrapper.RevokeAPIKey)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/service-accounts", wrapper.ListServiceAccounts)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/service-accounts", wrapper.CreateServiceAccount)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/service-accounts/{principalId}", wrapper.GetServiceAccount)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/service-accounts/{principalId}/api-keys", wrapper.ListServiceAccountAPIKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/service-accounts/{principalId}/api-keys", wrapper.CreateServiceAccountAPIKey)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/kargo/{integration}/promotions", wrapper.SubmitKargoPromotion)
@@ -14652,6 +15659,7 @@ func (response DownloadArtifact500ApplicationProblemPlusJSONResponse) VisitDownl
 }
 
 type ListAPIKeysRequestObject struct {
+	Params ListAPIKeysParams
 }
 
 type ListAPIKeysResponseObject interface {
@@ -14668,6 +15676,20 @@ func (response ListAPIKeys200JSONResponse) VisitListAPIKeysResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAPIKeys400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAPIKeys400ApplicationProblemPlusJSONResponse) VisitListAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -15244,6 +16266,7 @@ func (response GetCurrentPrincipal500ApplicationProblemPlusJSONResponse) VisitGe
 }
 
 type ListClustersRequestObject struct {
+	Params ListClustersParams
 }
 
 type ListClustersResponseObject interface {
@@ -15260,6 +16283,20 @@ func (response ListClusters200JSONResponse) VisitListClustersResponse(w http.Res
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListClusters400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListClusters400ApplicationProblemPlusJSONResponse) VisitListClustersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -16124,6 +17161,7 @@ func (response DecidePromotion500ApplicationProblemPlusJSONResponse) VisitDecide
 }
 
 type ListRepositoriesRequestObject struct {
+	Params ListRepositoriesParams
 }
 
 type ListRepositoriesResponseObject interface {
@@ -16140,6 +17178,20 @@ func (response ListRepositories200JSONResponse) VisitListRepositoriesResponse(w 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositories400ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -17162,6 +18214,7 @@ func (response StreamRunLog500ApplicationProblemPlusJSONResponse) VisitStreamRun
 }
 
 type ListServiceAccountsRequestObject struct {
+	Params ListServiceAccountsParams
 }
 
 type ListServiceAccountsResponseObject interface {
@@ -17178,6 +18231,20 @@ func (response ListServiceAccounts200JSONResponse) VisitListServiceAccountsRespo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListServiceAccounts400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListServiceAccounts400ApplicationProblemPlusJSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -17330,8 +18397,87 @@ func (response CreateServiceAccount500ApplicationProblemPlusJSONResponse) VisitC
 	return err
 }
 
+type GetServiceAccountRequestObject struct {
+	PrincipalID openapi_types.UUID `json:"principalId"`
+}
+
+type GetServiceAccountResponseObject interface {
+	VisitGetServiceAccountResponse(w http.ResponseWriter) error
+}
+
+type GetServiceAccount200JSONResponse ServiceAccount
+
+func (response GetServiceAccount200JSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceAccount401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServiceAccount401ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceAccount403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServiceAccount403ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceAccount404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServiceAccount404ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetServiceAccount500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetServiceAccount500ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListServiceAccountAPIKeysRequestObject struct {
 	PrincipalID openapi_types.UUID `json:"principalId"`
+	Params      ListServiceAccountAPIKeysParams
 }
 
 type ListServiceAccountAPIKeysResponseObject interface {
@@ -18693,6 +19839,9 @@ type StrictServerInterface interface {
 	// CreateServiceAccount Create a service account
 	// (POST /api/v1/service-accounts)
 	CreateServiceAccount(ctx context.Context, request CreateServiceAccountRequestObject) (CreateServiceAccountResponseObject, error)
+	// GetServiceAccount Get a service account
+	// (GET /api/v1/service-accounts/{principalId})
+	GetServiceAccount(ctx context.Context, request GetServiceAccountRequestObject) (GetServiceAccountResponseObject, error)
 	// ListServiceAccountAPIKeys List API keys for a service account
 	// (GET /api/v1/service-accounts/{principalId}/api-keys)
 	ListServiceAccountAPIKeys(ctx context.Context, request ListServiceAccountAPIKeysRequestObject) (ListServiceAccountAPIKeysResponseObject, error)
@@ -18803,8 +19952,10 @@ func (sh *strictHandler) DownloadArtifact(w http.ResponseWriter, r *http.Request
 }
 
 // ListAPIKeys operation middleware
-func (sh *strictHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListAPIKeys(w http.ResponseWriter, r *http.Request, params ListAPIKeysParams) {
 	var request ListAPIKeysRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListAPIKeys(ctx, request.(ListAPIKeysRequestObject))
@@ -18986,8 +20137,10 @@ func (sh *strictHandler) GetCurrentPrincipal(w http.ResponseWriter, r *http.Requ
 }
 
 // ListClusters operation middleware
-func (sh *strictHandler) ListClusters(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListClusters(w http.ResponseWriter, r *http.Request, params ListClustersParams) {
 	var request ListClustersRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListClusters(ctx, request.(ListClustersRequestObject))
@@ -19239,8 +20392,10 @@ func (sh *strictHandler) DecidePromotion(w http.ResponseWriter, r *http.Request,
 }
 
 // ListRepositories operation middleware
-func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request, params ListRepositoriesParams) {
 	var request ListRepositoriesRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListRepositories(ctx, request.(ListRepositoriesRequestObject))
@@ -19510,8 +20665,10 @@ func (sh *strictHandler) StreamRunLog(w http.ResponseWriter, r *http.Request, ru
 }
 
 // ListServiceAccounts operation middleware
-func (sh *strictHandler) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams) {
 	var request ListServiceAccountsRequestObject
+
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListServiceAccounts(ctx, request.(ListServiceAccountsRequestObject))
@@ -19564,11 +20721,38 @@ func (sh *strictHandler) CreateServiceAccount(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// GetServiceAccount operation middleware
+func (sh *strictHandler) GetServiceAccount(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
+	var request GetServiceAccountRequestObject
+
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetServiceAccount(ctx, request.(GetServiceAccountRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetServiceAccount")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetServiceAccountResponseObject); ok {
+		if err := validResponse.VisitGetServiceAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListServiceAccountAPIKeys operation middleware
-func (sh *strictHandler) ListServiceAccountAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
+func (sh *strictHandler) ListServiceAccountAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID, params ListServiceAccountAPIKeysParams) {
 	var request ListServiceAccountAPIKeysRequestObject
 
 	request.PrincipalID = principalID
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListServiceAccountAPIKeys(ctx, request.(ListServiceAccountAPIKeysRequestObject))

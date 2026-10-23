@@ -31,6 +31,31 @@ DependencyStatus:
     - available
     - unavailable
 
+GitCommit:
+  type: object
+  additionalProperties: false
+  required:
+    - sha
+  properties:
+    sha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+      description: Exact Git object identity.
+    title:
+      type: string
+      description: Commit subject when it has been read from the Git object.
+    author:
+      type: string
+      description: Commit author name when it has been read from the Git object.
+    authoredAt:
+      type: string
+      format: date-time
+      description: Commit author timestamp when it has been read from the Git object.
+    url:
+      type: string
+      format: uri
+      description: Provider commit page when the repository supports web links.
+
 Problem:
   type: object
   description: An RFC 9457 problem detail.

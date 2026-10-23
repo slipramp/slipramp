@@ -243,6 +243,21 @@ apiKeys:
       - ProductBearer: []
     tags:
       - Authentication
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
     responses:
       "200":
         description: API key metadata ordered from newest to oldest.
@@ -258,6 +273,12 @@ apiKeys:
               $ref: ../components/common.yaml#/Problem
       "403":
         description: The credential cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "400":
+        description: The list window is invalid.
         content:
           application/problem+json:
             schema:
@@ -401,6 +422,21 @@ serviceAccounts:
       - ProductBearer: []
     tags:
       - Authentication
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
     responses:
       "200":
         description: Service accounts ordered by display name.
@@ -416,6 +452,12 @@ serviceAccounts:
               $ref: ../components/common.yaml#/Problem
       "403":
         description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "400":
+        description: The list window is invalid.
         content:
           application/problem+json:
             schema:
@@ -484,6 +526,54 @@ serviceAccounts:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+serviceAccount:
+  parameters:
+    - name: principalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  get:
+    operationId: getServiceAccount
+    summary: Get a service account
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    responses:
+      "200":
+        description: Service-account identity.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/ServiceAccount
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The service account does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The service account could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 serviceAccountAPIKeys:
   parameters:
     - name: principalId
@@ -500,6 +590,21 @@ serviceAccountAPIKeys:
       - ProductBearer: []
     tags:
       - Authentication
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
     responses:
       "200":
         description: API key metadata ordered from newest to oldest.

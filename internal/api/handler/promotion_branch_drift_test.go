@@ -34,6 +34,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
+	lastRenderedAt := now.Add(-2 * time.Hour)
 	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1910")
 	drift := &recordingPromotionBranchDriftService{
 		result: promotion.BranchDriftList{
@@ -57,7 +58,9 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 					AcknowledgedSourceRevision:     strings.Repeat("a", 40),
 					AcknowledgedRenderBaseRevision: strings.Repeat("b", 40),
 					AcknowledgedRenderRevision:     strings.Repeat("b", 40),
+					AcknowledgedRenderAuthoredAt:   &lastRenderedAt,
 					SourceBranchRevision:           strings.Repeat("a", 40),
+					SourceBranchAuthoredAt:         &now,
 					TargetBranchRevision:           strings.Repeat("b", 40),
 					NoOpRender:                     true,
 				}},
@@ -70,6 +73,9 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	httpHandler := NewHTTP(
 		Dependencies{
 			PromotionBranchDrift: drift,
+			KargoIntegrations: promotion.IntegrationSet{
+				"prod": {UIURL: "https://kargo.example.com"},
+			},
 			ProductAuthentication: &recordingProductAuthenticationService{
 				authentication: productAuthentication(
 					productidentity.RoleViewer,
@@ -83,7 +89,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	request := httptest.NewRequestWithContext(
 		t.Context(),
 		http.MethodGet,
-		"/api/v1/promotion-branch-drift?integration=prod&repository=ops&limit=10&offset=2",
+		"/api/v1/promotion-branch-drift?status=current&integration=prod&project=kargo-core&application=external-dns&repository=ops&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -94,7 +100,10 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
 	}
-	if drift.filter.Integration != "prod" || drift.filter.Repository != "ops" ||
+	if drift.filter.Status != promotion.BranchDriftStatusCurrent ||
+		drift.filter.Integration != "prod" || drift.filter.Project != "kargo-core" ||
+		drift.filter.Application != "external-dns" ||
+		drift.filter.Repository != "ops" ||
 		drift.filter.Limit != 10 || drift.filter.Offset != 2 {
 		t.Errorf("branch drift filter = %#v", drift.filter)
 	}
@@ -105,6 +114,8 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 		`"noOpRender":true`,
 		`"sourceDrift":false`,
 		`"targetDrift":false`,
+		`"authoredAt":"2026-10-22T10:00:00Z"`,
+		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/external-dns-prod"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)

@@ -12,6 +12,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type PromotionRequestService interface {
@@ -143,6 +144,9 @@ func (h *Handler) ListPromotionStages(
 		Archived:    request.Params.Archived,
 		Limit:       promotion.DefaultListLimit,
 	}
+	if request.Params.Application != nil {
+		filter.Application = *request.Params.Application
+	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
 	}
@@ -164,7 +168,7 @@ func (h *Handler) ListPromotionStages(
 
 	items := make([]api.PromotionStage, 0, len(result.Items))
 	for _, review := range result.Items {
-		item, convertErr := promotionStageResponse(review)
+		item, convertErr := h.promotionStageResponse(review)
 		if convertErr != nil {
 			return nil, convertErr
 		}
@@ -244,6 +248,9 @@ func (h *Handler) ListPromotions(
 		StageID:     request.Params.StageID,
 		Limit:       promotion.DefaultListLimit,
 	}
+	if request.Params.Application != nil {
+		filter.Application = *request.Params.Application
+	}
 	if request.Params.Status != nil {
 		filter.Status = promotion.PromotionStatus(*request.Params.Status)
 	}
@@ -265,10 +272,22 @@ func (h *Handler) ListPromotions(
 	if err != nil {
 		return nil, err
 	}
+	keys := make([]repository.CommitKey, 0, len(result.Items)*2)
+	for _, review := range result.Items {
+		keys = append(
+			keys,
+			commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision),
+			commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision),
+		)
+	}
+	commits, commitErr := h.commitResponses(ctx, keys)
+	if commitErr != nil {
+		commits = commitFallbacks(keys)
+	}
 
 	items := make([]api.Promotion, 0, len(result.Items))
 	for _, review := range result.Items {
-		item, convertErr := promotionResponse(review)
+		item, convertErr := promotionResponse(review, commits, h.kargoIntegrations)
 		if convertErr != nil {
 			return nil, convertErr
 		}
@@ -469,7 +488,7 @@ func optionalCatalogName(value *api.CatalogName) string {
 	return string(*value)
 }
 
-func promotionStageResponse(review promotion.StageReview) (api.PromotionStage, error) {
+func (h *Handler) promotionStageResponse(review promotion.StageReview) (api.PromotionStage, error) {
 	freight, err := promotionFreightResponse(review.Stage.Freight)
 	if err != nil {
 		return api.PromotionStage{}, fmt.Errorf("decode Promotion Stage Freight: %w", err)
@@ -504,6 +523,11 @@ func promotionStageResponse(review promotion.StageReview) (api.PromotionStage, e
 		FirstObservedAt:                 review.Stage.FirstObservedAt,
 		LastObservedAt:                  review.Stage.LastObservedAt,
 		ArchivedAt:                      review.Stage.ArchivedAt,
+		KargoURL: h.kargoIntegrations.KargoStageURL(
+			review.Stage.Integration,
+			review.Stage.Project,
+			review.Stage.Name,
+		),
 	}, nil
 }
 
@@ -535,7 +559,11 @@ func promotionPolicyResponse(value promotion.PolicyView) api.PromotionStagePolic
 	}
 }
 
-func promotionResponse(review promotion.PromotionReview) (api.Promotion, error) {
+func promotionResponse(
+	review promotion.PromotionReview,
+	commits map[repository.CommitKey]api.GitCommit,
+	integrations promotion.IntegrationSet,
+) (api.Promotion, error) {
 	record := review.Promotion
 	stageSnapshot, err := rawObject(record.StageSnapshot)
 	if err != nil {
@@ -553,6 +581,7 @@ func promotionResponse(review promotion.PromotionReview) (api.Promotion, error) 
 	if requestedBy == nil {
 		return api.Promotion{}, errors.New("promotion requesting actor is missing")
 	}
+	project, _ := stageSnapshot["project"].(string)
 
 	body := api.Promotion{
 		ID:                     record.ID,
@@ -562,8 +591,8 @@ func promotionResponse(review promotion.PromotionReview) (api.Promotion, error) 
 		StageSnapshot:          stageSnapshot,
 		RepositoryID:           record.RepositoryID,
 		RepositorySnapshot:     repositorySnapshot,
-		BaseRevision:           record.BaseRevision,
-		CandidateRevision:      record.CandidateRevision,
+		BaseCommit:             commits[commitKey(record.RepositoryID, record.BaseRevision)],
+		CandidateCommit:        commits[commitKey(record.RepositoryID, record.CandidateRevision)],
 		CandidateBranch:        record.CandidateBranch,
 		TargetBranch:           record.TargetBranch,
 		PolicySnapshot:         policySnapshot,
@@ -579,6 +608,11 @@ func promotionResponse(review promotion.PromotionReview) (api.Promotion, error) 
 		DecidedAt:              record.DecidedAt,
 		ExpiresAt:              record.ExpiresAt,
 		UpdatedAt:              record.UpdatedAt,
+		KargoURL: integrations.KargoPromotionURL(
+			record.Integration,
+			project,
+			record.ExternalPromotionID,
+		),
 	}
 	if review.Decision != nil {
 		decidedBy := apiRunActor(&review.Decision.DecidedBySnapshot)
@@ -600,7 +634,15 @@ func (h *Handler) promotionDetailResponse(
 	ctx context.Context,
 	review promotion.PromotionReview,
 ) (api.Promotion, error) {
-	body, err := promotionResponse(review)
+	keys := []repository.CommitKey{
+		commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision),
+		commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision),
+	}
+	commits, commitErr := h.commitResponses(ctx, keys)
+	if commitErr != nil {
+		commits = commitFallbacks(keys)
+	}
+	body, err := promotionResponse(review, commits, h.kargoIntegrations)
 	if err != nil {
 		return api.Promotion{}, err
 	}
@@ -622,13 +664,25 @@ func (h *Handler) promotionDetailResponse(
 	if err != nil {
 		return api.Promotion{}, fmt.Errorf("load Promotion preparation artifacts: %w", err)
 	}
+	artifactKeys := make([]repository.CommitKey, 0, len(artifacts))
 	for _, record := range artifacts {
+		artifactKeys = append(
+			artifactKeys,
+			commitKey(record.Provenance.RepositoryID, record.Provenance.CommitSHA),
+		)
+	}
+	artifactCommits, err := h.commitResponses(ctx, artifactKeys)
+	if err != nil {
+		return api.Promotion{}, err
+	}
+	for _, record := range artifacts {
+		commit := artifactCommits[commitKey(record.Provenance.RepositoryID, record.Provenance.CommitSHA)]
 		switch record.ID {
 		case valueOrNilUUID(review.Promotion.GitDiffArtifactID):
-			value := artifactResponse(record)
+			value := artifactResponse(record, commit)
 			body.GitDiffArtifact = &value
 		case valueOrNilUUID(review.Promotion.ArgoDiffArtifactID):
-			value := artifactResponse(record)
+			value := artifactResponse(record, commit)
 			body.ArgoDiffArtifact = &value
 		}
 	}

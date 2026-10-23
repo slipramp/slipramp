@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -58,15 +59,39 @@ func (h *Handler) EnrollController(
 
 func (h *Handler) ListClusters(
 	ctx context.Context,
-	_ api.ListClustersRequestObject,
+	request api.ListClustersRequestObject,
 ) (api.ListClustersResponseObject, error) {
+	limit, offset, windowErr := listWindow(request.Params.Limit, request.Params.Offset)
+	if windowErr != nil {
+		return api.ListClusters400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, windowErr.Error()),
+		), nil
+	}
 	statuses, err := h.clusters.ListClusters(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	items := make([]api.Cluster, 0, len(statuses))
+	query := ""
+	if request.Params.Q != nil {
+		query = strings.ToLower(strings.TrimSpace(*request.Params.Q))
+	}
+	connection := ""
+	if request.Params.Connection != nil {
+		connection = string(*request.Params.Connection)
+	}
+	filtered := statuses[:0]
 	for _, status := range statuses {
+		if (query == "" || strings.Contains(strings.ToLower(status.Name), query)) &&
+			(connection == "" || string(status.ConnectionState) == connection) {
+			filtered = append(filtered, status)
+		}
+	}
+	total := len(filtered)
+	filtered = listPage(filtered, offset, limit)
+
+	items := make([]api.Cluster, 0, len(filtered))
+	for _, status := range filtered {
 		items = append(items, api.Cluster{
 			Name:            status.Name,
 			ConnectionState: api.ClusterConnectionState(status.ConnectionState),
@@ -75,7 +100,7 @@ func (h *Handler) ListClusters(
 		})
 	}
 
-	return api.ListClusters200JSONResponse{Items: items}, nil
+	return api.ListClusters200JSONResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 func (h *Handler) PollForControllerCommand(

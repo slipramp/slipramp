@@ -24,9 +24,18 @@ import {
   decidePromotion,
   getCurrentPrincipal,
   getPromotion,
+  type GitCommit,
   type ProductPrincipal,
   type Promotion,
 } from "~/api/generated";
+import { Timestamp } from "~/components/display";
+import { useActionSuccessToast } from "~/components/action-notifications";
+import { CommitReference } from "~/components/git-commit";
+import { Identity } from "~/components/identity";
+import { KargoButton } from "~/components/kargo-link";
+import { PageBackLink } from "~/components/page-back-link";
+import { PageHeader } from "~/components/page";
+import { formValue, optionalFormValue } from "~/form-data";
 import { filterArgoDiffResources, parseArgoDiff, type ArgoDiffResource } from "~/promotion-diff";
 import { pageTitle } from "~/page-title";
 
@@ -88,7 +97,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   if (decision !== "approved" && decision !== "rejected") {
     return { error: "Choose approve or reject." };
   }
-  const comment = optionalValue(formValue(formData, "comment"));
+  const comment = optionalFormValue(formData, "comment");
   const result = await decidePromotion({
     body: { comment, decision },
     client: createServerAPIClient(request),
@@ -104,11 +113,16 @@ export async function action({ params, request }: Route.ActionArgs) {
 }
 
 export default function PromotionDetail({ actionData, loaderData }: Route.ComponentProps) {
+  useActionSuccessToast(actionData, "Decision recorded", actionData?.message);
+
   if (!loaderData.promotion) {
     return (
-      <Alert color="red" title="Promotion not found">
-        {loaderData.error ?? "The Promotion could not be loaded."}
-      </Alert>
+      <Stack gap="md">
+        <PageBackLink label="Back to promotions" to="/promotions" />
+        <Alert color="red" title="Promotion not found">
+          {loaderData.error ?? "The Promotion could not be loaded."}
+        </Alert>
+      </Stack>
     );
   }
 
@@ -117,27 +131,21 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
   return (
     <Stack gap="lg">
-      <Group align="flex-start" justify="space-between">
-        <Stack gap={2}>
-          <Anchor component={Link} size="sm" to="/promotions">
-            Promotions
-          </Anchor>
-          <Title order={1}>{promotion.externalPromotionId}</Title>
-          <Text c="dimmed">Promotion {promotion.id}</Text>
-        </Stack>
-        <Badge color={promotionStatusColor(promotion.status)} size="lg" variant="light">
-          {promotionStatusLabel(promotion.status)}
-        </Badge>
-      </Group>
+      <PageHeader
+        actions={promotion.kargoUrl ? <KargoButton url={promotion.kargoUrl} /> : undefined}
+        back={<PageBackLink label="Back to promotions" to="/promotions" />}
+        badges={
+          <Badge color={promotionStatusColor(promotion.status)} variant="light">
+            {promotionStatusLabel(promotion.status)}
+          </Badge>
+        }
+        description={`Promotion ${promotion.id}`}
+        title={promotion.externalPromotionId}
+      />
 
       {actionData?.error ? (
         <Alert color="red" title="Decision failed">
           {actionData.error}
-        </Alert>
-      ) : null}
-      {actionData?.message ? (
-        <Alert color="green" title="Decision recorded">
-          {actionData.message}
         </Alert>
       ) : null}
       {promotion.message ? (
@@ -185,20 +193,22 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
           />
         </SimpleGrid>
         <SimpleGrid cols={{ base: 1, md: 2 }}>
-          <Revision label="Base revision" value={promotion.baseRevision} />
-          <Revision label="Candidate revision" value={promotion.candidateRevision} />
+          <Revision commit={promotion.baseCommit} label="Base revision" />
+          <Revision commit={promotion.candidateCommit} label="Candidate revision" />
         </SimpleGrid>
-        <Group gap="xl">
-          <Text size="sm">
-            Requested by <strong>{promotion.requestedBy.displayName}</strong>
-          </Text>
-          <Text c="dimmed" component="time" dateTime={promotion.createdAt} size="sm">
-            {formatTimestamp(promotion.createdAt)}
-          </Text>
+        <Group gap="xl" wrap="wrap">
+          <Group gap="xs">
+            <Text size="sm">Requested by</Text>
+            <Identity avatarSize={24} name={promotion.requestedBy.displayName} />
+          </Group>
+          <Timestamp c="dimmed" size="sm" value={promotion.createdAt} />
           {promotion.expiresAt ? (
-            <Text c="dimmed" component="time" dateTime={promotion.expiresAt} size="sm">
-              Review expires {formatTimestamp(promotion.expiresAt)}
-            </Text>
+            <Group gap={4}>
+              <Text c="dimmed" size="sm">
+                Review expires
+              </Text>
+              <Timestamp c="dimmed" size="sm" value={promotion.expiresAt} />
+            </Group>
           ) : null}
         </Group>
       </Stack>
@@ -377,10 +387,9 @@ function DecisionPanel({
               <Badge color={promotion.decision.decision === "approved" ? "green" : "red"}>
                 {promotion.decision.decision}
               </Badge>
-              <Text>
-                {promotion.decision.decidedBy.displayName} ·{" "}
-                {formatTimestamp(promotion.decision.decidedAt)}
-              </Text>
+              <Identity avatarSize={26} name={promotion.decision.decidedBy.displayName} />
+              <Text c="dimmed">·</Text>
+              <Timestamp value={promotion.decision.decidedAt} />
             </Group>
             {promotion.decision.comment ? <Text>{promotion.decision.comment}</Text> : null}
             <Text c="dimmed" size="sm">
@@ -451,13 +460,13 @@ function Fact({ label, value }: Readonly<{ label: string; value: string }>) {
   );
 }
 
-function Revision({ label, value }: Readonly<{ label: string; value: string }>) {
+function Revision({ commit, label }: Readonly<{ commit: GitCommit; label: string }>) {
   return (
     <Stack gap={2}>
       <Text c="dimmed" size="xs">
         {label}
       </Text>
-      <Code>{value}</Code>
+      <CommitReference commit={commit} />
     </Stack>
   );
 }
@@ -501,19 +510,4 @@ function canWritePromotions(principal?: ProductPrincipal) {
 
 function resourceKey(resource: ArgoDiffResource) {
   return [resource.group, resource.kind, resource.namespace, resource.name].join("/");
-}
-
-function optionalValue(value: string) {
-  return value.trim() || undefined;
-}
-
-function formValue(formData: FormData, name: string) {
-  const value = formData.get(name);
-  return typeof value === "string" ? value : "";
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(value),
-  );
 }

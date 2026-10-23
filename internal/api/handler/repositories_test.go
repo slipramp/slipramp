@@ -35,6 +35,7 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 		"name":"infrastructure",
 		"cloneUrl":"https://github.com/example/infrastructure.git",
 		"branch":"main",
+		"commitUrlTemplate":"https://github.com/example/infrastructure/commit/{sha}",
 		"refreshCredentialName":"github-server",
 		"checkoutCredentialName":"github-readonly"
 	}`)
@@ -54,6 +55,8 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 	}
 
 	if repositories.cfg.Name != "infrastructure" ||
+		repositories.cfg.CommitURLTemplate == nil ||
+		*repositories.cfg.CommitURLTemplate != "https://github.com/example/infrastructure/commit/{sha}" ||
 		repositories.cfg.RefreshCredentialName == nil ||
 		*repositories.cfg.RefreshCredentialName != "github-server" ||
 		repositories.cfg.CheckoutCredentialName == nil ||
@@ -68,6 +71,8 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 
 	if result.ID != repositoryID ||
 		result.CloneURL != "https://github.com/example/infrastructure.git" ||
+		result.CommitURLTemplate == nil ||
+		*result.CommitURLTemplate != "https://github.com/example/infrastructure/commit/{sha}" ||
 		result.RefreshCredentialName == nil ||
 		*result.RefreshCredentialName != "github-server" ||
 		result.CreatedAt != createdAt ||
@@ -209,8 +214,8 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 
 	if len(list.Items) != 1 || list.Items[0].ID != repositoryID ||
 		list.Items[0].Refresh.Status != api.RepositoryRefreshStatusSucceeded ||
-		list.Items[0].Refresh.CommitSha == nil ||
-		*list.Items[0].Refresh.CommitSha != commitSHA {
+		list.Items[0].Refresh.Commit == nil ||
+		list.Items[0].Refresh.Commit.Sha != commitSHA {
 		t.Errorf("repository list = %#v", list.Items)
 	}
 

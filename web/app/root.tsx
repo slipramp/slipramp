@@ -1,25 +1,35 @@
+import "@fontsource-variable/manrope/wght.css";
 import "@mantine/core/styles.css";
+import "@mantine/notifications/styles.css";
+import "./app.css";
 
 import {
-  Anchor,
-  AppShell,
-  Badge,
   Button,
   Center,
   ColorSchemeScript,
-  Group,
   MantineProvider,
   Paper,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
 import type { ReactNode } from "react";
-import { Form, Link, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import {
+  isRouteErrorResponse,
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useRouteError,
+} from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { getCurrentPrincipal } from "~/api/generated";
+import { ProductShell } from "~/components/product-shell";
 import { pageTitle } from "~/page-title";
+import { sliprampTheme } from "~/theme";
 
 import type { Route } from "./+types/root";
 
@@ -27,6 +37,15 @@ const authenticationProxyPaths = new Set(["/api/v1/auth/login", "/api/v1/auth/ca
 
 export function meta() {
   return [{ title: pageTitle() }];
+}
+
+export function headers() {
+  return {
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "same-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+  };
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -46,7 +65,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export function Layout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta content="width=device-width, initial-scale=1" name="viewport" />
@@ -55,7 +74,10 @@ export function Layout({ children }: Readonly<{ children: ReactNode }>) {
         <Links />
       </head>
       <body>
-        <MantineProvider defaultColorScheme="auto">{children}</MantineProvider>
+        <MantineProvider defaultColorScheme="auto" theme={sliprampTheme}>
+          <Notifications position="top-right" />
+          {children}
+        </MantineProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -72,59 +94,37 @@ export default function App({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <AppShell header={{ height: 60 }} padding="md">
-      <AppShell.Header>
-        <Group h="100%" justify="space-between" px="md">
-          <Anchor component={Link} c="inherit" fw={700} size="lg" to="/" underline="never">
-            Slipramp
-          </Anchor>
-          <Group gap="lg">
-            <Anchor component={Link} to="/">
-              Targets
-            </Anchor>
-            <Anchor component={Link} to="/clusters">
-              Clusters
-            </Anchor>
-            <Anchor component={Link} to="/repositories">
-              Repositories
-            </Anchor>
-            <Anchor component={Link} to="/runs">
-              Runs
-            </Anchor>
-            <Anchor component={Link} to="/promotions">
-              Promotions
-            </Anchor>
-            <Anchor component={Link} to="/promotion-pipelines">
-              Pipelines
-            </Anchor>
-            <Anchor component={Link} to="/promotion-branch-drift">
-              Branch Drift
-            </Anchor>
-            {loaderData.principal ? (
-              <>
-                <Anchor component={Link} to="/access">
-                  Access
-                </Anchor>
-                <Group gap="xs">
-                  <Text fw={500} size="sm">
-                    {loaderData.principal.displayName}
-                  </Text>
-                  <Badge variant="light">{loaderData.principal.role}</Badge>
-                  <Form action="/logout" method="post">
-                    <Button size="compact-sm" type="submit" variant="subtle">
-                      Log out
-                    </Button>
-                  </Form>
-                </Group>
-              </>
-            ) : null}
-          </Group>
-        </Group>
-      </AppShell.Header>
-      <AppShell.Main>
-        <Outlet />
-      </AppShell.Main>
-    </AppShell>
+    <ProductShell principal={loaderData.principal}>
+      <Outlet />
+    </ProductShell>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const responseError = isRouteErrorResponse(error) ? error : undefined;
+  const title = responseError
+    ? `${responseError.status} ${responseError.statusText || "Request failed"}`
+    : "Something went wrong";
+  const message =
+    responseError && typeof responseError.data === "string"
+      ? responseError.data
+      : "Slipramp could not render this page. Try again, or return to the target index.";
+
+  return (
+    <Center mih="100vh" p="md">
+      <Paper maw={520} p="xl" shadow="sm" withBorder>
+        <Stack align="flex-start" gap="md">
+          <Stack gap={4}>
+            <Title order={1}>{title}</Title>
+            <Text c="dimmed">{message}</Text>
+          </Stack>
+          <Button component="a" href="/">
+            Return to targets
+          </Button>
+        </Stack>
+      </Paper>
+    </Center>
   );
 }
 

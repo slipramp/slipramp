@@ -295,6 +295,10 @@ PromotionStage:
     archivedAt:
       type: string
       format: date-time
+    kargoUrl:
+      type: string
+      format: uri
+      description: Direct link to this Stage in the configured Kargo UI.
 
 PromotionStageList:
   type: object
@@ -349,6 +353,10 @@ PromotionPipelineStage:
     lastObservedAt:
       type: string
       format: date-time
+    kargoUrl:
+      type: string
+      format: uri
+      description: Direct link to this Stage in the configured Kargo UI.
 
 PromotionPipeline:
   type: object
@@ -469,16 +477,16 @@ PromotionBranchDriftStage:
         maxLength: 1024
     status:
       $ref: "#/PromotionBranchDriftStatus"
-    acknowledgedSourceRevision:
-      $ref: "#/GitRevision"
-    acknowledgedRenderBaseRevision:
-      $ref: "#/GitRevision"
-    acknowledgedRenderRevision:
-      $ref: "#/GitRevision"
-    sourceBranchRevision:
-      $ref: "#/GitRevision"
-    targetBranchRevision:
-      $ref: "#/GitRevision"
+    acknowledgedSourceCommit:
+      $ref: ./common.yaml#/GitCommit
+    acknowledgedRenderBaseCommit:
+      $ref: ./common.yaml#/GitCommit
+    acknowledgedRenderCommit:
+      $ref: ./common.yaml#/GitCommit
+    sourceBranchCommit:
+      $ref: ./common.yaml#/GitCommit
+    targetBranchCommit:
+      $ref: ./common.yaml#/GitCommit
     sourceDrift:
       type: boolean
     targetDrift:
@@ -492,6 +500,10 @@ PromotionBranchDriftStage:
     lastObservedAt:
       type: string
       format: date-time
+    kargoUrl:
+      type: string
+      format: uri
+      description: Direct link to this Stage in the configured Kargo UI.
 
 PromotionBranchDriftRepository:
   type: object
@@ -633,8 +645,8 @@ Promotion:
     - stageSnapshot
     - repositoryId
     - repositorySnapshot
-    - baseRevision
-    - candidateRevision
+    - baseCommit
+    - candidateCommit
     - candidateBranch
     - targetBranch
     - policySnapshot
@@ -665,10 +677,10 @@ Promotion:
     repositorySnapshot:
       type: object
       additionalProperties: true
-    baseRevision:
-      $ref: "#/GitRevision"
-    candidateRevision:
-      $ref: "#/GitRevision"
+    baseCommit:
+      $ref: ./common.yaml#/GitCommit
+    candidateCommit:
+      $ref: ./common.yaml#/GitCommit
     candidateBranch:
       type: string
       minLength: 17
@@ -722,6 +734,10 @@ Promotion:
     updatedAt:
       type: string
       format: date-time
+    kargoUrl:
+      type: string
+      format: uri
+      description: Direct link to this Promotion in the configured Kargo UI.
 
 PromotionList:
   type: object

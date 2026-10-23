@@ -126,12 +126,13 @@ func TestReviewServiceListsStageInventoryWithEffectivePolicy(t *testing.T) {
 	now := time.Date(2026, time.October, 21, 18, 0, 0, 0, time.UTC)
 	actor := reviewActor(t, now)
 	active := reviewStage("prod", "colo", "kargo-core", "external-dns-prod", now)
+	otherActive := reviewStage("prod", "colo", "kargo-core", "metrics-prod", now)
 	archived := reviewStage("prod", "colo", "kargo-core", "metrics-prod", now)
 	archived.ArchivedAt = new(now.Add(time.Minute))
 	policyUpdatedAt := now.Add(-2 * time.Hour)
 	expiresAt := now.Add(-time.Hour)
 	store := &reviewStore{
-		stages: []Stage{archived, active},
+		stages: []Stage{archived, otherActive, active},
 		policies: map[uuid.UUID]StagePolicy{
 			active.ID: {
 				StageID:              active.ID,
@@ -154,7 +155,11 @@ func TestReviewServiceListsStageInventoryWithEffectivePolicy(t *testing.T) {
 
 	result, err := service.ListStages(
 		t.Context(),
-		StageListFilter{Archived: &includeArchived, Limit: DefaultListLimit},
+		StageListFilter{
+			Application: active.Application,
+			Archived:    &includeArchived,
+			Limit:       DefaultListLimit,
+		},
 	)
 	if err != nil {
 		t.Fatalf("ListStages() error = %v", err)
@@ -227,17 +232,18 @@ func TestReviewServiceFiltersAndExpiresPromotionsBeforeReview(t *testing.T) {
 				ID:            pendingID,
 				Integration:   "prod",
 				StageID:       stageID,
-				StageSnapshot: []byte(`{"cluster":"colo","project":"kargo-core"}`),
+				StageSnapshot: []byte(`{"cluster":"colo","project":"kargo-core","application":"external-dns"}`),
 				Status:        StatusPending,
 				ExpiresAt:     &expiredAt,
 				CreatedAt:     now.Add(-2 * time.Hour),
 			},
 			{
 				ID:            otherID,
-				Integration:   "edge",
+				Integration:   "prod",
 				StageID:       uuid.New(),
-				StageSnapshot: []byte(`{"cluster":"edge","project":"kargo-core"}`),
-				Status:        StatusApproved,
+				StageSnapshot: []byte(`{"cluster":"colo","project":"kargo-core","application":"metrics"}`),
+				Status:        StatusPending,
+				ExpiresAt:     &expiredAt,
 				CreatedAt:     now.Add(-time.Hour),
 			},
 		},
@@ -249,10 +255,11 @@ func TestReviewServiceFiltersAndExpiresPromotionsBeforeReview(t *testing.T) {
 	result, err := service.ListPromotions(
 		t.Context(),
 		PromotionListFilter{
-			Status:  StatusExpired,
-			Cluster: "colo",
-			Project: "kargo-core",
-			Limit:   DefaultListLimit,
+			Status:      StatusExpired,
+			Cluster:     "colo",
+			Project:     "kargo-core",
+			Application: "external-dns",
+			Limit:       DefaultListLimit,
 		},
 	)
 	if err != nil {

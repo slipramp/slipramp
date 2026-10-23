@@ -1,70 +1,86 @@
 import {
-  Alert,
   Anchor,
   Badge,
   Button,
   Code,
   Group,
   Paper,
-  SimpleGrid,
   Stack,
   Table,
   Text,
   TextInput,
-  Title,
 } from "@mantine/core";
-import { Form, Link, redirect, useNavigation } from "react-router";
+import { IconPlus } from "@tabler/icons-react";
+import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { createRepository, listRepositories } from "~/api/generated";
+import { listRepositories } from "~/api/generated";
+import { Datestamp, RelativeTime } from "~/components/display";
+import { CommitReference } from "~/components/git-commit";
+import { ListPagination, SearchParamFilters } from "~/components/list-controls";
+import { PageHeader } from "~/components/page";
 import { pageTitle } from "~/page-title";
+import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/repositories";
+
+const pageSize = 25;
 
 export function meta() {
   return [{ title: pageTitle("Repositories") }];
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
-  const result = await listRepositories({ client: createServerAPIClient(request) });
-
-  return {
-    available: result.data !== undefined,
-    repositories: result.data?.items ?? [],
-  };
-}
-
-export async function action({ request }: Route.ActionArgs) {
-  const formData = await request.formData();
-  const result = await createRepository({
-    body: {
-      branch: formValue(formData, "branch"),
-      checkoutCredentialName: optionalFormValue(formData, "checkoutCredentialName"),
-      cloneUrl: formValue(formData, "cloneUrl"),
-      name: formValue(formData, "name"),
-      refreshCredentialName: optionalFormValue(formData, "refreshCredentialName"),
-    },
+  const url = new URL(request.url);
+  const query = url.searchParams.get("q")?.trim() ?? "";
+  const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
+  const result = await listRepositories({
     client: createServerAPIClient(request),
+    query: { limit: pageSize, offset: (page - 1) * pageSize, q: query || undefined },
   });
 
   if (result.data) {
-    return redirect(`/repositories/${result.data.id}`);
+    const lastPage = Math.max(1, Math.ceil(result.data.total / pageSize));
+    if (page > lastPage) {
+      if (lastPage === 1) url.searchParams.delete("page");
+      else url.searchParams.set("page", String(lastPage));
+      return redirect(`${url.pathname}${url.search}`);
+    }
   }
 
   return {
-    error: result.error.detail ?? result.error.title ?? "The repository could not be registered.",
+    available: result.data !== undefined,
+    page,
+    query,
+    repositories: result.data?.items ?? [],
+    total: result.data?.total ?? 0,
   };
 }
 
-export default function Repositories({ actionData, loaderData }: Route.ComponentProps) {
+export default function Repositories({ loaderData }: Route.ComponentProps) {
   return (
     <Stack gap="md">
-      <Stack gap={2}>
-        <Title order={1}>Repositories</Title>
-        <Text c="dimmed">Tracked Git branches and their latest catalog refresh.</Text>
-      </Stack>
+      <PageHeader
+        actions={
+          <Button component={Link} leftSection={<IconPlus size={17} />} to="/repositories/new">
+            Connect repository
+          </Button>
+        }
+        description="Tracked Git branches and their latest catalog refresh."
+        title="Repositories"
+      />
 
-      <RepositoryConnectionForm error={actionData?.error} />
+      <SearchParamFilters active={Boolean(loaderData.query)} clearTo="/repositories">
+        <TextInput
+          defaultValue={loaderData.query}
+          key={loaderData.query}
+          label="Search repositories"
+          name="q"
+          placeholder="Name, URL, or branch"
+          style={{ flex: "1 1 320px" }}
+          type="search"
+        />
+      </SearchParamFilters>
 
       <Paper withBorder>
         {!loaderData.available ? (
@@ -73,18 +89,19 @@ export default function Repositories({ actionData, loaderData }: Route.Component
           </Text>
         ) : loaderData.repositories.length === 0 ? (
           <Text c="dimmed" p="md">
-            No repositories have been registered yet.
+            {loaderData.query
+              ? "No repositories match this search."
+              : "No repositories have been registered yet."}
           </Text>
         ) : (
-          <Table.ScrollContainer minWidth={760}>
+          <Table.ScrollContainer minWidth={760} type="native">
             <Table verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Repository</Table.Th>
-                  <Table.Th>Branch</Table.Th>
-                  <Table.Th>Refresh</Table.Th>
-                  <Table.Th>Commit</Table.Th>
-                  <Table.Th>Last attempt</Table.Th>
+                  <Table.Th>Tracked ref</Table.Th>
+                  <Table.Th>Catalog</Table.Th>
+                  <Table.Th>Refresh activity</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -100,27 +117,41 @@ export default function Repositories({ actionData, loaderData }: Route.Component
                         </Text>
                       </Stack>
                     </Table.Td>
-                    <Table.Td>{repository.branch}</Table.Td>
                     <Table.Td>
-                      <RefreshBadge status={repository.refresh.status} />
+                      <Stack gap={0}>
+                        <Code>{repository.branch}</Code>
+                        <Datestamp c="dimmed" size="xs" value={repository.createdAt} />
+                      </Stack>
                     </Table.Td>
                     <Table.Td>
-                      {repository.refresh.commitSha ? (
-                        <Code>{shortCommit(repository.refresh.commitSha)}</Code>
-                      ) : (
-                        <Text c="dimmed">—</Text>
-                      )}
+                      <Stack align="flex-start" gap={4}>
+                        <RefreshBadge status={repository.refresh.status} />
+                        {repository.refresh.commit ? (
+                          <CommitReference commit={repository.refresh.commit} />
+                        ) : (
+                          <Text c="dimmed" size="xs">
+                            No accepted commit
+                          </Text>
+                        )}
+                      </Stack>
                     </Table.Td>
                     <Table.Td>
                       {repository.refresh.attemptedAt ? (
-                        <Text
-                          c="dimmed"
-                          component="time"
-                          dateTime={repository.refresh.attemptedAt}
-                          size="sm"
-                        >
-                          {formatTimestamp(repository.refresh.attemptedAt)}
-                        </Text>
+                        <Stack gap={0}>
+                          <RelativeTime size="sm" value={repository.refresh.attemptedAt} />
+                          {repository.refresh.succeededAt ? (
+                            <Group gap={4}>
+                              <Text c="dimmed" size="xs">
+                                Last success
+                              </Text>
+                              <RelativeTime
+                                c="dimmed"
+                                size="xs"
+                                value={repository.refresh.succeededAt}
+                              />
+                            </Group>
+                          ) : null}
+                        </Stack>
                       ) : (
                         <Text c="dimmed">Not attempted</Text>
                       )}
@@ -132,77 +163,16 @@ export default function Repositories({ actionData, loaderData }: Route.Component
           </Table.ScrollContainer>
         )}
       </Paper>
+      {loaderData.available && loaderData.total > 0 ? (
+        <ListPagination
+          itemCount={loaderData.repositories.length}
+          noun="Repositories"
+          page={loaderData.page}
+          pageSize={pageSize}
+          total={loaderData.total}
+        />
+      ) : null}
     </Stack>
-  );
-}
-
-function RepositoryConnectionForm({ error }: Readonly<{ error?: string }>) {
-  const navigation = useNavigation();
-  const isSubmitting = navigation.state === "submitting";
-
-  return (
-    <Paper p="md" withBorder>
-      <Form method="post">
-        <Stack gap="md">
-          <Stack gap={2}>
-            <Title order={2}>Connect repository</Title>
-            <Text c="dimmed" size="sm">
-              Track one Git branch. Credential fields reference names configured on the Server or
-              controllers; secret values are never entered here.
-            </Text>
-          </Stack>
-
-          {error ? (
-            <Alert color="red" title="Repository not connected">
-              {error}
-            </Alert>
-          ) : null}
-
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput
-              label="Name"
-              maxLength={63}
-              name="name"
-              pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
-              placeholder="homelab"
-              required
-            />
-            <TextInput defaultValue="main" label="Branch" maxLength={255} name="branch" required />
-          </SimpleGrid>
-
-          <TextInput
-            label="Clone URL"
-            maxLength={2048}
-            name="cloneUrl"
-            placeholder="https://github.com/example/infrastructure.git"
-            required
-          />
-
-          <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <TextInput
-              description="Server-side credential used during refresh"
-              label="Refresh credential name"
-              maxLength={63}
-              name="refreshCredentialName"
-              pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
-            />
-            <TextInput
-              description="Logical credential resolved inside execution clusters"
-              label="Checkout credential name"
-              maxLength={63}
-              name="checkoutCredentialName"
-              pattern="[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
-            />
-          </SimpleGrid>
-
-          <Group justify="flex-end">
-            <Button loading={isSubmitting} type="submit">
-              Connect repository
-            </Button>
-          </Group>
-        </Stack>
-      </Form>
-    </Paper>
   );
 }
 
@@ -218,25 +188,4 @@ function RefreshBadge({ status }: Readonly<{ status: "pending" | "succeeded" | "
       {status}
     </Badge>
   );
-}
-
-function shortCommit(commit: string) {
-  return commit.slice(0, 12);
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function formValue(formData: FormData, name: string) {
-  const value = formData.get(name);
-
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function optionalFormValue(formData: FormData, name: string) {
-  return formValue(formData, name) || undefined;
 }

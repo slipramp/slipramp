@@ -3,6 +3,7 @@ package promotion
 import (
 	"fmt"
 	"maps"
+	"net/url"
 	"slices"
 	"time"
 
@@ -22,6 +23,7 @@ type PreparationConfig struct {
 
 type IntegrationConfig struct {
 	ClusterName                string
+	UIURL                      string
 	Repositories               []string
 	EnvironmentOrder           []string
 	Preparation                PreparationConfig
@@ -66,6 +68,18 @@ func (c IntegrationConfig) Validate() error {
 	}
 	if len(c.Repositories) == 0 {
 		return fmt.Errorf("at least one Kargo repository is required")
+	}
+	if c.UIURL != "" {
+		parsed, err := url.Parse(c.UIURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("kargo UI URL must be an absolute URL")
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return fmt.Errorf("kargo UI URL must use HTTP or HTTPS")
+		}
+		if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("kargo UI URL must not contain credentials, a query, or a fragment")
+		}
 	}
 
 	seenRepositories := make(map[string]struct{}, len(c.Repositories))
@@ -116,6 +130,34 @@ func (c IntegrationConfig) Validate() error {
 	}
 
 	return nil
+}
+
+func (s IntegrationSet) KargoStageURL(integration, project, stage string) *string {
+	config, ok := s.Lookup(integration)
+	if !ok || config.UIURL == "" {
+		return nil
+	}
+
+	value, err := url.JoinPath(config.UIURL, "project", project, "stage", stage)
+	if err != nil {
+		return nil
+	}
+
+	return &value
+}
+
+func (s IntegrationSet) KargoPromotionURL(integration, project, promotion string) *string {
+	config, ok := s.Lookup(integration)
+	if !ok || config.UIURL == "" {
+		return nil
+	}
+
+	value, err := url.JoinPath(config.UIURL, "project", project, "promotion", promotion)
+	if err != nil {
+		return nil
+	}
+
+	return &value
 }
 
 func ValidateObserverConfigs(configs []ObserverConfig) error {
