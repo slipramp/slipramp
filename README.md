@@ -499,7 +499,12 @@ developer's existing SSH agent or default key and `known_hosts`. Confirm that
 `ssh -T git@github.com` can authenticate before registering the repository.
 The homelab Controller must use
 `slipramp-local-homelab-enrollment-token` as its enrollment token and continue
-mapping checkout credential `kcloud-ops` to Secret `kcloud-ops-git`.
+mapping checkout credential `kcloud-ops` to Secret `kcloud-ops-git`. It owns
+the `slipramp-runs` execution namespace and runs promotion preparation Jobs.
+The `prod-sjc1` Controller must use
+`slipramp-local-prod-sjc1-enrollment-token` and observe the `kargo-devops`
+namespace for the `homelab` integration, because the centralized Kargo Stage
+objects live in that cluster.
 
 The local `homelab-infrastructure` Placement exposes the `ops-ci`,
 `homelab-known-hosts`, `kcloud-ops-git`, and `kargo-argocd` Secret sources in

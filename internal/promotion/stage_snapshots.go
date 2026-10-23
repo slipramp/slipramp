@@ -94,11 +94,15 @@ func (s *StageService) ReplaceStageSnapshot(
 	}
 
 	acceptedAt := s.now().UTC().Truncate(time.Microsecond)
+	observedAt := replacement.ObservedAt.UTC().Truncate(time.Microsecond)
+	if observedAt.After(acceptedAt) {
+		observedAt = acceptedAt
+	}
 	snapshot := StageSnapshot{
 		SnapshotID:  replacement.SnapshotID,
 		Integration: integrationName,
 		ClusterName: clusterName,
-		ObservedAt:  replacement.ObservedAt.UTC().Truncate(time.Microsecond),
+		ObservedAt:  observedAt,
 		AcceptedAt:  acceptedAt,
 	}
 	if err := snapshot.Validate(); err != nil {

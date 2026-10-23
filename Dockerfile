@@ -60,7 +60,11 @@ RUN apk add --no-cache ca-certificates git openssh-client
 
 FROM quay.io/argoproj/argocd:v3.5.0@sha256:c298cedbaeb31532ba8d4e9904eba9e4987e067293fbd86400c5194e78f743d5 AS kargo-tools
 
-RUN test "$(git --version)" = "git version 2.53.0" \
+USER 0
+
+RUN printf '%s\n' 'slipramp:x:65532:65532:Slipramp:/tmp:/sbin/nologin' >> /etc/passwd \
+    && printf '%s\n' 'slipramp:x:65532:' >> /etc/group \
+    && test "$(git --version)" = "git version 2.53.0" \
     && test "$(argocd version --client --short)" = "argocd: v3.5.0"
 
 COPY --from=go-build /out/slipramp-kargo-tools /usr/local/bin/slipramp-kargo-tools

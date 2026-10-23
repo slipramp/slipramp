@@ -100,8 +100,8 @@ tasks:
     desc: Run the Server with local Dex and kcloud-ops integration configuration
     deps: [local:up]
     env:
-      SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS: '{"homelab":"slipramp-local-homelab-enrollment-token"}'
-      SLIPRAMP_KARGO_INTEGRATIONS: '{"homelab":{"cluster":"homelab","repositories":["kcloud-ops"],"preparation":{"repository":"kcloud-ops","target":"kargo-promotions","action":"prepare-review"},"maximumStageObservationAge":"5m","pendingReviewRetention":"192h"}}'
+      SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS: '{"homelab":"slipramp-local-homelab-enrollment-token","prod-sjc1":"slipramp-local-prod-sjc1-enrollment-token"}'
+      SLIPRAMP_KARGO_INTEGRATIONS: '{"homelab":{"cluster":"prod-sjc1","repositories":["kcloud-ops"],"preparation":{"repository":"kcloud-ops","target":"kargo-promotions","action":"prepare-review"},"maximumStageObservationAge":"5m","pendingReviewRetention":"192h"}}'
       SLIPRAMP_OIDC_CLIENT_ID: slipramp-local
       SLIPRAMP_OIDC_CLIENT_SECRET: slipramp-local-client-secret
       SLIPRAMP_OIDC_ISSUER: http://127.0.0.1:5556/dex

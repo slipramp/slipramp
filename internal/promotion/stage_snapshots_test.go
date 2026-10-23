@@ -134,3 +134,32 @@ func TestStageServiceRejectsWrongClusterAndUnmatchedRepository(t *testing.T) {
 		t.Fatalf("repository error = %v", err)
 	}
 }
+
+func TestStageServiceCapsFutureObservationTimeAtAcceptance(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 21, 12, 0, 1, 0, time.UTC)
+	store := &recordingStageSnapshotStore{}
+	service := NewStageService(
+		IntegrationSet{
+			"prod": {
+				ClusterName:  "colo",
+				Repositories: []string{"ops"},
+			},
+		},
+		staticRepositoryLister{},
+		store,
+	)
+	service.now = func() time.Time { return now }
+
+	err := service.ReplaceStageSnapshot(t.Context(), "prod", "colo", StageSnapshotReplacement{
+		SnapshotID: uuid.New(),
+		ObservedAt: now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("ReplaceStageSnapshot() error = %v", err)
+	}
+	if !store.snapshot.ObservedAt.Equal(now) || !store.snapshot.AcceptedAt.Equal(now) {
+		t.Fatalf("stored snapshot = %#v, want observation and acceptance at %v", store.snapshot, now)
+	}
+}
