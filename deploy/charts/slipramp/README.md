@@ -61,6 +61,7 @@ server:
       prod:
         cluster: prod
         repositories: [kcloud-ops]
+        environmentOrder: [homelab, prod]
         preparation:
           repository: kcloud-ops
           target: kargo-promotions
@@ -70,7 +71,10 @@ server:
 ```
 
 The selected Cluster must also be present in `controllerEnrollmentTokens`.
-Changing Kargo integration configuration requires a Server rollout.
+`environmentOrder` is required and controls Freight comparison columns.
+Observed environments that are absent from the list remain visible after the
+configured columns. Changing Kargo integration configuration requires a Server
+rollout.
 
 ## Ingress and operation
 

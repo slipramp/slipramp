@@ -16,7 +16,21 @@ It then verifies the accepted baseline end to end:
 - promotion of that plan into an apply Run pinned to its commit and catalog
   revision;
 - default per-Target serialization plus queued and running cancellation;
-- controller and Server restart recovery while Runs are active.
+- controller and Server restart recovery while Runs are active;
+- automatic Kargo Promotion approval without a preparation Run;
+- review-required Promotions prepared by the first-party Kargo tools image,
+  with exact Git diffs and structured Argo CD diffs uploaded by the Harness,
+  retained in RustFS, and downloaded through the artifact API;
+- zero-byte Git diff uploads and idempotent Promotion polling.
+
+The Kargo cases seed Stage inventory through the authenticated Controller
+snapshot endpoint and submit requests with a dedicated operator service account
+whose key has only `slipramp:promotions:submit` scope. They use real Git branches,
+execution Jobs, and artifact storage. A repository-defined Argo CD command
+fixture validates the injected credential and returns a fixed resource diff;
+the suite does not install Kargo or Argo CD or exercise their target-branch push
+and reconciliation. Those behaviors remain part of operational cutover
+acceptance.
 
 The cluster and all generated SSH keys are deleted when the test exits. Run it
 from the repository root with Docker, kubectl, curl, Git, jq, and `ssh-keygen`

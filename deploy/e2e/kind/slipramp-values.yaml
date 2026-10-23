@@ -45,12 +45,31 @@ server:
       acceptance:
         secretName: acceptance-git-client
         gitConfigKey: gitconfig
+  kargo:
+    integrations:
+      acceptance:
+        cluster: kind
+        repositories: [acceptance]
+        environmentOrder: [homelab, prod]
+        preparation:
+          repository: acceptance
+          target: kargo-promotions
+          action: prepare-review
+        maximumStageObservationAge: 5m
+        pendingReviewRetention: 1h
   placements:
     acceptance:
       cluster: kind
       jobNamespace: slipramp-runs
       serviceAccountName: slipramp-runner
       timeout: 2m
+      credentials:
+        review-git:
+          secretRef:
+            name: acceptance-git-client
+        review-argocd:
+          secretRef:
+            name: acceptance-argocd
       resources:
         requests:
           cpu: 10m

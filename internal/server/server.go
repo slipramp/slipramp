@@ -125,6 +125,14 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	)
 	promotionRequests := promotion.NewRequestService(cfg.KargoIntegrations, persistence.database)
 	promotionReviews := promotion.NewReviewService(persistence.database)
+	promotionPipelines := promotion.NewFreightPipelineService(cfg.KargoIntegrations, persistence.database)
+	promotionBranchDrift := promotion.NewBranchDriftService(
+		cfg.KargoIntegrations,
+		persistence.database,
+		repository.NewGitBranchScanner(cfg.RepositoryRefreshCredentials),
+		cfg.RepositoryRefreshInterval,
+		cfg.RepositoryFetchTimeout,
+	)
 	var promotionPreparations *promotion.PreparationCoordinator
 	var promotionExpirations *promotion.ExpirationCoordinator
 	if len(cfg.KargoIntegrations) > 0 {
@@ -155,6 +163,8 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			PromotionRequests:     promotionRequests,
 			PromotionStages:       promotionStages,
 			PromotionReviews:      promotionReviews,
+			PromotionPipelines:    promotionPipelines,
+			PromotionBranchDrift:  promotionBranchDrift,
 			Readiness:             readinessService,
 			ProductAuthentication: productAuthenticationService,
 		},

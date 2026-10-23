@@ -207,13 +207,16 @@ func (c ArtifactConfig) uploadArtifact(ctx context.Context, name, path string) e
 
 	var lastErr error
 	for attempt := range 3 {
-		file, err := os.Open(path)
-		if err != nil {
-			return fmt.Errorf("open declared file: %w", err)
+		body := io.ReadCloser(http.NoBody)
+		if info.Size() > 0 {
+			body, err = os.Open(path)
+			if err != nil {
+				return fmt.Errorf("open declared file: %w", err)
+			}
 		}
-		request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, file)
+		request, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, body)
 		if err != nil {
-			_ = file.Close()
+			_ = body.Close()
 			return err
 		}
 		request.ContentLength = info.Size()
@@ -221,7 +224,7 @@ func (c ArtifactConfig) uploadArtifact(ctx context.Context, name, path string) e
 		request.Header.Set("Content-Type", "application/octet-stream")
 		request.Header.Set("X-Slipramp-Content-SHA256", digest)
 		response, err := c.Client.Do(request)
-		_ = file.Close()
+		_ = body.Close()
 		if err == nil {
 			_ = response.Body.Close()
 			if response.StatusCode == http.StatusNoContent {

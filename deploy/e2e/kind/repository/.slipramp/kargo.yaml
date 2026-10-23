@@ -1,0 +1,117 @@
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
+  name: kargo-promotions
+spec:
+  image: slipramp-kargo-tools:acceptance
+  workingDirectory: /workspace
+  environment:
+    PATH: /workspace/scripts/kargo:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    GIT_SSH_COMMAND: ssh -i /run/slipramp/credentials/git/key -o BatchMode=yes -o IdentitiesOnly=yes -o UserKnownHostsFile=/run/slipramp/credentials/git/known_hosts -o StrictHostKeyChecking=yes
+  credentials:
+    git:
+      inject:
+        files:
+          - key: ssh-privatekey
+            path: /run/slipramp/credentials/git/key
+            mode: 0444
+          - key: known_hosts
+            path: /run/slipramp/credentials/git/known_hosts
+            mode: 0444
+    argocd:
+      inject:
+        files:
+          - key: targets.json
+            path: /run/slipramp/credentials/argocd/targets.json
+            mode: 0444
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: kargo-promotions
+  title: Disposable Kargo review preparation
+spec:
+  runtime: kargo-promotions
+  placement: acceptance
+  credentials:
+    git: review-git
+    argocd: review-argocd
+  actions:
+    prepare-review:
+      intent: preview
+      command: [slipramp-kargo-tools, prepare]
+      parameters:
+        promotion-id:
+          type: string
+          required: true
+          argument:
+            name: --promotion-id
+        external-promotion-id:
+          type: string
+          required: true
+          argument:
+            name: --external-promotion-id
+        project:
+          type: string
+          required: true
+          argument:
+            name: --project
+        stage:
+          type: string
+          required: true
+          argument:
+            name: --stage
+        application:
+          type: string
+          required: true
+          argument:
+            name: --application
+        environment:
+          type: string
+          required: true
+          argument:
+            name: --environment
+        repository-name:
+          type: string
+          required: true
+          argument:
+            name: --repository-name
+        repository-url:
+          type: string
+          required: true
+          argument:
+            name: --repository-url
+        base-revision:
+          type: string
+          required: true
+          argument:
+            name: --base-revision
+        candidate-revision:
+          type: string
+          required: true
+          argument:
+            name: --candidate-revision
+        candidate-branch:
+          type: string
+          required: true
+          argument:
+            name: --candidate-branch
+        target-branch:
+          type: string
+          required: true
+          argument:
+            name: --target-branch
+        source-paths:
+          type: string
+          required: true
+          argument:
+            name: --source-paths
+      artifacts:
+        git-diff:
+          path: /slipramp/artifacts/git.diff
+          mediaType: text/x-diff; charset=utf-8
+          sensitive: true
+        argo-diff:
+          path: /slipramp/artifacts/argo.json
+          mediaType: application/vnd.slipramp.argocd-diff+json
+          sensitive: true

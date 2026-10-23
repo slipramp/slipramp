@@ -99,9 +99,17 @@ export default function PromotionStages({ actionData, loaderData }: Route.Compon
           <Title order={1}>Promotion Stages</Title>
           <Text c="dimmed">Observed Kargo inventory and review policy.</Text>
         </Stack>
-        <Anchor component={Link} to="/promotions">
-          View Promotions
-        </Anchor>
+        <Group>
+          <Anchor component={Link} to="/promotion-pipelines">
+            Compare Freight
+          </Anchor>
+          <Anchor component={Link} to="/promotion-branch-drift">
+            Branch drift
+          </Anchor>
+          <Anchor component={Link} to="/promotions">
+            View Promotions
+          </Anchor>
+        </Group>
       </Group>
 
       {actionData?.error ? (

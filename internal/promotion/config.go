@@ -23,6 +23,7 @@ type PreparationConfig struct {
 type IntegrationConfig struct {
 	ClusterName                string
 	Repositories               []string
+	EnvironmentOrder           []string
 	Preparation                PreparationConfig
 	MaximumStageObservationAge time.Duration
 	PendingReviewRetention     time.Duration
@@ -76,6 +77,20 @@ func (c IntegrationConfig) Validate() error {
 			return fmt.Errorf("kargo repository %q is configured more than once", name)
 		}
 		seenRepositories[name] = struct{}{}
+	}
+	if len(c.EnvironmentOrder) == 0 {
+		return fmt.Errorf("at least one Kargo environment is required")
+	}
+
+	seenEnvironments := make(map[string]struct{}, len(c.EnvironmentOrder))
+	for _, environment := range c.EnvironmentOrder {
+		if err := validateText("Kargo environment", environment, maximumTextLength); err != nil {
+			return err
+		}
+		if _, ok := seenEnvironments[environment]; ok {
+			return fmt.Errorf("kargo environment %q is configured more than once", environment)
+		}
+		seenEnvironments[environment] = struct{}{}
 	}
 
 	if err := kubevalidate.DNSLabel("Kargo preparation repository", c.Preparation.Repository); err != nil {

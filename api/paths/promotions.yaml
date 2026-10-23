@@ -233,6 +233,90 @@ promotionStagePolicy:
       "500":
         $ref: "#/components/responses/InternalError"
 
+promotionPipelines:
+  get:
+    operationId: listPromotionPipelines
+    summary: Compare current Freight across ordered Kargo environments
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: integration
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: cluster
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: project
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: repository
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: application
+        in: query
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - $ref: "#/components/parameters/Limit"
+      - $ref: "#/components/parameters/Offset"
+    responses:
+      "200":
+        description: Active Kargo Stages grouped into ordered Freight comparisons.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionPipelineList
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
+promotionBranchDrift:
+  get:
+    operationId: listPromotionBranchDrift
+    summary: Inspect cached Kargo Stage branch drift grouped by Repository
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: integration
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: repository
+        in: query
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - $ref: "#/components/parameters/Limit"
+      - $ref: "#/components/parameters/Offset"
+    responses:
+      "200":
+        description: Cached branch comparisons for active observed Kargo Stages.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionBranchDriftList
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
 controllerKargoStages:
   put:
     operationId: replaceKargoStageSnapshot

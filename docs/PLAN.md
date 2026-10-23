@@ -660,9 +660,17 @@ The first-party `slipramp-kargo-tools` image now pins Git and Argo CD, validates
 the candidate ref without changing remote refs, and emits bounded deterministic
 Git and structured Argo CD diff files. The operator web experience lists
 Promotions and observed Stages, exposes policy and immutable decision controls,
-renders the sensitive Git and structured Argo CD artifacts, and durably expires
-pending reviews. Operational catalog wiring and real artifact-upload acceptance
-remain later work in [KARGO_PROMOTIONS.md](./KARGO_PROMOTIONS.md).
+renders the sensitive Git and structured Argo CD artifacts, durably expires
+pending reviews, and compares typed Freight across a configured environment
+order without treating the comparison as an execution workflow. A read-only
+branch-drift view groups active Stages by Repository, caches one bounded Git
+scan per group for the repository refresh interval, distinguishes source-path
+and target-branch drift, and treats equal target/result revisions as an
+acknowledged no-op render. The operational catalog is wired, and disposable
+kind acceptance covers automatic approval and guarded preparation through
+real artifact uploads, including empty Git diffs. The remaining live cutover
+cases and operational views are tracked in
+[KARGO_PROMOTIONS.md](./KARGO_PROMOTIONS.md).
 
 ## Ongoing Design Work
 

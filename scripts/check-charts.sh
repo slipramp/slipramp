@@ -161,6 +161,15 @@ assert_render_fails "Missing Server database credential" \
   --set-string server.database.url.existingSecret.key=
 assert_render_fails "Ambiguous Server database credential" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" --set-string server.database.url.value=postgres-secret
+assert_render_fails "Kargo integration without environment order" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set-string server.kargo.integrations.prod.cluster=primary \
+  --set-json 'server.kargo.integrations.prod.repositories=["ops"]' \
+  --set-string server.kargo.integrations.prod.preparation.repository=ops \
+  --set-string server.kargo.integrations.prod.preparation.target=kargo-promotions \
+  --set-string server.kargo.integrations.prod.preparation.action=prepare-review \
+  --set-string server.kargo.integrations.prod.maximumStageObservationAge=5m \
+  --set-string server.kargo.integrations.prod.pendingReviewRetention=192h
 assert_render_fails "Missing required Controller configuration" \
   invalid "$controller_chart"
 assert_render_fails "Controller replica count greater than one" \

@@ -464,9 +464,7 @@ export type PromotionStage = {
   repositoryUrl: string;
   targetBranch: string;
   sourcePaths: Array<string>;
-  freight: {
-    [key: string]: unknown;
-  };
+  freight: PromotionFreight;
   successfulRenderAcknowledgement?: {
     [key: string]: unknown;
   };
@@ -491,6 +489,42 @@ export type PromotionStagePolicy = {
   reason?: string;
   updatedBy?: RunActor;
   updatedAt?: string;
+};
+
+export type PromotionFreight = {
+  items: Array<PromotionFreightItem>;
+};
+
+export type PromotionPipeline = {
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  repository: CatalogName;
+  application: string;
+  environmentOrder: Array<string>;
+  stages: Array<PromotionPipelineStage>;
+};
+
+export type PromotionPipelineList = {
+  items: Array<PromotionPipeline>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export type PromotionBranchDriftRepository = {
+  repository: CatalogName;
+  sourceBranch?: string;
+  scannedAt: string;
+  error?: string;
+  stages: Array<PromotionBranchDriftStage>;
+};
+
+export type PromotionBranchDriftList = {
+  items: Array<PromotionBranchDriftRepository>;
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 export type RepositoryRefresh = {
@@ -860,12 +894,58 @@ export type PromotionDecisionUpdate = {
   comment?: string;
 };
 
+export type PromotionFreightArtifact = {
+  kind: "git" | "image" | "chart";
+  repository?: string;
+  version: string;
+};
+
+export type PromotionFreightItem = {
+  origin: string;
+  name: string;
+  artifacts: Array<PromotionFreightArtifact>;
+};
+
 export type PromotionPolicyMode = "automatic" | "review-required";
 
 export type PromotionStagePolicyUpdate = {
   mode: PromotionPolicyMode;
   expiresAt?: string;
   reason?: string;
+};
+
+export type PromotionPipelineStage = {
+  id: string;
+  name: string;
+  environment: string;
+  freight: PromotionFreight;
+  pendingPromotionCount: number;
+  lastObservedAt: string;
+};
+
+export type PromotionBranchDriftStatus = "current" | "drifted" | "unknown";
+
+export type PromotionBranchDriftStage = {
+  id: string;
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  name: string;
+  application: string;
+  environment: string;
+  targetBranch: string;
+  sourcePaths: Array<string>;
+  status: PromotionBranchDriftStatus;
+  acknowledgedSourceRevision?: GitRevision;
+  acknowledgedRenderBaseRevision?: GitRevision;
+  acknowledgedRenderRevision?: GitRevision;
+  sourceBranchRevision?: GitRevision;
+  targetBranchRevision?: GitRevision;
+  sourceDrift?: boolean;
+  targetDrift?: boolean;
+  noOpRender?: boolean;
+  message?: string;
+  lastObservedAt: string;
 };
 
 export type PromotionStageObservation = {
@@ -878,9 +958,7 @@ export type PromotionStageObservation = {
   repositoryUrl: string;
   targetBranch: string;
   sourcePaths: Array<string>;
-  freight: {
-    [key: string]: unknown;
-  };
+  freight: PromotionFreight;
   successfulRenderAcknowledgement?: {
     [key: string]: unknown;
   };
@@ -2668,6 +2746,97 @@ export type UpdatePromotionStagePolicyResponses = {
 
 export type UpdatePromotionStagePolicyResponse =
   UpdatePromotionStagePolicyResponses[keyof UpdatePromotionStagePolicyResponses];
+
+export type ListPromotionPipelinesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    integration?: CatalogName;
+    cluster?: CatalogName;
+    project?: CatalogName;
+    repository?: CatalogName;
+    application?: string;
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/promotion-pipelines";
+};
+
+export type ListPromotionPipelinesErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type ListPromotionPipelinesError =
+  ListPromotionPipelinesErrors[keyof ListPromotionPipelinesErrors];
+
+export type ListPromotionPipelinesResponses = {
+  /**
+   * Active Kargo Stages grouped into ordered Freight comparisons.
+   */
+  200: PromotionPipelineList;
+};
+
+export type ListPromotionPipelinesResponse =
+  ListPromotionPipelinesResponses[keyof ListPromotionPipelinesResponses];
+
+export type ListPromotionBranchDriftData = {
+  body?: never;
+  path?: never;
+  query?: {
+    integration?: CatalogName;
+    repository?: CatalogName;
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/promotion-branch-drift";
+};
+
+export type ListPromotionBranchDriftErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type ListPromotionBranchDriftError =
+  ListPromotionBranchDriftErrors[keyof ListPromotionBranchDriftErrors];
+
+export type ListPromotionBranchDriftResponses = {
+  /**
+   * Cached branch comparisons for active observed Kargo Stages.
+   */
+  200: PromotionBranchDriftList;
+};
+
+export type ListPromotionBranchDriftResponse =
+  ListPromotionBranchDriftResponses[keyof ListPromotionBranchDriftResponses];
 
 export type ReplaceKargoStageSnapshotData = {
   body: KargoStageSnapshot;

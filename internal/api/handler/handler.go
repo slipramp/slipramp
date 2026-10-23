@@ -15,18 +15,20 @@ type ControllerIdentityService interface {
 }
 
 type Handler struct {
-	clusters          ClusterService
-	identities        ControllerIdentityService
-	repositories      RepositoryService
-	catalogs          CatalogService
-	runs              RunService
-	artifacts         ArtifactService
-	promotionRequests PromotionRequestService
-	promotionStages   PromotionStageService
-	promotionReviews  PromotionReviewService
-	readiness         ReadinessService
-	productAuth       ProductAuthenticationService
-	now               func() time.Time
+	clusters           ClusterService
+	identities         ControllerIdentityService
+	repositories       RepositoryService
+	catalogs           CatalogService
+	runs               RunService
+	artifacts          ArtifactService
+	promotionRequests  PromotionRequestService
+	promotionStages    PromotionStageService
+	promotionReviews   PromotionReviewService
+	promotionPipelines PromotionPipelineService
+	promotionDrift     PromotionBranchDriftService
+	readiness          ReadinessService
+	productAuth        ProductAuthenticationService
+	now                func() time.Time
 }
 
 type ReadinessService interface {
@@ -48,6 +50,8 @@ type Dependencies struct {
 	PromotionRequests     PromotionRequestService
 	PromotionStages       PromotionStageService
 	PromotionReviews      PromotionReviewService
+	PromotionPipelines    PromotionPipelineService
+	PromotionBranchDrift  PromotionBranchDriftService
 	Readiness             ReadinessService
 	ProductAuthentication ProductAuthenticationService
 }
@@ -56,17 +60,19 @@ var _ api.StrictServerInterface = (*Handler)(nil)
 
 func newHandler(dependencies Dependencies) *Handler {
 	return &Handler{
-		clusters:          dependencies.Clusters,
-		identities:        dependencies.ControllerIdentities,
-		repositories:      dependencies.Repositories,
-		catalogs:          dependencies.Catalogs,
-		runs:              dependencies.Runs,
-		artifacts:         dependencies.Artifacts,
-		promotionRequests: dependencies.PromotionRequests,
-		promotionStages:   dependencies.PromotionStages,
-		promotionReviews:  dependencies.PromotionReviews,
-		readiness:         dependencies.Readiness,
-		productAuth:       dependencies.ProductAuthentication,
-		now:               time.Now,
+		clusters:           dependencies.Clusters,
+		identities:         dependencies.ControllerIdentities,
+		repositories:       dependencies.Repositories,
+		catalogs:           dependencies.Catalogs,
+		runs:               dependencies.Runs,
+		artifacts:          dependencies.Artifacts,
+		promotionRequests:  dependencies.PromotionRequests,
+		promotionStages:    dependencies.PromotionStages,
+		promotionReviews:   dependencies.PromotionReviews,
+		promotionPipelines: dependencies.PromotionPipelines,
+		promotionDrift:     dependencies.PromotionBranchDrift,
+		readiness:          dependencies.Readiness,
+		productAuth:        dependencies.ProductAuthentication,
+		now:                time.Now,
 	}
 }

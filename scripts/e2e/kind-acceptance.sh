@@ -364,7 +364,7 @@ wait_for_job_deletion() {
 }
 
 log "building Slipramp acceptance images"
-for target in acceptance-git checkout controller harness server web; do
+for target in acceptance-git checkout controller harness kargo-tools server web; do
   docker build --target "$target" \
     --tag "slipramp-$target:acceptance" \
     "$repository_root"
@@ -395,6 +395,7 @@ local_images=(
   slipramp-checkout:acceptance
   slipramp-controller:acceptance
   slipramp-harness:acceptance
+  slipramp-kargo-tools:acceptance
   slipramp-server:acceptance
   slipramp-web:acceptance
 )
@@ -412,8 +413,15 @@ git -C "$fixture_directory" config user.name 'Slipramp Acceptance'
 git -C "$fixture_directory" add .
 git -C "$fixture_directory" commit --quiet -m 'Acceptance fixture'
 fixture_commit=$(git -C "$fixture_directory" rev-parse HEAD)
+git -C "$fixture_directory" branch stage/acceptance/acceptance
+git -C "$fixture_directory" branch kargo/promotion/acceptance-empty
+git -C "$fixture_directory" checkout --quiet -b kargo/promotion/acceptance
+printf 'image: acceptance:new\n' >"$fixture_directory/review/manifest.yaml"
+git -C "$fixture_directory" commit --quiet -am 'Promotion candidate'
+candidate_commit=$(git -C "$fixture_directory" rev-parse HEAD)
+git -C "$fixture_directory" checkout --quiet main
 git -C "$fixture_directory" bundle create \
-  "$temporary_directory/repository.bundle" main
+  "$temporary_directory/repository.bundle" --all
 
 client_key="$temporary_directory/client-key"
 host_key="$temporary_directory/host-key"
@@ -487,6 +495,11 @@ log "deploying the acceptance fixtures"
   acceptance-git-client \
   --from-file="ssh-privatekey=$client_key" \
   --from-file="known_hosts=$temporary_directory/known_hosts" \
+  --dry-run=client -o yaml |
+  "${kubectl_command[@]}" apply -f -
+"${kubectl_command[@]}" -n "$run_namespace" create secret generic \
+  acceptance-argocd \
+  --from-literal='targets.json={"acceptance":{"server":"acceptance-argocd","authToken":"acceptance-argo-token"}}' \
   --dry-run=client -o yaml |
   "${kubectl_command[@]}" apply -f -
 "${kubectl_command[@]}" apply -f \
@@ -628,6 +641,8 @@ wait_for_run_phase "$server_recovery_run" running
 start_server_forward
 wait_for_run_outcome "$server_recovery_run" succeeded
 assert_log_contains "$server_recovery_run" 'acceptance recovery completed'
+
+source "$repository_root/scripts/e2e/kargo-promotions.sh"
 
 log "kind acceptance passed"
 printf 'Repository commit: %s\n' "$fixture_commit"

@@ -10,8 +10,9 @@ func TestIntegrationSetValidate(t *testing.T) {
 
 	integrations := IntegrationSet{
 		"prod": {
-			ClusterName:  "prod",
-			Repositories: []string{"kcloud-ops"},
+			ClusterName:      "prod",
+			Repositories:     []string{"kcloud-ops"},
+			EnvironmentOrder: []string{"homelab", "prod"},
 			Preparation: PreparationConfig{
 				Repository: "kcloud-ops",
 				Target:     "kargo-promotions",
@@ -31,6 +32,19 @@ func TestIntegrationSetValidate(t *testing.T) {
 	integrations["prod"] = integration
 	if err := integrations.Validate(); err == nil {
 		t.Fatal("Validate() error = nil for preparation repository outside allowlist")
+	}
+
+	integration.Preparation.Repository = "kcloud-ops"
+	integration.EnvironmentOrder = nil
+	integrations["prod"] = integration
+	if err := integrations.Validate(); err == nil {
+		t.Fatal("Validate() error = nil for missing environment order")
+	}
+
+	integration.EnvironmentOrder = []string{"prod", "prod"}
+	integrations["prod"] = integration
+	if err := integrations.Validate(); err == nil {
+		t.Fatal("Validate() error = nil for duplicate environment")
 	}
 }
 

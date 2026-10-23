@@ -74,6 +74,12 @@ import type {
   ListClustersData,
   ListClustersErrors,
   ListClustersResponses,
+  ListPromotionBranchDriftData,
+  ListPromotionBranchDriftErrors,
+  ListPromotionBranchDriftResponses,
+  ListPromotionPipelinesData,
+  ListPromotionPipelinesErrors,
+  ListPromotionPipelinesResponses,
   ListPromotionsData,
   ListPromotionsErrors,
   ListPromotionsResponses,
@@ -1128,6 +1134,60 @@ export const updatePromotionStagePolicy = <ThrowOnError extends boolean = false>
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * Compare current Freight across ordered Kargo environments
+ */
+export const listPromotionPipelines = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPromotionPipelinesData, ThrowOnError>,
+): RequestResult<ListPromotionPipelinesResponses, ListPromotionPipelinesErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListPromotionPipelinesResponses,
+    ListPromotionPipelinesErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-pipelines",
+    ...options,
+  });
+
+/**
+ * Inspect cached Kargo Stage branch drift grouped by Repository
+ */
+export const listPromotionBranchDrift = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPromotionBranchDriftData, ThrowOnError>,
+): RequestResult<ListPromotionBranchDriftResponses, ListPromotionBranchDriftErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListPromotionBranchDriftResponses,
+    ListPromotionBranchDriftErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-branch-drift",
+    ...options,
   });
 
 /**

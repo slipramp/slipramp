@@ -160,6 +160,7 @@ Placements. Each integration selects:
 
 - one registered Slipramp Cluster;
 - the logical repository names allowed for observed Stages;
+- the ordered environments used by Freight pipeline comparisons;
 - the repository, Target, and Action used for review preparation;
 - the maximum accepted Stage observation age;
 - pending-review retention and expiry settings.
@@ -177,6 +178,7 @@ kargo:
     prod:
       cluster: prod
       repositories: [kcloud-ops]
+      environmentOrder: [homelab, prod]
       preparation:
         repository: kcloud-ops
         target: kargo-promotions
@@ -224,6 +226,12 @@ initial adapter retains the established `app`, `argoApp`, `overlay`,
 `gitopsRepo`, `kustomizePath`, and
 `stageBranchKustomization` conventions. A
 `slipramp.com/promotion-source-paths` annotation may add unusual paths.
+
+The successful-render acknowledgement records the source commit rendered by
+Kargo, the target-branch commit read before rendering, and the resulting
+target commit. Kargo's `git-commit` step returns the existing target commit
+when rendering produces no changes, so equal target and result revisions are
+a successful no-op acknowledgement rather than missing progress.
 
 ### Promotion Policy
 
@@ -342,6 +350,7 @@ GET /api/v1/promotions/{promotionId}
 PUT /api/v1/promotions/{promotionId}/decision
 GET /api/v1/promotion-stages
 PUT /api/v1/promotion-stages/{stageId}/policy
+GET /api/v1/promotion-branch-drift
 ```
 
 List Promotions supports `status`, `integration`, `cluster`, `project`,
@@ -352,6 +361,24 @@ Promotion detail includes Stage and Repository snapshots, preparation Run,
 artifact metadata, requesting actor, policy snapshot, decision, failure
 message, and timestamps. Artifact contents continue to use the existing
 artifact download endpoint and sensitivity authorization.
+
+The branch-drift endpoint groups active Stages by matched Slipramp Repository.
+One read-only Git scan resolves the configured source branch and every target
+branch needed by a repository group. For each Stage it compares the current
+source branch with the acknowledged source revision only under the Stage's
+observed source paths, and compares the target-branch head with the
+acknowledged render result. Source-path changes and unexpected target-branch
+movement are reported independently. A Stage without a valid successful-render
+acknowledgement is `unknown`; repository and per-Stage scan failures remain
+visible instead of turning the entire view into a server error.
+
+Repository scan results, including failures, are held in the Server's
+in-memory cache for the configured repository refresh interval. A changed
+Repository or relevant Stage observation invalidates its group immediately.
+Concurrent requests share the same grouped scan, and each remote operation is
+bounded by the repository fetch timeout. The cache is derived operational
+state and is rebuilt after a Server restart; PostgreSQL remains authoritative
+for Repository and Stage inventory.
 
 The decision request is:
 
@@ -530,6 +557,7 @@ The Server:
 - creates exactly one preparation Run for each guarded Promotion;
 - observes preparation completion and verifies its declared artifacts;
 - expires old pending Promotions;
+- scans Repository branches read-only and serves the cached drift view;
 - serves operator and machine APIs.
 
 It does not connect to Kubernetes, execute `argocd`, or push Git branches.
@@ -604,6 +632,8 @@ Add a **Promotions** navigation item with these initial routes:
 /promotions
 /promotions/:promotionId
 /promotion-stages
+/promotion-pipelines
+/promotion-branch-drift
 ```
 
 The Promotions page shows pending work first, then recent terminal Promotions,
@@ -622,10 +652,20 @@ actor filters. The detail page shows:
 
 The Stage page shows current Freight, observation freshness, policy, pending
 count, and archived state. Policy controls are hidden when the principal lacks
-write permission, while the Server remains authoritative.
+write permission, while the Server remains authoritative. The pipeline page
+groups active Stages by integration, repository, project, and application. It
+aligns normalized Freight artifacts across the integration's configured
+environment order, preserves duplicate Stages in one environment, shows
+missing environments explicitly, and appends newly observed unconfigured
+environments without rejecting the Controller snapshot. Comparisons report
+only exact equality, difference, or absence; they do not infer semantic version
+or Git ancestry ordering.
 
-Freight pipeline comparisons and branch drift become additional views only
-after the Stage inventory and review flow are accepted.
+Branch drift becomes an additional view after the Stage inventory and review
+flow are accepted. It presents one section per Repository, the cached scan
+time and any repository-level failure, and per-Stage source and target drift.
+Successful no-op renders are labeled explicitly so an unchanged target branch
+does not look stale after Kargo acknowledged a newer source revision.
 
 ## Delivery Milestones
 
@@ -684,7 +724,7 @@ guarded request reaches `pending` through an ordinary Slipramp Run.
 - [x] Move the reusable read-only Git and Argo CD diff logic from
       `kargo-gate` into the first-party Kargo tools command.
 - [x] Build and pin its runtime image with Git and Argo CD versions.
-- [ ] Define the `kargo-promotions` Runtime, Target, and `prepare-review` Action
+- [x] Define the `kargo-promotions` Runtime, Target, and `prepare-review` Action
       in the operational repository.
 - [x] Emit bounded Git and structured Argo CD diff artifacts, including
       deterministic empty results.
@@ -692,10 +732,19 @@ guarded request reaches `pending` through an ordinary Slipramp Run.
       environment or Argo CD target.
 - [x] Add unit tests for output parsing and command execution against a real
       Git repository.
-- [ ] Add an execution acceptance test using real artifact upload.
+- [x] Add an execution acceptance test using real artifact upload.
 
 Accepted outcome: a real guarded Promotion presents exact Git and Argo CD
 diffs retained through the normal artifact path.
+
+The disposable kind acceptance suite covers automatic approval without a Run
+and guarded preparations with both changed and empty Git diffs. It executes
+the first-party tools image, verifies revision pinning and actor attribution,
+downloads the retained sensitive artifacts after Job deletion, and checks
+that repeated machine polls preserve one preparation Run. Stage inventory is
+seeded through the authenticated Controller snapshot API; an Argo CD command
+fixture supplies deterministic resource diffs. Live Kargo and Argo CD cutover
+coverage remains in milestone 6.
 
 ### 5. Operator review experience
 
@@ -715,9 +764,9 @@ temporarily change policy without using the standalone service.
 
 ### 6. Kargo cutover
 
-- [ ] Update the Kargo promotion tasks to use Slipramp bearer authentication
+- [x] Update the Kargo promotion tasks to use Slipramp bearer authentication
       and the new machine endpoint.
-- [ ] Add the target-branch `git-push` after approval and before
+- [x] Add the target-branch `git-push` after approval and before
       `argocd-update`.
 - [ ] Exercise automatic, approved, rejected, expired, preparation-failed, and
       stale-target cases against a noncritical Stage.
@@ -729,14 +778,25 @@ temporarily change policy without using the standalone service.
 - [ ] Retain or deliberately clean existing candidate branches only after
       verifying that no pending Promotion still depends on them.
 
+On 2026-10-22, the guarded path was exercised end to end with the noncritical
+`ops-ci-homelab` Stage. Kargo submitted the request with its shared Slipramp
+credential, Slipramp ran the repository-defined preparation Action, retained
+the real Git and Argo CD diff artifacts (including an empty Git diff), accepted
+an operator approval, and Kargo resumed through the target-branch push and
+`argocd-update`. The Promotion succeeded and the homelab Argo CD application
+was healthy and synced. Preparation failures were also observed during
+bring-up and recovered by starting a new Promotion after correcting the tools
+image and empty-artifact upload path. Rejection, expiry, and stale-target
+coverage remain outstanding, so the full cutover test-matrix item stays open.
+
 Accepted outcome: production Kargo Promotions use Slipramp exclusively and no
 standalone gate state or credential remains authoritative.
 
 ### 7. Operational views and notifications
 
-- [ ] Add configurable environment ordering and Freight pipeline comparisons;
+- [x] Add configurable environment ordering and Freight pipeline comparisons;
       do not hard-code `homelab` and `prod`.
-- [ ] Add cached, repository-grouped branch drift scanning with no-op render
+- [x] Add cached, repository-grouped branch drift scanning with no-op render
       acknowledgements.
 - [ ] Add candidate-branch expiry and cleanup as an explicit, observable
       operation with protected pending branches.

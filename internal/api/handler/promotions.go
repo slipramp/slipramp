@@ -46,6 +46,13 @@ type PromotionReviewService interface {
 	Decide(context.Context, promotion.DecisionRequest) (promotion.PromotionReview, error)
 }
 
+type PromotionPipelineService interface {
+	List(
+		context.Context,
+		promotion.FreightPipelineListFilter,
+	) (promotion.FreightPipelineList, error)
+}
+
 func (h *Handler) SubmitKargoPromotion(
 	ctx context.Context,
 	request api.SubmitKargoPromotionRequestObject,
@@ -463,7 +470,7 @@ func optionalCatalogName(value *api.CatalogName) string {
 }
 
 func promotionStageResponse(review promotion.StageReview) (api.PromotionStage, error) {
-	freight, err := rawObject(review.Stage.Freight)
+	freight, err := promotionFreightResponse(review.Stage.Freight)
 	if err != nil {
 		return api.PromotionStage{}, fmt.Errorf("decode Promotion Stage Freight: %w", err)
 	}
@@ -498,6 +505,23 @@ func promotionStageResponse(review promotion.StageReview) (api.PromotionStage, e
 		LastObservedAt:                  review.Stage.LastObservedAt,
 		ArchivedAt:                      review.Stage.ArchivedAt,
 	}, nil
+}
+
+func promotionFreightResponse(contents []byte) (api.PromotionFreight, error) {
+	var freight api.PromotionFreight
+	if err := json.Unmarshal(contents, &freight); err != nil {
+		return api.PromotionFreight{}, err
+	}
+	if freight.Items == nil {
+		freight.Items = []api.PromotionFreightItem{}
+	}
+	for index := range freight.Items {
+		if freight.Items[index].Artifacts == nil {
+			freight.Items[index].Artifacts = []api.PromotionFreightArtifact{}
+		}
+	}
+
+	return freight, nil
 }
 
 func promotionPolicyResponse(value promotion.PolicyView) api.PromotionStagePolicy {

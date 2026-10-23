@@ -310,13 +310,30 @@ the Promotion to `pending`; a failed Run or invalid artifacts move it to
 `error` without an implicit retry. Nonterminal Promotion artifacts are exempt
 from normal retention expiry.
 
+The Server also exposes a read-only, repository-grouped Kargo branch-drift
+view. It reuses the Repository refresh credential, resolves all source and
+target branches for one Repository in a single scan, and caches that derived
+result for `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL`. Each remote operation uses
+`SLIPRAMP_REPOSITORY_FETCH_TIMEOUT`. Source drift is limited to the source
+paths observed for a Stage, while target drift detects movement after Kargo's
+last successful render. Equal target and result revisions are shown as an
+acknowledged no-op render. Scan failures are visible in the API and UI, and
+the Server never receives Kubernetes access or writes a Git ref.
+
+Every configured integration supplies an explicit `environmentOrder` for
+Freight comparison. Newly observed environments outside that list remain
+visible after the configured columns and do not invalidate a complete Stage
+snapshot.
+
 Authenticated users can review this state at `/promotions`, open a Promotion
-to inspect its preparation Run and sensitive Git and Argo CD diffs, and browse
-the observed inventory at `/promotion-stages`. Operators and administrators can
-record one immutable approval or rejection and update per-Stage automatic or
-review-required policy. Temporary review policies retain their audit context
-after expiry, while pending Promotions expire durably when their review window
-ends.
+to inspect its preparation Run and sensitive Git and Argo CD diffs, browse the
+observed inventory at `/promotion-stages`, and compare current typed Freight
+across the configured environment order at `/promotion-pipelines`. The
+`/promotion-branch-drift` view shows cached source and target branch
+comparisons. Operators and administrators can record one immutable approval
+or rejection and update per-Stage automatic or review-required policy.
+Temporary review policies retain their audit context after expiry, while
+pending Promotions expire durably when their review window ends.
 
 The first-party `slipramp-kargo-tools prepare` command supplies the read-only
 preparation implementation. Its published image is pinned to Git 2.53.0 and

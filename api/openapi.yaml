@@ -74,6 +74,10 @@ paths:
     $ref: ./paths/promotions.yaml#/promotionStages
   /api/v1/promotion-stages/{stageId}/policy:
     $ref: ./paths/promotions.yaml#/promotionStagePolicy
+  /api/v1/promotion-pipelines:
+    $ref: ./paths/promotions.yaml#/promotionPipelines
+  /api/v1/promotion-branch-drift:
+    $ref: ./paths/promotions.yaml#/promotionBranchDrift
   /controller/v1/kargo/{integration}/stages:
     $ref: ./paths/promotions.yaml#/controllerKargoStages
 components:
@@ -173,3 +177,13 @@ components:
       $ref: ./components/promotions.yaml#/PromotionStageList
     PromotionStagePolicy:
       $ref: ./components/promotions.yaml#/PromotionStagePolicy
+    PromotionFreight:
+      $ref: ./components/promotions.yaml#/PromotionFreight
+    PromotionPipeline:
+      $ref: ./components/promotions.yaml#/PromotionPipeline
+    PromotionPipelineList:
+      $ref: ./components/promotions.yaml#/PromotionPipelineList
+    PromotionBranchDriftRepository:
+      $ref: ./components/promotions.yaml#/PromotionBranchDriftRepository
+    PromotionBranchDriftList:
+      $ref: ./components/promotions.yaml#/PromotionBranchDriftList

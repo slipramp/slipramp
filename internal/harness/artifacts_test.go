@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +87,51 @@ func TestArtifactTransfersDownloadInputsAndRetryUploads(t *testing.T) {
 	}
 	if uploadAttempts.Load() != 2 {
 		t.Errorf("upload attempts = %d, want 2", uploadAttempts.Load())
+	}
+}
+
+func TestArtifactTransfersUploadEmptyArtifactWithKnownLength(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.ContentLength != 0 {
+			t.Errorf("Content-Length = %d, want 0", request.ContentLength)
+		}
+		if len(request.TransferEncoding) != 0 {
+			t.Errorf("Transfer-Encoding = %v, want none", request.TransferEncoding)
+		}
+		contents, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		if len(contents) != 0 {
+			t.Errorf("request body = %q, want empty", contents)
+		}
+
+		digest := sha256.Sum256(nil)
+		if got, want := request.Header.Get("X-Slipramp-Content-SHA256"), hex.EncodeToString(digest[:]); got != want {
+			t.Errorf("X-Slipramp-Content-SHA256 = %q, want %q", got, want)
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	outputPath := filepath.Join(t.TempDir(), "empty.diff")
+	if err := os.WriteFile(outputPath, nil, 0o600); err != nil {
+		t.Fatalf("write empty output fixture: %v", err)
+	}
+	config := ArtifactConfig{
+		ServerURL: server.URL,
+		RunID:     "run-1",
+		Token:     "run-token",
+		Artifacts: map[string]ArtifactDeclaration{
+			"result": {Path: outputPath},
+		},
+		Client: server.Client(),
+	}
+
+	if err := config.UploadArtifacts(context.Background()); err != nil {
+		t.Fatalf("UploadArtifacts() error = %v", err)
 	}
 }
 

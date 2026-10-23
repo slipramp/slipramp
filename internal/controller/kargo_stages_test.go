@@ -68,6 +68,8 @@ func TestNormalizeKargoStage(t *testing.T) {
         "freightHistory":[{"items":{
           "Warehouse/external-dns":{
             "name":"99d3a4",
+            "commits":[{"repoURL":"https://example.com/ops.git","id":"source-sha"}],
+            "images":[{"repoURL":"ghcr.io/example/external-dns","tag":"0.19.0"}],
             "charts":[{"repoURL":"https://charts.example.com","name":"external-dns","version":"1.16.1"}]
           }
         }}],
@@ -103,8 +105,9 @@ func TestNormalizeKargoStage(t *testing.T) {
 	if !reflect.DeepEqual(observed.SourcePaths, wantPaths) {
 		t.Errorf("source paths = %#v, want %#v", observed.SourcePaths, wantPaths)
 	}
-	items, ok := observed.Freight["items"].([]any)
-	if !ok || len(items) != 1 {
+	if len(observed.Freight.Items) != 1 || observed.Freight.Items[0].Origin != "Warehouse/external-dns" ||
+		len(observed.Freight.Items[0].Artifacts) != 3 ||
+		observed.Freight.Items[0].Artifacts[0].Kind != api.PromotionFreightArtifactKindChart {
 		t.Fatalf("Freight = %#v", observed.Freight)
 	}
 	if observed.SuccessfulRenderAcknowledgement == nil ||

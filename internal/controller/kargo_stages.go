@@ -226,22 +226,6 @@ type kargoFreightReference struct {
 	} `json:"charts"`
 }
 
-type freightSummary struct {
-	Items []freightVersion `json:"items"`
-}
-
-type freightVersion struct {
-	Origin    string            `json:"origin"`
-	Name      string            `json:"name"`
-	Artifacts []artifactVersion `json:"artifacts,omitempty"`
-}
-
-type artifactVersion struct {
-	Kind       string `json:"kind"`
-	Repository string `json:"repository,omitempty"`
-	Version    string `json:"version"`
-}
-
 type successfulRenderAcknowledgement struct {
 	SourceRevision string `json:"sourceRevision"`
 	TargetRevision string `json:"targetRevision"`
@@ -261,11 +245,6 @@ func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObs
 	variables := kargoVariables(raw)
 	application := firstNonempty(variables["argoApp"], variables["app"], item.GetLabels()["app"], item.GetName())
 	repositoryURL, targetBranch, sourcePaths := kargoBranchDetails(item, variables)
-	freight, err := jsonObject(currentKargoFreight(raw))
-	if err != nil {
-		return api.PromotionStageObservation{}, err
-	}
-
 	observed := api.PromotionStageObservation{
 		Project:         api.CatalogName(item.GetNamespace()),
 		Name:            item.GetName(),
@@ -276,7 +255,7 @@ func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObs
 		RepositoryURL:   repositoryURL,
 		TargetBranch:    targetBranch,
 		SourcePaths:     sourcePaths,
-		Freight:         freight,
+		Freight:         currentKargoFreight(raw),
 	}
 
 	acknowledgement := kargoSuccessfulRenderAcknowledgement(raw)
@@ -388,32 +367,36 @@ func uniqueStrings(values []string) []string {
 	return unique
 }
 
-func currentKargoFreight(stage kargoStage) freightSummary {
-	summary := freightSummary{Items: []freightVersion{}}
+func currentKargoFreight(stage kargoStage) api.PromotionFreight {
+	summary := api.PromotionFreight{Items: []api.PromotionFreightItem{}}
 	if len(stage.Status.FreightHistory) == 0 {
 		return summary
 	}
 
 	for origin, reference := range stage.Status.FreightHistory[0].Items {
-		artifacts := make([]artifactVersion, 0, len(reference.Commits)+len(reference.Images)+len(reference.Charts))
+		artifacts := make(
+			[]api.PromotionFreightArtifact,
+			0,
+			len(reference.Commits)+len(reference.Images)+len(reference.Charts),
+		)
 		for _, commit := range reference.Commits {
-			artifacts = append(artifacts, artifactVersion{
-				Kind:       "git",
-				Repository: commit.RepositoryURL,
+			artifacts = append(artifacts, api.PromotionFreightArtifact{
+				Kind:       api.PromotionFreightArtifactKindGit,
+				Repository: optionalFreightRepository(commit.RepositoryURL),
 				Version:    firstNonempty(commit.Tag, commit.ID),
 			})
 		}
 		for _, image := range reference.Images {
-			artifacts = append(artifacts, artifactVersion{
-				Kind:       "image",
-				Repository: image.RepositoryURL,
+			artifacts = append(artifacts, api.PromotionFreightArtifact{
+				Kind:       api.PromotionFreightArtifactKindImage,
+				Repository: optionalFreightRepository(image.RepositoryURL),
 				Version:    firstNonempty(image.Tag, image.Digest),
 			})
 		}
 		for _, chart := range reference.Charts {
-			artifacts = append(artifacts, artifactVersion{
-				Kind:       "chart",
-				Repository: firstNonempty(chart.Name, chart.RepositoryURL),
+			artifacts = append(artifacts, api.PromotionFreightArtifact{
+				Kind:       api.PromotionFreightArtifactKindChart,
+				Repository: optionalFreightRepository(firstNonempty(chart.Name, chart.RepositoryURL)),
 				Version:    chart.Version,
 			})
 		}
@@ -421,12 +404,14 @@ func currentKargoFreight(stage kargoStage) freightSummary {
 			if artifacts[i].Kind != artifacts[j].Kind {
 				return artifacts[i].Kind < artifacts[j].Kind
 			}
-			if artifacts[i].Repository != artifacts[j].Repository {
-				return artifacts[i].Repository < artifacts[j].Repository
+			leftRepository := freightRepository(artifacts[i].Repository)
+			rightRepository := freightRepository(artifacts[j].Repository)
+			if leftRepository != rightRepository {
+				return leftRepository < rightRepository
 			}
 			return artifacts[i].Version < artifacts[j].Version
 		})
-		summary.Items = append(summary.Items, freightVersion{
+		summary.Items = append(summary.Items, api.PromotionFreightItem{
 			Origin:    origin,
 			Name:      reference.Name,
 			Artifacts: artifacts,
@@ -435,6 +420,22 @@ func currentKargoFreight(stage kargoStage) freightSummary {
 	sort.Slice(summary.Items, func(i, j int) bool { return summary.Items[i].Origin < summary.Items[j].Origin })
 
 	return summary
+}
+
+func optionalFreightRepository(value string) *string {
+	if value == "" {
+		return nil
+	}
+
+	return &value
+}
+
+func freightRepository(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
 }
 
 func kargoSuccessfulRenderAcknowledgement(stage kargoStage) *successfulRenderAcknowledgement {
