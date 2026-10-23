@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -104,7 +105,7 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
-	if result.Total != 1 || len(result.Items) != 1 || len(result.Items[0].Stages) != 2 {
+	if result.Total != 2 || len(result.Items) != 1 || len(result.Items[0].Stages) != 2 {
 		t.Fatalf("List() = %#v", result)
 	}
 	if len(scanner.calls) != 1 || len(scanner.requests[0]) != 2 {
@@ -170,6 +171,175 @@ func TestBranchDriftServiceRejectsInvalidStatusFilter(t *testing.T) {
 	})
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("List() error = %v, want ErrInvalid", err)
+	}
+}
+
+func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
+	store := &branchDriftTestStore{}
+	for _, name := range []string{"alpha", "beta", "missing"} {
+		for _, suffix := range []string{"one", "two", "three"} {
+			store.stages = append(store.stages, branchDriftTestStage(
+				"prod", name, name+"-"+suffix,
+				strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40), now,
+			))
+		}
+		if name != "missing" {
+			store.repositories = append(store.repositories, repository.Repository{
+				ID:     uuid.New(),
+				Name:   name,
+				Branch: "main",
+			})
+		}
+	}
+	archivedStage := store.stages[0]
+	archivedStage.ID = uuid.New()
+	archivedStage.ArchivedAt = &now
+	unconfiguredStage := store.stages[0]
+	unconfiguredStage.ID = uuid.New()
+	unconfiguredStage.Integration = "unconfigured"
+	store.stages = append(store.stages, archivedStage, unconfiguredStage)
+	slices.Reverse(store.stages)
+
+	for _, test := range []struct {
+		name    string
+		filter  BranchDriftListFilter
+		total   int
+		stages  []string
+		scanned []string
+	}{
+		{
+			name:    "first page within one repository",
+			filter:  BranchDriftListFilter{Limit: 2},
+			total:   9,
+			stages:  []string{"alpha-one", "alpha-three"},
+			scanned: []string{"alpha"},
+		},
+		{
+			name:    "page spans repository boundary",
+			filter:  BranchDriftListFilter{Limit: 2, Offset: 2},
+			total:   9,
+			stages:  []string{"alpha-two", "beta-one"},
+			scanned: []string{"alpha", "beta"},
+		},
+		{
+			name:    "page continues within repository",
+			filter:  BranchDriftListFilter{Limit: 2, Offset: 4},
+			total:   9,
+			stages:  []string{"beta-three", "beta-two"},
+			scanned: []string{"beta"},
+		},
+		{
+			name:   "last page retains missing repository error",
+			filter: BranchDriftListFilter{Limit: 2, Offset: 8},
+			total:  9,
+			stages: []string{"missing-two"},
+		},
+		{
+			name:   "offset beyond results",
+			filter: BranchDriftListFilter{Limit: 2, Offset: 9},
+			total:  9,
+		},
+		{
+			name:    "repository filter counts stages",
+			filter:  BranchDriftListFilter{Repository: "beta", Limit: 2, Offset: 2},
+			total:   3,
+			stages:  []string{"beta-two"},
+			scanned: []string{"beta"},
+		},
+		{
+			name:    "application filter before pagination",
+			filter:  BranchDriftListFilter{Application: "beta-two", Limit: 2},
+			total:   1,
+			stages:  []string{"beta-two"},
+			scanned: []string{"beta"},
+		},
+		{
+			name:    "status filter before pagination",
+			filter:  BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 1},
+			total:   4,
+			stages:  []string{"alpha-two", "beta-one"},
+			scanned: []string{"alpha", "beta"},
+		},
+		{
+			name:    "status filtered last page",
+			filter:  BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 3},
+			total:   4,
+			stages:  []string{"beta-two"},
+			scanned: []string{"alpha", "beta"},
+		},
+		{
+			name:    "status filtered offset beyond results",
+			filter:  BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 4},
+			total:   4,
+			scanned: []string{"alpha", "beta"},
+		},
+		{
+			name:    "unknown status paginates missing repository",
+			filter:  BranchDriftListFilter{Status: BranchDriftStatusUnknown, Limit: 2, Offset: 1},
+			total:   3,
+			stages:  []string{"missing-three", "missing-two"},
+			scanned: []string{"alpha", "beta"},
+		},
+		{
+			name:   "no matching stages",
+			filter: BranchDriftListFilter{Project: "absent", Limit: 2},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			scanner := &recordingBranchScanner{results: []repository.BranchComparison{
+				{}, {SourceDrift: true}, {},
+			}}
+			service := NewBranchDriftService(
+				IntegrationSet{"prod": {}}, store, scanner, time.Minute, 30*time.Second,
+			)
+			result, err := service.List(t.Context(), test.filter)
+			if err != nil {
+				t.Fatalf("List() error = %v", err)
+			}
+			if result.Total != test.total || result.Limit != test.filter.Limit || result.Offset != test.filter.Offset {
+				t.Errorf("List() pagination = total %d, limit %d, offset %d", result.Total, result.Limit, result.Offset)
+			}
+			var names []string
+			for _, item := range result.Items {
+				if len(item.Stages) == 0 {
+					t.Error("List() returned an empty repository group")
+				}
+				if item.Repository.Name == "missing" && item.Error == "" {
+					t.Error("List() lost missing repository error")
+				}
+				for _, stage := range item.Stages {
+					if stage.Stage.RepositoryName != item.Repository.Name {
+						t.Errorf("Stage %s is in the wrong repository group", stage.Stage.Name)
+					}
+					names = append(names, stage.Stage.Name)
+				}
+			}
+			if !slices.Equal(names, test.stages) {
+				t.Errorf("List() Stages = %v, want %v", names, test.stages)
+			}
+			var scanned []string
+			for index, record := range scanner.calls {
+				scanned = append(scanned, record.Name)
+				if len(scanner.requests[index]) != 3 {
+					t.Errorf("repository %s scan did not include all Stages", record.Name)
+				}
+			}
+			if !slices.Equal(scanned, test.scanned) {
+				t.Errorf("scanned repositories = %v, want %v", scanned, test.scanned)
+			}
+
+			if _, err := service.List(t.Context(), test.filter); err != nil {
+				t.Fatalf("cached List() error = %v", err)
+			}
+			if len(scanner.calls) != len(test.scanned) {
+				t.Error("cached List() rescanned repositories")
+			}
+		})
 	}
 }
 

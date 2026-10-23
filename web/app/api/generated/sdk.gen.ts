@@ -1317,6 +1317,8 @@ export const listPromotionPipelines = <ThrowOnError extends boolean = false>(
 
 /**
  * Inspect cached Kargo Stage branch drift grouped by Repository
+ *
+ * Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
  */
 export const listPromotionBranchDrift = <ThrowOnError extends boolean = false>(
   options?: Options<ListPromotionBranchDriftData, ThrowOnError>,

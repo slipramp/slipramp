@@ -1182,10 +1182,17 @@ type Promotion struct {
 
 // PromotionBranchDriftList defines model for PromotionBranchDriftList.
 type PromotionBranchDriftList struct {
-	Items  []PromotionBranchDriftRepository `json:"items"`
-	Limit  int                              `json:"limit"`
-	Offset int                              `json:"offset"`
-	Total  int                              `json:"total"`
+	// Items Repository groups containing only the matching Stages on this page.
+	Items []PromotionBranchDriftRepository `json:"items"`
+
+	// Limit Maximum number of Stages on this page across all Repository groups.
+	Limit int `json:"limit"`
+
+	// Offset Number of matching Stages skipped across all Repository groups.
+	Offset int `json:"offset"`
+
+	// Total Total number of matching Stages across all Repository groups.
+	Total int `json:"total"`
 }
 
 // PromotionBranchDriftRepository defines model for PromotionBranchDriftRepository.
@@ -2450,6 +2457,8 @@ type ClientInterface interface {
 
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	//
+	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
+	//
 	// Corresponds with GET /api/v1/promotion-branch-drift (the `ListPromotionBranchDrift` operationId).
 	ListPromotionBranchDrift(ctx context.Context, params *ListPromotionBranchDriftParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3018,6 +3027,8 @@ func (c *Client) SubmitKargoPromotion(ctx context.Context, integration CatalogNa
 }
 
 // ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
+//
+// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
 //
 // Corresponds with GET /api/v1/promotion-branch-drift (the `ListPromotionBranchDrift` operationId).
 func (c *Client) ListPromotionBranchDrift(ctx context.Context, params *ListPromotionBranchDriftParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6841,6 +6852,8 @@ type ClientWithResponsesInterface interface {
 	SubmitKargoPromotionWithResponse(ctx context.Context, integration CatalogName, body SubmitKargoPromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitKargoPromotionResponse, error)
 
 	// ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
+	//
+	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -11055,6 +11068,8 @@ func (c *ClientWithResponses) SubmitKargoPromotionWithResponse(ctx context.Conte
 }
 
 // ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
+//
+// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
 //
 // Returns a wrapper object for the known response body format(s).
 //

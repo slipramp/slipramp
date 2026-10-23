@@ -1,0 +1,4 @@
+[url "git@gitlab.kcloud.io:"]
+	insteadOf = https://gitlab.kcloud.io/
+[core]
+	sshCommand = ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes

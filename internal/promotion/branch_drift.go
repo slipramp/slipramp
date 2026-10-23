@@ -147,7 +147,7 @@ func (s *BranchDriftService) List(
 		repositoriesByName[record.Name] = record
 	}
 	stagesByRepository := make(map[string][]Stage)
-	matchingRepositories := make(map[string]struct{})
+	matchingStageCounts := make(map[string]int)
 	for _, stage := range stages {
 		if stage.ArchivedAt != nil {
 			continue
@@ -157,15 +157,11 @@ func (s *BranchDriftService) List(
 		}
 		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)
 		if stageMatchesBranchDriftFilter(stage, filter) {
-			matchingRepositories[stage.RepositoryName] = struct{}{}
+			matchingStageCounts[stage.RepositoryName]++
 		}
 	}
 
-	names := slices.Sorted(maps.Keys(matchingRepositories))
-	total := len(names)
-	if filter.Status == "" {
-		names = page(names, filter.Offset, filter.Limit)
-	}
+	names := slices.Sorted(maps.Keys(matchingStageCounts))
 
 	select {
 	case s.scanLock <- struct{}{}:
@@ -174,8 +170,17 @@ func (s *BranchDriftService) List(
 		return BranchDriftList{}, ctx.Err()
 	}
 
-	items := make([]BranchDriftRepository, 0, len(names))
+	items := make([]BranchDriftRepository, 0, min(len(names), filter.Limit))
+	total := 0
 	for _, name := range names {
+		groupStart := total
+		if filter.Status == "" {
+			total += matchingStageCounts[name]
+			if total <= filter.Offset || groupStart >= filter.Offset+filter.Limit {
+				continue
+			}
+		}
+
 		groupStages := stagesByRepository[name]
 		slices.SortFunc(groupStages, compareBranchDriftStages)
 		record, ok := repositoriesByName[name]
@@ -201,13 +206,16 @@ func (s *BranchDriftService) List(
 			}
 		}
 		item.Stages = filterBranchDriftStages(item.Stages, filter.Status)
-		if len(item.Stages) > 0 {
+		if filter.Status != "" {
+			total += len(item.Stages)
+		}
+
+		start := max(0, filter.Offset-groupStart)
+		end := min(len(item.Stages), filter.Offset+filter.Limit-groupStart)
+		if start < end {
+			item.Stages = item.Stages[start:end]
 			items = append(items, item)
 		}
-	}
-	if filter.Status != "" {
-		total = len(items)
-		items = page(items, filter.Offset, filter.Limit)
 	}
 
 	return BranchDriftList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil

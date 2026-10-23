@@ -65,7 +65,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 					NoOpRender:                     true,
 				}},
 			}},
-			Total:  1,
+			Total:  42,
 			Limit:  10,
 			Offset: 2,
 		},
@@ -110,6 +110,9 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	for _, expected := range []string{
 		stageID.String(),
 		`"repository":"ops"`,
+		`"total":42`,
+		`"limit":10`,
+		`"offset":2`,
 		`"status":"current"`,
 		`"noOpRender":true`,
 		`"sourceDrift":false`,

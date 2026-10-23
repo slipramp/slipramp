@@ -1,233 +1,63 @@
 # Slipramp
 
 Slipramp is a GitOps-driven infrastructure control plane for homelabs and small
-teams. The product direction is in [`docs/PLAN.md`](docs/PLAN.md), and the
-accepted MVP baseline is recorded in [`docs/MVP.md`](docs/MVP.md).
+teams. Connect a Git repository, discover versioned Targets and Actions, and
+execute exact commits as Kubernetes Jobs across one or more Clusters.
 
-## Project status
+Slipramp supports manual/API Runs, named Git triggers, live and retained logs,
+declared artifacts, pinned preview/apply flows, OIDC/API-key authentication, and
+optional Kargo Promotion reviews with Git and Argo CD diffs. Its Server has no
+Kubernetes access; in-cluster Controllers manage execution through outbound HTTP.
 
-The MVP operational loop is implemented and accepted. Slipramp can discover a
-versioned repository catalog, run exact commits through authenticated in-cluster
-controllers, stream and retain logs, transfer declared artifacts, and promote a
-preview artifact into a pinned follow-up Run. Development now continues
-incrementally from that baseline; the MVP document is a record of the delivered
-scope rather than an open checklist.
+## Documentation
 
-The repository keeps formatting, linting, generation, unit, integration, build,
-and disposable-cluster acceptance checks in CI. The kind-based end-to-end suite
-is documented in [`deploy/e2e`](deploy/e2e/README.md). Supported Kubernetes
-installation is provided by the focused Server/web and Controller charts under
-[`deploy/charts`](deploy/charts).
+- [Design](docs/DESIGN.md): implemented architecture, domain model, trust
+  boundaries, and governing decisions.
+- [Roadmap](docs/ROADMAP.md): unfinished product work, reliability, live Kargo
+  acceptance, and deferred choices.
+- [Catalog example](examples/infrastructure-ops/README.md): Runtime and Target
+  definitions, typed parameters, credentials, triggers, and artifact flows.
+- [Server/web chart](deploy/charts/slipramp/README.md) and
+  [Controller chart](deploy/charts/slipramp-controller/README.md): Kubernetes
+  installation and deployment configuration.
+- [End-to-end acceptance](deploy/e2e/README.md): disposable kind coverage and
+  diagnostics.
 
-## Current implementation
+Contracts are pre-stable. Development favors clean breaking changes with all
+callers and documentation updated together.
 
-Slipramp consists of four processes: the Server, cluster controller, harness,
-and web application. The split OpenAPI contract defines the Server's JSON
-liveness probe at `GET /healthz`, dependency-aware readiness probe at
-`GET /readyz`, the read-only cluster health endpoint at
-`GET /api/v1/clusters`, and the authenticated controller enrollment and long
-poll at `POST /controller/v1/enroll` and `POST /controller/v1/poll`. Ongoing
-controller routes derive the cluster identity from the enrolled bearer
-credential rather than repeating it in every path.
-
-Repository registrations can be listed and created at
-`GET|POST /api/v1/repositories` and removed at
-`DELETE /api/v1/repositories/{repositoryId}`. Go request and response types,
-Server interfaces, the controller client, and the TypeScript frontend client
-are generated together from that contract. API errors use RFC 9457 problem
-details with the
-`application/problem+json` media type.
-
-The Server connects to PostgreSQL through pgxpool, applies embedded Goose
-migrations at startup, and uses sqlc-generated query methods. Artifact contents
-use a narrow S3-compatible storage boundary backed by the MinIO Go client. The
-configured bucket is provisioned separately and checked at startup so the
-Server does not require bucket-administration permissions. PostgreSQL remains
-authoritative for product state and artifact metadata.
-
-Repository registrations persist an HTTPS, SSH, or SCP-style Git clone URL,
-one tracked branch, and optional names for two distinct credential paths. The
-refresh credential name refers to a secret source available to the Server,
-while the checkout credential name is resolved to a Kubernetes Secret by each
-execution cluster. Secret values and URL-embedded HTTPS credentials are not
-accepted. Removing a repository hides it from the active list while retaining
-its stable identity for future catalog and run history references.
-
-The Server fetches each active repository when it starts and on the configured
-interval. It materializes the exact commit in an isolated temporary checkout,
-loads the catalog, and removes the checkout after indexing. Repository contents
-are never stored in PostgreSQL or S3.
-
-Repository catalog definitions live below `.slipramp` in the tracked Git tree.
-Files ending in `.yaml` or `.yml` are discovered recursively and may each
-contain one or more versioned `Runtime` or `Target` documents. The catalog
-loader decodes these documents independently of repository refresh and rejects
-unknown fields and duplicate mapping keys. It validates repository and
-container paths, runtime credential injection, target defaults, Kubernetes
-resource quantities, timeouts, action intents and commands, typed parameter
-mapping, configured placement and credential-source references, artifact
-declarations, artifact input provenance, and named Git triggers. A Git trigger
-uses its target's required `watch` patterns, may supply static values for its
-action's declared parameters, and may invoke only an action without artifact
-inputs. Trigger parameters use the same normalization and validation as manual
-and API Runs, including required, type, and enum checks. Other trigger sources
-are rejected.
-Effective actions deterministically merge target credential and
-resource defaults without mutating the source catalog. A valid commit produces
-one immutable PostgreSQL catalog revision containing its runtime and target
-definitions. Repeated refreshes reuse that revision. A rejected commit records
-its SHA and validation diagnostic while leaving the previous valid revision
-active. Repository API responses include the latest refresh state; catalog read
-access through `GET /api/v1/repositories/{repositoryId}/catalog` returns the
-active immutable revision and its complete typed Runtime and Target
-definitions. The web application lists repository refresh health and provides
-a repository detail screen for browsing the active revision's targets and
-actions.
-
-Each successful refresh compares the newly accepted commit with the previous
-active catalog commit. Changed repository paths are matched against every
-target's `watch` patterns, including recursive `**` segments. Slipramp stores
-the resulting desired commit in a durable target projection and shows it in
-the repository catalog and target detail screens. New and reactivated targets
-start at the commit where they become active, removed targets are archived,
-and invalid catalogs do not change target state or initiate Runs. After the
-initial index, an accepted new head records one durable delivery for each Git
-trigger whose target watch patterns match. A background dispatcher submits
-each delivery through normal Run creation, pinned to that accepted catalog
-revision and made idempotent by the stable delivery ID. Each delivery freezes
-the trigger's normalized parameter object from that revision so a later
-repository refresh cannot change its parameters or revision pin.
-
-Automatic Git-triggered work is coalesced per Repository and Target when an
-affected Target's desired commit advances or the Target is removed. Older
-undispatched deliveries remain as superseded history, and stale queued Git Runs
-finish as canceled with reason `SupersededByGitChange` and a persisted phase
-transition. Assigned, preparing, and running Git Runs are allowed to finish;
-only the newest queued Git revision is retained behind them. Manual and API Runs
-are never superseded and retain ordinary FIFO scheduling with all other
-eligible Runs. Git Run insertion locks and reads current Target state in
-PostgreSQL and refuses a stale pinned commit, closing the refresh/dispatch race
-at the database boundary.
-
-Further delivery reliability work is intentionally not implemented yet. It
-includes persisting failed delivery-attempt metadata, bounded retry backoff,
-allowing later eligible deliveries to proceed past one permanently failing
-delivery, and restart-persistent retry scheduling. Branch/path overrides,
-per-commit delivery, schedules, webhooks, and configurable delivery policies
-also remain out of scope.
-
-`POST /api/v1/runs` resolves a requested action against the active catalog and
-persists an immutable queued Run with validated parameters, an optional
-idempotency key, and a frozen repository, target, action, runtime, and placement
-snapshot. Controller polls claim the oldest eligible Run for their cluster,
-enforce one active Run per target, and return a run-assignment command containing
-that frozen snapshot through the generated API contract. Assigned Runs are
-redelivered with the same identity until the controller reports the materialized
-Job UID and `preparing` phase. Lifecycle phase, terminal outcome, cancellation
-intent, Job identity, observation freshness, diagnostics, and exit code remain
-separate persisted facts.
-
-Run sources are stored as structured values. Manual and API Runs retain their
-existing source behavior; a Git source contains only the trigger name and
-delivery ID, while the Run's ordinary fields retain its repository, commit,
-catalog revision, branch snapshot, and creation time. Git-triggered Runs have
-no human actor.
-
-Target detail screens provide manual Run forms for actions without artifact
-inputs. The forms render string, boolean, number, and enum controls from the
-catalog declarations, omit unset optional parameters, and submit through the
-same Run-creation API used by programmatic clients. Actions requiring artifact
-inputs are started from a compatible retained artifact on its producing Run.
-The Run history screen lists up to 50 recent Runs and links back to their
-repository, target, and detail views. `GET /api/v1/runs` exposes the same
-latest-first history with optional repository and repository-scoped target
-filters and a bounded result limit.
-
-Authenticated controllers can append raw action output at
-`POST /controller/v1/runs/{runId}/log-chunks?offsetBytes=N`. Each chunk is
-limited to 256 KiB, written to S3-compatible storage before its digest and
-offset metadata become visible in PostgreSQL, and accepted idempotently when
-the same bytes are retried at the same offset. The enrolled credential must
-identify the Run's assigned cluster. The controller first reads the durable
-cursor, so a restarted controller replays only bytes the Server has not
-accepted. Before reporting a terminal observation it seals the log with the
-verified final byte size and SHA-256 digest.
-
-Run logs stream as reconnectable SSE from
-`GET /api/v1/runs/{runId}/logs`; the event ID is the next durable byte offset.
-Run detail and artifact metadata are available at `GET /api/v1/runs/{runId}`
-and `GET /api/v1/runs/{runId}/artifacts`, and sealed contents download from
-`GET /api/v1/artifacts/{artifactId}/download`. The web Run screen consumes the
-same stream and exposes retained downloads.
-
-Assignments carry a narrowly scoped, deterministic Run artifact credential that
-the harness uses only with the Server's execution artifact endpoints. Before
-starting the action the harness downloads every explicitly selected input to
-its declared `mountPath`; afterward it uploads each declared output path with
-its size and digest. Retries are idempotent. Input selection is explicit in
-the Run request and compatible consumers are pinned to the producing Run's
-commit and catalog revision. PostgreSQL stores bindings, provenance,
-sensitivity, and retention metadata while S3-compatible storage holds bytes.
-Successful preview Runs expose an **Apply this plan** action when the frozen
-catalog contains a directly runnable consumer for the retained plan.
-
-`POST /api/v1/runs/{runId}/cancel` records a cancel request idempotently.
-Queued Runs finish as canceled immediately. Controllers receive cancel commands
-ahead of new assignments. A controller marks a started execution Pod through a
-projected cancellation annotation so the harness can terminate its active child
-process, drain and seal its log, report the canceled outcome, and only then
-delete the deterministic Job with identity and UID checks. An unstarted Job is
-deleted before the empty canceled Run is reported. Repeated delivery and an
-already-missing Job are safe.
-
-[`examples/infrastructure-ops`](./examples/infrastructure-ops) contains a larger catalog
-example with a pyinfra deployment and a Terraform stack, including runtime
-credentials, placement configuration, a canary action, and a saved-plan
-artifact flow.
-
-`SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS` maps logical credential names to
-absolute paths of administrator-mounted Git config files. Each isolated fetch
-uses only its selected config file and disables interactive prompts. The file
-can use standard Git configuration such as a scoped credential helper for
-HTTPS or `core.sshCommand` for SSH; any referenced credential and known-hosts
-files should be mounted separately. For example:
-
-```json
-{
-  "github-server": "/var/run/secrets/slipramp/github.gitconfig"
-}
-```
+## Server configuration
 
 The Server accepts these environment variables:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SLIPRAMP_SERVER_ADDRESS` | `:8080` | TCP address on which the Server listens |
-| `SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT` | `10s` | Graceful shutdown deadline |
-| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS` | `{}` | JSON object mapping cluster names to their bootstrap enrollment credentials |
-| `SLIPRAMP_PLACEMENTS_FILE` | Unset | Path to the versioned YAML placement configuration |
-| `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS` | `{}` | JSON object mapping refresh credential names to mounted Git config files |
-| `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL` | `1m` | Interval between repository branch refreshes |
-| `SLIPRAMP_REPOSITORY_FETCH_TIMEOUT` | `30s` | Deadline for fetching one repository branch |
-| `SLIPRAMP_DATABASE_URL` | Local development PostgreSQL URL | PostgreSQL connection URL |
-| `SLIPRAMP_DATABASE_CONNECT_TIMEOUT` | `10s` | PostgreSQL startup deadline |
-| `SLIPRAMP_S3_ENDPOINT` | `http://127.0.0.1:9000` | S3-compatible endpoint URL |
-| `SLIPRAMP_S3_REGION` | `us-east-1` | S3 bucket region |
-| `SLIPRAMP_S3_BUCKET` | `slipramp` | Artifact-content bucket |
-| `SLIPRAMP_S3_ACCESS_KEY_ID` | `slipramp` | S3 access key ID |
-| `SLIPRAMP_S3_SECRET_ACCESS_KEY` | `slipramp-development` | S3 secret access key |
-| `SLIPRAMP_S3_STARTUP_TIMEOUT` | `10s` | S3 bucket availability check deadline |
-| `SLIPRAMP_ARTIFACT_TOKEN_SECRET` | Local development secret | HMAC key for Run-scoped harness artifact credentials; use at least 32 characters |
-| `SLIPRAMP_ARTIFACT_RETENTION_PERIOD` | `720h` | Age after sealing when an artifact becomes eligible for expiration |
-| `SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL` | `1h` | Interval between artifact expiration, deletion, and orphan reconciliation passes |
-| `SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD` | `24h` | Minimum object age before an unreferenced object may be deleted |
-| `SLIPRAMP_OIDC_ISSUER` | Required | Issuer URL for the single browser-login OIDC provider |
-| `SLIPRAMP_OIDC_CLIENT_ID` | Required | OIDC relying-party client ID |
-| `SLIPRAMP_OIDC_CLIENT_SECRET` | Required | OIDC relying-party client secret; supply through deployment secret configuration |
-| `SLIPRAMP_OIDC_REDIRECT_URL` | Required | Absolute provider callback URL ending at `/api/v1/auth/callback` |
-| `SLIPRAMP_OIDC_SUBJECT_ROLES` | Required | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required |
-| `SLIPRAMP_PRODUCT_SESSION_LIFETIME` | `12h` | Absolute lifetime of a local browser session |
-| `SLIPRAMP_KARGO_INTEGRATIONS` | `{}` | JSON object containing optional named Kargo promotion-review integrations; each may include a Kargo `uiUrl` for deep links |
+| Variable                                    | Default                          | Purpose                                                                                                                    |
+| ------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `SLIPRAMP_SERVER_ADDRESS`                   | `:8080`                          | TCP address on which the Server listens                                                                                    |
+| `SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT`          | `10s`                            | Graceful shutdown deadline                                                                                                 |
+| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`     | `{}`                             | JSON object mapping cluster names to their bootstrap enrollment credentials                                                |
+| `SLIPRAMP_PLACEMENTS_FILE`                  | Unset                            | Path to the versioned YAML placement configuration                                                                         |
+| `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS`   | `{}`                             | JSON object mapping refresh credential names to mounted Git config files                                                   |
+| `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL`      | `1m`                             | Interval between repository branch refreshes                                                                               |
+| `SLIPRAMP_REPOSITORY_FETCH_TIMEOUT`         | `30s`                            | Deadline for fetching one repository branch                                                                                |
+| `SLIPRAMP_DATABASE_URL`                     | Local development PostgreSQL URL | PostgreSQL connection URL                                                                                                  |
+| `SLIPRAMP_DATABASE_CONNECT_TIMEOUT`         | `10s`                            | PostgreSQL startup deadline                                                                                                |
+| `SLIPRAMP_S3_ENDPOINT`                      | `http://127.0.0.1:9000`          | S3-compatible endpoint URL                                                                                                 |
+| `SLIPRAMP_S3_REGION`                        | `us-east-1`                      | S3 bucket region                                                                                                           |
+| `SLIPRAMP_S3_BUCKET`                        | `slipramp`                       | Artifact-content bucket                                                                                                    |
+| `SLIPRAMP_S3_ACCESS_KEY_ID`                 | `slipramp`                       | S3 access key ID                                                                                                           |
+| `SLIPRAMP_S3_SECRET_ACCESS_KEY`             | `slipramp-development`           | S3 secret access key                                                                                                       |
+| `SLIPRAMP_S3_STARTUP_TIMEOUT`               | `10s`                            | S3 bucket availability check deadline                                                                                      |
+| `SLIPRAMP_ARTIFACT_TOKEN_SECRET`            | Local development secret         | HMAC key for Run-scoped harness artifact credentials; use at least 32 characters                                           |
+| `SLIPRAMP_ARTIFACT_RETENTION_PERIOD`        | `720h`                           | Age after sealing when an artifact becomes eligible for expiration                                                         |
+| `SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL` | `1h`                             | Interval between artifact expiration, deletion, and orphan reconciliation passes                                           |
+| `SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD`     | `24h`                            | Minimum object age before an unreferenced object may be deleted                                                            |
+| `SLIPRAMP_OIDC_ISSUER`                      | Required                         | Issuer URL for the single browser-login OIDC provider                                                                      |
+| `SLIPRAMP_OIDC_CLIENT_ID`                   | Required                         | OIDC relying-party client ID                                                                                               |
+| `SLIPRAMP_OIDC_CLIENT_SECRET`               | Required                         | OIDC relying-party client secret; supply through deployment secret configuration                                           |
+| `SLIPRAMP_OIDC_REDIRECT_URL`                | Required                         | Absolute provider callback URL ending at `/api/v1/auth/callback`                                                           |
+| `SLIPRAMP_OIDC_SUBJECT_ROLES`               | Required                         | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required  |
+| `SLIPRAMP_PRODUCT_SESSION_LIFETIME`         | `12h`                            | Absolute lifetime of a local browser session                                                                               |
+| `SLIPRAMP_KARGO_INTEGRATIONS`               | `{}`                             | JSON object containing optional named Kargo promotion-review integrations; each may include a Kargo `uiUrl` for deep links |
 
 OIDC configuration is required for the Server to start. The subject-role map is
 the installation's enrollment and role authority: unknown subjects cannot sign
@@ -298,133 +128,39 @@ accepts Kubernetes pod metadata and spec extensions, but cannot replace
 Slipramp-owned containers, init containers, restart policy, service account,
 node selector, or run deadline.
 
-Configured Kargo integrations expose the authenticated
-`POST /api/v1/kargo/{integration}/promotions` machine endpoint. Exact repeated
-requests recover the same durable Promotion. Automatic policy approves the
-request immediately; review-required policy dispatches one ordinary,
-revision-pinned preparation Run under the requesting service account. The Run
-uses the configured Repository, Target, and Action, records a `promotion`
-source backlink, and must produce retained sensitive `git-diff` and
-`argo-diff` artifacts no larger than 16 MiB each. Successful preparation moves
-the Promotion to `pending`; a failed Run or invalid artifacts move it to
-`error` without an implicit retry. Nonterminal Promotion artifacts are exempt
-from normal retention expiry.
+Kargo integration behavior, credential boundaries, Run execution, and artifact
+retention are described in the [design](docs/DESIGN.md). Integration and
+Placement configuration is loaded at Server startup.
 
-The Server also exposes a read-only, repository-grouped Kargo branch-drift
-view. It reuses the Repository refresh credential, resolves all source and
-target branches for one Repository in a single scan, and caches that derived
-result for `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL`. Each remote operation uses
-`SLIPRAMP_REPOSITORY_FETCH_TIMEOUT`. Source drift is limited to the source
-paths observed for a Stage, while target drift detects movement after Kargo's
-last successful render. Equal target and result revisions are shown as an
-acknowledged no-op render. Scan failures are visible in the API and UI, and
-the Server never receives Kubernetes access or writes a Git ref.
-
-Every configured integration supplies an explicit `environmentOrder` for
-Freight comparison. Newly observed environments outside that list remain
-visible after the configured columns and do not invalidate a complete Stage
-snapshot.
-
-Authenticated users can browse active Stage-backed Kargo projects at
-`/promotion-projects` and follow their configured Kargo UI links, review state
-at `/promotions`, open a Promotion to inspect its preparation Run and sensitive
-Git and Argo CD diffs, browse the observed inventory at `/promotion-stages`,
-and compare current typed Freight across the configured environment order at
-`/promotion-pipelines`. The `/promotion-branch-drift` view shows cached source
-and target branch comparisons. Operators and administrators can record one
-immutable approval or rejection and update per-Stage automatic or
-review-required policy.
-Temporary review policies retain their audit context after expiry, while
-pending Promotions expire durably when their review window ends.
-
-The first-party `slipramp-kargo-tools prepare` command supplies the read-only
-preparation implementation. Its published image is pinned to Git 2.53.0 and
-Argo CD 3.5.0. It verifies that the remote candidate branch still resolves to
-the snapshotted candidate revision, produces a bounded textual Git diff, and
-normalizes Argo CD output into deterministic per-resource JSON. Argo CD targets
-come from a Runtime credential file and an unknown environment fails closed;
-tokens are passed through the child environment rather than command arguments.
-The normal Harness uploads the two declared output files, so the tools image
-has no Slipramp API integration.
-
-The Server emits structured JSON logs and shuts down gracefully on `SIGINT` or
-`SIGTERM`. Its liveness probe only reports that HTTP is serving. Readiness
-checks PostgreSQL and artifact storage concurrently under a two-second deadline
-and returns `503 Service Unavailable` with non-sensitive per-dependency status
-when either required service cannot be reached.
-
-The controller process runs inside its execution cluster. At startup it uses a
-cluster-scoped enrollment credential to register the SHA-256 digest of its
-separate controller-owned bearer credential. Repeating enrollment with the
-same credential is idempotent; replacing an enrolled credential is rejected.
-The controller then authenticates with that enrolled credential and
-continuously long-polls for controller commands. Successful polls
-and Run observation reports upsert the cluster's first-seen and last-seen
-timestamps in PostgreSQL. The Server reports a cluster as unreachable after one
-minute without either request, and the web index shows the resulting cluster
-health. Each frozen
-assignment is rendered as a deterministic `slipramp-run-<run-id>` Kubernetes
-Job. Repeated delivery creates the Job once and then reuses it. Before polling,
-the controller scans labeled Jobs across the cluster and resumes their
-observers. It derives `preparing` and `running` from the action container,
-records Job completion reasons and exit codes, maps deadline failures to the
-`timed-out` outcome, and reports a permanent rendering or admission failure as
-a terminal failed Run instead of blocking later assignments. Cancel commands
-are delivered to the harness through a projected Pod annotation so the action
-can stop before the controller drains its final log and removes the Job.
+## Controller configuration
 
 The controller requires in-cluster Kubernetes configuration and these
 environment variables:
 
-| Variable | Purpose |
-| --- | --- |
-| `SLIPRAMP_CONTROLLER_CLUSTER` | Stable logical name of this execution cluster |
-| `SLIPRAMP_CONTROLLER_SERVER_URL` | Absolute HTTP or HTTPS URL of the Slipramp Server; use plaintext HTTP only over a trusted encrypted network |
-| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN` | Cluster-scoped bootstrap credential used only to enroll the controller |
-| `SLIPRAMP_CONTROLLER_TOKEN` | Controller-owned bearer credential registered during enrollment and used for ongoing requests |
-| `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE` | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container |
-| `SLIPRAMP_CONTROLLER_HARNESS_IMAGE` | Pinned image whose entrypoint is `slipramp-harness` |
-| `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS` | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
-| `SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES` | Required JSON array of exclusively owned execution namespaces |
-| `SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS` | JSON array of optional Kargo integration names and Stage namespaces; defaults to `[]` |
+| Variable                                   | Purpose                                                                                                          |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `SLIPRAMP_CONTROLLER_CLUSTER`              | Stable logical name of this execution cluster                                                                    |
+| `SLIPRAMP_CONTROLLER_SERVER_URL`           | Absolute HTTP or HTTPS URL of the Slipramp Server; use plaintext HTTP only over a trusted encrypted network      |
+| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN`     | Cluster-scoped bootstrap credential used only to enroll the controller                                           |
+| `SLIPRAMP_CONTROLLER_TOKEN`                | Controller-owned bearer credential registered during enrollment and used for ongoing requests                    |
+| `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE`       | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container                                  |
+| `SLIPRAMP_CONTROLLER_HARNESS_IMAGE`        | Pinned image whose entrypoint is `slipramp-harness`                                                              |
+| `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS`      | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
+| `SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES` | Required JSON array of exclusively owned execution namespaces                                                    |
+| `SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS`   | JSON array of optional Kargo integration names and Stage namespaces; defaults to `[]`                            |
 
-The Controller validates every assignment against its configured execution
-namespaces and scans those namespaces individually during restart recovery.
-This permits namespace-scoped Roles instead of cluster-wide RBAC. The checkout
-init container materializes the exact commit into an `emptyDir`.
-Optional Kargo observers independently list every page of Stages in their
-configured namespaces and submit only complete snapshots. A failed namespace
-list leaves the Server's last durable inventory unchanged; successful
-snapshots archive missing Stages without removing policy or history. The
-Server matches each observed Git repository URL to the integration's allowed
-Slipramp Repositories and never receives Kubernetes credentials.
-The action container mounts it at the runtime's `workingDirectory`, or
-`/workspace` by default, and runs from the target's repository-relative path.
-The checkout is made writable inside the execution Pod so checkout and runtime
-images need not share a numeric user. Placements can supply a Pod `fsGroup` for
-runtime access to restrictive Secret file modes.
-The harness image copies its static executable into a second `emptyDir`, so the
-runtime image does not need Slipramp tooling. A checkout credential Secret may
-provide `gitconfig`, `ssh-privatekey`, and `known_hosts` keys; it is mounted only
-in the checkout init container.
+Each Controller owns its configured execution namespaces and uses
+namespace-scoped RBAC. Git checkout and execution Secrets remain in that
+Cluster. Optional Kargo observers submit complete Stage snapshots only after
+all configured namespace listings succeed.
 
-The harness materializes selected inputs, executes an action from an explicit
-argument array without an implicit shell, and uploads declared output files.
-It removes its Run-scoped artifact credential from the child process
-environment, connects the action to its standard streams, forwards `SIGHUP`,
-`SIGINT`, and `SIGTERM`, and preserves the action's exit status. An artifact
-transfer failure changes an otherwise successful harness execution to failure;
-it never hides a nonzero action exit code.
+## Web configuration
 
-The web process is a React Router v8 Framework Mode application with server-side
-rendering and a Mantine v9 application shell. Its index route uses the generated
-API client to provide a searchable, repository-filtered, paginated view of
-Targets across active catalogs. Observed execution clusters are available on
-the dedicated Clusters screen. The web process accepts these environment
-variables:
+The Web uses React Router v8 Framework/SSR mode and Mantine UI v9. It accepts
+these environment variables:
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
+| Variable           | Default                 | Purpose                            |
+| ------------------ | ----------------------- | ---------------------------------- |
 | `SLIPRAMP_API_URL` | `http://127.0.0.1:8080` | Server URL used by the web process |
 
 The browser accesses login and callback paths through the web origin. The web
@@ -505,25 +241,29 @@ Open `http://localhost:5173` and sign in with
 `admin@slipramp.local` / `slipramp`. These credentials and the static OIDC
 client secret are only for local development. Dex stores its state in memory.
 
-Register the private operational repository with:
+Register the private operational repositories with:
 
-- name `kcloud-ops`;
-- clone URL `https://github.com/ianunruh/kcloud-ops`;
-- branch `main`;
-- refresh credential `kcloud-ops`;
-- checkout credential `kcloud-ops`.
+- `kcloud-ops`: clone URL `https://github.com/ianunruh/kcloud-ops`, branch
+  `main`, refresh credential `kcloud-ops`, and checkout credential
+  `kcloud-ops`;
+- `universe`: clone URL `https://gitlab.kcloud.io/watchivy/universe.git`,
+  branch `main`, refresh credential `universe`, and no checkout credential.
 
-The local refresh credential rewrites the HTTPS URL to SSH and uses the
+The local refresh credentials rewrite the HTTPS URLs to SSH and use the
 developer's existing SSH agent or default key and `known_hosts`. Confirm that
-`ssh -T git@github.com` can authenticate before registering the repository.
+`ssh -T git@github.com` and `ssh -T git@gitlab.kcloud.io` can authenticate
+before registering the repositories. The Kargo integration allows both
+repositories because the `kargo-ivy` project promotes `universe`; its review
+preparation still runs from the `kcloud-ops` catalog.
 The homelab Controller must use
 `slipramp-local-homelab-enrollment-token` as its enrollment token and continue
 mapping checkout credential `kcloud-ops` to Secret `kcloud-ops-git`. It owns
 the `slipramp-runs` execution namespace and runs promotion preparation Jobs.
 The `prod-sjc1` Controller must use
-`slipramp-local-prod-sjc1-enrollment-token` and observe the `kargo-devops`
-namespace for the `homelab` integration, because the centralized Kargo Stage
-objects live in that cluster.
+`slipramp-local-prod-sjc1-enrollment-token` and observe the `kargo-core`,
+`kargo-devops`, `kargo-ivy`, `kargo-network`, `kargo-platform`, `kargo-play`,
+`kargo-sandbox`, `kargo-storage`, and `kargo-virt` namespaces for the `homelab`
+integration, because the centralized Kargo Stage objects live in that cluster.
 
 The local `homelab-infrastructure` Placement exposes the `ops-ci`,
 `homelab-known-hosts`, `kcloud-ops-git`, and `kargo-argocd` Secret sources in

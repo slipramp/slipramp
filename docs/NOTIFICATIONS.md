@@ -1,13 +1,16 @@
-# Notification Delivery Plan
+# Notification Delivery Design
 
-This document defines the intended design and delivery sequence for outbound
-Slipramp notifications. It is a planning aid for incremental implementation,
-not an implemented or stable external contract.
+This unimplemented proposal defines the intended design for outbound Slipramp
+notifications. It is not an implemented or stable external contract.
 
 Notification delivery is provider-neutral, with Slack as the first adapter.
 Notifications report durable domain transitions but never own or alter them.
 A failed notification must not change a Promotion, Run, repository, cluster,
 or other product resource.
+
+Delivery tracking and deferred choices live in the
+[roadmap](./ROADMAP.md#notifications). Update [DESIGN.md](./DESIGN.md) as behavior
+is implemented.
 
 ## Goals
 
@@ -368,72 +371,6 @@ An explicit operator retry endpoint may be added after automatic retry behavior
 is exercised. If added, it resets only the delivery schedule and never replays
 or changes the originating domain transition.
 
-## Delivery Milestones
-
-Each milestone leaves the repository generated, formatted, tested, and
-documented. Generated code is changed only through the repository generation
-command.
-
-### 1. Contract, configuration, and persistence
-
-- Add and validate notification destination, route, public URL, retry, and
-  retention configuration.
-- Add notification OpenAPI components and an operational delivery-list endpoint.
-- Add the migration, SQL queries, generated store code, and integration tests.
-- Add focused domain types and an enqueue boundary without provider logic.
-- Add Helm values, schemas, secret-file mounts, and deployment documentation.
-
-Accepted outcome: a domain transaction can idempotently persist a versioned
-event and its resolved destination deliveries without containing a provider
-credential.
-
-### 2. Slack delivery
-
-- Add a Slack destination adapter behind the provider-neutral sender boundary.
-- Render the channel-neutral title, summary, facts, expiry, and authenticated
-  action link into one bounded message.
-- Add restart-persistent bounded retry, jitter, rate-limit handling, and terminal
-  failure.
-- Keep response bodies and secret material out of PostgreSQL and logs.
-- Add a fake adapter for deterministic dispatcher tests.
-
-Accepted outcome: one persisted event is delivered to each configured Slack
-destination independently, and ambiguous attempts recover with documented
-at-least-once behavior.
-
-### 3. Kargo review notification
-
-- Enqueue `review.requested` atomically when a guarded Promotion becomes
-  `pending`.
-- Keep automatic, rejected, expired, and failed-preparation paths unchanged.
-- Show exhausted delivery failures in the operational Inbox.
-- Add a disposable-cluster acceptance path that verifies the message content
-  and authenticated review link without making delivery part of gate state.
-
-Accepted outcome: a newly pending Kargo review produces one durable Slack
-notification across repeated polls and Server restarts, while a notification
-outage cannot block or change the Promotion.
-
-### 4. Additional events and destinations
-
-Add events only with concrete transition and noise semantics. Likely candidates
-are review resolution, failed Runs, failed repository refreshes, unreachable
-Controllers, and stale active Run observations. A signed generic webhook is the
-next likely destination type; email follows only when a deployment requires it.
-
-Accepted outcome: additional event producers and destination adapters reuse the
-same persistence, routing, retry, and observability boundary without creating
-provider-specific domain state.
-
-### 5. Run review integration
-
-After the separate Run-approval policy and state design is accepted, emit the
-same `review.requested` contract with subject type `run`. Reassess shared review
-persistence only after both Kargo and Run review semantics exist in production.
-
-Accepted outcome: adding Run review requires a new event producer and message
-content, not a second notification subsystem or Slack-specific Run behavior.
-
 ## Required Tests
 
 The implementation is not complete without focused coverage of:
@@ -456,20 +393,3 @@ The implementation is not complete without focused coverage of:
   reconciliation;
 - notification failure leaving Promotion state unchanged;
 - OpenAPI, SQL, Helm schema, and generated-output freshness.
-
-## Deferred Decisions
-
-Resolve these when a concrete milestone needs them:
-
-- exact retention duration for terminal notification records;
-- whether operators need an explicit delivery retry API;
-- typed route filters beyond event type;
-- signed generic webhook envelope and replay-protection details;
-- email provider and formatting behavior;
-- provider-interactive decisions and principal mapping;
-- whether two implemented review domains justify shared review persistence;
-- whether notification delivery later participates in a broader audit-event
-  model.
-
-Do not turn notification delivery into a general event bus, policy language, or
-workflow engine while resolving these choices.

@@ -597,17 +597,21 @@ PromotionBranchDriftList:
   properties:
     items:
       type: array
+      description: Repository groups containing only the matching Stages on this page.
       items:
         $ref: "#/PromotionBranchDriftRepository"
     total:
       type: integer
       minimum: 0
+      description: Total number of matching Stages across all Repository groups.
     limit:
       type: integer
       minimum: 1
+      description: Maximum number of Stages on this page across all Repository groups.
     offset:
       type: integer
       minimum: 0
+      description: Number of matching Stages skipped across all Repository groups.
 
 PromotionStagePolicy:
   type: object

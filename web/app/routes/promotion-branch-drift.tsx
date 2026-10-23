@@ -112,8 +112,11 @@ export default function PromotionBranchDrift({ loaderData }: Route.ComponentProp
 
       {loaderData.available && loaderData.total > 0 ? (
         <ListPagination
-          itemCount={loaderData.repositories.length}
-          noun="Repositories"
+          itemCount={loaderData.repositories.reduce(
+            (count, repository) => count + repository.stages.length,
+            0,
+          )}
+          noun="Stages"
           page={loaderData.page}
           pageSize={pageSize}
           total={loaderData.total}
@@ -192,7 +195,9 @@ function BranchDriftRepository({
             {sharedSourcePaths.length > 0 ? (
               <Group gap="xs" mt={4} wrap="wrap">
                 <Text c="dimmed" size="xs">
-                  {sharedSourcePaths.length === 1 ? "Shared watch path" : "Shared watch paths"}
+                  {sharedSourcePaths.length === 1
+                    ? "Shared watch path on this page"
+                    : "Shared watch paths on this page"}
                 </Text>
                 {sharedSourcePaths.map((path) => (
                   <Text ff="monospace" key={path} size="xs">

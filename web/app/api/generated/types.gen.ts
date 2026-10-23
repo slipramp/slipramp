@@ -664,9 +664,21 @@ export type PromotionBranchDriftRepository = {
 };
 
 export type PromotionBranchDriftList = {
+  /**
+   * Repository groups containing only the matching Stages on this page.
+   */
   items: Array<PromotionBranchDriftRepository>;
+  /**
+   * Total number of matching Stages across all Repository groups.
+   */
   total: number;
+  /**
+   * Maximum number of Stages on this page across all Repository groups.
+   */
   limit: number;
+  /**
+   * Number of matching Stages skipped across all Repository groups.
+   */
   offset: number;
 };
 

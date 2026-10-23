@@ -1,15 +1,19 @@
-# Operational Inbox Plan
+# Operational Inbox Design
 
-This document defines the focused design and delivery plan for moving the
+This unimplemented proposal defines the focused design for moving the
 operational Inbox behind a dedicated Slipramp Server API and adding durable,
 per-principal problem acknowledgements.
 
-The accepted MVP remains described in [MVP.md](./MVP.md). The Inbox already
-exists as the web homepage, but the web process currently composes it from
-repository, cluster, Run, Promotion, readiness, and identity APIs. This plan
-replaces that browser-facing composition with one authenticated Server read
-model. It does not turn Inbox problems into a second source of truth for the
-underlying domains.
+The implemented architecture is described in [DESIGN.md](./DESIGN.md). The
+Inbox already exists as the web homepage, but the web process currently composes
+it from repository, cluster, Run, Promotion, readiness, and identity APIs. This
+design replaces that browser-facing composition with one authenticated Server
+read model. It does not turn Inbox problems into a second source of truth for
+the underlying domains.
+
+Delivery tracking and deferred choices live in the
+[roadmap](./ROADMAP.md#operational-inbox). Update [DESIGN.md](./DESIGN.md) as
+behavior is implemented.
 
 ## Goals
 
@@ -329,8 +333,8 @@ acknowledge.
 
 Update the API-key scope schema, product identity validation, PostgreSQL scope
 constraint, Access UI, authorization tests, and the matrix in
-[AUTH.md](./AUTH.md) together. Because owner revocation accepts any valid
-API-key scope, include the new scope in that behavior as well.
+[DESIGN.md](./DESIGN.md#api-keys-and-permissions) together. Include the new scope
+in owner API-key revocation behavior as well.
 
 The `InboxCapabilities.acknowledgeProblems` value is derived from the complete
 authentication result, including role and credential scope. It is not inferred
@@ -573,86 +577,3 @@ Exercise two user principals:
    for the first principal.
 7. Create multiple problems, use **Acknowledge all**, and confirm pending
    decisions remain.
-
-## Delivery Milestones
-
-Each milestone leaves generated output current and passes proportionate
-formatting, linting, unit, and integration checks.
-
-### 1. Contract, identity, and persistence
-
-- [ ] Add Inbox OpenAPI path and component files with the read model and batch
-      acknowledgement request.
-- [ ] Add the `inbox:write` permission and `slipramp:inbox:write` API-key scope.
-- [ ] Extend API-key validation, database constraints, and Access UI scope
-      selection.
-- [ ] Add the acknowledgement migration, SQL queries, generated store code,
-      and integration tests.
-- [ ] Update [AUTH.md](./AUTH.md) and the durable-state descriptions in
-      [PLAN.md](./PLAN.md) after the implementation lands.
-
-Accepted outcome: the generated contract compiles, authorization is explicit,
-and PostgreSQL can persist an idempotent per-principal batch.
-
-### 2. Server Inbox projection
-
-- [ ] Add the `internal/inbox` domain types, occurrence identity, and service.
-- [ ] Add complete internal reads for active Runs and relevant Promotions.
-- [ ] Add explicit-time Cluster status derivation and dependency outage
-      transition tracking.
-- [ ] Preserve Promotion expiry and unreachable-Cluster Run grouping.
-- [ ] Add unit tests for projection, recurrence, filtering, failures, and
-      concurrency semantics.
-
-Accepted outcome: one service returns a complete role-aware Inbox and filters
-only exact acknowledgements for the current principal.
-
-### 3. Generated HTTP surface
-
-- [ ] Implement the generated Inbox handlers and response conversion.
-- [ ] Wire the Inbox service through Server and handler dependencies.
-- [ ] Add fail-closed product authorization mappings.
-- [ ] Add handler, router, authentication, scope, and integration coverage.
-- [ ] Regenerate and verify Go and TypeScript outputs.
-
-Accepted outcome: authenticated clients can read the complete Inbox and
-idempotently acknowledge exact current problem occurrences.
-
-### 4. Web cutover
-
-- [ ] Replace the homepage domain fan-out with `getInbox` and the readiness
-      fallback.
-- [ ] Replace client-side problem construction with presentation and
-      destination mapping only.
-- [ ] Add individual **Acknowledge** controls and **Acknowledge all**.
-- [ ] Add pending, failure, capability, and unavailable states.
-- [ ] Remove obsolete composition code and pagination warnings.
-- [ ] Add focused route and presentation tests.
-
-Accepted outcome: an operator can acknowledge one or all displayed problems,
-the state survives reloads, and other principals and later occurrences remain
-unaffected.
-
-### 5. Documentation and acceptance
-
-- [ ] Update the implemented Inbox behavior in [PLAN.md](./PLAN.md) and
-      [MVP.md](./MVP.md) without rewriting the historical MVP boundary.
-- [ ] Complete the two-principal recurrence acceptance scenario.
-- [ ] Run generated-output checks, formatting, linting, unit tests, PostgreSQL
-      integration tests, and the web build.
-
-Accepted outcome: the focused plan reflects implemented behavior and the
-feature passes the repository's normal quality gates.
-
-## Deferred Decisions
-
-Revisit these only when a concrete product requirement needs them:
-
-- an acknowledged-problems view and explicit unacknowledge API;
-- team-wide acknowledgement or assignment;
-- durable problem occurrence and resolution history;
-- acknowledgement retention or archival;
-- pagination and whole-query bulk operations for unusually large Inboxes;
-- server-pushed Inbox updates;
-- notification delivery and escalation;
-- a general audit-event model covering acknowledgement and administration.
