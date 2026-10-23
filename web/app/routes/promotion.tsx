@@ -49,8 +49,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(title) }];
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const client = createServerAPIClient(request);
+export async function loader({ context, params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request, context);
   const [promotionResult, principalResult] = await Promise.all([
     getPromotion({ client, path: { promotionId: params.promotionId } }),
     getCurrentPrincipal({ client }),
@@ -91,7 +91,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ params, request }: Route.ActionArgs) {
+export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const decision = formValue(formData, "decision");
   if (decision !== "approved" && decision !== "rejected") {
@@ -100,7 +100,7 @@ export async function action({ params, request }: Route.ActionArgs) {
   const comment = optionalFormValue(formData, "comment");
   const result = await decidePromotion({
     body: { comment, decision },
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
     path: { promotionId: params.promotionId },
   });
 

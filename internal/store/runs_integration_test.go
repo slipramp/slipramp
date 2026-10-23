@@ -112,8 +112,16 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	second.IdempotencyKey = nil
 	second.RequestDigest = strings.Repeat("c", 64)
 	second.CreatedAt = record.CreatedAt.Add(time.Minute)
-	if _, err := database.CreateRun(ctx, second); err != nil {
+	rerunMode := run.RerunModeLatest
+	second.RerunOfRunID = &record.ID
+	second.RerunMode = &rerunMode
+	createdSecond, err := database.CreateRun(ctx, second)
+	if err != nil {
 		t.Fatalf("create second Run: %v", err)
+	}
+	if createdSecond.RerunOfRunID == nil || *createdSecond.RerunOfRunID != record.ID ||
+		createdSecond.RerunMode == nil || *createdSecond.RerunMode != run.RerunModeLatest {
+		t.Errorf("rerun provenance = (%v, %v)", createdSecond.RerunOfRunID, createdSecond.RerunMode)
 	}
 
 	listed, err := database.ListRuns(ctx, run.RunListFilter{Limit: 10})

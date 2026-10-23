@@ -46,8 +46,8 @@ export function meta() {
   return [{ title: pageTitle("Inbox") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const client = createServerAPIClient(request);
+export async function loader({ context, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request, context);
   const [
     principalResult,
     readinessResult,

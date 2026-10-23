@@ -5,6 +5,7 @@ import {
   abbreviateMiddle,
   formatBinarySize,
   formatDuration,
+  formatElapsedDuration,
   formatRelativeTime,
   shortIdentifier,
 } from "./display.ts";
@@ -27,6 +28,15 @@ test("formats compact durations and identifiers", () => {
   assert.equal(formatDuration("2026-10-22T17:00:00Z", "2026-10-22T18:03:04Z"), "1h 3m");
   assert.equal(shortIdentifier("0123456789abcdef"), "01234567");
   assert.equal(shortIdentifier("0123456789abcdef", 12), "0123456789ab");
+});
+
+test("formats elapsed durations with seconds at every scale", () => {
+  assert.equal(formatElapsedDuration("2026-10-22T18:00:00Z", "2026-10-22T18:00:09Z"), "9s");
+  assert.equal(formatElapsedDuration("2026-10-22T17:00:00Z", "2026-10-22T18:03:04Z"), "1h 3m 4s");
+  assert.equal(
+    formatElapsedDuration("2026-10-21T17:00:00Z", "2026-10-22T18:03:04Z"),
+    "1d 1h 3m 4s",
+  );
 });
 
 test("abbreviates long labels while preserving both ends", () => {

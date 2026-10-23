@@ -155,6 +155,12 @@ in as described in [AUTH.md](./AUTH.md).
 - Treat manual and API run requests as always available unless the deployment later adds policy.
 - Route UI and API requests through one run-creation service rather than dispatching Jobs directly.
 - Record a structured run source and accept an optional idempotency key.
+- Allow finished Runs to create a new exact or latest rerun. Exact reruns copy
+  the frozen execution snapshot and retained artifact inputs; latest reruns
+  resolve the same target, action, and parameter values from the active catalog
+  and current placement configuration. Record the parent Run and rerun mode,
+  while deriving source and actor from the new request boundary. Reject latest
+  reruns with artifact inputs.
 - Keep the run-creation boundary independent from HTTP so Git delivery and
   future schedule or webhook triggers call the same service.
 - Dispatch persisted Git-trigger deliveries with their exact catalog revision

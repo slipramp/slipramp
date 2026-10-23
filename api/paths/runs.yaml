@@ -292,3 +292,97 @@ cancelRun:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+rerunRun:
+  post:
+    operationId: rerunRun
+    summary: Rerun a finished Run
+    description: >-
+      Creates a new immutable queued Run from a finished Run. Exact mode reuses
+      the original frozen execution snapshot. Latest mode resolves the same
+      target, action, and parameters against the active catalog and current
+      placement configuration. Latest mode is unavailable when the original
+      Run has artifact inputs.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Runs
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        description: Finished Run to execute again.
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: >-
+          Optional key that makes retries of the same rerun request return the
+          originally created Run. Authenticated keys are scoped to the calling
+          principal. Reusing a key for a different request is a conflict.
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 128
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/runs.yaml#/RunRerun
+    responses:
+      "201":
+        description: The queued rerun was created or recovered by idempotency key.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/runs.yaml#/Run
+      "400":
+        description: The request or parameters are invalid for the selected mode.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Operator permission and runs-write scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: >-
+          The original Run or a current catalog resource required by latest
+          mode does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: >-
+          The original Run is unfinished, latest mode cannot reuse its artifact
+          inputs, an exact input is unavailable, or the idempotency key conflicts.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The rerun could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

@@ -393,6 +393,14 @@ export type Run = {
   placement: CatalogName;
   cluster: CatalogName;
   source: RunSource;
+  /**
+   * Immediate parent Run when this Run was created by a rerun operation.
+   */
+  rerunOfRunId?: string;
+  /**
+   * Resolution mode used to rerun the parent Run.
+   */
+  rerunMode?: RunRerunMode;
   createdBy?: RunActor;
   canceledBy?: RunActor;
   inputs: {
@@ -459,6 +467,15 @@ export type RunCreate = {
     [key: string]: string;
   };
 };
+
+export type RunRerun = {
+  /**
+   * Exact reuses the original Run's frozen commit, catalog, parameters, artifact inputs, and execution configuration. Latest resolves the original target, action, and parameters against the active catalog and current placement configuration.
+   */
+  mode: RunRerunMode;
+};
+
+export type RunRerunMode = "exact" | "latest";
 
 export type RunActor = {
   /**
@@ -2158,6 +2175,66 @@ export type CancelRunResponses = {
 };
 
 export type CancelRunResponse = CancelRunResponses[keyof CancelRunResponses];
+
+export type RerunRunData = {
+  body: RunRerun;
+  headers?: {
+    /**
+     * Optional key that makes retries of the same rerun request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
+     */
+    "Idempotency-Key"?: string;
+  };
+  path: {
+    /**
+     * Finished Run to execute again.
+     */
+    runId: string;
+  };
+  query?: never;
+  url: "/api/v1/runs/{runId}/rerun";
+};
+
+export type RerunRunErrors = {
+  /**
+   * The request or parameters are invalid for the selected mode.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Operator permission and runs-write scope are required.
+   */
+  403: Problem;
+  /**
+   * The original Run or a current catalog resource required by latest mode does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The original Run is unfinished, latest mode cannot reuse its artifact inputs, an exact input is unavailable, or the idempotency key conflicts.
+   */
+  409: Problem;
+  /**
+   * The rerun could not be created.
+   */
+  500: Problem;
+};
+
+export type RerunRunError = RerunRunErrors[keyof RerunRunErrors];
+
+export type RerunRunResponses = {
+  /**
+   * The queued rerun was created or recovered by idempotency key.
+   */
+  201: Run;
+};
+
+export type RerunRunResponse = RerunRunResponses[keyof RerunRunResponses];
 
 export type ListRunArtifactsData = {
   body?: never;

@@ -279,6 +279,8 @@ type Run struct {
 	CreatedBySnapshot       []byte
 	CanceledByPrincipalID   pgtype.UUID
 	CanceledBySnapshot      []byte
+	RerunOfRunID            pgtype.UUID
+	RerunMode               *string
 }
 
 type RunArtifactInput struct {

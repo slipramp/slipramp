@@ -45,7 +45,7 @@ export function meta() {
   return [{ title: pageTitle("Promotion stages") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const archivedFilter = url.searchParams.get("archived") ?? "active";
   const integration = optionalValue(url.searchParams.get("integration"));
@@ -53,7 +53,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const application = optionalValue(url.searchParams.get("application"));
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const [stagesResult, principalResult] = await Promise.all([
     listPromotionStages({
       client,
@@ -94,7 +94,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ context, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const stageId = formValue(formData, "stageId");
   const mode = formValue(formData, "mode") as PromotionPolicyMode;
@@ -106,7 +106,7 @@ export async function action({ request }: Route.ActionArgs) {
       reason,
       expiresAt: mode === "review-required" ? expiresAtValue : undefined,
     },
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
     path: { stageId },
   });
 

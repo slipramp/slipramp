@@ -217,6 +217,8 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 			Source:               source,
 			IdempotencyKey:       record.IdempotencyKey,
 			RequestDigest:        record.RequestDigest,
+			RerunOfRunID:         optionalDatabaseUUID(record.RerunOfRunID),
+			RerunMode:            optionalRerunMode(record.RerunMode),
 			Snapshot:             snapshot,
 			CreatedByPrincipalID: createdByPrincipalID,
 			CreatedBySnapshot:    createdBySnapshot,
@@ -355,6 +357,8 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		Source:                  source,
 		IdempotencyKey:          row.IdempotencyKey,
 		RequestDigest:           row.RequestDigest,
+		RerunOfRunID:            applicationUUID(row.RerunOfRunID),
+		RerunMode:               applicationRerunMode(row.RerunMode),
 		Snapshot:                snapshot,
 		CreatedBy:               createdBy,
 		CanceledBy:              canceledBy,
@@ -370,6 +374,26 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		OutcomeMessage:          row.OutcomeMessage,
 		ExitCode:                row.ExitCode,
 	}, nil
+}
+
+func optionalRerunMode(value *run.RerunMode) *string {
+	if value == nil {
+		return nil
+	}
+
+	converted := string(*value)
+
+	return &converted
+}
+
+func applicationRerunMode(value *string) *run.RerunMode {
+	if value == nil {
+		return nil
+	}
+
+	converted := run.RerunMode(*value)
+
+	return &converted
 }
 
 func actorDatabaseFields(actor *productidentity.ActorSnapshot) (pgtype.UUID, []byte, error) {

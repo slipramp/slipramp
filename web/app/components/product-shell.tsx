@@ -45,6 +45,7 @@ import { Form, Link, useLocation } from "react-router";
 
 import type { ProductPrincipal } from "~/api/generated";
 import { Identity } from "~/components/identity";
+import { PerformanceFooter } from "~/components/performance-footer";
 
 type NavigationItem = {
   icon: TablerIcon;
@@ -205,7 +206,10 @@ export function ProductShell({
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Box className="page-surface">{children}</Box>
+        <Box className="page-surface">
+          <Box className="page-content">{children}</Box>
+          <PerformanceFooter />
+        </Box>
       </AppShell.Main>
     </AppShell>
   );

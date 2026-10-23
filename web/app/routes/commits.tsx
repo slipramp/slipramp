@@ -24,12 +24,12 @@ export function meta() {
   return [{ title: pageTitle("Commit history") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
   const repositoryId = url.searchParams.get("repositoryId")?.trim() || undefined;
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const [commitsResult, repositoriesResult] = await Promise.all([
     listCommits({
       client,

@@ -40,14 +40,14 @@ export function meta() {
   return [{ title: pageTitle("Run history") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const repositoryId = optionalSearchValue(url, "repositoryId");
   const target = repositoryId ? optionalSearchValue(url, "target") : undefined;
   const cluster = optionalSearchValue(url, "cluster");
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const offset = (requestedPage - 1) * pageSize;
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const [initialRunsResult, repositoriesResult, clustersResult] = await Promise.all([
     listRuns({
       client,

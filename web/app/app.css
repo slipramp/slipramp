@@ -113,9 +113,35 @@ a {
 }
 
 .page-surface {
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  min-height: calc(
+    100dvh - var(--app-shell-header-offset, 0rem) - var(--app-shell-footer-offset, 0rem) -
+      var(--app-shell-padding, 0rem) - var(--app-shell-padding, 0rem)
+  );
   max-width: 1500px;
   margin-inline: auto;
+}
+
+.page-content {
+  flex: 1 0 auto;
+}
+
+.performance-footer {
+  margin-top: var(--mantine-spacing-xl);
+}
+
+.performance-metric-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-metric-value {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .page-surface h1 {

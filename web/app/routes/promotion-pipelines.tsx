@@ -43,7 +43,7 @@ export function meta() {
   return [{ title: pageTitle("Promotion pipelines") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const integration = optionalValue(url.searchParams.get("integration"));
   const project = optionalValue(url.searchParams.get("project"));
@@ -52,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const status = optionalFreightStatus(url.searchParams.get("status"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listPromotionPipelines({
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
     query: {
       application,
       integration,

@@ -573,6 +573,24 @@ func (e RunObservationPhase) Valid() bool {
 	}
 }
 
+// Defines values for RunRerunMode.
+const (
+	RunRerunModeExact  RunRerunMode = "exact"
+	RunRerunModeLatest RunRerunMode = "latest"
+)
+
+// Valid indicates whether the value is a known member of the RunRerunMode enum.
+func (e RunRerunMode) Valid() bool {
+	switch e {
+	case RunRerunModeExact:
+		return true
+	case RunRerunModeLatest:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunSourceType.
 const (
 	RunSourceTypeAPI       RunSourceType = "api"
@@ -1581,9 +1599,15 @@ type Run struct {
 	Placement    CatalogName        `json:"placement"`
 	PreparingAt  *time.Time         `json:"preparingAt,omitempty"`
 	RepositoryID openapi_types.UUID `json:"repositoryId"`
-	Source       RunSource          `json:"source"`
-	StartedAt    *time.Time         `json:"startedAt,omitempty"`
-	Target       CatalogName        `json:"target"`
+
+	// RerunMode Resolution mode used to rerun the parent Run.
+	RerunMode *RunRerunMode `json:"rerunMode,omitempty"`
+
+	// RerunOfRunID Immediate parent Run when this Run was created by a rerun operation.
+	RerunOfRunID *openapi_types.UUID `json:"rerunOfRunId,omitempty"`
+	Source       RunSource           `json:"source"`
+	StartedAt    *time.Time          `json:"startedAt,omitempty"`
+	Target       CatalogName         `json:"target"`
 }
 
 // RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
@@ -1767,6 +1791,15 @@ type RunObservationOutcome string
 
 // RunObservationPhase Lifecycle phase observed from the Run's Kubernetes Job.
 type RunObservationPhase string
+
+// RunRerun defines model for RunRerun.
+type RunRerun struct {
+	// Mode Exact reuses the original Run's frozen commit, catalog, parameters, artifact inputs, and execution configuration. Latest resolves the original target, action, and parameters against the active catalog and current placement configuration.
+	Mode RunRerunMode `json:"mode"`
+}
+
+// RunRerunMode defines model for RunRerunMode.
+type RunRerunMode string
 
 // RunSource defines model for RunSource.
 type RunSource struct {
@@ -2070,6 +2103,12 @@ type StreamRunLogParams struct {
 	LastEventID *string `json:"Last-Event-ID,omitempty"`
 }
 
+// RerunRunParams defines parameters for RerunRun.
+type RerunRunParams struct {
+	// IdempotencyKey Optional key that makes retries of the same rerun request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
+	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
+}
+
 // ListServiceAccountsParams defines parameters for ListServiceAccounts.
 type ListServiceAccountsParams struct {
 	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
@@ -2134,6 +2173,9 @@ type UpdateRepositoryJSONRequestBody = RepositoryUpdate
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = RunCreate
+
+// RerunRunJSONRequestBody defines body for RerunRun for application/json ContentType.
+type RerunRunJSONRequestBody = RunRerun
 
 // CreateServiceAccountJSONRequestBody defines body for CreateServiceAccount for application/json ContentType.
 type CreateServiceAccountJSONRequestBody = ServiceAccountCreate
@@ -2569,6 +2611,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 	StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RerunRunWithBody Rerun a finished Run
+	//
+	// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+	RerunRunWithBody(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RerunRun Rerun a finished Run
+	//
+	// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+	RerunRun(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListServiceAccounts List service accounts
 	//
@@ -3351,6 +3411,44 @@ func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEdi
 // Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 func (c *Client) StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStreamRunLogRequest(c.Server, runID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RerunRunWithBody Rerun a finished Run
+//
+// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+func (c *Client) RerunRunWithBody(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRerunRunRequestWithBody(c.Server, runID, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RerunRun Rerun a finished Run
+//
+// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+func (c *Client) RerunRun(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRerunRunRequest(c.Server, runID, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5698,6 +5796,68 @@ func NewStreamRunLogRequest(server string, runID openapi_types.UUID, params *Str
 	return req, nil
 }
 
+// NewRerunRunRequest calls the generic RerunRun builder with application/json body
+func NewRerunRunRequest(server string, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRerunRunRequestWithBody(server, runID, params, "application/json", bodyReader)
+}
+
+// NewRerunRunRequestWithBody constructs an http.Request for the RerunRun method, with any body, and a specified content type
+func NewRerunRunRequestWithBody(server string, runID openapi_types.UUID, params *RerunRunParams, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/rerun", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	if params != nil {
+
+		if params.IdempotencyKey != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "Idempotency-Key", *params.IdempotencyKey, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("Idempotency-Key", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewListServiceAccountsRequest constructs an http.Request for the ListServiceAccounts method
 func NewListServiceAccountsRequest(server string, params *ListServiceAccountsParams) (*http.Request, error) {
 	var err error
@@ -6871,6 +7031,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 	StreamRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*StreamRunLogResponse, error)
+
+	// RerunRunWithBodyWithResponse Rerun a finished Run
+	//
+	// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+	RerunRunWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RerunRunResponse, error)
+
+	// RerunRunWithResponse Rerun a finished Run
+	//
+	// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+	RerunRunWithResponse(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody, reqEditors ...RequestEditorFn) (*RerunRunResponse, error)
 
 	// ListServiceAccountsWithResponse List service accounts
 	//
@@ -9363,6 +9541,96 @@ func (r StreamRunLogResponse) ContentType() string {
 	return ""
 }
 
+type RerunRunResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Run
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r RerunRunResponse) GetJSON201() *Run {
+	return r.JSON201
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RerunRunResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RerunRunResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RerunRunResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RerunRunResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListServiceAccountsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11120,6 +11388,36 @@ func (c *ClientWithResponses) StreamRunLogWithResponse(ctx context.Context, runI
 		return nil, err
 	}
 	return ParseStreamRunLogResponse(rsp)
+}
+
+// RerunRunWithBodyWithResponse Rerun a finished Run
+//
+// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+func (c *ClientWithResponses) RerunRunWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RerunRunResponse, error) {
+	rsp, err := c.RerunRunWithBody(ctx, runID, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRerunRunResponse(rsp)
+}
+
+// RerunRunWithResponse Rerun a finished Run
+//
+// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
+func (c *ClientWithResponses) RerunRunWithResponse(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody, reqEditors ...RequestEditorFn) (*RerunRunResponse, error) {
+	rsp, err := c.RerunRun(ctx, runID, params, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRerunRunResponse(rsp)
 }
 
 // ListServiceAccountsWithResponse List service accounts
@@ -13393,6 +13691,81 @@ func ParseStreamRunLogResponse(rsp *http.Response) (*StreamRunLogResponse, error
 	return response, nil
 }
 
+// ParseRerunRunResponse parses an HTTP response from a RerunRunWithResponse call
+func ParseRerunRunResponse(rsp *http.Response) (*RerunRunResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RerunRunResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Run
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListServiceAccountsResponse parses an HTTP response from a ListServiceAccountsWithResponse call
 func ParseListServiceAccountsResponse(rsp *http.Response) (*ListServiceAccountsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14499,6 +14872,9 @@ type ServerInterface interface {
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
 	StreamRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params StreamRunLogParams)
+	// RerunRun Rerun a finished Run
+	// (POST /api/v1/runs/{runId}/rerun)
+	RerunRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params RerunRunParams)
 	// ListServiceAccounts List service accounts
 	// (GET /api/v1/service-accounts)
 	ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams)
@@ -16077,6 +16453,56 @@ func (siw *ServerInterfaceWrapper) StreamRunLog(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// RerunRun operation middleware
+func (siw *ServerInterfaceWrapper) RerunRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RerunRunParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = &IdempotencyKey
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RerunRun(w, r, runID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListServiceAccounts operation middleware
 func (siw *ServerInterfaceWrapper) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
 
@@ -16777,6 +17203,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs", wrapper.CreateRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}", wrapper.GetRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/cancel", wrapper.CancelRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/rerun", wrapper.RerunRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/artifacts", wrapper.ListRunArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/logs", wrapper.StreamRunLog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/download", wrapper.DownloadArtifact)
@@ -19784,6 +20211,128 @@ func (response StreamRunLog500ApplicationProblemPlusJSONResponse) VisitStreamRun
 	return err
 }
 
+type RerunRunRequestObject struct {
+	RunID  openapi_types.UUID `json:"runId"`
+	Params RerunRunParams
+	Body   *RerunRunJSONRequestBody
+}
+
+type RerunRunResponseObject interface {
+	VisitRerunRunResponse(w http.ResponseWriter) error
+}
+
+type RerunRun201JSONResponse Run
+
+func (response RerunRun201JSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun400ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun400ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun401ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun401ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun403ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun403ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun404ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun405ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun405ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun409ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun409ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun500ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun500ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListServiceAccountsRequestObject struct {
 	Params ListServiceAccountsParams
 }
@@ -21413,6 +21962,9 @@ type StrictServerInterface interface {
 	// StreamRunLog Stream retained and live Run log bytes
 	// (GET /api/v1/runs/{runId}/logs)
 	StreamRunLog(ctx context.Context, request StreamRunLogRequestObject) (StreamRunLogResponseObject, error)
+	// RerunRun Rerun a finished Run
+	// (POST /api/v1/runs/{runId}/rerun)
+	RerunRun(ctx context.Context, request RerunRunRequestObject) (RerunRunResponseObject, error)
 	// ListServiceAccounts List service accounts
 	// (GET /api/v1/service-accounts)
 	ListServiceAccounts(ctx context.Context, request ListServiceAccountsRequestObject) (ListServiceAccountsResponseObject, error)
@@ -22322,6 +22874,40 @@ func (sh *strictHandler) StreamRunLog(w http.ResponseWriter, r *http.Request, ru
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StreamRunLogResponseObject); ok {
 		if err := validResponse.VisitStreamRunLogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RerunRun operation middleware
+func (sh *strictHandler) RerunRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params RerunRunParams) {
+	var request RerunRunRequestObject
+
+	request.RunID = runID
+	request.Params = params
+
+	var body RerunRunJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RerunRun(ctx, request.(RerunRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RerunRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RerunRunResponseObject); ok {
+		if err := validResponse.VisitRerunRunResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

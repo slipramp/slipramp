@@ -445,6 +445,99 @@ func TestCancelRun(t *testing.T) {
 	}
 }
 
+func TestRerunRun(t *testing.T) {
+	t.Parallel()
+
+	originalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	rerunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
+	mode := run.RerunModeExact
+	runs := &recordingRunService{
+		rerun: run.Run{
+			ID:           rerunID,
+			Phase:        run.PhaseQueued,
+			Parameters:   map[string]any{},
+			RerunOfRunID: &originalID,
+			RerunMode:    &mode,
+		},
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/api/v1/runs/"+originalID.String()+"/rerun",
+		bytes.NewBufferString(`{"mode":"exact"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Idempotency-Key", "exact-rerun")
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusCreated, response.Body)
+	}
+	if runs.rerunRequest.RunID != originalID || runs.rerunRequest.Mode != run.RerunModeExact ||
+		runs.rerunRequest.Source.Type != run.SourceTypeAPI || runs.rerunRequest.IdempotencyKey == nil ||
+		*runs.rerunRequest.IdempotencyKey != "exact-rerun" {
+		t.Errorf("rerun request = %#v", runs.rerunRequest)
+	}
+
+	var result api.Run
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.ID != rerunID || result.RerunOfRunID == nil || *result.RerunOfRunID != originalID ||
+		result.RerunMode == nil || *result.RerunMode != api.RunRerunModeExact {
+		t.Errorf("Run response = %#v", result)
+	}
+}
+
+func TestRerunRunMapsExpectedFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "missing Run", err: run.ErrRunNotFound, wantStatus: http.StatusNotFound},
+		{name: "unfinished Run", err: run.ErrRunNotFinished, wantStatus: http.StatusConflict},
+		{name: "latest artifact inputs", err: run.ErrLatestRerunInputs, wantStatus: http.StatusConflict},
+		{name: "expired artifact inputs", err: run.ErrRerunInputsMissing, wantStatus: http.StatusConflict},
+		{name: "invalid latest parameters", err: run.ErrInvalidParameters, wantStatus: http.StatusBadRequest},
+		{name: "missing latest action", err: run.ErrActionNotFound, wantStatus: http.StatusNotFound},
+		{name: "persistence failure", err: errors.New("database unavailable"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/api/v1/runs/018f90ff-9fd8-7b5f-b7e1-f32ff54c1202/rerun",
+				bytes.NewBufferString(`{"mode":"latest"}`),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			newAdminTestHandler(
+				&recordingClusterService{},
+				nil,
+				nil,
+				nil,
+				&recordingRunService{rerunError: test.err},
+				nil,
+				nil,
+			).ServeHTTP(response, request)
+
+			assertProblem(t, response, test.wantStatus)
+			if strings.Contains(response.Body.String(), "database unavailable") {
+				t.Error("internal error details were exposed in the problem response")
+			}
+		})
+	}
+}
+
 func TestGetRunReportsDerivedObservationState(t *testing.T) {
 	t.Parallel()
 
@@ -537,6 +630,9 @@ type recordingRunService struct {
 	request         run.CreateRequest
 	created         run.Run
 	err             error
+	rerunRequest    run.RerunRequest
+	rerun           run.Run
+	rerunError      error
 	loaded          run.Run
 	loadError       error
 	nextClusterName string
@@ -600,6 +696,12 @@ func (s *recordingRunService) CreateRun(_ context.Context, request run.CreateReq
 	s.request = request
 
 	return s.created, s.err
+}
+
+func (s *recordingRunService) RerunRun(_ context.Context, request run.RerunRequest) (run.Run, error) {
+	s.rerunRequest = request
+
+	return s.rerun, s.rerunError
 }
 
 func (s *recordingRunService) ReportObservation(_ context.Context, observation run.Observation) error {

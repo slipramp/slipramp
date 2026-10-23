@@ -22,6 +22,7 @@ import {
   IconLoader2,
   IconPlayerPlay,
   IconPlayerStop,
+  IconRefresh,
   IconServer2,
   IconX,
   type TablerIcon,
@@ -37,6 +38,7 @@ import {
   getRun,
   listRepositories,
   listRunArtifacts,
+  rerunRun,
   type Artifact,
   type Run,
   type RunArtifactConsumer,
@@ -47,22 +49,28 @@ import { CommitDetails, CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, SectionHeader } from "~/components/page";
-import { formatBinarySize, formatDuration, shortIdentifier } from "~/display";
+import {
+  formatBinarySize,
+  formatDuration,
+  formatElapsedDuration,
+  shortIdentifier,
+} from "~/display";
 import { pageTitle } from "~/page-title";
 import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 
 import type { Route } from "./+types/run";
 
-const runRevalidationIntervalMs = 2000;
+const elapsedTimerIntervalMs = 1000;
+const runRevalidationIntervalMs = 1000;
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const runName = loaderData?.run ? `Run ${loaderData.run.id.slice(0, 8)}` : "Run";
   return [{ title: pageTitle(runName) }];
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const client = createServerAPIClient(request);
+export async function loader({ context, params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request, context);
   const [runResult, artifactResult, repositoriesResult] = await Promise.all([
     getRun({ client, path: { runId: params.runId } }),
     listRunArtifacts({ client, path: { runId: params.runId } }),
@@ -74,17 +82,18 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     repositoryName: repositoriesResult.data?.items.find(
       (repository) => repository.id === runResult.data?.repositoryId,
     )?.name,
+    rerunKey: crypto.randomUUID(),
     run: runResult.data,
     runId: params.runId,
   };
 }
 
-export async function action({ params, request }: Route.ActionArgs) {
+export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
   if (intent === "cancel") {
     const result = await cancelRun({
-      client: createServerAPIClient(request),
+      client: createServerAPIClient(request, context),
       path: { runId: params.runId },
     });
     if (result.data) {
@@ -93,6 +102,24 @@ export async function action({ params, request }: Route.ActionArgs) {
 
     return {
       error: result.error?.detail ?? result.error?.title ?? "The Run could not be canceled.",
+    };
+  }
+
+  if (intent === "rerun-exact" || intent === "rerun-latest") {
+    const idempotencyKey = formData.get("idempotencyKey");
+    const result = await rerunRun({
+      body: { mode: intent === "rerun-exact" ? "exact" : "latest" },
+      client: createServerAPIClient(request, context),
+      headers:
+        typeof idempotencyKey === "string" ? { "Idempotency-Key": idempotencyKey } : undefined,
+      path: { runId: params.runId },
+    });
+    if (result.data) {
+      return redirect(`/runs/${result.data.id}`);
+    }
+
+    return {
+      error: result.error?.detail ?? result.error?.title ?? "The Run could not be started again.",
     };
   }
 
@@ -113,7 +140,7 @@ export async function action({ params, request }: Route.ActionArgs) {
     return { error: "The artifact selection is incomplete." };
   }
 
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const producerResult = await getRun({ client, path: { runId: params.runId } });
   const producer = producerResult.data;
   const consumer = producer?.artifactConsumers[artifactName]?.find(
@@ -170,7 +197,55 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     <Stack gap="lg">
       <PageHeader
         actions={
-          run.phase !== "finished" && run.cancellationRequestedAt === undefined ? (
+          run.phase === "finished" ? (
+            <Group gap="sm" wrap="wrap">
+              <Form method="post">
+                <input name="intent" type="hidden" value="rerun-exact" />
+                <input
+                  name="idempotencyKey"
+                  type="hidden"
+                  value={`${loaderData.rerunKey}:exact`}
+                />
+                <Button
+                  leftSection={<IconRefresh aria-hidden size={16} />}
+                  loading={
+                    navigation.state === "submitting" &&
+                    navigation.formData?.get("intent") === "rerun-exact"
+                  }
+                  size="compact-md"
+                  type="submit"
+                >
+                  {run.outcome === "succeeded" ? "Run same revision" : "Retry same revision"}
+                </Button>
+              </Form>
+              <Form method="post">
+                <input name="intent" type="hidden" value="rerun-latest" />
+                <input
+                  name="idempotencyKey"
+                  type="hidden"
+                  value={`${loaderData.rerunKey}:latest`}
+                />
+                <Button
+                  disabled={Object.keys(run.inputs).length > 0}
+                  leftSection={<IconPlayerPlay aria-hidden size={16} />}
+                  loading={
+                    navigation.state === "submitting" &&
+                    navigation.formData?.get("intent") === "rerun-latest"
+                  }
+                  size="compact-md"
+                  title={
+                    Object.keys(run.inputs).length > 0
+                      ? "Runs with artifact inputs stay pinned to the producing revision."
+                      : "Resolve this target, action, and its parameters from the latest catalog revision."
+                  }
+                  type="submit"
+                  variant="light"
+                >
+                  Run latest revision
+                </Button>
+              </Form>
+            </Group>
+          ) : run.cancellationRequestedAt === undefined ? (
             <Form method="post">
               <input name="intent" type="hidden" value="cancel" />
               <Button
@@ -319,6 +394,14 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
             <Fact label="Run ID">
               <Code style={{ overflowWrap: "anywhere" }}>{run.id}</Code>
             </Fact>
+            {run.rerunOfRunId && run.rerunMode ? (
+              <Fact label="Run again">
+                <Anchor component={Link} to={`/runs/${run.rerunOfRunId}`}>
+                  {run.rerunMode === "exact" ? "Same revision as" : "Latest revision from"} Run{" "}
+                  {shortIdentifier(run.rerunOfRunId)}
+                </Anchor>
+              </Fact>
+            ) : null}
             <Fact label="Job UID">
               {run.jobUid ? (
                 <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
@@ -360,6 +443,7 @@ function Fact({ children, label }: Readonly<{ children: ReactNode; label: string
 
 function RunLifecycle({ run }: Readonly<{ run: Run }>) {
   const activeStep = lifecycleActiveStep(run);
+  const currentTime = useCurrentTime(run.phase !== "finished");
   const steps: Array<{
     detail: ReactNode;
     icon: TablerIcon;
@@ -373,6 +457,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
         activeStep === 0,
         "Waiting for assignment",
         "Waited",
+        currentTime,
       ),
       icon: IconClock,
       label: "Queued",
@@ -385,6 +470,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
         activeStep === 1,
         "Waiting for Job materialization",
         "Job materialized in",
+        currentTime,
       ),
       icon: IconServer2,
       label: "Assigned",
@@ -397,6 +483,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
         activeStep === 2,
         "Preparing checkout and inputs",
         "Prepared in",
+        currentTime,
       ),
       icon: IconLoader2,
       label: "Preparing",
@@ -409,6 +496,7 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
         activeStep === 3,
         "Action is executing",
         "Executed for",
+        currentTime,
       ),
       icon: IconPlayerPlay,
       label: "Running",
@@ -538,11 +626,32 @@ function lifecycleDuration(
   active: boolean,
   activeLabel: string,
   completeLabel: string,
+  currentTime: Date | undefined,
 ) {
   if (!start) return "Not reached";
   if (end) return `${completeLabel} ${formatDuration(start, end)}`;
-  if (active) return activeLabel;
+  if (active) {
+    const elapsed = currentTime ? ` · ${formatElapsedDuration(start, currentTime)} elapsed` : "";
+    return `${activeLabel}${elapsed}`;
+  }
   return "Transition timestamp unavailable";
+}
+
+function useCurrentTime(active: boolean) {
+  const [currentTime, setCurrentTime] = useState<Date>();
+
+  useEffect(() => {
+    if (!active) return;
+
+    const initialTimer = window.setTimeout(() => setCurrentTime(new Date()), 0);
+    const timer = window.setInterval(() => setCurrentTime(new Date()), elapsedTimerIntervalMs);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
+  }, [active]);
+
+  return currentTime;
 }
 
 function finishedIcon(run: Run): TablerIcon {

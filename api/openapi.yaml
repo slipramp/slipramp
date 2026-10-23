@@ -42,6 +42,8 @@ paths:
     $ref: ./paths/runs.yaml#/run
   /api/v1/runs/{runId}/cancel:
     $ref: ./paths/runs.yaml#/cancelRun
+  /api/v1/runs/{runId}/rerun:
+    $ref: ./paths/runs.yaml#/rerunRun
   /api/v1/runs/{runId}/artifacts:
     $ref: ./paths/artifacts.yaml#/runArtifacts
   /api/v1/runs/{runId}/logs:
@@ -175,6 +177,10 @@ components:
       $ref: ./components/runs.yaml#/RunList
     RunCreate:
       $ref: ./components/runs.yaml#/RunCreate
+    RunRerun:
+      $ref: ./components/runs.yaml#/RunRerun
+    RunRerunMode:
+      $ref: ./components/runs.yaml#/RunRerunMode
     RunActor:
       $ref: ./components/runs.yaml#/RunActor
     Artifact:

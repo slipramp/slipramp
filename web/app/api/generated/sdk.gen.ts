@@ -128,6 +128,9 @@ import type {
   ReportRunObservationData,
   ReportRunObservationErrors,
   ReportRunObservationResponses,
+  RerunRunData,
+  RerunRunErrors,
+  RerunRunResponses,
   RevokeApiKeyData,
   RevokeApiKeyErrors,
   RevokeApiKeyResponses,
@@ -702,6 +705,35 @@ export const cancelRun = <ThrowOnError extends boolean = false>(
     ],
     url: "/api/v1/runs/{runId}/cancel",
     ...options,
+  });
+
+/**
+ * Rerun a finished Run
+ *
+ * Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+ */
+export const rerunRun = <ThrowOnError extends boolean = false>(
+  options: Options<RerunRunData, ThrowOnError>,
+): RequestResult<RerunRunResponses, RerunRunErrors, ThrowOnError> =>
+  (options.client ?? client).post<RerunRunResponses, RerunRunErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/runs/{runId}/rerun",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

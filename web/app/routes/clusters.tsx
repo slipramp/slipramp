@@ -33,14 +33,14 @@ export function meta() {
   return [{ title: pageTitle("Clusters") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
   const connection = url.searchParams.get("connection");
   const normalizedConnection =
     connection === "connected" || connection === "unreachable" ? connection : undefined;
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const [readinessResult, clustersResult] = await Promise.all([
     getReadiness({ client }),
     listClusters({

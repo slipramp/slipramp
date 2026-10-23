@@ -40,8 +40,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(loaderData?.repository?.name ?? "Repository") }];
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const client = createServerAPIClient(request);
+export async function loader({ context, params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request, context);
   const [repositoriesResult, catalogResult, runsResult, commitsResult] = await Promise.all([
     listRepositories({ client, query: { limit: 200 } }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
@@ -68,13 +68,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ params, request }: Route.ActionArgs) {
+export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const result = await updateRepository({
     body: {
       commitIndexing: formValue(formData, "commitIndexing") as RepositoryCommitIndexingMode,
     },
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
     path: { repositoryId: params.repositoryId },
   });
 

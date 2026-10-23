@@ -96,6 +96,16 @@ The harness is supplied by Slipramp rather than baked into runtime images. Infra
 
 A run is an immutable execution of an action against a target. It captures the exact commit, catalog revision, resolved definitions, parameters, artifact inputs, run source, any available actor identity, and placement configuration used for the operation. Product authentication, authorization, and human attribution follow the incremental design in [AUTH.md](./AUTH.md).
 
+A finished Run can be run again in one of two explicit modes. An exact rerun
+copies the original commit, catalog revision, parameters, artifact inputs, and
+resolved execution snapshot. A latest rerun resolves the original target,
+action, and parameter values against the repository's active catalog revision
+and current placement configuration. Latest reruns are unavailable when the
+original Run has artifact inputs because those inputs pin consumers to their
+producing catalog revision. Both modes create a new immutable Run, preserve a
+link to the immediate parent and the selected mode, and derive their source and
+actor from the boundary that requested the rerun.
+
 ### Artifact
 
 An artifact is an output of a run. Every run creates a log artifact when execution starts, and actions may publish additional named artifacts such as Terraform plans, test results, generated manifests, or diagnostic bundles.

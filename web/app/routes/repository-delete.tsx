@@ -15,9 +15,9 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(`Remove ${loaderData?.repository?.name ?? "repository"}`) }];
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
+export async function loader({ context, params, request }: Route.LoaderArgs) {
   const result = await listRepositories({
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
     query: { limit: 200 },
   });
   return {
@@ -27,9 +27,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ params, request }: Route.ActionArgs) {
+export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const repositoriesResult = await listRepositories({ client, query: { limit: 200 } });
   const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
 

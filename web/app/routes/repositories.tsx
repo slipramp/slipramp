@@ -30,12 +30,12 @@ export function meta() {
   return [{ title: pageTitle("Repositories") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listRepositories({
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
     query: { limit: pageSize, offset: (page - 1) * pageSize, q: query || undefined },
   });
 

@@ -18,14 +18,14 @@ export function meta() {
   return [{ title: pageTitle("Promotion projects") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const integration = optionalValue(url.searchParams.get("integration"));
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const project = optionalValue(url.searchParams.get("project"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listPromotionProjects({
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
     query: {
       cluster,
       integration,

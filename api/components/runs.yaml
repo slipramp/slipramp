@@ -28,6 +28,28 @@ RunCreate:
         catalog compatibility pins the new Run to the producer's commit and
         catalog revision.
 
+RunRerun:
+  type: object
+  required:
+    - mode
+  properties:
+    mode:
+      $ref: "#/RunRerunMode"
+      description: >-
+        Exact reuses the original Run's frozen commit, catalog, parameters,
+        artifact inputs, and execution configuration. Latest resolves the
+        original target, action, and parameters against the active catalog and
+        current placement configuration.
+
+RunRerunMode:
+  type: string
+  enum:
+    - exact
+    - latest
+  x-enum-varnames:
+    - RunRerunModeExact
+    - RunRerunModeLatest
+
 RunList:
   type: object
   required:
@@ -130,6 +152,13 @@ Run:
       $ref: "#/CatalogName"
     source:
       $ref: "#/RunSource"
+    rerunOfRunId:
+      type: string
+      format: uuid
+      description: Immediate parent Run when this Run was created by a rerun operation.
+    rerunMode:
+      $ref: "#/RunRerunMode"
+      description: Resolution mode used to rerun the parent Run.
     createdBy:
       $ref: "#/RunActor"
     canceledBy:

@@ -29,11 +29,14 @@ import { createServerAPIClient } from "~/api/client.server";
 import { getCurrentPrincipal } from "~/api/generated";
 import { ProductShell } from "~/components/product-shell";
 import { pageTitle } from "~/page-title";
+import { serverPerformanceMiddleware } from "~/performance.server";
 import { sliprampTheme } from "~/theme";
 
 import type { Route } from "./+types/root";
 
 const authenticationProxyPaths = new Set(["/api/v1/auth/login", "/api/v1/auth/callback"]);
+
+export const middleware: Route.MiddlewareFunction[] = [serverPerformanceMiddleware];
 
 export function meta() {
   return [{ title: pageTitle() }];
@@ -48,12 +51,12 @@ export function headers() {
   };
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   if (authenticationProxyPaths.has(new URL(request.url).pathname)) {
     return { authentication: "passthrough", principal: undefined } as const;
   }
 
-  const result = await getCurrentPrincipal({ client: createServerAPIClient(request) });
+  const result = await getCurrentPrincipal({ client: createServerAPIClient(request, context) });
   if (result.data) {
     return { authentication: "authenticated", principal: result.data } as const;
   }

@@ -42,8 +42,8 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(targetName) }];
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const client = createServerAPIClient(request);
+export async function loader({ context, params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request, context);
   const [repositoriesResult, catalogResult] = await Promise.all([
     listRepositories({ client, query: { limit: 200 } }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),

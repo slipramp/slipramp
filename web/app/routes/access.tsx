@@ -20,10 +20,10 @@ export function meta() {
   return [{ title: pageTitle("Personal API keys") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const [principalResult, apiKeysResult] = await Promise.all([
     getCurrentPrincipal({ client }),
     listApiKeys({ client, query: { limit: pageSize, offset: (page - 1) * pageSize } }),
@@ -48,9 +48,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ context, request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
 
   switch (formValue(formData, "intent")) {
     case "create-api-key": {

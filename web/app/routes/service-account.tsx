@@ -27,10 +27,10 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: pageTitle(loaderData?.serviceAccount?.displayName ?? "Service account") }];
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
+export async function loader({ context, params, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const [principalResult, accountResult, keysResult] = await Promise.all([
     getCurrentPrincipal({ client }),
     getServiceAccount({ client, path: { principalId: params.principalId } }),
@@ -61,9 +61,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ params, request }: Route.ActionArgs) {
+export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   if (formValue(formData, "intent") === "create-service-account-api-key") {
     const result = await createServiceAccountApiKey({
       body: apiKeyCreateBody(formData),

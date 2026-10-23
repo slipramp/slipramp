@@ -21,10 +21,10 @@ export function meta() {
   return [{ title: pageTitle("Service accounts") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const principalResult = await getCurrentPrincipal({ client });
   const principal = principalResult.data;
   if (principal?.role !== "admin") {
@@ -52,7 +52,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ context, request }: Route.ActionArgs) {
   const formData = await request.formData();
   if (formValue(formData, "intent") !== "create-service-account") {
     return { error: "The requested service-account operation is not supported." };
@@ -62,7 +62,7 @@ export async function action({ request }: Route.ActionArgs) {
       displayName: formValue(formData, "displayName"),
       role: formValue(formData, "role") as "admin" | "operator" | "viewer",
     },
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
   });
   return result.data
     ? { message: `Service account ${result.data.displayName} was created.` }

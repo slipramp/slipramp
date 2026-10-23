@@ -21,12 +21,90 @@ import (
 
 type RunService interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
+	RerunRun(ctx context.Context, request run.RerunRequest) (run.Run, error)
 	GetRun(context.Context, uuid.UUID) (run.Run, error)
 	ListRuns(context.Context, run.RunListFilter) (run.RunList, error)
 	CancelRun(ctx context.Context, request run.CancelRequest) (run.Run, error)
 	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
 	NextRunToCancel(ctx context.Context, clusterName string) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
+}
+
+func (h *Handler) RerunRun(
+	ctx context.Context,
+	request api.RerunRunRequestObject,
+) (api.RerunRunResponseObject, error) {
+	created, err := h.runs.RerunRun(
+		ctx,
+		run.RerunRequest{
+			RunID:          request.RunID,
+			Mode:           run.RerunMode(request.Body.Mode),
+			Source:         currentRunSource(ctx),
+			IdempotencyKey: request.Params.IdempotencyKey,
+			Actor:          currentProductPrincipal(ctx),
+		},
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, run.ErrInvalidRequest),
+			errors.Is(err, run.ErrInvalidParameters),
+			errors.Is(err, run.ErrInvalidInputs):
+			problem := NewProblem(http.StatusBadRequest, err.Error())
+
+			return api.RerunRun400ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrRunNotFound):
+			problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
+
+			return api.RerunRun404ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrRepositoryNotFound),
+			errors.Is(err, run.ErrCatalogNotFound),
+			errors.Is(err, run.ErrTargetNotFound),
+			errors.Is(err, run.ErrActionNotFound),
+			errors.Is(err, run.ErrRuntimeNotFound),
+			errors.Is(err, run.ErrPlacementNotFound),
+			errors.Is(err, run.ErrArtifactNotFound):
+			problem := NewProblem(
+				http.StatusNotFound,
+				"The requested action could not be resolved from the active catalog.",
+			)
+
+			return api.RerunRun404ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrRunNotFinished):
+			problem := NewProblem(http.StatusConflict, "Only a finished Run can be run again.")
+
+			return api.RerunRun409ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrLatestRerunInputs):
+			problem := NewProblem(
+				http.StatusConflict,
+				"A Run with artifact inputs cannot be run against the latest revision.",
+			)
+
+			return api.RerunRun409ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrRerunInputsMissing):
+			problem := NewProblem(
+				http.StatusConflict,
+				"One or more artifact inputs are no longer retained for an exact rerun.",
+			)
+
+			return api.RerunRun409ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrIdempotencyConflict):
+			problem := NewProblem(
+				http.StatusConflict,
+				"The idempotency key was already used for a different run request.",
+			)
+
+			return api.RerunRun409ApplicationProblemPlusJSONResponse(problem), nil
+		default:
+			return nil, err
+		}
+	}
+
+	body, err := h.runResponse(ctx, created)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.RerunRun201JSONResponse(body), nil
 }
 
 func (h *Handler) ListRuns(
@@ -283,6 +361,8 @@ func runResponse(
 		Placement:               api.CatalogName(record.PlacementName),
 		Cluster:                 api.CatalogName(record.ClusterName),
 		Source:                  apiRunSource(record.Source),
+		RerunOfRunID:            record.RerunOfRunID,
+		RerunMode:               apiRerunMode(record.RerunMode),
 		CreatedBy:               apiRunActor(record.CreatedBy),
 		CanceledBy:              apiRunActor(record.CanceledBy),
 		Inputs:                  runInputResponse(record.Snapshot.Inputs, commits),
@@ -299,6 +379,16 @@ func runResponse(
 		OutcomeMessage:          record.OutcomeMessage,
 		ExitCode:                record.ExitCode,
 	}, nil
+}
+
+func apiRerunMode(value *run.RerunMode) *api.RunRerunMode {
+	if value == nil {
+		return nil
+	}
+
+	converted := api.RunRerunMode(*value)
+
+	return &converted
 }
 
 func apiRunSource(source run.Source) api.RunSource {

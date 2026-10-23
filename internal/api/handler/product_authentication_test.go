@@ -141,6 +141,7 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 		operationID string
 	}{
 		{name: "Run cancellation", operationID: "CancelRun"},
+		{name: "Run rerun", operationID: "RerunRun"},
 		{name: "API key revocation", operationID: "RevokeAPIKey"},
 	}
 

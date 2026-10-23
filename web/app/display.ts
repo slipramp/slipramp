@@ -79,6 +79,25 @@ export function formatDuration(start: string | Date, end: string | Date = new Da
   return remainingHours === 0 ? `${days}d` : `${days}d ${remainingHours}h`;
 }
 
+export function formatElapsedDuration(start: string | Date, end: string | Date = new Date()) {
+  const durationSeconds = Math.max(
+    0,
+    Math.floor((asDate(end).getTime() - asDate(start).getTime()) / 1000),
+  );
+  const days = Math.floor(durationSeconds / (24 * 60 * 60));
+  const hours = Math.floor((durationSeconds % (24 * 60 * 60)) / (60 * 60));
+  const minutes = Math.floor((durationSeconds % (60 * 60)) / 60);
+  const seconds = durationSeconds % 60;
+  const parts = [
+    days > 0 ? `${days}d` : undefined,
+    hours > 0 ? `${hours}h` : undefined,
+    minutes > 0 ? `${minutes}m` : undefined,
+    `${seconds}s`,
+  ];
+
+  return parts.filter((part): part is string => part !== undefined).join(" ");
+}
+
 export function shortIdentifier(value: string, length = 8) {
   return value.slice(0, length);
 }

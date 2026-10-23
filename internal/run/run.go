@@ -34,6 +34,9 @@ const (
 	SourceTypeGit       SourceType = "git"
 	SourceTypePromotion SourceType = "promotion"
 
+	RerunModeExact  RerunMode = "exact"
+	RerunModeLatest RerunMode = "latest"
+
 	ReasonCancelRequested       = "CancelRequested"
 	ReasonSupersededByGitChange = "SupersededByGitChange"
 )
@@ -50,6 +53,9 @@ var (
 	ErrRuntimeNotFound     = errors.New("run runtime not found")
 	ErrPlacementNotFound   = errors.New("run placement not found")
 	ErrRunNotFound         = errors.New("run not found")
+	ErrRunNotFinished      = errors.New("run is not finished")
+	ErrLatestRerunInputs   = errors.New("latest rerun does not support artifact inputs")
+	ErrRerunInputsMissing  = errors.New("rerun artifact inputs are no longer available")
 	ErrRunFinished         = errors.New("run already finished")
 	ErrNoRunAssignment     = errors.New("no run assignment available")
 	ErrNoRunToCancel       = errors.New("no run to cancel")
@@ -63,6 +69,8 @@ type Phase string
 type Outcome string
 
 type SourceType string
+
+type RerunMode string
 
 type ObservationState string
 
@@ -106,6 +114,14 @@ type CancelRequest struct {
 	Actor *productidentity.Principal
 }
 
+type RerunRequest struct {
+	RunID          uuid.UUID
+	Mode           RerunMode
+	Source         Source
+	IdempotencyKey *string
+	Actor          *productidentity.Principal
+}
+
 type RunListFilter struct {
 	RepositoryID *uuid.UUID
 	TargetName   string
@@ -147,6 +163,8 @@ type Run struct {
 	Source                  Source
 	IdempotencyKey          *string
 	RequestDigest           string
+	RerunOfRunID            *uuid.UUID
+	RerunMode               *RerunMode
 	Snapshot                Snapshot
 	CreatedBy               *productidentity.ActorSnapshot
 	CanceledBy              *productidentity.ActorSnapshot

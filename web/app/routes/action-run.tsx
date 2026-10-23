@@ -44,8 +44,8 @@ export function meta({ loaderData, params }: Route.MetaArgs) {
   return [{ title: pageTitle(`Run ${actionName}`) }];
 }
 
-export async function loader({ params, request }: Route.LoaderArgs) {
-  const client = createServerAPIClient(request);
+export async function loader({ context, params, request }: Route.LoaderArgs) {
+  const client = createServerAPIClient(request, context);
   const [repositoriesResult, catalogResult] = await Promise.all([
     listRepositories({ client, query: { limit: 200 } }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
@@ -65,9 +65,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-export async function action({ params, request }: Route.ActionArgs) {
+export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const catalogResult = await getRepositoryCatalog({
     client,
     path: { repositoryId: params.repositoryId },

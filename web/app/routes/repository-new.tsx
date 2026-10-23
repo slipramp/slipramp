@@ -24,7 +24,7 @@ export function meta() {
   return [{ title: pageTitle("Connect repository") }];
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ context, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const result = await createRepository({
     body: {
@@ -39,7 +39,7 @@ export async function action({ request }: Route.ActionArgs) {
       name: formValue(formData, "name"),
       refreshCredentialName: optionalFormValue(formData, "refreshCredentialName"),
     },
-    client: createServerAPIClient(request),
+    client: createServerAPIClient(request, context),
   });
 
   if (result.data) return redirect(`/repositories/${result.data.id}`);

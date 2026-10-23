@@ -33,7 +33,7 @@ export function meta() {
   return [{ title: pageTitle("Promotions") }];
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const integration = optionalValue(url.searchParams.get("integration"));
   const project = optionalValue(url.searchParams.get("project"));
@@ -41,7 +41,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const status = optionalStatus(url.searchParams.get("status"));
   const stageId = optionalValue(url.searchParams.get("stageId"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const client = createServerAPIClient(request);
+  const client = createServerAPIClient(request, context);
   const result = await listPromotions({
     client,
     query: {
