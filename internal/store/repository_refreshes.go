@@ -44,7 +44,8 @@ func (d *Database) RecordRepositoryRefresh(
 
 		return fmt.Errorf("lock repository for refresh: %w", err)
 	}
-	if result.Commit != nil {
+	if result.Commit != nil &&
+		repository.CommitIndexingMode(lockedRepository.CommitIndexingMode) != repository.CommitIndexingDisabled {
 		commit := *result.Commit
 		if commit.RepositoryID == uuid.Nil {
 			commit.RepositoryID = repositoryID

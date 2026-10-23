@@ -158,6 +158,7 @@ export type RepositoryConfig = {
    * Git branch tracked by repository refresh.
    */
   branch: string;
+  commitIndexing: RepositoryCommitIndexingMode;
   /**
    * Optional absolute HTTP or HTTPS commit-page template containing one {sha} placeholder. Known public Git providers are inferred when this is omitted.
    */
@@ -170,6 +171,15 @@ export type RepositoryConfig = {
    * Optional logical credential name resolved by each execution cluster to a cluster-local Kubernetes Secret.
    */
   checkoutCredentialName?: string;
+};
+
+/**
+ * Controls whether refresh records no presentation metadata, metadata only for observed branch heads, or metadata for the complete tracked branch history. Exact commit SHAs required by product records are retained in all modes.
+ */
+export type RepositoryCommitIndexingMode = "disabled" | "observedHeads" | "trackedBranchHistory";
+
+export type RepositoryUpdate = {
+  commitIndexing: RepositoryCommitIndexingMode;
 };
 
 export type CatalogRevision = {
@@ -1260,6 +1270,56 @@ export type RemoveRepositoryResponses = {
 };
 
 export type RemoveRepositoryResponse = RemoveRepositoryResponses[keyof RemoveRepositoryResponses];
+
+export type UpdateRepositoryData = {
+  body: RepositoryUpdate;
+  path: {
+    /**
+     * Stable identity of the repository registration.
+     */
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/api/v1/repositories/{repositoryId}";
+};
+
+export type UpdateRepositoryErrors = {
+  /**
+   * The repository update is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The active repository does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The repository could not be updated.
+   */
+  500: Problem;
+};
+
+export type UpdateRepositoryError = UpdateRepositoryErrors[keyof UpdateRepositoryErrors];
+
+export type UpdateRepositoryResponses = {
+  /**
+   * Updated repository registration.
+   */
+  200: Repository;
+};
+
+export type UpdateRepositoryResponse = UpdateRepositoryResponses[keyof UpdateRepositoryResponses];
 
 export type GetRepositoryCatalogData = {
   body?: never;

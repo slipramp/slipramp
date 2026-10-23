@@ -92,9 +92,38 @@ func TestServiceRejectsInvalidConfigBeforePersistence(t *testing.T) {
 	}
 }
 
+func TestServiceUpdatesCommitIndexing(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.New()
+	repositories := &recordingStore{}
+	service := NewService(repositories, nil)
+
+	updated, err := service.UpdateRepositoryCommitIndexing(
+		context.Background(),
+		repositoryID,
+		CommitIndexingTrackedBranchHistory,
+	)
+	if err != nil {
+		t.Fatalf("UpdateRepositoryCommitIndexing() error = %v", err)
+	}
+	if repositories.updatedID != repositoryID ||
+		repositories.updatedMode != CommitIndexingTrackedBranchHistory ||
+		updated.CommitIndexing != CommitIndexingTrackedBranchHistory {
+		t.Errorf("updated repository = %#v", updated)
+	}
+
+	_, err = service.UpdateRepositoryCommitIndexing(context.Background(), repositoryID, "everything")
+	if !errors.Is(err, ErrInvalidConfig) {
+		t.Errorf("invalid UpdateRepositoryCommitIndexing() error = %v, want %v", err, ErrInvalidConfig)
+	}
+}
+
 type recordingStore struct {
 	created     Repository
 	createCalls int
+	updatedID   uuid.UUID
+	updatedMode CommitIndexingMode
 }
 
 func (s *recordingStore) CreateRepository(_ context.Context, repository Repository) (Repository, error) {
@@ -110,6 +139,17 @@ func (*recordingStore) ListRepositories(context.Context) ([]Repository, error) {
 
 func (*recordingStore) GetRepository(context.Context, uuid.UUID) (Repository, error) {
 	return Repository{}, nil
+}
+
+func (s *recordingStore) UpdateRepositoryCommitIndexing(
+	_ context.Context,
+	repositoryID uuid.UUID,
+	mode CommitIndexingMode,
+) (Repository, error) {
+	s.updatedID = repositoryID
+	s.updatedMode = mode
+
+	return Repository{Config: Config{CommitIndexing: mode}}, nil
 }
 
 func (*recordingStore) RemoveRepository(context.Context, uuid.UUID, time.Time) error {

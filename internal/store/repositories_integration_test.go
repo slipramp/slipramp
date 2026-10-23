@@ -21,6 +21,7 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		Name:                   "infrastructure",
 		CloneURL:               "git@github.com:example/infrastructure.git",
 		Branch:                 "main",
+		CommitIndexing:         repository.CommitIndexingObservedHeads,
 		RefreshCredentialName:  &refreshCredentialName,
 		CheckoutCredentialName: &checkoutCredentialName,
 		ID:                     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200"),
@@ -59,11 +60,12 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 	}
 
 	second := repository.Repository{
-		Name:      "applications",
-		CloneURL:  "https://github.com/example/applications.git",
-		Branch:    "production",
-		ID:        uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
-		CreatedAt: createdAt.Add(time.Minute),
+		Name:           "applications",
+		CloneURL:       "https://github.com/example/applications.git",
+		Branch:         "production",
+		CommitIndexing: repository.CommitIndexingDisabled,
+		ID:             uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"),
+		CreatedAt:      createdAt.Add(time.Minute),
 	}
 	if _, err := database.CreateRepository(ctx, second); err != nil {
 		t.Fatalf("create second repository: %v", err)
@@ -85,6 +87,18 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 			repositories[1].Refresh.Status,
 			repository.RefreshStatusPending,
 		)
+	}
+
+	updated, err := database.UpdateRepositoryCommitIndexing(
+		ctx,
+		second.ID,
+		repository.CommitIndexingTrackedBranchHistory,
+	)
+	if err != nil {
+		t.Fatalf("UpdateRepositoryCommitIndexing() error = %v", err)
+	}
+	if updated.CommitIndexing != repository.CommitIndexingTrackedBranchHistory {
+		t.Errorf("updated commit indexing = %q", updated.CommitIndexing)
 	}
 
 	commitSHA := "0123456789abcdef0123456789abcdef01234567"
@@ -193,5 +207,46 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 
 	if len(repositories) != 2 || repositories[1].ID != replacement.ID {
 		t.Errorf("repository list after replacement = %#v", repositories)
+	}
+}
+
+func TestDisabledCommitIndexingSkipsRefreshMetadataIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	repositoryID := uuid.New()
+	createdAt := time.Now().UTC().Truncate(time.Second)
+	_, err := database.CreateRepository(ctx, repository.Repository{
+		Name:           "metadata-disabled",
+		CloneURL:       "https://github.com/example/metadata-disabled.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingDisabled,
+		ID:             repositoryID,
+		CreatedAt:      createdAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateRepository() error = %v", err)
+	}
+
+	commitSHA := "0123456789abcdef0123456789abcdef01234567"
+	refresh := successfulCatalogRefresh(commitSHA, createdAt.Add(time.Minute), uuid.New())
+	title := "metadata that must not be persisted"
+	author := "Example Operator"
+	authoredAt := createdAt.Add(-time.Hour)
+	refresh.Commit.Title = &title
+	refresh.Commit.AuthorName = &author
+	refresh.Commit.AuthoredAt = &authoredAt
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, refresh); err != nil {
+		t.Fatalf("RecordRepositoryRefresh() error = %v", err)
+	}
+
+	key := repository.CommitKey{RepositoryID: repositoryID, SHA: commitSHA}
+	commits, err := database.ListCommits(ctx, []repository.CommitKey{key})
+	if err != nil {
+		t.Fatalf("ListCommits() error = %v", err)
+	}
+	commit := commits[key]
+	if commit.Title != nil || commit.AuthorName != nil || commit.AuthoredAt != nil {
+		t.Errorf("disabled commit metadata = %#v", commit)
 	}
 }

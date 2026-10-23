@@ -1,5 +1,5 @@
 -- name: LockActiveRepository :one
-SELECT id, active_catalog_revision_id
+SELECT id, active_catalog_revision_id, commit_indexing_mode
 FROM repositories
 WHERE id = sqlc.arg(id)
   AND removed_at IS NULL

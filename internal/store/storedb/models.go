@@ -220,6 +220,7 @@ type Repository struct {
 	LastRefreshError        *string
 	ActiveCatalogRevisionID pgtype.UUID
 	CommitUrlTemplate       *string
+	CommitIndexingMode      string
 }
 
 type RepositoryCommit struct {

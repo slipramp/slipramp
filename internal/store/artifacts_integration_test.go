@@ -490,11 +490,12 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1401")
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1402")
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		ID:        repositoryID,
-		Name:      "artifact-test",
-		CloneURL:  "https://github.com/example/artifact-test.git",
-		Branch:    "main",
-		CreatedAt: createdAt,
+		ID:             repositoryID,
+		Name:           "artifact-test",
+		CloneURL:       "https://github.com/example/artifact-test.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("create repository: %v", err)

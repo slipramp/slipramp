@@ -15,6 +15,11 @@ import (
 type RepositoryService interface {
 	CreateRepository(ctx context.Context, cfg repository.Config) (repository.Repository, error)
 	ListRepositories(ctx context.Context) ([]repository.Repository, error)
+	UpdateRepositoryCommitIndexing(
+		ctx context.Context,
+		repositoryID uuid.UUID,
+		mode repository.CommitIndexingMode,
+	) (repository.Repository, error)
 	RemoveRepository(ctx context.Context, repositoryID uuid.UUID) error
 }
 
@@ -79,6 +84,7 @@ func (h *Handler) CreateRepository(
 		Name:                   request.Body.Name,
 		CloneURL:               request.Body.CloneURL,
 		Branch:                 request.Body.Branch,
+		CommitIndexing:         repository.CommitIndexingMode(request.Body.CommitIndexing),
 		CommitURLTemplate:      request.Body.CommitURLTemplate,
 		RefreshCredentialName:  request.Body.RefreshCredentialName,
 		CheckoutCredentialName: request.Body.CheckoutCredentialName,
@@ -110,6 +116,45 @@ func (h *Handler) CreateRepository(
 	}, nil
 }
 
+func (h *Handler) UpdateRepository(
+	ctx context.Context,
+	request api.UpdateRepositoryRequestObject,
+) (api.UpdateRepositoryResponseObject, error) {
+	updated, err := h.repositories.UpdateRepositoryCommitIndexing(
+		ctx,
+		request.RepositoryID,
+		repository.CommitIndexingMode(request.Body.CommitIndexing),
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, repository.ErrInvalidConfig):
+			return api.UpdateRepository400ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusBadRequest, err.Error()),
+			), nil
+		case errors.Is(err, repository.ErrNotFound):
+			return api.UpdateRepository404ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusNotFound, "The active repository does not exist."),
+			), nil
+		default:
+			return nil, err
+		}
+	}
+
+	keys := make([]repository.CommitKey, 0, 1)
+	if updated.Refresh.CommitSHA != nil {
+		keys = append(keys, commitKey(updated.ID, *updated.Refresh.CommitSHA))
+	}
+	commits, err := h.commitResponses(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.UpdateRepository200JSONResponse(repositoryResponse(
+		updated,
+		repositoryRefreshCommit(updated, commits),
+	)), nil
+}
+
 func (h *Handler) RemoveRepository(
 	ctx context.Context,
 	request api.RemoveRepositoryRequestObject,
@@ -134,6 +179,7 @@ func repositoryResponse(item repository.Repository, commit *api.GitCommit) api.R
 		Name:                   item.Name,
 		CloneURL:               item.CloneURL,
 		Branch:                 item.Branch,
+		CommitIndexing:         api.RepositoryCommitIndexingMode(item.CommitIndexing),
 		CommitURLTemplate:      item.CommitURLTemplate,
 		RefreshCredentialName:  item.RefreshCredentialName,
 		CheckoutCredentialName: item.CheckoutCredentialName,

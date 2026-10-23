@@ -141,6 +141,9 @@ import type {
   UpdatePromotionStagePolicyData,
   UpdatePromotionStagePolicyErrors,
   UpdatePromotionStagePolicyResponses,
+  UpdateRepositoryData,
+  UpdateRepositoryErrors,
+  UpdateRepositoryResponses,
   UploadRunArtifactData,
   UploadRunArtifactErrors,
   UploadRunArtifactResponses,
@@ -272,6 +275,37 @@ export const removeRepository = <ThrowOnError extends boolean = false>(
     url: "/api/v1/repositories/{repositoryId}",
     ...options,
   });
+
+/**
+ * Update a repository
+ *
+ * Updates mutable indexing behavior for an active repository registration.
+ */
+export const updateRepository = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateRepositoryData, ThrowOnError>,
+): RequestResult<UpdateRepositoryResponses, UpdateRepositoryErrors, ThrowOnError> =>
+  (options.client ?? client).patch<UpdateRepositoryResponses, UpdateRepositoryErrors, ThrowOnError>(
+    {
+      security: [
+        {
+          in: "cookie",
+          name: "slipramp_session",
+          type: "apiKey",
+        },
+        {
+          key: "ProductBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/api/v1/repositories/{repositoryId}",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    },
+  );
 
 /**
  * Get the active repository catalog

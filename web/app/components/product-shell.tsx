@@ -126,11 +126,7 @@ export function ProductShell({
               </ActionIcon>
             </Tooltip>
             <Link className="product-brand" to="/">
-              <span aria-hidden="true" className="product-mark">
-                <span />
-                <span />
-                <span />
-              </span>
+              <img alt="" aria-hidden="true" className="product-mark" src="/slipramp-mark.png" />
               <span>Slipramp</span>
             </Link>
             <Text c="dimmed" className="product-tagline" size="sm" visibleFrom="sm">

@@ -20,11 +20,12 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	createdAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		Name:      "infrastructure",
-		CloneURL:  "https://github.com/example/infrastructure.git",
-		Branch:    "main",
-		ID:        repositoryID,
-		CreatedAt: createdAt,
+		Name:           "infrastructure",
+		CloneURL:       "https://github.com/example/infrastructure.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		ID:             repositoryID,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -148,11 +149,12 @@ func TestGetActiveCatalogRevisionRequiresActiveAcceptedCatalog(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	createdAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		Name:      "infrastructure",
-		CloneURL:  "https://github.com/example/infrastructure.git",
-		Branch:    "main",
-		ID:        repositoryID,
-		CreatedAt: createdAt,
+		Name:           "infrastructure",
+		CloneURL:       "https://github.com/example/infrastructure.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		ID:             repositoryID,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -205,11 +207,12 @@ func TestCatalogRefreshTracksTargetDesiredCommitsIntegration(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1300")
 	createdAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		Name:      "desired-commits",
-		CloneURL:  "https://github.com/example/desired-commits.git",
-		Branch:    "main",
-		ID:        repositoryID,
-		CreatedAt: createdAt,
+		Name:           "desired-commits",
+		CloneURL:       "https://github.com/example/desired-commits.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		ID:             repositoryID,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -328,18 +331,20 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	secondRepositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1401")
 	repositories := []repository.Repository{
 		{
-			ID:        firstRepositoryID,
-			Name:      "infrastructure",
-			CloneURL:  "https://github.com/example/infrastructure.git",
-			Branch:    "main",
-			CreatedAt: createdAt,
+			ID:             firstRepositoryID,
+			Name:           "infrastructure",
+			CloneURL:       "https://github.com/example/infrastructure.git",
+			Branch:         "main",
+			CommitIndexing: repository.CommitIndexingObservedHeads,
+			CreatedAt:      createdAt,
 		},
 		{
-			ID:        secondRepositoryID,
-			Name:      "operations",
-			CloneURL:  "https://github.com/example/operations.git",
-			Branch:    "main",
-			CreatedAt: createdAt,
+			ID:             secondRepositoryID,
+			Name:           "operations",
+			CloneURL:       "https://github.com/example/operations.git",
+			Branch:         "main",
+			CommitIndexing: repository.CommitIndexingObservedHeads,
+			CreatedAt:      createdAt,
 		},
 	}
 	for _, record := range repositories {

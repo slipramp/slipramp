@@ -17,6 +17,7 @@ INSERT INTO repositories (
     name,
     clone_url,
     branch,
+    commit_indexing_mode,
     commit_url_template,
     refresh_credential_name,
     checkout_credential_name,
@@ -29,13 +30,15 @@ INSERT INTO repositories (
     $5,
     $6,
     $7,
-    $8
+    $8,
+    $9
 )
 RETURNING
     id,
     name,
     clone_url,
     branch,
+    commit_indexing_mode,
     commit_url_template,
     refresh_credential_name,
     checkout_credential_name,
@@ -52,6 +55,7 @@ type CreateRepositoryParams struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitIndexingMode     string
 	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
@@ -63,6 +67,7 @@ type CreateRepositoryRow struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitIndexingMode     string
 	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
@@ -80,6 +85,7 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 		arg.Name,
 		arg.CloneUrl,
 		arg.Branch,
+		arg.CommitIndexingMode,
 		arg.CommitUrlTemplate,
 		arg.RefreshCredentialName,
 		arg.CheckoutCredentialName,
@@ -91,6 +97,7 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 		&i.Name,
 		&i.CloneUrl,
 		&i.Branch,
+		&i.CommitIndexingMode,
 		&i.CommitUrlTemplate,
 		&i.RefreshCredentialName,
 		&i.CheckoutCredentialName,
@@ -110,6 +117,7 @@ SELECT
     repositories.name,
     repositories.clone_url,
     repositories.branch,
+    repositories.commit_indexing_mode,
     repositories.commit_url_template,
     repositories.refresh_credential_name,
     repositories.checkout_credential_name,
@@ -132,6 +140,7 @@ type GetActiveRepositoryRow struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitIndexingMode     string
 	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
@@ -152,6 +161,7 @@ func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetA
 		&i.Name,
 		&i.CloneUrl,
 		&i.Branch,
+		&i.CommitIndexingMode,
 		&i.CommitUrlTemplate,
 		&i.RefreshCredentialName,
 		&i.CheckoutCredentialName,
@@ -172,6 +182,7 @@ SELECT
     repositories.name,
     repositories.clone_url,
     repositories.branch,
+    repositories.commit_indexing_mode,
     repositories.commit_url_template,
     repositories.refresh_credential_name,
     repositories.checkout_credential_name,
@@ -194,6 +205,7 @@ type ListRepositoriesRow struct {
 	Name                   string
 	CloneUrl               string
 	Branch                 string
+	CommitIndexingMode     string
 	CommitUrlTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
@@ -220,6 +232,7 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 			&i.Name,
 			&i.CloneUrl,
 			&i.Branch,
+			&i.CommitIndexingMode,
 			&i.CommitUrlTemplate,
 			&i.RefreshCredentialName,
 			&i.CheckoutCredentialName,
@@ -285,6 +298,26 @@ type RemoveRepositoryParams struct {
 
 func (q *Queries) RemoveRepository(ctx context.Context, arg RemoveRepositoryParams) (int64, error) {
 	result, err := q.db.Exec(ctx, removeRepository, arg.RemovedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateRepositoryCommitIndexing = `-- name: UpdateRepositoryCommitIndexing :execrows
+UPDATE repositories
+SET commit_indexing_mode = $1
+WHERE id = $2
+  AND removed_at IS NULL
+`
+
+type UpdateRepositoryCommitIndexingParams struct {
+	CommitIndexingMode string
+	ID                 pgtype.UUID
+}
+
+func (q *Queries) UpdateRepositoryCommitIndexing(ctx context.Context, arg UpdateRepositoryCommitIndexingParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateRepositoryCommitIndexing, arg.CommitIndexingMode, arg.ID)
 	if err != nil {
 		return 0, err
 	}

@@ -51,6 +51,7 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 	cfg := Config{
 		CloneURL:              remoteDirectory,
 		Branch:                "main",
+		CommitIndexing:        CommitIndexingObservedHeads,
 		RefreshCredentialName: &credentialName,
 	}
 	fetched, err := fetcher.Fetch(context.Background(), Repository{Config: cfg})
@@ -80,6 +81,20 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 	}
 	if _, err := fs.ReadFile(fetched.Files, "tracked.txt"); err == nil {
 		t.Fatal("read fetched file after Close() error = nil")
+	}
+
+	cfg.CommitIndexing = CommitIndexingDisabled
+	disabled, err := fetcher.Fetch(context.Background(), Repository{Config: cfg})
+	if err != nil {
+		t.Fatalf("Fetch() with disabled indexing error = %v", err)
+	}
+	defer func() {
+		if closeErr := disabled.Close(); closeErr != nil {
+			t.Errorf("disabled FetchedCommit.Close() error = %v", closeErr)
+		}
+	}()
+	if disabled.Commit.Title != nil || disabled.Commit.AuthorName != nil || disabled.Commit.AuthoredAt != nil {
+		t.Errorf("disabled commit metadata = %#v", disabled.Commit)
 	}
 }
 

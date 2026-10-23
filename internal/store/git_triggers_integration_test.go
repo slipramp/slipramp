@@ -27,11 +27,12 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1600")
 	createdAt := time.Date(2026, time.October, 20, 12, 0, 0, 0, time.UTC)
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		ID:        repositoryID,
-		Name:      "git-triggers",
-		CloneURL:  "https://github.com/example/git-triggers.git",
-		Branch:    "main",
-		CreatedAt: createdAt,
+		ID:             repositoryID,
+		Name:           "git-triggers",
+		CloneURL:       "https://github.com/example/git-triggers.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -190,11 +191,12 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1700")
 	baseTime := time.Now().UTC().Truncate(time.Second)
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		ID:        repositoryID,
-		Name:      "latest-wins",
-		CloneURL:  "https://github.com/example/latest-wins.git",
-		Branch:    "main",
-		CreatedAt: baseTime,
+		ID:             repositoryID,
+		Name:           "latest-wins",
+		CloneURL:       "https://github.com/example/latest-wins.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		CreatedAt:      baseTime,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -348,7 +350,7 @@ func TestGitTriggerTargetRemovalCancelsQueuedRunIntegration(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 	_, err := database.CreateRepository(ctx, repository.Repository{
 		ID: repositoryID, Name: "target-removal", CloneURL: "https://github.com/example/target-removal.git",
-		Branch: "main", CreatedAt: baseTime,
+		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: baseTime,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -420,7 +422,7 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 	baseTime := time.Now().UTC().Truncate(time.Second)
 	_, err := database.CreateRepository(ctx, repository.Repository{
 		ID: repositoryID, Name: "fifo", CloneURL: "https://github.com/example/fifo.git",
-		Branch: "main", CreatedAt: baseTime,
+		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: baseTime,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -514,7 +516,7 @@ func TestGitRunCreationRejectsRefreshRaceAtDatabaseBoundaryIntegration(t *testin
 	baseTime := time.Now().UTC().Truncate(time.Second)
 	_, err := database.CreateRepository(ctx, repository.Repository{
 		ID: repositoryID, Name: "dispatch-race", CloneURL: "https://github.com/example/race.git",
-		Branch: "main", CreatedAt: baseTime,
+		Branch: "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: baseTime,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)

@@ -96,6 +96,13 @@ func TestConfigValidationRejectsInvalidValues(t *testing.T) {
 			},
 			wantError: "refresh credential",
 		},
+		{
+			name: "unsupported commit indexing mode",
+			configure: func(cfg *Config) {
+				cfg.CommitIndexing = "everything"
+			},
+			wantError: "commit indexing mode",
+		},
 	}
 
 	for _, test := range tests {
@@ -150,8 +157,9 @@ func TestCommitURL(t *testing.T) {
 
 func validRepositoryConfig() Config {
 	return Config{
-		Name:     "infrastructure",
-		CloneURL: "https://github.com/slipramp/slipramp.git",
-		Branch:   "main",
+		Name:           "infrastructure",
+		CloneURL:       "https://github.com/slipramp/slipramp.git",
+		Branch:         "main",
+		CommitIndexing: CommitIndexingObservedHeads,
 	}
 }

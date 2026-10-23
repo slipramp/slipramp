@@ -137,6 +137,10 @@ components:
       $ref: ./components/repositories.yaml#/RepositoryList
     RepositoryConfig:
       $ref: ./components/repositories.yaml#/RepositoryConfig
+    RepositoryCommitIndexingMode:
+      $ref: ./components/repositories.yaml#/RepositoryCommitIndexingMode
+    RepositoryUpdate:
+      $ref: ./components/repositories.yaml#/RepositoryUpdate
     CatalogRevision:
       $ref: ./components/catalog.yaml#/CatalogRevision
     TargetSummary:

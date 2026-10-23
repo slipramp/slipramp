@@ -69,6 +69,8 @@ export function Layout({ children }: Readonly<{ children: ReactNode }>) {
       <head>
         <meta charSet="utf-8" />
         <meta content="width=device-width, initial-scale=1" name="viewport" />
+        <link href="/favicon.ico" rel="icon" sizes="any" />
+        <link href="/apple-touch-icon.png" rel="apple-touch-icon" />
         <ColorSchemeScript defaultColorScheme="auto" />
         <Meta />
         <Links />

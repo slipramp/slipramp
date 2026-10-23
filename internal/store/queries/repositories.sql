@@ -4,6 +4,7 @@ INSERT INTO repositories (
     name,
     clone_url,
     branch,
+    commit_indexing_mode,
     commit_url_template,
     refresh_credential_name,
     checkout_credential_name,
@@ -13,6 +14,7 @@ INSERT INTO repositories (
     sqlc.arg(name),
     sqlc.arg(clone_url),
     sqlc.arg(branch),
+    sqlc.arg(commit_indexing_mode),
     sqlc.narg(commit_url_template),
     sqlc.narg(refresh_credential_name),
     sqlc.narg(checkout_credential_name),
@@ -23,6 +25,7 @@ RETURNING
     name,
     clone_url,
     branch,
+    commit_indexing_mode,
     commit_url_template,
     refresh_credential_name,
     checkout_credential_name,
@@ -39,6 +42,7 @@ SELECT
     repositories.name,
     repositories.clone_url,
     repositories.branch,
+    repositories.commit_indexing_mode,
     repositories.commit_url_template,
     repositories.refresh_credential_name,
     repositories.checkout_credential_name,
@@ -61,6 +65,7 @@ SELECT
     repositories.name,
     repositories.clone_url,
     repositories.branch,
+    repositories.commit_indexing_mode,
     repositories.commit_url_template,
     repositories.refresh_credential_name,
     repositories.checkout_credential_name,
@@ -76,6 +81,12 @@ LEFT JOIN catalog_revisions
   ON catalog_revisions.id = repositories.active_catalog_revision_id
 WHERE repositories.id = sqlc.arg(id)
   AND repositories.removed_at IS NULL;
+
+-- name: UpdateRepositoryCommitIndexing :execrows
+UPDATE repositories
+SET commit_indexing_mode = sqlc.arg(commit_indexing_mode)
+WHERE id = sqlc.arg(id)
+  AND removed_at IS NULL;
 
 -- name: RecordRepositoryRefreshFailure :exec
 UPDATE repositories

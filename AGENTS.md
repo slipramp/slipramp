@@ -75,3 +75,9 @@ Use the established names consistently:
 - Keep a feature's narrow interfaces, domain types, and methods together when that makes the ownership clear. Split them further only when the feature itself becomes large.
 - Mirror the production grouping in test filenames and keep SQL queries grouped by the same domain names.
 - Give cross-feature helpers a specific purpose-revealing name; do not create catch-all files such as `utils.go` or `helpers.go`.
+
+## Brand and mascot source assets
+
+Canonical Slipramp brand and mascot source artwork, prompts, prototypes, and export masters live in the sibling `../slipramp-assets` repository, normally checked out at `~/Workspace/slipramp-assets`. Do not recreate a top-level `assets/` directory here. This repository tracks only production outputs required to build and distribute Slipramp.
+
+Read `../slipramp-assets/AGENTS.md` before changing source artwork. If that workspace is unavailable, do not regenerate or replace source artwork without maintainer direction. Normal builds, tests, and releases must not depend on the sibling checkout.

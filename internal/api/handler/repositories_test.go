@@ -35,6 +35,7 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 		"name":"infrastructure",
 		"cloneUrl":"https://github.com/example/infrastructure.git",
 		"branch":"main",
+		"commitIndexing":"trackedBranchHistory",
 		"commitUrlTemplate":"https://github.com/example/infrastructure/commit/{sha}",
 		"refreshCredentialName":"github-server",
 		"checkoutCredentialName":"github-readonly"
@@ -55,6 +56,7 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 	}
 
 	if repositories.cfg.Name != "infrastructure" ||
+		repositories.cfg.CommitIndexing != repository.CommitIndexingTrackedBranchHistory ||
 		repositories.cfg.CommitURLTemplate == nil ||
 		*repositories.cfg.CommitURLTemplate != "https://github.com/example/infrastructure/commit/{sha}" ||
 		repositories.cfg.RefreshCredentialName == nil ||
@@ -71,6 +73,7 @@ func TestCreateRepositoryReturnsRegistration(t *testing.T) {
 
 	if result.ID != repositoryID ||
 		result.CloneURL != "https://github.com/example/infrastructure.git" ||
+		result.CommitIndexing != api.RepositoryCommitIndexingTrackedBranchHistory ||
 		result.CommitURLTemplate == nil ||
 		*result.CommitURLTemplate != "https://github.com/example/infrastructure/commit/{sha}" ||
 		result.RefreshCredentialName == nil ||
@@ -88,7 +91,8 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 	validBody := `{
 		"name":"infrastructure",
 		"cloneUrl":"https://github.com/example/infrastructure.git",
-		"branch":"main"
+		"branch":"main",
+		"commitIndexing":"observedHeads"
 	}`
 	tests := []struct {
 		name          string
@@ -171,6 +175,55 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 				t.Error("internal error details were exposed in the problem response")
 			}
 		})
+	}
+}
+
+func TestUpdateRepositoryCommitIndexing(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.New()
+	repositories := &recordingRepositoryService{
+		updated: repository.Repository{
+			Config: repository.Config{
+				Name:           "infrastructure",
+				CloneURL:       "https://github.com/example/infrastructure.git",
+				Branch:         "main",
+				CommitIndexing: repository.CommitIndexingTrackedBranchHistory,
+			},
+			ID:        repositoryID,
+			CreatedAt: time.Now().UTC(),
+			Refresh: repository.RefreshState{
+				Status: repository.RefreshStatusPending,
+			},
+		},
+	}
+	body := bytes.NewBufferString(`{"commitIndexing":"trackedBranchHistory"}`)
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPatch,
+		"/api/v1/repositories/"+repositoryID.String(),
+		body,
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, repositories, nil, nil, nil, nil).
+		ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if repositories.updatedID != repositoryID ||
+		repositories.updatedMode != repository.CommitIndexingTrackedBranchHistory {
+		t.Errorf("update = (%s, %q)", repositories.updatedID, repositories.updatedMode)
+	}
+
+	var result api.Repository
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.CommitIndexing != api.RepositoryCommitIndexingTrackedBranchHistory {
+		t.Errorf("commit indexing = %q", result.CommitIndexing)
 	}
 }
 
@@ -257,7 +310,10 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 type recordingRepositoryService struct {
 	cfg         repository.Config
 	created     repository.Repository
+	updated     repository.Repository
 	items       []repository.Repository
+	updatedID   uuid.UUID
+	updatedMode repository.CommitIndexingMode
 	removedID   uuid.UUID
 	createError error
 	listError   error
@@ -276,6 +332,17 @@ func (r *recordingRepositoryService) CreateRepository(
 
 func (r *recordingRepositoryService) ListRepositories(context.Context) ([]repository.Repository, error) {
 	return r.items, r.listError
+}
+
+func (r *recordingRepositoryService) UpdateRepositoryCommitIndexing(
+	_ context.Context,
+	repositoryID uuid.UUID,
+	mode repository.CommitIndexingMode,
+) (repository.Repository, error) {
+	r.updatedID = repositoryID
+	r.updatedMode = mode
+
+	return r.updated, nil
 }
 
 func (r *recordingRepositoryService) RemoveRepository(_ context.Context, repositoryID uuid.UUID) error {

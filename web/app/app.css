@@ -69,42 +69,11 @@ a {
 }
 
 .product-mark {
-  display: grid;
-  grid-template-columns: repeat(3, 5px);
-  gap: 3px;
-  align-items: end;
-  width: 22px;
-  height: 24px;
-  padding: 3px;
-  border-radius: 7px;
-  background: linear-gradient(
-    145deg,
-    var(--mantine-primary-color-5) 0%,
-    var(--mantine-primary-color-7) 62%,
-    var(--slipramp-accent) 63%,
-    var(--slipramp-accent) 100%
-  );
-  box-shadow: 0 6px 18px var(--slipramp-brand-shadow);
-}
-
-.product-mark span {
   display: block;
-  border-radius: 2px 2px 1px 1px;
-  background: white;
-}
-
-.product-mark span:nth-child(1) {
-  height: 35%;
-  opacity: 0.72;
-}
-
-.product-mark span:nth-child(2) {
-  height: 62%;
-  opacity: 0.86;
-}
-
-.product-mark span:nth-child(3) {
-  height: 100%;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 8px var(--slipramp-brand-shadow));
 }
 
 .product-tagline {

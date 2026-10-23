@@ -30,6 +30,7 @@ func (d *Database) CreateRepository(ctx context.Context, record repository.Repos
 			Name:                   record.Name,
 			CloneUrl:               record.CloneURL,
 			Branch:                 record.Branch,
+			CommitIndexingMode:     string(record.CommitIndexing),
 			CommitUrlTemplate:      record.CommitURLTemplate,
 			RefreshCredentialName:  record.RefreshCredentialName,
 			CheckoutCredentialName: record.CheckoutCredentialName,
@@ -64,6 +65,7 @@ func (d *Database) ListRepositories(ctx context.Context) ([]repository.Repositor
 			Name:                   row.Name,
 			CloneURL:               row.CloneUrl,
 			Branch:                 row.Branch,
+			CommitIndexing:         repository.CommitIndexingMode(row.CommitIndexingMode),
 			CommitURLTemplate:      row.CommitUrlTemplate,
 			RefreshCredentialName:  row.RefreshCredentialName,
 			CheckoutCredentialName: row.CheckoutCredentialName,
@@ -96,6 +98,7 @@ func (d *Database) GetRepository(ctx context.Context, repositoryID uuid.UUID) (r
 		Name:                   row.Name,
 		CloneURL:               row.CloneUrl,
 		Branch:                 row.Branch,
+		CommitIndexing:         repository.CommitIndexingMode(row.CommitIndexingMode),
 		CommitURLTemplate:      row.CommitUrlTemplate,
 		RefreshCredentialName:  row.RefreshCredentialName,
 		CheckoutCredentialName: row.CheckoutCredentialName,
@@ -110,6 +113,28 @@ func (d *Database) GetRepository(ctx context.Context, repositoryID uuid.UUID) (r
 		),
 		ActiveCatalogCommitSHA: row.ActiveCatalogCommitSha,
 	}, nil
+}
+
+func (d *Database) UpdateRepositoryCommitIndexing(
+	ctx context.Context,
+	repositoryID uuid.UUID,
+	mode repository.CommitIndexingMode,
+) (repository.Repository, error) {
+	rowsAffected, err := d.queries.UpdateRepositoryCommitIndexing(
+		ctx,
+		storedb.UpdateRepositoryCommitIndexingParams{
+			CommitIndexingMode: string(mode),
+			ID:                 databaseUUID(repositoryID),
+		},
+	)
+	if err != nil {
+		return repository.Repository{}, fmt.Errorf("update repository commit indexing: %w", err)
+	}
+	if rowsAffected == 0 {
+		return repository.Repository{}, repository.ErrNotFound
+	}
+
+	return d.GetRepository(ctx, repositoryID)
 }
 
 func (d *Database) RemoveRepository(ctx context.Context, repositoryID uuid.UUID, removedAt time.Time) error {
@@ -142,6 +167,7 @@ func repositoryFromCreateRow(row storedb.CreateRepositoryRow) repository.Reposit
 		Name:                   row.Name,
 		CloneURL:               row.CloneUrl,
 		Branch:                 row.Branch,
+		CommitIndexing:         repository.CommitIndexingMode(row.CommitIndexingMode),
 		CommitURLTemplate:      row.CommitUrlTemplate,
 		RefreshCredentialName:  row.RefreshCredentialName,
 		CheckoutCredentialName: row.CheckoutCredentialName,

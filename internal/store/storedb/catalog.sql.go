@@ -493,7 +493,7 @@ func (q *Queries) ListRepositoryTargetStates(ctx context.Context, repositoryID p
 }
 
 const lockActiveRepository = `-- name: LockActiveRepository :one
-SELECT id, active_catalog_revision_id
+SELECT id, active_catalog_revision_id, commit_indexing_mode
 FROM repositories
 WHERE id = $1
   AND removed_at IS NULL
@@ -503,12 +503,13 @@ FOR UPDATE
 type LockActiveRepositoryRow struct {
 	ID                      pgtype.UUID
 	ActiveCatalogRevisionID pgtype.UUID
+	CommitIndexingMode      string
 }
 
 func (q *Queries) LockActiveRepository(ctx context.Context, id pgtype.UUID) (LockActiveRepositoryRow, error) {
 	row := q.db.QueryRow(ctx, lockActiveRepository, id)
 	var i LockActiveRepositoryRow
-	err := row.Scan(&i.ID, &i.ActiveCatalogRevisionID)
+	err := row.Scan(&i.ID, &i.ActiveCatalogRevisionID, &i.CommitIndexingMode)
 	return i, err
 }
 

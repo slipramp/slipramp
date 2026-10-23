@@ -12,6 +12,11 @@ type Store interface {
 	CreateRepository(ctx context.Context, repository Repository) (Repository, error)
 	ListRepositories(ctx context.Context) ([]Repository, error)
 	GetRepository(ctx context.Context, repositoryID uuid.UUID) (Repository, error)
+	UpdateRepositoryCommitIndexing(
+		ctx context.Context,
+		repositoryID uuid.UUID,
+		mode CommitIndexingMode,
+	) (Repository, error)
 	RemoveRepository(ctx context.Context, repositoryID uuid.UUID, removedAt time.Time) error
 }
 
@@ -58,6 +63,18 @@ func (s *Service) ListRepositories(ctx context.Context) ([]Repository, error) {
 
 func (s *Service) GetRepository(ctx context.Context, repositoryID uuid.UUID) (Repository, error) {
 	return s.repositories.GetRepository(ctx, repositoryID)
+}
+
+func (s *Service) UpdateRepositoryCommitIndexing(
+	ctx context.Context,
+	repositoryID uuid.UUID,
+	mode CommitIndexingMode,
+) (Repository, error) {
+	if err := validateCommitIndexingMode(mode); err != nil {
+		return Repository{}, fmt.Errorf("%w: %w", ErrInvalidConfig, err)
+	}
+
+	return s.repositories.UpdateRepositoryCommitIndexing(ctx, repositoryID, mode)
 }
 
 func (s *Service) RemoveRepository(ctx context.Context, repositoryID uuid.UUID) error {

@@ -24,6 +24,14 @@ var (
 	ErrNotFound      = errors.New("repository not found")
 )
 
+type CommitIndexingMode string
+
+const (
+	CommitIndexingDisabled             CommitIndexingMode = "disabled"
+	CommitIndexingObservedHeads        CommitIndexingMode = "observedHeads"
+	CommitIndexingTrackedBranchHistory CommitIndexingMode = "trackedBranchHistory"
+)
+
 type Repository struct {
 	Config
 	ID                     RepositoryID
@@ -38,6 +46,7 @@ type Config struct {
 	Name                   string
 	CloneURL               string
 	Branch                 string
+	CommitIndexing         CommitIndexingMode
 	CommitURLTemplate      *string
 	RefreshCredentialName  *string
 	CheckoutCredentialName *string
@@ -55,6 +64,9 @@ func (c Config) Validate() error {
 	if err := validateBranch(c.Branch); err != nil {
 		return fmt.Errorf("branch: %w", err)
 	}
+	if err := validateCommitIndexingMode(c.CommitIndexing); err != nil {
+		return err
+	}
 	if err := validateCommitURLTemplate(c.CommitURLTemplate); err != nil {
 		return fmt.Errorf("commit URL template: %w", err)
 	}
@@ -68,6 +80,17 @@ func (c Config) Validate() error {
 	}
 
 	return nil
+}
+
+func validateCommitIndexingMode(mode CommitIndexingMode) error {
+	switch mode {
+	case CommitIndexingDisabled,
+		CommitIndexingObservedHeads,
+		CommitIndexingTrackedBranchHistory:
+		return nil
+	default:
+		return fmt.Errorf("commit indexing mode %q is not supported", mode)
+	}
 }
 
 func validateCloneURL(cloneURL string) error {

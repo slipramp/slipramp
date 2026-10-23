@@ -139,6 +139,72 @@ repositories:
               $ref: ../components/common.yaml#/Problem
 
 repository:
+  patch:
+    operationId: updateRepository
+    summary: Update a repository
+    description: Updates mutable indexing behavior for an active repository registration.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Repositories
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        description: Stable identity of the repository registration.
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/repositories.yaml#/RepositoryUpdate
+    responses:
+      "200":
+        description: Updated repository registration.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/Repository
+      "400":
+        description: The repository update is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The active repository does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The repository could not be updated.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
   delete:
     operationId: removeRepository
     summary: Remove a repository

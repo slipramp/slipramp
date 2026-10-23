@@ -269,11 +269,12 @@ func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Datab
 	commitSHA := strings.Repeat("a", 40)
 
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		ID:        repositoryID,
-		Name:      "server-recovery",
-		CloneURL:  "https://github.com/example/server-recovery.git",
-		Branch:    "main",
-		CreatedAt: createdAt,
+		ID:             repositoryID,
+		Name:           "server-recovery",
+		CloneURL:       "https://github.com/example/server-recovery.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("create recovery repository: %v", err)

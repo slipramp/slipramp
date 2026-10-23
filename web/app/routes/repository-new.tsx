@@ -1,4 +1,14 @@
-import { Alert, Button, Group, Paper, SimpleGrid, Stack, Text, TextInput } from "@mantine/core";
+import {
+  Alert,
+  Button,
+  Group,
+  NativeSelect,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { Form, redirect, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -21,6 +31,10 @@ export async function action({ request }: Route.ActionArgs) {
       branch: formValue(formData, "branch"),
       checkoutCredentialName: optionalFormValue(formData, "checkoutCredentialName"),
       cloneUrl: formValue(formData, "cloneUrl"),
+      commitIndexing: formValue(formData, "commitIndexing") as
+        | "disabled"
+        | "observedHeads"
+        | "trackedBranchHistory",
       commitUrlTemplate: optionalFormValue(formData, "commitUrlTemplate"),
       name: formValue(formData, "name"),
       refreshCredentialName: optionalFormValue(formData, "refreshCredentialName"),
@@ -84,6 +98,17 @@ export default function ConnectRepository({ actionData }: Route.ComponentProps) 
               name="cloneUrl"
               placeholder="https://github.com/example/infrastructure.git"
               required
+            />
+
+            <NativeSelect
+              data={[
+                { label: "Observed branch heads", value: "observedHeads" },
+                { label: "Disabled", value: "disabled" },
+                { label: "Complete tracked branch history", value: "trackedBranchHistory" },
+              ]}
+              description="Controls collection of commit titles, authors, and timestamps. Exact SHAs used by Runs and catalogs are always retained."
+              label="Commit indexing"
+              name="commitIndexing"
             />
 
             <TextInput

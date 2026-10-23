@@ -89,10 +89,12 @@ func (f *GitFetcher) Fetch(ctx context.Context, repository Repository) (FetchedC
 		RepositoryID: repository.ID,
 		SHA:          commitSHA,
 	}
-	if metadata, metadataErr := readCommitMetadata(ctx, environment, checkoutDirectory, commitSHA); metadataErr == nil {
-		commit.Title = &metadata.title
-		commit.AuthorName = &metadata.authorName
-		commit.AuthoredAt = &metadata.authoredAt
+	if repository.CommitIndexing != CommitIndexingDisabled {
+		if metadata, metadataErr := readCommitMetadata(ctx, environment, checkoutDirectory, commitSHA); metadataErr == nil {
+			commit.Title = &metadata.title
+			commit.AuthorName = &metadata.authorName
+			commit.AuthoredAt = &metadata.authoredAt
+		}
 	}
 
 	changedPaths, err := changedRepositoryPaths(

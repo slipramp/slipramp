@@ -23,11 +23,12 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	createdAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	_, err := database.CreateRepository(ctx, repository.Repository{
-		Name:      "infrastructure",
-		CloneURL:  "https://github.com/example/infrastructure.git",
-		Branch:    "main",
-		ID:        repositoryID,
-		CreatedAt: createdAt,
+		Name:           "infrastructure",
+		CloneURL:       "https://github.com/example/infrastructure.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		ID:             repositoryID,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("CreateRepository() error = %v", err)
@@ -445,11 +446,12 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1510")
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1511")
 	_, err = database.CreateRepository(ctx, repository.Repository{
-		Name:      "attributed-infrastructure",
-		CloneURL:  "https://github.com/example/infrastructure.git",
-		Branch:    "main",
-		ID:        repositoryID,
-		CreatedAt: createdAt,
+		Name:           "attributed-infrastructure",
+		CloneURL:       "https://github.com/example/infrastructure.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		ID:             repositoryID,
+		CreatedAt:      createdAt,
 	})
 	if err != nil {
 		t.Fatalf("create attributed repository: %v", err)

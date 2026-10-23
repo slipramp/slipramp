@@ -4,6 +4,7 @@ RepositoryConfig:
     - name
     - cloneUrl
     - branch
+    - commitIndexing
   properties:
     name:
       type: string
@@ -21,6 +22,8 @@ RepositoryConfig:
       minLength: 1
       maxLength: 255
       description: Git branch tracked by repository refresh.
+    commitIndexing:
+      $ref: "#/RepositoryCommitIndexingMode"
     commitUrlTemplate:
       type: string
       minLength: 1
@@ -46,6 +49,30 @@ RepositoryConfig:
       description: >-
         Optional logical credential name resolved by each execution cluster to
         a cluster-local Kubernetes Secret.
+
+RepositoryCommitIndexingMode:
+  type: string
+  enum:
+    - disabled
+    - observedHeads
+    - trackedBranchHistory
+  x-enum-varnames:
+    - RepositoryCommitIndexingDisabled
+    - RepositoryCommitIndexingObservedHeads
+    - RepositoryCommitIndexingTrackedBranchHistory
+  description: >-
+    Controls whether refresh records no presentation metadata, metadata only
+    for observed branch heads, or metadata for the complete tracked branch
+    history. Exact commit SHAs required by product records are retained in all
+    modes.
+
+RepositoryUpdate:
+  type: object
+  required:
+    - commitIndexing
+  properties:
+    commitIndexing:
+      $ref: "#/RepositoryCommitIndexingMode"
 
 Repository:
   allOf:

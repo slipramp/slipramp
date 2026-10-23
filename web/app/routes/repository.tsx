@@ -1,6 +1,16 @@
-import { Alert, Badge, Button, Group, Paper, Stack, Text, Title } from "@mantine/core";
+import {
+  Alert,
+  Badge,
+  Button,
+  Group,
+  NativeSelect,
+  Paper,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import { IconListDetails, IconTrash } from "@tabler/icons-react";
-import { Link } from "react-router";
+import { Form, Link, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -9,6 +19,8 @@ import {
   listRuns,
   type CatalogRevision,
   type Repository,
+  type RepositoryCommitIndexingMode,
+  updateRepository,
 } from "~/api/generated";
 import { Timestamp } from "~/components/display";
 import { CommitReference } from "~/components/git-commit";
@@ -16,6 +28,7 @@ import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, SectionHeader } from "~/components/page";
 import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { pageTitle } from "~/page-title";
+import { formValue } from "~/form-data";
 
 import type { Route } from "./+types/repository";
 
@@ -46,7 +59,24 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   };
 }
 
-export default function RepositoryCatalog({ loaderData }: Route.ComponentProps) {
+export async function action({ params, request }: Route.ActionArgs) {
+  const formData = await request.formData();
+  const result = await updateRepository({
+    body: {
+      commitIndexing: formValue(formData, "commitIndexing") as RepositoryCommitIndexingMode,
+    },
+    client: createServerAPIClient(request),
+    path: { repositoryId: params.repositoryId },
+  });
+
+  if (result.data) return { updated: true };
+
+  return {
+    error: result.error.detail ?? result.error.title ?? "The repository could not be updated.",
+  };
+}
+
+export default function RepositoryCatalog({ actionData, loaderData }: Route.ComponentProps) {
   if (!loaderData.apiAvailable) {
     return (
       <Stack gap="md">
@@ -155,6 +185,58 @@ export default function RepositoryCatalog({ loaderData }: Route.ComponentProps) 
         runs={loaderData.recentRuns}
         viewAllTo={`/runs?repositoryId=${encodeURIComponent(loaderData.repositoryId)}`}
       />
+
+      {repository ? (
+        <CommitIndexingSettings actionData={actionData} repository={repository} />
+      ) : null}
+    </Stack>
+  );
+}
+
+function CommitIndexingSettings({
+  actionData,
+  repository,
+}: Readonly<{
+  actionData: Route.ComponentProps["actionData"];
+  repository: Repository;
+}>) {
+  const navigation = useNavigation();
+
+  return (
+    <Stack gap="md">
+      <SectionHeader title="Commit indexing" />
+      <Paper p="md" withBorder>
+        <Form method="post">
+          <Stack gap="md">
+            {actionData?.error ? (
+              <Alert color="red" title="Commit indexing was not updated">
+                {actionData.error}
+              </Alert>
+            ) : null}
+            {actionData?.updated ? (
+              <Alert color="green" title="Commit indexing updated">
+                The new mode will be used by subsequent repository refreshes.
+              </Alert>
+            ) : null}
+            <NativeSelect
+              data={[
+                { label: "Disabled", value: "disabled" },
+                { label: "Observed branch heads", value: "observedHeads" },
+                { label: "Complete tracked branch history", value: "trackedBranchHistory" },
+              ]}
+              defaultValue={repository.commitIndexing}
+              description="Exact SHAs used by Runs and catalogs are retained in every mode. Disabling indexing does not erase metadata already collected."
+              label="Metadata collection"
+              name="commitIndexing"
+            />
+            <Group justify="flex-end">
+              <Button loading={navigation.state === "submitting"} size="compact-md" type="submit">
+                Save indexing mode
+              </Button>
+            </Group>
+          </Stack>
+        </Form>
+      </Paper>
     </Stack>
   );
 }
