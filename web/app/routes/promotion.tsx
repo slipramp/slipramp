@@ -15,8 +15,8 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { useEffect, useMemo, useState } from "react";
-import { Form, Link, useNavigation, useRevalidator } from "react-router";
+import { useMemo, useState } from "react";
+import { Form, Link, useNavigation } from "react-router";
 
 import { proxyArtifactDownload } from "~/api/artifact-download.server";
 import { createServerAPIClient, getServerAPIURL } from "~/api/client.server";
@@ -30,12 +30,15 @@ import {
 } from "~/api/generated";
 import { Timestamp } from "~/components/display";
 import { useActionSuccessToast } from "~/components/action-notifications";
+import { useActivityRefresh } from "~/components/activity-refresh";
 import { CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
 import { KargoButton } from "~/components/kargo-link";
+import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader } from "~/components/page";
 import { formValue, optionalFormValue } from "~/form-data";
+import { promotionActivity } from "~/execution-activity";
 import { filterArgoDiffResources, parseArgoDiff, type ArgoDiffResource } from "~/promotion-diff";
 import { pageTitle } from "~/page-title";
 
@@ -114,7 +117,9 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
 export default function PromotionDetail({ actionData, loaderData }: Route.ComponentProps) {
   useActionSuccessToast(actionData, "Decision recorded", actionData?.message);
-  useCreatingPromotionRefresh(loaderData.promotion?.status === "creating");
+  useActivityRefresh(
+    loaderData.promotion !== undefined && promotionActivity(loaderData.promotion) !== undefined,
+  );
 
   if (!loaderData.promotion) {
     return (
@@ -144,6 +149,8 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         title={promotion.externalPromotionId}
       />
 
+      <KawaiiActivity activity={promotionActivity(promotion)} />
+
       {actionData?.error ? (
         <Alert color="red" title="Decision failed">
           {actionData.error}
@@ -171,22 +178,6 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       <DecisionPanel canWrite={canWrite} promotion={promotion} />
     </Stack>
   );
-}
-
-function useCreatingPromotionRefresh(creating: boolean) {
-  const revalidator = useRevalidator();
-
-  useEffect(() => {
-    if (!creating) return;
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible" && revalidator.state === "idle") {
-        void revalidator.revalidate();
-      }
-    }, 3000);
-
-    return () => window.clearInterval(interval);
-  }, [creating, revalidator]);
 }
 
 function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {

@@ -186,6 +186,9 @@ func (s *serviceContentStore) Put(
 }
 
 func (s *serviceContentStore) Open(_ context.Context, key string) (objectstore.Object, error) {
+	if s.err != nil {
+		return objectstore.Object{}, s.err
+	}
 	contents := s.contents
 	if s.objects != nil {
 		contents = s.objects[key]
@@ -353,18 +356,116 @@ func TestServiceSealsAndReconnectsToDurableLog(t *testing.T) {
 		t.Fatalf("repeated SealLog() error = %v", err)
 	}
 
-	stream, err := service.StreamLog(context.Background(), runID, 6)
+	for _, test := range []struct {
+		name      string
+		offset    int64
+		chunks    []LogStreamChunk
+		sourceErr error
+	}{
+		{name: "chunk boundary", offset: 6, chunks: []LogStreamChunk{
+			{OffsetBytes: 6, NextOffsetBytes: 11, Contents: []byte("logs\n")},
+		}},
+		{name: "inside chunk", offset: 8, chunks: []LogStreamChunk{
+			{OffsetBytes: 8, NextOffsetBytes: 11, Contents: []byte("gs\n")},
+		}},
+		{name: "sealed end", offset: 11},
+		{name: "source EOF", offset: 6, sourceErr: io.EOF},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			contents.err = test.sourceErr
+			stream, err := service.StreamLog(context.Background(), runID, test.offset)
+			if err != nil {
+				t.Fatalf("StreamLog() error = %v", err)
+			}
+			defer func() { _ = stream.Close() }()
+			if test.sourceErr != nil {
+				if _, err := stream.Next(); !errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+					t.Errorf("Next() error = %v, want unexpected EOF without normal completion", err)
+				}
+
+				return
+			}
+			for _, want := range test.chunks {
+				chunk, err := stream.Next()
+				if err != nil {
+					t.Fatalf("Next() error = %v", err)
+				}
+				if chunk.OffsetBytes != want.OffsetBytes || chunk.NextOffsetBytes != want.NextOffsetBytes ||
+					!slices.Equal(chunk.Contents, want.Contents) {
+					t.Errorf("chunk = %#v, want %#v", chunk, want)
+				}
+			}
+			if _, err := stream.Next(); !errors.Is(err, io.EOF) {
+				t.Errorf("drained Next() error = %v, want EOF", err)
+			}
+		})
+	}
+}
+
+func TestServiceLogStreamFollowsAppendAndCloseCancelsRead(t *testing.T) {
+	t.Parallel()
+
+	metadata := &serviceMetadataStore{runCluster: "colo", chunks: map[int64]LogChunk{}}
+	contents := &serviceContentStore{}
+	service := newTestService(metadata, contents)
+	runID := uuid.New()
+	if _, err := service.GetLogCursor(context.Background(), runID, "colo"); err != nil {
+		t.Fatalf("GetLogCursor() error = %v", err)
+	}
+	stream, err := service.StreamLog(context.Background(), runID, 0)
 	if err != nil {
 		t.Fatalf("StreamLog() error = %v", err)
 	}
-	events, err := io.ReadAll(stream)
-	if err != nil {
-		t.Fatalf("read stream: %v", err)
+	defer func() { _ = stream.Close() }()
+	request := AppendLogChunkRequest{RunID: runID, ClusterName: "colo", Contents: []byte("live")}
+	if err := service.AppendLogChunk(context.Background(), request); err != nil {
+		t.Fatalf("AppendLogChunk() error = %v", err)
 	}
-	if !strings.Contains(string(events), "bG9ncwo=") ||
-		!strings.Contains(string(events), "event: sealed") {
-		t.Errorf("events = %q", events)
+	chunk, err := stream.Next()
+	if err != nil || chunk.OffsetBytes != 0 || chunk.NextOffsetBytes != 4 || string(chunk.Contents) != "live" {
+		t.Fatalf("Next() = (%#v, %v), want newly appended chunk", chunk, err)
 	}
+	request.OffsetBytes = 4
+	if err := service.AppendLogChunk(context.Background(), request); err != nil {
+		t.Fatalf("append next chunk: %v", err)
+	}
+	reader, writer := io.Pipe()
+	defer func() { _ = writer.Close() }()
+	blocked := &blockedLogContentStore{ContentStore: contents, body: reader, opened: make(chan struct{})}
+	service.contents = blocked
+	result := make(chan error, 1)
+	go func() {
+		_, err := stream.Next()
+		result <- err
+	}()
+	select {
+	case <-blocked.opened:
+	case <-time.After(time.Second):
+		t.Fatal("Next() did not open the next chunk")
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("closed Next() error = %v, want context cancellation", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Close() did not interrupt the blocked read")
+	}
+}
+
+type blockedLogContentStore struct {
+	ContentStore
+	body   io.ReadCloser
+	opened chan struct{}
+}
+
+func (s *blockedLogContentStore) Open(context.Context, string) (objectstore.Object, error) {
+	close(s.opened)
+
+	return objectstore.Object{Body: s.body, Size: 4}, nil
 }
 
 func TestServiceUploadsDeclaredArtifactIdempotently(t *testing.T) {

@@ -5,7 +5,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -189,6 +191,31 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 		t.Fatalf("seal recovered log: %v", err)
 	}
 	requireRecoveryStatus(t, seal, http.StatusNoContent)
+
+	resumeOffset := int64(len(beforeRestart) + 2)
+	lastEventID := fmt.Sprint(resumeOffset)
+	streamContext, stopStream := context.WithTimeout(ctx, 10*time.Second)
+	streamed, err := client.StreamRunLogWithResponse(
+		streamContext, firstRunID, &api.StreamRunLogParams{LastEventID: &lastEventID}, productAuthorization,
+	)
+	stopStream()
+	if err != nil {
+		t.Fatalf("reconnect to recovered log: %v", err)
+	}
+	requireRecoveryStatus(t, streamed, http.StatusOK)
+	encodedEvent, err := json.Marshal(api.LogEvent{
+		OffsetBytes: resumeOffset, NextOffsetBytes: int64(len(completeLog)), ContentsBase64: afterRestart[2:],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedEvents := fmt.Sprintf(
+		"id: %d\nevent: chunk\ndata: %s\n\nid: %d\nevent: sealed\ndata: {}\n\n",
+		len(completeLog), encodedEvent, len(completeLog),
+	)
+	if string(streamed.Body) != expectedEvents {
+		t.Errorf("recovered SSE stream = %q, want %q", streamed.Body, expectedEvents)
+	}
 
 	succeeded := api.RunObservationOutcomeSucceeded
 	exitCode := int32(0)

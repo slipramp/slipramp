@@ -1,0 +1,103 @@
+.activity {
+  display: none;
+}
+
+:global(:root[data-slipramp-theme="kawaii"]) .activity {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  overflow: hidden;
+  border: 1px solid var(--slipramp-border);
+  border-radius: var(--mantine-radius-lg);
+  background: linear-gradient(110deg, #fff0f7, #fffaf2 58%, #effcf8);
+}
+
+.worker {
+  flex: 0 0 8rem;
+  width: 8rem;
+  aspect-ratio: 6 / 5;
+  background-image: url("/slipramp-axolotl-working.webp");
+  background-repeat: no-repeat;
+  background-position: 0 55%;
+  background-size: 400% auto;
+  animation: working 1.6s step-end infinite;
+}
+
+.copy {
+  min-width: 0;
+}
+
+.eyebrow {
+  color: var(--mantine-color-sakura-8);
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0.15rem 0 0.25rem;
+  font-size: var(--mantine-font-size-md);
+  font-weight: 700;
+}
+
+.description {
+  margin: 0;
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+}
+
+:global(:root[data-slipramp-theme="kawaii"]) .activity[data-compact] {
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.5rem;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.activity[data-compact] .worker {
+  flex-basis: 100%;
+  width: 100%;
+}
+
+/* Four equal sprite cells share a stationary laptop; paws and eyes change. */
+@keyframes working {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  30% {
+    background-position-x: calc(100% / 3);
+  }
+
+  60% {
+    background-position-x: calc(200% / 3);
+  }
+
+  70% {
+    background-position-x: 100%;
+  }
+}
+
+@media (width < 36em) {
+  :global(:root[data-slipramp-theme="kawaii"]) .activity:not([data-compact]) {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .activity:not([data-compact]) .worker {
+    flex-basis: 6rem;
+    width: 6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .worker {
+    animation: none;
+  }
+}

@@ -1457,6 +1457,13 @@ type LogCursor struct {
 // LogCursorState defines model for LogCursor.State.
 type LogCursorState string
 
+// LogEvent defines model for LogEvent.
+type LogEvent struct {
+	ContentsBase64  []byte `json:"contentsBase64"`
+	NextOffsetBytes int64  `json:"nextOffsetBytes"`
+	OffsetBytes     int64  `json:"offsetBytes"`
+}
+
 // LogSeal defines model for LogSeal.
 type LogSeal struct {
 	Sha256    string `json:"sha256"`

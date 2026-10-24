@@ -1,15 +1,18 @@
-import { Alert, Anchor, Badge, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { getCommit, listPromotions, listRuns, type Promotion, type Run } from "~/api/generated";
+import { useKawaiiActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime } from "~/components/display";
 import { CommitDetails } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
+import { KawaiiActivity } from "~/components/kawaii-activity";
 import { ListPagination } from "~/components/list-controls";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, SectionHeader } from "~/components/page";
 import { abbreviateMiddle, shortIdentifier } from "~/display";
+import { promotionActivity, runActivity } from "~/execution-activity";
 import { pageTitle } from "~/page-title";
 import { runSourceLabel } from "~/run-source";
 import { runStatusColor } from "~/run-status";
@@ -89,6 +92,11 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 }
 
 export default function Commit({ loaderData }: Route.ComponentProps) {
+  useKawaiiActivityRefresh(
+    loaderData.runs.some((run) => run.phase !== "finished") ||
+      loaderData.promotions.some((promotion) => promotionActivity(promotion) !== undefined),
+  );
+
   if (!loaderData.commit) {
     return (
       <Stack gap="md">
@@ -202,9 +210,12 @@ function RunAssociations({ runs }: Readonly<{ runs: Run[] }>) {
                   </Stack>
                 </Table.Td>
                 <Table.Td>
-                  <Badge color={runStatusColor(run)} variant="light">
-                    {run.outcome ?? run.phase}
-                  </Badge>
+                  <Group gap="xs" wrap="nowrap">
+                    <KawaiiActivity activity={runActivity(run)} compact />
+                    <Badge color={runStatusColor(run)} variant="light">
+                      {run.outcome ?? run.phase}
+                    </Badge>
+                  </Group>
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={0}>
@@ -270,9 +281,12 @@ function PromotionAssociations({
                   <Badge variant="outline">{promotionCommitRole(promotion, commitSha)}</Badge>
                 </Table.Td>
                 <Table.Td>
-                  <Badge color={promotionStatusColor(promotion.status)} variant="light">
-                    {promotionStatusLabel(promotion.status)}
-                  </Badge>
+                  <Group gap="xs" wrap="nowrap">
+                    <KawaiiActivity activity={promotionActivity(promotion)} compact />
+                    <Badge color={promotionStatusColor(promotion.status)} variant="light">
+                      {promotionStatusLabel(promotion.status)}
+                    </Badge>
+                  </Group>
                 </Table.Td>
                 <Table.Td style={{ whiteSpace: "nowrap" }}>
                   <Stack gap={0}>

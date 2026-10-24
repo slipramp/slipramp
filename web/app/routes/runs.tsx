@@ -10,12 +10,15 @@ import {
   type Repository,
   type Run,
 } from "~/api/generated";
+import { useKawaiiActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime, Timestamp } from "~/components/display";
 import { CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
+import { KawaiiActivity } from "~/components/kawaii-activity";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
 import { formatDuration, shortIdentifier } from "~/display";
+import { runActivity } from "~/execution-activity";
 import { pageTitle } from "~/page-title";
 import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
@@ -100,6 +103,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 }
 
 export default function RunHistory({ loaderData }: Route.ComponentProps) {
+  useKawaiiActivityRefresh(loaderData.runs.some((run) => run.phase !== "finished"));
   const repositoryNames = new Map(
     loaderData.repositories.map((repository) => [repository.id, repository.name]),
   );
@@ -261,6 +265,7 @@ function HistoryTable({
                 </Table.Td>
                 <Table.Td>
                   <Group gap="xs" wrap="nowrap">
+                    <KawaiiActivity activity={runActivity(run)} compact />
                     <Badge color={runStatusColor(run)} variant="light">
                       {run.outcome ?? run.phase}
                     </Badge>

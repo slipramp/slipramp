@@ -47,6 +47,7 @@ import {
   listRunArtifacts,
   rerunRun,
   type Artifact,
+  type LogEvent,
   type Run,
   type RunArtifactConsumer,
   type RunArtifactInput,
@@ -54,6 +55,7 @@ import {
 import { RelativeTime, Timestamp } from "~/components/display";
 import { CommitDetails, CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
+import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, SectionHeader } from "~/components/page";
 import {
@@ -63,6 +65,7 @@ import {
   shortIdentifier,
 } from "~/display";
 import { pageTitle } from "~/page-title";
+import { runActivity } from "~/execution-activity";
 import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 
@@ -302,6 +305,8 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         }
         title={`Run ${run.id.slice(0, 8)}`}
       />
+
+      <KawaiiActivity activity={runActivity(run)} />
 
       {actionData?.error ? (
         <Alert color="red" title="Run operation failed">
@@ -839,10 +844,7 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
       source = new EventSource(streamURL);
       source.addEventListener("open", () => setStatus("Live"));
       source.addEventListener("chunk", (event) => {
-        const payload = JSON.parse((event as MessageEvent<string>).data) as {
-          contentsBase64: string;
-          nextOffsetBytes: number;
-        };
+        const payload = JSON.parse((event as MessageEvent<string>).data) as LogEvent;
         const binary = atob(payload.contentsBase64);
         const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
         nextOffsetBytes = payload.nextOffsetBytes;

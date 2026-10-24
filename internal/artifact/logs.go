@@ -4,14 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -215,27 +212,6 @@ func (s *Service) SealLog(ctx context.Context, request SealLogRequest) error {
 	return nil
 }
 
-func (s *Service) StreamLog(ctx context.Context, runID uuid.UUID, offsetBytes int64) (io.ReadCloser, error) {
-	if offsetBytes < 0 {
-		return nil, invalid("log offset must not be negative")
-	}
-	record, err := s.artifacts.GetArtifactByRunAndName(ctx, runID, logArtifactName)
-	if err != nil {
-		return nil, err
-	}
-	if record.RetentionState != RetentionRetained {
-		return nil, ErrNotFound
-	}
-	if offsetBytes > record.SizeBytes {
-		return nil, invalid("log offset exceeds durable size")
-	}
-
-	reader, writer := io.Pipe()
-	go s.writeLogEvents(ctx, writer, record.ID, offsetBytes)
-
-	return reader, nil
-}
-
 func (s *Service) ensureLogArtifact(ctx context.Context, runID uuid.UUID) (Artifact, error) {
 	record, err := s.artifacts.GetArtifactByRunAndName(ctx, runID, logArtifactName)
 	if err == nil {
@@ -343,87 +319,4 @@ func (s *Service) copyLogContents(ctx context.Context, artifactID uuid.UUID, des
 	}
 
 	return offset, nil
-}
-
-func (s *Service) writeLogEvents(ctx context.Context, writer *io.PipeWriter, artifactID uuid.UUID, offsetBytes int64) {
-	defer func() { _ = writer.Close() }()
-
-	cursor := offsetBytes
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		chunks, err := s.logChunks.ListLogChunks(ctx, artifactID, cursor)
-		if err != nil {
-			_ = writer.CloseWithError(err)
-			return
-		}
-		for _, chunk := range chunks {
-			if chunk.EndOffset() <= cursor {
-				continue
-			}
-			object, err := s.contents.Open(ctx, chunk.ObjectKey)
-			if err != nil {
-				_ = writer.CloseWithError(err)
-				return
-			}
-			contents, readErr := io.ReadAll(object.Body)
-			closeErr := object.Body.Close()
-			if readErr != nil || closeErr != nil {
-				_ = writer.CloseWithError(errors.Join(readErr, closeErr))
-				return
-			}
-			if int64(len(contents)) != chunk.SizeBytes {
-				_ = writer.CloseWithError(fmt.Errorf(
-					"log chunk at byte %d has size %d, expected %d",
-					chunk.OffsetBytes,
-					len(contents),
-					chunk.SizeBytes,
-				))
-				return
-			}
-
-			start := max(cursor-chunk.OffsetBytes, 0)
-			if start > int64(len(contents)) {
-				_ = writer.CloseWithError(errors.New("log cursor exceeds chunk contents"))
-				return
-			}
-			contents = contents[start:]
-			event := struct {
-				OffsetBytes     int64  `json:"offsetBytes"`
-				NextOffsetBytes int64  `json:"nextOffsetBytes"`
-				ContentsBase64  string `json:"contentsBase64"`
-			}{
-				OffsetBytes:     cursor,
-				NextOffsetBytes: chunk.EndOffset(),
-				ContentsBase64:  base64.StdEncoding.EncodeToString(contents),
-			}
-			encoded, _ := json.Marshal(event)
-			if _, err := fmt.Fprintf(
-				writer,
-				"id: %d\nevent: chunk\ndata: %s\n\n",
-				event.NextOffsetBytes,
-				encoded,
-			); err != nil {
-				return
-			}
-			cursor = chunk.EndOffset()
-		}
-
-		record, err := s.artifacts.GetArtifact(ctx, artifactID)
-		if err != nil {
-			_ = writer.CloseWithError(err)
-			return
-		}
-		if record.State != StateOpen && cursor >= record.SizeBytes {
-			_, _ = fmt.Fprintf(writer, "id: %d\nevent: sealed\ndata: {}\n\n", cursor)
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-	}
 }

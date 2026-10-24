@@ -54,10 +54,10 @@ execution without requiring a trigger.
 
 - [ ] Broaden acceptance for multiple execution Clusters, Pod loss, network
       interruptions, Controller/Server restarts, and PostgreSQL/S3 outages, including
-      retained log recovery and cancellation under failure. Unit coverage includes
-      responsive command polling during blocked Run work, coalesced cancellation,
-      and bounded Kargo command attempts;
-      exercise these paths against real dependencies as part of acceptance, along
+      retained log recovery, SSE reconnection, and cancellation under failure.
+      Unit coverage includes responsive command polling during blocked Run work,
+      coalesced cancellation, and bounded Kargo command attempts; exercise these
+      paths against real dependencies as part of acceptance, along
       with Promotion preparation retry recovery and terminal diagnostics.
 - [ ] Expand operational diagnostics beyond current readiness and observation
       freshness, guided by those failure cases.

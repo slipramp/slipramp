@@ -369,6 +369,12 @@ Live logs use reconnectable SSE whose event ID is the next durable byte offset.
 Live viewing and retained capture share the same ingestion path. Pod logs are
 the source during execution, never the durable record.
 
+The artifact service exposes a cancellable pull stream of raw log chunks and
+byte offsets, owning durable polling and cursor validation. The HTTP adapter
+encodes the generated log-event payload and SSE framing, including completion.
+Chunks are read as the response consumes them; the generated response writer
+flushes output and closes the stream on completion or disconnection.
+
 Assignments include a deterministic, narrowly scoped artifact credential
 derived from a Server HMAC key. The Harness may download only explicit input
 bindings and upload only frozen Action output names. The Server streams bytes
@@ -855,6 +861,16 @@ exposed through readiness for external monitoring and failure diagnosis.
 Targets have their own searchable, repository-filtered, paginated index.
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
+
+The optional kawaii theme adds a typing axolotl at a laptop beside status badges
+and on detail pages for assigned, preparing, and running Runs and for creating
+or preparing Promotions. Queued or finished Runs, unknown Run observations, and
+Promotions awaiting review or already decided do not show activity. Cancellation
+intent retains activity with stopping text until the Run finishes. Promotion
+details refresh throughout creation and preparation. In the kawaii theme, visible
+lists refresh while Runs are unfinished or Promotions are creating or preparing.
+Activity respects reduced motion preferences and leaves textual status indicators
+available.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

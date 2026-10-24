@@ -3,14 +3,17 @@ import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { listPromotions, type Promotion, type PromotionStatus } from "~/api/generated";
+import { useKawaiiActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime } from "~/components/display";
 import { CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
 import { KargoLink } from "~/components/kargo-link";
+import { KawaiiActivity } from "~/components/kawaii-activity";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
 import { promotionScopeFilters } from "~/components/promotion-scope-filters";
 import { abbreviateMiddle } from "~/display";
+import { promotionActivity } from "~/execution-activity";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
 
@@ -65,6 +68,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 }
 
 export default function Promotions({ loaderData }: Route.ComponentProps) {
+  useKawaiiActivityRefresh(
+    loaderData.promotions.some((promotion) => promotionActivity(promotion) !== undefined),
+  );
+
   return (
     <Stack gap="lg">
       <PageHeader
@@ -249,9 +256,12 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
         )}
       </Table.Td>
       <Table.Td>
-        <Badge color={promotionStatusColor(promotion.status)} variant="light">
-          {promotionStatusLabel(promotion.status)}
-        </Badge>
+        <Group gap="xs" wrap="nowrap">
+          <KawaiiActivity activity={promotionActivity(promotion)} compact />
+          <Badge color={promotionStatusColor(promotion.status)} variant="light">
+            {promotionStatusLabel(promotion.status)}
+          </Badge>
+        </Group>
       </Table.Td>
       <Table.Td>
         <Stack gap={0}>

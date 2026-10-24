@@ -8,3 +8,5 @@ generate:
 output: internal/api/generated.go
 output-options:
   name-normalizer: ToCamelCaseWithInitialisms
+  # Retain payload types used by handwritten SSE adapters.
+  skip-prune: true

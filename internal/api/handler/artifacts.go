@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/google/uuid"
 
@@ -26,7 +25,7 @@ type ArtifactService interface {
 	List(context.Context, uuid.UUID) ([]artifact.Record, error)
 	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
 	OpenInput(context.Context, uuid.UUID, string) (artifact.Content, error)
-	StreamLog(context.Context, uuid.UUID, int64) (io.ReadCloser, error)
+	StreamLog(context.Context, uuid.UUID, int64) (artifact.LogStream, error)
 }
 
 func (h *Handler) AppendRunLogChunk(
@@ -294,41 +293,6 @@ func (h *Handler) DownloadRunInput(
 		ContentLength: content.Artifact.SizeBytes,
 		Headers:       api.DownloadRunInput200ResponseHeaders{Digest: &digest},
 	}, nil
-}
-
-func (h *Handler) StreamRunLog(
-	ctx context.Context,
-	request api.StreamRunLogRequestObject,
-) (api.StreamRunLogResponseObject, error) {
-	offset := int64(0)
-	if request.Params.OffsetBytes != nil {
-		offset = *request.Params.OffsetBytes
-	}
-	if request.Params.LastEventID != nil {
-		parsed, err := strconv.ParseInt(*request.Params.LastEventID, 10, 64)
-		if err != nil || parsed < 0 {
-			problem := NewProblem(http.StatusBadRequest, "Last-Event-ID must be a nonnegative byte offset.")
-			return api.StreamRunLog400ApplicationProblemPlusJSONResponse(problem), nil
-		}
-		if request.Params.OffsetBytes == nil {
-			offset = parsed
-		}
-	}
-
-	stream, err := h.artifacts.StreamLog(ctx, request.RunID, offset)
-	if errors.Is(err, artifact.ErrInvalid) {
-		problem := NewProblem(http.StatusBadRequest, err.Error())
-		return api.StreamRunLog400ApplicationProblemPlusJSONResponse(problem), nil
-	}
-	if errors.Is(err, artifact.ErrNotFound) {
-		problem := NewProblem(http.StatusNotFound, "The Run log does not exist.")
-		return api.StreamRunLog404ApplicationProblemPlusJSONResponse(problem), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	return api.StreamRunLog200TextEventStreamResponse{Body: stream}, nil
 }
 
 func artifactResponse(record artifact.Record, commit api.GitCommit) api.Artifact {

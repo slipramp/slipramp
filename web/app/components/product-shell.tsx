@@ -163,7 +163,7 @@ export function ProductShell({
                 alt=""
                 className="product-header-mascot"
                 decoding="async"
-                src="/slipramp-mascot.png"
+                src="/slipramp-mascot.webp"
               />
             </Box>
             <AppearanceControl />

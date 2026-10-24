@@ -1,11 +1,14 @@
-import { Alert, Anchor, Badge, Button, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { IconListDetails } from "@tabler/icons-react";
 import { Link } from "react-router";
 
 import type { Run } from "~/api/generated";
+import { useKawaiiActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime } from "~/components/display";
+import { KawaiiActivity } from "~/components/kawaii-activity";
 import { SectionHeader } from "~/components/page";
 import { formatDuration, shortIdentifier } from "~/display";
+import { runActivity } from "~/execution-activity";
 import { runStatusColor } from "~/run-status";
 
 export const recentRunLimit = 10;
@@ -23,6 +26,8 @@ export function RecentRuns({
   runs: Run[];
   viewAllTo: string;
 }>) {
+  useKawaiiActivityRefresh(runs.some((run) => run.phase !== "finished"));
+
   return (
     <Stack gap="md">
       <SectionHeader
@@ -79,9 +84,12 @@ export function RecentRuns({
                       </Stack>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={runStatusColor(run)} variant="light">
-                        {run.outcome ?? run.phase}
-                      </Badge>
+                      <Group gap="xs" wrap="nowrap">
+                        <KawaiiActivity activity={runActivity(run)} compact />
+                        <Badge color={runStatusColor(run)} variant="light">
+                          {run.outcome ?? run.phase}
+                        </Badge>
+                      </Group>
                     </Table.Td>
                     <Table.Td>
                       <Stack gap={0}>

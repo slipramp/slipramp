@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -916,9 +915,13 @@ type recordingControllerIdentityService struct {
 }
 
 type recordingArtifactService struct {
-	calls   int
-	request artifact.AppendLogChunkRequest
-	err     error
+	calls        int
+	request      artifact.AppendLogChunkRequest
+	err          error
+	stream       artifact.LogStream
+	streamCalls  int
+	streamRunID  uuid.UUID
+	streamOffset int64
 }
 
 type recordingPromotionDispatchService struct {
@@ -1050,8 +1053,15 @@ func (*recordingArtifactService) OpenInput(context.Context, uuid.UUID, string) (
 	return artifact.Content{}, artifact.ErrNotFound
 }
 
-func (*recordingArtifactService) StreamLog(context.Context, uuid.UUID, int64) (io.ReadCloser, error) {
-	return nil, artifact.ErrNotFound
+func (r *recordingArtifactService) StreamLog(_ context.Context, runID uuid.UUID, offset int64) (artifact.LogStream, error) {
+	r.streamCalls++
+	r.streamRunID = runID
+	r.streamOffset = offset
+	if r.stream == nil {
+		return nil, artifact.ErrNotFound
+	}
+
+	return r.stream, nil
 }
 
 func controllerIdentityFor(token string, clusterName string) *recordingControllerIdentityService {
