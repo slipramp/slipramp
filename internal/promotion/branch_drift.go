@@ -95,7 +95,7 @@ type branchDriftCacheEntry struct {
 
 type branchDriftEvidence struct {
 	status               BranchDriftStatus
-	acknowledgement      successfulRenderAcknowledgement
+	acknowledgement      SuccessfulRenderAcknowledgement
 	acknowledgedTargetAt *time.Time
 	sourceBranchRevision string
 	sourceBranchAt       *time.Time
@@ -103,12 +103,6 @@ type branchDriftEvidence struct {
 	sourceDrift          bool
 	targetDrift          bool
 	message              string
-}
-
-type successfulRenderAcknowledgement struct {
-	SourceRevision string `json:"sourceRevision"`
-	TargetRevision string `json:"targetRevision"`
-	ResultRevision string `json:"resultRevision"`
 }
 
 func NewBranchDriftService(
@@ -269,7 +263,7 @@ func (s *BranchDriftService) scanRepository(
 	requests := make([]repository.BranchComparisonRequest, 0, len(stages))
 	requestStageIDs := make([]uuid.UUID, 0, len(stages))
 	for _, stage := range stages {
-		acknowledgement, err := decodeSuccessfulRenderAcknowledgement(stage.SuccessfulRenderAcknowledgement)
+		acknowledgement, err := validatedRenderAcknowledgement(stage.SuccessfulRenderAcknowledgement)
 		if err != nil {
 			entry.stages[stage.ID] = branchDriftEvidence{
 				status:  BranchDriftStatusUnknown,
@@ -524,7 +518,7 @@ func pendingBranchDriftCacheEntry(
 		refreshing:  true,
 	}
 	for _, stage := range stages {
-		acknowledgement, err := decodeSuccessfulRenderAcknowledgement(stage.SuccessfulRenderAcknowledgement)
+		acknowledgement, err := validatedRenderAcknowledgement(stage.SuccessfulRenderAcknowledgement)
 		message := "Branch drift refresh is pending."
 		if err != nil {
 			message = err.Error()
@@ -539,24 +533,21 @@ func pendingBranchDriftCacheEntry(
 	return entry
 }
 
-func decodeSuccessfulRenderAcknowledgement(value json.RawMessage) (successfulRenderAcknowledgement, error) {
-	if len(value) == 0 {
-		return successfulRenderAcknowledgement{}, fmt.Errorf(
+func validatedRenderAcknowledgement(value *SuccessfulRenderAcknowledgement) (SuccessfulRenderAcknowledgement, error) {
+	if value == nil {
+		return SuccessfulRenderAcknowledgement{}, fmt.Errorf(
 			"Stage has no successful-render acknowledgement",
 		)
 	}
 
-	var acknowledgement successfulRenderAcknowledgement
-	if err := json.Unmarshal(value, &acknowledgement); err != nil {
-		return successfulRenderAcknowledgement{}, fmt.Errorf("decode successful-render acknowledgement: %w", err)
-	}
+	acknowledgement := *value
 	for label, revision := range map[string]string{
 		"source revision":        acknowledgement.SourceRevision,
 		"render base revision":   acknowledgement.TargetRevision,
 		"render result revision": acknowledgement.ResultRevision,
 	} {
 		if err := validateRevision(label, revision); err != nil {
-			return successfulRenderAcknowledgement{}, fmt.Errorf(
+			return SuccessfulRenderAcknowledgement{}, fmt.Errorf(
 				"Stage successful-render acknowledgement is invalid: %w",
 				err,
 			)
@@ -590,7 +581,7 @@ func branchDriftFingerprint(record repository.Repository, stages []Stage) [sha25
 		ID                              uuid.UUID
 		TargetBranch                    string
 		SourcePaths                     []string
-		SuccessfulRenderAcknowledgement string
+		SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 	}
 	type fingerprintValue struct {
 		CloneURL              string
@@ -609,7 +600,7 @@ func branchDriftFingerprint(record repository.Repository, stages []Stage) [sha25
 			ID:                              stage.ID,
 			TargetBranch:                    stage.TargetBranch,
 			SourcePaths:                     slices.Clone(stage.SourcePaths),
-			SuccessfulRenderAcknowledgement: string(stage.SuccessfulRenderAcknowledgement),
+			SuccessfulRenderAcknowledgement: stage.SuccessfulRenderAcknowledgement,
 		})
 	}
 	encoded, err := json.Marshal(value)

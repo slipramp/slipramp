@@ -1600,23 +1600,23 @@ type Promotion struct {
 	NextDispatchAt       *time.Time `json:"nextDispatchAt,omitempty"`
 
 	// NextReconciliationAt Next durable inspection time while the materialized resource awaits callback.
-	NextReconciliationAt   *time.Time             `json:"nextReconciliationAt,omitempty"`
-	PolicySnapshot         map[string]interface{} `json:"policySnapshot"`
-	PreparationCompletedAt *time.Time             `json:"preparationCompletedAt,omitempty"`
-	PreparationRun         *Run                   `json:"preparationRun,omitempty"`
-	PreparationRunID       *openapi_types.UUID    `json:"preparationRunId,omitempty"`
-	RepositoryID           openapi_types.UUID     `json:"repositoryId"`
-	RepositorySnapshot     map[string]interface{} `json:"repositorySnapshot"`
-	RequestedBy            RunActor               `json:"requestedBy"`
-	ReviewRequired         bool                   `json:"reviewRequired"`
-	SelectedFreight        *PromotionFreightItem  `json:"selectedFreight,omitempty"`
-	Source                 PromotionSource        `json:"source"`
-	SourceStageID          *openapi_types.UUID    `json:"sourceStageId,omitempty"`
-	StageID                openapi_types.UUID     `json:"stageId"`
-	StageSnapshot          map[string]interface{} `json:"stageSnapshot"`
-	Status                 PromotionStatus        `json:"status"`
-	TargetBranch           string                 `json:"targetBranch"`
-	UpdatedAt              time.Time              `json:"updatedAt"`
+	NextReconciliationAt   *time.Time                  `json:"nextReconciliationAt,omitempty"`
+	PolicySnapshot         PromotionStagePolicy        `json:"policySnapshot"`
+	PreparationCompletedAt *time.Time                  `json:"preparationCompletedAt,omitempty"`
+	PreparationRun         *Run                        `json:"preparationRun,omitempty"`
+	PreparationRunID       *openapi_types.UUID         `json:"preparationRunId,omitempty"`
+	RepositoryID           openapi_types.UUID          `json:"repositoryId"`
+	RepositorySnapshot     PromotionRepositorySnapshot `json:"repositorySnapshot"`
+	RequestedBy            RunActor                    `json:"requestedBy"`
+	ReviewRequired         bool                        `json:"reviewRequired"`
+	SelectedFreight        *PromotionFreightItem       `json:"selectedFreight,omitempty"`
+	Source                 PromotionSource             `json:"source"`
+	SourceStageID          *openapi_types.UUID         `json:"sourceStageId,omitempty"`
+	StageID                openapi_types.UUID          `json:"stageId"`
+	StageSnapshot          PromotionStageSnapshot      `json:"stageSnapshot"`
+	Status                 PromotionStatus             `json:"status"`
+	TargetBranch           string                      `json:"targetBranch"`
+	UpdatedAt              time.Time                   `json:"updatedAt"`
 }
 
 // PromotionBranchDriftList defines model for PromotionBranchDriftList.
@@ -1805,6 +1805,14 @@ type PromotionProjectList struct {
 	Total  int                `json:"total"`
 }
 
+// PromotionRepositorySnapshot defines model for PromotionRepositorySnapshot.
+type PromotionRepositorySnapshot struct {
+	Branch                 string      `json:"branch"`
+	CheckoutCredentialName *string     `json:"checkoutCredentialName,omitempty"`
+	CloneURL               string      `json:"cloneUrl"`
+	Name                   CatalogName `json:"name"`
+}
+
 // PromotionRunSource defines model for PromotionRunSource.
 type PromotionRunSource struct {
 	PromotionID openapi_types.UUID `json:"promotionId"`
@@ -1825,20 +1833,20 @@ type PromotionStage struct {
 	Integration     CatalogName        `json:"integration"`
 
 	// KargoURL Direct link to this Stage in the configured Kargo UI.
-	KargoURL                        *string                   `json:"kargoUrl,omitempty"`
-	KubernetesUID                   string                    `json:"kubernetesUid"`
-	LastObservedAt                  time.Time                 `json:"lastObservedAt"`
-	Name                            string                    `json:"name"`
-	PendingPromotionCount           int                       `json:"pendingPromotionCount"`
-	Policy                          PromotionStagePolicy      `json:"policy"`
-	Project                         CatalogName               `json:"project"`
-	Repository                      CatalogName               `json:"repository"`
-	RepositoryURL                   string                    `json:"repositoryUrl"`
-	RequestedFreight                []PromotionFreightRequest `json:"requestedFreight"`
-	ResourceVersion                 string                    `json:"resourceVersion"`
-	SourcePaths                     []string                  `json:"sourcePaths"`
-	SuccessfulRenderAcknowledgement *map[string]interface{}   `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    string                    `json:"targetBranch"`
+	KargoURL                        *string                          `json:"kargoUrl,omitempty"`
+	KubernetesUID                   string                           `json:"kubernetesUid"`
+	LastObservedAt                  time.Time                        `json:"lastObservedAt"`
+	Name                            string                           `json:"name"`
+	PendingPromotionCount           int                              `json:"pendingPromotionCount"`
+	Policy                          PromotionStagePolicy             `json:"policy"`
+	Project                         CatalogName                      `json:"project"`
+	Repository                      CatalogName                      `json:"repository"`
+	RepositoryURL                   string                           `json:"repositoryUrl"`
+	RequestedFreight                []PromotionFreightRequest        `json:"requestedFreight"`
+	ResourceVersion                 string                           `json:"resourceVersion"`
+	SourcePaths                     []string                         `json:"sourcePaths"`
+	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
+	TargetBranch                    string                           `json:"targetBranch"`
 }
 
 // PromotionStageList defines model for PromotionStageList.
@@ -1851,18 +1859,18 @@ type PromotionStageList struct {
 
 // PromotionStageObservation defines model for PromotionStageObservation.
 type PromotionStageObservation struct {
-	Application                     string                    `json:"application"`
-	Environment                     string                    `json:"environment"`
-	Freight                         PromotionFreight          `json:"freight"`
-	KubernetesUID                   string                    `json:"kubernetesUid"`
-	Name                            string                    `json:"name"`
-	Project                         CatalogName               `json:"project"`
-	RepositoryURL                   string                    `json:"repositoryUrl"`
-	RequestedFreight                []PromotionFreightRequest `json:"requestedFreight"`
-	ResourceVersion                 string                    `json:"resourceVersion"`
-	SourcePaths                     []string                  `json:"sourcePaths"`
-	SuccessfulRenderAcknowledgement *map[string]interface{}   `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    string                    `json:"targetBranch"`
+	Application                     string                           `json:"application"`
+	Environment                     string                           `json:"environment"`
+	Freight                         PromotionFreight                 `json:"freight"`
+	KubernetesUID                   string                           `json:"kubernetesUid"`
+	Name                            string                           `json:"name"`
+	Project                         CatalogName                      `json:"project"`
+	RepositoryURL                   string                           `json:"repositoryUrl"`
+	RequestedFreight                []PromotionFreightRequest        `json:"requestedFreight"`
+	ResourceVersion                 string                           `json:"resourceVersion"`
+	SourcePaths                     []string                         `json:"sourcePaths"`
+	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
+	TargetBranch                    string                           `json:"targetBranch"`
 }
 
 // PromotionStagePolicy defines model for PromotionStagePolicy.
@@ -1880,6 +1888,27 @@ type PromotionStagePolicyUpdate struct {
 	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
 	Mode      PromotionPolicyMode `json:"mode"`
 	Reason    *string             `json:"reason,omitempty"`
+}
+
+// PromotionStageSnapshot defines model for PromotionStageSnapshot.
+type PromotionStageSnapshot struct {
+	Application                     string                           `json:"application"`
+	Cluster                         CatalogName                      `json:"cluster"`
+	Environment                     string                           `json:"environment"`
+	Freight                         PromotionFreight                 `json:"freight"`
+	ID                              openapi_types.UUID               `json:"id"`
+	Integration                     CatalogName                      `json:"integration"`
+	KubernetesUID                   string                           `json:"kubernetesUid"`
+	LastObservedAt                  time.Time                        `json:"lastObservedAt"`
+	Name                            string                           `json:"name"`
+	Project                         CatalogName                      `json:"project"`
+	Repository                      CatalogName                      `json:"repository"`
+	RepositoryURL                   string                           `json:"repositoryUrl"`
+	RequestedFreight                []PromotionFreightRequest        `json:"requestedFreight"`
+	ResourceVersion                 string                           `json:"resourceVersion"`
+	SourcePaths                     []string                         `json:"sourcePaths"`
+	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
+	TargetBranch                    string                           `json:"targetBranch"`
 }
 
 // PromotionStatus defines model for PromotionStatus.
@@ -2338,6 +2367,13 @@ type ServiceAccountList struct {
 	Limit  int              `json:"limit"`
 	Offset int              `json:"offset"`
 	Total  int              `json:"total"`
+}
+
+// SuccessfulRenderAcknowledgement defines model for SuccessfulRenderAcknowledgement.
+type SuccessfulRenderAcknowledgement struct {
+	ResultRevision *string `json:"resultRevision,omitempty"`
+	SourceRevision *string `json:"sourceRevision,omitempty"`
+	TargetRevision *string `json:"targetRevision,omitempty"`
 }
 
 // Target defines model for Target.

@@ -109,6 +109,12 @@ Targets begin at the commit where they become active; removed Targets archive.
 Repository refresh indexes Git; target reconciliation executes optional `sync`.
 Watch patterns alone never start execution.
 
+Catalog revision reads contain only immutable definitions and revision metadata.
+The active catalog view pairs that revision with mutable Target state, read from
+one repeatable-read PostgreSQL snapshot so refresh cannot mix different accepted
+heads. A Target's desired commit may remain older than the active catalog commit
+when its watched paths did not change.
+
 ### Parameters
 
 Parameters are `string`, `boolean`, `number`, or `enum`, with required and enum
@@ -523,6 +529,13 @@ reuse returns `409`. Persisting the request, actor, and snapshots precedes Run
 creation. Domain states, including terminal errors, return the same machine
 response shape rather than masquerading as transport errors.
 
+Promotion Stage, Repository, policy, and selected Freight snapshots are typed
+domain values. Stage inventory and frozen snapshots share typed Freight and
+render acknowledgements. PostgreSQL encodes and decodes their JSONB at the
+storage boundary; services and Inbox projections use typed facts directly.
+OpenAPI defines the corresponding response shapes, and HTTP maps the domain
+values without JSON round trips. Snapshot creation copies nested mutable data.
+
 `Promotion` is the only user-facing lifecycle for both Kargo-originated and
 Slipramp-originated requests. Its source records which path created it; no
 parallel start or invocation resource exists. Kargo-originated Promotions begin
@@ -675,6 +688,13 @@ flows use one dialog, can open the durable Promotion immediately or leave it in
 the background, and periodically refresh its detail while creation is in
 progress. The Kargo resource link appears only after successful Controller
 delivery is recorded.
+
+Promotion history applies filters, pending-first ordering, counts, and pagination
+in PostgreSQL. The count and page share one read snapshot, and only the requested
+page's snapshots are decoded. Historical filters use the frozen Stage snapshot.
+Pipelines obtain grouped pending Promotion counts for matching active Stages
+without loading Promotion history; topology and Freight comparison stay in the
+Promotion domain.
 
 Pipeline choices come only from current Freight on the destination Stage's
 declared upstream Stages whose origin matches its requested Freight. They do not

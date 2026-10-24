@@ -42,7 +42,8 @@ import { promotionActivity } from "~/execution-activity";
 import { filterArgoDiffResources, parseArgoDiff, type ArgoDiffResource } from "~/promotion-diff";
 import { pageTitle } from "~/page-title";
 
-import { promotionStatusColor, promotionStatusLabel, snapshotString } from "./promotions";
+import { promotionStatusColor, promotionStatusLabel } from "./promotions";
+import styles from "./promotion.module.css";
 import type { Route } from "./+types/promotion";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -162,7 +163,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         </Alert>
       ) : null}
       {promotion.status === "creating" ? (
-        <Alert color="cyan" title="Creating Promotion in Kargo">
+        <Alert className={styles.creationNotice} color="cyan" title="Creating Promotion in Kargo">
           Slipramp is delivering this request or waiting for Kargo to submit its promotion data.
         </Alert>
       ) : null}
@@ -191,19 +192,13 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
         <Title order={2}>Promotion context</Title>
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
           <Fact label="Integration" value={promotion.integration} />
-          <Fact
-            label="Stage"
-            value={`${snapshotString(stage, "project") ?? "unknown"}/${snapshotString(stage, "name") ?? "unknown"}`}
-          />
-          <Fact label="Application" value={snapshotString(stage, "application") ?? "Unknown"} />
-          <Fact label="Environment" value={snapshotString(stage, "environment") ?? "Unknown"} />
-          <Fact label="Repository" value={snapshotString(repository, "name") ?? "Unknown"} />
+          <Fact label="Stage" value={`${stage.project}/${stage.name}`} />
+          <Fact label="Application" value={stage.application} />
+          <Fact label="Environment" value={stage.environment} />
+          <Fact label="Repository" value={repository.name} />
           <Fact label="Target branch" value={promotion.targetBranch} />
           <Fact label="Candidate branch" value={promotion.candidateBranch ?? "Waiting for Kargo"} />
-          <Fact
-            label="Policy snapshot"
-            value={snapshotString(policy, "effectiveMode") ?? "Unknown"}
-          />
+          <Fact label="Policy snapshot" value={policy.effectiveMode} />
         </SimpleGrid>
         <SimpleGrid cols={{ base: 1, md: 2 }}>
           <Revision

@@ -2,7 +2,6 @@ package inbox
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -321,14 +320,11 @@ func activeRun(id uuid.UUID, phase run.Phase, clusterName string, observedAt tim
 }
 
 func inboxPromotion(id uuid.UUID, status promotion.PromotionStatus, at time.Time) PromotionState {
-	stageSnapshot, err := json.Marshal(map[string]string{"name": "production", "application": "api"})
-	if err != nil {
-		panic(err)
-	}
 	message := "Diff collection failed."
 	return PromotionState{
 		ID:              id,
-		StageSnapshot:   stageSnapshot,
+		StageName:       "production",
+		Application:     "api",
 		CandidateBranch: "kargo/promotion/api",
 		TargetBranch:    "main",
 		Status:          status,

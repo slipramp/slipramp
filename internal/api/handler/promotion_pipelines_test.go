@@ -48,7 +48,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 						ID:             stageID,
 						Name:           "external-dns-prod",
 						Environment:    "prod",
-						Freight:        []byte(`{"items":[{"origin":"Warehouse/external-dns","name":"freight-1","artifacts":[{"kind":"image","repository":"ghcr.io/example/external-dns","version":"1.2.3"}]}]}`),
+						Freight:        promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/external-dns", Name: "freight-1", Artifacts: []promotion.FreightArtifact{{Kind: "image", Repository: new("ghcr.io/example/external-dns"), Version: "1.2.3"}}}}},
 						LastObservedAt: now,
 					},
 					PromotionSources: []promotion.FreightPromotionSource{{

@@ -624,20 +624,14 @@ export type Promotion = {
   externalPromotionId: string;
   stageId: string;
   sourceStageId?: string;
-  stageSnapshot: {
-    [key: string]: unknown;
-  };
+  stageSnapshot: PromotionStageSnapshot;
   repositoryId: string;
-  repositorySnapshot: {
-    [key: string]: unknown;
-  };
+  repositorySnapshot: PromotionRepositorySnapshot;
   baseCommit?: GitCommit;
   candidateCommit?: GitCommit;
   candidateBranch?: string;
   targetBranch: string;
-  policySnapshot: {
-    [key: string]: unknown;
-  };
+  policySnapshot: PromotionStagePolicy;
   selectedFreight?: PromotionFreightItem;
   reviewRequired: boolean;
   status: PromotionStatus;
@@ -722,9 +716,7 @@ export type PromotionStage = {
   sourcePaths: Array<string>;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
-  successfulRenderAcknowledgement?: {
-    [key: string]: unknown;
-  };
+  successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
   policy: PromotionStagePolicy;
   pendingPromotionCount: number;
   firstObservedAt: string;
@@ -1274,6 +1266,12 @@ export type KargoPromotionResponse = {
 
 export type PromotionSource = "kargo" | "slipramp";
 
+export type PromotionFreightRequest = {
+  origin: string;
+  direct: boolean;
+  sourceStages: Array<string>;
+};
+
 export type PromotionFreightArtifact = {
   kind: "git" | "image" | "chart";
   repository?: string;
@@ -1286,6 +1284,41 @@ export type PromotionFreightItem = {
   artifacts: Array<PromotionFreightArtifact>;
 };
 
+export type SuccessfulRenderAcknowledgement = {
+  sourceRevision?: string;
+  targetRevision?: string;
+  resultRevision?: string;
+};
+
+export type PromotionStageSnapshot = {
+  id: string;
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  name: string;
+  kubernetesUid: string;
+  resourceVersion: string;
+  application: string;
+  environment: string;
+  repository: CatalogName;
+  repositoryUrl: string;
+  targetBranch: string;
+  sourcePaths: Array<string>;
+  requestedFreight: Array<PromotionFreightRequest>;
+  freight: PromotionFreight;
+  successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
+  lastObservedAt: string;
+};
+
+export type PromotionRepositorySnapshot = {
+  name: CatalogName;
+  cloneUrl: string;
+  branch: string;
+  checkoutCredentialName?: string;
+};
+
+export type PromotionPolicyMode = "automatic" | "review-required";
+
 export type PromotionDecision = {
   decision: "approved" | "rejected";
   comment?: string;
@@ -1297,14 +1330,6 @@ export type PromotionDecisionUpdate = {
   decision: "approved" | "rejected";
   comment?: string;
 };
-
-export type PromotionFreightRequest = {
-  origin: string;
-  direct: boolean;
-  sourceStages: Array<string>;
-};
-
-export type PromotionPolicyMode = "automatic" | "review-required";
 
 export type PromotionStagePolicyUpdate = {
   mode: PromotionPolicyMode;
@@ -1377,9 +1402,7 @@ export type PromotionStageObservation = {
   sourcePaths: Array<string>;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
-  successfulRenderAcknowledgement?: {
-    [key: string]: unknown;
-  };
+  successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
 };
 
 export type KargoStageSnapshot = {

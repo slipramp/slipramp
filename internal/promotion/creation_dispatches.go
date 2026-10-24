@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -95,13 +94,10 @@ func (s *CreationDispatchService) Next(ctx context.Context, clusterName string) 
 		return CreationCommand{}, err
 	}
 
-	var stage PromotionStageSnapshot
-	if err := json.Unmarshal(record.StageSnapshot, &stage); err != nil {
-		return CreationCommand{}, fmt.Errorf("decode Promotion creation Stage snapshot: %w", err)
-	}
-	var freight FreightItem
-	if err := json.Unmarshal(record.SelectedFreightSnapshot, &freight); err != nil {
-		return CreationCommand{}, fmt.Errorf("decode Promotion creation Freight snapshot: %w", err)
+	stage := record.StageSnapshot
+	freight := record.SelectedFreightSnapshot
+	if freight == nil {
+		return CreationCommand{}, fmt.Errorf("%w: claimed Promotion has no selected Freight", ErrInvalid)
 	}
 	command := CreationCommand{
 		PromotionID:  record.ID,

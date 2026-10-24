@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -531,11 +530,11 @@ func createDispatchablePromotion(
 
 	stage := fixture.stage
 	stage.ResourceVersion = uuid.NewString()
-	stage.Freight = json.RawMessage(`{"items":[{
-      "origin":"Warehouse/external-dns",
-      "name":"freight-42",
-      "artifacts":[{"kind":"image","version":"1.2.3"}]
-    }]}`)
+	stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin:    "Warehouse/external-dns",
+		Name:      "freight-42",
+		Artifacts: []promotion.FreightArtifact{{Kind: "image", Version: "1.2.3"}},
+	}}}
 	stage.FirstObservedAt = acceptedAt.Add(-30 * time.Second)
 	stage.LastObservedAt = acceptedAt.Add(-30 * time.Second)
 	if err := fixture.database.ReplacePromotionStageSnapshot(

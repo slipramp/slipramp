@@ -272,8 +272,7 @@ function PromotionAssociations({
                       {abbreviateMiddle(promotion.externalPromotionId, 30)}
                     </Anchor>
                     <Text c="dimmed" size="xs">
-                      {snapshotString(promotion.stageSnapshot, "name") ??
-                        shortIdentifier(promotion.stageId)}
+                      {promotion.stageSnapshot.name}
                     </Text>
                   </Stack>
                 </Table.Td>
@@ -353,11 +352,6 @@ function promotionStatusLabel(status: Promotion["status"]) {
     case "rejected":
       return "Rejected";
   }
-}
-
-function snapshotString(snapshot: Record<string, unknown>, key: string) {
-  const value = snapshot[key];
-  return typeof value === "string" ? value : undefined;
 }
 
 function setPage(url: URL, name: string, page: number) {

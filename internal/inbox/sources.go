@@ -1,7 +1,6 @@
 package inbox
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +22,8 @@ type ActiveRun struct {
 // PromotionState contains only the current Promotion facts used by the Inbox.
 type PromotionState struct {
 	ID              uuid.UUID
-	StageSnapshot   json.RawMessage
+	StageName       string
+	Application     string
 	CandidateBranch string
 	TargetBranch    string
 	Status          promotion.PromotionStatus

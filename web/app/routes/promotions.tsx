@@ -185,10 +185,9 @@ function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
 }
 
 function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
-  const stageName =
-    snapshotString(promotion.stageSnapshot, "name") ?? promotion.stageId.slice(0, 8);
-  const project = snapshotString(promotion.stageSnapshot, "project");
-  const application = snapshotString(promotion.stageSnapshot, "application") ?? "—";
+  const stageName = promotion.stageSnapshot.name;
+  const project = promotion.stageSnapshot.project;
+  const application = promotion.stageSnapshot.application;
 
   return (
     <Table.Tr>
@@ -316,11 +315,6 @@ export function promotionStatusLabel(status: PromotionStatus) {
     case "error":
       return "Failed";
   }
-}
-
-export function snapshotString(snapshot: Record<string, unknown>, key: string) {
-  const value = snapshot[key];
-  return typeof value === "string" ? value : undefined;
 }
 
 function optionalStatus(value: string | null): PromotionStatus | undefined {

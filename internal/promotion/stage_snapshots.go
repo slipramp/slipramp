@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"time"
@@ -23,8 +22,8 @@ type StageObservation struct {
 	TargetBranch                    string
 	SourcePaths                     []string
 	RequestedFreight                []FreightRequest
-	Freight                         json.RawMessage
-	SuccessfulRenderAcknowledgement json.RawMessage
+	Freight                         Freight
+	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 }
 
 type StageSnapshotReplacement struct {
@@ -136,9 +135,9 @@ func (s *StageService) ReplaceStageSnapshot(
 			RepositoryURL:                   observed.RepositoryURL,
 			TargetBranch:                    observed.TargetBranch,
 			SourcePaths:                     slices.Clone(observed.SourcePaths),
-			RequestedFreight:                slices.Clone(observed.RequestedFreight),
-			Freight:                         slices.Clone(observed.Freight),
-			SuccessfulRenderAcknowledgement: slices.Clone(observed.SuccessfulRenderAcknowledgement),
+			RequestedFreight:                cloneFreightRequests(observed.RequestedFreight),
+			Freight:                         cloneFreight(observed.Freight),
+			SuccessfulRenderAcknowledgement: cloneRenderAcknowledgement(observed.SuccessfulRenderAcknowledgement),
 			FirstObservedAt:                 snapshot.ObservedAt,
 			LastObservedAt:                  snapshot.ObservedAt,
 		}

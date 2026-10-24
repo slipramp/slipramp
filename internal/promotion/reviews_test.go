@@ -3,6 +3,7 @@ package promotion
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -12,14 +13,19 @@ import (
 )
 
 type reviewStore struct {
-	stages      []Stage
-	policies    map[uuid.UUID]StagePolicy
-	promotions  []Promotion
-	decisions   map[uuid.UUID]Decision
-	stagePage   StageReviewPage
-	stageFilter StageListFilter
-	stageCalls  int
-	expiredAt   time.Time
+	stages          []Stage
+	policies        map[uuid.UUID]StagePolicy
+	promotions      []Promotion
+	decisions       map[uuid.UUID]Decision
+	stagePage       StageReviewPage
+	stageFilter     StageListFilter
+	stageCalls      int
+	expiredAt       time.Time
+	promotionPage   PromotionReviewPage
+	promotionFilter PromotionListFilter
+	promotionCalls  int
+	promotionReadAt time.Time
+	pendingStageIDs []uuid.UUID
 }
 
 func (s *reviewStore) ListPromotionStages(context.Context) ([]Stage, error) {
@@ -64,8 +70,27 @@ func (s *reviewStore) UpsertPromotionStagePolicy(
 	return record, nil
 }
 
-func (s *reviewStore) ListPromotions(context.Context) ([]Promotion, error) {
-	return s.promotions, nil
+func (s *reviewStore) ListPromotionReviews(_ context.Context, filter PromotionListFilter) (PromotionReviewPage, error) {
+	s.promotionFilter = filter
+	s.promotionCalls++
+	s.promotionReadAt = s.expiredAt
+
+	return s.promotionPage, nil
+}
+
+func (s *reviewStore) CountPendingPromotionsByStage(
+	_ context.Context,
+	stageIDs []uuid.UUID,
+) (map[uuid.UUID]int, error) {
+	s.pendingStageIDs = slices.Clone(stageIDs)
+	counts := make(map[uuid.UUID]int)
+	for _, record := range s.promotions {
+		if record.Status == StatusPending && slices.Contains(stageIDs, record.StageID) {
+			counts[record.StageID]++
+		}
+	}
+
+	return counts, nil
 }
 
 func (s *reviewStore) GetPromotion(_ context.Context, id uuid.UUID) (Promotion, error) {
@@ -245,64 +270,47 @@ func TestReviewServiceRejectsArchivedPolicyUpdateAndAttributesValidUpdate(t *tes
 	}
 }
 
-func TestReviewServiceFiltersAndExpiresPromotionsBeforeReview(t *testing.T) {
+func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 21, 18, 0, 0, 0, time.UTC)
-	stageID := uuid.New()
-	expiredAt := now.Add(-time.Minute)
-	pendingID := uuid.New()
-	otherID := uuid.New()
-	repositoryID := uuid.New()
-	commitSHA := "0123456789abcdef0123456789abcdef01234567"
+	record := Promotion{
+		ID:        uuid.New(),
+		Status:    StatusPending,
+		ExpiresAt: new(now.Add(-time.Minute)),
+	}
+	expired := record
+	expired.Status = StatusExpired
 	store := &reviewStore{
-		policies: map[uuid.UUID]StagePolicy{},
-		promotions: []Promotion{
-			{
-				ID:            pendingID,
-				RepositoryID:  repositoryID,
-				BaseRevision:  commitSHA,
-				Integration:   "prod",
-				StageID:       stageID,
-				StageSnapshot: []byte(`{"cluster":"colo","project":"kargo-core","application":"external-dns"}`),
-				Status:        StatusPending,
-				ExpiresAt:     &expiredAt,
-				CreatedAt:     now.Add(-2 * time.Hour),
-			},
-			{
-				ID:            otherID,
-				RepositoryID:  uuid.New(),
-				BaseRevision:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-				Integration:   "prod",
-				StageID:       uuid.New(),
-				StageSnapshot: []byte(`{"cluster":"colo","project":"kargo-core","application":"metrics"}`),
-				Status:        StatusPending,
-				ExpiresAt:     &expiredAt,
-				CreatedAt:     now.Add(-time.Hour),
-			},
-		},
-		decisions: map[uuid.UUID]Decision{},
+		promotions:    []Promotion{record},
+		promotionPage: PromotionReviewPage{Items: []Promotion{expired}, Total: 5},
 	}
 	service := NewReviewService(store)
 	service.now = func() time.Time { return now }
+	filter := PromotionListFilter{
+		RepositoryID: new(uuid.New()),
+		CommitSHA:    "0123456789abcdef0123456789abcdef01234567",
+		Status:       StatusExpired,
+		Integration:  "prod",
+		StageID:      new(uuid.New()),
+		Cluster:      "colo",
+		Project:      "kargo-core",
+		Application:  "external-dns",
+		Limit:        1,
+		Offset:       2,
+	}
 
-	result, err := service.ListPromotions(
-		t.Context(),
-		PromotionListFilter{
-			RepositoryID: &repositoryID,
-			CommitSHA:    commitSHA,
-			Status:       StatusExpired,
-			Cluster:      "colo",
-			Project:      "kargo-core",
-			Application:  "external-dns",
-			Limit:        DefaultListLimit,
-		},
-	)
+	result, err := service.ListPromotions(t.Context(), filter)
 	if err != nil {
 		t.Fatalf("ListPromotions() error = %v", err)
 	}
-	if result.Total != 1 || result.Items[0].Promotion.ID != pendingID ||
-		result.Items[0].Promotion.Status != StatusExpired {
+	if store.promotionCalls != 1 || store.promotionFilter != filter || !store.promotionReadAt.Equal(now) ||
+		store.promotions[0].Status != StatusExpired {
+		t.Errorf("Promotion page read = calls %d, filter %#v, expiry time %s",
+			store.promotionCalls, store.promotionFilter, store.promotionReadAt)
+	}
+	if result.Total != 5 || result.Limit != 1 || result.Offset != 2 || len(result.Items) != 1 ||
+		result.Items[0].Promotion.ID != record.ID || result.Items[0].Promotion.Status != StatusExpired {
 		t.Errorf("ListPromotions() = %#v", result)
 	}
 }
@@ -374,7 +382,7 @@ func reviewStage(integration, cluster, project, name string, now time.Time) Stag
 		RepositoryURL:   "https://example.com/ops.git",
 		TargetBranch:    "stage/" + name,
 		SourcePaths:     []string{"k8s/" + name},
-		Freight:         []byte(`{"items":[]}`),
+		Freight:         Freight{Items: []FreightItem{}},
 		FirstObservedAt: now.Add(-time.Hour),
 		LastObservedAt:  now,
 	}

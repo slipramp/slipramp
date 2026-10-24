@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,40 +74,12 @@ func (d *Database) CreateOperatorPromotion(
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
-	stageSnapshot, err := json.Marshal(promotion.PromotionStageSnapshot{
-		ID:                              target.ID,
-		Integration:                     target.Integration,
-		ClusterName:                     target.ClusterName,
-		Project:                         target.Project,
-		Name:                            target.Name,
-		KubernetesUID:                   target.KubernetesUID,
-		ResourceVersion:                 target.ResourceVersion,
-		Application:                     target.Application,
-		Environment:                     target.Environment,
-		RepositoryName:                  target.RepositoryName,
-		RepositoryURL:                   target.RepositoryURL,
-		TargetBranch:                    target.TargetBranch,
-		SourcePaths:                     slices.Clone(target.SourcePaths),
-		RequestedFreight:                slices.Clone(target.RequestedFreight),
-		Freight:                         slices.Clone(target.Freight),
-		SuccessfulRenderAcknowledgement: slices.Clone(target.SuccessfulRenderAcknowledgement),
-		LastObservedAt:                  target.LastObservedAt,
-	})
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode operator Promotion Stage snapshot: %w", err)
-	}
-	repositorySnapshot, err := json.Marshal(promotion.PromotionRepositorySnapshot{
+	stageSnapshot := target.PromotionSnapshot()
+	repositorySnapshot := promotion.PromotionRepositorySnapshot{
 		Name:                   repositoryRow.Name,
 		CloneURL:               repositoryRow.CloneUrl,
 		Branch:                 repositoryRow.Branch,
 		CheckoutCredentialName: repositoryRow.CheckoutCredentialName,
-	})
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode operator Promotion repository snapshot: %w", err)
-	}
-	policy, err := json.Marshal(policySnapshot)
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode operator Promotion policy snapshot: %w", err)
 	}
 	requestedBy, err := json.Marshal(acceptance.RequestedBySnapshot)
 	if err != nil {
@@ -133,7 +104,7 @@ func (d *Database) CreateOperatorPromotion(
 		RepositoryID:            uuid.UUID(repositoryRow.ID.Bytes),
 		RepositorySnapshot:      repositorySnapshot,
 		TargetBranch:            target.TargetBranch,
-		PolicySnapshot:          policy,
+		PolicySnapshot:          policySnapshot,
 		SelectedFreightSnapshot: selectedFreight,
 		ReviewRequired:          reviewRequired,
 		Status:                  promotion.StatusCreating,
@@ -149,7 +120,11 @@ func (d *Database) CreateOperatorPromotion(
 		return promotion.Promotion{}, err
 	}
 
-	row, err := queries.CreatePromotion(ctx, promotionDatabaseParams(record, requestedBy))
+	params, err := promotionDatabaseParams(record, requestedBy)
+	if err != nil {
+		return promotion.Promotion{}, err
+	}
+	row, err := queries.CreatePromotion(ctx, params)
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("insert operator Promotion: %w", err)
 	}

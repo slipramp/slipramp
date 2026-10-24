@@ -129,40 +129,12 @@ func (d *Database) acceptPromotionRequest(
 		return promotion.Promotion{}, fmt.Errorf("get Kargo Promotion Stage policy: %w", err)
 	}
 
-	stageSnapshot, err := json.Marshal(promotion.PromotionStageSnapshot{
-		ID:                              stage.ID,
-		Integration:                     stage.Integration,
-		ClusterName:                     stage.ClusterName,
-		Project:                         stage.Project,
-		Name:                            stage.Name,
-		KubernetesUID:                   stage.KubernetesUID,
-		ResourceVersion:                 stage.ResourceVersion,
-		Application:                     stage.Application,
-		Environment:                     stage.Environment,
-		RepositoryName:                  stage.RepositoryName,
-		RepositoryURL:                   stage.RepositoryURL,
-		TargetBranch:                    stage.TargetBranch,
-		SourcePaths:                     slices.Clone(stage.SourcePaths),
-		RequestedFreight:                slices.Clone(stage.RequestedFreight),
-		Freight:                         slices.Clone(stage.Freight),
-		SuccessfulRenderAcknowledgement: slices.Clone(stage.SuccessfulRenderAcknowledgement),
-		LastObservedAt:                  stage.LastObservedAt,
-	})
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode Kargo Promotion Stage snapshot: %w", err)
-	}
-	repositorySnapshot, err := json.Marshal(promotion.PromotionRepositorySnapshot{
+	stageSnapshot := stage.PromotionSnapshot()
+	repositorySnapshot := promotion.PromotionRepositorySnapshot{
 		Name:                   repositoryRow.Name,
 		CloneURL:               repositoryRow.CloneUrl,
 		Branch:                 repositoryRow.Branch,
 		CheckoutCredentialName: repositoryRow.CheckoutCredentialName,
-	})
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode Kargo Promotion repository snapshot: %w", err)
-	}
-	policy, err := json.Marshal(policySnapshot)
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("encode Kargo Promotion policy snapshot: %w", err)
 	}
 	requestedBy, err := json.Marshal(acceptance.RequestedBySnapshot)
 	if err != nil {
@@ -190,7 +162,7 @@ func (d *Database) acceptPromotionRequest(
 		CandidateRevision:      acceptance.Request.CandidateRevision,
 		CandidateBranch:        acceptance.Request.CandidateBranch,
 		TargetBranch:           stage.TargetBranch,
-		PolicySnapshot:         policy,
+		PolicySnapshot:         policySnapshot,
 		ReviewRequired:         reviewRequired,
 		Status:                 status,
 		RequestedByPrincipalID: acceptance.RequestedByPrincipalID,
@@ -212,7 +184,11 @@ func (d *Database) acceptPromotionRequest(
 		return promotion.Promotion{}, err
 	}
 
-	row, err := queries.CreatePromotion(ctx, promotionDatabaseParams(record, requestedBy))
+	params, err := promotionDatabaseParams(record, requestedBy)
+	if err != nil {
+		return promotion.Promotion{}, err
+	}
+	row, err := queries.CreatePromotion(ctx, params)
 	if constraintMatches(err, promotionIdentityConstraint) {
 		_ = transaction.Rollback(ctx)
 
@@ -272,10 +248,7 @@ func finishExistingPromotionRequest(
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}
 
-	var stage promotion.PromotionStageSnapshot
-	if err := json.Unmarshal(existing.StageSnapshot, &stage); err != nil {
-		return promotion.Promotion{}, fmt.Errorf("decode operator Promotion Stage snapshot: %w", err)
-	}
+	stage := existing.StageSnapshot
 	if stage.Project != acceptance.Request.Project || stage.Name != acceptance.Request.Stage {
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}

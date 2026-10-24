@@ -2,10 +2,8 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,6 +73,11 @@ type PromotionReviewList struct {
 	Offset int
 }
 
+type PromotionReviewPage struct {
+	Items []Promotion
+	Total int
+}
+
 type PolicyUpdate struct {
 	Mode      PolicyMode
 	ExpiresAt *time.Time
@@ -92,7 +95,7 @@ type ReviewStore interface {
 	StageReviewStore
 	GetPromotionStage(context.Context, uuid.UUID) (Stage, error)
 	UpsertPromotionStagePolicy(context.Context, StagePolicy) (StagePolicy, error)
-	ListPromotions(context.Context) ([]Promotion, error)
+	ListPromotionReviews(context.Context, PromotionListFilter) (PromotionReviewPage, error)
 	GetPromotion(context.Context, uuid.UUID) (Promotion, error)
 	GetPromotionDecision(context.Context, uuid.UUID) (Decision, error)
 	DecidePromotion(context.Context, Decision) (Promotion, Decision, error)
@@ -178,42 +181,16 @@ func (s *ReviewService) ListPromotions(
 		return PromotionReviewList{}, err
 	}
 
-	records, err := s.store.ListPromotions(ctx)
+	page, err := s.store.ListPromotionReviews(ctx, filter)
 	if err != nil {
 		return PromotionReviewList{}, err
 	}
-	items := make([]PromotionReview, 0, len(records))
-	for _, record := range records {
-		matches, matchErr := promotionMatchesFilter(record, filter)
-		if matchErr != nil {
-			return PromotionReviewList{}, matchErr
-		}
-		if !matches {
-			continue
-		}
+	items := make([]PromotionReview, 0, len(page.Items))
+	for _, record := range page.Items {
 		items = append(items, PromotionReview{Promotion: record})
 	}
-	slices.SortFunc(items, func(left, right PromotionReview) int {
-		leftPending := left.Promotion.Status == StatusPending
-		rightPending := right.Promotion.Status == StatusPending
-		if leftPending != rightPending {
-			if leftPending {
-				return -1
-			}
 
-			return 1
-		}
-		if value := right.Promotion.CreatedAt.Compare(left.Promotion.CreatedAt); value != 0 {
-			return value
-		}
-
-		return compareText(right.Promotion.ID.String(), left.Promotion.ID.String())
-	})
-
-	total := len(items)
-	items = page(items, filter.Offset, filter.Limit)
-
-	return PromotionReviewList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+	return PromotionReviewList{Items: items, Total: page.Total, Limit: filter.Limit, Offset: filter.Offset}, nil
 }
 
 func (s *ReviewService) GetPromotion(
@@ -297,45 +274,6 @@ func validateListWindow(limit, offset int) error {
 	}
 
 	return nil
-}
-
-func promotionMatchesFilter(record Promotion, filter PromotionListFilter) (bool, error) {
-	if filter.RepositoryID != nil && record.RepositoryID != *filter.RepositoryID {
-		return false, nil
-	}
-	if filter.CommitSHA != "" &&
-		record.BaseRevision != filter.CommitSHA &&
-		record.CandidateRevision != filter.CommitSHA {
-		return false, nil
-	}
-	if filter.Status != "" && record.Status != filter.Status {
-		return false, nil
-	}
-	if filter.Integration != "" && record.Integration != filter.Integration {
-		return false, nil
-	}
-	if filter.StageID != nil && record.StageID != *filter.StageID {
-		return false, nil
-	}
-	if filter.Cluster == "" && filter.Project == "" && filter.Application == "" {
-		return true, nil
-	}
-
-	var snapshot PromotionStageSnapshot
-	if err := json.Unmarshal(record.StageSnapshot, &snapshot); err != nil {
-		return false, fmt.Errorf("decode Promotion Stage snapshot for filtering: %w", err)
-	}
-	if filter.Cluster != "" && snapshot.ClusterName != filter.Cluster {
-		return false, nil
-	}
-	if filter.Project != "" && snapshot.Project != filter.Project {
-		return false, nil
-	}
-	if filter.Application != "" && snapshot.Application != filter.Application {
-		return false, nil
-	}
-
-	return true, nil
 }
 
 func page[T any](items []T, offset, limit int) []T {

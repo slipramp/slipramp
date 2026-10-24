@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -582,6 +581,19 @@ func TestBranchDriftServiceUsesAcknowledgementsAndFiltersWithoutScanningUnknownS
 		!strings.Contains(stage.Message, "no successful-render acknowledgement") {
 		t.Errorf("unknown Stage = %#v", stage)
 	}
+	store.stages[0].SuccessfulRenderAcknowledgement = &SuccessfulRenderAcknowledgement{SourceRevision: "invalid"}
+	if _, err := service.Refresh(t.Context()); err != nil {
+		t.Fatalf("refresh invalid acknowledgement: %v", err)
+	}
+	result, err = service.List(t.Context(), BranchDriftListFilter{Application: "wanted-app", Limit: DefaultListLimit})
+	if err != nil || len(result.Items) != 1 || len(result.Items[0].Stages) != 1 ||
+		result.Items[0].Stages[0].Status != BranchDriftStatusUnknown ||
+		!strings.Contains(result.Items[0].Stages[0].Message, "acknowledgement is invalid") {
+		t.Errorf("invalid acknowledgement = %#v, %v", result, err)
+	}
+	if len(scanner.requests) != 2 || len(scanner.requests[1]) != 1 {
+		t.Errorf("invalid acknowledgement was scanned: %#v", scanner.requests)
+	}
 }
 
 func branchDriftTestStage(
@@ -593,13 +605,10 @@ func branchDriftTestStage(
 	resultRevision string,
 	now time.Time,
 ) Stage {
-	acknowledgement, err := json.Marshal(successfulRenderAcknowledgement{
+	acknowledgement := &SuccessfulRenderAcknowledgement{
 		SourceRevision: sourceRevision,
 		TargetRevision: targetRevision,
 		ResultRevision: resultRevision,
-	})
-	if err != nil {
-		panic(err)
 	}
 
 	return Stage{

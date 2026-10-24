@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -37,21 +36,15 @@ func TestCreationDispatchServiceBuildsCommandAndReport(t *testing.T) {
 
 	now := time.Date(2026, time.October, 23, 18, 0, 0, 123456789, time.UTC)
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1940")
-	stageSnapshot, err := json.Marshal(PromotionStageSnapshot{
+	stageSnapshot := PromotionStageSnapshot{
 		ClusterName:   "colo",
 		Project:       "kargo-core",
 		Name:          "external-dns-prod",
 		KubernetesUID: "stage-uid",
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
-	freightSnapshot, err := json.Marshal(FreightItem{
+	freightSnapshot := &FreightItem{
 		Origin: "Warehouse/external-dns",
 		Name:   "freight-42",
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	store := &creationDispatchTestStore{record: Promotion{
 		ID:                      promotionID,

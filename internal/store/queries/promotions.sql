@@ -429,10 +429,47 @@ WHERE id = sqlc.arg(id)
   AND request_digest IS NULL
 RETURNING *;
 
--- name: ListPromotions :many
+-- name: CountPromotionReviews :one
+SELECT count(*)
+FROM promotions
+WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repository_id))
+  AND (
+      sqlc.narg(commit_sha)::text IS NULL
+      OR base_revision = sqlc.narg(commit_sha)
+      OR candidate_revision = sqlc.narg(commit_sha)
+  )
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
+  AND (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
+  AND (sqlc.narg(stage_id)::uuid IS NULL OR stage_id = sqlc.narg(stage_id))
+  AND (sqlc.narg(cluster_name)::text IS NULL OR stage_snapshot->>'cluster' = sqlc.narg(cluster_name))
+  AND (sqlc.narg(project)::text IS NULL OR stage_snapshot->>'project' = sqlc.narg(project))
+  AND (sqlc.narg(application)::text IS NULL OR stage_snapshot->>'application' = sqlc.narg(application));
+
+-- name: ListPromotionReviews :many
 SELECT *
 FROM promotions
-ORDER BY created_at DESC, id DESC;
+WHERE (sqlc.narg(repository_id)::uuid IS NULL OR repository_id = sqlc.narg(repository_id))
+  AND (
+      sqlc.narg(commit_sha)::text IS NULL
+      OR base_revision = sqlc.narg(commit_sha)
+      OR candidate_revision = sqlc.narg(commit_sha)
+  )
+  AND (sqlc.narg(status)::text IS NULL OR status = sqlc.narg(status))
+  AND (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
+  AND (sqlc.narg(stage_id)::uuid IS NULL OR stage_id = sqlc.narg(stage_id))
+  AND (sqlc.narg(cluster_name)::text IS NULL OR stage_snapshot->>'cluster' = sqlc.narg(cluster_name))
+  AND (sqlc.narg(project)::text IS NULL OR stage_snapshot->>'project' = sqlc.narg(project))
+  AND (sqlc.narg(application)::text IS NULL OR stage_snapshot->>'application' = sqlc.narg(application))
+ORDER BY (status = 'pending') DESC, created_at DESC, id DESC
+LIMIT sqlc.arg(result_limit)
+OFFSET sqlc.arg(result_offset)::bigint;
+
+-- name: CountPendingPromotionsByStage :many
+SELECT stage_id, count(*) AS pending_promotion_count
+FROM promotions
+WHERE status = 'pending'
+  AND stage_id = ANY(sqlc.arg(stage_ids)::uuid[])
+GROUP BY stage_id;
 
 -- name: GetPromotionAwaitingDispatch :one
 SELECT *

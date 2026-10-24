@@ -220,7 +220,11 @@ func (d *Database) ReplacePromotionStageSnapshot(
 	}
 
 	for _, stage := range stages {
-		if _, err := queries.UpsertPromotionStage(ctx, stageDatabaseParams(stage)); err != nil {
+		params, err := stageDatabaseParams(stage)
+		if err != nil {
+			return err
+		}
+		if _, err := queries.UpsertPromotionStage(ctx, params); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return promotion.ErrStaleSnapshot
 			}
@@ -293,24 +297,6 @@ func (d *Database) GetPromotionByExternalIdentity(
 	}
 
 	return promotionFromRow(row)
-}
-
-func (d *Database) ListPromotions(ctx context.Context) ([]promotion.Promotion, error) {
-	rows, err := d.queries.ListPromotions(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list Promotions: %w", err)
-	}
-
-	records := make([]promotion.Promotion, 0, len(rows))
-	for _, row := range rows {
-		record, decodeErr := promotionFromRow(row)
-		if decodeErr != nil {
-			return nil, decodeErr
-		}
-		records = append(records, record)
-	}
-
-	return records, nil
 }
 
 func (d *Database) GetPromotionDecision(
@@ -573,44 +559,37 @@ func finishExistingDecision(
 	return current, existing, err
 }
 
-func stageDatabaseParams(record promotion.Stage) storedb.UpsertPromotionStageParams {
-	requests := record.RequestedFreight
-	if requests == nil {
-		requests = []promotion.FreightRequest{}
+func stageDatabaseParams(record promotion.Stage) (storedb.UpsertPromotionStageParams, error) {
+	params := storedb.UpsertPromotionStageParams{
+		ID:              databaseUUID(record.ID),
+		Integration:     record.Integration,
+		ClusterName:     record.ClusterName,
+		Project:         record.Project,
+		Name:            record.Name,
+		KubernetesUid:   record.KubernetesUID,
+		ResourceVersion: record.ResourceVersion,
+		Application:     record.Application,
+		Environment:     record.Environment,
+		RepositoryName:  record.RepositoryName,
+		RepositoryUrl:   record.RepositoryURL,
+		TargetBranch:    record.TargetBranch,
+		SourcePaths:     record.SourcePaths,
+		FirstObservedAt: databaseTime(record.FirstObservedAt),
+		LastObservedAt:  databaseTime(record.LastObservedAt),
+		ArchivedAt:      optionalDatabaseTime(record.ArchivedAt),
 	}
-	requestedFreight, err := json.Marshal(requests)
-	if err != nil {
-		panic(fmt.Sprintf("encode validated requested Freight: %v", err))
+	if err := encodePromotionStageJSON(record, &params); err != nil {
+		return storedb.UpsertPromotionStageParams{}, err
 	}
 
-	return storedb.UpsertPromotionStageParams{
-		ID:                              databaseUUID(record.ID),
-		Integration:                     record.Integration,
-		ClusterName:                     record.ClusterName,
-		Project:                         record.Project,
-		Name:                            record.Name,
-		KubernetesUid:                   record.KubernetesUID,
-		ResourceVersion:                 record.ResourceVersion,
-		Application:                     record.Application,
-		Environment:                     record.Environment,
-		RepositoryName:                  record.RepositoryName,
-		RepositoryUrl:                   record.RepositoryURL,
-		TargetBranch:                    record.TargetBranch,
-		SourcePaths:                     record.SourcePaths,
-		RequestedFreightJson:            requestedFreight,
-		FreightJson:                     record.Freight,
-		SuccessfulRenderAcknowledgement: nullableJSON(record.SuccessfulRenderAcknowledgement),
-		FirstObservedAt:                 databaseTime(record.FirstObservedAt),
-		LastObservedAt:                  databaseTime(record.LastObservedAt),
-		ArchivedAt:                      optionalDatabaseTime(record.ArchivedAt),
-	}
+	return params, nil
 }
 
 func promotionDatabaseParams(
 	record promotion.Promotion,
 	requestedBy []byte,
-) storedb.CreatePromotionParams {
-	return storedb.CreatePromotionParams{
+) (storedb.CreatePromotionParams, error) {
+	params := storedb.CreatePromotionParams{
 		ID:                           databaseUUID(record.ID),
 		Source:                       string(record.Source),
 		Integration:                  record.Integration,
@@ -618,15 +597,11 @@ func promotionDatabaseParams(
 		RequestDigest:                nullablePromotionRequestDigest(record.RequestDigest),
 		StageID:                      databaseUUID(record.StageID),
 		SourceStageID:                optionalDatabaseUUID(record.SourceStageID),
-		StageSnapshot:                record.StageSnapshot,
 		RepositoryID:                 databaseUUID(record.RepositoryID),
-		RepositorySnapshot:           record.RepositorySnapshot,
 		BaseRevision:                 optionalString(record.BaseRevision),
 		CandidateRevision:            optionalString(record.CandidateRevision),
 		CandidateBranch:              optionalString(record.CandidateBranch),
 		TargetBranch:                 record.TargetBranch,
-		PolicySnapshot:               record.PolicySnapshot,
-		SelectedFreightSnapshot:      nullableJSON(record.SelectedFreightSnapshot),
 		ReviewRequired:               record.ReviewRequired,
 		Status:                       string(record.Status),
 		Message:                      record.Message,
@@ -648,33 +623,34 @@ func promotionDatabaseParams(
 		ExpiresAt:                    optionalDatabaseTime(record.ExpiresAt),
 		UpdatedAt:                    databaseTime(record.UpdatedAt),
 	}
+	if err := encodePromotionSnapshots(record, &params); err != nil {
+		return storedb.CreatePromotionParams{}, err
+	}
+
+	return params, nil
 }
 
 func promotionStageFromRow(row storedb.PromotionStage) (promotion.Stage, error) {
-	var requestedFreight []promotion.FreightRequest
-	if err := json.Unmarshal(row.RequestedFreightJson, &requestedFreight); err != nil {
-		return promotion.Stage{}, fmt.Errorf("decode requested Freight: %w", err)
-	}
 	record := promotion.Stage{
-		ID:                              uuid.UUID(row.ID.Bytes),
-		Integration:                     row.Integration,
-		ClusterName:                     row.ClusterName,
-		Project:                         row.Project,
-		Name:                            row.Name,
-		KubernetesUID:                   row.KubernetesUid,
-		ResourceVersion:                 row.ResourceVersion,
-		Application:                     row.Application,
-		Environment:                     row.Environment,
-		RepositoryName:                  row.RepositoryName,
-		RepositoryURL:                   row.RepositoryUrl,
-		TargetBranch:                    row.TargetBranch,
-		SourcePaths:                     row.SourcePaths,
-		RequestedFreight:                requestedFreight,
-		Freight:                         json.RawMessage(row.FreightJson),
-		SuccessfulRenderAcknowledgement: json.RawMessage(row.SuccessfulRenderAcknowledgement),
-		FirstObservedAt:                 row.FirstObservedAt.Time.UTC(),
-		LastObservedAt:                  row.LastObservedAt.Time.UTC(),
-		ArchivedAt:                      applicationTime(row.ArchivedAt),
+		ID:              uuid.UUID(row.ID.Bytes),
+		Integration:     row.Integration,
+		ClusterName:     row.ClusterName,
+		Project:         row.Project,
+		Name:            row.Name,
+		KubernetesUID:   row.KubernetesUid,
+		ResourceVersion: row.ResourceVersion,
+		Application:     row.Application,
+		Environment:     row.Environment,
+		RepositoryName:  row.RepositoryName,
+		RepositoryURL:   row.RepositoryUrl,
+		TargetBranch:    row.TargetBranch,
+		SourcePaths:     row.SourcePaths,
+		FirstObservedAt: row.FirstObservedAt.Time.UTC(),
+		LastObservedAt:  row.LastObservedAt.Time.UTC(),
+		ArchivedAt:      applicationTime(row.ArchivedAt),
+	}
+	if err := decodePromotionStageJSON(row, &record); err != nil {
+		return promotion.Stage{}, err
 	}
 
 	return record, record.Validate()
@@ -725,15 +701,11 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		RequestDigest:                digest,
 		StageID:                      uuid.UUID(row.StageID.Bytes),
 		SourceStageID:                applicationUUID(row.SourceStageID),
-		StageSnapshot:                json.RawMessage(row.StageSnapshot),
 		RepositoryID:                 uuid.UUID(row.RepositoryID.Bytes),
-		RepositorySnapshot:           json.RawMessage(row.RepositorySnapshot),
 		BaseRevision:                 stringValue(row.BaseRevision),
 		CandidateRevision:            stringValue(row.CandidateRevision),
 		CandidateBranch:              stringValue(row.CandidateBranch),
 		TargetBranch:                 row.TargetBranch,
-		PolicySnapshot:               json.RawMessage(row.PolicySnapshot),
-		SelectedFreightSnapshot:      json.RawMessage(row.SelectedFreightSnapshot),
 		ReviewRequired:               row.ReviewRequired,
 		Status:                       promotion.PromotionStatus(row.Status),
 		Message:                      row.Message,
@@ -758,6 +730,9 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		DecidedAt:                    applicationTime(row.DecidedAt),
 		ExpiresAt:                    applicationTime(row.ExpiresAt),
 		UpdatedAt:                    row.UpdatedAt.Time.UTC(),
+	}
+	if err := decodePromotionSnapshots(row, &record); err != nil {
+		return promotion.Promotion{}, err
 	}
 
 	return record, record.Validate()
@@ -824,14 +799,6 @@ func stringValue(value *string) string {
 	}
 
 	return *value
-}
-
-func nullableJSON(value json.RawMessage) []byte {
-	if len(value) == 0 {
-		return nil
-	}
-
-	return value
 }
 
 func applicationUUID(value pgtype.UUID) *uuid.UUID {

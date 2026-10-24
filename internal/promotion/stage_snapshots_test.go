@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -75,7 +74,7 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 				RepositoryURL:   "https://example.com/ops.git",
 				TargetBranch:    "stage/external-dns/prod",
 				SourcePaths:     []string{"k8s/external-dns/base"},
-				Freight:         json.RawMessage(`{"items":[]}`),
+				Freight:         Freight{Items: []FreightItem{}},
 			},
 		},
 	})
@@ -89,6 +88,21 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 	if stage.ID != stageID || stage.RepositoryName != "ops" || stage.Integration != "prod" ||
 		stage.ClusterName != "colo" {
 		t.Errorf("stored Stage = %#v", stage)
+	}
+	stage.RequestedFreight = []FreightRequest{{Origin: "Warehouse/app", SourceStages: []string{"app-qa"}}}
+	stage.Freight = Freight{Items: []FreightItem{{
+		Name: "freight-42", Artifacts: []FreightArtifact{{Repository: new("ghcr.io/example/app"), Version: "1.0"}},
+	}}}
+	stage.SuccessfulRenderAcknowledgement = &SuccessfulRenderAcknowledgement{SourceRevision: "observed"}
+	frozen := stage.PromotionSnapshot()
+	stage.SourcePaths[0] = "changed"
+	stage.RequestedFreight[0].SourceStages[0] = "changed"
+	*stage.Freight.Items[0].Artifacts[0].Repository = "changed"
+	stage.SuccessfulRenderAcknowledgement.SourceRevision = "changed"
+	if frozen.SourcePaths[0] != "k8s/external-dns/base" || frozen.RequestedFreight[0].SourceStages[0] != "app-qa" ||
+		*frozen.Freight.Items[0].Artifacts[0].Repository != "ghcr.io/example/app" ||
+		frozen.SuccessfulRenderAcknowledgement.SourceRevision != "observed" {
+		t.Errorf("Promotion snapshot changed with observed Stage = %#v", frozen)
 	}
 }
 
@@ -126,7 +140,7 @@ func TestStageServiceRejectsWrongClusterAndUnmatchedRepository(t *testing.T) {
 				RepositoryURL:   "https://example.com/unconfigured.git",
 				TargetBranch:    "stage/external-dns/prod",
 				SourcePaths:     []string{"k8s/external-dns/base"},
-				Freight:         json.RawMessage(`{"items":[]}`),
+				Freight:         Freight{Items: []FreightItem{}},
 			},
 		},
 	})

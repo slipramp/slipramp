@@ -137,7 +137,8 @@ func TestInboxPromotionReadIntegration(t *testing.T) {
 	}
 	if len(relevant) != 2 ||
 		relevant[0].ID != errored.ID || relevant[0].Status != promotion.StatusError ||
-		relevant[1].ID != pending.ID || relevant[1].Status != promotion.StatusPending {
+		relevant[1].ID != pending.ID || relevant[1].Status != promotion.StatusPending ||
+		relevant[1].StageName != fixture.stage.Name || relevant[1].Application != fixture.stage.Application {
 		t.Errorf("relevant Promotions = %#v", relevant)
 	}
 }

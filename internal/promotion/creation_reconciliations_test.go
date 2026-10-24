@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -38,12 +37,9 @@ func TestCreationReconciliationServiceBuildsCommandAndReport(t *testing.T) {
 
 	now := time.Date(2026, time.October, 23, 18, 0, 0, 123456789, time.UTC)
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1941")
-	stageSnapshot, err := json.Marshal(PromotionStageSnapshot{
+	stageSnapshot := PromotionStageSnapshot{
 		ClusterName: "colo",
 		Project:     "kargo-core",
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 	uid := "promotion-uid"
 	store := &creationReconciliationTestStore{record: Promotion{

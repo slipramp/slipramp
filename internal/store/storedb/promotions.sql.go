@@ -257,6 +257,83 @@ func (q *Queries) CompletePromotionPreparation(ctx context.Context, arg Complete
 	return i, err
 }
 
+const countPendingPromotionsByStage = `-- name: CountPendingPromotionsByStage :many
+SELECT stage_id, count(*) AS pending_promotion_count
+FROM promotions
+WHERE status = 'pending'
+  AND stage_id = ANY($1::uuid[])
+GROUP BY stage_id
+`
+
+type CountPendingPromotionsByStageRow struct {
+	StageID               pgtype.UUID
+	PendingPromotionCount int64
+}
+
+func (q *Queries) CountPendingPromotionsByStage(ctx context.Context, stageIds []pgtype.UUID) ([]CountPendingPromotionsByStageRow, error) {
+	rows, err := q.db.Query(ctx, countPendingPromotionsByStage, stageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountPendingPromotionsByStageRow
+	for rows.Next() {
+		var i CountPendingPromotionsByStageRow
+		if err := rows.Scan(&i.StageID, &i.PendingPromotionCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countPromotionReviews = `-- name: CountPromotionReviews :one
+SELECT count(*)
+FROM promotions
+WHERE ($1::uuid IS NULL OR repository_id = $1)
+  AND (
+      $2::text IS NULL
+      OR base_revision = $2
+      OR candidate_revision = $2
+  )
+  AND ($3::text IS NULL OR status = $3)
+  AND ($4::text IS NULL OR integration = $4)
+  AND ($5::uuid IS NULL OR stage_id = $5)
+  AND ($6::text IS NULL OR stage_snapshot->>'cluster' = $6)
+  AND ($7::text IS NULL OR stage_snapshot->>'project' = $7)
+  AND ($8::text IS NULL OR stage_snapshot->>'application' = $8)
+`
+
+type CountPromotionReviewsParams struct {
+	RepositoryID pgtype.UUID
+	CommitSha    *string
+	Status       *string
+	Integration  *string
+	StageID      pgtype.UUID
+	ClusterName  *string
+	Project      *string
+	Application  *string
+}
+
+func (q *Queries) CountPromotionReviews(ctx context.Context, arg CountPromotionReviewsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countPromotionReviews,
+		arg.RepositoryID,
+		arg.CommitSha,
+		arg.Status,
+		arg.Integration,
+		arg.StageID,
+		arg.ClusterName,
+		arg.Project,
+		arg.Application,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPromotionStageReviews = `-- name: CountPromotionStageReviews :one
 SELECT count(*)
 FROM promotion_stages
@@ -1416,6 +1493,111 @@ func (q *Queries) LinkPromotionPreparationRun(ctx context.Context, arg LinkPromo
 	return result.RowsAffected(), nil
 }
 
+const listPromotionReviews = `-- name: ListPromotionReviews :many
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+FROM promotions
+WHERE ($1::uuid IS NULL OR repository_id = $1)
+  AND (
+      $2::text IS NULL
+      OR base_revision = $2
+      OR candidate_revision = $2
+  )
+  AND ($3::text IS NULL OR status = $3)
+  AND ($4::text IS NULL OR integration = $4)
+  AND ($5::uuid IS NULL OR stage_id = $5)
+  AND ($6::text IS NULL OR stage_snapshot->>'cluster' = $6)
+  AND ($7::text IS NULL OR stage_snapshot->>'project' = $7)
+  AND ($8::text IS NULL OR stage_snapshot->>'application' = $8)
+ORDER BY (status = 'pending') DESC, created_at DESC, id DESC
+LIMIT $10
+OFFSET $9::bigint
+`
+
+type ListPromotionReviewsParams struct {
+	RepositoryID pgtype.UUID
+	CommitSha    *string
+	Status       *string
+	Integration  *string
+	StageID      pgtype.UUID
+	ClusterName  *string
+	Project      *string
+	Application  *string
+	ResultOffset int64
+	ResultLimit  int32
+}
+
+func (q *Queries) ListPromotionReviews(ctx context.Context, arg ListPromotionReviewsParams) ([]Promotion, error) {
+	rows, err := q.db.Query(ctx, listPromotionReviews,
+		arg.RepositoryID,
+		arg.CommitSha,
+		arg.Status,
+		arg.Integration,
+		arg.StageID,
+		arg.ClusterName,
+		arg.Project,
+		arg.Application,
+		arg.ResultOffset,
+		arg.ResultLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Promotion
+	for rows.Next() {
+		var i Promotion
+		if err := rows.Scan(
+			&i.ID,
+			&i.Integration,
+			&i.ExternalPromotionID,
+			&i.RequestDigest,
+			&i.StageID,
+			&i.StageSnapshot,
+			&i.RepositoryID,
+			&i.RepositorySnapshot,
+			&i.BaseRevision,
+			&i.CandidateRevision,
+			&i.CandidateBranch,
+			&i.TargetBranch,
+			&i.PolicySnapshot,
+			&i.ReviewRequired,
+			&i.Status,
+			&i.Message,
+			&i.PreparationRepositoryID,
+			&i.PreparationCatalogRevisionID,
+			&i.PreparationRunID,
+			&i.GitDiffArtifactID,
+			&i.ArgoDiffArtifactID,
+			&i.RequestedByPrincipalID,
+			&i.RequestedBySnapshot,
+			&i.CreatedAt,
+			&i.PreparationCompletedAt,
+			&i.DecidedAt,
+			&i.ExpiresAt,
+			&i.UpdatedAt,
+			&i.Source,
+			&i.SourceStageID,
+			&i.SelectedFreightSnapshot,
+			&i.DispatchAttemptCount,
+			&i.NextDispatchAt,
+			&i.LastDispatchAt,
+			&i.DispatchedAt,
+			&i.KargoPromotionUid,
+			&i.NextReconciliationAt,
+			&i.LastReconciliationAt,
+			&i.PreparationFailureCount,
+			&i.NextPreparationAttemptAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPromotionStageReviews = `-- name: ListPromotionStageReviews :many
 WITH paged_stages AS (
     SELECT id
@@ -1568,73 +1750,6 @@ func (q *Queries) ListPromotionStages(ctx context.Context) ([]PromotionStage, er
 			&i.LastObservedAt,
 			&i.ArchivedAt,
 			&i.RequestedFreightJson,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPromotions = `-- name: ListPromotions :many
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
-FROM promotions
-ORDER BY created_at DESC, id DESC
-`
-
-func (q *Queries) ListPromotions(ctx context.Context) ([]Promotion, error) {
-	rows, err := q.db.Query(ctx, listPromotions)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Promotion
-	for rows.Next() {
-		var i Promotion
-		if err := rows.Scan(
-			&i.ID,
-			&i.Integration,
-			&i.ExternalPromotionID,
-			&i.RequestDigest,
-			&i.StageID,
-			&i.StageSnapshot,
-			&i.RepositoryID,
-			&i.RepositorySnapshot,
-			&i.BaseRevision,
-			&i.CandidateRevision,
-			&i.CandidateBranch,
-			&i.TargetBranch,
-			&i.PolicySnapshot,
-			&i.ReviewRequired,
-			&i.Status,
-			&i.Message,
-			&i.PreparationRepositoryID,
-			&i.PreparationCatalogRevisionID,
-			&i.PreparationRunID,
-			&i.GitDiffArtifactID,
-			&i.ArgoDiffArtifactID,
-			&i.RequestedByPrincipalID,
-			&i.RequestedBySnapshot,
-			&i.CreatedAt,
-			&i.PreparationCompletedAt,
-			&i.DecidedAt,
-			&i.ExpiresAt,
-			&i.UpdatedAt,
-			&i.Source,
-			&i.SourceStageID,
-			&i.SelectedFreightSnapshot,
-			&i.DispatchAttemptCount,
-			&i.NextDispatchAt,
-			&i.LastDispatchAt,
-			&i.DispatchedAt,
-			&i.KargoPromotionUid,
-			&i.NextReconciliationAt,
-			&i.LastReconciliationAt,
-			&i.PreparationFailureCount,
-			&i.NextPreparationAttemptAt,
 		); err != nil {
 			return nil, err
 		}

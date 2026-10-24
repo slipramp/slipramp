@@ -17,19 +17,43 @@ import (
 var _ catalog.Store = (*Database)(nil)
 
 func (d *Database) GetActiveCatalogRevision(ctx context.Context, repositoryID uuid.UUID) (catalog.Revision, error) {
-	repositoryIdentifier := pgtype.UUID{
-		Bytes: repositoryID,
-		Valid: true,
-	}
-	row, err := d.queries.GetActiveCatalogRevision(ctx, repositoryIdentifier)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return catalog.Revision{}, catalog.ErrNotFound
-	}
+	return loadActiveCatalogRevision(ctx, d.queries, repositoryID)
+}
+
+func (d *Database) GetActiveCatalog(ctx context.Context, repositoryID uuid.UUID) (catalog.ActiveCatalog, error) {
+	// Refresh atomically replaces the active revision and mutable Target state.
+	// Keep every query on one snapshot even if a refresh commits between reads.
+	transaction, err := d.pool.BeginTx(ctx, pgx.TxOptions{
+		IsoLevel:   pgx.RepeatableRead,
+		AccessMode: pgx.ReadOnly,
+	})
 	if err != nil {
-		return catalog.Revision{}, fmt.Errorf("get active catalog revision: %w", err)
+		return catalog.ActiveCatalog{}, fmt.Errorf("begin active catalog read: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+
+	queries := d.queries.WithTx(transaction)
+	revision, err := loadActiveCatalogRevision(ctx, queries, repositoryID)
+	if err != nil {
+		return catalog.ActiveCatalog{}, err
+	}
+	states, err := queries.ListCatalogTargetStates(ctx, databaseUUID(revision.ID))
+	if err != nil {
+		return catalog.ActiveCatalog{}, fmt.Errorf("list catalog target states: %w", err)
 	}
 
-	return d.loadCatalogRevision(ctx, row.ID, row.CommitSha, row.CreatedAt)
+	targetStates := make(map[string]catalog.TargetState, len(states))
+	for _, state := range states {
+		targetStates[state.Name] = catalog.TargetState{DesiredCommitSHA: state.DesiredCommitSha}
+	}
+
+	if err := transaction.Commit(ctx); err != nil {
+		return catalog.ActiveCatalog{}, fmt.Errorf("commit active catalog read: %w", err)
+	}
+
+	return catalog.ActiveCatalog{Revision: revision, TargetStates: targetStates}, nil
 }
 
 func (d *Database) GetCatalogRevision(
@@ -51,7 +75,7 @@ func (d *Database) GetCatalogRevision(
 		return catalog.Revision{}, fmt.Errorf("get catalog revision: %w", err)
 	}
 
-	return d.loadCatalogRevision(ctx, row.ID, row.CommitSha, row.CreatedAt)
+	return loadCatalogRevision(ctx, d.queries, row.ID, row.CommitSha, row.CreatedAt)
 }
 
 func (d *Database) ListActiveTargets(
@@ -110,24 +134,37 @@ func (d *Database) ListActiveTargets(
 	return catalog.TargetList{Items: items, Total: total}, nil
 }
 
-func (d *Database) loadCatalogRevision(
+func loadActiveCatalogRevision(
 	ctx context.Context,
+	queries *storedb.Queries,
+	repositoryID uuid.UUID,
+) (catalog.Revision, error) {
+	row, err := queries.GetActiveCatalogRevision(ctx, databaseUUID(repositoryID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return catalog.Revision{}, catalog.ErrNotFound
+	}
+	if err != nil {
+		return catalog.Revision{}, fmt.Errorf("get active catalog revision: %w", err)
+	}
+
+	return loadCatalogRevision(ctx, queries, row.ID, row.CommitSha, row.CreatedAt)
+}
+
+func loadCatalogRevision(
+	ctx context.Context,
+	queries *storedb.Queries,
 	revisionID pgtype.UUID,
 	commitSHA string,
 	createdAt pgtype.Timestamptz,
 ) (catalog.Revision, error) {
-	runtimes, err := d.queries.ListCatalogRuntimes(ctx, revisionID)
+	runtimes, err := queries.ListCatalogRuntimes(ctx, revisionID)
 	if err != nil {
 		return catalog.Revision{}, fmt.Errorf("list catalog runtimes: %w", err)
 	}
 
-	targets, err := d.queries.ListCatalogTargets(ctx, revisionID)
+	targets, err := queries.ListCatalogTargets(ctx, revisionID)
 	if err != nil {
 		return catalog.Revision{}, fmt.Errorf("list catalog targets: %w", err)
-	}
-	targetStates, err := d.queries.ListCatalogTargetStates(ctx, revisionID)
-	if err != nil {
-		return catalog.Revision{}, fmt.Errorf("list catalog target states: %w", err)
 	}
 
 	decodedRuntimes, err := decodeCatalogDefinitions[catalog.Runtime]("runtime", runtimes)
@@ -140,18 +177,10 @@ func (d *Database) loadCatalogRevision(
 		return catalog.Revision{}, err
 	}
 
-	decodedTargetStates := make(map[string]catalog.TargetState, len(targetStates))
-	for _, state := range targetStates {
-		decodedTargetStates[state.Name] = catalog.TargetState{
-			DesiredCommitSHA: state.DesiredCommitSha,
-		}
-	}
-
 	return catalog.Revision{
-		ID:           uuid.UUID(revisionID.Bytes),
-		CommitSHA:    commitSHA,
-		CreatedAt:    createdAt.Time.UTC(),
-		TargetStates: decodedTargetStates,
+		ID:        uuid.UUID(revisionID.Bytes),
+		CommitSHA: commitSHA,
+		CreatedAt: createdAt.Time.UTC(),
 		Catalog: catalog.Catalog{
 			Runtimes: decodedRuntimes,
 			Targets:  decodedTargets,

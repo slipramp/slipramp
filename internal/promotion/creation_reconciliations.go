@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -84,10 +83,7 @@ func (s *CreationReconciliationService) Next(
 		return CreationReconciliationCommand{}, err
 	}
 
-	var stage PromotionStageSnapshot
-	if err := json.Unmarshal(record.StageSnapshot, &stage); err != nil {
-		return CreationReconciliationCommand{}, fmt.Errorf("decode Promotion reconciliation Stage snapshot: %w", err)
-	}
+	stage := record.StageSnapshot
 	if record.KargoPromotionUID == nil {
 		return CreationReconciliationCommand{}, fmt.Errorf("%w: claimed Promotion has no Kargo UID", ErrInvalid)
 	}

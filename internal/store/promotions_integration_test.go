@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -33,6 +32,15 @@ func TestAcceptPromotionRequestIntegration(t *testing.T) {
 		automatic.ReviewRequired || automatic.RepositoryID != fixture.repositoryID ||
 		automatic.PreparationRunID != nil {
 		t.Errorf("automatic Promotion = %#v", automatic)
+	}
+	var storedSnapshotShape bool
+	if err := fixture.database.pool.QueryRow(fixture.ctx, `
+SELECT stage_snapshot->'freight' = '{"items":[]}'::jsonb
+    AND stage_snapshot->'requestedFreight' = '[]'::jsonb
+    AND NOT (stage_snapshot ? 'successfulRenderAcknowledgement')
+    AND selected_freight_snapshot IS NULL
+FROM promotions WHERE id = $1`, automatic.ID).Scan(&storedSnapshotShape); err != nil || !storedSnapshotShape {
+		t.Errorf("stored snapshot shape = %v, %v", storedSnapshotShape, err)
 	}
 	for _, sha := range []string{automatic.BaseRevision, automatic.CandidateRevision} {
 		known, commitErr := fixture.database.GetCommit(fixture.ctx, repository.CommitKey{
@@ -92,17 +100,15 @@ func TestAcceptPromotionRequestIntegration(t *testing.T) {
 		!guarded.ExpiresAt.Equal(guardedAcceptance.AcceptedAt.Add(8*24*time.Hour)) {
 		t.Errorf("guarded Promotion = %#v", guarded)
 	}
-	var stageSnapshot promotion.PromotionStageSnapshot
-	if err := json.Unmarshal(guarded.StageSnapshot, &stageSnapshot); err != nil ||
-		stageSnapshot.ResourceVersion != fixture.stage.ResourceVersion ||
+	stageSnapshot := guarded.StageSnapshot
+	if stageSnapshot.ResourceVersion != fixture.stage.ResourceVersion ||
 		stageSnapshot.RepositoryName != fixture.stage.RepositoryName {
-		t.Errorf("Stage snapshot = %#v, %v", stageSnapshot, err)
+		t.Errorf("Stage snapshot = %#v", stageSnapshot)
 	}
-	var policySnapshot promotion.PromotionPolicySnapshot
-	if err := json.Unmarshal(guarded.PolicySnapshot, &policySnapshot); err != nil ||
-		policySnapshot.ConfiguredMode != promotion.PolicyModeReviewRequired ||
+	policySnapshot := guarded.PolicySnapshot
+	if policySnapshot.ConfiguredMode != promotion.PolicyModeReviewRequired ||
 		policySnapshot.EffectiveMode != promotion.PolicyModeReviewRequired {
-		t.Errorf("policy snapshot = %#v, %v", policySnapshot, err)
+		t.Errorf("policy snapshot = %#v", policySnapshot)
 	}
 
 	staleRequest := guardedRequest
@@ -131,11 +137,16 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	fixture.stage.ResourceVersion = "2"
 	fixture.stage.FirstObservedAt = createdAt.Add(2 * time.Minute)
 	fixture.stage.LastObservedAt = createdAt.Add(2 * time.Minute)
-	fixture.stage.Freight = json.RawMessage(`{"items":[{
-      "origin":"Warehouse/external-dns",
-      "name":"freight-42",
-      "artifacts":[{"kind":"image","repository":"ghcr.io/example/external-dns","version":"1.2.3"}]
-    }]}`)
+	fixture.stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin: "Warehouse/external-dns",
+		Name:   "freight-42",
+		Artifacts: []promotion.FreightArtifact{{
+			Kind: "image", Repository: new("ghcr.io/example/external-dns"), Version: "1.2.3",
+		}},
+	}}}
+	fixture.stage.SuccessfulRenderAcknowledgement = &promotion.SuccessfulRenderAcknowledgement{
+		SourceRevision: strings.Repeat("a", 40),
+	}
 	if err := fixture.database.ReplacePromotionStageSnapshot(
 		fixture.ctx,
 		promotionTestSnapshot(uuid.New(), "prod", "colo", createdAt.Add(2*time.Minute)),
@@ -168,14 +179,16 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 		record.NextDispatchAt == nil || !record.NextDispatchAt.Equal(acceptedAt) {
 		t.Errorf("operator Promotion = %#v", record)
 	}
-	var selected promotion.FreightItem
-	if err := json.Unmarshal(record.SelectedFreightSnapshot, &selected); err != nil ||
-		selected.Name != "freight-42" || selected.Origin != "Warehouse/external-dns" {
-		t.Errorf("selected Freight = %#v, %v", selected, err)
+	selected := record.SelectedFreightSnapshot
+	if selected == nil || selected.Name != "freight-42" || selected.Origin != "Warehouse/external-dns" {
+		t.Errorf("selected Freight = %#v", selected)
 	}
 
 	loaded, err := fixture.database.GetPromotion(fixture.ctx, record.ID)
-	if err != nil || loaded.Source != promotion.SourceSlipramp || loaded.Status != promotion.StatusCreating {
+	if err != nil || loaded.Source != promotion.SourceSlipramp || loaded.Status != promotion.StatusCreating ||
+		loaded.SelectedFreightSnapshot == nil || loaded.SelectedFreightSnapshot.Name != "freight-42" ||
+		loaded.StageSnapshot.SuccessfulRenderAcknowledgement == nil ||
+		loaded.StageSnapshot.SuccessfulRenderAcknowledgement.SourceRevision != strings.Repeat("a", 40) {
 		t.Errorf("GetPromotion() = %#v, %v", loaded, err)
 	}
 
@@ -214,11 +227,13 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	fixture.stage.ResourceVersion = "2"
 	fixture.stage.FirstObservedAt = createdAt.Add(2 * time.Minute)
 	fixture.stage.LastObservedAt = createdAt.Add(2 * time.Minute)
-	fixture.stage.Freight = json.RawMessage(`{"items":[{
-      "origin":"Warehouse/external-dns",
-      "name":"freight-42",
-      "artifacts":[{"kind":"image","repository":"ghcr.io/example/external-dns","version":"1.2.3"}]
-    }]}`)
+	fixture.stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin: "Warehouse/external-dns",
+		Name:   "freight-42",
+		Artifacts: []promotion.FreightArtifact{{
+			Kind: "image", Repository: new("ghcr.io/example/external-dns"), Version: "1.2.3",
+		}},
+	}}}
 	if err := fixture.database.ReplacePromotionStageSnapshot(
 		fixture.ctx,
 		promotionTestSnapshot(uuid.New(), "prod", "colo", fixture.stage.LastObservedAt),
@@ -1415,7 +1430,7 @@ func promotionTestStage(
 		RepositoryURL:   "https://github.com/example/artifact-test.git",
 		TargetBranch:    "stage/" + name,
 		SourcePaths:     []string{"k8s/" + name},
-		Freight:         json.RawMessage(`{"items":[]}`),
+		Freight:         promotion.Freight{Items: []promotion.FreightItem{}},
 		FirstObservedAt: observedAt,
 		LastObservedAt:  observedAt,
 	}

@@ -70,6 +70,10 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 	if pipeline.Stages[0].PendingPromotionCount != 1 {
 		t.Errorf("pending count = %d, want 1", pipeline.Stages[0].PendingPromotionCount)
 	}
+	wantPendingStageIDs := []uuid.UUID{production.ID, homelabB.ID, canary.ID, otherApplication.ID, homelabA.ID}
+	if !reflect.DeepEqual(store.pendingStageIDs, wantPendingStageIDs) {
+		t.Errorf("pending count Stage IDs = %v, want %v", store.pendingStageIDs, wantPendingStageIDs)
+	}
 
 	missingEnvironment := result.Items[0]
 	if missingEnvironment.Application != "external-dns" ||
@@ -106,6 +110,10 @@ func TestFreightPipelineServiceFiltersAndPaginatesPipelines(t *testing.T) {
 	if result.Total != 2 || len(result.Items) != 1 || result.Items[0].Application != "bravo" {
 		t.Errorf("filtered page = %#v", result)
 	}
+	wantPendingStageIDs := []uuid.UUID{store.stages[0].ID, store.stages[1].ID}
+	if !reflect.DeepEqual(store.pendingStageIDs, wantPendingStageIDs) {
+		t.Errorf("pending count Stage IDs = %v, want %v", store.pendingStageIDs, wantPendingStageIDs)
+	}
 }
 
 func TestFreightPipelineServiceBuildsPromotionSourcesFromDeclaredTopology(t *testing.T) {
@@ -113,23 +121,30 @@ func TestFreightPipelineServiceBuildsPromotionSourcesFromDeclaredTopology(t *tes
 
 	now := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
 	source := pipelineStage("prod", "kargo-core", "shared-source", "app-homelab", "homelab", now)
-	source.Freight = []byte(`{"items":[
-      {"origin":"Warehouse/app","name":"freight-42","artifacts":[{"kind":"image","version":"1.2.3"}]},
-      {"origin":"Warehouse/other","name":"freight-other","artifacts":[]}
-    ]}`)
+	source.Freight = Freight{Items: []FreightItem{
+		{Origin: "Warehouse/app", Name: "freight-42", Artifacts: []FreightArtifact{{Kind: "image", Version: "1.2.3"}}},
+		{Origin: "Warehouse/other", Name: "freight-other", Artifacts: []FreightArtifact{}},
+	}}
 	target := pipelineStage("prod", "kargo-core", "app", "app-prod", "prod", now)
 	target.RequestedFreight = []FreightRequest{{
 		Origin:       "Warehouse/app",
 		SourceStages: []string{source.Name},
 	}}
+	store := &reviewStore{stages: []Stage{target, source}}
 	service := NewFreightPipelineService(
 		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
-		&reviewStore{stages: []Stage{target, source}},
+		store,
 	)
 
-	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: DefaultListLimit})
+	result, err := service.List(t.Context(), FreightPipelineListFilter{
+		Application: target.Application,
+		Limit:       DefaultListLimit,
+	})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
+	}
+	if !reflect.DeepEqual(store.pendingStageIDs, []uuid.UUID{target.ID}) {
+		t.Errorf("pending count Stage IDs = %v, want only %s", store.pendingStageIDs, target.ID)
 	}
 	var targetPipeline FreightPipeline
 	for _, pipeline := range result.Items {
@@ -264,7 +279,9 @@ func pipelineStage(
 	return stage
 }
 
-func pipelineFreight(version string) []byte {
-	return []byte(`{"items":[{"origin":"Warehouse/app","name":"freight","artifacts":[` +
-		`{"kind":"image","repository":"ghcr.io/example/app","version":"` + version + `"}]}]}`)
+func pipelineFreight(version string) Freight {
+	return Freight{Items: []FreightItem{{
+		Origin: "Warehouse/app", Name: "freight",
+		Artifacts: []FreightArtifact{{Kind: "image", Repository: new("ghcr.io/example/app"), Version: version}},
+	}}}
 }

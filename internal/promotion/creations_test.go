@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -116,11 +115,10 @@ func TestSelectPromotionFreightValidatesUpstreamTopology(t *testing.T) {
 		ClusterName: "colo",
 		Project:     "kargo-core",
 		Name:        "external-dns-qa",
-		Freight: json.RawMessage(`{"items":[{
-          "origin":"Warehouse/external-dns",
-          "name":"freight-42",
-          "artifacts":[{"kind":"image","version":"1.2.3"}]
-        }]}`),
+		Freight: Freight{Items: []FreightItem{{
+			Origin: "Warehouse/external-dns", Name: "freight-42",
+			Artifacts: []FreightArtifact{{Kind: "image", Version: "1.2.3"}},
+		}}},
 	}
 	target := Stage{
 		ID:          uuid.New(),
@@ -138,10 +136,12 @@ func TestSelectPromotionFreightValidatesUpstreamTopology(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SelectPromotionFreight() error = %v", err)
 	}
-	var item FreightItem
-	if err := json.Unmarshal(selected, &item); err != nil || item.Name != "freight-42" ||
-		item.Origin != "Warehouse/external-dns" {
-		t.Errorf("selected Freight = %#v, %v", item, err)
+	if selected.Name != "freight-42" || selected.Origin != "Warehouse/external-dns" {
+		t.Errorf("selected Freight = %#v", selected)
+	}
+	source.Freight.Items[0].Artifacts[0].Version = "2.0.0"
+	if selected.Artifacts[0].Version != "1.2.3" {
+		t.Error("selected Freight changed with the observed source")
 	}
 
 	target.RequestedFreight[0].SourceStages = []string{"another-stage"}

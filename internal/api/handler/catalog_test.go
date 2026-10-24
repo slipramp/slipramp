@@ -24,14 +24,15 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
 	createdAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	commitSHA := "0123456789abcdef0123456789abcdef01234567"
+	desiredCommitSHA := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	catalogs := &recordingCatalogService{
+		targetStates: map[string]catalog.TargetState{
+			"network": {DesiredCommitSHA: desiredCommitSHA},
+		},
 		revision: catalog.Revision{
 			ID:        revisionID,
 			CommitSHA: commitSHA,
 			CreatedAt: createdAt,
-			TargetStates: map[string]catalog.TargetState{
-				"network": {DesiredCommitSHA: commitSHA},
-			},
 			Catalog: catalog.Catalog{
 				Runtimes: []catalog.Runtime{{
 					APIVersion: catalog.APIVersion,
@@ -111,7 +112,7 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	}
 	if len(body.Targets) != 1 ||
 		body.Targets[0].Metadata.Name != "network" ||
-		body.Targets[0].Status.DesiredCommit.Sha != commitSHA ||
+		body.Targets[0].Status.DesiredCommit.Sha != desiredCommitSHA ||
 		len(body.Targets[0].Spec.Actions["preview"].Command) != 2 ||
 		body.Targets[0].Spec.Actions["preview"].Artifacts == nil {
 		t.Errorf("catalog targets = %#v", body.Targets)
@@ -276,20 +277,21 @@ type recordingCatalogService struct {
 	calls        int
 	repositoryID uuid.UUID
 	revision     catalog.Revision
+	targetStates map[string]catalog.TargetState
 	err          error
 	listCalls    int
 	filter       catalog.TargetListFilter
 	targets      catalog.TargetList
 }
 
-func (s *recordingCatalogService) GetActiveRevision(
+func (s *recordingCatalogService) GetActive(
 	_ context.Context,
 	repositoryID uuid.UUID,
-) (catalog.Revision, error) {
+) (catalog.ActiveCatalog, error) {
 	s.calls++
 	s.repositoryID = repositoryID
 
-	return s.revision, s.err
+	return catalog.ActiveCatalog{Revision: s.revision, TargetStates: s.targetStates}, s.err
 }
 
 func (s *recordingCatalogService) ListTargets(

@@ -227,8 +227,7 @@ PromotionStageObservation:
     freight:
       $ref: "#/PromotionFreight"
     successfulRenderAcknowledgement:
-      type: object
-      additionalProperties: true
+      $ref: "#/SuccessfulRenderAcknowledgement"
 
 KargoStageSnapshot:
   type: object
@@ -379,8 +378,7 @@ PromotionStage:
     freight:
       $ref: "#/PromotionFreight"
     successfulRenderAcknowledgement:
-      type: object
-      additionalProperties: true
+      $ref: "#/SuccessfulRenderAcknowledgement"
     policy:
       $ref: "#/PromotionStagePolicy"
     pendingPromotionCount:
@@ -769,6 +767,112 @@ PromotionDecisionUpdate:
       minLength: 1
       maxLength: 4096
 
+SuccessfulRenderAcknowledgement:
+  type: object
+  additionalProperties: false
+  properties:
+    sourceRevision:
+      type: string
+    targetRevision:
+      type: string
+    resultRevision:
+      type: string
+
+PromotionStageSnapshot:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - integration
+    - cluster
+    - project
+    - name
+    - kubernetesUid
+    - resourceVersion
+    - application
+    - environment
+    - repository
+    - repositoryUrl
+    - targetBranch
+    - sourcePaths
+    - requestedFreight
+    - freight
+    - lastObservedAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    project:
+      $ref: ./runs.yaml#/CatalogName
+    name:
+      type: string
+      minLength: 1
+      maxLength: 253
+    kubernetesUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+    resourceVersion:
+      type: string
+      minLength: 1
+      maxLength: 200
+    application:
+      type: string
+      minLength: 1
+      maxLength: 200
+    environment:
+      type: string
+      minLength: 1
+      maxLength: 200
+    repository:
+      $ref: ./runs.yaml#/CatalogName
+    repositoryUrl:
+      type: string
+      minLength: 1
+      maxLength: 2048
+    targetBranch:
+      type: string
+      minLength: 1
+      maxLength: 255
+    sourcePaths:
+      type: array
+      items:
+        type: string
+        minLength: 1
+        maxLength: 1024
+    requestedFreight:
+      type: array
+      items:
+        $ref: "#/PromotionFreightRequest"
+    freight:
+      $ref: "#/PromotionFreight"
+    successfulRenderAcknowledgement:
+      $ref: "#/SuccessfulRenderAcknowledgement"
+    lastObservedAt:
+      type: string
+      format: date-time
+
+PromotionRepositorySnapshot:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - cloneUrl
+    - branch
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    cloneUrl:
+      type: string
+    branch:
+      type: string
+    checkoutCredentialName:
+      type: string
+
 Promotion:
   type: object
   additionalProperties: false
@@ -808,14 +912,12 @@ Promotion:
       type: string
       format: uuid
     stageSnapshot:
-      type: object
-      additionalProperties: true
+      $ref: "#/PromotionStageSnapshot"
     repositoryId:
       type: string
       format: uuid
     repositorySnapshot:
-      type: object
-      additionalProperties: true
+      $ref: "#/PromotionRepositorySnapshot"
     baseCommit:
       $ref: ./common.yaml#/GitCommit
     candidateCommit:
@@ -829,8 +931,7 @@ Promotion:
       minLength: 1
       maxLength: 255
     policySnapshot:
-      type: object
-      additionalProperties: true
+      $ref: "#/PromotionStagePolicy"
     selectedFreight:
       $ref: "#/PromotionFreightItem"
     reviewRequired:

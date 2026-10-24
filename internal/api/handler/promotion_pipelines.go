@@ -49,10 +49,7 @@ func (h *Handler) ListPromotionPipelines(
 	for _, pipeline := range result.Items {
 		stages := make([]api.PromotionPipelineStage, 0, len(pipeline.Stages))
 		for _, pipelineStage := range pipeline.Stages {
-			freight, decodeErr := promotionFreightResponse(pipelineStage.Stage.Freight)
-			if decodeErr != nil {
-				return nil, decodeErr
-			}
+			freight := promotionFreightResponse(pipelineStage.Stage.Freight)
 			promotionSources := make([]api.PromotionFreightSource, 0, len(pipelineStage.PromotionSources))
 			for _, source := range pipelineStage.PromotionSources {
 				items := make([]api.PromotionFreightItem, 0, len(source.Freight))

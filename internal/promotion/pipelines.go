@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -59,7 +58,7 @@ type FreightPipelineList struct {
 
 type FreightPipelineStore interface {
 	ListPromotionStages(context.Context) ([]Stage, error)
-	ListPromotions(context.Context) ([]Promotion, error)
+	CountPendingPromotionsByStage(context.Context, []uuid.UUID) (map[uuid.UUID]int, error)
 }
 
 type FreightPipelineService struct {
@@ -89,18 +88,6 @@ func (s *FreightPipelineService) List(
 	if err != nil {
 		return FreightPipelineList{}, err
 	}
-	promotions, err := s.store.ListPromotions(ctx)
-	if err != nil {
-		return FreightPipelineList{}, err
-	}
-
-	pendingCounts := make(map[uuid.UUID]int)
-	for _, record := range promotions {
-		if record.Status == StatusPending {
-			pendingCounts[record.StageID]++
-		}
-	}
-
 	type pipelineKey struct {
 		integration string
 		cluster     string
@@ -115,6 +102,7 @@ func (s *FreightPipelineService) List(
 
 	builders := make(map[pipelineKey]*pipelineBuilder)
 	activeStages := make(map[stageIdentity]Stage)
+	stageIDs := make([]uuid.UUID, 0, len(stages))
 	for _, stage := range stages {
 		if stage.ArchivedAt != nil {
 			continue
@@ -127,6 +115,7 @@ func (s *FreightPipelineService) List(
 		if !stageMatchesPipelineFilter(stage, filter) {
 			continue
 		}
+		stageIDs = append(stageIDs, stage.ID)
 
 		key := pipelineKey{
 			integration: stage.Integration,
@@ -155,20 +144,20 @@ func (s *FreightPipelineService) List(
 		if !slices.Contains(integration.EnvironmentOrder, stage.Environment) {
 			builder.unknownEnvs[stage.Environment] = struct{}{}
 		}
-		builder.pipeline.Stages = append(builder.pipeline.Stages, FreightPipelineStage{
-			Stage:                 stage,
-			PendingPromotionCount: pendingCounts[stage.ID],
-		})
+		builder.pipeline.Stages = append(builder.pipeline.Stages, FreightPipelineStage{Stage: stage})
+	}
+
+	pendingCounts, err := s.store.CountPendingPromotionsByStage(ctx, stageIDs)
+	if err != nil {
+		return FreightPipelineList{}, err
 	}
 
 	items := make([]FreightPipeline, 0, len(builders))
 	for _, builder := range builders {
 		for index := range builder.pipeline.Stages {
-			sources, sourceErr := promotionSources(builder.pipeline.Stages[index].Stage, activeStages)
-			if sourceErr != nil {
-				return FreightPipelineList{}, sourceErr
-			}
-			builder.pipeline.Stages[index].PromotionSources = sources
+			stage := &builder.pipeline.Stages[index]
+			stage.PromotionSources = promotionSources(stage.Stage, activeStages)
+			stage.PendingPromotionCount = pendingCounts[stage.Stage.ID]
 		}
 		unknownEnvironments := make([]string, 0, len(builder.unknownEnvs))
 		for environment := range builder.unknownEnvs {
@@ -191,11 +180,7 @@ func (s *FreightPipelineService) List(
 
 			return compareText(left.Stage.ID.String(), right.Stage.ID.String())
 		})
-		matches, err := freightPipelineMatchesStatus(builder.pipeline, filter.Status)
-		if err != nil {
-			return FreightPipelineList{}, err
-		}
-		if matches {
+		if freightPipelineMatchesStatus(builder.pipeline, filter.Status) {
 			items = append(items, builder.pipeline)
 		}
 	}
@@ -237,7 +222,7 @@ func newStageIdentity(stage Stage) stageIdentity {
 	}
 }
 
-func promotionSources(target Stage, stages map[stageIdentity]Stage) ([]FreightPromotionSource, error) {
+func promotionSources(target Stage, stages map[stageIdentity]Stage) []FreightPromotionSource {
 	sources := make([]FreightPromotionSource, 0)
 	sourceIndexes := make(map[uuid.UUID]int)
 	for _, request := range target.RequestedFreight {
@@ -249,13 +234,7 @@ func promotionSources(target Stage, stages map[stageIdentity]Stage) ([]FreightPr
 				continue
 			}
 
-			var freight struct {
-				Items []FreightItem `json:"items"`
-			}
-			if err := json.Unmarshal(source.Freight, &freight); err != nil {
-				return nil, fmt.Errorf("decode promotion source Freight for Stage %s: %w", source.ID, err)
-			}
-			for _, item := range freight.Items {
+			for _, item := range source.Freight.Items {
 				if item.Origin != request.Origin {
 					continue
 				}
@@ -275,16 +254,16 @@ func promotionSources(target Stage, stages map[stageIdentity]Stage) ([]FreightPr
 		}
 	}
 
-	return sources, nil
+	return sources
 }
 
 func (s FreightComparisonStatus) Valid() bool {
 	return s == FreightComparisonStatusEqual || s == FreightComparisonStatusDifferent
 }
 
-func freightPipelineMatchesStatus(pipeline FreightPipeline, status FreightComparisonStatus) (bool, error) {
+func freightPipelineMatchesStatus(pipeline FreightPipeline, status FreightComparisonStatus) bool {
 	if status == "" {
-		return true, nil
+		return true
 	}
 
 	environments := make(map[string]struct{}, len(pipeline.Stages))
@@ -292,16 +271,16 @@ func freightPipelineMatchesStatus(pipeline FreightPipeline, status FreightCompar
 	for _, pipelineStage := range pipeline.Stages {
 		environments[pipelineStage.Stage.Environment] = struct{}{}
 
-		var freight freightComparisonDocument
-		if err := json.Unmarshal(pipelineStage.Stage.Freight, &freight); err != nil {
-			return false, fmt.Errorf("decode Freight for Stage %s: %w", pipelineStage.Stage.ID, err)
-		}
-		for _, item := range freight.Items {
+		for _, item := range pipelineStage.Stage.Freight.Items {
 			for _, artifact := range item.Artifacts {
+				repository := ""
+				if artifact.Repository != nil {
+					repository = *artifact.Repository
+				}
 				key := freightComparisonRowKey{
 					origin:     item.Origin,
 					kind:       artifact.Kind,
-					repository: artifact.Repository,
+					repository: repository,
 				}
 				values := rows[key]
 				if values == nil {
@@ -316,32 +295,17 @@ func freightPipelineMatchesStatus(pipeline FreightPipeline, status FreightCompar
 	}
 
 	if len(environments) < 2 {
-		return false, nil
+		return false
 	}
 
 	for _, values := range rows {
 		equal := freightValuesEqual(values, pipeline.Stages)
 		if (status == FreightComparisonStatusEqual) == equal {
-			return true, nil
+			return true
 		}
 	}
 
-	return false, nil
-}
-
-type freightComparisonDocument struct {
-	Items []freightComparisonItem `json:"items"`
-}
-
-type freightComparisonItem struct {
-	Origin    string                      `json:"origin"`
-	Artifacts []freightComparisonArtifact `json:"artifacts"`
-}
-
-type freightComparisonArtifact struct {
-	Kind       string `json:"kind"`
-	Repository string `json:"repository"`
-	Version    string `json:"version"`
+	return false
 }
 
 type freightComparisonRowKey struct {

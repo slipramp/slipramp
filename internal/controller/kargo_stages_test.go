@@ -122,8 +122,8 @@ func TestNormalizeKargoStage(t *testing.T) {
 		t.Fatalf("Freight = %#v", observed.Freight)
 	}
 	if observed.SuccessfulRenderAcknowledgement == nil ||
-		(*observed.SuccessfulRenderAcknowledgement)["sourceRevision"] != "source-sha" ||
-		(*observed.SuccessfulRenderAcknowledgement)["resultRevision"] != "target-sha" {
+		valueOrEmpty(observed.SuccessfulRenderAcknowledgement.SourceRevision) != "source-sha" ||
+		valueOrEmpty(observed.SuccessfulRenderAcknowledgement.ResultRevision) != "target-sha" {
 		t.Errorf("successful render acknowledgement = %#v", observed.SuccessfulRenderAcknowledgement)
 	}
 }

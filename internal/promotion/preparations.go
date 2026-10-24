@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -394,10 +393,7 @@ func (c *PreparationCoordinator) recordFailure(ctx context.Context, record Promo
 }
 
 func (c *PreparationCoordinator) reviewRequestedEvent(record Promotion, occurredAt time.Time) (notification.Event, error) {
-	var stage PromotionStageSnapshot
-	if err := json.Unmarshal(record.StageSnapshot, &stage); err != nil {
-		return notification.Event{}, fmt.Errorf("decode Promotion Stage snapshot for notification: %w", err)
-	}
+	stage := record.StageSnapshot
 	if stage.Project == "" || stage.Name == "" || stage.RepositoryName == "" {
 		return notification.Event{}, fmt.Errorf("%w: Promotion Stage notification snapshot is incomplete", ErrInvalid)
 	}

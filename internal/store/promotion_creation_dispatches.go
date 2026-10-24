@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -126,10 +125,7 @@ func (d *Database) ReportPromotionCreation(
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
-	var stage promotion.PromotionStageSnapshot
-	if err := json.Unmarshal(current.StageSnapshot, &stage); err != nil {
-		return promotion.Promotion{}, fmt.Errorf("decode Promotion creation Stage snapshot: %w", err)
-	}
+	stage := current.StageSnapshot
 	if current.Source != promotion.SourceSlipramp || stage.ClusterName != report.ClusterName {
 		return promotion.Promotion{}, promotion.ErrPromotionNotFound
 	}

@@ -500,7 +500,7 @@ func testPreparationCoordinator(
 
 func preparingPromotion() Promotion {
 	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1923")
-	stageSnapshot, err := json.Marshal(PromotionStageSnapshot{
+	stageSnapshot := PromotionStageSnapshot{
 		ID:             uuid.New(),
 		Integration:    "prod",
 		ClusterName:    "colo",
@@ -512,9 +512,6 @@ func preparingPromotion() Promotion {
 		RepositoryURL:  "https://example.com/ops.git",
 		TargetBranch:   "main",
 		SourcePaths:    []string{"k8s/external-dns"},
-	})
-	if err != nil {
-		panic(err)
 	}
 
 	return Promotion{

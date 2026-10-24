@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -248,10 +247,7 @@ func (h *Handler) ListPromotionStages(
 
 	items := make([]api.PromotionStage, 0, len(result.Items))
 	for _, review := range result.Items {
-		item, convertErr := h.promotionStageResponse(review)
-		if convertErr != nil {
-			return nil, convertErr
-		}
+		item := h.promotionStageResponse(review)
 		items = append(items, item)
 	}
 
@@ -493,17 +489,6 @@ func (h *Handler) ReplaceKargoStageSnapshot(
 
 	stages := make([]promotion.StageObservation, 0, len(request.Body.Stages))
 	for _, observed := range request.Body.Stages {
-		freight, marshalErr := json.Marshal(observed.Freight)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		var acknowledgement json.RawMessage
-		if observed.SuccessfulRenderAcknowledgement != nil {
-			acknowledgement, marshalErr = json.Marshal(*observed.SuccessfulRenderAcknowledgement)
-			if marshalErr != nil {
-				return nil, marshalErr
-			}
-		}
 		stages = append(stages, promotion.StageObservation{
 			Project:                         string(observed.Project),
 			Name:                            observed.Name,
@@ -515,8 +500,8 @@ func (h *Handler) ReplaceKargoStageSnapshot(
 			TargetBranch:                    observed.TargetBranch,
 			SourcePaths:                     observed.SourcePaths,
 			RequestedFreight:                promotionFreightRequests(observed.RequestedFreight),
-			Freight:                         freight,
-			SuccessfulRenderAcknowledgement: acknowledgement,
+			Freight:                         promotionFreightFromRequest(observed.Freight),
+			SuccessfulRenderAcknowledgement: promotionAcknowledgementFromRequest(observed.SuccessfulRenderAcknowledgement),
 		})
 	}
 
@@ -574,20 +559,7 @@ func optionalCatalogName(value *api.CatalogName) string {
 	return string(*value)
 }
 
-func (h *Handler) promotionStageResponse(review promotion.StageReview) (api.PromotionStage, error) {
-	freight, err := promotionFreightResponse(review.Stage.Freight)
-	if err != nil {
-		return api.PromotionStage{}, fmt.Errorf("decode Promotion Stage Freight: %w", err)
-	}
-	var acknowledgement *map[string]any
-	if len(review.Stage.SuccessfulRenderAcknowledgement) > 0 {
-		value, decodeErr := rawObject(review.Stage.SuccessfulRenderAcknowledgement)
-		if decodeErr != nil {
-			return api.PromotionStage{}, fmt.Errorf("decode Promotion Stage acknowledgement: %w", decodeErr)
-		}
-		acknowledgement = &value
-	}
-
+func (h *Handler) promotionStageResponse(review promotion.StageReview) api.PromotionStage {
 	return api.PromotionStage{
 		ID:                              review.Stage.ID,
 		Integration:                     api.CatalogName(review.Stage.Integration),
@@ -603,8 +575,8 @@ func (h *Handler) promotionStageResponse(review promotion.StageReview) (api.Prom
 		TargetBranch:                    review.Stage.TargetBranch,
 		SourcePaths:                     review.Stage.SourcePaths,
 		RequestedFreight:                promotionFreightRequestResponse(review.Stage.RequestedFreight),
-		Freight:                         freight,
-		SuccessfulRenderAcknowledgement: acknowledgement,
+		Freight:                         promotionFreightResponse(review.Stage.Freight),
+		SuccessfulRenderAcknowledgement: promotionAcknowledgementResponse(review.Stage.SuccessfulRenderAcknowledgement),
 		Policy:                          promotionPolicyResponse(review.Policy),
 		PendingPromotionCount:           review.PendingPromotionCount,
 		FirstObservedAt:                 review.Stage.FirstObservedAt,
@@ -615,24 +587,7 @@ func (h *Handler) promotionStageResponse(review promotion.StageReview) (api.Prom
 			review.Stage.Project,
 			review.Stage.Name,
 		),
-	}, nil
-}
-
-func promotionFreightResponse(contents []byte) (api.PromotionFreight, error) {
-	var freight api.PromotionFreight
-	if err := json.Unmarshal(contents, &freight); err != nil {
-		return api.PromotionFreight{}, err
 	}
-	if freight.Items == nil {
-		freight.Items = []api.PromotionFreightItem{}
-	}
-	for index := range freight.Items {
-		if freight.Items[index].Artifacts == nil {
-			freight.Items[index].Artifacts = []api.PromotionFreightArtifact{}
-		}
-	}
-
-	return freight, nil
 }
 
 func promotionFreightRequests(values []api.PromotionFreightRequest) []promotion.FreightRequest {
@@ -681,29 +636,14 @@ func promotionResponse(
 	integrations promotion.IntegrationSet,
 ) (api.Promotion, error) {
 	record := review.Promotion
-	stageSnapshot, err := rawObject(record.StageSnapshot)
-	if err != nil {
-		return api.Promotion{}, fmt.Errorf("decode Promotion Stage snapshot: %w", err)
-	}
-	repositorySnapshot, err := rawObject(record.RepositorySnapshot)
-	if err != nil {
-		return api.Promotion{}, fmt.Errorf("decode Promotion repository snapshot: %w", err)
-	}
-	policySnapshot, err := rawObject(record.PolicySnapshot)
-	if err != nil {
-		return api.Promotion{}, fmt.Errorf("decode Promotion policy snapshot: %w", err)
-	}
 	requestedBy := apiRunActor(&record.RequestedBySnapshot)
 	if requestedBy == nil {
 		return api.Promotion{}, errors.New("promotion requesting actor is missing")
 	}
-	project, _ := stageSnapshot["project"].(string)
+	project := record.StageSnapshot.Project
 	var selectedFreight *api.PromotionFreightItem
-	if len(record.SelectedFreightSnapshot) > 0 {
-		var value api.PromotionFreightItem
-		if err := json.Unmarshal(record.SelectedFreightSnapshot, &value); err != nil {
-			return api.Promotion{}, fmt.Errorf("decode selected Promotion Freight: %w", err)
-		}
+	if record.SelectedFreightSnapshot != nil {
+		value := promotionFreightItemResponse(*record.SelectedFreightSnapshot)
 		selectedFreight = &value
 	}
 	var baseCommit *api.GitCommit
@@ -728,14 +668,14 @@ func promotionResponse(
 		ExternalPromotionID:    record.ExternalPromotionID,
 		StageID:                record.StageID,
 		SourceStageID:          record.SourceStageID,
-		StageSnapshot:          stageSnapshot,
+		StageSnapshot:          promotionStageSnapshotResponse(record.StageSnapshot),
 		RepositoryID:           record.RepositoryID,
-		RepositorySnapshot:     repositorySnapshot,
+		RepositorySnapshot:     promotionRepositorySnapshotResponse(record.RepositorySnapshot),
 		BaseCommit:             baseCommit,
 		CandidateCommit:        candidateCommit,
 		CandidateBranch:        candidateBranch,
 		TargetBranch:           record.TargetBranch,
-		PolicySnapshot:         policySnapshot,
+		PolicySnapshot:         promotionPolicyResponse(promotion.PolicyView(record.PolicySnapshot)),
 		SelectedFreight:        selectedFreight,
 		ReviewRequired:         record.ReviewRequired,
 		Status:                 api.PromotionStatus(record.Status),
@@ -841,15 +781,6 @@ func (h *Handler) promotionDetailResponse(
 	}
 
 	return body, nil
-}
-
-func rawObject(contents []byte) (map[string]any, error) {
-	var value map[string]any
-	if err := json.Unmarshal(contents, &value); err != nil {
-		return nil, err
-	}
-
-	return value, nil
 }
 
 func valueOrNilUUID(value *uuid.UUID) uuid.UUID {

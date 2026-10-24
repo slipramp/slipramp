@@ -1,7 +1,6 @@
 package inbox
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -13,21 +12,16 @@ import (
 )
 
 func promotionItem(record PromotionState) (Item, error) {
-	var stage promotion.PromotionStageSnapshot
-	if err := json.Unmarshal(record.StageSnapshot, &stage); err != nil {
-		return Item{}, fmt.Errorf("decode Promotion %s Stage snapshot: %w", record.ID, err)
-	}
-
 	destination := Destination{Type: DestinationPromotion, ID: record.ID.String()}
 	switch record.Status {
 	case promotion.StatusPending:
 		title := "Promotion awaits review"
-		if stage.Name != "" {
-			title = fmt.Sprintf("Promotion to %s awaits review", stage.Name)
+		if record.StageName != "" {
+			title = fmt.Sprintf("Promotion to %s awaits review", record.StageName)
 		}
 		context := make([]string, 0, 2)
-		if stage.Application != "" {
-			context = append(context, stage.Application)
+		if record.Application != "" {
+			context = append(context, record.Application)
 		}
 		context = append(context, fmt.Sprintf("%s → %s", record.CandidateBranch, record.TargetBranch))
 
@@ -46,8 +40,8 @@ func promotionItem(record PromotionState) (Item, error) {
 			description = *record.Message
 		}
 		title := "Promotion preparation failed"
-		if stage.Name != "" {
-			title = fmt.Sprintf("Promotion to %s could not be prepared", stage.Name)
+		if record.StageName != "" {
+			title = fmt.Sprintf("Promotion to %s could not be prepared", record.StageName)
 		}
 
 		return newProblem(

@@ -1,7 +1,6 @@
 package promotion
 
 import (
-	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -57,9 +56,7 @@ func TestPromotionValidateCreatingOperatorPromotion(t *testing.T) {
 	nextDispatchAt := record.CreatedAt
 	record.Source = SourceSlipramp
 	record.SourceStageID = &sourceStageID
-	record.SelectedFreightSnapshot = json.RawMessage(
-		`{"origin":"Warehouse/app","name":"freight-42","artifacts":[]}`,
-	)
+	record.SelectedFreightSnapshot = &FreightItem{Origin: "Warehouse/app", Name: "freight-42", Artifacts: []FreightArtifact{}}
 	record.RequestDigest = RequestDigest{}
 	record.BaseRevision = ""
 	record.CandidateRevision = ""
@@ -130,6 +127,7 @@ func validPromotion() Promotion {
 	preparationRevisionID := uuid.New()
 	gitArtifactID := uuid.New()
 	argoArtifactID := uuid.New()
+	stage := reviewStage("prod", "colo", "kargo-core", "external-dns-prod", now)
 
 	return Promotion{
 		ID:                           uuid.New(),
@@ -137,15 +135,15 @@ func validPromotion() Promotion {
 		Integration:                  "prod",
 		ExternalPromotionID:          "external-dns-01jbe4q8",
 		RequestDigest:                RequestDigest{1},
-		StageID:                      uuid.New(),
-		StageSnapshot:                json.RawMessage(`{"name":"external-dns-prod"}`),
+		StageID:                      stage.ID,
+		StageSnapshot:                stage.PromotionSnapshot(),
 		RepositoryID:                 uuid.New(),
-		RepositorySnapshot:           json.RawMessage(`{"name":"kcloud-ops"}`),
+		RepositorySnapshot:           PromotionRepositorySnapshot{Name: "ops", CloneURL: "https://example.com/ops.git", Branch: "main"},
 		BaseRevision:                 "8b7f1d217a6b0000000000000000000000000000",
 		CandidateRevision:            "f4cb21a88e1d0000000000000000000000000000",
 		CandidateBranch:              "kargo/promotion/external-dns-01jbe4q8",
 		TargetBranch:                 "main",
-		PolicySnapshot:               json.RawMessage(`{"mode":"review-required"}`),
+		PolicySnapshot:               PromotionPolicySnapshot{ConfiguredMode: PolicyModeReviewRequired, EffectiveMode: PolicyModeReviewRequired},
 		ReviewRequired:               true,
 		Status:                       StatusPending,
 		PreparationRepositoryID:      &preparationRepositoryID,

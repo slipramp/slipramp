@@ -17,7 +17,7 @@ import (
 )
 
 type CatalogService interface {
-	GetActiveRevision(ctx context.Context, repositoryID uuid.UUID) (catalog.Revision, error)
+	GetActive(ctx context.Context, repositoryID uuid.UUID) (catalog.ActiveCatalog, error)
 	ListTargets(context.Context, catalog.TargetListFilter) (catalog.TargetList, error)
 }
 
@@ -113,7 +113,7 @@ func (h *Handler) GetRepositoryCatalog(
 	ctx context.Context,
 	request api.GetRepositoryCatalogRequestObject,
 ) (api.GetRepositoryCatalogResponseObject, error) {
-	revision, err := h.catalogs.GetActiveRevision(ctx, request.RepositoryID)
+	active, err := h.catalogs.GetActive(ctx, request.RepositoryID)
 	if errors.Is(err, catalog.ErrNotFound) {
 		problem := NewProblem(
 			http.StatusNotFound,
@@ -126,8 +126,8 @@ func (h *Handler) GetRepositoryCatalog(
 		return nil, err
 	}
 
-	keys := []repository.CommitKey{commitKey(request.RepositoryID, revision.CommitSHA)}
-	for _, state := range revision.TargetStates {
+	keys := []repository.CommitKey{commitKey(request.RepositoryID, active.Revision.CommitSHA)}
+	for _, state := range active.TargetStates {
 		keys = append(keys, commitKey(request.RepositoryID, state.DesiredCommitSHA))
 	}
 	commits, err := h.commitResponses(ctx, keys)
@@ -135,7 +135,7 @@ func (h *Handler) GetRepositoryCatalog(
 		return nil, err
 	}
 
-	body, err := catalogRevisionResponse(request.RepositoryID, revision, commits)
+	body, err := activeCatalogResponse(request.RepositoryID, active, commits)
 	if err != nil {
 		return nil, err
 	}
@@ -143,11 +143,12 @@ func (h *Handler) GetRepositoryCatalog(
 	return api.GetRepositoryCatalog200JSONResponse(body), nil
 }
 
-func catalogRevisionResponse(
+func activeCatalogResponse(
 	repositoryID uuid.UUID,
-	revision catalog.Revision,
+	active catalog.ActiveCatalog,
 	commits map[repository.CommitKey]api.GitCommit,
 ) (api.CatalogRevision, error) {
+	revision := active.Revision
 	runtimes := make([]api.Runtime, 0, len(revision.Catalog.Runtimes))
 	for _, runtime := range revision.Catalog.Runtimes {
 		runtimes = append(runtimes, catalogRuntimeResponse(runtime))
@@ -157,7 +158,7 @@ func catalogRevisionResponse(
 	for _, target := range revision.Catalog.Targets {
 		converted, err := catalogTargetResponse(
 			target,
-			revision.TargetStates[target.Metadata.Name],
+			active.TargetStates[target.Metadata.Name],
 			commits,
 			repositoryID,
 		)

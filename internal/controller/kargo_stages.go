@@ -238,12 +238,6 @@ type kargoFreightReference struct {
 	} `json:"charts"`
 }
 
-type successfulRenderAcknowledgement struct {
-	SourceRevision string `json:"sourceRevision"`
-	TargetRevision string `json:"targetRevision"`
-	ResultRevision string `json:"resultRevision"`
-}
-
 func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObservation, error) {
 	encoded, err := json.Marshal(item.Object)
 	if err != nil {
@@ -275,14 +269,7 @@ func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObs
 		Freight:          currentKargoFreight(raw),
 	}
 
-	acknowledgement := kargoSuccessfulRenderAcknowledgement(raw)
-	if acknowledgement != nil {
-		value, objectErr := jsonObject(acknowledgement)
-		if objectErr != nil {
-			return api.PromotionStageObservation{}, objectErr
-		}
-		observed.SuccessfulRenderAcknowledgement = &value
-	}
+	observed.SuccessfulRenderAcknowledgement = kargoSuccessfulRenderAcknowledgement(raw)
 
 	for subject, value := range map[string]string{
 		"project":          string(observed.Project),
@@ -481,7 +468,7 @@ func freightRepository(value *string) string {
 	return *value
 }
 
-func kargoSuccessfulRenderAcknowledgement(stage kargoStage) *successfulRenderAcknowledgement {
+func kargoSuccessfulRenderAcknowledgement(stage kargoStage) *api.SuccessfulRenderAcknowledgement {
 	promotion := stage.Status.LastPromotion
 	if promotion == nil || promotion.Status.Phase != "Succeeded" {
 		return nil
@@ -509,17 +496,18 @@ func kargoSuccessfulRenderAcknowledgement(stage kargoStage) *successfulRenderAck
 		return nil
 	}
 
-	acknowledgement := &successfulRenderAcknowledgement{
-		SourceRevision: strings.TrimSpace(clone.Commits["./src"]),
-		TargetRevision: strings.TrimSpace(clone.Commits["target"]),
-		ResultRevision: strings.TrimSpace(commit.Commit),
-	}
-	if acknowledgement.SourceRevision == "" || acknowledgement.TargetRevision == "" ||
-		acknowledgement.ResultRevision == "" {
+	sourceRevision := strings.TrimSpace(clone.Commits["./src"])
+	targetRevision := strings.TrimSpace(clone.Commits["target"])
+	resultRevision := strings.TrimSpace(commit.Commit)
+	if sourceRevision == "" || targetRevision == "" || resultRevision == "" {
 		return nil
 	}
 
-	return acknowledgement
+	return &api.SuccessfulRenderAcknowledgement{
+		SourceRevision: &sourceRevision,
+		TargetRevision: &targetRevision,
+		ResultRevision: &resultRevision,
+	}
 }
 
 func promotionStateForAlias(state map[string]json.RawMessage, alias string) (json.RawMessage, bool) {
@@ -538,19 +526,6 @@ func promotionStateForAlias(state map[string]json.RawMessage, alias string) (jso
 	sort.Strings(keys)
 
 	return state[keys[0]], true
-}
-
-func jsonObject(value any) (map[string]any, error) {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return nil, fmt.Errorf("encode normalized Kargo Stage data: %w", err)
-	}
-	var object map[string]any
-	if err := json.Unmarshal(encoded, &object); err != nil {
-		return nil, fmt.Errorf("decode normalized Kargo Stage data: %w", err)
-	}
-
-	return object, nil
 }
 
 func firstNonempty(values ...string) string {

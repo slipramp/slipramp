@@ -74,10 +74,7 @@ func (h *Handler) ListPromotionBranchDrift(
 	for _, item := range result.Items {
 		stages := make([]api.PromotionBranchDriftStage, 0, len(item.Stages))
 		for _, stage := range item.Stages {
-			freight, decodeErr := promotionFreightResponse(stage.Stage.Freight)
-			if decodeErr != nil {
-				return nil, decodeErr
-			}
+			freight := promotionFreightResponse(stage.Stage.Freight)
 			response := api.PromotionBranchDriftStage{
 				ID:             stage.Stage.ID,
 				Integration:    api.CatalogName(stage.Stage.Integration),

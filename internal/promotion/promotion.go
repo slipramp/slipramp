@@ -4,7 +4,6 @@ package promotion
 
 import (
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -99,17 +98,11 @@ type Stage struct {
 	TargetBranch                    string
 	SourcePaths                     []string
 	RequestedFreight                []FreightRequest
-	Freight                         json.RawMessage
-	SuccessfulRenderAcknowledgement json.RawMessage
+	Freight                         Freight
+	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 	FirstObservedAt                 time.Time
 	LastObservedAt                  time.Time
 	ArchivedAt                      *time.Time
-}
-
-type FreightRequest struct {
-	Origin       string   `json:"origin"`
-	Direct       bool     `json:"direct"`
-	SourceStages []string `json:"sourceStages"`
 }
 
 type StagePolicy struct {
@@ -138,15 +131,15 @@ type Promotion struct {
 	RequestDigest                RequestDigest
 	StageID                      uuid.UUID
 	SourceStageID                *uuid.UUID
-	StageSnapshot                json.RawMessage
+	StageSnapshot                PromotionStageSnapshot
 	RepositoryID                 uuid.UUID
-	RepositorySnapshot           json.RawMessage
+	RepositorySnapshot           PromotionRepositorySnapshot
 	BaseRevision                 string
 	CandidateRevision            string
 	CandidateBranch              string
 	TargetBranch                 string
-	PolicySnapshot               json.RawMessage
-	SelectedFreightSnapshot      json.RawMessage
+	PolicySnapshot               PromotionPolicySnapshot
+	SelectedFreightSnapshot      *FreightItem
 	ReviewRequired               bool
 	Status                       PromotionStatus
 	Message                      *string
@@ -286,13 +279,6 @@ func (s Stage) Validate() error {
 		}
 		seenPaths[path] = struct{}{}
 	}
-	if !validJSONObject(s.Freight) {
-		return fmt.Errorf("%w: Freight must be a JSON object", ErrInvalid)
-	}
-	if len(s.SuccessfulRenderAcknowledgement) > 0 &&
-		!validJSONObject(s.SuccessfulRenderAcknowledgement) {
-		return fmt.Errorf("%w: successful-render acknowledgement must be a JSON object", ErrInvalid)
-	}
 	if s.FirstObservedAt.IsZero() || s.LastObservedAt.IsZero() || s.LastObservedAt.Before(s.FirstObservedAt) {
 		return fmt.Errorf("%w: Stage observation timestamps are invalid", ErrInvalid)
 	}
@@ -365,9 +351,11 @@ func (p Promotion) Validate() error {
 	if err := validateText("external Promotion ID", p.ExternalPromotionID, maximumKargoPromotionNameLength); err != nil {
 		return err
 	}
-	if !validJSONObject(p.StageSnapshot) || !validJSONObject(p.RepositorySnapshot) ||
-		!validJSONObject(p.PolicySnapshot) {
-		return fmt.Errorf("%w: Promotion snapshots must be JSON objects", ErrInvalid)
+	if p.StageSnapshot.ID != p.StageID || p.StageSnapshot.Integration != p.Integration {
+		return fmt.Errorf("%w: Promotion Stage snapshot identity does not match", ErrInvalid)
+	}
+	if !p.PolicySnapshot.ConfiguredMode.Valid() || !p.PolicySnapshot.EffectiveMode.Valid() {
+		return fmt.Errorf("%w: Promotion policy snapshot modes are invalid", ErrInvalid)
 	}
 	hydrated := p.RequestDigest != (RequestDigest{}) || p.BaseRevision != "" ||
 		p.CandidateRevision != "" || p.CandidateBranch != ""
@@ -406,13 +394,13 @@ func (p Promotion) Validate() error {
 		return fmt.Errorf("%w: automatic Promotion cannot have preparation or decision state", ErrInvalid)
 	}
 	if p.Source == SourceKargo {
-		if p.SourceStageID != nil || len(p.SelectedFreightSnapshot) != 0 || p.DispatchAttemptCount != 0 ||
+		if p.SourceStageID != nil || p.SelectedFreightSnapshot != nil || p.DispatchAttemptCount != 0 ||
 			p.NextDispatchAt != nil || p.LastDispatchAt != nil || p.DispatchedAt != nil || p.KargoPromotionUID != nil ||
 			p.NextReconciliationAt != nil || p.LastReconciliationAt != nil {
 			return fmt.Errorf("%w: Kargo-originated Promotion cannot have creation dispatch state", ErrInvalid)
 		}
 	} else {
-		if p.SourceStageID == nil || !validJSONObject(p.SelectedFreightSnapshot) {
+		if p.SourceStageID == nil || p.SelectedFreightSnapshot == nil {
 			return fmt.Errorf("%w: Slipramp-originated Promotion requires source Stage and Freight snapshots", ErrInvalid)
 		}
 		if p.Status == StatusCreating && hydrated {
@@ -573,13 +561,4 @@ func validateRevision(label, revision string) error {
 	}
 
 	return nil
-}
-
-func validJSONObject(value json.RawMessage) bool {
-	if len(value) == 0 || !json.Valid(value) {
-		return false
-	}
-
-	var object map[string]json.RawMessage
-	return json.Unmarshal(value, &object) == nil && object != nil
 }

@@ -2,7 +2,6 @@ package promotion
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -140,39 +139,21 @@ func (a OperatorPromotionAcceptance) Validate() error {
 	return nil
 }
 
-type FreightItem struct {
-	Origin    string            `json:"origin"`
-	Name      string            `json:"name"`
-	Artifacts []FreightArtifact `json:"artifacts"`
-}
-
-type FreightArtifact struct {
-	Kind       string  `json:"kind"`
-	Repository *string `json:"repository,omitempty"`
-	Version    string  `json:"version"`
-}
-
-func SelectPromotionFreight(target Stage, source Stage, name string) (json.RawMessage, error) {
+func SelectPromotionFreight(target Stage, source Stage, name string) (*FreightItem, error) {
 	if target.Integration != source.Integration || target.ClusterName != source.ClusterName ||
 		target.Project != source.Project {
 		return nil, ErrStageScope
 	}
 
-	var document struct {
-		Items []FreightItem `json:"items"`
-	}
-	if err := json.Unmarshal(source.Freight, &document); err != nil {
-		return nil, fmt.Errorf("decode source Stage Freight: %w", err)
-	}
 	var selected *FreightItem
-	for index := range document.Items {
-		if document.Items[index].Name != name {
+	for index := range source.Freight.Items {
+		if source.Freight.Items[index].Name != name {
 			continue
 		}
 		if selected != nil {
 			return nil, fmt.Errorf("%w: Freight name %q is ambiguous", ErrInvalid, name)
 		}
-		selected = &document.Items[index]
+		selected = &source.Freight.Items[index]
 	}
 	if selected == nil {
 		return nil, ErrFreightNotFound
@@ -191,10 +172,6 @@ func SelectPromotionFreight(target Stage, source Stage, name string) (json.RawMe
 		}
 	}
 
-	encoded, err := json.Marshal(selected)
-	if err != nil {
-		return nil, fmt.Errorf("encode selected Freight: %w", err)
-	}
-
-	return encoded, nil
+	cloned := cloneFreightItem(*selected)
+	return &cloned, nil
 }

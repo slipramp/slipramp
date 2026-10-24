@@ -52,7 +52,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 						Environment:    "prod",
 						TargetBranch:   "stage/external-dns/prod",
 						SourcePaths:    []string{"apps/external-dns"},
-						Freight:        []byte(`{"items":[{"origin":"Warehouse/external-dns","name":"freight-1","artifacts":[]}]}`),
+						Freight:        promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/external-dns", Name: "freight-1", Artifacts: []promotion.FreightArtifact{}}}},
 						LastObservedAt: now.Add(-time.Minute),
 					},
 					Status:                         promotion.BranchDriftStatusCurrent,

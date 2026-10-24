@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -92,9 +93,17 @@ func (d *Database) ListInboxPromotions(ctx context.Context) ([]inbox.PromotionSt
 
 	records := make([]inbox.PromotionState, 0, len(rows))
 	for _, row := range rows {
+		var stage struct {
+			Name        string `json:"name"`
+			Application string `json:"application"`
+		}
+		if err := json.Unmarshal(row.StageSnapshot, &stage); err != nil {
+			return nil, fmt.Errorf("decode Inbox Promotion Stage facts: %w", err)
+		}
 		records = append(records, inbox.PromotionState{
 			ID:              uuid.UUID(row.ID.Bytes),
-			StageSnapshot:   row.StageSnapshot,
+			StageName:       stage.Name,
+			Application:     stage.Application,
 			CandidateBranch: stringValue(row.CandidateBranch),
 			TargetBranch:    row.TargetBranch,
 			Status:          promotion.PromotionStatus(row.Status),
