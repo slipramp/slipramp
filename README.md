@@ -298,6 +298,9 @@ Kubernetes service account in a cluster.
 `task local:down` stops them while retaining the PostgreSQL and RustFS named
 volumes. Database migrations live in `internal/store/migrations`, queries live
 in `internal/store/queries`, and `task generate` refreshes both sqlc output and
-the OpenAPI-generated clients. While the repository and database contracts are
-still pre-stable, schema baselines may be rewritten instead of migrated
-compatibly; recreate the local PostgreSQL volume after such a change.
+the OpenAPI-generated clients. `task local:server` rebuilds and gracefully
+restarts the Server after server source, Go module, or local Placement changes.
+Rapid file changes are coalesced, and a failed rebuild leaves the last good
+Server binary available. While the repository and database contracts are still
+pre-stable, schema baselines may be rewritten instead of migrated compatibly;
+recreate the local PostgreSQL volume after such a change.

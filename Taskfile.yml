@@ -1,6 +1,8 @@
 version: "3"
 
 vars:
+  AIR: "{{.ROOT_DIR}}/.bin/air"
+  AIR_VERSION: v1.67.4
   GOLANGCI_LINT: "{{.ROOT_DIR}}/.bin/golangci-lint"
   GOLANGCI_LINT_VERSION: v2.14.0
   HELM: "{{.ROOT_DIR}}/.bin/helm"
@@ -26,7 +28,16 @@ env:
 tasks:
   deps:
     desc: Install pinned development tools
-    deps: [deps:go, deps:helm, deps:web]
+    deps: [deps:air, deps:go, deps:helm, deps:web]
+
+  deps:air:
+    internal: true
+    cmds:
+      - mkdir -p "{{.ROOT_DIR}}/.bin"
+      - GOBIN="{{.ROOT_DIR}}/.bin" go install github.com/air-verse/air@{{.AIR_VERSION}}
+    status:
+      - test -x "{{.AIR}}"
+      - '"{{.AIR}}" -v | grep -Fq "{{.AIR_VERSION}}"'
 
   deps:go:
     internal: true
@@ -97,8 +108,8 @@ tasks:
         exit 1
 
   local:server:
-    desc: Run the Server with local Dex and kcloud-ops integration configuration
-    deps: [local:up]
+    desc: Run the hot-reloading Server with local Dex and kcloud-ops integration configuration
+    deps: [deps:air, local:up]
     env:
       SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS: '{"homelab":"slipramp-local-homelab-enrollment-token","prod-sjc1":"slipramp-local-prod-sjc1-enrollment-token"}'
       SLIPRAMP_KARGO_INTEGRATIONS: '{"homelab":{"cluster":"prod-sjc1","uiUrl":"https://kargo.k8s.kcloud.io","repositories":["kcloud-ops","universe"],"environmentOrder":["homelab","prod"],"preparation":{"repository":"kcloud-ops","target":"kargo-promotions","action":"prepare-review"},"maximumStageObservationAge":"5m","pendingReviewRetention":"192h"}}'
@@ -111,7 +122,7 @@ tasks:
       SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS: '{"kcloud-ops":"{{.ROOT_DIR}}/deploy/local/kcloud-ops.gitconfig","universe":"{{.ROOT_DIR}}/deploy/local/universe.gitconfig"}'
       SLIPRAMP_REPOSITORY_REFRESH_INTERVAL: 10s
     cmds:
-      - go run ./cmd/slipramp-server
+      - '"{{.AIR}}" -c .air.toml'
 
   local:down:
     desc: Stop local dependencies without deleting their data

@@ -135,6 +135,86 @@ func TestArtifactTransfersUploadEmptyArtifactWithKnownLength(t *testing.T) {
 	}
 }
 
+func TestArtifactTransferErrorsIncludeResponseBodies(t *testing.T) {
+	t.Parallel()
+
+	var uploadAttempts atomic.Int32
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		switch request.Method {
+		case http.MethodGet:
+			return testHTTPResponse(
+				request,
+				http.StatusForbidden,
+				http.Header{},
+				`{"detail":"input is no longer retained"}`+"\n",
+			), nil
+		case http.MethodPut:
+			uploadAttempts.Add(1)
+			return testHTTPResponse(
+				request,
+				http.StatusInternalServerError,
+				http.Header{},
+				`{"detail":"artifact storage is unavailable"}`+"\n",
+			), nil
+		default:
+			return testHTTPResponse(request, http.StatusMethodNotAllowed, http.Header{}, ""), nil
+		}
+	})}
+
+	directory := t.TempDir()
+	outputPath := filepath.Join(directory, "result.txt")
+	if err := os.WriteFile(outputPath, []byte("result bytes"), 0o600); err != nil {
+		t.Fatalf("write output fixture: %v", err)
+	}
+	config := ArtifactConfig{
+		ServerURL: "https://slipramp.test",
+		RunID:     "run-1",
+		Token:     "run-token",
+		Artifacts: map[string]ArtifactDeclaration{
+			"result": {Path: outputPath},
+		},
+		Inputs: map[string]InputDeclaration{
+			"plan": {MountPath: filepath.Join(directory, "plan.tfplan")},
+		},
+		Client: client,
+	}
+
+	err := config.MaterializeInputs(context.Background())
+	want := `materialize input "plan": server returned HTTP 403: response body "{\"detail\":\"input is no longer retained\"}"`
+	if err == nil || err.Error() != want {
+		t.Fatalf("MaterializeInputs() error = %v, want %q", err, want)
+	}
+
+	err = config.UploadArtifacts(context.Background())
+	want = `upload artifact "result": server returned HTTP 500: response body "{\"detail\":\"artifact storage is unavailable\"}"`
+	if err == nil || err.Error() != want {
+		t.Fatalf("UploadArtifacts() error = %v, want %q", err, want)
+	}
+	if uploadAttempts.Load() != 3 {
+		t.Errorf("upload attempts = %d, want 3", uploadAttempts.Load())
+	}
+}
+
+func TestServerResponseErrorBoundsBody(t *testing.T) {
+	t.Parallel()
+
+	response := testHTTPResponse(
+		&http.Request{},
+		http.StatusBadGateway,
+		http.Header{},
+		strings.Repeat("x", maximumErrorResponseBodyBytes+1),
+	)
+	defer func() { _ = response.Body.Close() }()
+
+	err := serverResponseError(response)
+	if err == nil || !strings.HasSuffix(err.Error(), `" (truncated)`) {
+		t.Fatalf("serverResponseError() = %v, want bounded truncated body", err)
+	}
+	if len(err.Error()) > maximumErrorResponseBodyBytes+100 {
+		t.Fatalf("serverResponseError() length = %d, want bounded output", len(err.Error()))
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {

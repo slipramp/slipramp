@@ -521,58 +521,113 @@ Stage name, and Stage ID. Pages without a status filter scan only Repositories
 represented on the page; status filters evaluate all matching Repositories to
 count results.
 
-## Notification delivery foundation
+## Notification delivery
+
+Notifications report selected durable domain transitions without owning or
+altering them. A delivery failure never changes a Promotion, Run, Repository,
+Cluster, or other subject. Domain state remains the audit and recovery source of
+truth; notification records exist to operate outbound delivery, not to form a
+second general event log.
+
+A notification event is created only at the durable transition it describes.
+Polling, listing, rendering the Inbox, and restarting the Server never recreate
+one. The immutable, versioned event snapshots its subject, transition time, and
+channel-neutral presentation so delivery workers do not reconstruct an old
+message from mutable state. Its stable deduplication key makes repeated or
+concurrent transition handling idempotent. When a transactional domain service
+owns the transition, it persists the state change, event, and intended deliveries
+in one PostgreSQL transaction. Events based on elapsed time or derived health
+require their own durable detection, episode, recovery, deduplication, and noise
+semantics before they can be added.
+
+### Events and routing
 
 Outbound notification configuration is installation-wide Server configuration.
-It names Slack destinations backed by secret files, an explicit absolute public
-Slipramp URL, and routes that match implemented event types exactly. The initial
-event contract is `review.requested` schema version 1 with a `promotion` subject,
-bounded title, summary, ordered facts, and an application-relative action path.
-The event model does not accept external action URLs. Retry attempts and maximum
-backoff are bounded configuration, and terminal history has a bounded retention
-period; pending deliveries are never eligible for retention.
+It names provider-neutral destinations, with Slack as the first adapter, and
+routes that match implemented event types exactly. Routes resolve once at
+enqueue time and snapshot the destination name and type into each delivery, so a
+later configuration change cannot redirect committed work. Removing a configured
+destination preserves history; unresolved pending deliveries follow the bounded
+retry policy and eventually fail with a non-sensitive diagnostic. Exact event
+matching remains deliberately smaller than arbitrary predicates, labels, or user
+subscriptions.
 
-PostgreSQL stores immutable versioned notification events and one mutable
-delivery row per snapshotted destination. The event deduplication key is unique,
-and `(event_id, destination_name)` is the delivery uniqueness boundary. A focused
-enqueue service validates the channel-neutral payload, resolves routes once, and
-inserts the event and all selected deliveries in one transaction. Repeated use
-of the same key returns the existing logical event without adding destinations;
-a conflicting snapshot for that key is rejected. If no route matches, it writes
-nothing.
+The initial contract is `review.requested` schema version 1 with a `promotion`
+subject, bounded title, summary, ordered facts, optional expiry, and an
+application-relative action path. Facts come from the already-authorized domain
+snapshot; adapters may omit unsupported presentation details but do not re-read
+the subject to enrich a delivery. The model rejects external action URLs.
+Additional events or subject types require an implemented durable transition and
+explicit deduplication, recovery, and noise-suppression semantics.
+
+The enqueue service validates the payload and resolves all matching destinations
+before writing. PostgreSQL stores one immutable event and one mutable delivery per
+selected destination. The event deduplication key is unique, and
+`(event_id, destination_name)` is the delivery uniqueness boundary. Reusing a key
+with the same snapshot returns the existing event without adding destinations;
+conflicting content is rejected. When no route selects a destination, no
+notification record is written and the domain transition proceeds normally.
+
+### Inbox boundary
+
+The operational Inbox and outbound notifications share domain semantics, not
+storage or lifecycle. The Inbox projects what requires attention now regardless
+of notification configuration or delivery success; notification events preserve
+point-in-time snapshots for external delivery. Resolving or expiring a subject
+removes the current Inbox item without retracting a sent message or erasing
+delivery history. Viewing or acknowledging the Inbox never enqueues, suppresses,
+acknowledges, or retries a delivery.
+
+The two taxonomies need not mirror each other. A point-in-time event may be
+useful externally without remaining a current Inbox item, while an Inbox
+condition cannot produce notifications until it has a durable transition and
+episode boundary. A terminal delivery failure is exposed through delivery
+history rather than a notification-specific Inbox item. If it later joins the
+Inbox, it must be a Server-side projection with a stable failure-occurrence ID;
+per-Principal acknowledgement must not reset delivery state.
+
+### Delivery and operations
+
+Delivery is at least once. PostgreSQL stores `pending`, `delivered`, or terminal
+`failed` state, attempt count, retry timing, bounded error summaries, and attempt,
+delivery, and failure timestamps. A Server worker claims the oldest eligible
+pending delivery, durably advances its attempt metadata and jittered exponential
+retry time, and only then contacts the adapter. A restart after provider
+acceptance but before recording success may therefore send a duplicate, but it
+cannot lose the delivery. Separate destinations make independent progress.
+
+Timeouts, connection failures, rate limits, and retryable provider responses
+remain pending until the bounded attempt policy is exhausted. Permanent
+rendering, configuration, and provider rejections fail immediately. Rate-limit
+delays honor `Retry-After` up to the configured maximum backoff. Provider bodies
+and raw transport errors are never persisted; diagnostics are bounded and
+scrubbed of configured webhook URLs. Terminal history has bounded retention,
+while pending deliveries are never eligible for retention.
+
+Slack destinations use administrator-mounted webhook files and an explicit
+absolute public Slipramp URL. The renderer joins the event's relative action path
+to that URL and sends bounded context plus a link back to the authenticated
+product. Messages cannot approve or reject. Provider-side decisions would require
+signature validation, replay protection, provider-identity mapping to a Slipramp
+Principal, and the same authorization checks as the product API; a shared webhook
+credential cannot act for a human.
+
+When guarded Kargo Promotion preparation succeeds, route resolution precedes the
+state change and the same transaction moves the Promotion to `pending`, inserts
+one deduplicated `review.requested` event, and inserts all selected deliveries.
+With no matching route, the transaction changes only the Promotion. Automatic
+Promotions and preparation failures emit no review request, and repeated
+reconciliation cannot enqueue another event. The shared event shape does not
+create shared approval persistence: Promotions continue to own their decisions,
+and a future reviewed Run may own a different state machine.
 
 The generated read-only `/api/v1/notification-deliveries` endpoint uses ordinary
-product read authorization and exposes event/subject identity, destination name
-and type, state, attempt count, bounded diagnostics, and timestamps. It omits
-payloads, deduplication keys, provider bodies, webhook URLs, and secret paths.
-Notification delivery history remains separate from the operational Inbox.
-
-A Server worker claims the oldest eligible pending delivery in PostgreSQL,
-durably advances its attempt count and jittered exponential retry time, and only
-then contacts Slack. Successful requests become `delivered`; timeouts, connection
-failures, rate limits, and retryable provider responses remain pending until the
-bounded attempt policy is exhausted. Permanent rendering, configuration, and
-provider rejections become `failed` immediately, while a snapshotted destination
-missing from current configuration follows the bounded retry policy. Rate-limit
-delays honor `Retry-After` up to the configured maximum backoff. Provider bodies
-and raw transport errors are never persisted, and stored diagnostics are bounded
-and scrubbed of configured webhook URLs. A restart after an ambiguous attempt
-can therefore resend at least once without losing the delivery, while separate
-destinations continue to make independent progress.
-
-The Slack renderer uses the immutable event snapshot and joins its relative
-action path to the configured public Slipramp URL. Messages contain a fallback,
-bounded context fields, and an authenticated Slipramp action link; they cannot
-approve or reject. When guarded Kargo Promotion preparation succeeds, routing is
-resolved before the state change and the same PostgreSQL transaction moves the
-Promotion to `pending`, inserts one deduplicated `review.requested` event, and
-inserts its selected deliveries. With no matching route, the transaction changes
-only the Promotion. Automatic Promotions and preparation failures emit no review
-request, and repeated reconciliation cannot enqueue another event. A dedicated
-`/notification-deliveries` Web view uses the generated client to show paginated,
-non-sensitive history with subject links, attempt timing, and bounded failure
-summaries. It does not compose delivery data into the Inbox. Notification failure
-remains operational state and never changes the originating Promotion or Run.
+product read authorization. It exposes event and subject identity, destination
+name and type, state, attempt count, bounded diagnostics, and timestamps while
+omitting payloads, deduplication keys, provider bodies, webhook URLs, and secret
+paths. The dedicated `/notification-deliveries` Web view uses that generated
+client to show paginated history, subject links, attempt timing, and failure
+summaries. It offers no routing, template, destination-secret, or retry editor.
 
 ## API, operations, and delivery
 

@@ -24,6 +24,8 @@ const (
 	ArtifactTokenEnvironment  = "SLIPRAMP_ARTIFACT_TOKEN"
 	ArtifactsEnvironment      = "SLIPRAMP_ARTIFACTS"
 	ArtifactInputsEnvironment = "SLIPRAMP_ARTIFACT_INPUTS"
+
+	maximumErrorResponseBodyBytes = 4 << 10
 )
 
 var internalEnvironmentNames = map[string]struct{}{
@@ -166,7 +168,7 @@ func (c ArtifactConfig) downloadInput(ctx context.Context, name string, destinat
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		_ = temporary.Close()
-		return fmt.Errorf("server returned HTTP %d", response.StatusCode)
+		return serverResponseError(response)
 	}
 
 	digest := sha256.New()
@@ -226,14 +228,16 @@ func (c ArtifactConfig) uploadArtifact(ctx context.Context, name, path string) e
 		response, err := c.Client.Do(request)
 		_ = body.Close()
 		if err == nil {
-			_ = response.Body.Close()
 			if response.StatusCode == http.StatusNoContent {
+				_ = response.Body.Close()
 				return nil
 			}
+			responseErr := serverResponseError(response)
+			_ = response.Body.Close()
 			if response.StatusCode < 500 {
-				return fmt.Errorf("server returned HTTP %d", response.StatusCode)
+				return responseErr
 			}
-			lastErr = fmt.Errorf("server returned HTTP %d", response.StatusCode)
+			lastErr = responseErr
 		} else {
 			lastErr = err
 		}
@@ -249,6 +253,32 @@ func (c ArtifactConfig) uploadArtifact(ctx context.Context, name, path string) e
 	}
 
 	return lastErr
+}
+
+func serverResponseError(response *http.Response) error {
+	prefix := fmt.Sprintf("server returned HTTP %d", response.StatusCode)
+	if response.Body == nil {
+		return errors.New(prefix)
+	}
+
+	contents, err := io.ReadAll(io.LimitReader(response.Body, maximumErrorResponseBodyBytes+1))
+	if err != nil {
+		return fmt.Errorf("%s; read response body: %w", prefix, err)
+	}
+
+	truncated := len(contents) > maximumErrorResponseBodyBytes
+	if truncated {
+		contents = contents[:maximumErrorResponseBodyBytes]
+	}
+	body := strings.TrimSpace(string(contents))
+	if body == "" {
+		return errors.New(prefix)
+	}
+	if truncated {
+		return fmt.Errorf("%s: response body %q (truncated)", prefix, body)
+	}
+
+	return fmt.Errorf("%s: response body %q", prefix, body)
 }
 
 func fileSHA256(path string) (string, error) {

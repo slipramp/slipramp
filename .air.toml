@@ -1,0 +1,47 @@
+root = "."
+tmp_dir = ".cache/air"
+
+[build]
+cmd = "go build -o ./.cache/air/slipramp-server ./cmd/slipramp-server"
+entrypoint = ["./.cache/air/slipramp-server"]
+include_ext = ["go"]
+include_file = ["go.mod", "go.sum", "deploy/local/placements.yaml"]
+exclude_dir = [
+  ".bin",
+  ".cache",
+  ".git",
+  "api",
+  "assets",
+  "cmd/slipramp-controller",
+  "cmd/slipramp-harness",
+  "cmd/slipramp-kargo-tools",
+  "deploy/charts",
+  "deploy/e2e",
+  "dist",
+  "docs",
+  "examples",
+  "node_modules",
+  "scripts",
+  "web",
+]
+exclude_regex = ["_test\\.go$"]
+exclude_unchanged = true
+
+# Coalesce rapid editor and generator writes into one rebuild.
+delay = 750
+
+# Fall back to the last good binary when an intermediate edit does not compile.
+stop_on_error = false
+
+# Let the Server drain requests and close resources before forcing it down.
+send_interrupt = true
+kill_delay = "4s"
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true
+
+[screen]
+clear_on_rebuild = false

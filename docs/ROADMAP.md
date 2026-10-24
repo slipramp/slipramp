@@ -130,7 +130,7 @@ an operator need justifies a focused design:
   explicit delivery retries, user subscriptions, or interactive provider
   decisions. Add them only for a concrete operator need and preserve the
   transition, deduplication, recovery, noise, and security boundaries in
-  [NOTIFICATIONS.md](./NOTIFICATIONS.md).
+  [notification delivery](./DESIGN.md#notification-delivery).
 - Protected Targets, branch restrictions, maintenance windows, image policy, or
   broader authorization. Such controls must preserve the opt-in safety model.
 - Workflow graphs and multi-step pipelines, only if independent Actions and
