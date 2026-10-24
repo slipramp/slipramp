@@ -30,7 +30,10 @@ type runJobs interface {
 	Delete(ctx context.Context, handle jobHandle) error
 }
 
-var errLogNotReady = errors.New("execution log is not ready")
+var (
+	errLogNotReady            = errors.New("execution log is not ready")
+	errRunJobIdentityMismatch = errors.New("execution Job identity does not match Run")
+)
 
 type cancellationResult struct {
 	handle      jobHandle
@@ -45,13 +48,6 @@ func (r *kubernetesRunJobs) RequestCancellation(
 	ctx context.Context,
 	command api.CancelRunCommand,
 ) (cancellationResult, error) {
-	if !r.config.OwnsExecutionNamespace(string(command.JobNamespace)) {
-		return cancellationResult{}, fmt.Errorf(
-			"execution namespace %q is not owned by this Controller",
-			command.JobNamespace,
-		)
-	}
-
 	jobs := r.jobs.Jobs(string(command.JobNamespace))
 	name := runJobName(command.ID)
 	handle := jobHandle{
@@ -62,6 +58,9 @@ func (r *kubernetesRunJobs) RequestCancellation(
 	if command.JobUID != nil {
 		handle.uid = *command.JobUID
 	}
+	if err := r.validateJobHandle(handle); err != nil {
+		return cancellationResult{}, err
+	}
 
 	job, err := jobs.Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -71,46 +70,19 @@ func (r *kubernetesRunJobs) RequestCancellation(
 		return cancellationResult{}, fmt.Errorf("get execution Job to cancel: %w", err)
 	}
 
-	if job.Labels[managedByLabel] != managedByLabelValue ||
-		job.Labels[runIDLabel] != command.ID.String() ||
-		job.Labels[clusterLabel] != r.config.ClusterName {
-		return cancellationResult{}, fmt.Errorf("execution Job %q does not have the expected Run identity", name)
+	if err := r.validateJobIdentity(handle, job); err != nil {
+		return cancellationResult{}, err
 	}
+	handle.uid = string(job.UID)
 
-	jobUID := string(job.UID)
-	if command.JobUID != nil && jobUID != *command.JobUID {
-		return cancellationResult{}, fmt.Errorf(
-			"execution Job %q UID %q does not match recorded UID %q",
-			name,
-			jobUID,
-			*command.JobUID,
-		)
-	}
-
-	if jobUID != "" {
-		handle.uid = jobUID
-	}
-
-	pods, err := r.pods.Pods(handle.namespace).List(
-		ctx,
-		metav1.ListOptions{
-			LabelSelector: labels.Set{
-				batchv1.JobNameLabel: handle.name,
-				managedByLabel:       managedByLabelValue,
-				runIDLabel:           command.ID.String(),
-				clusterLabel:         r.config.ClusterName,
-			}.String(),
-		},
-	)
+	pods, err := r.executionPods(ctx, handle)
 	if err != nil {
 		return cancellationResult{}, fmt.Errorf("list execution Pods to cancel Run: %w", err)
 	}
-	if len(pods.Items) == 0 {
+	if len(pods) == 0 {
 		propagation := metav1.DeletePropagationForeground
 		options := metav1.DeleteOptions{PropagationPolicy: &propagation}
-		if job.UID != "" {
-			options.Preconditions = &metav1.Preconditions{UID: &job.UID}
-		}
+		options.Preconditions = &metav1.Preconditions{UID: &job.UID}
 		if err := jobs.Delete(ctx, name, options); err != nil &&
 			!apierrors.IsNotFound(err) {
 			return cancellationResult{}, fmt.Errorf("delete unstarted execution Job: %w", err)
@@ -119,12 +91,12 @@ func (r *kubernetesRunJobs) RequestCancellation(
 		return cancellationResult{handle: handle}, nil
 	}
 	if terminalJobObservation(job.Status.Conditions, nil) != nil ||
-		actionAlreadyTerminated(pods.Items) {
+		actionAlreadyTerminated(pods) {
 		return cancellationResult{handle: handle, jobRetained: true}, nil
 	}
 
-	for index := range pods.Items {
-		pod := pods.Items[index].DeepCopy()
+	for index := range pods {
+		pod := pods[index].DeepCopy()
 		if pod.Annotations[cancellationAnnotation] == "true" {
 			continue
 		}
@@ -207,13 +179,21 @@ func newKubernetesRunJobs(
 // Job is success because the Server may deliver the same assignment more than
 // once.
 func (r *kubernetesRunJobs) Ensure(ctx context.Context, assignment api.RunAssignment) (ensuredRunJob, error) {
+	// Reject invalid assignments before accessing Kubernetes. These failures do
+	// not establish that a foreign or replacement Job exists and can finish the Run.
 	if !r.config.OwnsExecutionNamespace(string(assignment.Placement.JobNamespace)) {
 		return ensuredRunJob{}, permanentMaterialization(fmt.Errorf(
-			"execution namespace %q is not owned by this Controller",
-			assignment.Placement.JobNamespace,
+			"execution namespace %q is not owned by this Controller", assignment.Placement.JobNamespace,
 		))
 	}
-
+	if assignment.ID == uuid.Nil {
+		return ensuredRunJob{}, permanentMaterialization(errors.New("Run ID is required"))
+	}
+	handle := jobHandle{
+		runID:     assignment.ID,
+		namespace: string(assignment.Placement.JobNamespace),
+		name:      runJobName(assignment.ID),
+	}
 	job, err := renderJob(r.config, assignment)
 	if err != nil {
 		return ensuredRunJob{}, permanentMaterialization(err)
@@ -222,6 +202,10 @@ func (r *kubernetesRunJobs) Ensure(ctx context.Context, assignment api.RunAssign
 	jobs := r.jobs.Jobs(job.Namespace)
 	created, err := jobs.Create(ctx, job, metav1.CreateOptions{})
 	if err == nil {
+		if err := r.validateJobIdentity(handle, created); err != nil {
+			return ensuredRunJob{}, permanentMaterialization(err)
+		}
+
 		return ensuredRunJob{
 			handle:  handleFromJob(created, assignment.ID),
 			created: true,
@@ -236,13 +220,8 @@ func (r *kubernetesRunJobs) Ensure(ctx context.Context, assignment api.RunAssign
 		return ensuredRunJob{}, classifyMaterializationError("get existing execution Job", err)
 	}
 
-	if existing.Labels[managedByLabel] != managedByLabelValue ||
-		existing.Labels[runIDLabel] != assignment.ID.String() ||
-		existing.Labels[clusterLabel] != r.config.ClusterName {
-		return ensuredRunJob{}, permanentMaterialization(fmt.Errorf(
-			"execution Job %q already exists without the expected Run identity",
-			job.Name,
-		))
+	if err := r.validateJobIdentity(handle, existing); err != nil {
+		return ensuredRunJob{}, permanentMaterialization(err)
 	}
 
 	return ensuredRunJob{
@@ -267,7 +246,11 @@ func (r *kubernetesRunJobs) Recover(ctx context.Context) ([]jobHandle, error) {
 			runID, parseErr := uuid.Parse(job.Labels[runIDLabel])
 			// A partial or copied label set does not establish Slipramp ownership.
 			// Ignore it rather than letting one malformed Job block all recovery.
-			if parseErr != nil || job.Name != runJobName(runID) {
+			if parseErr != nil {
+				continue
+			}
+			handle := jobHandle{runID: runID, namespace: namespace, name: runJobName(runID)}
+			if err := r.validateJobIdentity(handle, job); err != nil {
 				continue
 			}
 
@@ -279,6 +262,10 @@ func (r *kubernetesRunJobs) Recover(ctx context.Context) ([]jobHandle, error) {
 }
 
 func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runObservation, error) {
+	if err := r.validateJobHandle(handle); err != nil {
+		return runObservation{}, err
+	}
+
 	job, err := r.jobs.Jobs(handle.namespace).Get(ctx, handle.name, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -297,37 +284,30 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 
 		return runObservation{}, fmt.Errorf("get execution Job state: %w", err)
 	}
-	jobUID := string(job.UID)
-	if jobUID == "" {
-		jobUID = handle.uid
+	if err := r.validateJobIdentity(handle, job); err != nil {
+		return runObservation{}, err
 	}
-	uid := optionalNonemptyString(jobUID)
+	handle.uid = string(job.UID)
+	uid := new(handle.uid)
 
 	terminal := terminalJobObservation(job.Status.Conditions, uid)
 
-	pods, err := r.pods.Pods(handle.namespace).List(
-		ctx,
-		metav1.ListOptions{
-			LabelSelector: labels.Set{
-				batchv1.JobNameLabel: handle.name,
-			}.String(),
-		},
-	)
+	pods, err := r.executionPods(ctx, handle)
 	if err != nil {
 		return runObservation{}, fmt.Errorf("list execution Pods: %w", err)
 	}
 
 	cancellationRequested := false
-	for index := range pods.Items {
-		if pods.Items[index].Annotations[cancellationAnnotation] == "true" {
+	for index := range pods {
+		if pods[index].Annotations[cancellationAnnotation] == "true" {
 			cancellationRequested = true
 			break
 		}
 	}
 
-	for podIndex := range pods.Items {
-		for statusIndex := range pods.Items[podIndex].Status.ContainerStatuses {
-			status := &pods.Items[podIndex].Status.ContainerStatuses[statusIndex]
+	for podIndex := range pods {
+		for statusIndex := range pods[podIndex].Status.ContainerStatuses {
+			status := &pods[podIndex].Status.ContainerStatuses[statusIndex]
 			if status.Name != actionContainerName {
 				continue
 			}
@@ -387,8 +367,21 @@ func canceledIfRequested(observation runObservation, requested bool) runObservat
 // captured when observation began. A missing Job is success so cleanup remains
 // idempotent when a deletion response is lost or the Controller restarts.
 func (r *kubernetesRunJobs) Delete(ctx context.Context, handle jobHandle) error {
+	if err := r.validateJobHandle(handle); err != nil {
+		return err
+	}
 	if handle.uid == "" {
-		return errors.New("delete execution Job: Job UID is required")
+		return fmt.Errorf("%w: delete execution Job requires a pinned UID", errRunJobIdentityMismatch)
+	}
+	job, err := r.jobs.Jobs(handle.namespace).Get(ctx, handle.name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get completed execution Job before deletion: %w", err)
+	}
+	if err := r.validateJobIdentity(handle, job); err != nil {
+		return err
 	}
 
 	uid := types.UID(handle.uid)
@@ -397,7 +390,7 @@ func (r *kubernetesRunJobs) Delete(ctx context.Context, handle jobHandle) error 
 		Preconditions:     &metav1.Preconditions{UID: &uid},
 		PropagationPolicy: &propagation,
 	}
-	err := r.jobs.Jobs(handle.namespace).Delete(ctx, handle.name, options)
+	err = r.jobs.Jobs(handle.namespace).Delete(ctx, handle.name, options)
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete completed execution Job: %w", err)
 	}
@@ -406,22 +399,35 @@ func (r *kubernetesRunJobs) Delete(ctx context.Context, handle jobHandle) error 
 }
 
 func (r *kubernetesRunJobs) OpenLog(ctx context.Context, handle jobHandle, follow bool) (io.ReadCloser, error) {
-	pods, err := r.pods.Pods(handle.namespace).List(
-		ctx,
-		metav1.ListOptions{
-			LabelSelector: labels.Set{batchv1.JobNameLabel: handle.name}.String(),
-		},
-	)
+	if err := r.validateJobHandle(handle); err != nil {
+		return nil, err
+	}
+	job, err := r.jobs.Jobs(handle.namespace).Get(ctx, handle.name, metav1.GetOptions{})
+	if err == nil {
+		if err := r.validateJobIdentity(handle, job); err != nil {
+			return nil, err
+		}
+		handle.uid = string(job.UID)
+	} else if !apierrors.IsNotFound(err) {
+		return nil, fmt.Errorf("get execution Job for log stream: %w", err)
+	}
+	// Original Pods can outlive a deleted Job. Its pinned UID still establishes
+	// which remaining log source belongs to this Run.
+	if handle.uid == "" {
+		return nil, errLogNotReady
+	}
+
+	pods, err := r.executionPods(ctx, handle)
 	if err != nil {
 		return nil, fmt.Errorf("list execution Pods for log stream: %w", err)
 	}
-	if len(pods.Items) == 0 {
+	if len(pods) == 0 {
 		return nil, errLogNotReady
 	}
-	sort.Slice(pods.Items, func(left, right int) bool {
-		return pods.Items[left].CreationTimestamp.Before(&pods.Items[right].CreationTimestamp)
+	sort.Slice(pods, func(left, right int) bool {
+		return pods[left].CreationTimestamp.Before(&pods[right].CreationTimestamp)
 	})
-	pod := pods.Items[0]
+	pod := pods[0]
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.Name == actionContainerName &&
 			status.State.Waiting != nil {
@@ -441,6 +447,75 @@ func (r *kubernetesRunJobs) OpenLog(ctx context.Context, handle jobHandle, follo
 	}
 
 	return stream, nil
+}
+
+func (r *kubernetesRunJobs) validateJobHandle(handle jobHandle) error {
+	if !r.config.OwnsExecutionNamespace(handle.namespace) {
+		return fmt.Errorf(
+			"%w: execution namespace %q is not owned by this Controller",
+			errRunJobIdentityMismatch,
+			handle.namespace,
+		)
+	}
+	if handle.runID == uuid.Nil || handle.name != runJobName(handle.runID) {
+		return fmt.Errorf("%w: Job name %q does not match Run %s", errRunJobIdentityMismatch, handle.name, handle.runID)
+	}
+
+	return nil
+}
+
+// An unbound handle may learn an admitted UID once. A pinned handle must never
+// adopt a replacement Job, even when its deterministic name and labels match.
+func (r *kubernetesRunJobs) validateJobIdentity(handle jobHandle, job *batchv1.Job) error {
+	if err := r.validateJobHandle(handle); err != nil {
+		return err
+	}
+	if job.Namespace != handle.namespace || job.Name != handle.name ||
+		job.Labels[managedByLabel] != managedByLabelValue ||
+		job.Labels[runIDLabel] != handle.runID.String() ||
+		job.Labels[clusterLabel] != r.config.ClusterName {
+		return fmt.Errorf("%w: Job %s/%s does not have the expected Run identity",
+			errRunJobIdentityMismatch, job.Namespace, job.Name)
+	}
+	if job.UID == "" {
+		return fmt.Errorf("%w: Job %s/%s has no admitted UID", errRunJobIdentityMismatch, job.Namespace, job.Name)
+	}
+	if handle.uid != "" && string(job.UID) != handle.uid {
+		return fmt.Errorf("%w: Job %s/%s UID %q does not match pinned UID %q",
+			errRunJobIdentityMismatch, job.Namespace, job.Name, job.UID, handle.uid)
+	}
+
+	return nil
+}
+
+func (r *kubernetesRunJobs) executionPods(ctx context.Context, handle jobHandle) ([]corev1.Pod, error) {
+	if handle.uid == "" {
+		return nil, fmt.Errorf("%w: select execution Pods requires a pinned Job UID", errRunJobIdentityMismatch)
+	}
+	selector := labels.Set{
+		batchv1.JobNameLabel:       handle.name,
+		batchv1.ControllerUidLabel: handle.uid,
+		managedByLabel:             managedByLabelValue,
+		runIDLabel:                 handle.runID.String(),
+		clusterLabel:               r.config.ClusterName,
+	}
+	podSelector := selector.AsSelector()
+	pods, err := r.pods.Pods(handle.namespace).List(ctx, metav1.ListOptions{LabelSelector: podSelector.String()})
+	if err != nil {
+		return nil, err
+	}
+	for index := range pods.Items {
+		pod := &pods.Items[index]
+		owner := metav1.GetControllerOf(pod)
+		if pod.Namespace != handle.namespace || !podSelector.Matches(labels.Set(pod.Labels)) ||
+			owner == nil || owner.APIVersion != "batch/v1" || owner.Kind != "Job" ||
+			owner.Name != handle.name || string(owner.UID) != handle.uid {
+			return nil, fmt.Errorf("%w: Pod %s/%s is not controlled by Job %s with UID %q",
+				errRunJobIdentityMismatch, pod.Namespace, pod.Name, handle.name, handle.uid)
+		}
+	}
+
+	return pods.Items, nil
 }
 
 func terminalJobObservation(conditions []batchv1.JobCondition, jobUID *string) *runObservation {

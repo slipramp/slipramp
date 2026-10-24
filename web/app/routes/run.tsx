@@ -6,6 +6,7 @@ import {
   Button,
   Code,
   Group,
+  Modal,
   Paper,
   SimpleGrid,
   Stack,
@@ -20,17 +21,23 @@ import {
   IconClock,
   IconClockExclamation,
   IconLoader2,
+  IconMaximize,
+  IconOctagon,
   IconPlayerPlay,
-  IconPlayerStop,
   IconRefresh,
   IconServer2,
   IconX,
   type TablerIcon,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Form, Link, redirect, useFetcher, useNavigation } from "react-router";
 
-import { ANSI_DEFAULT_BACKGROUND, ANSI_DEFAULT_FOREGROUND, parseAnsi } from "~/ansi";
+import {
+  ANSI_DEFAULT_BACKGROUND,
+  ANSI_DEFAULT_FOREGROUND,
+  parseAnsi,
+  type AnsiTextSegment,
+} from "~/ansi";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   cancelRun,
@@ -255,7 +262,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
               <input name="intent" type="hidden" value="cancel" />
               <Button
                 color="red"
-                leftSection={<IconPlayerStop size={16} />}
+                leftSection={<IconOctagon aria-hidden size={16} />}
                 loading={
                   navigation.state === "submitting" &&
                   navigation.formData?.get("intent") === "cancel"
@@ -284,7 +291,8 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         }
         description={
           <Text c="dimmed">
-            {run.target} · {run.action} · <CommitReference commit={run.commit} />
+            {run.target} · {run.action} ·{" "}
+            <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
           </Text>
         }
         details={
@@ -340,12 +348,12 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
-      <CommitDetails commit={run.commit} />
+      <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
+      <LiveLog key={run.id} runId={run.id} />
       <RunOverview repositoryName={currentData.repositoryName} run={run} />
       <ParameterTable parameters={run.parameters} />
 
-      <InputTable inputs={run.inputs} />
-      <LiveLog key={run.id} runId={run.id} />
+      <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
       <ArtifactTable
         artifacts={currentData.artifacts ?? []}
         consumers={run.artifactConsumers}
@@ -389,7 +397,7 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
               </Stack>
             </Fact>
             <Fact label="Git revision">
-              <CommitReference commit={run.commit} />
+              <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
             </Fact>
             <Fact label="Catalog revision">
               <Code title={run.catalogRevisionId}>
@@ -428,7 +436,7 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
         </Stack>
       </Paper>
 
-      <Paper p="lg" withBorder>
+      <Paper p="md" withBorder>
         <RunLifecycle run={run} />
       </Paper>
     </SimpleGrid>
@@ -525,12 +533,12 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
   ].filter((value): value is string => value !== undefined);
 
   return (
-    <Stack gap="lg">
+    <Stack gap="md">
       <SectionHeader
         actions={
           <Group gap="xs">
             {summary.map((value) => (
-              <Badge key={value} tt="none" variant="light">
+              <Badge key={value} size="sm" tt="none" variant="light">
                 {value}
               </Badge>
             ))}
@@ -540,10 +548,10 @@ function RunLifecycle({ run }: Readonly<{ run: Run }>) {
       />
       <Timeline
         active={activeStep}
-        bulletSize={34}
+        bulletSize={28}
         className="lifecycle-timeline"
         color={run.phase === "finished" ? runStatusColor(run) : "lilac"}
-        lineWidth={3}
+        lineWidth={2}
       >
         {steps.map((step, index) => (
           <LifecycleStep
@@ -585,11 +593,13 @@ function LifecycleStep({
 
   return (
     <Timeline.Item
-      bullet={<Icon aria-hidden size={17} stroke={2.2} />}
+      bullet={<Icon aria-hidden size={15} stroke={2.2} />}
       className="lifecycle-step"
       title={
         <Group gap="xs" justify="space-between" wrap="nowrap">
-          <Text fw={650}>{label}</Text>
+          <Text fw={650} size="sm">
+            {label}
+          </Text>
           <Badge color={color} size="xs" variant={active || status ? "light" : "outline"}>
             {state}
           </Badge>
@@ -597,14 +607,14 @@ function LifecycleStep({
       }
     >
       {value ? (
-        <Stack gap={3}>
-          <Timestamp c="dimmed" size="sm" value={value} />
+        <Group gap={6} wrap="wrap">
+          <Timestamp c="dimmed" size="xs" value={value} />
           <Text c="dimmed" size="xs">
             {children}
           </Text>
-        </Stack>
+        </Group>
       ) : (
-        <Text c="dimmed" size="sm">
+        <Text c="dimmed" size="xs">
           Not reached
         </Text>
       )}
@@ -733,7 +743,10 @@ function ParameterTable({ parameters }: Readonly<{ parameters: Run["parameters"]
   );
 }
 
-function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInput> }>) {
+function InputTable({
+  inputs,
+  repositoryId,
+}: Readonly<{ inputs: Record<string, RunArtifactInput>; repositoryId: string }>) {
   const entries = Object.entries(inputs).toSorted(([left], [right]) => left.localeCompare(right));
   if (entries.length === 0) return null;
 
@@ -775,7 +788,7 @@ function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInp
                   </Table.Td>
                   <Table.Td>
                     <Stack gap={0}>
-                      <CommitReference commit={input.commit} />
+                      <CommitReference commit={input.commit} repositoryId={repositoryId} />
                       <Text c="dimmed" size="xs">
                         Catalog {input.catalogRevisionId.slice(0, 8)}
                       </Text>
@@ -793,19 +806,25 @@ function InputTable({ inputs }: Readonly<{ inputs: Record<string, RunArtifactInp
 
 function LiveLog({ runId }: Readonly<{ runId: string }>) {
   const [contents, setContents] = useState("");
+  const [fullscreenOpened, setFullscreenOpened] = useState(false);
   const [receivedBytes, setReceivedBytes] = useState(0);
   const [status, setStatus] = useState("Connecting");
+  const fullscreenOutputRef = useRef<HTMLElement>(null);
   const outputRef = useRef<HTMLElement>(null);
   const logSegments = useMemo(() => parseAnsi(contents), [contents]);
 
   useEffect(() => {
     if (contents.length === 0) return;
 
-    const output = outputRef.current;
-    if (output !== null) {
-      output.scrollTop = output.scrollHeight;
+    const outputs = fullscreenOpened
+      ? [outputRef.current, fullscreenOutputRef.current]
+      : [outputRef.current];
+    for (const output of outputs) {
+      if (output !== null) {
+        output.scrollTop = output.scrollHeight;
+      }
     }
-  }, [contents]);
+  }, [contents, fullscreenOpened]);
 
   useEffect(() => {
     const decoder = new TextDecoder();
@@ -860,40 +879,89 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
   }, [runId]);
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="sm">
-        <Group justify="space-between">
-          <Title order={2}>Logs</Title>
+    <>
+      <Paper p="md" withBorder>
+        <Stack gap="sm">
+          <Group justify="space-between">
+            <Title order={2}>Logs</Title>
+            <Group gap="xs">
+              <Text c="dimmed" size="xs">
+                {formatBinarySize(receivedBytes)} received
+              </Text>
+              <Badge variant="light">{status}</Badge>
+              <Button
+                leftSection={<IconMaximize aria-hidden size={15} />}
+                onClick={() => setFullscreenOpened(true)}
+                size="compact-sm"
+                variant="subtle"
+              >
+                Full screen
+              </Button>
+            </Group>
+          </Group>
+          <LogOutput contents={contents} logSegments={logSegments} outputRef={outputRef} />
+        </Stack>
+      </Paper>
+
+      <Modal
+        classNames={{ body: "run-log-modal-body", content: "run-log-modal-content" }}
+        fullScreen
+        onClose={() => setFullscreenOpened(false)}
+        opened={fullscreenOpened}
+        title="Run logs"
+      >
+        <Stack className="run-log-fullscreen-layout" gap="sm">
           <Group gap="xs">
             <Text c="dimmed" size="xs">
               {formatBinarySize(receivedBytes)} received
             </Text>
             <Badge variant="light">{status}</Badge>
           </Group>
-        </Group>
-        <Code
-          className="run-log"
-          ref={outputRef}
-          block
-          mah={480}
-          style={{
-            backgroundColor: ANSI_DEFAULT_BACKGROUND,
-            color: ANSI_DEFAULT_FOREGROUND,
-            overflow: "auto",
-            tabSize: 4,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {contents.length === 0
-            ? "Waiting for durable log output…"
-            : logSegments.map((segment, index) => (
-                <span key={index} style={segment.style}>
-                  {segment.text}
-                </span>
-              ))}
-        </Code>
-      </Stack>
-    </Paper>
+          <LogOutput
+            contents={contents}
+            fullscreen
+            logSegments={logSegments}
+            outputRef={fullscreenOutputRef}
+          />
+        </Stack>
+      </Modal>
+    </>
+  );
+}
+
+function LogOutput({
+  contents,
+  fullscreen = false,
+  logSegments,
+  outputRef,
+}: Readonly<{
+  contents: string;
+  fullscreen?: boolean;
+  logSegments: AnsiTextSegment[];
+  outputRef: RefObject<HTMLElement | null>;
+}>) {
+  return (
+    <Code
+      className={fullscreen ? "run-log run-log-fullscreen" : "run-log"}
+      ref={outputRef}
+      block
+      mah={fullscreen ? undefined : 480}
+      style={{
+        backgroundColor: ANSI_DEFAULT_BACKGROUND,
+        color: ANSI_DEFAULT_FOREGROUND,
+        overflow: "auto",
+        tabSize: 4,
+        whiteSpace: "pre-wrap",
+      }}
+    >
+      {contents.length === 0
+        ? "Waiting for durable log output…"
+        : logSegments.map((segment, index) => (
+            <span key={index} style={segment.style}>
+              {segment.text}
+            </span>
+          ))}
+    </Code>
   );
 }
 
@@ -957,8 +1025,11 @@ function ArtifactTable({
                           {artifact.provenance.target} · {artifact.provenance.action}
                         </Text>
                         <Text c="dimmed" size="xs">
-                          <CommitReference commit={artifact.provenance.commit} /> · Catalog{" "}
-                          {shortIdentifier(artifact.provenance.catalogRevisionId)}
+                          <CommitReference
+                            commit={artifact.provenance.commit}
+                            repositoryId={artifact.provenance.repositoryId}
+                          />{" "}
+                          · Catalog {shortIdentifier(artifact.provenance.catalogRevisionId)}
                         </Text>
                       </Stack>
                     </Table.Td>

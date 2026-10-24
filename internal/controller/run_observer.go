@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -11,7 +12,7 @@ import (
 type runObservationSession struct {
 	controller   *Controller
 	handle       jobHandle
-	observer     *runObserver
+	observer     *runWorker
 	cancellation *api.CancelRunCommand
 	logStream    *logSession
 	completedLog *logStreamResult
@@ -22,7 +23,7 @@ type runObservationSession struct {
 func newRunObservationSession(
 	controller *Controller,
 	handle jobHandle,
-	observer *runObserver,
+	observer *runWorker,
 ) *runObservationSession {
 	return &runObservationSession{
 		controller: controller,
@@ -33,6 +34,11 @@ func newRunObservationSession(
 
 func (s *runObservationSession) run(ctx context.Context) {
 	for {
+		if s.completedLog != nil && permanentServerError(s.completedLog.err) {
+			s.controller.runWorkerError(s.handle.runID, "stream Run log", s.completedLog.err)
+
+			return
+		}
 		s.acceptPendingCancellation()
 		if s.cancellation != nil {
 			if s.cancel(ctx) {
@@ -61,7 +67,18 @@ func (s *runObservationSession) acceptPendingCancellation() {
 }
 
 func (s *runObservationSession) cancel(ctx context.Context) bool {
-	result, err := s.controller.requestJobCancellation(ctx, *s.cancellation)
+	command := *s.cancellation
+	if string(command.JobNamespace) != s.handle.namespace ||
+		(s.handle.uid != "" && command.JobUID != nil && *command.JobUID != s.handle.uid) {
+		err := fmt.Errorf("%w: cancellation does not match the worker's pinned Job", errRunJobIdentityMismatch)
+		s.controller.runWorkerError(s.handle.runID, "stop cancellation after Job identity mismatch", err)
+
+		return true
+	}
+	if s.handle.uid != "" {
+		command.JobUID = new(s.handle.uid)
+	}
+	result, err := s.controller.requestJobCancellation(ctx, command)
 	if err != nil {
 		return true
 	}
@@ -84,6 +101,11 @@ func (s *runObservationSession) observe(ctx context.Context) bool {
 		return true
 	}
 	if err != nil {
+		if errors.Is(err, errRunJobIdentityMismatch) {
+			s.controller.runWorkerError(s.handle.runID, "stop observation after Job identity mismatch", err)
+
+			return true
+		}
 		s.controller.logger.Warn(
 			"observe execution Job",
 			"run_id", s.handle.runID,
@@ -103,7 +125,9 @@ func (s *runObservationSession) observe(ctx context.Context) bool {
 	}
 
 	s.discardCompletedLog()
-	s.startLog(ctx, observation)
+	if s.startLog(ctx, observation) {
+		return true
+	}
 
 	return s.report(ctx, observation)
 }
@@ -123,13 +147,18 @@ func (s *runObservationSession) discardCompletedLog() {
 	s.completedLog = nil
 }
 
-func (s *runObservationSession) startLog(ctx context.Context, observation runObservation) {
+func (s *runObservationSession) startLog(ctx context.Context, observation runObservation) bool {
 	if observation.phase != api.RunObservationPhaseRunning || s.logStream != nil {
-		return
+		return false
 	}
 
 	logStream, err := s.controller.startLogSession(ctx, s.handle, true)
 	if err != nil {
+		if errors.Is(err, errRunJobIdentityMismatch) {
+			s.controller.runWorkerError(s.handle.runID, "retain Job after log source identity mismatch", err)
+
+			return true
+		}
 		if !errors.Is(err, errLogNotReady) {
 			s.controller.logger.Warn(
 				"open Run log stream",
@@ -138,10 +167,12 @@ func (s *runObservationSession) startLog(ctx context.Context, observation runObs
 			)
 		}
 
-		return
+		return false
 	}
 
 	s.logStream = logStream
+
+	return false
 }
 
 func (s *runObservationSession) report(ctx context.Context, observation runObservation) bool {
@@ -159,8 +190,8 @@ func (s *runObservationSession) report(ctx context.Context, observation runObser
 	if ctx.Err() != nil {
 		return true
 	}
-	if errors.Is(err, errRunObservationRejected) {
-		s.controller.logRunRejection(s.handle.runID, "report observation", err)
+	if permanentServerError(err) {
+		s.controller.runWorkerError(s.handle.runID, "report observation", err)
 
 		return true
 	}

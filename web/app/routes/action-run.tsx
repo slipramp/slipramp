@@ -152,8 +152,16 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
         description={`${targetLabel} · ${loaderData.repository?.name ?? "Repository"}`}
         details={
           <Text c="dimmed" size="sm">
-            Exact revision <CommitReference commit={target.status.desiredCommit} /> · catalog{" "}
-            <CommitReference commit={loaderData.catalog.commit} />
+            Exact revision{" "}
+            <CommitReference
+              commit={target.status.desiredCommit}
+              repositoryId={params.repositoryId}
+            />{" "}
+            · catalog{" "}
+            <CommitReference
+              commit={loaderData.catalog.commit}
+              repositoryId={params.repositoryId}
+            />
           </Text>
         }
         title={`Run ${params.actionName}`}

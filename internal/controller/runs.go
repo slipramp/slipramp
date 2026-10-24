@@ -10,46 +10,50 @@ import (
 )
 
 func (c *Controller) handleAssignment(ctx context.Context, assignment api.RunAssignment) error {
+	handle := jobHandle{
+		runID:     assignment.ID,
+		namespace: string(assignment.Placement.JobNamespace),
+		name:      runJobName(assignment.ID),
+	}
+	c.startRunWorker(ctx, handle, &assignment, nil)
+
+	return nil
+}
+
+func (c *Controller) materializeRun(ctx context.Context, assignment api.RunAssignment) (jobHandle, bool) {
 	ensured, err := c.jobs.Ensure(ctx, assignment)
 	if err != nil {
+		if errors.Is(err, errRunJobIdentityMismatch) {
+			c.runWorkerError(assignment.ID, "stop materialization after Job identity mismatch", err)
+
+			return jobHandle{}, false
+		}
 		c.logger.Warn(
 			"materialize Run",
 			"run_id", assignment.ID,
 			"error", err,
 		)
 		if !isPermanentMaterializationError(err) {
-			return nil
+			return jobHandle{}, false
 		}
 
 		if sealErr := c.sealLog(ctx, assignment.ID, emptyLogSummary()); sealErr != nil {
-			return sealErr
+			c.runWorkerError(assignment.ID, "seal materialization failure log", sealErr)
+
+			return jobHandle{}, false
 		}
 
 		reason := "MaterializationFailed"
 		message := err.Error()
 		outcome := api.RunObservationOutcomeFailed
-		reportErr := c.reports.ReportObservation(
-			ctx,
-			assignment.ID,
-			api.RunObservation{
-				Phase:   api.RunObservationPhaseFinished,
-				Outcome: &outcome,
-				Reason:  &reason,
-				Message: &message,
-			},
-		)
-		if errors.Is(reportErr, errControllerCredentialRejected) {
-			return reportErr
-		}
-		if reportErr != nil {
-			c.logger.Warn(
-				"report materialization failure",
-				"run_id", assignment.ID,
-				"error", reportErr,
-			)
-		}
+		c.reportTerminalObservation(ctx, assignment.ID, runObservation{
+			phase:   api.RunObservationPhaseFinished,
+			outcome: &outcome,
+			reason:  &reason,
+			message: &message,
+		})
 
-		return nil
+		return jobHandle{}, false
 	}
 
 	c.logger.Info(
@@ -57,9 +61,7 @@ func (c *Controller) handleAssignment(ctx context.Context, assignment api.RunAss
 		"run_id", assignment.ID,
 		"job_created", ensured.created,
 	)
-	c.startRunObserver(ctx, ensured.handle, nil)
-
-	return nil
+	return ensured.handle, true
 }
 
 func (c *Controller) handleCancellation(ctx context.Context, command api.CancelRunCommand) error {
@@ -72,58 +74,113 @@ func (c *Controller) handleCancellation(ctx context.Context, command api.CancelR
 		handle.uid = *command.JobUID
 	}
 
-	c.startRunObserver(ctx, handle, &command)
+	c.startRunWorker(ctx, handle, nil, &command)
 
 	return nil
 }
 
-func (c *Controller) startRunObserver(
+func (c *Controller) startRunWorker(
 	ctx context.Context,
 	handle jobHandle,
+	assignment *api.RunAssignment,
 	initialCancellation *api.CancelRunCommand,
-) *runObserver {
-	c.observerMutex.Lock()
-	if observer := c.observedRuns[handle.runID]; observer != nil {
-		c.observerMutex.Unlock()
+) *runWorker {
+	c.runMutex.Lock()
+	if observer := c.activeRuns[handle.runID]; observer != nil {
+		c.runMutex.Unlock()
 		if initialCancellation != nil {
 			select {
 			case observer.cancellations <- *initialCancellation:
-			case <-observer.done:
-			case <-ctx.Done():
+			default:
 			}
 		}
 
 		return observer
 	}
 
-	observer := &runObserver{
+	observer := &runWorker{
 		cancellations: make(chan api.CancelRunCommand, 1),
 		done:          make(chan struct{}),
 	}
 	if initialCancellation != nil {
 		observer.cancellations <- *initialCancellation
 	}
-	c.observedRuns[handle.runID] = observer
-	c.observers.Add(1)
-	c.observerMutex.Unlock()
+	c.activeRuns[handle.runID] = observer
+	c.runWorkers.Add(1)
+	c.runMutex.Unlock()
 
-	go c.observeRun(ctx, handle, observer)
+	go c.executeRun(ctx, handle, assignment, observer)
 
 	return observer
 }
 
-func (c *Controller) observeRun(ctx context.Context, handle jobHandle, observer *runObserver) {
+func (c *Controller) executeRun(
+	ctx context.Context,
+	handle jobHandle,
+	assignment *api.RunAssignment,
+	observer *runWorker,
+) {
+	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
-		c.observerMutex.Lock()
-		if c.observedRuns[handle.runID] == observer {
-			delete(c.observedRuns, handle.runID)
-		}
-		c.observerMutex.Unlock()
+		cancel()
 		close(observer.done)
-		c.observers.Done()
+		c.runWorkers.Done()
 	}()
 
+	if assignment != nil {
+		select {
+		case command := <-observer.cancellations:
+			session := newRunObservationSession(c, handle, observer)
+			session.cancellation = &command
+			session.run(ctx)
+
+			return
+		default:
+		}
+
+		var materialized bool
+		handle, materialized = c.materializeRun(ctx, *assignment)
+		if !materialized {
+			return
+		}
+	}
+
 	newRunObservationSession(c, handle, observer).run(ctx)
+}
+
+func (c *Controller) reapRunWorkers() {
+	c.runMutex.Lock()
+	defer c.runMutex.Unlock()
+
+	// Keep completed workers through any in-flight poll response, so a stale
+	// assignment cannot recreate a Job after terminal reporting and deletion.
+	for runID, worker := range c.activeRuns {
+		select {
+		case <-worker.done:
+			if !worker.blocked {
+				delete(c.activeRuns, runID)
+			}
+		default:
+		}
+	}
+}
+
+func (c *Controller) runWorkerError(runID uuid.UUID, operation string, err error) {
+	if permanentRunError(err) {
+		c.runMutex.Lock()
+		if worker := c.activeRuns[runID]; worker != nil {
+			worker.blocked = true
+		}
+		c.runMutex.Unlock()
+	}
+	if errors.Is(err, errControllerCredentialRejected) && c.stop != nil {
+		c.stop(err)
+	}
+	c.logger.Warn(operation, "run_id", runID, "error", err)
+}
+
+func permanentRunError(err error) bool {
+	return permanentServerError(err) || errors.Is(err, errRunJobIdentityMismatch)
 }
 
 func (c *Controller) requestJobCancellation(
@@ -134,6 +191,11 @@ func (c *Controller) requestJobCancellation(
 		result, err := c.jobs.RequestCancellation(ctx, command)
 		if err == nil {
 			return result, nil
+		}
+		if errors.Is(err, errRunJobIdentityMismatch) {
+			c.runWorkerError(command.ID, "stop cancellation after Job identity mismatch", err)
+
+			return cancellationResult{}, err
 		}
 		if ctx.Err() != nil {
 			return cancellationResult{}, ctx.Err()
@@ -153,21 +215,15 @@ func (c *Controller) requestJobCancellation(
 func (c *Controller) finishUnstartedCancellation(ctx context.Context, handle jobHandle) {
 	summary, err := c.emptyOrSealedLog(ctx, handle.runID)
 	if err != nil {
-		if isUnknownRunRejection(err) {
-			c.logRunRejection(handle.runID, "finish unstarted cancellation", err)
-		} else if ctx.Err() == nil {
-			c.logger.Error(
-				"finish unstarted cancellation",
-				"run_id", handle.runID,
-				"error", err,
-			)
+		if ctx.Err() == nil {
+			c.runWorkerError(handle.runID, "finish unstarted cancellation", err)
 		}
 
 		return
 	}
 	if err := c.sealLog(ctx, handle.runID, summary); err != nil {
-		if isUnknownRunRejection(err) {
-			c.logRunRejection(handle.runID, "seal canceled Run log", err)
+		if ctx.Err() == nil {
+			c.runWorkerError(handle.runID, "seal canceled Run log", err)
 		}
 
 		return
@@ -197,8 +253,8 @@ func (c *Controller) finishObservedRun(
 		if err == nil {
 			break
 		}
-		if isUnknownRunRejection(err) {
-			c.logRunRejection(handle.runID, "stream terminal Run log", err)
+		if permanentRunError(err) {
+			c.runWorkerError(handle.runID, "stream terminal Run log", err)
 
 			return
 		}
@@ -218,8 +274,8 @@ func (c *Controller) finishObservedRun(
 		}
 	}
 	if err := c.sealLog(ctx, handle.runID, summary); err != nil {
-		if isUnknownRunRejection(err) {
-			c.logRunRejection(handle.runID, "seal terminal Run log", err)
+		if ctx.Err() == nil {
+			c.runWorkerError(handle.runID, "seal terminal Run log", err)
 		}
 
 		return
@@ -237,6 +293,11 @@ func (c *Controller) finishObservedRun(
 				"job_namespace", handle.namespace,
 				"job_name", handle.name,
 			)
+
+			return
+		}
+		if errors.Is(err, errRunJobIdentityMismatch) {
+			c.runWorkerError(handle.runID, "retain completed Job after identity mismatch", err)
 
 			return
 		}
@@ -317,8 +378,8 @@ func (c *Controller) reportTerminalObservation(ctx context.Context, runID uuid.U
 		if ctx.Err() != nil {
 			return false
 		}
-		if errors.Is(err, errRunObservationRejected) {
-			c.logRunRejection(runID, "report terminal observation", err)
+		if permanentServerError(err) {
+			c.runWorkerError(runID, "report terminal observation", err)
 
 			return false
 		}
@@ -332,26 +393,6 @@ func (c *Controller) reportTerminalObservation(ctx context.Context, runID uuid.U
 			return false
 		}
 	}
-}
-
-func (c *Controller) logRunRejection(runID uuid.UUID, operation string, err error) {
-	c.logger.Warn(
-		"stop observing Run rejected by Server",
-		"run_id", runID,
-		"operation", operation,
-		"error", err,
-	)
-}
-
-func isUnknownRunRejection(err error) bool {
-	if !errors.Is(err, errRunLogRejected) &&
-		!errors.Is(err, errRunObservationRejected) {
-		return false
-	}
-
-	statusCode, ok := serverResponseStatusCode(err)
-
-	return ok && statusCode == 404
 }
 
 func observationRequest(observation runObservation) api.RunObservation {

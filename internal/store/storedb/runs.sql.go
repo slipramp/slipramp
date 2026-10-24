@@ -161,20 +161,25 @@ WHERE (
 )
 AND (
     $2::text IS NULL
-    OR target_name = $2
+    OR commit_sha = $2
 )
 AND (
     $3::text IS NULL
-    OR cluster_name = $3
+    OR target_name = $3
 )
 AND (
     $4::text IS NULL
-    OR phase = $4
+    OR cluster_name = $4
+)
+AND (
+    $5::text IS NULL
+    OR phase = $5
 )
 `
 
 type CountRunsParams struct {
 	RepositoryID pgtype.UUID
+	CommitSha    *string
 	TargetName   *string
 	ClusterName  *string
 	Phase        *string
@@ -183,6 +188,7 @@ type CountRunsParams struct {
 func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countRuns,
 		arg.RepositoryID,
+		arg.CommitSha,
 		arg.TargetName,
 		arg.ClusterName,
 		arg.Phase,
@@ -743,23 +749,28 @@ WHERE (
 )
 AND (
     $2::text IS NULL
-    OR target_name = $2
+    OR commit_sha = $2
 )
 AND (
     $3::text IS NULL
-    OR cluster_name = $3
+    OR target_name = $3
 )
 AND (
     $4::text IS NULL
-    OR phase = $4
+    OR cluster_name = $4
+)
+AND (
+    $5::text IS NULL
+    OR phase = $5
 )
 ORDER BY created_at DESC, id DESC
-LIMIT $6
-OFFSET $5
+LIMIT $7
+OFFSET $6
 `
 
 type ListRunsParams struct {
 	RepositoryID pgtype.UUID
+	CommitSha    *string
 	TargetName   *string
 	ClusterName  *string
 	Phase        *string
@@ -770,6 +781,7 @@ type ListRunsParams struct {
 func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
 	rows, err := q.db.Query(ctx, listRuns,
 		arg.RepositoryID,
+		arg.CommitSha,
 		arg.TargetName,
 		arg.ClusterName,
 		arg.Phase,

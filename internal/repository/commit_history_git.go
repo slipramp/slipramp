@@ -26,10 +26,10 @@ func (f *GitCommitHistoryFetcher) FetchCommitHistory(
 	desiredHeadSHA string,
 	indexedHeadSHA *string,
 ) (FetchedCommitHistory, error) {
-	if !validCommitSHA(desiredHeadSHA) {
+	if !ValidCommitSHA(desiredHeadSHA) {
 		return FetchedCommitHistory{}, fmt.Errorf("invalid desired Git commit %q", desiredHeadSHA)
 	}
-	if indexedHeadSHA != nil && !validCommitSHA(*indexedHeadSHA) {
+	if indexedHeadSHA != nil && !ValidCommitSHA(*indexedHeadSHA) {
 		return FetchedCommitHistory{}, fmt.Errorf("invalid indexed Git commit %q", *indexedHeadSHA)
 	}
 
@@ -280,7 +280,7 @@ func readCommitHistory(
 	commits := make([]Commit, 0, len(fields)/fieldsPerCommit)
 	for offset := 0; offset < len(fields); offset += fieldsPerCommit {
 		sha := fields[offset]
-		if !validCommitSHA(sha) {
+		if !ValidCommitSHA(sha) {
 			return nil, fmt.Errorf("git returned invalid commit history SHA %q", sha)
 		}
 		authoredAt, parseErr := time.Parse(time.RFC3339, fields[offset+4])

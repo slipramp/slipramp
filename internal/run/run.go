@@ -124,6 +124,7 @@ type RerunRequest struct {
 
 type RunListFilter struct {
 	RepositoryID *uuid.UUID
+	CommitSHA    string
 	TargetName   string
 	ClusterName  string
 	Phase        Phase

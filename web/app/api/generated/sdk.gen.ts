@@ -53,6 +53,9 @@ import type {
   EnrollControllerData,
   EnrollControllerErrors,
   EnrollControllerResponses,
+  GetCommitData,
+  GetCommitErrors,
+  GetCommitResponses,
   GetCurrentPrincipalData,
   GetCurrentPrincipalErrors,
   GetCurrentPrincipalResponses,
@@ -484,6 +487,31 @@ export const listCommits = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Get a known commit
+ *
+ * Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
+ */
+export const getCommit = <ThrowOnError extends boolean = false>(
+  options: Options<GetCommitData, ThrowOnError>,
+): RequestResult<GetCommitResponses, GetCommitErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetCommitResponses, GetCommitErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/repositories/{repositoryId}/commits/{commitSha}",
+    ...options,
+  });
+
+/**
  * Get the active repository catalog
  *
  * Returns the immutable catalog revision currently active for an existing repository. A repository without an accepted catalog does not have this resource yet.
@@ -817,7 +845,7 @@ export const downloadRunInput = <ThrowOnError extends boolean = false>(
 /**
  * List recent Runs
  *
- * Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
+ * Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
  */
 export const listRuns = <ThrowOnError extends boolean = false>(
   options?: Options<ListRunsData, ThrowOnError>,
@@ -1337,6 +1365,8 @@ export const submitKargoPromotion = <ThrowOnError extends boolean = false>(
 
 /**
  * List Promotions
+ *
+ * Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
  */
 export const listPromotions = <ThrowOnError extends boolean = false>(
   options?: Options<ListPromotionsData, ThrowOnError>,

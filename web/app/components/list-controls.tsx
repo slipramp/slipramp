@@ -255,12 +255,14 @@ export function ListPagination({
   itemCount,
   noun,
   page,
+  pageParam = "page",
   pageSize,
   total,
 }: Readonly<{
   itemCount: number;
   noun: string;
   page: number;
+  pageParam?: string;
   pageSize: number;
   total: number;
 }>) {
@@ -272,9 +274,9 @@ export function ListPagination({
   function changePage(nextPage: number) {
     const nextSearchParams = new URLSearchParams(searchParams);
     if (nextPage === 1) {
-      nextSearchParams.delete("page");
+      nextSearchParams.delete(pageParam);
     } else {
-      nextSearchParams.set("page", String(nextPage));
+      nextSearchParams.set(pageParam, String(nextPage));
     }
     setSearchParams(nextSearchParams);
   }

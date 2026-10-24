@@ -14,6 +14,7 @@ import (
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
@@ -21,6 +22,27 @@ const (
 	promotionIdentityConstraint     = "promotions_external_identity_key"
 	kargoSnapshotIdentityConstraint = "kargo_stage_snapshots_pkey"
 )
+
+func recordPromotionCommits(
+	ctx context.Context,
+	queries *storedb.Queries,
+	repositoryID uuid.UUID,
+	revisions ...string,
+) error {
+	for _, revision := range revisions {
+		if revision == "" {
+			continue
+		}
+		if err := upsertRepositoryCommit(ctx, queries, repository.Commit{
+			RepositoryID: repositoryID,
+			SHA:          revision,
+		}); err != nil {
+			return fmt.Errorf("record Promotion commit: %w", err)
+		}
+	}
+
+	return nil
+}
 
 func (d *Database) GetPromotionStage(ctx context.Context, stageID uuid.UUID) (promotion.Stage, error) {
 	row, err := d.queries.GetPromotionStage(ctx, databaseUUID(stageID))

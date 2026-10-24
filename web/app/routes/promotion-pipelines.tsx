@@ -140,7 +140,11 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
         </Alert>
       ) : loaderData.pipelines.length === 0 ? (
         <Paper p="md" withBorder>
-          <Text c="dimmed">No active Kargo pipelines match these filters.</Text>
+          <Text c="dimmed">
+            {loaderData.status === "different"
+              ? "All pipelines are in sync."
+              : "No active Kargo pipelines match these filters."}
+          </Text>
         </Paper>
       ) : (
         loaderData.pipelines.map((pipeline) => (

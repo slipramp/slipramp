@@ -180,11 +180,11 @@ func ValidateCommitHistoryResult(result CommitHistoryResult) error {
 	if result.AttemptedAt.IsZero() {
 		return errors.New("commit history attempted time is required")
 	}
-	if !validCommitSHA(result.HeadSHA) {
+	if !ValidCommitSHA(result.HeadSHA) {
 		return fmt.Errorf("invalid commit history head %q", result.HeadSHA)
 	}
 	for _, commit := range result.Commits {
-		if !validCommitSHA(commit.SHA) {
+		if !ValidCommitSHA(commit.SHA) {
 			return fmt.Errorf("invalid commit history commit %q", commit.SHA)
 		}
 		if commit.Title == nil || commit.AuthorName == nil ||
@@ -197,7 +197,7 @@ func ValidateCommitHistoryResult(result CommitHistoryResult) error {
 }
 
 func ValidateCommitHistoryFailure(headSHA string, attemptedAt time.Time, failureReason string) error {
-	if !validCommitSHA(headSHA) {
+	if !ValidCommitSHA(headSHA) {
 		return fmt.Errorf("invalid attempted commit history head %q", headSHA)
 	}
 	if attemptedAt.IsZero() {

@@ -82,7 +82,7 @@ func (f *GitFetcher) Fetch(ctx context.Context, repository Repository) (FetchedC
 	}
 
 	commitSHA := strings.TrimSpace(output)
-	if !validCommitSHA(commitSHA) {
+	if !ValidCommitSHA(commitSHA) {
 		return FetchedCommit{}, fmt.Errorf("git returned invalid commit %q", commitSHA)
 	}
 	commit := Commit{
@@ -284,7 +284,8 @@ func removeGitOverrides(environment []string) []string {
 	return filtered
 }
 
-func validCommitSHA(value string) bool {
+// ValidCommitSHA reports whether value is a lowercase full Git object ID.
+func ValidCommitSHA(value string) bool {
 	return commitSHAPattern.MatchString(value)
 }
 

@@ -138,7 +138,10 @@ export default function Repositories({ loaderData }: Route.ComponentProps) {
                       <Stack align="flex-start" gap={4}>
                         <RefreshBadge status={repository.refresh.status} />
                         {repository.refresh.commit ? (
-                          <CommitReference commit={repository.refresh.commit} />
+                          <CommitReference
+                            commit={repository.refresh.commit}
+                            repositoryId={repository.id}
+                          />
                         ) : (
                           <Text c="dimmed" size="xs">
                             No accepted commit

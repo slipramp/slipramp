@@ -15,6 +15,7 @@ export default [
   route("repositories", "routes/repositories.tsx"),
   route("repositories/new", "routes/repository-new.tsx"),
   route("repositories/:repositoryId/delete", "routes/repository-delete.tsx"),
+  route("repositories/:repositoryId/commits/:commitSha", "routes/commit.tsx"),
   route("repositories/:repositoryId", "routes/repository.tsx"),
   route("repositories/:repositoryId/targets/:targetName", "routes/target.tsx"),
   route(

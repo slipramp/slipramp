@@ -152,7 +152,7 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         </Paper>
       ) : (
         <>
-          <CatalogSummary catalog={catalog} />
+          <CatalogSummary catalog={catalog} repositoryId={loaderData.repositoryId} />
           <Stack gap="md">
             <SectionHeader
               actions={
@@ -311,7 +311,7 @@ function CommitHistorySection({
                           </Text>
                         </Table.Td>
                         <Table.Td>
-                          <CommitReference commit={item.commit} />
+                          <CommitReference commit={item.commit} repositoryId={item.repositoryId} />
                         </Table.Td>
                         <Table.Td>
                           {(item.commit.committedAt ?? item.commit.authoredAt) ? (
@@ -349,7 +349,10 @@ function RefreshBadge({ repository }: Readonly<{ repository: Repository }>) {
   );
 }
 
-function CatalogSummary({ catalog }: Readonly<{ catalog: CatalogRevision }>) {
+function CatalogSummary({
+  catalog,
+  repositoryId,
+}: Readonly<{ catalog: CatalogRevision; repositoryId: string }>) {
   return (
     <Paper p="md" withBorder>
       <Group gap="xl">
@@ -357,7 +360,7 @@ function CatalogSummary({ catalog }: Readonly<{ catalog: CatalogRevision }>) {
           <Text c="dimmed" size="xs" tt="uppercase">
             Active commit
           </Text>
-          <CommitReference commit={catalog.commit} />
+          <CommitReference commit={catalog.commit} repositoryId={repositoryId} />
         </Stack>
         <Stack gap={0}>
           <Text c="dimmed" size="xs" tt="uppercase">

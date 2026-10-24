@@ -407,6 +407,12 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	if filter.TargetName != "" && filter.RepositoryID == nil {
 		return RunList{}, fmt.Errorf("%w: target filter requires a repository ID", ErrInvalidRequest)
 	}
+	if filter.CommitSHA != "" && !repository.ValidCommitSHA(filter.CommitSHA) {
+		return RunList{}, fmt.Errorf("%w: commit SHA must be a lowercase full Git object ID", ErrInvalidRequest)
+	}
+	if filter.CommitSHA != "" && filter.RepositoryID == nil {
+		return RunList{}, fmt.Errorf("%w: commit filter requires a repository ID", ErrInvalidRequest)
+	}
 	if filter.ClusterName != strings.TrimSpace(filter.ClusterName) {
 		return RunList{}, fmt.Errorf("%w: cluster name must not have surrounding whitespace", ErrInvalidRequest)
 	}

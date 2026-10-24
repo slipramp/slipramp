@@ -4,7 +4,7 @@ runs:
     summary: List recent Runs
     description: >-
       Lists Runs in descending creation order with offset pagination.
-      Repository, target, and cluster filters scope execution history.
+      Repository, commit, target, and cluster filters scope execution history.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -26,6 +26,15 @@ runs:
           Requires repositoryId.
         schema:
           $ref: ../components/runs.yaml#/CatalogName
+      - name: commitSha
+        in: query
+        required: false
+        description: >-
+          Limit results to Runs pinned to this full Git object ID. Requires
+          repositoryId.
+        schema:
+          type: string
+          pattern: '^(?:[0-9a-f]{40}|[0-9a-f]{64})$'
       - name: cluster
         in: query
         required: false

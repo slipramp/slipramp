@@ -87,6 +87,24 @@ func TestRepositoryCommitHistoryPersistenceIntegration(t *testing.T) {
 		page.Commits[0].RepositoryName != "commit-history" {
 		t.Errorf("commit history page = %#v", page)
 	}
+	loadedCommit, err := database.GetCommit(ctx, repository.CommitKey{
+		RepositoryID: repositoryID,
+		SHA:          commitB,
+	})
+	if err != nil {
+		t.Fatalf("GetCommit() error = %v", err)
+	}
+	if loadedCommit.RepositoryName != "commit-history" || loadedCommit.Commit.SHA != commitB ||
+		loadedCommit.Commit.Title == nil || *loadedCommit.Commit.Title != "second" {
+		t.Errorf("GetCommit() = %#v", loadedCommit)
+	}
+	_, err = database.GetCommit(ctx, repository.CommitKey{
+		RepositoryID: repositoryID,
+		SHA:          "ffffffffffffffffffffffffffffffffffffffff",
+	})
+	if !errors.Is(err, repository.ErrCommitNotFound) {
+		t.Fatalf("unknown GetCommit() error = %v, want commit not found", err)
+	}
 	query := "first"
 	page, err = database.ListCommitHistory(ctx, repository.CommitHistoryFilter{
 		RepositoryID: &repositoryID,

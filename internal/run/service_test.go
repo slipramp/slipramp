@@ -707,6 +707,7 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 		context.Background(),
 		RunListFilter{
 			RepositoryID: &repositoryID,
+			CommitSHA:    testCommitSHA,
 			TargetName:   "network",
 			ClusterName:  "colo",
 			Phase:        PhaseRunning,
@@ -720,6 +721,7 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 	}
 	if runs.listFilter.RepositoryID == nil ||
 		*runs.listFilter.RepositoryID != repositoryID ||
+		runs.listFilter.CommitSHA != testCommitSHA ||
 		runs.listFilter.TargetName != "network" ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != PhaseRunning ||
@@ -763,6 +765,30 @@ func TestListRunsRejectsTargetWithoutRepository(t *testing.T) {
 
 	service, _ := testService(t)
 	_, err := service.ListRuns(context.Background(), RunListFilter{TargetName: "network"})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
+	}
+}
+
+func TestListRunsRejectsCommitWithoutRepository(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(context.Background(), RunListFilter{CommitSHA: testCommitSHA})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
+	}
+}
+
+func TestListRunsRejectsInvalidCommit(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	repositoryID := testRepositoryID
+	_, err := service.ListRuns(context.Background(), RunListFilter{
+		RepositoryID: &repositoryID,
+		CommitSHA:    "0123456",
+	})
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}

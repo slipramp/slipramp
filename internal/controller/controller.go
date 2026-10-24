@@ -26,10 +26,6 @@ var (
 	errControllerCredentialRejected           = errors.New("controller credential was rejected")
 	errControllerEnrollmentCredentialRejected = errors.New("controller enrollment credential was rejected")
 	errControllerEnrollmentConflict           = errors.New("controller enrollment conflicts with an existing identity")
-	errRunLogRejected                         = errors.New("run log was rejected")
-	errRunObservationRejected                 = errors.New("run observation was rejected")
-	errKargoPromotionDispatchRejected         = errors.New("kargo Promotion dispatch report was rejected")
-	errKargoPromotionReconciliationRejected   = errors.New("kargo Promotion reconciliation report was rejected")
 )
 
 type controllerEnroller interface {
@@ -72,9 +68,10 @@ type logCursor struct {
 	sha256          string
 }
 
-type runObserver struct {
+type runWorker struct {
 	cancellations chan api.CancelRunCommand
 	done          chan struct{}
+	blocked       bool
 }
 
 type Controller struct {
@@ -92,13 +89,14 @@ type Controller struct {
 	observeEvery                   time.Duration
 	heartbeatEvery                 time.Duration
 	now                            func() time.Time
-	observerMutex                  sync.Mutex
-	observedRuns                   map[uuid.UUID]*runObserver
-	observers                      sync.WaitGroup
+	runMutex                       sync.Mutex
+	activeRuns                     map[uuid.UUID]*runWorker
+	runWorkers                     sync.WaitGroup
 	stageObservers                 []*kargoStageObserver
 	promotions                     kargoPromotionCreator
 	promotionReconciler            kargoPromotionReconciler
 	workers                        sync.WaitGroup
+	stop                           context.CancelCauseFunc
 }
 
 func New(
@@ -141,7 +139,7 @@ func New(
 		observeEvery:                   jobObservationPeriod,
 		heartbeatEvery:                 observationHeartbeatPeriod,
 		now:                            time.Now,
-		observedRuns:                   make(map[uuid.UUID]*runObserver),
+		activeRuns:                     make(map[uuid.UUID]*runWorker),
 	}
 	if len(cfg.KargoIntegrations) > 0 {
 		controller.stageObservers = newKargoStageObservers(
@@ -158,12 +156,17 @@ func New(
 	return controller, nil
 }
 
-func (c *Controller) Run(ctx context.Context) error {
-	observeContext, stopObservers := context.WithCancel(ctx)
+func (c *Controller) Run(ctx context.Context) (result error) {
+	observeContext, stopObservers := context.WithCancelCause(ctx)
+	c.stop = stopObservers
 	defer func() {
-		stopObservers()
+		cause := context.Cause(observeContext)
+		stopObservers(nil)
 		c.workers.Wait()
-		c.observers.Wait()
+		c.runWorkers.Wait()
+		if result == nil && ctx.Err() == nil {
+			result = cause
+		}
 	}()
 
 	c.logger.Info(
@@ -173,7 +176,7 @@ func (c *Controller) Run(ctx context.Context) error {
 	)
 	defer c.logger.Info("controller stopped", "cluster", c.clusterName)
 
-	if err := c.enroll(ctx); err != nil {
+	if err := c.enroll(observeContext); err != nil {
 		return err
 	}
 	c.startStageObservers(observeContext)
@@ -183,11 +186,12 @@ func (c *Controller) Run(ctx context.Context) error {
 	}
 
 	for {
-		if ctx.Err() != nil {
+		if observeContext.Err() != nil {
 			return nil
 		}
 
-		command, err := c.server.Poll(ctx)
+		c.reapRunWorkers()
+		command, err := c.server.Poll(observeContext)
 		if err == nil && command == nil {
 			continue
 		}
@@ -196,17 +200,17 @@ func (c *Controller) Run(ctx context.Context) error {
 				return err
 			}
 
-			if !waitForRetry(ctx, c.retryDelay) {
+			if !waitForRetry(observeContext, c.retryDelay) {
 				return nil
 			}
 
 			continue
 		}
 
-		if ctx.Err() != nil {
+		if observeContext.Err() != nil {
 			return nil
 		}
-		if errors.Is(err, errControllerCredentialRejected) {
+		if permanentServerError(err) {
 			return err
 		}
 
@@ -215,7 +219,7 @@ func (c *Controller) Run(ctx context.Context) error {
 			"cluster", c.clusterName,
 			"error", err,
 		)
-		if !waitForRetry(ctx, c.retryDelay) {
+		if !waitForRetry(observeContext, c.retryDelay) {
 			return nil
 		}
 	}
@@ -223,7 +227,11 @@ func (c *Controller) Run(ctx context.Context) error {
 
 func (c *Controller) startStageObservers(ctx context.Context) {
 	for _, observer := range c.stageObservers {
-		c.workers.Go(func() { observer.Run(ctx) })
+		c.workers.Go(func() {
+			if err := observer.Run(ctx); err != nil && c.stop != nil {
+				c.stop(err)
+			}
+		})
 	}
 }
 
@@ -239,7 +247,7 @@ func (c *Controller) enroll(ctx context.Context) error {
 			return nil
 		}
 		if errors.Is(err, errControllerEnrollmentCredentialRejected) ||
-			errors.Is(err, errControllerEnrollmentConflict) {
+			errors.Is(err, errControllerEnrollmentConflict) || permanentServerError(err) {
 			return err
 		}
 
@@ -259,7 +267,7 @@ func (c *Controller) recoverRuns(ctx context.Context) bool {
 		handles, err := c.jobs.Recover(ctx)
 		if err == nil {
 			for _, handle := range handles {
-				c.startRunObserver(ctx, handle, nil)
+				c.startRunWorker(ctx, handle, nil, nil)
 			}
 
 			return true
@@ -276,43 +284,48 @@ func (c *Controller) recoverRuns(ctx context.Context) bool {
 }
 
 func (c *Controller) handleCommand(ctx context.Context, command api.ControllerCommand) error {
+	payloads := 0
+	for _, present := range [...]bool{
+		command.Assignment != nil,
+		command.Cancel != nil,
+		command.Promotion != nil,
+		command.PromotionReconciliation != nil,
+	} {
+		if present {
+			payloads++
+		}
+	}
+	if payloads != 1 {
+		return invalidServerResponse("poll Controller command", "command must contain exactly one matching payload")
+	}
+
 	switch command.Type {
 	case api.ControllerCommandTypeRunAssignment:
 		if command.Assignment == nil {
-			c.logger.Warn("run assignment command has no assignment")
-
-			return nil
+			return invalidServerResponse("poll Controller command", "run assignment payload is missing")
 		}
 
 		return c.handleAssignment(ctx, *command.Assignment)
 	case api.ControllerCommandTypeCancelRun:
 		if command.Cancel == nil {
-			c.logger.Warn("cancel-run command has no payload")
-
-			return nil
+			return invalidServerResponse("poll Controller command", "cancellation payload is missing")
 		}
 
 		return c.handleCancellation(ctx, *command.Cancel)
 	case api.ControllerCommandTypeCreateKargoPromotion:
 		if command.Promotion == nil {
-			c.logger.Warn("create-kargo-promotion command has no payload")
-
-			return nil
+			return invalidServerResponse("poll Controller command", "Promotion creation payload is missing")
 		}
 
 		return c.handleKargoPromotionCreation(ctx, *command.Promotion)
 	case api.ControllerCommandTypeReconcileKargoPromotion:
 		if command.PromotionReconciliation == nil {
-			c.logger.Warn("reconcile-kargo-promotion command has no payload")
-
-			return nil
+			return invalidServerResponse("poll Controller command", "Promotion reconciliation payload is missing")
 		}
 
 		return c.handleKargoPromotionReconciliation(ctx, *command.PromotionReconciliation)
 	default:
-		c.logger.Warn("unsupported controller command", "type", command.Type)
-
-		return nil
+		return invalidServerResponse("poll Controller command", "command type is unsupported")
 	}
 }
 

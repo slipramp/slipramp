@@ -143,8 +143,16 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
               {target.source.path} · document {target.source.document}
             </Text>
             <Text c="dimmed" size="xs">
-              Desired <CommitReference commit={target.status.desiredCommit} /> · Catalog{" "}
-              <CommitReference commit={loaderData.catalog.commit} />
+              Desired{" "}
+              <CommitReference
+                commit={target.status.desiredCommit}
+                repositoryId={loaderData.repositoryId}
+              />{" "}
+              · Catalog{" "}
+              <CommitReference
+                commit={loaderData.catalog.commit}
+                repositoryId={loaderData.repositoryId}
+              />
             </Text>
           </Stack>
         }

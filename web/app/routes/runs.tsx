@@ -307,7 +307,7 @@ function HistoryTable({
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={0}>
-                    <CommitReference commit={run.commit} />
+                    <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
                     <Text c="dimmed" size="xs">
                       Catalog {shortIdentifier(run.catalogRevisionId)}
                     </Text>

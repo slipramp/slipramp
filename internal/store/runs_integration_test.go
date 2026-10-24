@@ -111,6 +111,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	second.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1204")
 	second.IdempotencyKey = nil
 	second.RequestDigest = strings.Repeat("c", 64)
+	second.CommitSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	second.CreatedAt = record.CreatedAt.Add(time.Minute)
 	rerunMode := run.RerunModeLatest
 	second.RerunOfRunID = &record.ID
@@ -149,6 +150,21 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 	if len(listed.Items) != 1 || listed.Items[0].ID != record.ID || listed.Total != 2 {
 		t.Errorf("filtered ListRuns() = %#v, want first Run on second page", listed)
+	}
+
+	listed, err = database.ListRuns(
+		ctx,
+		run.RunListFilter{
+			RepositoryID: &repositoryFilter,
+			CommitSHA:    second.CommitSHA,
+			Limit:        10,
+		},
+	)
+	if err != nil {
+		t.Fatalf("commit-filtered ListRuns() error = %v", err)
+	}
+	if len(listed.Items) != 1 || listed.Items[0].ID != second.ID || listed.Total != 1 {
+		t.Errorf("commit-filtered ListRuns() = %#v, want second Run", listed)
 	}
 
 	listed, err = database.ListRuns(ctx, run.RunListFilter{ClusterName: "other", Limit: 10})

@@ -1,10 +1,11 @@
-import { Alert, Badge, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
+import { Alert, Badge, Code, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
 import { useState } from "react";
 import { redirect } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getCurrentPrincipal,
   listPromotionBranchDrift,
+  listRepositories,
   type GitCommit,
   type PromotionBranchDriftRepository,
   type PromotionBranchDriftStage,
@@ -43,7 +44,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const status = optionalStatus(url.searchParams.get("status"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [result, principalResult] = await Promise.all([
+  const [result, principalResult, repositoriesResult] = await Promise.all([
     listPromotionBranchDrift({
       client,
       query: {
@@ -57,6 +58,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       },
     }),
     getCurrentPrincipal({ client }),
+    listRepositories({ client, query: { limit: 200 } }),
   ]);
 
   if (result.data) {
@@ -77,6 +79,9 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     project,
     principal: principalResult.data,
     repositories: result.data?.items ?? [],
+    repositoryIds: Object.fromEntries(
+      (repositoriesResult.data?.items ?? []).map((item) => [item.name, item.id]),
+    ),
     repository,
     status,
     total: result.data?.total ?? 0,
@@ -111,7 +116,11 @@ export default function PromotionBranchDrift({ loaderData }: Route.ComponentProp
         </Alert>
       ) : loaderData.repositories.length === 0 ? (
         <Paper p="md" withBorder>
-          <Text c="dimmed">No active Kargo Stages match these filters.</Text>
+          <Text c="dimmed">
+            {loaderData.status === "drifted"
+              ? "All Kargo Stage branches are in sync."
+              : "No active Kargo Stages match these filters."}
+          </Text>
         </Paper>
       ) : (
         loaderData.repositories.map((repository) => (
@@ -119,6 +128,7 @@ export default function PromotionBranchDrift({ loaderData }: Route.ComponentProp
             canWrite={canWrite}
             key={repository.repository}
             repository={repository}
+            repositoryId={loaderData.repositoryIds[repository.repository]}
           />
         ))
       )}
@@ -185,7 +195,12 @@ function BranchDriftFilters({
 function BranchDriftRepository({
   canWrite,
   repository,
-}: Readonly<{ canWrite: boolean; repository: PromotionBranchDriftRepository }>) {
+  repositoryId,
+}: Readonly<{
+  canWrite: boolean;
+  repository: PromotionBranchDriftRepository;
+  repositoryId?: string;
+}>) {
   const sharedSourcePaths = commonSourcePaths(repository.stages);
 
   return (
@@ -232,8 +247,8 @@ function BranchDriftRepository({
               <Table.Tr>
                 <Table.Th>Stage</Table.Th>
                 <Table.Th>Status</Table.Th>
-                <Table.Th>Source updated</Table.Th>
-                <Table.Th>Last rendered</Table.Th>
+                <Table.Th miw={210}>Source updated</Table.Th>
+                <Table.Th miw={210}>Last rendered</Table.Th>
                 <Table.Th aria-label="Actions" />
               </Table.Tr>
             </Table.Thead>
@@ -242,6 +257,7 @@ function BranchDriftRepository({
                 <BranchDriftRow
                   canWrite={canWrite}
                   key={stage.id}
+                  repositoryId={repositoryId}
                   sharedSourcePaths={sharedSourcePaths}
                   sourceBranch={repository.sourceBranch}
                   stage={stage}
@@ -260,8 +276,10 @@ function BranchDriftRow({
   sharedSourcePaths,
   sourceBranch,
   stage,
+  repositoryId,
 }: Readonly<{
   canWrite: boolean;
+  repositoryId?: string;
   sharedSourcePaths: string[];
   sourceBranch?: string;
   stage: PromotionBranchDriftStage;
@@ -289,9 +307,11 @@ function BranchDriftRow({
               {stage.integration} · {stage.cluster} · {stage.project}
             </Text>
             {stageSpecificPaths.length > 0 ? (
-              <Text c="dimmed" size="xs">
-                Also watches {stageSpecificPaths.join(", ")}
-              </Text>
+              <Group gap={4} mt={4} wrap="wrap">
+                {stageSpecificPaths.map((path) => (
+                  <Code key={path}>{path}</Code>
+                ))}
+              </Group>
             ) : null}
           </Stack>
         </Table.Td>
@@ -308,10 +328,18 @@ function BranchDriftRow({
           </Stack>
         </Table.Td>
         <Table.Td>
-          <CommitMoment branch={sourceBranch} commit={stage.sourceBranchCommit} />
+          <CommitMoment
+            branch={sourceBranch}
+            commit={stage.sourceBranchCommit}
+            repositoryId={repositoryId}
+          />
         </Table.Td>
         <Table.Td>
-          <CommitMoment branch={stage.targetBranch} commit={stage.acknowledgedRenderCommit} />
+          <CommitMoment
+            branch={stage.targetBranch}
+            commit={stage.acknowledgedRenderCommit}
+            repositoryId={repositoryId}
+          />
         </Table.Td>
         <Table.Td ta="right">
           {canWrite && stage.status === "drifted" ? (
@@ -336,9 +364,11 @@ function BranchDriftRow({
 function CommitMoment({
   branch,
   commit,
+  repositoryId,
 }: Readonly<{
   branch?: string;
   commit?: GitCommit;
+  repositoryId?: string;
 }>) {
   return (
     <Stack gap={2}>
@@ -349,7 +379,11 @@ function CommitMoment({
         <Text c="dimmed" size="xs">
           Commit
         </Text>
-        {commit ? <CommitReference commit={commit} /> : <Text size="xs">Unknown</Text>}
+        {commit ? (
+          <CommitReference commit={commit} repositoryId={repositoryId} />
+        ) : (
+          <Text size="xs">Unknown</Text>
+        )}
       </Group>
       <Group gap="xs" wrap="wrap">
         <Text c="dimmed" size="xs">

@@ -44,6 +44,58 @@ func (q *Queries) CountTrackedBranchCommits(ctx context.Context, arg CountTracke
 	return count, err
 }
 
+const getRepositoryCommit = `-- name: GetRepositoryCommit :one
+SELECT
+    repository_commits.repository_id,
+    repositories.name AS repository_name,
+    repository_commits.sha,
+    repository_commits.title,
+    repository_commits.author_name,
+    repository_commits.authored_at,
+    repository_commits.committed_at,
+    repositories.clone_url,
+    repositories.commit_url_template
+FROM repository_commits
+JOIN repositories ON repositories.id = repository_commits.repository_id
+WHERE repository_commits.repository_id = $1
+  AND repository_commits.sha = $2
+  AND repositories.removed_at IS NULL
+`
+
+type GetRepositoryCommitParams struct {
+	RepositoryID pgtype.UUID
+	Sha          string
+}
+
+type GetRepositoryCommitRow struct {
+	RepositoryID      pgtype.UUID
+	RepositoryName    string
+	Sha               string
+	Title             *string
+	AuthorName        *string
+	AuthoredAt        pgtype.Timestamptz
+	CommittedAt       pgtype.Timestamptz
+	CloneUrl          string
+	CommitUrlTemplate *string
+}
+
+func (q *Queries) GetRepositoryCommit(ctx context.Context, arg GetRepositoryCommitParams) (GetRepositoryCommitRow, error) {
+	row := q.db.QueryRow(ctx, getRepositoryCommit, arg.RepositoryID, arg.Sha)
+	var i GetRepositoryCommitRow
+	err := row.Scan(
+		&i.RepositoryID,
+		&i.RepositoryName,
+		&i.Sha,
+		&i.Title,
+		&i.AuthorName,
+		&i.AuthoredAt,
+		&i.CommittedAt,
+		&i.CloneUrl,
+		&i.CommitUrlTemplate,
+	)
+	return i, err
+}
+
 const listRepositoryCommits = `-- name: ListRepositoryCommits :many
 WITH requested AS (
     SELECT repository_ids.repository_id, commit_shas.sha

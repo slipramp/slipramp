@@ -135,6 +135,10 @@ func (h *Handler) ListRuns(
 	if request.Params.Phase != nil {
 		phase = run.Phase(*request.Params.Phase)
 	}
+	commitSHA := ""
+	if request.Params.CommitSha != nil {
+		commitSHA = *request.Params.CommitSha
+	}
 	offset := int32(0)
 	if request.Params.Offset != nil {
 		if *request.Params.Offset < 0 || *request.Params.Offset > run.MaximumRunListOffset {
@@ -149,6 +153,7 @@ func (h *Handler) ListRuns(
 		ctx,
 		run.RunListFilter{
 			RepositoryID: request.Params.RepositoryID,
+			CommitSHA:    commitSHA,
 			TargetName:   targetName,
 			ClusterName:  clusterName,
 			Phase:        phase,

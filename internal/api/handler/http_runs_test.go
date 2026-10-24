@@ -326,6 +326,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		context.Background(),
 		http.MethodGet,
 		"/api/v1/runs?repositoryId="+repositoryID.String()+
+			"&commitSha=0123456789abcdef0123456789abcdef01234567"+
 			"&target=network&cluster=colo&phase=running&limit=12&offset=4",
 		nil,
 	)
@@ -338,6 +339,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	}
 	if runs.listFilter.RepositoryID == nil ||
 		*runs.listFilter.RepositoryID != repositoryID ||
+		runs.listFilter.CommitSHA != "0123456789abcdef0123456789abcdef01234567" ||
 		runs.listFilter.TargetName != "network" ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != run.PhaseRunning ||

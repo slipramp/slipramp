@@ -14,6 +14,7 @@ import (
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -30,6 +31,15 @@ func TestAcceptPromotionRequestIntegration(t *testing.T) {
 		automatic.ReviewRequired || automatic.RepositoryID != fixture.repositoryID ||
 		automatic.PreparationRunID != nil {
 		t.Errorf("automatic Promotion = %#v", automatic)
+	}
+	for _, sha := range []string{automatic.BaseRevision, automatic.CandidateRevision} {
+		known, commitErr := fixture.database.GetCommit(fixture.ctx, repository.CommitKey{
+			RepositoryID: fixture.repositoryID,
+			SHA:          sha,
+		})
+		if commitErr != nil || known.Commit.SHA != sha {
+			t.Errorf("Promotion commit %s = %#v, %v", sha, known, commitErr)
+		}
 	}
 
 	repeatedAcceptance := acceptance
@@ -279,6 +289,13 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 		hydrated.BaseRevision != callback.Request.BaseRevision || hydrated.NextDispatchAt != nil ||
 		hydrated.RequestedByPrincipalID != operator.ID || hydrated.RequestedBySnapshot != operatorActor {
 		t.Errorf("hydrated automatic Promotion = %#v", hydrated)
+	}
+	knownCandidate, err := fixture.database.GetCommit(fixture.ctx, repository.CommitKey{
+		RepositoryID: fixture.repositoryID,
+		SHA:          hydrated.CandidateRevision,
+	})
+	if err != nil || knownCandidate.Commit.SHA != hydrated.CandidateRevision {
+		t.Errorf("hydrated Promotion candidate = %#v, %v", knownCandidate, err)
 	}
 
 	uid := "kargo-promotion-uid"

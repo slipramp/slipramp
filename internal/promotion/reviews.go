@@ -29,14 +29,16 @@ type StageListFilter struct {
 }
 
 type PromotionListFilter struct {
-	Status      PromotionStatus
-	Integration string
-	Cluster     string
-	Project     string
-	Application string
-	StageID     *uuid.UUID
-	Limit       int
-	Offset      int
+	RepositoryID *uuid.UUID
+	CommitSHA    string
+	Status       PromotionStatus
+	Integration  string
+	Cluster      string
+	Project      string
+	Application  string
+	StageID      *uuid.UUID
+	Limit        int
+	Offset       int
 }
 
 type StageReview struct {
@@ -220,6 +222,17 @@ func (s *ReviewService) ListPromotions(
 	if filter.Status != "" && !filter.Status.Valid() {
 		return PromotionReviewList{}, fmt.Errorf("%w: Promotion status filter is invalid", ErrInvalid)
 	}
+	if filter.RepositoryID != nil && *filter.RepositoryID == uuid.Nil {
+		return PromotionReviewList{}, fmt.Errorf("%w: repository ID must not be empty", ErrInvalid)
+	}
+	if filter.CommitSHA != "" {
+		if err := validateRevision("commit SHA filter", filter.CommitSHA); err != nil {
+			return PromotionReviewList{}, err
+		}
+		if filter.RepositoryID == nil {
+			return PromotionReviewList{}, fmt.Errorf("%w: commit filter requires a repository ID", ErrInvalid)
+		}
+	}
 	if err := s.ExpirePending(ctx); err != nil {
 		return PromotionReviewList{}, err
 	}
@@ -378,6 +391,14 @@ func stageMatchesFilter(stage Stage, filter StageListFilter) bool {
 }
 
 func promotionMatchesFilter(record Promotion, filter PromotionListFilter) (bool, error) {
+	if filter.RepositoryID != nil && record.RepositoryID != *filter.RepositoryID {
+		return false, nil
+	}
+	if filter.CommitSHA != "" &&
+		record.BaseRevision != filter.CommitSHA &&
+		record.CandidateRevision != filter.CommitSHA {
+		return false, nil
+	}
 	if filter.Status != "" && record.Status != filter.Status {
 		return false, nil
 	}

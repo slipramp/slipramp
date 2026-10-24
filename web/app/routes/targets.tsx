@@ -200,7 +200,10 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                           </Table.Td>
                           <Table.Td>
                             <Stack gap={0}>
-                              <CommitReference commit={target.desiredCommit} />
+                              <CommitReference
+                                commit={target.desiredCommit}
+                                repositoryId={target.repositoryId}
+                              />
                               {target.desiredCommit.sha !== target.catalogCommit.sha ? (
                                 <Text c="dimmed" size="xs">
                                   differs from catalog

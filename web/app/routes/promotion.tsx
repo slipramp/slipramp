@@ -215,8 +215,16 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
           />
         </SimpleGrid>
         <SimpleGrid cols={{ base: 1, md: 2 }}>
-          <Revision commit={promotion.baseCommit} label="Base revision" />
-          <Revision commit={promotion.candidateCommit} label="Candidate revision" />
+          <Revision
+            commit={promotion.baseCommit}
+            label="Base revision"
+            repositoryId={promotion.repositoryId}
+          />
+          <Revision
+            commit={promotion.candidateCommit}
+            label="Candidate revision"
+            repositoryId={promotion.repositoryId}
+          />
         </SimpleGrid>
         <Group gap="xl" wrap="wrap">
           <Group gap="xs">
@@ -482,13 +490,21 @@ function Fact({ label, value }: Readonly<{ label: string; value: string }>) {
   );
 }
 
-function Revision({ commit, label }: Readonly<{ commit?: GitCommit; label: string }>) {
+function Revision({
+  commit,
+  label,
+  repositoryId,
+}: Readonly<{ commit?: GitCommit; label: string; repositoryId: string }>) {
   return (
     <Stack gap={2}>
       <Text c="dimmed" size="xs">
         {label}
       </Text>
-      {commit ? <CommitReference commit={commit} /> : <Text>Waiting for Kargo</Text>}
+      {commit ? (
+        <CommitReference commit={commit} repositoryId={repositoryId} />
+      ) : (
+        <Text>Waiting for Kargo</Text>
+      )}
     </Stack>
   );
 }

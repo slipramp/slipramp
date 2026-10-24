@@ -225,11 +225,15 @@ func TestReviewServiceFiltersAndExpiresPromotionsBeforeReview(t *testing.T) {
 	expiredAt := now.Add(-time.Minute)
 	pendingID := uuid.New()
 	otherID := uuid.New()
+	repositoryID := uuid.New()
+	commitSHA := "0123456789abcdef0123456789abcdef01234567"
 	store := &reviewStore{
 		policies: map[uuid.UUID]StagePolicy{},
 		promotions: []Promotion{
 			{
 				ID:            pendingID,
+				RepositoryID:  repositoryID,
+				BaseRevision:  commitSHA,
 				Integration:   "prod",
 				StageID:       stageID,
 				StageSnapshot: []byte(`{"cluster":"colo","project":"kargo-core","application":"external-dns"}`),
@@ -239,6 +243,8 @@ func TestReviewServiceFiltersAndExpiresPromotionsBeforeReview(t *testing.T) {
 			},
 			{
 				ID:            otherID,
+				RepositoryID:  uuid.New(),
+				BaseRevision:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 				Integration:   "prod",
 				StageID:       uuid.New(),
 				StageSnapshot: []byte(`{"cluster":"colo","project":"kargo-core","application":"metrics"}`),
@@ -255,11 +261,13 @@ func TestReviewServiceFiltersAndExpiresPromotionsBeforeReview(t *testing.T) {
 	result, err := service.ListPromotions(
 		t.Context(),
 		PromotionListFilter{
-			Status:      StatusExpired,
-			Cluster:     "colo",
-			Project:     "kargo-core",
-			Application: "external-dns",
-			Limit:       DefaultListLimit,
+			RepositoryID: &repositoryID,
+			CommitSHA:    commitSHA,
+			Status:       StatusExpired,
+			Cluster:      "colo",
+			Project:      "kargo-core",
+			Application:  "external-dns",
+			Limit:        DefaultListLimit,
 		},
 	)
 	if err != nil {
@@ -268,6 +276,19 @@ func TestReviewServiceFiltersAndExpiresPromotionsBeforeReview(t *testing.T) {
 	if result.Total != 1 || result.Items[0].Promotion.ID != pendingID ||
 		result.Items[0].Promotion.Status != StatusExpired {
 		t.Errorf("ListPromotions() = %#v", result)
+	}
+}
+
+func TestReviewServiceRejectsCommitFilterWithoutRepository(t *testing.T) {
+	t.Parallel()
+
+	service := NewReviewService(&reviewStore{})
+	_, err := service.ListPromotions(t.Context(), PromotionListFilter{
+		CommitSHA: "0123456789abcdef0123456789abcdef01234567",
+		Limit:     DefaultListLimit,
+	})
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("ListPromotions() error = %v, want invalid filter", err)
 	}
 }
 

@@ -132,6 +132,13 @@ trigger deliveries. Disabling collection hides the Repository from commit
 browsing while retaining collected metadata for resumption. Provider links are
 inferred for known public providers or supplied through a commit URL template.
 
+A commit detail resolves any known commit in an active Repository by exact
+Repository ID and full SHA, including commits retained only because product
+state references them. It presents paginated associated Runs pinned to that
+commit and Promotions where the commit is either the base or candidate
+revision. Commit-scoped Run and Promotion filters require Repository identity
+so equal object IDs in different Repositories never merge their histories.
+
 ## Run creation and scheduling
 
 UI, API, Git delivery, and Promotion preparation use the same Run-creation
@@ -226,12 +233,35 @@ or leader election. Assignment remains `assigned` until the Controller reports
 the materialized Job UID and `preparing` phase. Permanent rendering or admission
 failures finish the Run as failed rather than blocking delivery.
 
+Controller polling dispatches Run work to one local worker per Run before Job
+materialization begins. That worker owns materialization, observation, log
+completion, terminal reporting, and cleanup. Duplicate assignments reuse the
+worker, and repeated cancellation commands coalesce without blocking polling.
+Completed workers remain registered through an in-flight poll response so a
+late assignment cannot recreate a finished Job.
+
+Controller HTTP failures have explicit operational categories. Transport
+failures, HTTP 408/429, and Server errors retry; invalid requests, unknown
+resources, conflicts, and unusable log state stop the affected Run worker with
+a diagnostic while retaining its Job. A stopped worker suppresses duplicate
+commands until Controller restart. Credential rejection stops the Controller
+and interrupts polling, including rejection from background log or inventory
+requests. Malformed polling responses fail the Controller rather than silently
+discarding work.
+
 Every execution namespace is exclusively owned by one Controller and its
 control plane. A Controller may own several namespaces, rejects assignments
 outside its configured list, and scans those namespaces individually before
 polling after restart. Another installation may reuse a namespace only after
 all previous Slipramp Jobs are removed. Duplicate Controllers or reused Cluster
 names are configuration errors, not a failover mechanism.
+
+Every Job operation verifies the owned namespace, deterministic name, Run and
+Cluster labels, and admitted Job UID. Once a worker pins that UID, it never
+adopts a replacement. Pod observation, log reads, and cancellation also require
+matching labels and a controlling owner reference to that exact Job UID.
+Identity mismatches stop the affected worker and retain resources for diagnosis.
+Original owned Pods may still supply logs after their pinned Job disappears.
 
 ### Job and Harness contract
 

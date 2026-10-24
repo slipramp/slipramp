@@ -81,6 +81,23 @@ LEFT JOIN repository_commits
  AND repository_commits.sha = requested.sha
 ORDER BY requested.repository_id, requested.sha;
 
+-- name: GetRepositoryCommit :one
+SELECT
+    repository_commits.repository_id,
+    repositories.name AS repository_name,
+    repository_commits.sha,
+    repository_commits.title,
+    repository_commits.author_name,
+    repository_commits.authored_at,
+    repository_commits.committed_at,
+    repositories.clone_url,
+    repositories.commit_url_template
+FROM repository_commits
+JOIN repositories ON repositories.id = repository_commits.repository_id
+WHERE repository_commits.repository_id = sqlc.arg(repository_id)
+  AND repository_commits.sha = sqlc.arg(sha)
+  AND repositories.removed_at IS NULL;
+
 -- name: ListTrackedBranchCommits :many
 SELECT
     repository_commits.repository_id,

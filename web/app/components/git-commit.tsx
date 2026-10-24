@@ -1,7 +1,9 @@
 import { Anchor, Code, Group, HoverCard, Paper, Stack, Text, Title } from "@mantine/core";
 import { IconExternalLink, IconGitCommit } from "@tabler/icons-react";
+import { Link } from "react-router";
 
 import type { GitCommit } from "~/api/generated";
+import { commitPath } from "~/commit-path";
 import { RelativeTime, Timestamp } from "~/components/display";
 import { Identity } from "~/components/identity";
 import { shortIdentifier } from "~/display";
@@ -9,11 +11,21 @@ import { shortIdentifier } from "~/display";
 type CommitReferenceProps = {
   commit: GitCommit;
   length?: number;
+  repositoryId?: string;
 };
 
-export function CommitReference({ commit, length = 12 }: Readonly<CommitReferenceProps>) {
-  const hasDetails = Boolean(commit.title || commit.author || commit.authoredAt);
-  const reference = commit.url ? (
+export function CommitReference({
+  commit,
+  length = 12,
+  repositoryId,
+}: Readonly<CommitReferenceProps>) {
+  const detailsURL = repositoryId ? commitPath(repositoryId, commit.sha) : undefined;
+  const hasDetails = Boolean(detailsURL || commit.title || commit.author || commit.authoredAt);
+  const reference = detailsURL ? (
+    <Anchor aria-label={`Open commit ${commit.sha}`} component={Link} to={detailsURL}>
+      <Code>{shortIdentifier(commit.sha, length)}</Code>
+    </Anchor>
+  ) : commit.url ? (
     <Anchor
       aria-label={`Open commit ${commit.sha}`}
       href={commit.url}
@@ -58,14 +70,35 @@ export function CommitReference({ commit, length = 12 }: Readonly<CommitReferenc
               <RelativeTime c="dimmed" size="xs" value={commit.authoredAt} />
             ) : null}
           </Group>
+          {detailsURL || commit.url ? (
+            <Group gap="md" justify="space-between" wrap="wrap">
+              {detailsURL ? (
+                <Anchor component={Link} fw={600} size="xs" to={detailsURL}>
+                  View details
+                </Anchor>
+              ) : null}
+              {commit.url ? (
+                <Anchor href={commit.url} rel="noreferrer" size="xs" target="_blank">
+                  <Group gap={4} wrap="nowrap">
+                    Git provider
+                    <IconExternalLink aria-hidden size={13} />
+                  </Group>
+                </Anchor>
+              ) : null}
+            </Group>
+          ) : null}
         </Stack>
       </HoverCard.Dropdown>
     </HoverCard>
   );
 }
 
-export function CommitDetails({ commit }: Readonly<{ commit: GitCommit }>) {
+export function CommitDetails({
+  commit,
+  repositoryId,
+}: Readonly<{ commit: GitCommit; repositoryId?: string }>) {
   const title = commit.title ?? `Commit ${shortIdentifier(commit.sha, 12)}`;
+  const detailsURL = repositoryId ? commitPath(repositoryId, commit.sha) : undefined;
 
   return (
     <Paper p="lg" withBorder>
@@ -78,7 +111,18 @@ export function CommitDetails({ commit }: Readonly<{ commit: GitCommit }>) {
             </Text>
           </Group>
           <Title lineClamp={2} order={2} style={{ overflowWrap: "anywhere" }} title={title}>
-            {commit.url ? (
+            {detailsURL ? (
+              <Anchor
+                c="inherit"
+                component={Link}
+                fw="inherit"
+                fz="inherit"
+                to={detailsURL}
+                underline="hover"
+              >
+                {title}
+              </Anchor>
+            ) : commit.url ? (
               <Anchor
                 c="inherit"
                 fw="inherit"

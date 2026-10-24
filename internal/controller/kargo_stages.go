@@ -92,18 +92,18 @@ func newKargoStageObservers(
 	return observers
 }
 
-func (o *kargoStageObserver) Run(ctx context.Context) {
+func (o *kargoStageObserver) Run(ctx context.Context) error {
 	var pending *api.KargoStageSnapshot
 	for {
 		if pending == nil {
 			snapshot, err := o.observe(ctx)
 			if err != nil {
 				if ctx.Err() != nil {
-					return
+					return nil
 				}
 				o.logger.Warn("observe Kargo Stages", "error", err)
 				if !waitForRetry(ctx, o.interval) {
-					return
+					return nil
 				}
 				continue
 			}
@@ -114,16 +114,18 @@ func (o *kargoStageObserver) Run(ctx context.Context) {
 		if err == nil {
 			pending = nil
 		} else if ctx.Err() != nil {
-			return
+			return nil
+		} else if errors.Is(err, errControllerCredentialRejected) {
+			return err
 		} else {
 			o.logger.Warn("submit Kargo Stage snapshot", "snapshot_id", pending.SnapshotID, "error", err)
-			if statusCode, ok := serverResponseStatusCode(err); ok && statusCode >= 400 && statusCode < 500 {
+			if permanentServerError(err) {
 				pending = nil
 			}
 		}
 
 		if !waitForRetry(ctx, o.interval) {
-			return
+			return nil
 		}
 	}
 }

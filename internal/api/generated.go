@@ -2544,6 +2544,11 @@ type ListPromotionStagesParams struct {
 
 // ListPromotionsParams defines parameters for ListPromotions.
 type ListPromotionsParams struct {
+	// RepositoryID Limit results to one repository.
+	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
+
+	// CommitSha Limit results to Promotions whose base or candidate revision matches this full Git object ID. Requires repositoryId.
+	CommitSha   *string             `form:"commitSha,omitempty" json:"commitSha,omitempty"`
 	Integration *CatalogName        `form:"integration,omitempty" json:"integration,omitempty"`
 	Project     *CatalogName        `form:"project,omitempty" json:"project,omitempty"`
 	Application *string             `form:"application,omitempty" json:"application,omitempty"`
@@ -2574,6 +2579,9 @@ type ListRunsParams struct {
 
 	// Target Limit results to a target name within the selected repository. Requires repositoryId.
 	Target *CatalogName `form:"target,omitempty" json:"target,omitempty"`
+
+	// CommitSha Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
+	CommitSha *string `form:"commitSha,omitempty" json:"commitSha,omitempty"`
 
 	// Cluster Limit results to Runs assigned to one execution cluster.
 	Cluster *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
@@ -3051,6 +3059,8 @@ type ClientInterface interface {
 
 	// ListPromotions List Promotions
 	//
+	// Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
+	//
 	// Corresponds with GET /api/v1/promotions (the `ListPromotions` operationId).
 	ListPromotions(ctx context.Context, params *ListPromotionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3130,9 +3140,16 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetCommit Get a known commit
+	//
+	// Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/commits/{commitSha} (the `GetCommit` operationId).
+	GetCommit(ctx context.Context, repositoryID openapi_types.UUID, commitSha string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListRuns List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
 	//
 	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3841,6 +3858,8 @@ func (c *Client) CreatePromotion(ctx context.Context, stageID openapi_types.UUID
 
 // ListPromotions List Promotions
 //
+// Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
+//
 // Corresponds with GET /api/v1/promotions (the `ListPromotions` operationId).
 func (c *Client) ListPromotions(ctx context.Context, params *ListPromotionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListPromotionsRequest(c.Server, params)
@@ -4030,9 +4049,26 @@ func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_
 	return c.Client.Do(req)
 }
 
+// GetCommit Get a known commit
+//
+// Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/commits/{commitSha} (the `GetCommit` operationId).
+func (c *Client) GetCommit(ctx context.Context, repositoryID openapi_types.UUID, commitSha string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetCommitRequest(c.Server, repositoryID, commitSha)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListRuns List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
 //
 // Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6075,6 +6111,30 @@ func NewListPromotionsRequest(server string, params *ListPromotionsParams) (*htt
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.RepositoryID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repositoryId", *params.RepositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CommitSha != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "commitSha", *params.CommitSha, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Integration != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "integration", *params.Integration, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -6511,6 +6571,47 @@ func NewGetRepositoryCatalogRequest(server string, repositoryID openapi_types.UU
 	return req, nil
 }
 
+// NewGetCommitRequest constructs an http.Request for the GetCommit method
+func NewGetCommitRequest(server string, repositoryID openapi_types.UUID, commitSha string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "repositoryId", repositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "commitSha", commitSha, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories/%s/commits/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListRunsRequest constructs an http.Request for the ListRuns method
 func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, error) {
 	var err error
@@ -6554,6 +6655,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 		if params.Target != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "target", *params.Target, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CommitSha != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "commitSha", *params.CommitSha, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -8101,6 +8214,8 @@ type ClientWithResponsesInterface interface {
 
 	// ListPromotionsWithResponse List Promotions
 	//
+	// Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
+	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/promotions (the `ListPromotions` operationId).
@@ -8190,9 +8305,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalogWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRepositoryCatalogResponse, error)
 
+	// GetCommitWithResponse Get a known commit
+	//
+	// Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/commits/{commitSha} (the `GetCommit` operationId).
+	GetCommitWithResponse(ctx context.Context, repositoryID openapi_types.UUID, commitSha string, reqEditors ...RequestEditorFn) (*GetCommitResponse, error)
+
 	// ListRunsWithResponse List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10697,6 +10821,89 @@ func (r GetRepositoryCatalogResponse) ContentType() string {
 	return ""
 }
 
+type GetCommitResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RepositoryCommit
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetCommitResponse) GetJSON200() *RepositoryCommit {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetCommitResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetCommitResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetCommitResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetCommitResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetCommitResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetCommitResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetCommitResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetCommitResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetCommitResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetCommitResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListRunsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13022,6 +13229,8 @@ func (c *ClientWithResponses) CreatePromotionWithResponse(ctx context.Context, s
 
 // ListPromotionsWithResponse List Promotions
 //
+// Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
+//
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/promotions (the `ListPromotions` operationId).
@@ -13177,9 +13386,24 @@ func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Conte
 	return ParseGetRepositoryCatalogResponse(rsp)
 }
 
+// GetCommitWithResponse Get a known commit
+//
+// Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/commits/{commitSha} (the `GetCommit` operationId).
+func (c *ClientWithResponses) GetCommitWithResponse(ctx context.Context, repositoryID openapi_types.UUID, commitSha string, reqEditors ...RequestEditorFn) (*GetCommitResponse, error) {
+	rsp, err := c.GetCommit(ctx, repositoryID, commitSha, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetCommitResponse(rsp)
+}
+
 // ListRunsWithResponse List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, target, and cluster filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15566,6 +15790,74 @@ func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalo
 	return response, nil
 }
 
+// ParseGetCommitResponse parses an HTTP response from a GetCommitWithResponse call
+func ParseGetCommitResponse(rsp *http.Response) (*GetCommitResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetCommitResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RepositoryCommit
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListRunsResponse parses an HTTP response from a ListRunsWithResponse call
 func ParseListRunsResponse(rsp *http.Response) (*ListRunsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17259,6 +17551,9 @@ type ServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
+	// GetCommit Get a known commit
+	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
+	GetCommit(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, commitSha string)
 	// ListRuns List recent Runs
 	// (GET /api/v1/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
@@ -18412,6 +18707,32 @@ func (siw *ServerInterfaceWrapper) ListPromotions(w http.ResponseWriter, r *http
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListPromotionsParams
 
+	// ------------- Optional query parameter "repositoryId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repositoryId", r.URL.Query(), &params.RepositoryID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repositoryId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "commitSha" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "commitSha", r.URL.Query(), &params.CommitSha, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "commitSha"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "commitSha", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "integration" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "integration", r.URL.Query(), &params.Integration, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -18743,6 +19064,41 @@ func (siw *ServerInterfaceWrapper) GetRepositoryCatalog(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// GetCommit operation middleware
+func (siw *ServerInterfaceWrapper) GetCommit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "commitSha" -------------
+	var commitSha string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "commitSha", r.PathValue("commitSha"), &commitSha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "commitSha", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCommit(w, r, repositoryID, commitSha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -18774,6 +19130,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "target"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "commitSha" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "commitSha", r.URL.Query(), &params.CommitSha, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "commitSha"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "commitSha", Err: err})
 		}
 		return
 	}
@@ -19814,6 +20183,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.UpdateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/git-trigger-deliveries/failed", wrapper.ListFailedGitTriggerDeliveries)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/commits", wrapper.ListCommits)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/commits/{commitSha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
@@ -22705,6 +23075,113 @@ func (response GetRepositoryCatalog500ApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type GetCommitRequestObject struct {
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+	CommitSha    string             `json:"commitSha"`
+}
+
+type GetCommitResponseObject interface {
+	VisitGetCommitResponse(w http.ResponseWriter) error
+}
+
+type GetCommit200JSONResponse RepositoryCommit
+
+func (response GetCommit200JSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit400ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit400ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit401ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit403ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit404ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit405ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit500ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRunsRequestObject struct {
 	Params ListRunsParams
 }
@@ -25294,6 +25771,9 @@ type StrictServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(ctx context.Context, request GetRepositoryCatalogRequestObject) (GetRepositoryCatalogResponseObject, error)
+	// GetCommit Get a known commit
+	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
+	GetCommit(ctx context.Context, request GetCommitRequestObject) (GetCommitResponseObject, error)
 	// ListRuns List recent Runs
 	// (GET /api/v1/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
@@ -26206,6 +26686,33 @@ func (sh *strictHandler) GetRepositoryCatalog(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryCatalogResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCommit operation middleware
+func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, commitSha string) {
+	var request GetCommitRequestObject
+
+	request.RepositoryID = repositoryID
+	request.CommitSha = commitSha
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCommit(ctx, request.(GetCommitRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCommit")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCommitResponseObject); ok {
+		if err := validResponse.VisitGetCommitResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

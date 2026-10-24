@@ -324,11 +324,15 @@ func (h *Handler) ListPromotions(
 	request api.ListPromotionsRequestObject,
 ) (api.ListPromotionsResponseObject, error) {
 	filter := promotion.PromotionListFilter{
-		Integration: optionalCatalogName(request.Params.Integration),
-		Cluster:     optionalCatalogName(request.Params.Cluster),
-		Project:     optionalCatalogName(request.Params.Project),
-		StageID:     request.Params.StageID,
-		Limit:       promotion.DefaultListLimit,
+		RepositoryID: request.Params.RepositoryID,
+		Integration:  optionalCatalogName(request.Params.Integration),
+		Cluster:      optionalCatalogName(request.Params.Cluster),
+		Project:      optionalCatalogName(request.Params.Project),
+		StageID:      request.Params.StageID,
+		Limit:        promotion.DefaultListLimit,
+	}
+	if request.Params.CommitSha != nil {
+		filter.CommitSHA = *request.Params.CommitSha
 	}
 	if request.Params.Application != nil {
 		filter.Application = *request.Params.Application

@@ -8,6 +8,7 @@ import {
   type Repository,
   type RepositoryCommit,
 } from "~/api/generated";
+import { commitPath } from "~/commit-path";
 import { Timestamp } from "~/components/display";
 import { CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
@@ -186,10 +187,16 @@ function CommitTable({
               <Table.Tr key={`${item.repositoryId}:${item.commit.sha}`}>
                 <Table.Td>
                   <Stack gap={2} maw={520}>
-                    <Text fw={600} lineClamp={1} title={item.commit.title}>
+                    <Anchor
+                      component={Link}
+                      fw={600}
+                      lineClamp={1}
+                      title={item.commit.title}
+                      to={commitPath(item.repositoryId, item.commit.sha)}
+                    >
                       {item.commit.title ?? "Untitled commit"}
-                    </Text>
-                    <CommitReference commit={item.commit} />
+                    </Anchor>
+                    <CommitReference commit={item.commit} repositoryId={item.repositoryId} />
                   </Stack>
                 </Table.Td>
                 <Table.Td>

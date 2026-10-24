@@ -202,6 +202,15 @@ func (d *Database) acceptPromotionRequest(
 	if err := record.Validate(); err != nil {
 		return promotion.Promotion{}, err
 	}
+	if err := recordPromotionCommits(
+		ctx,
+		queries,
+		record.RepositoryID,
+		record.BaseRevision,
+		record.CandidateRevision,
+	); err != nil {
+		return promotion.Promotion{}, err
+	}
 
 	row, err := queries.CreatePromotion(ctx, promotionDatabaseParams(record, requestedBy))
 	if constraintMatches(err, promotionIdentityConstraint) {
@@ -269,6 +278,15 @@ func finishExistingPromotionRequest(
 	}
 	if stage.Project != acceptance.Request.Project || stage.Name != acceptance.Request.Stage {
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
+	}
+	if err := recordPromotionCommits(
+		ctx,
+		queries,
+		existing.RepositoryID,
+		acceptance.Request.BaseRevision,
+		acceptance.Request.CandidateRevision,
+	); err != nil {
+		return promotion.Promotion{}, err
 	}
 
 	row, err = queries.HydrateOperatorPromotion(

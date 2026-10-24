@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,39 +16,6 @@ import (
 )
 
 const pollRequestTimeout = 35 * time.Second
-
-type serverResponseError struct {
-	operation  string
-	statusCode int
-	err        error
-}
-
-func (e *serverResponseError) Error() string {
-	if e.err == nil {
-		return fmt.Sprintf("%s returned HTTP %d", e.operation, e.statusCode)
-	}
-
-	return fmt.Sprintf("%s: %v; Server returned HTTP %d", e.operation, e.err, e.statusCode)
-}
-
-func (e *serverResponseError) Unwrap() error { return e.err }
-
-func serverResponseStatusCode(err error) (int, bool) {
-	var responseErr *serverResponseError
-	if !errors.As(err, &responseErr) {
-		return 0, false
-	}
-
-	return responseErr.statusCode, true
-}
-
-func rejectedServerResponse(operation string, statusCode int, err error) error {
-	return &serverResponseError{
-		operation:  operation,
-		statusCode: statusCode,
-		err:        err,
-	}
-}
 
 type controllerAPI interface {
 	EnrollControllerWithResponse(
@@ -107,28 +73,43 @@ type controllerAPI interface {
 	) (*api.ReplaceKargoStageSnapshotResponse, error)
 }
 
+type serverClient struct {
+	clusterName     string
+	bearerToken     string
+	enrollmentToken string
+	api             controllerAPI
+}
+
 func (c *serverClient) GetLogCursor(ctx context.Context, runID uuid.UUID) (logCursor, error) {
 	response, err := c.api.GetRunLogCursorWithResponse(ctx, runID, controllerAuthorization(c.bearerToken))
 	if err != nil {
-		return logCursor{}, fmt.Errorf("get Run log cursor: %w", err)
+		return logCursor{}, serverRequestError("get Run log cursor", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusOK:
 		if response.JSON200 == nil {
-			return logCursor{}, errors.New("Run log cursor response is empty")
+			return logCursor{}, invalidServerResponse("get Run log cursor", "response is empty")
+		}
+		cursor := response.JSON200
+		if cursor.NextOffsetBytes < 0 || !cursor.State.Valid() ||
+			(cursor.State == api.LogCursorStateSealed && valueOrEmpty(cursor.Sha256) == "") {
+			return logCursor{}, invalidServerResponse("get Run log cursor", "cursor state is invalid")
+		}
+		if cursor.State == api.LogCursorStateFailed {
+			return logCursor{}, &serverResponseError{
+				operation:  "get Run log cursor",
+				statusCode: response.StatusCode(),
+				kind:       serverFailureLogFailed,
+			}
 		}
 		return logCursor{
 			nextOffsetBytes: response.JSON200.NextOffsetBytes,
 			sealed:          response.JSON200.State == api.LogCursorStateSealed,
 			sha256:          valueOrEmpty(response.JSON200.Sha256),
 		}, nil
-	case http.StatusUnauthorized:
-		return logCursor{}, errControllerCredentialRejected
-	case http.StatusNotFound:
-		return logCursor{}, rejectedServerResponse("get Run log cursor", response.StatusCode(), errRunLogRejected)
 	default:
-		return logCursor{}, rejectedServerResponse("get Run log cursor", response.StatusCode(), nil)
+		return logCursor{}, newServerResponseError("get Run log cursor", response.StatusCode())
 	}
 }
 
@@ -140,18 +121,14 @@ func (c *serverClient) SealLog(ctx context.Context, runID uuid.UUID, sizeBytes i
 		controllerAuthorization(c.bearerToken),
 	)
 	if err != nil {
-		return fmt.Errorf("seal Run log: %w", err)
+		return serverRequestError("seal Run log", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusNoContent:
 		return nil
-	case http.StatusUnauthorized:
-		return errControllerCredentialRejected
-	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict:
-		return rejectedServerResponse("seal Run log", response.StatusCode(), errRunLogRejected)
 	default:
-		return rejectedServerResponse("seal Run log", response.StatusCode(), nil)
+		return newServerResponseError("seal Run log", response.StatusCode())
 	}
 }
 
@@ -165,29 +142,15 @@ func (c *serverClient) AppendLogChunk(ctx context.Context, runID uuid.UUID, offs
 		controllerAuthorization(c.bearerToken),
 	)
 	if err != nil {
-		return fmt.Errorf("append Run log chunk: %w", err)
+		return serverRequestError("append Run log chunk", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusNoContent:
 		return nil
-	case http.StatusUnauthorized:
-		return errControllerCredentialRejected
-	case http.StatusBadRequest,
-		http.StatusNotFound,
-		http.StatusConflict,
-		http.StatusRequestEntityTooLarge:
-		return rejectedServerResponse("append Run log chunk", response.StatusCode(), errRunLogRejected)
 	default:
-		return rejectedServerResponse("append Run log chunk", response.StatusCode(), nil)
+		return newServerResponseError("append Run log chunk", response.StatusCode())
 	}
-}
-
-type serverClient struct {
-	clusterName     string
-	bearerToken     string
-	enrollmentToken string
-	api             controllerAPI
 }
 
 func newServerClient(cfg Config) (*serverClient, error) {
@@ -221,7 +184,7 @@ func (c *serverClient) Enroll(ctx context.Context) error {
 		controllerAuthorization(c.enrollmentToken),
 	)
 	if err != nil {
-		return fmt.Errorf("enroll controller with Server: %w", err)
+		return serverRequestError("enroll Controller", err)
 	}
 
 	switch response.StatusCode() {
@@ -232,29 +195,26 @@ func (c *serverClient) Enroll(ctx context.Context) error {
 	case http.StatusConflict:
 		return errControllerEnrollmentConflict
 	default:
-		return fmt.Errorf("controller enrollment returned HTTP %d", response.StatusCode())
+		return newServerResponseError("enroll Controller", response.StatusCode())
 	}
 }
 
 func (c *serverClient) Poll(ctx context.Context) (*api.ControllerCommand, error) {
 	response, err := c.api.PollForControllerCommandWithResponse(ctx, nil, controllerAuthorization(c.bearerToken))
 	if err != nil {
-		return nil, fmt.Errorf("poll Server for run assignment: %w", err)
+		return nil, serverRequestError("poll Controller command", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusOK:
 		if response.JSON200 == nil {
-			return nil, fmt.Errorf("controller poll returned an empty command response")
+			return nil, invalidServerResponse("poll Controller command", "response is empty")
 		}
-
 		return response.JSON200, nil
 	case http.StatusNoContent:
 		return nil, nil
-	case http.StatusUnauthorized:
-		return nil, errControllerCredentialRejected
 	default:
-		return nil, fmt.Errorf("controller poll returned HTTP %d", response.StatusCode())
+		return nil, newServerResponseError("poll Controller command", response.StatusCode())
 	}
 }
 
@@ -266,18 +226,14 @@ func (c *serverClient) ReportObservation(ctx context.Context, runID uuid.UUID, o
 		controllerAuthorization(c.bearerToken),
 	)
 	if err != nil {
-		return fmt.Errorf("report Run observation to Server: %w", err)
+		return serverRequestError("report Run observation", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusNoContent:
 		return nil
-	case http.StatusUnauthorized:
-		return errControllerCredentialRejected
-	case http.StatusNotFound, http.StatusConflict:
-		return rejectedServerResponse("report Run observation", response.StatusCode(), errRunObservationRejected)
 	default:
-		return rejectedServerResponse("report Run observation", response.StatusCode(), nil)
+		return newServerResponseError("report Run observation", response.StatusCode())
 	}
 }
 
@@ -293,22 +249,14 @@ func (c *serverClient) ReportKargoPromotionDispatch(
 		controllerAuthorization(c.bearerToken),
 	)
 	if err != nil {
-		return fmt.Errorf("report Kargo Promotion dispatch: %w", err)
+		return serverRequestError("report Kargo Promotion dispatch", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusNoContent:
 		return nil
-	case http.StatusUnauthorized:
-		return errControllerCredentialRejected
-	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict:
-		return rejectedServerResponse(
-			"report Kargo Promotion dispatch",
-			response.StatusCode(),
-			errKargoPromotionDispatchRejected,
-		)
 	default:
-		return rejectedServerResponse("report Kargo Promotion dispatch", response.StatusCode(), nil)
+		return newServerResponseError("report Kargo Promotion dispatch", response.StatusCode())
 	}
 }
 
@@ -324,22 +272,14 @@ func (c *serverClient) ReportKargoPromotionReconciliation(
 		controllerAuthorization(c.bearerToken),
 	)
 	if err != nil {
-		return fmt.Errorf("report Kargo Promotion reconciliation: %w", err)
+		return serverRequestError("report Kargo Promotion reconciliation", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusNoContent:
 		return nil
-	case http.StatusUnauthorized:
-		return errControllerCredentialRejected
-	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict:
-		return rejectedServerResponse(
-			"report Kargo Promotion reconciliation",
-			response.StatusCode(),
-			errKargoPromotionReconciliationRejected,
-		)
 	default:
-		return rejectedServerResponse("report Kargo Promotion reconciliation", response.StatusCode(), nil)
+		return newServerResponseError("report Kargo Promotion reconciliation", response.StatusCode())
 	}
 }
 
@@ -355,18 +295,14 @@ func (c *serverClient) ReplaceKargoStageSnapshot(
 		controllerAuthorization(c.bearerToken),
 	)
 	if err != nil {
-		return fmt.Errorf("replace Kargo Stage snapshot: %w", err)
+		return serverRequestError("replace Kargo Stage snapshot", err)
 	}
 
 	switch response.StatusCode() {
 	case http.StatusNoContent:
 		return nil
-	case http.StatusUnauthorized:
-		return errControllerCredentialRejected
-	case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound, http.StatusConflict:
-		return rejectedServerResponse("replace Kargo Stage snapshot", response.StatusCode(), nil)
 	default:
-		return rejectedServerResponse("replace Kargo Stage snapshot", response.StatusCode(), nil)
+		return newServerResponseError("replace Kargo Stage snapshot", response.StatusCode())
 	}
 }
 

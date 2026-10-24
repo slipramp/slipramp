@@ -207,7 +207,7 @@ func ValidateRefreshResult(result RefreshResult) error {
 		return errors.New("refresh result must contain a commit or a failure")
 	}
 
-	if result.Commit != nil && !validCommitSHA(result.Commit.SHA) {
+	if result.Commit != nil && !ValidCommitSHA(result.Commit.SHA) {
 		return fmt.Errorf("invalid fetched Git commit %q", result.Commit.SHA)
 	}
 

@@ -289,7 +289,9 @@ func TestKargoStageObserverRetriesTheSameSnapshotAfterAmbiguousFailure(t *testin
 		},
 	}
 
-	observer.Run(ctx)
+	if err := observer.Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
 
 	if len(reported) != 2 || !reflect.DeepEqual(reported[0], reported[1]) {
 		t.Fatalf("reported snapshots = %#v", reported)

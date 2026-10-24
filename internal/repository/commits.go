@@ -13,6 +13,8 @@ import (
 
 const commitURLPlaceholder = "{sha}"
 
+var ErrCommitNotFound = errors.New("commit not found")
+
 type CommitKey struct {
 	RepositoryID uuid.UUID
 	SHA          string
@@ -65,6 +67,7 @@ type CommitHistoryPage struct {
 }
 
 type CommitReader interface {
+	GetCommit(context.Context, CommitKey) (IndexedCommit, error)
 	ListCommits(context.Context, []CommitKey) (map[CommitKey]Commit, error)
 	ListCommitHistory(context.Context, CommitHistoryFilter) (CommitHistoryPage, error)
 }
@@ -102,7 +105,7 @@ func validateCommitURLTemplate(value *string) error {
 }
 
 func CommitURL(cfg Config, sha string) *string {
-	if !validCommitSHA(sha) {
+	if !ValidCommitSHA(sha) {
 		return nil
 	}
 	if cfg.CommitURLTemplate != nil {

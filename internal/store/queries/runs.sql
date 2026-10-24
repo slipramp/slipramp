@@ -72,6 +72,10 @@ WHERE (
     OR repository_id = sqlc.narg(repository_id)
 )
 AND (
+    sqlc.narg(commit_sha)::text IS NULL
+    OR commit_sha = sqlc.narg(commit_sha)
+)
+AND (
     sqlc.narg(target_name)::text IS NULL
     OR target_name = sqlc.narg(target_name)
 )
@@ -93,6 +97,10 @@ FROM runs
 WHERE (
     sqlc.narg(repository_id)::uuid IS NULL
     OR repository_id = sqlc.narg(repository_id)
+)
+AND (
+    sqlc.narg(commit_sha)::text IS NULL
+    OR commit_sha = sqlc.narg(commit_sha)
 )
 AND (
     sqlc.narg(target_name)::text IS NULL

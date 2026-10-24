@@ -1866,6 +1866,54 @@ export type ListCommitsResponses = {
 
 export type ListCommitsResponse = ListCommitsResponses[keyof ListCommitsResponses];
 
+export type GetCommitData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+    commitSha: string;
+  };
+  query?: never;
+  url: "/api/v1/repositories/{repositoryId}/commits/{commitSha}";
+};
+
+export type GetCommitErrors = {
+  /**
+   * The repository ID or commit SHA is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The active repository or known commit does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The commit could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetCommitError = GetCommitErrors[keyof GetCommitErrors];
+
+export type GetCommitResponses = {
+  /**
+   * The known commit and its repository.
+   */
+  200: RepositoryCommit;
+};
+
+export type GetCommitResponse = GetCommitResponses[keyof GetCommitResponses];
+
 export type GetRepositoryCatalogData = {
   body?: never;
   path: {
@@ -2517,6 +2565,10 @@ export type ListRunsData = {
      * Limit results to a target name within the selected repository. Requires repositoryId.
      */
     target?: CatalogName;
+    /**
+     * Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
+     */
+    commitSha?: string;
     /**
      * Limit results to Runs assigned to one execution cluster.
      */
@@ -3472,6 +3524,14 @@ export type ListPromotionsData = {
   body?: never;
   path?: never;
   query?: {
+    /**
+     * Limit results to one repository.
+     */
+    repositoryId?: string;
+    /**
+     * Limit results to Promotions whose base or candidate revision matches this full Git object ID. Requires repositoryId.
+     */
+    commitSha?: string;
     integration?: CatalogName;
     project?: CatalogName;
     application?: string;

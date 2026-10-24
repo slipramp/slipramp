@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/slipramp/slipramp/internal/repository"
@@ -11,6 +13,44 @@ import (
 )
 
 var _ repository.CommitReader = (*Database)(nil)
+
+func (d *Database) GetCommit(
+	ctx context.Context,
+	key repository.CommitKey,
+) (repository.IndexedCommit, error) {
+	row, err := d.queries.GetRepositoryCommit(
+		ctx,
+		storedb.GetRepositoryCommitParams{
+			RepositoryID: databaseUUID(key.RepositoryID),
+			Sha:          key.SHA,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return repository.IndexedCommit{}, repository.ErrCommitNotFound
+	}
+	if err != nil {
+		return repository.IndexedCommit{}, fmt.Errorf("get repository commit: %w", err)
+	}
+
+	cfg := repository.Config{
+		CloneURL:          row.CloneUrl,
+		CommitURLTemplate: row.CommitUrlTemplate,
+	}
+
+	return repository.IndexedCommit{
+		RepositoryID:   row.RepositoryID.Bytes,
+		RepositoryName: row.RepositoryName,
+		Commit: repository.Commit{
+			RepositoryID: row.RepositoryID.Bytes,
+			SHA:          row.Sha,
+			Title:        row.Title,
+			AuthorName:   row.AuthorName,
+			AuthoredAt:   applicationTime(row.AuthoredAt),
+			CommittedAt:  applicationTime(row.CommittedAt),
+			URL:          repository.CommitURL(cfg, row.Sha),
+		},
+	}, nil
+}
 
 func (d *Database) ListCommits(
 	ctx context.Context,

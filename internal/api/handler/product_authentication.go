@@ -29,6 +29,7 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"ListRepositories":               productidentity.PermissionRead,
 	"ListFailedGitTriggerDeliveries": productidentity.PermissionRead,
 	"ListCommits":                    productidentity.PermissionRead,
+	"GetCommit":                      productidentity.PermissionRead,
 	"GetRepositoryCatalog":           productidentity.PermissionRead,
 	"ListTargets":                    productidentity.PermissionRead,
 	"ListClusters":                   productidentity.PermissionRead,

@@ -91,8 +91,8 @@ func (s *GitBranchScanner) ScanBranches(
 			comparisons[index].Error = fmt.Sprintf("target branch %q is invalid", request.TargetBranch)
 			continue
 		}
-		if !validCommitSHA(request.AcknowledgedSourceCommit) ||
-			!validCommitSHA(request.AcknowledgedTargetCommit) {
+		if !ValidCommitSHA(request.AcknowledgedSourceCommit) ||
+			!ValidCommitSHA(request.AcknowledgedTargetCommit) {
 			comparisons[index].Error = "successful-render acknowledgement contains an invalid Git object ID"
 			continue
 		}
@@ -333,7 +333,7 @@ func parseRemoteBranches(output string) (map[string]string, error) {
 			continue
 		}
 		fields := strings.Fields(line)
-		if len(fields) != 2 || !validCommitSHA(fields[0]) || !strings.HasPrefix(fields[1], "refs/heads/") {
+		if len(fields) != 2 || !ValidCommitSHA(fields[0]) || !strings.HasPrefix(fields[1], "refs/heads/") {
 			return nil, errors.New("git returned an invalid branch reference")
 		}
 		revisions[fields[1]] = fields[0]
@@ -352,7 +352,7 @@ func resolveCommit(
 		return "", err
 	}
 	commit := strings.TrimSpace(output)
-	if !validCommitSHA(commit) {
+	if !ValidCommitSHA(commit) {
 		return "", fmt.Errorf("git returned invalid commit %q", commit)
 	}
 

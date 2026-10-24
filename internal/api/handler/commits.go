@@ -2,19 +2,53 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type CommitService interface {
+	GetCommit(context.Context, repository.CommitKey) (repository.IndexedCommit, error)
 	ListCommits(context.Context, []repository.CommitKey) (map[repository.CommitKey]repository.Commit, error)
 	ListCommitHistory(
 		context.Context,
 		repository.CommitHistoryFilter,
 	) (repository.CommitHistoryPage, error)
+}
+
+func (h *Handler) GetCommit(
+	ctx context.Context,
+	request api.GetCommitRequestObject,
+) (api.GetCommitResponseObject, error) {
+	if request.RepositoryID == uuid.Nil || !repository.ValidCommitSHA(request.CommitSha) {
+		return api.GetCommit400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, "repository ID and a lowercase full Git object ID are required"),
+		), nil
+	}
+
+	item, err := h.commits.GetCommit(
+		ctx,
+		repository.CommitKey{RepositoryID: request.RepositoryID, SHA: request.CommitSha},
+	)
+	if errors.Is(err, repository.ErrCommitNotFound) {
+		return api.GetCommit404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The commit is not known for this active repository."),
+		), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetCommit200JSONResponse{
+		RepositoryID:   item.RepositoryID,
+		RepositoryName: item.RepositoryName,
+		Commit:         commitResponse(item.Commit),
+	}, nil
 }
 
 func (h *Handler) ListCommits(

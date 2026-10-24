@@ -3,6 +3,8 @@ package controller
 import (
 	"context"
 	"errors"
+	"io"
+	"maps"
 	"strings"
 	"testing"
 
@@ -24,6 +26,12 @@ func TestKubernetesRunJobsCreatesAndReusesJob(t *testing.T) {
 	t.Parallel()
 
 	client := fake.NewClientset()
+	client.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		created := action.(k8stesting.CreateAction).GetObject().(*batchv1.Job)
+		created.UID = types.UID("job-uid")
+
+		return false, nil, nil
+	})
 	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 	assignment := testRunAssignment(t)
 
@@ -61,15 +69,7 @@ func TestKubernetesRunJobsMarksPodForCancellationIdempotently(t *testing.T) {
 		t.Fatalf("renderJob() error = %v", err)
 	}
 	job.UID = types.UID("job-uid")
-	pod := &corev1.Pod{}
-	pod.Name = "run-pod"
-	pod.Namespace = job.Namespace
-	pod.Labels = map[string]string{
-		batchv1.JobNameLabel: job.Name,
-		managedByLabel:       managedByLabelValue,
-		runIDLabel:           assignment.ID.String(),
-		clusterLabel:         validConfig().ClusterName,
-	}
+	pod := testExecutionPod(job)
 	pod.Annotations = map[string]string{cancellationAnnotation: "false"}
 	client := fake.NewClientset(job, pod)
 	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
@@ -149,21 +149,16 @@ func TestKubernetesRunJobsDoesNotRelabelCompletedPodAsCanceled(t *testing.T) {
 		t.Fatalf("renderJob() error = %v", err)
 	}
 	job.UID = types.UID("job-uid")
-	pod := &corev1.Pod{
-		Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
-			{
-				Name: actionContainerName,
-				State: corev1.ContainerState{
-					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
-				},
+	pod := testExecutionPod(job)
+	pod.Status = corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{
+		{
+			Name: actionContainerName,
+			State: corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
 			},
-		}},
-	}
-	pod.Name = "run-pod"
-	pod.Namespace = job.Namespace
-	pod.Labels = job.Spec.Template.Labels
+		},
+	}}
 	pod.Annotations = map[string]string{cancellationAnnotation: "false"}
-	pod.Labels[batchv1.JobNameLabel] = job.Name
 	client := fake.NewClientset(job, pod)
 	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 
@@ -193,12 +188,11 @@ func TestKubernetesRunJobsDoesNotRelabelCompletedPodAsCanceled(t *testing.T) {
 func TestKubernetesRunJobsDeleteUsesUIDPrecondition(t *testing.T) {
 	t.Parallel()
 
-	runID := uuid.New()
-	replacement := &batchv1.Job{}
-	replacement.Name = runJobName(runID)
-	replacement.Namespace = "slipramp-runs"
+	assignment := testRunAssignment(t)
+	job := testExecutionJob(t, assignment)
+	replacement := job.DeepCopy()
 	replacement.UID = types.UID("replacement-uid")
-	client := fake.NewClientset(replacement)
+	client := fake.NewClientset(job)
 	var deleteOptions metav1.DeleteOptions
 	client.PrependReactor(
 		"delete",
@@ -209,6 +203,10 @@ func TestKubernetesRunJobsDeleteUsesUIDPrecondition(t *testing.T) {
 				t.Fatalf("delete action = %T", action)
 			}
 			deleteOptions = deleteAction.GetDeleteOptions()
+			if err := client.Tracker().Update(batchv1.SchemeGroupVersion.WithResource("jobs"), replacement,
+				replacement.Namespace); err != nil {
+				t.Fatalf("replace Job: %v", err)
+			}
 
 			return true, nil, apierrors.NewConflict(
 				schema.GroupResource{Group: "batch", Resource: "jobs"},
@@ -219,10 +217,10 @@ func TestKubernetesRunJobsDeleteUsesUIDPrecondition(t *testing.T) {
 	)
 	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 	handle := jobHandle{
-		runID:     runID,
+		runID:     assignment.ID,
 		namespace: replacement.Namespace,
 		name:      replacement.Name,
-		uid:       "original-uid",
+		uid:       string(job.UID),
 	}
 
 	err := jobs.Delete(context.Background(), handle)
@@ -250,14 +248,11 @@ func TestKubernetesRunJobsDeleteUsesUIDPrecondition(t *testing.T) {
 func TestKubernetesRunJobsDeletesCompletedJobIdempotently(t *testing.T) {
 	t.Parallel()
 
-	runID := uuid.New()
-	job := &batchv1.Job{}
-	job.Name = runJobName(runID)
-	job.Namespace = "slipramp-runs"
-	job.UID = types.UID("job-uid")
+	assignment := testRunAssignment(t)
+	job := testExecutionJob(t, assignment)
 	client := fake.NewClientset(job)
 	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
-	handle := handleFromJob(job, runID)
+	handle := handleFromJob(job, assignment.ID)
 
 	if err := jobs.Delete(context.Background(), handle); err != nil {
 		t.Fatalf("first Delete() error = %v", err)
@@ -397,24 +392,17 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 			t.Parallel()
 
 			assignment := testRunAssignment(t)
-			job := &batchv1.Job{
-				Name:      runJobName(assignment.ID),
-				Namespace: string(assignment.Placement.JobNamespace),
-				Status:    test.status,
-			}
+			job := testExecutionJob(t, assignment)
+			job.Status = test.status
 			objects := []runtime.Object{}
 			if !test.missing {
 				objects = append(objects, job)
 			}
 			if test.podStatus != nil {
-				pod := &corev1.Pod{
-					Status: corev1.PodStatus{
-						ContainerStatuses: []corev1.ContainerStatus{*test.podStatus},
-					},
+				pod := testExecutionPod(job)
+				pod.Status = corev1.PodStatus{
+					ContainerStatuses: []corev1.ContainerStatus{*test.podStatus},
 				}
-				pod.Name = "run-pod"
-				pod.Namespace = job.Namespace
-				pod.Labels = map[string]string{batchv1.JobNameLabel: job.Name}
 				if test.canceled {
 					pod.Annotations = map[string]string{
 						cancellationAnnotation: "true",
@@ -437,6 +425,7 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 			}
 			if observation.phase != test.wantPhase ||
 				!equalPointers(observation.outcome, test.wantOutcome) ||
+				valueOrEmpty(observation.jobUID) != "job-uid" ||
 				valueOrEmpty(observation.reason) != test.wantReason ||
 				!equalPointers(observation.exitCode, test.wantExit) {
 				t.Errorf("Observe() = %#v", observation)
@@ -526,4 +515,200 @@ func TestKubernetesRunJobsRejectsUnownedExecutionNamespace(t *testing.T) {
 	if !isPermanentMaterializationError(err) {
 		t.Fatalf("Ensure() error = %T, want permanent materialization error", err)
 	}
+	if errors.Is(err, errRunJobIdentityMismatch) || len(client.Actions()) != 0 {
+		t.Fatal("invalid assignment was treated as an observed Job identity conflict")
+	}
+}
+
+func TestKubernetesRunJobsRejectsIdentityChangesAcrossLifecycle(t *testing.T) {
+	t.Parallel()
+
+	changes := map[string]func(*batchv1.Job, *jobHandle){
+		"replacement UID":  func(job *batchv1.Job, _ *jobHandle) { job.UID = "replacement-uid" },
+		"managed-by label": func(job *batchv1.Job, _ *jobHandle) { delete(job.Labels, managedByLabel) },
+		"Run label":        func(job *batchv1.Job, _ *jobHandle) { job.Labels[runIDLabel] = uuid.NewString() },
+		"Cluster label":    func(job *batchv1.Job, _ *jobHandle) { job.Labels[clusterLabel] = "other" },
+		"unowned namespace": func(_ *batchv1.Job, handle *jobHandle) {
+			handle.namespace = "other-runs"
+		},
+		"unexpected name": func(_ *batchv1.Job, handle *jobHandle) { handle.name = "other-job" },
+	}
+	operations := map[string]func(*kubernetesRunJobs, jobHandle) error{
+		"observe": func(jobs *kubernetesRunJobs, handle jobHandle) error {
+			_, err := jobs.Observe(context.Background(), handle)
+			return err
+		},
+		"log": func(jobs *kubernetesRunJobs, handle jobHandle) error {
+			_, err := jobs.OpenLog(context.Background(), handle, false)
+			return err
+		},
+		"cancel": func(jobs *kubernetesRunJobs, handle jobHandle) error {
+			_, err := jobs.RequestCancellation(context.Background(), api.CancelRunCommand{
+				ID: handle.runID, JobNamespace: api.CatalogName(handle.namespace), JobUID: new(handle.uid),
+			})
+			return err
+		},
+		"delete": func(jobs *kubernetesRunJobs, handle jobHandle) error {
+			return jobs.Delete(context.Background(), handle)
+		},
+	}
+
+	for changeName, change := range changes {
+		for operationName, operation := range operations {
+			if changeName == "unexpected name" && operationName == "cancel" {
+				continue // Cancellation derives the Job name from the Run ID.
+			}
+			t.Run(changeName+"/"+operationName, func(t *testing.T) {
+				t.Parallel()
+				assignment := testRunAssignment(t)
+				job := testExecutionJob(t, assignment)
+				handle := handleFromJob(job, assignment.ID)
+				change(job, &handle)
+				client := fake.NewClientset(job)
+				jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
+
+				if err := operation(jobs, handle); !errors.Is(err, errRunJobIdentityMismatch) {
+					t.Fatalf("operation error = %v, want identity mismatch", err)
+				}
+				for _, action := range client.Actions() {
+					if action.GetVerb() == "delete" || action.GetVerb() == "update" || action.GetSubresource() == "log" {
+						t.Fatalf("identity mismatch allowed action %s %s", action.GetVerb(), action.GetResource().Resource)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestKubernetesRunJobsRejectsPodWithConflictingOwner(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	job := testExecutionJob(t, assignment)
+	pod := testExecutionPod(job)
+	pod.OwnerReferences[0].UID = "other-job-uid"
+	client := fake.NewClientset(job, pod)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
+	handle := handleFromJob(job, assignment.ID)
+
+	_, err := jobs.Observe(context.Background(), handle)
+	if !errors.Is(err, errRunJobIdentityMismatch) {
+		t.Fatalf("Observe() error = %v, want identity mismatch", err)
+	}
+	_, err = jobs.OpenLog(context.Background(), handle, false)
+	if !errors.Is(err, errRunJobIdentityMismatch) {
+		t.Fatalf("OpenLog() error = %v, want identity mismatch", err)
+	}
+	_, err = jobs.RequestCancellation(context.Background(), api.CancelRunCommand{
+		ID: assignment.ID, JobNamespace: assignment.Placement.JobNamespace,
+	})
+	if !errors.Is(err, errRunJobIdentityMismatch) {
+		t.Fatalf("RequestCancellation() error = %v, want identity mismatch", err)
+	}
+	for _, action := range client.Actions() {
+		if action.GetVerb() == "delete" || action.GetVerb() == "update" || action.GetSubresource() == "log" {
+			t.Fatalf("conflicting Pod owner allowed action %s %s", action.GetVerb(), action.GetResource().Resource)
+		}
+	}
+}
+
+func TestKubernetesRunJobsSelectsPodsByPinnedJobUID(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	job := testExecutionJob(t, assignment)
+	pod := testExecutionPod(job)
+	pod.CreationTimestamp = metav1.Now()
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: actionContainerName,
+		State: corev1.ContainerState{
+			Running: &corev1.ContainerStateRunning{},
+		},
+	}}
+	oldPod := testExecutionPod(job)
+	oldPod.Name = "old-pod"
+	oldPod.Labels[batchv1.ControllerUidLabel] = "old-job-uid"
+	oldPod.OwnerReferences[0].UID = "old-job-uid"
+	oldPod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name: actionContainerName,
+		State: corev1.ContainerState{
+			Waiting: &corev1.ContainerStateWaiting{},
+		},
+	}}
+	client := fake.NewClientset(job, pod, oldPod)
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
+	handle := handleFromJob(job, assignment.ID)
+
+	observation, err := jobs.Observe(context.Background(), handle)
+	if err != nil || observation.phase != api.RunObservationPhaseRunning {
+		t.Fatalf("Observe() = %#v, %v; want running", observation, err)
+	}
+	stream, err := jobs.OpenLog(context.Background(), handle, false)
+	if err != nil {
+		t.Fatalf("OpenLog() error = %v", err)
+	}
+	defer func() { _ = stream.Close() }()
+	contents, err := io.ReadAll(stream)
+	if err != nil || string(contents) != "fake logs" {
+		t.Fatalf("read logs = %q, %v", contents, err)
+	}
+	result, err := jobs.RequestCancellation(context.Background(), api.CancelRunCommand{
+		ID: assignment.ID, JobNamespace: assignment.Placement.JobNamespace,
+	})
+	if err != nil || !result.jobRetained || result.handle.uid != string(job.UID) {
+		t.Fatalf("RequestCancellation() = %#v, %v", result, err)
+	}
+	for _, expected := range []*corev1.Pod{pod, oldPod} {
+		got, err := client.CoreV1().Pods(job.Namespace).Get(context.Background(), expected.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("get Pod: %v", err)
+		}
+		if (got.Annotations[cancellationAnnotation] == "true") != (expected.Name == pod.Name) {
+			t.Errorf("Pod %s cancellation annotation = %#v", got.Name, got.Annotations)
+		}
+	}
+}
+
+func TestKubernetesRunJobsReadsPinnedPodLogAfterJobDisappears(t *testing.T) {
+	t.Parallel()
+
+	assignment := testRunAssignment(t)
+	job := testExecutionJob(t, assignment)
+	client := fake.NewClientset(testExecutionPod(job))
+	jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
+	stream, err := jobs.OpenLog(context.Background(), handleFromJob(job, assignment.ID), false)
+	if err != nil {
+		t.Fatalf("OpenLog() error = %v", err)
+	}
+	defer func() { _ = stream.Close() }()
+	contents, err := io.ReadAll(stream)
+	if err != nil || string(contents) != "fake logs" {
+		t.Fatalf("read logs = %q, %v", contents, err)
+	}
+}
+
+func testExecutionJob(t *testing.T, assignment api.RunAssignment) *batchv1.Job {
+	t.Helper()
+
+	job, err := renderJob(validConfig(), assignment)
+	if err != nil {
+		t.Fatalf("renderJob() error = %v", err)
+	}
+	job.UID = "job-uid"
+
+	return job
+}
+
+func testExecutionPod(job *batchv1.Job) *corev1.Pod {
+	pod := &corev1.Pod{}
+	pod.Name = "run-pod"
+	pod.Namespace = job.Namespace
+	pod.Labels = maps.Clone(job.Labels)
+	pod.Labels[batchv1.JobNameLabel] = job.Name
+	pod.Labels[batchv1.ControllerUidLabel] = string(job.UID)
+	pod.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "batch/v1", Kind: "Job", Name: job.Name, UID: job.UID, Controller: new(true),
+	}}
+
+	return pod
 }

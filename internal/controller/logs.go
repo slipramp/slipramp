@@ -41,6 +41,9 @@ func (c *Controller) startLogSession(ctx context.Context, handle jobHandle, foll
 		if streamErr == nil && closeErr != nil {
 			streamErr = fmt.Errorf("close execution log stream: %w", closeErr)
 		}
+		if errors.Is(streamErr, errControllerCredentialRejected) && c.stop != nil {
+			c.stop(streamErr)
+		}
 		result <- logStreamResult{summary: summary, err: streamErr}
 	}()
 
@@ -115,7 +118,7 @@ func (c *Controller) getLogCursor(ctx context.Context, runID uuid.UUID) (logCurs
 		if err == nil {
 			return cursor, nil
 		}
-		if permanentLogError(err) {
+		if permanentServerError(err) {
 			return logCursor{}, err
 		}
 		if !waitForRetry(ctx, c.retryDelay) {
@@ -130,7 +133,7 @@ func (c *Controller) appendLogChunk(ctx context.Context, runID uuid.UUID, offset
 		if err == nil {
 			return nil
 		}
-		if permanentLogError(err) {
+		if permanentServerError(err) {
 			return err
 		}
 		if !waitForRetry(ctx, c.retryDelay) {
@@ -149,18 +152,13 @@ func (c *Controller) sealLog(ctx context.Context, runID uuid.UUID, summary logSu
 		if err == nil {
 			return nil
 		}
-		if permanentLogError(err) {
+		if permanentServerError(err) {
 			return err
 		}
 		if !waitForRetry(ctx, c.retryDelay) {
 			return ctx.Err()
 		}
 	}
-}
-
-func permanentLogError(err error) bool {
-	return errors.Is(err, errControllerCredentialRejected) ||
-		isUnknownRunRejection(err)
 }
 
 func emptyLogSummary() logSummary {

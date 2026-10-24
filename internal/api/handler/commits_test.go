@@ -108,6 +108,44 @@ func TestListCommitsReturnsIndexedHistory(t *testing.T) {
 	}
 }
 
+func TestGetCommitReturnsKnownCommit(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	sha := "0123456789abcdef0123456789abcdef01234567"
+	title := "Add commit detail"
+	service := &recordingCommitService{
+		item: repository.IndexedCommit{
+			RepositoryID:   repositoryID,
+			RepositoryName: "infrastructure",
+			Commit: repository.Commit{
+				RepositoryID: repositoryID,
+				SHA:          sha,
+				Title:        &title,
+			},
+		},
+	}
+	handler := Handler{commits: service}
+
+	response, err := handler.GetCommit(t.Context(), api.GetCommitRequestObject{
+		RepositoryID: repositoryID,
+		CommitSha:    sha,
+	})
+	if err != nil {
+		t.Fatalf("GetCommit() error = %v", err)
+	}
+
+	result, ok := response.(api.GetCommit200JSONResponse)
+	if !ok {
+		t.Fatalf("response = %#v", response)
+	}
+	if service.key.RepositoryID != repositoryID || service.key.SHA != sha ||
+		result.RepositoryID != repositoryID || result.RepositoryName != "infrastructure" ||
+		result.Commit.Sha != sha || result.Commit.Title == nil || *result.Commit.Title != title {
+		t.Errorf("response = %#v, key = %#v", result, service.key)
+	}
+}
+
 type staticCommitService map[repository.CommitKey]repository.Commit
 
 func (s staticCommitService) ListCommits(
@@ -115,6 +153,18 @@ func (s staticCommitService) ListCommits(
 	_ []repository.CommitKey,
 ) (map[repository.CommitKey]repository.Commit, error) {
 	return s, nil
+}
+
+func (s staticCommitService) GetCommit(
+	_ context.Context,
+	key repository.CommitKey,
+) (repository.IndexedCommit, error) {
+	commit, ok := s[key]
+	if !ok {
+		return repository.IndexedCommit{}, repository.ErrCommitNotFound
+	}
+
+	return repository.IndexedCommit{RepositoryID: key.RepositoryID, Commit: commit}, nil
 }
 
 func (staticCommitService) ListCommitHistory(
@@ -127,6 +177,9 @@ func (staticCommitService) ListCommitHistory(
 type recordingCommitService struct {
 	filter repository.CommitHistoryFilter
 	page   repository.CommitHistoryPage
+	key    repository.CommitKey
+	item   repository.IndexedCommit
+	err    error
 }
 
 func (*recordingCommitService) ListCommits(
@@ -134,6 +187,15 @@ func (*recordingCommitService) ListCommits(
 	[]repository.CommitKey,
 ) (map[repository.CommitKey]repository.Commit, error) {
 	return nil, nil
+}
+
+func (s *recordingCommitService) GetCommit(
+	_ context.Context,
+	key repository.CommitKey,
+) (repository.IndexedCommit, error) {
+	s.key = key
+
+	return s.item, s.err
 }
 
 func (s *recordingCommitService) ListCommitHistory(

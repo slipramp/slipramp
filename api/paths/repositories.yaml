@@ -342,6 +342,75 @@ repositoryCommits:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+repositoryCommit:
+  get:
+    operationId: getCommit
+    summary: Get a known commit
+    description: >-
+      Gets a commit known to Slipramp for an active repository. Known commits
+      include indexed branch history and commits referenced by product state.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Repositories
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: commitSha
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^(?:[0-9a-f]{40}|[0-9a-f]{64})$'
+    responses:
+      "200":
+        description: The known commit and its repository.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/RepositoryCommit
+      "400":
+        description: The repository ID or commit SHA is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The active repository or known commit does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The commit could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 failedGitTriggerDeliveries:
   get:
     operationId: listFailedGitTriggerDeliveries

@@ -79,8 +79,12 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
     items: [
       { icon: IconFolder, label: "Projects", to: "/promotion-projects" },
       { icon: IconRocket, label: "Promotions", to: "/promotions" },
-      { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines" },
-      { icon: IconArrowsDiff, label: "Branch drift", to: "/promotion-branch-drift" },
+      { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines?status=different" },
+      {
+        icon: IconArrowsDiff,
+        label: "Branch drift",
+        to: "/promotion-branch-drift?status=drifted",
+      },
       { icon: IconShieldCheck, label: "Stage policies", to: "/promotion-stages" },
     ],
     label: "Promote",
@@ -167,9 +171,9 @@ export function ProductShell({
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar className="product-navbar" p="md">
+      <AppShell.Navbar className="product-navbar" p="sm">
         <AppShell.Section component={ScrollArea} grow>
-          <Stack gap="lg">
+          <Stack gap="md">
             {navigationGroups.map((group) => (
               <NavigationGroup
                 closeMobile={() => setMobileOpened(false)}
@@ -202,8 +206,8 @@ export function ProductShell({
 
         {principal ? (
           <AppShell.Section>
-            <Divider mb="md" />
-            <Stack gap="sm">
+            <Divider mb="sm" />
+            <Stack gap="xs">
               <Group justify="space-between" wrap="nowrap">
                 <Identity
                   avatarSize={30}
@@ -232,7 +236,7 @@ export function ProductShell({
         ) : null}
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main className="product-main">
         <Box className="page-surface">
           <Box className="page-content">{children}</Box>
           <PerformanceFooter />
@@ -252,16 +256,19 @@ function NavigationGroup({
   const location = useLocation();
 
   return (
-    <Stack gap={6}>
+    <Stack gap={4}>
       <Text c="dimmed" className="navigation-label" fw={700} size="xs" tt="uppercase">
         {group.label}
       </Text>
       {group.items.map((item) => {
         const ItemIcon = item.icon;
+        const queryIndex = item.to.indexOf("?");
+        const itemPathname = queryIndex === -1 ? item.to : item.to.slice(0, queryIndex);
         const active =
-          item.to === "/"
+          itemPathname === "/"
             ? location.pathname === "/"
-            : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
+            : location.pathname === itemPathname ||
+              location.pathname.startsWith(`${itemPathname}/`);
 
         return (
           <NavLink
@@ -271,8 +278,8 @@ function NavigationGroup({
             key={item.to}
             label={item.label}
             leftSection={
-              <ThemeIcon size={30} variant={active ? "filled" : "light"}>
-                <ItemIcon size={18} stroke={1.9} />
+              <ThemeIcon size={28} variant={active ? "filled" : "light"}>
+                <ItemIcon size={17} stroke={1.9} />
               </ThemeIcon>
             }
             onClick={closeMobile}

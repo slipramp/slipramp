@@ -226,8 +226,17 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
               → {promotion.targetBranch}
             </Text>
             <Text c="dimmed" size="xs">
-              <CommitReference commit={promotion.baseCommit} length={10} /> →{" "}
-              <CommitReference commit={promotion.candidateCommit} length={10} />
+              <CommitReference
+                commit={promotion.baseCommit}
+                length={10}
+                repositoryId={promotion.repositoryId}
+              />{" "}
+              →{" "}
+              <CommitReference
+                commit={promotion.candidateCommit}
+                length={10}
+                repositoryId={promotion.repositoryId}
+              />
             </Text>
           </Stack>
         ) : (

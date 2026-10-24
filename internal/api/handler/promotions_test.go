@@ -479,6 +479,8 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 	now := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1904")
 	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1905")
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1906")
+	commitSHA := "f4cb21a88e1d0000000000000000000000000000"
 	reviews := &recordingPromotionReviewService{
 		promotions: promotion.PromotionReviewList{
 			Items: []promotion.PromotionReview{{Promotion: promotion.Promotion{
@@ -488,7 +490,7 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 				ExternalPromotionID:    "external-dns-01jbe4q8",
 				StageID:                stageID,
 				StageSnapshot:          []byte(`{"project":"kargo-core","name":"external-dns-prod","application":"external-dns"}`),
-				RepositoryID:           uuid.New(),
+				RepositoryID:           repositoryID,
 				RepositorySnapshot:     []byte(`{"name":"ops"}`),
 				BaseRevision:           "8b7f1d217a6b0000000000000000000000000000",
 				CandidateRevision:      "f4cb21a88e1d0000000000000000000000000000",
@@ -531,7 +533,8 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		t.Context(),
 		http.MethodGet,
 		"/api/v1/promotions?status=pending&integration=prod&cluster=colo&project=kargo-core&application=external-dns&stageId="+
-			stageID.String()+"&limit=10&offset=2",
+			stageID.String()+"&repositoryId="+repositoryID.String()+"&commitSha="+commitSHA+
+			"&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -543,6 +546,9 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
 	}
 	if reviews.promotionFilter.Status != promotion.StatusPending ||
+		reviews.promotionFilter.RepositoryID == nil ||
+		*reviews.promotionFilter.RepositoryID != repositoryID ||
+		reviews.promotionFilter.CommitSHA != commitSHA ||
 		reviews.promotionFilter.Integration != "prod" || reviews.promotionFilter.Cluster != "colo" ||
 		reviews.promotionFilter.Project != "kargo-core" ||
 		reviews.promotionFilter.Application != "external-dns" || reviews.promotionFilter.StageID == nil ||

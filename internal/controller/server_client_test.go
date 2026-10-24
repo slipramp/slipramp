@@ -363,45 +363,56 @@ func TestServerClientAppendsAuthenticatedRunLogChunk(t *testing.T) {
 	}
 }
 
-func TestServerClientReturnsSealedLogCursor(t *testing.T) {
+func TestServerClientReturnsTerminalLogCursor(t *testing.T) {
 	t.Parallel()
 
-	digest := strings.Repeat("a", 64)
-	client, err := newServerClientWithHTTPClient(
-		validConfig(),
-		httpDoerFunc(func(*http.Request) (*http.Response, error) {
-			body := fmt.Sprintf(
-				`{"nextOffsetBytes":12,"state":"sealed","sha256":%q}`,
-				digest,
+	for _, state := range []string{"sealed", "failed"} {
+		t.Run(state, func(t *testing.T) {
+			t.Parallel()
+
+			digest := strings.Repeat("a", 64)
+			client, err := newServerClientWithHTTPClient(
+				validConfig(),
+				httpDoerFunc(func(*http.Request) (*http.Response, error) {
+					body := fmt.Sprintf(
+						`{"nextOffsetBytes":12,"state":%q,"sha256":%q}`,
+						state, digest,
+					)
+
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header:     http.Header{"Content-Type": []string{"application/json"}},
+						Body:       io.NopCloser(strings.NewReader(body)),
+					}, nil
+				}),
 			)
+			if err != nil {
+				t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+			}
 
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-				Body:       io.NopCloser(strings.NewReader(body)),
-			}, nil
-		}),
-	)
-	if err != nil {
-		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
-	}
-
-	cursor, err := client.GetLogCursor(context.Background(), uuid.New())
-	if err != nil {
-		t.Fatalf("GetLogCursor() error = %v", err)
-	}
-	if cursor.nextOffsetBytes != 12 || !cursor.sealed || cursor.sha256 != digest {
-		t.Errorf("log cursor = %#v", cursor)
+			cursor, err := client.GetLogCursor(context.Background(), uuid.New())
+			if state == "failed" {
+				if !permanentServerError(err) {
+					t.Fatalf("GetLogCursor() error = %v, want permanent failed-log result", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("GetLogCursor() error = %v", err)
+			}
+			if cursor.nextOffsetBytes != 12 || !cursor.sealed || cursor.sha256 != digest {
+				t.Errorf("log cursor = %#v", cursor)
+			}
+		})
 	}
 }
 
-func TestServerClientPreservesUnknownRunStatus(t *testing.T) {
+func TestServerClientClassifiesFailures(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name string
 		call func(*serverClient) error
-		want error
 	}{
 		{
 			name: "log cursor",
@@ -410,7 +421,6 @@ func TestServerClientPreservesUnknownRunStatus(t *testing.T) {
 
 				return err
 			},
-			want: errRunLogRejected,
 		},
 		{
 			name: "observation",
@@ -421,35 +431,49 @@ func TestServerClientPreservesUnknownRunStatus(t *testing.T) {
 					api.RunObservation{Phase: api.RunObservationPhaseRunning},
 				)
 			},
-			want: errRunObservationRejected,
 		},
 	}
 
+	outcomes := []struct {
+		status    int
+		kind      serverFailureKind
+		permanent bool
+	}{
+		{http.StatusBadRequest, serverFailureInvalidRequest, true},
+		{http.StatusUnauthorized, serverFailureAuthentication, true},
+		{http.StatusNotFound, serverFailureNotFound, true},
+		{http.StatusConflict, serverFailureConflict, true},
+		{http.StatusRequestEntityTooLarge, serverFailureInvalidRequest, true},
+		{http.StatusRequestTimeout, serverFailureRetryable, false},
+		{http.StatusTooManyRequests, serverFailureRetryable, false},
+		{http.StatusServiceUnavailable, serverFailureRetryable, false},
+	}
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
+		for _, outcome := range outcomes {
+			t.Run(fmt.Sprintf("%s/%d", test.name, outcome.status), func(t *testing.T) {
+				t.Parallel()
 
-			client, err := newServerClientWithHTTPClient(
-				validConfig(),
-				httpDoerFunc(func(*http.Request) (*http.Response, error) {
-					return &http.Response{
-						StatusCode: http.StatusNotFound,
-						Body:       io.NopCloser(strings.NewReader("")),
-					}, nil
-				}),
-			)
-			if err != nil {
-				t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
-			}
+				client, err := newServerClientWithHTTPClient(
+					validConfig(),
+					httpDoerFunc(func(*http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: outcome.status,
+							Body:       io.NopCloser(strings.NewReader("")),
+						}, nil
+					}),
+				)
+				if err != nil {
+					t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+				}
 
-			err = test.call(client)
-			if !errors.Is(err, test.want) {
-				t.Fatalf("error = %v, want %v", err, test.want)
-			}
-			statusCode, ok := serverResponseStatusCode(err)
-			if !ok || statusCode != http.StatusNotFound {
-				t.Errorf("HTTP status = %d, %t; want 404, true", statusCode, ok)
-			}
-		})
+				err = test.call(client)
+				var responseError *serverResponseError
+				if !errors.As(err, &responseError) || responseError.kind != outcome.kind ||
+					responseError.statusCode != outcome.status || permanentServerError(err) != outcome.permanent {
+					t.Fatalf("error = %v, want HTTP %d %s, permanent %t", err,
+						outcome.status, outcome.kind, outcome.permanent)
+				}
+			})
+		}
 	}
 }

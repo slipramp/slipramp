@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -158,12 +159,51 @@ func TestControllerRejectsInvalidCredentials(t *testing.T) {
 	}
 }
 
+func TestControllerInterruptsPollAfterWorkerAuthenticationFailure(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	handle := jobHandle{runID: uuid.New(), namespace: "slipramp-runs", uid: "job-uid"}
+	handle.name = runJobName(handle.runID)
+	polling := make(chan struct{})
+	jobs := &stubRunJobs{
+		recover: func(context.Context) ([]jobHandle, error) { return []jobHandle{handle}, nil },
+		observe: func(context.Context, jobHandle) (runObservation, error) {
+			return runObservation{phase: api.RunObservationPhaseRunning, jobUID: &handle.uid}, nil
+		},
+	}
+	app := newTestController(jobs, &memoryLogReporter{})
+	app.server = commandPollerFunc(func(ctx context.Context) (*api.ControllerCommand, error) {
+		close(polling)
+		<-ctx.Done()
+
+		return nil, ctx.Err()
+	})
+	app.reports = runObservationReporterFunc(func(ctx context.Context, _ uuid.UUID, _ api.RunObservation) error {
+		select {
+		case <-polling:
+			return newServerResponseError("report Run observation", 401)
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+
+	if err := app.Run(ctx); !errors.Is(err, errControllerCredentialRejected) {
+		t.Fatalf("Run() error = %v, want credential rejection", err)
+	}
+	if ctx.Err() != nil {
+		t.Fatal("Controller waited for the parent deadline instead of interrupting polling")
+	}
+}
+
 func TestControllerReportsMaterializationFailureWithSealedEmptyLog(t *testing.T) {
 	t.Parallel()
 
 	runID := uuid.New()
-	logs := &memoryLogReporter{}
+	logs := &memoryLogReporter{sealErrors: []error{errors.New("storage unavailable")}}
 	var reported api.RunObservation
+	reportAttempts := 0
 	jobs := &stubRunJobs{ensure: func(context.Context, api.RunAssignment) (ensuredRunJob, error) {
 		return ensuredRunJob{}, permanentMaterialization(errors.New("invalid Job"))
 	}}
@@ -176,6 +216,10 @@ func TestControllerReportsMaterializationFailureWithSealedEmptyLog(t *testing.T)
 		if !logs.isSealed() {
 			t.Error("materialization failure reported before its empty log was sealed")
 		}
+		reportAttempts++
+		if reportAttempts == 1 {
+			return errors.New("response lost")
+		}
 		reported = observation
 
 		return nil
@@ -184,6 +228,7 @@ func TestControllerReportsMaterializationFailureWithSealedEmptyLog(t *testing.T)
 	if err := app.handleAssignment(context.Background(), api.RunAssignment{ID: runID}); err != nil {
 		t.Fatalf("handleAssignment() error = %v", err)
 	}
+	app.runWorkers.Wait()
 	if reported.Outcome == nil ||
 		*reported.Outcome != api.RunObservationOutcomeFailed ||
 		reported.Reason == nil || *reported.Reason != "MaterializationFailed" {
@@ -191,6 +236,62 @@ func TestControllerReportsMaterializationFailureWithSealedEmptyLog(t *testing.T)
 	}
 	if contents := logs.bytes(); len(contents) != 0 {
 		t.Errorf("materialization log = %q, want empty", contents)
+	}
+}
+
+func TestControllerPollsWhileRunWorkerIsBusy(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	runID := uuid.New()
+	started := make(chan struct{})
+	var ensureCalls atomic.Int32
+	jobs := &stubRunJobs{ensure: func(ctx context.Context, _ api.RunAssignment) (ensuredRunJob, error) {
+		if ensureCalls.Add(1) == 1 {
+			close(started)
+		}
+		<-ctx.Done()
+
+		return ensuredRunJob{}, ctx.Err()
+	}}
+	app := newTestController(jobs, &memoryLogReporter{})
+	polls := 0
+	app.server = commandPollerFunc(func(ctx context.Context) (*api.ControllerCommand, error) {
+		polls++
+		if polls == 1 {
+			return &api.ControllerCommand{
+				Type:       api.ControllerCommandTypeRunAssignment,
+				Assignment: &api.RunAssignment{ID: runID},
+			}, nil
+		}
+		select {
+		case <-started:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		if polls == 2 {
+			return &api.ControllerCommand{
+				Type:       api.ControllerCommandTypeRunAssignment,
+				Assignment: &api.RunAssignment{ID: runID},
+			}, nil
+		}
+		if polls < 6 {
+			return &api.ControllerCommand{
+				Type:   api.ControllerCommandTypeCancelRun,
+				Cancel: &api.CancelRunCommand{ID: runID, JobNamespace: "slipramp-runs"},
+			}, nil
+		}
+		cancel()
+
+		return nil, ctx.Err()
+	})
+
+	if err := app.Run(ctx); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if polls != 6 || ensureCalls.Load() != 1 {
+		t.Fatalf("polls = %d, materializations = %d; want 6, 1", polls, ensureCalls.Load())
 	}
 }
 
@@ -219,6 +320,11 @@ func TestControllerCompletesRunInLifecycleOrder(t *testing.T) {
 	index := 0
 	deleted := false
 	jobs := &stubRunJobs{
+		ensure: func(context.Context, api.RunAssignment) (ensuredRunJob, error) {
+			t.Error("late assignment rematerialized the completed Run")
+
+			return ensuredRunJob{}, errors.New("unexpected materialization")
+		},
 		observe: func(context.Context, jobHandle) (runObservation, error) {
 			mutex.Lock()
 			defer mutex.Unlock()
@@ -261,8 +367,12 @@ func TestControllerCompletesRunInLifecycleOrder(t *testing.T) {
 		return nil
 	})
 
-	app.startRunObserver(context.Background(), handle, nil)
-	app.observers.Wait()
+	app.startRunWorker(context.Background(), handle, nil, nil)
+	app.runWorkers.Wait()
+	if err := app.handleAssignment(context.Background(), api.RunAssignment{ID: runID}); err != nil {
+		t.Fatalf("late handleAssignment() error = %v", err)
+	}
+	app.runWorkers.Wait()
 
 	if got := string(logs.bytes()); got != "complete log\n" {
 		t.Errorf("durable log = %q", got)
@@ -304,8 +414,8 @@ func TestControllerCompletesRunWhoseActionNeverStarted(t *testing.T) {
 	logs := &memoryLogReporter{}
 	app := newTestController(jobs, logs)
 
-	app.startRunObserver(context.Background(), handle, nil)
-	app.observers.Wait()
+	app.startRunWorker(context.Background(), handle, nil, nil)
+	app.runWorkers.Wait()
 
 	if !logs.isSealed() || len(logs.bytes()) != 0 {
 		t.Error("empty terminal log was not sealed")
@@ -350,7 +460,10 @@ func TestControllerCancellationDrainsLogBeforeReporting(t *testing.T) {
 
 			return reader, nil
 		},
-		requestCancellation: func(context.Context, api.CancelRunCommand) (cancellationResult, error) {
+		requestCancellation: func(_ context.Context, command api.CancelRunCommand) (cancellationResult, error) {
+			if command.JobUID == nil || *command.JobUID != handle.uid {
+				t.Error("cancellation did not retain the worker's pinned Job UID")
+			}
 			if _, err := io.WriteString(writer, "during shutdown\n"); err != nil {
 				return cancellationResult{}, err
 			}
@@ -378,7 +491,7 @@ func TestControllerCancellationDrainsLogBeforeReporting(t *testing.T) {
 		return nil
 	})
 
-	observer := app.startRunObserver(context.Background(), handle, nil)
+	observer := app.startRunWorker(context.Background(), handle, nil, nil)
 	select {
 	case <-streamOpened:
 	case <-time.After(2 * time.Second):
@@ -391,7 +504,6 @@ func TestControllerCancellationDrainsLogBeforeReporting(t *testing.T) {
 	command := api.CancelRunCommand{
 		ID:           runID,
 		JobNamespace: api.CatalogName(handle.namespace),
-		JobUID:       &handle.uid,
 	}
 	if err := app.handleCancellation(context.Background(), command); err != nil {
 		t.Fatalf("handleCancellation() error = %v", err)
@@ -458,7 +570,7 @@ func TestControllerCancellationWinsBeforeMaterialization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleCancellation() error = %v", err)
 	}
-	app.observers.Wait()
+	app.runWorkers.Wait()
 
 	if observeCalls != 0 {
 		t.Errorf("Kubernetes observations = %d, want 0", observeCalls)
@@ -472,45 +584,55 @@ func TestControllerCancellationWinsBeforeMaterialization(t *testing.T) {
 	}
 }
 
-func TestControllerLeavesJobWhenServerDoesNotOwnRun(t *testing.T) {
+func TestControllerRetainsJobAfterPermanentLogRejection(t *testing.T) {
 	t.Parallel()
 
-	runID := uuid.New()
-	handle := jobHandle{
-		runID:     runID,
-		namespace: "slipramp-runs",
-		name:      runJobName(runID),
-		uid:       "job-uid",
-	}
-	succeeded := api.RunObservationOutcomeSucceeded
-	deleteCalls := 0
-	jobs := &stubRunJobs{
-		observe: func(context.Context, jobHandle) (runObservation, error) {
-			return runObservation{
-				phase:   api.RunObservationPhaseFinished,
-				outcome: &succeeded,
-				jobUID:  &handle.uid,
-			}, nil
-		},
-		openLog: func(context.Context, jobHandle, bool) (io.ReadCloser, error) {
-			return io.NopCloser(strings.NewReader("orphan log\n")), nil
-		},
-		delete: func(context.Context, jobHandle) error {
-			deleteCalls++
+	for _, status := range []int{400, 404, 409, 413} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			t.Parallel()
 
-			return nil
-		},
-	}
-	logs := &memoryLogReporter{cursorErrors: []error{
-		rejectedServerResponse("get Run log cursor", 404, errRunLogRejected),
-	}}
-	app := newTestController(jobs, logs)
+			runID := uuid.New()
+			handle := jobHandle{
+				runID:     runID,
+				namespace: "slipramp-runs",
+				name:      runJobName(runID),
+				uid:       "job-uid",
+			}
+			succeeded := api.RunObservationOutcomeSucceeded
+			deleteCalls := 0
+			jobs := &stubRunJobs{
+				observe: func(context.Context, jobHandle) (runObservation, error) {
+					return runObservation{
+						phase:   api.RunObservationPhaseFinished,
+						outcome: &succeeded,
+						jobUID:  &handle.uid,
+					}, nil
+				},
+				openLog: func(context.Context, jobHandle, bool) (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("orphan log\n")), nil
+				},
+				delete: func(context.Context, jobHandle) error {
+					deleteCalls++
 
-	app.startRunObserver(context.Background(), handle, nil)
-	app.observers.Wait()
+					return nil
+				},
+			}
+			logs := &memoryLogReporter{cursorErrors: []error{
+				newServerResponseError("get Run log cursor", status),
+			}}
+			app := newTestController(jobs, logs)
 
-	if deleteCalls != 0 {
-		t.Errorf("Job deletion calls = %d, want 0", deleteCalls)
+			app.startRunWorker(context.Background(), handle, nil, nil)
+			app.runWorkers.Wait()
+
+			if deleteCalls != 0 {
+				t.Errorf("Job deletion calls = %d, want 0", deleteCalls)
+			}
+			app.reapRunWorkers()
+			if app.activeRuns[runID] == nil {
+				t.Error("blocked Run was released for repeated assignment")
+			}
+		})
 	}
 }
 
@@ -526,6 +648,6 @@ func newTestController(jobs runJobs, logs runLogReporter) *Controller {
 		observeEvery:   time.Millisecond,
 		heartbeatEvery: time.Hour,
 		now:            time.Now,
-		observedRuns:   make(map[uuid.UUID]*runObserver),
+		activeRuns:     make(map[uuid.UUID]*runWorker),
 	}
 }
