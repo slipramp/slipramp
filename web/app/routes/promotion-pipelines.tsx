@@ -4,12 +4,10 @@ import {
   Badge,
   Code,
   Group,
-  NativeSelect,
   Paper,
   SimpleGrid,
   Stack,
   Text,
-  TextInput,
   ThemeIcon,
   Title,
   Tooltip,
@@ -22,7 +20,7 @@ import { listPromotionPipelines, type PromotionPipeline } from "~/api/generated"
 import { KargoLink } from "~/components/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
-import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
+import { promotionScopeFilters } from "~/components/promotion-scope-filters";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
 import {
@@ -48,6 +46,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const integration = optionalValue(url.searchParams.get("integration"));
   const project = optionalValue(url.searchParams.get("project"));
   const application = optionalValue(url.searchParams.get("application"));
+  const cluster = optionalValue(url.searchParams.get("cluster"));
   const repository = optionalValue(url.searchParams.get("repository"));
   const status = optionalFreightStatus(url.searchParams.get("status"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
@@ -55,6 +54,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     client: createServerAPIClient(request, context),
     query: {
       application,
+      cluster,
       integration,
       limit: pageSize,
       offset: (requestedPage - 1) * pageSize,
@@ -75,6 +75,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   return {
     application,
     available: result.data !== undefined,
+    cluster,
     error: result.error?.detail ?? result.error?.title,
     integration,
     page: requestedPage,
@@ -96,6 +97,7 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
 
       <PipelineFilters
         application={loaderData.application}
+        cluster={loaderData.cluster}
         integration={loaderData.integration}
         project={loaderData.project}
         repository={loaderData.repository}
@@ -135,45 +137,52 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
 
 function PipelineFilters({
   application,
+  cluster,
   integration,
   project,
   repository,
   status,
 }: Readonly<{
   application?: string;
+  cluster?: string;
   integration?: string;
   project?: string;
   repository?: string;
   status?: FreightComparisonStatus;
 }>) {
-  const active = Boolean(application || integration || project || repository || status);
-
   return (
-    <SearchParamFilters active={active} clearTo="/promotion-pipelines">
-      <PromotionScopeFilters
-        application={application}
-        integration={integration}
-        project={project}
-      />
-      <NativeSelect
-        defaultValue={status ?? ""}
-        label="Status"
-        name="status"
-        data={[
-          { label: "All statuses", value: "" },
-          { label: "Equal", value: "equal" },
-          { label: "Different", value: "different" },
-        ]}
-        style={{ flex: "1 1 160px" }}
-      />
-      <TextInput
-        defaultValue={repository}
-        label="Repository"
-        name="repository"
-        style={{ flex: "1 1 160px" }}
-        type="search"
-      />
-    </SearchParamFilters>
+    <SearchParamFilters
+      clearTo="/promotion-pipelines"
+      filters={[
+        ...promotionScopeFilters({ application, integration, project }),
+        {
+          active: Boolean(cluster),
+          kind: "text",
+          label: "Cluster",
+          name: "cluster",
+          value: cluster,
+        },
+        {
+          active: Boolean(status),
+          data: [
+            { label: "All statuses", value: "" },
+            { label: "Equal", value: "equal" },
+            { label: "Different", value: "different" },
+          ],
+          kind: "select",
+          label: "Status",
+          name: "status",
+          value: status,
+        },
+        {
+          active: Boolean(repository),
+          kind: "text",
+          label: "Repository",
+          name: "repository",
+          value: repository,
+        },
+      ]}
+    />
   );
 }
 
@@ -363,9 +372,13 @@ function FreightArtifactCard({
 }
 
 function pipelineKey(pipeline: PromotionPipeline) {
-  return [pipeline.integration, pipeline.repository, pipeline.project, pipeline.application].join(
-    "/",
-  );
+  return [
+    pipeline.integration,
+    pipeline.cluster,
+    pipeline.repository,
+    pipeline.project,
+    pipeline.application,
+  ].join("/");
 }
 
 function optionalValue(value: string | null) {

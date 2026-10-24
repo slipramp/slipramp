@@ -574,9 +574,10 @@ tag publishes matching application images and versioned OCI charts to GHCR
 with tag/chart/application/image versions required to agree.
 
 Formatting, linting, strict type checks, generated-output freshness, unit/race,
-PostgreSQL/S3 integration, chart render/package checks, builds, and disposable
-kind acceptance run in CI. Versions are pinned and warnings fail. Go uses
-golangci-lint v2; frontend uses Oxlint and Oxfmt. Existing kind acceptance covers
-execution and automatic/guarded Kargo preparation through real artifact
-uploads, including empty Git diffs; broader failure and live cutover coverage
-remains on the [roadmap](./ROADMAP.md).
+PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.
+Versions are pinned and warnings fail. Go uses golangci-lint v2; frontend uses
+Oxlint and Oxfmt. Disposable kind acceptance remains available through the
+local task but is not run in hosted CI. It covers execution and
+automatic/guarded Kargo preparation through real artifact uploads, including
+empty Git diffs; broader failure and live cutover coverage remains on the
+[roadmap](./ROADMAP.md).

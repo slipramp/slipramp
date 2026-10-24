@@ -31,7 +31,7 @@ import { Identity } from "~/components/identity";
 import { KargoLink } from "~/components/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
-import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
+import { promotionScopeFilters } from "~/components/promotion-scope-filters";
 import { abbreviateMiddle } from "~/display";
 import { formValue, optionalFormValue } from "~/form-data";
 import { pageTitle } from "~/page-title";
@@ -177,35 +177,30 @@ function StageFilters({
 }>) {
   return (
     <SearchParamFilters
-      active={
-        archivedFilter !== "active" || Boolean(application || cluster || integration || project)
-      }
       clearTo="/promotion-stages"
-    >
-      <PromotionScopeFilters
-        application={application}
-        integration={integration}
-        project={project}
-      />
-      <NativeSelect
-        defaultValue={archivedFilter}
-        label="Status"
-        name="archived"
-        data={[
-          { label: "Active Stages", value: "active" },
-          { label: "Archived Stages", value: "archived" },
-          { label: "All Stages", value: "all" },
-        ]}
-        style={{ flex: "1 1 160px" }}
-      />
-      <TextInput
-        defaultValue={cluster}
-        label="Cluster"
-        name="cluster"
-        style={{ flex: "1 1 160px" }}
-        type="search"
-      />
-    </SearchParamFilters>
+      filters={[
+        ...promotionScopeFilters({ application, integration, project }),
+        {
+          active: archivedFilter !== "active",
+          data: [
+            { label: "Active Stages", value: "" },
+            { label: "Archived Stages", value: "archived" },
+            { label: "All Stages", value: "all" },
+          ],
+          kind: "select",
+          label: "Status",
+          name: "archived",
+          value: archivedFilter === "active" ? "" : archivedFilter,
+        },
+        {
+          active: Boolean(cluster),
+          kind: "text",
+          label: "Cluster",
+          name: "cluster",
+          value: cluster,
+        },
+      ]}
+    />
   );
 }
 

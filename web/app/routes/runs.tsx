@@ -1,15 +1,4 @@
-import {
-  Alert,
-  Anchor,
-  Badge,
-  Group,
-  NativeSelect,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -45,6 +34,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const repositoryId = optionalSearchValue(url, "repositoryId");
   const target = repositoryId ? optionalSearchValue(url, "target") : undefined;
   const cluster = optionalSearchValue(url, "cluster");
+  const phase = optionalRunPhase(url.searchParams.get("phase"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const offset = (requestedPage - 1) * pageSize;
   const client = createServerAPIClient(request, context);
@@ -55,6 +45,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         cluster,
         limit: pageSize,
         offset,
+        phase,
         repositoryId,
         target,
       },
@@ -73,6 +64,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         initialRunsResult.error?.title ??
         "Run history could not be loaded.",
       page: 1,
+      phase,
       repositoryId,
       repositories: repositoriesResult.data?.items ?? [],
       runs: [],
@@ -98,6 +90,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     clusters: clustersResult.data?.items ?? [],
     error: undefined,
     page: requestedPage,
+    phase,
     repositoryId,
     repositories: repositoriesResult.data?.items ?? [],
     runs: initialRunsResult.data.items,
@@ -117,6 +110,7 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
       <HistoryFilters
         cluster={loaderData.cluster}
         clusters={loaderData.clusters}
+        phase={loaderData.phase}
         repositoryId={loaderData.repositoryId}
         repositories={loaderData.repositories}
         target={loaderData.target}
@@ -147,57 +141,74 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
 function HistoryFilters({
   cluster,
   clusters,
+  phase,
   repositoryId,
   repositories,
   target,
 }: Readonly<{
   cluster?: string;
   clusters: Cluster[];
+  phase?: Run["phase"];
   repositoryId?: string;
   repositories: Repository[];
   target?: string;
 }>) {
   return (
-    <SearchParamFilters active={Boolean(cluster || repositoryId || target)} clearTo="/runs">
-      <NativeSelect
-        data={[
-          { label: "All repositories", value: "" },
-          ...repositories.map((repository) => ({ label: repository.name, value: repository.id })),
-        ]}
-        defaultValue={repositoryId ?? ""}
-        key={`repository:${repositoryId ?? ""}`}
-        label="Repository"
-        name="repositoryId"
-        onChange={(event) => {
-          if (event.currentTarget.value !== "") return;
-
-          const targetInput = event.currentTarget.form?.elements.namedItem("target");
-          if (targetInput instanceof HTMLInputElement) targetInput.value = "";
-        }}
-        style={{ flex: "1 1 260px" }}
-      />
-      <TextInput
-        defaultValue={target}
-        disabled={!repositoryId}
-        key={`target:${repositoryId ?? ""}:${target ?? ""}`}
-        label="Target"
-        name="target"
-        placeholder={repositoryId ? "Target name" : "Select a repository first"}
-        style={{ flex: "1 1 260px" }}
-        type="search"
-      />
-      <NativeSelect
-        data={[
-          { label: "All clusters", value: "" },
-          ...clusters.map((item) => ({ label: item.name, value: item.name })),
-        ]}
-        defaultValue={cluster ?? ""}
-        key={`cluster:${cluster ?? ""}`}
-        label="Cluster"
-        name="cluster"
-        style={{ flex: "1 1 220px" }}
-      />
-    </SearchParamFilters>
+    <SearchParamFilters
+      clearTo="/runs"
+      filters={[
+        {
+          active: Boolean(repositoryId),
+          clearWhenEmpty: ["target"],
+          data: [
+            { label: "All repositories", value: "" },
+            ...repositories.map((repository) => ({
+              label: repository.name,
+              value: repository.id,
+            })),
+          ],
+          kind: "select",
+          label: "Repository",
+          name: "repositoryId",
+          value: repositoryId,
+        },
+        {
+          active: Boolean(target),
+          disabled: !repositoryId,
+          kind: "text",
+          label: "Target",
+          name: "target",
+          placeholder: "Target name",
+          value: target,
+        },
+        {
+          active: Boolean(cluster),
+          data: [
+            { label: "All clusters", value: "" },
+            ...clusters.map((item) => ({ label: item.name, value: item.name })),
+          ],
+          kind: "select",
+          label: "Cluster",
+          name: "cluster",
+          value: cluster,
+        },
+        {
+          active: Boolean(phase),
+          data: [
+            { label: "Any phase", value: "" },
+            { label: "Queued", value: "queued" },
+            { label: "Assigned", value: "assigned" },
+            { label: "Preparing", value: "preparing" },
+            { label: "Running", value: "running" },
+            { label: "Finished", value: "finished" },
+          ],
+          kind: "select",
+          label: "Phase",
+          name: "phase",
+          value: phase,
+        },
+      ]}
+    />
   );
 }
 
@@ -313,4 +324,17 @@ function HistoryTable({
 
 function optionalSearchValue(url: URL, name: string) {
   return url.searchParams.get(name)?.trim() || undefined;
+}
+
+function optionalRunPhase(value: string | null): Run["phase"] | undefined {
+  switch (value) {
+    case "queued":
+    case "assigned":
+    case "preparing":
+    case "running":
+    case "finished":
+      return value;
+    default:
+      return undefined;
+  }
 }

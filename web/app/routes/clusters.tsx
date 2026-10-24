@@ -1,15 +1,4 @@
-import {
-  Anchor,
-  Badge,
-  Group,
-  NativeSelect,
-  Paper,
-  SimpleGrid,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { Anchor, Badge, Group, Paper, SimpleGrid, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -84,31 +73,30 @@ export default function Clusters({ loaderData }: Route.ComponentProps) {
       </SimpleGrid>
 
       <SearchParamFilters
-        active={Boolean(loaderData.query || loaderData.connection)}
         clearTo="/clusters"
-      >
-        <TextInput
-          defaultValue={loaderData.query}
-          key={`query:${loaderData.query}`}
-          label="Search clusters"
-          name="q"
-          placeholder="Cluster name"
-          style={{ flex: "1 1 300px" }}
-          type="search"
-        />
-        <NativeSelect
-          data={[
-            { label: "Any connection state", value: "" },
-            { label: "Connected", value: "connected" },
-            { label: "Unreachable", value: "unreachable" },
-          ]}
-          defaultValue={loaderData.connection ?? ""}
-          key={`connection:${loaderData.connection ?? ""}`}
-          label="Connection"
-          name="connection"
-          style={{ flex: "0 1 240px" }}
-        />
-      </SearchParamFilters>
+        filters={[
+          {
+            active: Boolean(loaderData.query),
+            kind: "text",
+            label: "Cluster",
+            name: "q",
+            placeholder: "Cluster name",
+            value: loaderData.query,
+          },
+          {
+            active: Boolean(loaderData.connection),
+            data: [
+              { label: "Any connection state", value: "" },
+              { label: "Connected", value: "connected" },
+              { label: "Unreachable", value: "unreachable" },
+            ],
+            kind: "select",
+            label: "Connection",
+            name: "connection",
+            value: loaderData.connection,
+          },
+        ]}
+      />
 
       {!loaderData.clustersAvailable ? (
         <EmptyState description="Cluster observations are unavailable while the API is disconnected." />

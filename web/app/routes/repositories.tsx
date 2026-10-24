@@ -1,15 +1,4 @@
-import {
-  Anchor,
-  Badge,
-  Button,
-  Code,
-  Group,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { Anchor, Badge, Button, Code, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { Link, redirect } from "react-router";
 
@@ -33,10 +22,16 @@ export function meta() {
 export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
+  const refreshStatus = optionalRefreshStatus(url.searchParams.get("refreshStatus"));
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const result = await listRepositories({
     client: createServerAPIClient(request, context),
-    query: { limit: pageSize, offset: (page - 1) * pageSize, q: query || undefined },
+    query: {
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
+      q: query || undefined,
+      refreshStatus,
+    },
   });
 
   if (result.data) {
@@ -52,6 +47,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     available: result.data !== undefined,
     page,
     query,
+    refreshStatus,
     repositories: result.data?.items ?? [],
     total: result.data?.total ?? 0,
   };
@@ -70,17 +66,32 @@ export default function Repositories({ loaderData }: Route.ComponentProps) {
         title="Repositories"
       />
 
-      <SearchParamFilters active={Boolean(loaderData.query)} clearTo="/repositories">
-        <TextInput
-          defaultValue={loaderData.query}
-          key={loaderData.query}
-          label="Search repositories"
-          name="q"
-          placeholder="Name, URL, or branch"
-          style={{ flex: "1 1 320px" }}
-          type="search"
-        />
-      </SearchParamFilters>
+      <SearchParamFilters
+        clearTo="/repositories"
+        filters={[
+          {
+            active: Boolean(loaderData.query),
+            kind: "text",
+            label: "Repository",
+            name: "q",
+            placeholder: "Name, URL, or branch",
+            value: loaderData.query,
+          },
+          {
+            active: Boolean(loaderData.refreshStatus),
+            data: [
+              { label: "Any refresh status", value: "" },
+              { label: "Pending", value: "pending" },
+              { label: "Succeeded", value: "succeeded" },
+              { label: "Failed", value: "failed" },
+            ],
+            kind: "select",
+            label: "Refresh status",
+            name: "refreshStatus",
+            value: loaderData.refreshStatus,
+          },
+        ]}
+      />
 
       <Paper withBorder>
         {!loaderData.available ? (
@@ -89,8 +100,8 @@ export default function Repositories({ loaderData }: Route.ComponentProps) {
           </Text>
         ) : loaderData.repositories.length === 0 ? (
           <Text c="dimmed" p="md">
-            {loaderData.query
-              ? "No repositories match this search."
+            {loaderData.query || loaderData.refreshStatus
+              ? "No repositories match these filters."
               : "No repositories have been registered yet."}
           </Text>
         ) : (
@@ -188,4 +199,8 @@ function RefreshBadge({ status }: Readonly<{ status: "pending" | "succeeded" | "
       {status}
     </Badge>
   );
+}
+
+function optionalRefreshStatus(value: string | null) {
+  return value === "pending" || value === "succeeded" || value === "failed" ? value : undefined;
 }

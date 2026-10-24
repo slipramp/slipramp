@@ -41,7 +41,7 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react";
 import { useState, type ReactNode } from "react";
-import { Form, Link, useLocation } from "react-router";
+import { Form, Link, useLocation, useNavigation } from "react-router";
 
 import type { ProductPrincipal } from "~/api/generated";
 import { Identity } from "~/components/identity";
@@ -88,6 +88,8 @@ export function ProductShell({
 }: Readonly<{ children: ReactNode; principal?: ProductPrincipal }>) {
   const [mobileOpened, setMobileOpened] = useState(false);
   const [desktopOpened, setDesktopOpened] = useState(true);
+  const navigation = useNavigation();
+  const loading = navigation.state !== "idle";
 
   function toggleDesktopNavigation() {
     setDesktopOpened((current) => !current);
@@ -104,6 +106,16 @@ export function ProductShell({
       }}
       padding={{ base: "md", sm: "xl" }}
     >
+      <Box
+        aria-hidden={!loading}
+        aria-label="Loading page"
+        className="global-loading-bar"
+        component="output"
+        data-active={loading || undefined}
+      >
+        <Box component="span" />
+      </Box>
+
       <AppShell.Header className="product-header">
         <Group h="100%" justify="space-between" px={{ base: "md", sm: "xl" }}>
           <Group gap="sm">

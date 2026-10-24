@@ -1,4 +1,4 @@
-import { Alert, Anchor, NativeSelect, Paper, Stack, Table, Text, TextInput } from "@mantine/core";
+import { Alert, Anchor, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -115,32 +115,34 @@ function CommitFilters({
   repositoryId?: string;
 }>) {
   return (
-    <SearchParamFilters active={Boolean(query || repositoryId)} clearTo="/commits">
-      <NativeSelect
-        data={[
-          { label: "All repositories", value: "" },
-          ...repositories.map((repository) => ({
-            label: repository.name,
-            value: repository.id,
-          })),
-        ]}
-        defaultValue={repositoryId ?? ""}
-        key={`repository:${repositoryId ?? ""}`}
-        label="Repository"
-        name="repositoryId"
-        style={{ flex: "1 1 260px" }}
-      />
-      <TextInput
-        defaultValue={query}
-        key={query}
-        label="Search commits"
-        maxLength={200}
-        name="q"
-        placeholder="SHA, title, or author"
-        style={{ flex: "2 1 320px" }}
-        type="search"
-      />
-    </SearchParamFilters>
+    <SearchParamFilters
+      clearTo="/commits"
+      filters={[
+        {
+          active: Boolean(repositoryId),
+          data: [
+            { label: "All repositories", value: "" },
+            ...repositories.map((repository) => ({
+              label: repository.name,
+              value: repository.id,
+            })),
+          ],
+          kind: "select",
+          label: "Repository",
+          name: "repositoryId",
+          value: repositoryId,
+        },
+        {
+          active: Boolean(query),
+          kind: "text",
+          label: "Commit",
+          maxLength: 200,
+          name: "q",
+          placeholder: "SHA, title, or author",
+          value: query,
+        },
+      ]}
+    />
   );
 }
 

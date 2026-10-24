@@ -5,12 +5,10 @@ import {
   Button,
   Group,
   Menu,
-  NativeSelect,
   Paper,
   Stack,
   Table,
   Text,
-  TextInput,
 } from "@mantine/core";
 import { IconChevronDown, IconPlayerPlay } from "@tabler/icons-react";
 import { Link, redirect } from "react-router";
@@ -268,31 +266,33 @@ function TargetFilters({
   repositoryId: string;
 }>) {
   return (
-    <SearchParamFilters active={Boolean(query || repositoryId)} clearTo="/targets">
-      <TextInput
-        defaultValue={query}
-        key={`query:${query}`}
-        label="Search"
-        name="q"
-        placeholder="Target, action, or repository"
-        style={{ flex: "1 1 300px" }}
-        type="search"
-      />
-      <NativeSelect
-        data={[
-          { label: "All repositories", value: "" },
-          ...repositories.map((repository) => ({
-            label: repository.name,
-            value: repository.id,
-          })),
-        ]}
-        defaultValue={repositoryId}
-        key={`repository:${repositoryId}`}
-        label="Repository"
-        name="repositoryId"
-        style={{ flex: "0 1 280px" }}
-      />
-    </SearchParamFilters>
+    <SearchParamFilters
+      clearTo="/targets"
+      filters={[
+        {
+          active: Boolean(query),
+          kind: "text",
+          label: "Target",
+          name: "q",
+          placeholder: "Target, action, or repository",
+          value: query,
+        },
+        {
+          active: Boolean(repositoryId),
+          data: [
+            { label: "All repositories", value: "" },
+            ...repositories.map((repository) => ({
+              label: repository.name,
+              value: repository.id,
+            })),
+          ],
+          kind: "select",
+          label: "Repository",
+          name: "repositoryId",
+          value: repositoryId,
+        },
+      ]}
+    />
   );
 }
 

@@ -1,15 +1,4 @@
-import {
-  Alert,
-  Anchor,
-  Badge,
-  Group,
-  NativeSelect,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-} from "@mantine/core";
+import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -20,7 +9,7 @@ import { Identity } from "~/components/identity";
 import { KargoLink } from "~/components/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
-import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
+import { promotionScopeFilters } from "~/components/promotion-scope-filters";
 import { abbreviateMiddle } from "~/display";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
@@ -38,6 +27,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const integration = optionalValue(url.searchParams.get("integration"));
   const project = optionalValue(url.searchParams.get("project"));
   const application = optionalValue(url.searchParams.get("application"));
+  const cluster = optionalValue(url.searchParams.get("cluster"));
   const status = optionalStatus(url.searchParams.get("status"));
   const stageId = optionalValue(url.searchParams.get("stageId"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
@@ -46,6 +36,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     client,
     query: {
       application,
+      cluster,
       integration,
       limit: pageSize,
       offset: (requestedPage - 1) * pageSize,
@@ -66,7 +57,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   return {
     available: result.data !== undefined,
     error: result.error?.detail ?? result.error?.title,
-    filters: { application, integration, project, stageId, status },
+    filters: { application, cluster, integration, project, stageId, status },
     page: requestedPage,
     promotions: result.data?.items ?? [],
     total: result.data?.total ?? 0,
@@ -113,44 +104,50 @@ function PromotionFilters({
 }: Readonly<{
   filters: {
     application?: string;
+    cluster?: string;
     integration?: string;
     project?: string;
     stageId?: string;
     status?: PromotionStatus;
   };
 }>) {
-  const filtered = Object.values(filters).some((value) => value !== undefined);
-
   return (
-    <SearchParamFilters active={filtered} clearTo="/promotions">
-      <PromotionScopeFilters
-        application={filters.application}
-        integration={filters.integration}
-        project={filters.project}
-      />
-      <NativeSelect
-        defaultValue={filters.status ?? ""}
-        label="Status"
-        name="status"
-        data={[
-          { label: "All statuses", value: "" },
-          { label: "Pending review", value: "pending" },
-          { label: "Preparing", value: "preparing" },
-          { label: "Approved", value: "approved" },
-          { label: "Rejected", value: "rejected" },
-          { label: "Expired", value: "expired" },
-          { label: "Error", value: "error" },
-        ]}
-        style={{ flex: "1 1 160px" }}
-      />
-      <TextInput
-        defaultValue={filters.stageId}
-        label="Stage ID"
-        name="stageId"
-        style={{ flex: "1 1 160px" }}
-        type="search"
-      />
-    </SearchParamFilters>
+    <SearchParamFilters
+      clearTo="/promotions"
+      filters={[
+        ...promotionScopeFilters(filters),
+        {
+          active: Boolean(filters.cluster),
+          kind: "text",
+          label: "Cluster",
+          name: "cluster",
+          value: filters.cluster,
+        },
+        {
+          active: Boolean(filters.status),
+          data: [
+            { label: "All statuses", value: "" },
+            { label: "Pending review", value: "pending" },
+            { label: "Preparing", value: "preparing" },
+            { label: "Approved", value: "approved" },
+            { label: "Rejected", value: "rejected" },
+            { label: "Expired", value: "expired" },
+            { label: "Error", value: "error" },
+          ],
+          kind: "select",
+          label: "Status",
+          name: "status",
+          value: filters.status,
+        },
+        {
+          active: Boolean(filters.stageId),
+          kind: "text",
+          label: "Stage ID",
+          name: "stageId",
+          value: filters.stageId,
+        },
+      ]}
+    />
   );
 }
 

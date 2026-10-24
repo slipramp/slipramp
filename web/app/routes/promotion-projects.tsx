@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text, TextInput } from "@mantine/core";
+import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -66,29 +66,32 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
         title="Promotion projects"
       />
 
-      <SearchParamFilters active={filtered} clearTo="/promotion-projects">
-        <TextInput
-          defaultValue={loaderData.integration}
-          label="Integration"
-          name="integration"
-          style={{ flex: "1 1 200px" }}
-          type="search"
-        />
-        <TextInput
-          defaultValue={loaderData.project}
-          label="Project"
-          name="project"
-          style={{ flex: "1 1 240px" }}
-          type="search"
-        />
-        <TextInput
-          defaultValue={loaderData.cluster}
-          label="Cluster"
-          name="cluster"
-          style={{ flex: "1 1 200px" }}
-          type="search"
-        />
-      </SearchParamFilters>
+      <SearchParamFilters
+        clearTo="/promotion-projects"
+        filters={[
+          {
+            active: Boolean(loaderData.integration),
+            kind: "text",
+            label: "Integration",
+            name: "integration",
+            value: loaderData.integration,
+          },
+          {
+            active: Boolean(loaderData.project),
+            kind: "text",
+            label: "Project",
+            name: "project",
+            value: loaderData.project,
+          },
+          {
+            active: Boolean(loaderData.cluster),
+            kind: "text",
+            label: "Cluster",
+            name: "cluster",
+            value: loaderData.cluster,
+          },
+        ]}
+      />
 
       {!loaderData.available ? (
         <Alert color="red" title="Promotion projects unavailable">

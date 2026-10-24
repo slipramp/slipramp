@@ -1,15 +1,4 @@
-import {
-  Alert,
-  Badge,
-  Group,
-  NativeSelect,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Title,
-} from "@mantine/core";
+import { Alert, Badge, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
 import { redirect } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -24,7 +13,7 @@ import { CommitReference } from "~/components/git-commit";
 import { KargoLink } from "~/components/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
-import { PromotionScopeFilters } from "~/components/promotion-scope-filters";
+import { promotionScopeFilters } from "~/components/promotion-scope-filters";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
 
@@ -139,40 +128,33 @@ function BranchDriftFilters({
   repository?: string;
   status?: PromotionBranchDriftStatus;
 }>) {
-  const filtered =
-    application !== undefined ||
-    integration !== undefined ||
-    project !== undefined ||
-    repository !== undefined ||
-    status !== undefined;
-
   return (
-    <SearchParamFilters active={filtered} clearTo="/promotion-branch-drift">
-      <PromotionScopeFilters
-        application={application}
-        integration={integration}
-        project={project}
-      />
-      <NativeSelect
-        defaultValue={status ?? ""}
-        label="Status"
-        name="status"
-        data={[
-          { label: "All statuses", value: "" },
-          { label: "In sync", value: "current" },
-          { label: "Behind", value: "drifted" },
-          { label: "Unknown", value: "unknown" },
-        ]}
-        style={{ flex: "1 1 150px" }}
-      />
-      <TextInput
-        defaultValue={repository}
-        label="Repository"
-        name="repository"
-        style={{ flex: "1 1 160px" }}
-        type="search"
-      />
-    </SearchParamFilters>
+    <SearchParamFilters
+      clearTo="/promotion-branch-drift"
+      filters={[
+        ...promotionScopeFilters({ application, integration, project }),
+        {
+          active: Boolean(status),
+          data: [
+            { label: "All statuses", value: "" },
+            { label: "In sync", value: "current" },
+            { label: "Behind", value: "drifted" },
+            { label: "Unknown", value: "unknown" },
+          ],
+          kind: "select",
+          label: "Status",
+          name: "status",
+          value: status,
+        },
+        {
+          active: Boolean(repository),
+          kind: "text",
+          label: "Repository",
+          name: "repository",
+          value: repository,
+        },
+      ]}
+    />
   );
 }
 

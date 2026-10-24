@@ -1,6 +1,6 @@
-import { TextInput } from "@mantine/core";
+import type { SearchParamFilter } from "~/components/list-controls";
 
-export function PromotionScopeFilters({
+export function promotionScopeFilters({
   application,
   integration,
   project,
@@ -8,30 +8,28 @@ export function PromotionScopeFilters({
   application?: string;
   integration?: string;
   project?: string;
-}>) {
-  return (
-    <>
-      <TextInput
-        defaultValue={integration}
-        label="Integration"
-        name="integration"
-        style={{ flex: "1 1 160px" }}
-        type="search"
-      />
-      <TextInput
-        defaultValue={project}
-        label="Project"
-        name="project"
-        style={{ flex: "1 1 160px" }}
-        type="search"
-      />
-      <TextInput
-        defaultValue={application}
-        label="Application"
-        name="application"
-        style={{ flex: "1 1 160px" }}
-        type="search"
-      />
-    </>
-  );
+}>): SearchParamFilter[] {
+  return [
+    {
+      active: Boolean(integration),
+      kind: "text",
+      label: "Integration",
+      name: "integration",
+      value: integration,
+    },
+    {
+      active: Boolean(project),
+      kind: "text",
+      label: "Project",
+      name: "project",
+      value: project,
+    },
+    {
+      active: Boolean(application),
+      kind: "text",
+      label: "Application",
+      name: "application",
+      value: application,
+    },
+  ];
 }
