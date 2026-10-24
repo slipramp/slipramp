@@ -249,6 +249,96 @@ FROM promotions
 WHERE integration = sqlc.arg(integration)
   AND external_promotion_id = sqlc.arg(external_promotion_id);
 
+-- name: LockPromotionByExternalIdentity :one
+SELECT *
+FROM promotions
+WHERE integration = sqlc.arg(integration)
+  AND external_promotion_id = sqlc.arg(external_promotion_id)
+FOR UPDATE;
+
+-- name: HydrateOperatorPromotion :one
+UPDATE promotions
+SET request_digest = sqlc.arg(request_digest),
+    base_revision = sqlc.arg(base_revision),
+    candidate_revision = sqlc.arg(candidate_revision),
+    candidate_branch = sqlc.arg(candidate_branch),
+    status = CASE WHEN review_required THEN 'preparing' ELSE 'approved' END,
+    next_dispatch_at = NULL,
+    message = NULL,
+    updated_at = GREATEST(updated_at, sqlc.arg(hydrated_at))
+WHERE id = sqlc.arg(id)
+  AND source = 'slipramp'
+  AND status = 'creating'
+  AND request_digest IS NULL
+RETURNING *;
+
+-- name: LockNextPromotionCreationDispatch :one
+SELECT *
+FROM promotions
+WHERE source = 'slipramp'
+  AND status = 'creating'
+  AND next_dispatch_at <= sqlc.arg(due_at)
+  AND stage_snapshot ->> 'cluster' = sqlc.arg(cluster_name)::text
+ORDER BY next_dispatch_at, created_at, id
+FOR UPDATE SKIP LOCKED
+LIMIT 1;
+
+-- name: ClaimPromotionCreationDispatch :one
+UPDATE promotions
+SET dispatch_attempt_count = dispatch_attempt_count + 1,
+    next_dispatch_at = sqlc.arg(next_dispatch_at),
+    last_dispatch_at = sqlc.arg(claimed_at),
+    message = NULL,
+    updated_at = sqlc.arg(claimed_at)
+WHERE id = sqlc.arg(id)
+  AND source = 'slipramp'
+  AND status = 'creating'
+  AND dispatch_attempt_count = sqlc.arg(expected_attempt_count)
+RETURNING *;
+
+-- name: ExhaustPromotionCreationDispatch :one
+UPDATE promotions
+SET status = 'error',
+    next_dispatch_at = NULL,
+    message = sqlc.arg(message),
+    updated_at = sqlc.arg(failed_at)
+WHERE id = sqlc.arg(id)
+  AND source = 'slipramp'
+  AND status = 'creating'
+RETURNING *;
+
+-- name: LockPromotionCreationDispatch :one
+SELECT *
+FROM promotions
+WHERE id = sqlc.arg(id)
+FOR UPDATE;
+
+-- name: RecordCreatedPromotionDispatch :one
+UPDATE promotions
+SET next_dispatch_at = NULL,
+    dispatched_at = COALESCE(dispatched_at, sqlc.arg(dispatched_at)),
+    kargo_promotion_uid = sqlc.arg(kargo_promotion_uid),
+    message = CASE WHEN status = 'creating' THEN NULL ELSE message END,
+    updated_at = GREATEST(updated_at, sqlc.arg(dispatched_at))
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: RecordRetryablePromotionDispatch :one
+UPDATE promotions
+SET message = sqlc.arg(message),
+    updated_at = sqlc.arg(reported_at)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: RecordFailedPromotionDispatch :one
+UPDATE promotions
+SET status = 'error',
+    next_dispatch_at = NULL,
+    message = sqlc.arg(message),
+    updated_at = sqlc.arg(reported_at)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
 -- name: ListPromotions :many
 SELECT *
 FROM promotions

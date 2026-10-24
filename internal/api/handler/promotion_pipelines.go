@@ -53,11 +53,25 @@ func (h *Handler) ListPromotionPipelines(
 			if decodeErr != nil {
 				return nil, decodeErr
 			}
+			promotionSources := make([]api.PromotionFreightSource, 0, len(pipelineStage.PromotionSources))
+			for _, source := range pipelineStage.PromotionSources {
+				items := make([]api.PromotionFreightItem, 0, len(source.Freight))
+				for _, item := range source.Freight {
+					items = append(items, promotionFreightItemResponse(item))
+				}
+				promotionSources = append(promotionSources, api.PromotionFreightSource{
+					StageID:     source.StageID,
+					StageName:   source.StageName,
+					Environment: source.Environment,
+					Freight:     api.PromotionFreight{Items: items},
+				})
+			}
 			stages = append(stages, api.PromotionPipelineStage{
 				ID:                    pipelineStage.Stage.ID,
 				Name:                  pipelineStage.Stage.Name,
 				Environment:           pipelineStage.Stage.Environment,
 				Freight:               freight,
+				PromotionSources:      promotionSources,
 				PendingPromotionCount: pipelineStage.PendingPromotionCount,
 				LastObservedAt:        pipelineStage.Stage.LastObservedAt,
 				KargoURL: h.kargoIntegrations.KargoStageURL(
@@ -84,4 +98,21 @@ func (h *Handler) ListPromotionPipelines(
 		Limit:  result.Limit,
 		Offset: result.Offset,
 	}, nil
+}
+
+func promotionFreightItemResponse(item promotion.FreightItem) api.PromotionFreightItem {
+	artifacts := make([]api.PromotionFreightArtifact, 0, len(item.Artifacts))
+	for _, artifact := range item.Artifacts {
+		artifacts = append(artifacts, api.PromotionFreightArtifact{
+			Kind:       api.PromotionFreightArtifactKind(artifact.Kind),
+			Repository: artifact.Repository,
+			Version:    artifact.Version,
+		})
+	}
+
+	return api.PromotionFreightItem{
+		Origin:    item.Origin,
+		Name:      item.Name,
+		Artifacts: artifacts,
+	}
 }

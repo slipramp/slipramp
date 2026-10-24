@@ -51,6 +51,19 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 						Freight:        []byte(`{"items":[{"origin":"Warehouse/external-dns","name":"freight-1","artifacts":[{"kind":"image","repository":"ghcr.io/example/external-dns","version":"1.2.3"}]}]}`),
 						LastObservedAt: now,
 					},
+					PromotionSources: []promotion.FreightPromotionSource{{
+						StageID:     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1908"),
+						StageName:   "external-dns-homelab",
+						Environment: "homelab",
+						Freight: []promotion.FreightItem{{
+							Origin: "Warehouse/external-dns",
+							Name:   "freight-1",
+							Artifacts: []promotion.FreightArtifact{{
+								Kind:    "image",
+								Version: "1.2.3",
+							}},
+						}},
+					}},
 					PendingPromotionCount: 1,
 				}},
 			}},
@@ -101,6 +114,8 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		stageID.String(),
 		`"environmentOrder":["homelab","prod"]`,
 		`"version":"1.2.3"`,
+		`"stageName":"external-dns-homelab"`,
+		`"promotionSources":[`,
 		`"pendingPromotionCount":1`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/external-dns-prod"`,
 	} {

@@ -413,7 +413,7 @@ export type CancelRunCommand = {
 };
 
 export type ControllerCommand = {
-  type: "run-assignment" | "cancel-run";
+  type: "run-assignment" | "cancel-run" | "create-kargo-promotion";
   /**
    * Present when type is run-assignment.
    */
@@ -422,6 +422,10 @@ export type ControllerCommand = {
    * Present when type is cancel-run.
    */
   cancel?: CancelRunCommand;
+  /**
+   * Present when type is create-kargo-promotion.
+   */
+  promotion?: KargoPromotionCreationCommand;
 };
 
 export type RunObservation = {
@@ -1075,6 +1079,54 @@ export type RunArtifactAccess = {
   token: string;
 };
 
+export type KargoPromotionCreationCommand = {
+  /**
+   * Durable Slipramp Promotion identity.
+   */
+  id: string;
+  /**
+   * Monotonic dispatch attempt used to reject stale reports.
+   */
+  attempt: number;
+  /**
+   * Deterministic name for the Kargo Promotion resource.
+   */
+  externalName: string;
+  integration: CatalogName;
+  /**
+   * Kubernetes namespace containing the Kargo project.
+   */
+  project: CatalogName;
+  /**
+   * Exact target Kargo Stage name.
+   */
+  stage: string;
+  /**
+   * Observed Kubernetes UID of the target Stage.
+   */
+  stageUid: string;
+  /**
+   * Exact Kargo Freight name to promote.
+   */
+  freight: string;
+};
+
+export type KargoPromotionDispatchReport = {
+  /**
+   * Dispatch attempt from the creation command.
+   */
+  attempt: number;
+  result: "created" | "retryable" | "failed";
+  /**
+   * Kubernetes UID; required when result is created.
+   */
+  kargoUid?: string;
+  /**
+   * Bounded failure detail; required for retryable and failed results.
+   */
+  diagnostic?: string;
+};
+
 export type LogSeal = {
   sizeBytes: number;
   sha256: string;
@@ -1207,11 +1259,19 @@ export type PromotionStagePolicyUpdate = {
 
 export type PromotionFreightComparisonStatus = "equal" | "different";
 
+export type PromotionFreightSource = {
+  stageId: string;
+  stageName: string;
+  environment: string;
+  freight: PromotionFreight;
+};
+
 export type PromotionPipelineStage = {
   id: string;
   name: string;
   environment: string;
   freight: PromotionFreight;
+  promotionSources: Array<PromotionFreightSource>;
   pendingPromotionCount: number;
   lastObservedAt: string;
   /**
@@ -1232,6 +1292,7 @@ export type PromotionBranchDriftStage = {
   environment: string;
   targetBranch: string;
   sourcePaths: Array<string>;
+  freight: PromotionFreight;
   status: PromotionBranchDriftStatus;
   acknowledgedSourceCommit?: GitCommit;
   acknowledgedRenderBaseCommit?: GitCommit;
@@ -1994,6 +2055,58 @@ export type PollForControllerCommandResponses = {
 
 export type PollForControllerCommandResponse =
   PollForControllerCommandResponses[keyof PollForControllerCommandResponses];
+
+export type ReportKargoPromotionDispatchData = {
+  body: KargoPromotionDispatchReport;
+  path: {
+    /**
+     * Slipramp Promotion whose Kargo resource was dispatched.
+     */
+    promotionId: string;
+  };
+  query?: never;
+  url: "/controller/v1/promotions/{promotionId}/dispatch";
+};
+
+export type ReportKargoPromotionDispatchErrors = {
+  /**
+   * The dispatch report is invalid.
+   */
+  400: Problem;
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The Promotion is not assigned to this controller's cluster.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The report conflicts with the materialized Kargo Promotion identity.
+   */
+  409: Problem;
+  /**
+   * The dispatch result could not be recorded.
+   */
+  500: Problem;
+};
+
+export type ReportKargoPromotionDispatchError =
+  ReportKargoPromotionDispatchErrors[keyof ReportKargoPromotionDispatchErrors];
+
+export type ReportKargoPromotionDispatchResponses = {
+  /**
+   * The dispatch result was recorded or was already reflected in newer state.
+   */
+  204: void;
+};
+
+export type ReportKargoPromotionDispatchResponse =
+  ReportKargoPromotionDispatchResponses[keyof ReportKargoPromotionDispatchResponses];
 
 export type ReportRunObservationData = {
   body: RunObservation;

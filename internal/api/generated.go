@@ -116,14 +116,17 @@ func (e ClusterConnectionState) Valid() bool {
 
 // Defines values for ControllerCommandType.
 const (
-	ControllerCommandTypeCancelRun     ControllerCommandType = "cancel-run"
-	ControllerCommandTypeRunAssignment ControllerCommandType = "run-assignment"
+	ControllerCommandTypeCancelRun            ControllerCommandType = "cancel-run"
+	ControllerCommandTypeCreateKargoPromotion ControllerCommandType = "create-kargo-promotion"
+	ControllerCommandTypeRunAssignment        ControllerCommandType = "run-assignment"
 )
 
 // Valid indicates whether the value is a known member of the ControllerCommandType enum.
 func (e ControllerCommandType) Valid() bool {
 	switch e {
 	case ControllerCommandTypeCancelRun:
+		return true
+	case ControllerCommandTypeCreateKargoPromotion:
 		return true
 	case ControllerCommandTypeRunAssignment:
 		return true
@@ -213,6 +216,27 @@ func (e InboxItemKind) Valid() bool {
 	case InboxItemKindRepositoryRefresh:
 		return true
 	case InboxItemKindRunObservation:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KargoPromotionDispatchReportResult.
+const (
+	KargoPromotionDispatchReportResultCreated   KargoPromotionDispatchReportResult = "created"
+	KargoPromotionDispatchReportResultFailed    KargoPromotionDispatchReportResult = "failed"
+	KargoPromotionDispatchReportResultRetryable KargoPromotionDispatchReportResult = "retryable"
+)
+
+// Valid indicates whether the value is a known member of the KargoPromotionDispatchReportResult enum.
+func (e KargoPromotionDispatchReportResult) Valid() bool {
+	switch e {
+	case KargoPromotionDispatchReportResultCreated:
+		return true
+	case KargoPromotionDispatchReportResultFailed:
+		return true
+	case KargoPromotionDispatchReportResultRetryable:
 		return true
 	default:
 		return false
@@ -1117,8 +1141,11 @@ type ControllerCommand struct {
 	Assignment *RunAssignment `json:"assignment,omitempty"`
 
 	// Cancel Present when type is cancel-run.
-	Cancel *CancelRunCommand     `json:"cancel,omitempty"`
-	Type   ControllerCommandType `json:"type"`
+	Cancel *CancelRunCommand `json:"cancel,omitempty"`
+
+	// Promotion Present when type is create-kargo-promotion.
+	Promotion *KargoPromotionCreationCommand `json:"promotion,omitempty"`
+	Type      ControllerCommandType          `json:"type"`
 }
 
 // ControllerCommandType defines model for ControllerCommand.Type.
@@ -1284,6 +1311,47 @@ type InboxProblemAcknowledgements struct {
 	// ProblemIds Exact current problem-occurrence IDs to acknowledge.
 	ProblemIds []string `json:"problemIds"`
 }
+
+// KargoPromotionCreationCommand defines model for KargoPromotionCreationCommand.
+type KargoPromotionCreationCommand struct {
+	// Attempt Monotonic dispatch attempt used to reject stale reports.
+	Attempt int `json:"attempt"`
+
+	// ExternalName Deterministic name for the Kargo Promotion resource.
+	ExternalName string `json:"externalName"`
+
+	// Freight Exact Kargo Freight name to promote.
+	Freight string `json:"freight"`
+
+	// ID Durable Slipramp Promotion identity.
+	ID          openapi_types.UUID `json:"id"`
+	Integration CatalogName        `json:"integration"`
+
+	// Project Kubernetes namespace containing the Kargo project.
+	Project CatalogName `json:"project"`
+
+	// Stage Exact target Kargo Stage name.
+	Stage string `json:"stage"`
+
+	// StageUID Observed Kubernetes UID of the target Stage.
+	StageUID string `json:"stageUid"`
+}
+
+// KargoPromotionDispatchReport defines model for KargoPromotionDispatchReport.
+type KargoPromotionDispatchReport struct {
+	// Attempt Dispatch attempt from the creation command.
+	Attempt int `json:"attempt"`
+
+	// Diagnostic Bounded failure detail; required for retryable and failed results.
+	Diagnostic *string `json:"diagnostic,omitempty"`
+
+	// KargoUID Kubernetes UID; required when result is created.
+	KargoUID *string                            `json:"kargoUid,omitempty"`
+	Result   KargoPromotionDispatchReportResult `json:"result"`
+}
+
+// KargoPromotionDispatchReportResult defines model for KargoPromotionDispatchReport.Result.
+type KargoPromotionDispatchReportResult string
 
 // KargoPromotionRequest defines model for KargoPromotionRequest.
 type KargoPromotionRequest struct {
@@ -1503,6 +1571,7 @@ type PromotionBranchDriftStage struct {
 	Application                  string             `json:"application"`
 	Cluster                      CatalogName        `json:"cluster"`
 	Environment                  string             `json:"environment"`
+	Freight                      PromotionFreight   `json:"freight"`
 	ID                           openapi_types.UUID `json:"id"`
 	Integration                  CatalogName        `json:"integration"`
 
@@ -1583,6 +1652,14 @@ type PromotionFreightRequest struct {
 	SourceStages []string `json:"sourceStages"`
 }
 
+// PromotionFreightSource defines model for PromotionFreightSource.
+type PromotionFreightSource struct {
+	Environment string             `json:"environment"`
+	Freight     PromotionFreight   `json:"freight"`
+	StageID     openapi_types.UUID `json:"stageId"`
+	StageName   string             `json:"stageName"`
+}
+
 // PromotionList defines model for PromotionList.
 type PromotionList struct {
 	Items  []Promotion `json:"items"`
@@ -1617,10 +1694,11 @@ type PromotionPipelineStage struct {
 	ID          openapi_types.UUID `json:"id"`
 
 	// KargoURL Direct link to this Stage in the configured Kargo UI.
-	KargoURL              *string   `json:"kargoUrl,omitempty"`
-	LastObservedAt        time.Time `json:"lastObservedAt"`
-	Name                  string    `json:"name"`
-	PendingPromotionCount int       `json:"pendingPromotionCount"`
+	KargoURL              *string                  `json:"kargoUrl,omitempty"`
+	LastObservedAt        time.Time                `json:"lastObservedAt"`
+	Name                  string                   `json:"name"`
+	PendingPromotionCount int                      `json:"pendingPromotionCount"`
+	PromotionSources      []PromotionFreightSource `json:"promotionSources"`
 }
 
 // PromotionPolicyMode defines model for PromotionPolicyMode.
@@ -2544,6 +2622,9 @@ type EnrollControllerJSONRequestBody = ControllerEnrollment
 // ReplaceKargoStageSnapshotJSONRequestBody defines body for ReplaceKargoStageSnapshot for application/json ContentType.
 type ReplaceKargoStageSnapshotJSONRequestBody = KargoStageSnapshot
 
+// ReportKargoPromotionDispatchJSONRequestBody defines body for ReportKargoPromotionDispatch for application/json ContentType.
+type ReportKargoPromotionDispatchJSONRequestBody = KargoPromotionDispatchReport
+
 // SealRunLogJSONRequestBody defines body for SealRunLog for application/json ContentType.
 type SealRunLogJSONRequestBody = LogSeal
 
@@ -3128,10 +3209,28 @@ type ClientInterface interface {
 
 	// PollForControllerCommand Poll for a controller command
 	//
-	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
 	// Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
 	PollForControllerCommand(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportKargoPromotionDispatchWithBody Report Kargo Promotion creation
+	//
+	// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+	ReportKargoPromotionDispatchWithBody(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportKargoPromotionDispatch Report Kargo Promotion creation
+	//
+	// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+	ReportKargoPromotionDispatch(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRunLogCursor Get the durable Run log cursor
 	//
@@ -4202,11 +4301,49 @@ func (c *Client) ReplaceKargoStageSnapshot(ctx context.Context, integration Cata
 
 // PollForControllerCommand Poll for a controller command
 //
-// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
 //
 // Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
 func (c *Client) PollForControllerCommand(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPollForControllerCommandRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportKargoPromotionDispatchWithBody Report Kargo Promotion creation
+//
+// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+func (c *Client) ReportKargoPromotionDispatchWithBody(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportKargoPromotionDispatchRequestWithBody(c.Server, promotionID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportKargoPromotionDispatch Report Kargo Promotion creation
+//
+// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+func (c *Client) ReportKargoPromotionDispatch(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportKargoPromotionDispatchRequest(c.Server, promotionID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7142,6 +7279,53 @@ func NewPollForControllerCommandRequest(server string, params *PollForController
 	return req, nil
 }
 
+// NewReportKargoPromotionDispatchRequest calls the generic ReportKargoPromotionDispatch builder with application/json body
+func NewReportKargoPromotionDispatchRequest(server string, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportKargoPromotionDispatchRequestWithBody(server, promotionID, "application/json", bodyReader)
+}
+
+// NewReportKargoPromotionDispatchRequestWithBody constructs an http.Request for the ReportKargoPromotionDispatch method, with any body, and a specified content type
+func NewReportKargoPromotionDispatchRequestWithBody(server string, promotionID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "promotionId", promotionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/promotions/%s/dispatch", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetRunLogCursorRequest constructs an http.Request for the GetRunLogCursor method
 func NewGetRunLogCursorRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
 	var err error
@@ -8000,12 +8184,30 @@ type ClientWithResponsesInterface interface {
 
 	// PollForControllerCommandWithResponse Poll for a controller command
 	//
-	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
 	PollForControllerCommandWithResponse(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*PollForControllerCommandResponse, error)
+
+	// ReportKargoPromotionDispatchWithBodyWithResponse Report Kargo Promotion creation
+	//
+	// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+	ReportKargoPromotionDispatchWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportKargoPromotionDispatchResponse, error)
+
+	// ReportKargoPromotionDispatchWithResponse Report Kargo Promotion creation
+	//
+	// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+	ReportKargoPromotionDispatchWithResponse(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportKargoPromotionDispatchResponse, error)
 
 	// GetRunLogCursorWithResponse Get the durable Run log cursor
 	//
@@ -11549,6 +11751,82 @@ func (r PollForControllerCommandResponse) ContentType() string {
 	return ""
 }
 
+type ReportKargoPromotionDispatchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ReportKargoPromotionDispatchResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReportKargoPromotionDispatchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReportKargoPromotionDispatchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReportKargoPromotionDispatchResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetRunLogCursorResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12925,7 +13203,7 @@ func (c *ClientWithResponses) ReplaceKargoStageSnapshotWithResponse(ctx context.
 
 // PollForControllerCommandWithResponse Poll for a controller command
 //
-// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -12936,6 +13214,36 @@ func (c *ClientWithResponses) PollForControllerCommandWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParsePollForControllerCommandResponse(rsp)
+}
+
+// ReportKargoPromotionDispatchWithBodyWithResponse Report Kargo Promotion creation
+//
+// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+func (c *ClientWithResponses) ReportKargoPromotionDispatchWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportKargoPromotionDispatchResponse, error) {
+	rsp, err := c.ReportKargoPromotionDispatchWithBody(ctx, promotionID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportKargoPromotionDispatchResponse(rsp)
+}
+
+// ReportKargoPromotionDispatchWithResponse Report Kargo Promotion creation
+//
+// Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
+func (c *ClientWithResponses) ReportKargoPromotionDispatchWithResponse(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportKargoPromotionDispatchResponse, error) {
+	rsp, err := c.ReportKargoPromotionDispatch(ctx, promotionID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportKargoPromotionDispatchResponse(rsp)
 }
 
 // GetRunLogCursorWithResponse Get the durable Run log cursor
@@ -15981,6 +16289,70 @@ func ParsePollForControllerCommandResponse(rsp *http.Response) (*PollForControll
 	return response, nil
 }
 
+// ParseReportKargoPromotionDispatchResponse parses an HTTP response from a ReportKargoPromotionDispatchWithResponse call
+func ParseReportKargoPromotionDispatchResponse(rsp *http.Response) (*ReportKargoPromotionDispatchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReportKargoPromotionDispatchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetRunLogCursorResponse parses an HTTP response from a GetRunLogCursorWithResponse call
 func ParseGetRunLogCursorResponse(rsp *http.Response) (*GetRunLogCursorResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -16568,6 +16940,9 @@ type ServerInterface interface {
 	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/poll)
 	PollForControllerCommand(w http.ResponseWriter, r *http.Request, params PollForControllerCommandParams)
+	// ReportKargoPromotionDispatch Report Kargo Promotion creation
+	// (POST /controller/v1/promotions/{promotionId}/dispatch)
+	ReportKargoPromotionDispatch(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID)
 	// GetRunLogCursor Get the durable Run log cursor
 	// (GET /controller/v1/runs/{runId}/log)
 	GetRunLogCursor(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
@@ -18640,6 +19015,32 @@ func (siw *ServerInterfaceWrapper) PollForControllerCommand(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// ReportKargoPromotionDispatch operation middleware
+func (siw *ServerInterfaceWrapper) ReportKargoPromotionDispatch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "promotionId" -------------
+	var promotionID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "promotionId", r.PathValue("promotionId"), &promotionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "promotionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportKargoPromotionDispatch(w, r, promotionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRunLogCursor operation middleware
 func (siw *ServerInterfaceWrapper) GetRunLogCursor(w http.ResponseWriter, r *http.Request) {
 
@@ -19022,6 +19423,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/promotions/{promotionId}/dispatch", wrapper.ReportKargoPromotionDispatch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/observations", wrapper.ReportRunObservation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log-chunks", wrapper.AppendRunLogChunk)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.GetRunLogCursor)
@@ -23528,6 +23930,107 @@ func (response PollForControllerCommand500ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type ReportKargoPromotionDispatchRequestObject struct {
+	PromotionID openapi_types.UUID `json:"promotionId"`
+	Body        *ReportKargoPromotionDispatchJSONRequestBody
+}
+
+type ReportKargoPromotionDispatchResponseObject interface {
+	VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error
+}
+
+type ReportKargoPromotionDispatch204Response struct {
+}
+
+func (response ReportKargoPromotionDispatch204Response) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportKargoPromotionDispatch400ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionDispatch400ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionDispatch401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionDispatch401ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionDispatch404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionDispatch404ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionDispatch405ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionDispatch405ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionDispatch409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionDispatch409ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionDispatch500ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionDispatch500ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRunLogCursorRequestObject struct {
 	RunID openapi_types.UUID `json:"runId"`
 }
@@ -24341,6 +24844,9 @@ type StrictServerInterface interface {
 	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/poll)
 	PollForControllerCommand(ctx context.Context, request PollForControllerCommandRequestObject) (PollForControllerCommandResponseObject, error)
+	// ReportKargoPromotionDispatch Report Kargo Promotion creation
+	// (POST /controller/v1/promotions/{promotionId}/dispatch)
+	ReportKargoPromotionDispatch(ctx context.Context, request ReportKargoPromotionDispatchRequestObject) (ReportKargoPromotionDispatchResponseObject, error)
 	// GetRunLogCursor Get the durable Run log cursor
 	// (GET /controller/v1/runs/{runId}/log)
 	GetRunLogCursor(ctx context.Context, request GetRunLogCursorRequestObject) (GetRunLogCursorResponseObject, error)
@@ -25656,6 +26162,39 @@ func (sh *strictHandler) PollForControllerCommand(w http.ResponseWriter, r *http
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PollForControllerCommandResponseObject); ok {
 		if err := validResponse.VisitPollForControllerCommandResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportKargoPromotionDispatch operation middleware
+func (sh *strictHandler) ReportKargoPromotionDispatch(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID) {
+	var request ReportKargoPromotionDispatchRequestObject
+
+	request.PromotionID = promotionID
+
+	var body ReportKargoPromotionDispatchJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportKargoPromotionDispatch(ctx, request.(ReportKargoPromotionDispatchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportKargoPromotionDispatch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportKargoPromotionDispatchResponseObject); ok {
+		if err := validResponse.VisitReportKargoPromotionDispatchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

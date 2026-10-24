@@ -50,9 +50,11 @@ server:
 The resulting Git config path is
 `/var/run/slipramp/repository-credentials/github-readonly/gitconfig`.
 
-Optional Kargo promotion-review integrations are static Server configuration.
-Each integration selects a registered Cluster, a repository allowlist, and the
-repository-defined Target and Action that will prepare review artifacts:
+Optional Kargo integrations are static Server configuration. Each integration
+selects a registered Cluster, a repository allowlist, ordered environments, and
+the repository-defined Target and Action that prepare review artifacts. The
+same configuration enables observed-Freight operator creation; Kargo remains
+authoritative for admission and availability:
 
 ```yaml
 server:

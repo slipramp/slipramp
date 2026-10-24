@@ -196,6 +196,207 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	}
 }
 
+func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 23, 14, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	fixture.stage.ResourceVersion = "2"
+	fixture.stage.FirstObservedAt = createdAt.Add(2 * time.Minute)
+	fixture.stage.LastObservedAt = createdAt.Add(2 * time.Minute)
+	fixture.stage.Freight = json.RawMessage(`{"items":[{
+      "origin":"Warehouse/external-dns",
+      "name":"freight-42",
+      "artifacts":[{"kind":"image","repository":"ghcr.io/example/external-dns","version":"1.2.3"}]
+    }]}`)
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), "prod", "colo", fixture.stage.LastObservedAt),
+		[]promotion.Stage{fixture.stage},
+	); err != nil {
+		t.Fatalf("update observed Stage Freight: %v", err)
+	}
+
+	operator := productidentity.Principal{
+		ID:          uuid.New(),
+		Kind:        productidentity.KindUser,
+		DisplayName: "Promotion operator",
+		Role:        productidentity.RoleOperator,
+		CreatedAt:   createdAt,
+		UpdatedAt:   createdAt,
+	}
+	if _, err := fixture.database.CreatePrincipal(fixture.ctx, operator); err != nil {
+		t.Fatalf("create Promotion operator: %v", err)
+	}
+	operatorActor, err := operator.ActorSnapshot()
+	if err != nil {
+		t.Fatalf("snapshot Promotion operator: %v", err)
+	}
+	createOperatorPromotion := func(acceptedAt time.Time) promotion.Promotion {
+		t.Helper()
+
+		record, createErr := fixture.database.CreateOperatorPromotion(
+			fixture.ctx,
+			promotion.OperatorPromotionAcceptance{
+				ID:                         uuid.New(),
+				Integration:                fixture.stage.Integration,
+				TargetStageID:              fixture.stage.ID,
+				SourceStageID:              fixture.stage.ID,
+				FreightName:                "freight-42",
+				RequestedByPrincipalID:     operator.ID,
+				RequestedBySnapshot:        operatorActor,
+				AcceptedAt:                 acceptedAt,
+				MaximumStageObservationAge: 5 * time.Minute,
+				PendingReviewRetention:     8 * 24 * time.Hour,
+			},
+		)
+		if createErr != nil {
+			t.Fatalf("create operator Promotion: %v", createErr)
+		}
+
+		return record
+	}
+
+	automatic := createOperatorPromotion(createdAt.Add(150 * time.Second))
+	claimed, err := fixture.database.ClaimPromotionCreation(
+		fixture.ctx,
+		promotion.CreationDispatchClaim{
+			ClusterName:      fixture.stage.ClusterName,
+			ClaimedAt:        createdAt.Add(3 * time.Minute),
+			RetryDelays:      []time.Duration{time.Minute},
+			ExhaustedMessage: "Promotion creation exhausted its retry budget.",
+		},
+	)
+	if err != nil || claimed.ID != automatic.ID || claimed.DispatchAttemptCount != 1 {
+		t.Fatalf("claim operator Promotion = %#v, %v", claimed, err)
+	}
+	callbackAt := createdAt.Add(190 * time.Second)
+	callback := fixture.acceptance(t, fixture.request(automatic.ExternalPromotionID), callbackAt)
+	hydrated, err := fixture.database.AcceptPromotionRequest(fixture.ctx, callback)
+	if err != nil {
+		t.Fatalf("hydrate automatic operator Promotion: %v", err)
+	}
+	if hydrated.ID != automatic.ID || hydrated.Source != promotion.SourceSlipramp ||
+		hydrated.Status != promotion.StatusApproved || hydrated.RequestDigest != callback.RequestDigest ||
+		hydrated.BaseRevision != callback.Request.BaseRevision || hydrated.NextDispatchAt != nil ||
+		hydrated.RequestedByPrincipalID != operator.ID || hydrated.RequestedBySnapshot != operatorActor {
+		t.Errorf("hydrated automatic Promotion = %#v", hydrated)
+	}
+
+	uid := "kargo-promotion-uid"
+	reported, err := fixture.database.ReportPromotionCreation(
+		fixture.ctx,
+		promotion.CreationDispatchReport{
+			PromotionID: automatic.ID,
+			ClusterName: fixture.stage.ClusterName,
+			Attempt:     claimed.DispatchAttemptCount,
+			Result:      promotion.CreationDispatchCreated,
+			KargoUID:    &uid,
+			ReportedAt:  createdAt.Add(200 * time.Second),
+		},
+	)
+	if err != nil || reported.Status != promotion.StatusApproved || reported.KargoPromotionUID == nil ||
+		*reported.KargoPromotionUID != uid {
+		t.Errorf("late successful dispatch report = %#v, %v", reported, err)
+	}
+
+	repeated := callback
+	repeated.ID = uuid.New()
+	repeated.AcceptedAt = createdAt.Add(210 * time.Second)
+	recovered, err := fixture.database.AcceptPromotionRequest(fixture.ctx, repeated)
+	if err != nil || recovered.ID != automatic.ID || recovered.KargoPromotionUID == nil {
+		t.Errorf("repeated hydrated callback = %#v, %v", recovered, err)
+	}
+	conflicting := callback
+	conflicting.ID = uuid.New()
+	conflicting.Request.CandidateRevision = "a4cb21a88e1d0000000000000000000000000000"
+	conflicting.RequestDigest, err = conflicting.Request.Digest()
+	if err != nil {
+		t.Fatalf("digest conflicting callback: %v", err)
+	}
+	if _, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx,
+		conflicting,
+	); !errors.Is(err, promotion.ErrIdentityConflict) {
+		t.Errorf("conflicting hydrated callback error = %v", err)
+	}
+
+	mismatched := createOperatorPromotion(createdAt.Add(220 * time.Second))
+	mismatchedCallback := fixture.acceptance(
+		t,
+		fixture.request(mismatched.ExternalPromotionID),
+		createdAt.Add(230*time.Second),
+	)
+	mismatchedCallback.Request.Stage = "another-stage"
+	mismatchedCallback.RequestDigest, err = mismatchedCallback.Request.Digest()
+	if err != nil {
+		t.Fatalf("digest mismatched callback: %v", err)
+	}
+	if _, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx,
+		mismatchedCallback,
+	); !errors.Is(err, promotion.ErrIdentityConflict) {
+		t.Errorf("mismatched Stage callback error = %v", err)
+	}
+	unchanged, err := fixture.database.GetPromotion(fixture.ctx, mismatched.ID)
+	if err != nil || unchanged.Status != promotion.StatusCreating ||
+		unchanged.RequestDigest != (promotion.RequestDigest{}) {
+		t.Errorf("mismatched callback changed Promotion = %#v, %v", unchanged, err)
+	}
+
+	concurrent := createOperatorPromotion(createdAt.Add(235 * time.Second))
+	concurrentCallback := fixture.acceptance(
+		t,
+		fixture.request(concurrent.ExternalPromotionID),
+		createdAt.Add(238*time.Second),
+	)
+	type callbackResult struct {
+		record promotion.Promotion
+		err    error
+	}
+	callbackResults := make(chan callbackResult, 2)
+	for range 2 {
+		acceptance := concurrentCallback
+		acceptance.ID = uuid.New()
+		go func() {
+			record, acceptErr := fixture.database.AcceptPromotionRequest(fixture.ctx, acceptance)
+			callbackResults <- callbackResult{record: record, err: acceptErr}
+		}()
+	}
+	firstCallback := <-callbackResults
+	secondCallback := <-callbackResults
+	if firstCallback.err != nil || secondCallback.err != nil || firstCallback.record.ID != concurrent.ID ||
+		secondCallback.record.ID != concurrent.ID || firstCallback.record.Status != promotion.StatusApproved ||
+		secondCallback.record.Status != promotion.StatusApproved {
+		t.Errorf("concurrent callbacks = %#v and %#v", firstCallback, secondCallback)
+	}
+
+	policyUpdatedAt := createdAt.Add(4 * time.Minute)
+	if _, err := fixture.database.UpsertPromotionStagePolicy(fixture.ctx, promotion.StagePolicy{
+		StageID:              fixture.stage.ID,
+		Mode:                 promotion.PolicyModeReviewRequired,
+		UpdatedByPrincipalID: operator.ID,
+		UpdatedBySnapshot:    operatorActor,
+		UpdatedAt:            policyUpdatedAt,
+	}); err != nil {
+		t.Fatalf("create guarded policy: %v", err)
+	}
+	guardedCreatedAt := createdAt.Add(250 * time.Second)
+	guarded := createOperatorPromotion(guardedCreatedAt)
+	guardedCallback := fixture.acceptance(
+		t,
+		fixture.request(guarded.ExternalPromotionID),
+		createdAt.Add(260*time.Second),
+	)
+	guarded, err = fixture.database.AcceptPromotionRequest(fixture.ctx, guardedCallback)
+	if err != nil {
+		t.Fatalf("hydrate guarded operator Promotion: %v", err)
+	}
+	if guarded.Status != promotion.StatusPreparing || !guarded.ReviewRequired || guarded.ExpiresAt == nil ||
+		!guarded.ExpiresAt.Equal(guardedCreatedAt.Add(8*24*time.Hour)) ||
+		guarded.RequestedByPrincipalID != operator.ID || guarded.NextDispatchAt != nil {
+		t.Errorf("hydrated guarded Promotion = %#v", guarded)
+	}
+}
+
 func TestConcurrentPromotionRequestPollsRecoverOneRecordIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 21, 14, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)

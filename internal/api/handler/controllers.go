@@ -15,6 +15,7 @@ import (
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -212,6 +213,56 @@ func (h *Handler) ReportRunObservation(
 	return api.ReportRunObservation204Response{}, nil
 }
 
+func (h *Handler) ReportKargoPromotionDispatch(
+	ctx context.Context,
+	request api.ReportKargoPromotionDispatchRequestObject,
+) (api.ReportKargoPromotionDispatchResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "A Kargo Promotion dispatch report is required.")
+
+		return api.ReportKargoPromotionDispatch400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	err = h.promotionDispatches.Report(
+		ctx,
+		principal.ClusterName,
+		promotion.CreationDispatchReport{
+			PromotionID: request.PromotionID,
+			Attempt:     request.Body.Attempt,
+			Result:      promotion.CreationDispatchResult(request.Body.Result),
+			KargoUID:    request.Body.KargoUID,
+			Diagnostic:  request.Body.Diagnostic,
+		},
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, promotion.ErrInvalid):
+			problem := NewProblem(http.StatusBadRequest, err.Error())
+
+			return api.ReportKargoPromotionDispatch400ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, promotion.ErrPromotionNotFound):
+			problem := NewProblem(http.StatusNotFound, "The Promotion is not assigned to this controller's cluster.")
+
+			return api.ReportKargoPromotionDispatch404ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, promotion.ErrCreationDispatchConflict):
+			problem := NewProblem(http.StatusConflict, "The dispatch report conflicts with the Kargo Promotion identity.")
+
+			return api.ReportKargoPromotionDispatch409ApplicationProblemPlusJSONResponse(problem), nil
+		default:
+			return nil, err
+		}
+	}
+	if err := h.clusters.RecordControllerContact(ctx, principal.ClusterName); err != nil {
+		return nil, err
+	}
+
+	return api.ReportKargoPromotionDispatch204Response{}, nil
+}
+
 func runObservationOutcome(value *api.RunObservationOutcome) *run.Outcome {
 	if value == nil {
 		return nil
@@ -240,6 +291,22 @@ func cancelRunCommand(record run.Run) api.ControllerCommand {
 	}
 }
 
+func createKargoPromotionCommand(command promotion.CreationCommand) api.ControllerCommand {
+	return api.ControllerCommand{
+		Type: api.ControllerCommandTypeCreateKargoPromotion,
+		Promotion: &api.KargoPromotionCreationCommand{
+			ID:           command.PromotionID,
+			Attempt:      command.Attempt,
+			ExternalName: command.ExternalName,
+			Integration:  api.CatalogName(command.Integration),
+			Project:      api.CatalogName(command.Project),
+			Stage:        command.Stage,
+			StageUID:     command.StageUID,
+			Freight:      command.Freight,
+		},
+	}
+}
+
 func (h *Handler) nextControllerCommand(ctx context.Context, clusterName string) (*api.ControllerCommand, error) {
 	record, err := h.runs.NextRunToCancel(ctx, clusterName)
 	if err == nil {
@@ -249,6 +316,18 @@ func (h *Handler) nextControllerCommand(ctx context.Context, clusterName string)
 	}
 	if !errors.Is(err, run.ErrNoRunToCancel) {
 		return nil, err
+	}
+
+	if h.promotionDispatches != nil {
+		promotionCommand, dispatchErr := h.promotionDispatches.Next(ctx, clusterName)
+		if dispatchErr == nil {
+			command := createKargoPromotionCommand(promotionCommand)
+
+			return &command, nil
+		}
+		if !errors.Is(dispatchErr, promotion.ErrNoCreationDispatch) {
+			return nil, dispatchErr
+		}
 	}
 
 	assignment, err := h.nextRunAssignment(ctx, clusterName)

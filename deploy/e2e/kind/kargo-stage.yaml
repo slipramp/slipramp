@@ -1,0 +1,34 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: acceptance
+  namespace: kargo-acceptance
+  labels:
+    env: acceptance
+  annotations:
+    slipramp.com/promotion-source-paths: review/manifest.yaml
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: acceptance
+      sources:
+        direct: true
+        stages: []
+  promotionTemplate:
+    spec:
+      vars:
+        - name: app
+          value: acceptance
+        - name: overlay
+          value: acceptance
+        - name: gitopsRepo
+          value: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+status:
+  freightHistory:
+    - items:
+        Warehouse/acceptance:
+          name: acceptance-freight
+          commits:
+            - repoURL: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+              id: acceptance-source

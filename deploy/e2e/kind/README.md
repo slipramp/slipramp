@@ -21,19 +21,22 @@ It then verifies the accepted baseline end to end:
 - default per-Target serialization plus queued and running cancellation;
 - controller and Server restart recovery while Runs are active;
 - automatic Kargo Promotion approval without a preparation Run;
+- operator-started Kargo Promotion creation through Controller materialization
+  and callback hydration of the same durable record;
 - review-required Promotions prepared by the first-party Kargo tools image,
   with exact Git diffs and structured Argo CD diffs uploaded by the Harness,
   retained in RustFS, and downloaded through the artifact API;
 - zero-byte Git diff uploads and idempotent Promotion polling.
 
-The Kargo cases seed Stage inventory through the authenticated Controller
-snapshot endpoint and submit requests with a dedicated operator service account
-whose key has only `slipramp:promotions:submit` scope. They use real Git branches,
-execution Jobs, and artifact storage. A repository-defined Argo CD command
-fixture validates the injected credential and returns a fixed resource diff;
-the suite does not install Kargo or Argo CD or exercise their target-branch push
-and reconciliation. Those behaviors remain part of operational cutover
-acceptance.
+The Kargo cases install minimal Stage and Promotion CRDs plus a Stage fixture.
+The Controller observes that Stage, materializes an operator-started Promotion,
+and reports its Kubernetes UID before a dedicated operator service account with
+only `slipramp:promotions:submit` scope submits the existing callback. The suite
+also uses real Git branches, execution Jobs, and artifact storage. A
+repository-defined Argo CD command fixture validates the injected credential
+and returns a fixed resource diff; the suite does not install Kargo or Argo CD
+controllers or exercise their target-branch push and reconciliation. Those
+behaviors remain part of operational cutover acceptance.
 
 The cluster and all generated SSH keys are deleted when the test exits. Run it
 from the repository root with Docker, kubectl, curl, Git, jq, and `ssh-keygen`

@@ -77,8 +77,9 @@ ADD CONSTRAINT promotions_dispatch_valid CHECK (
     AND (dispatched_at IS NULL OR dispatched_at >= created_at)
     AND (kargo_promotion_uid IS NULL OR length(kargo_promotion_uid) BETWEEN 1 AND 200)
     AND (kargo_promotion_uid IS NULL OR dispatched_at IS NOT NULL)
+    AND (next_dispatch_at IS NULL OR dispatched_at IS NULL)
     AND (status <> 'creating' OR source = 'slipramp')
-    AND (status <> 'creating' OR next_dispatch_at IS NOT NULL)
+    AND (status <> 'creating' OR next_dispatch_at IS NOT NULL OR dispatched_at IS NOT NULL)
 ),
 ADD CONSTRAINT promotions_automatic_state_valid CHECK (
     review_required

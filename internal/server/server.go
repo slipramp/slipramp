@@ -138,6 +138,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	)
 	promotionRequests := promotion.NewRequestService(cfg.KargoIntegrations, persistence.database)
 	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database)
+	promotionDispatches := promotion.NewCreationDispatchService(persistence.database)
 	promotionReviews := promotion.NewReviewService(persistence.database)
 	promotionProjects := promotion.NewProjectService(cfg.KargoIntegrations, persistence.database)
 	promotionPipelines := promotion.NewFreightPipelineService(cfg.KargoIntegrations, persistence.database)
@@ -206,6 +207,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			Artifacts:             artifacts,
 			PromotionRequests:     promotionRequests,
 			PromotionCreations:    promotionCreations,
+			PromotionDispatches:   promotionDispatches,
 			PromotionStages:       promotionStages,
 			PromotionReviews:      promotionReviews,
 			PromotionProjects:     promotionProjects,

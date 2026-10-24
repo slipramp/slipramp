@@ -13,10 +13,12 @@ import {
   Tooltip,
 } from "@mantine/core";
 import { IconArrowsDiff, IconCheck, IconMinus } from "@tabler/icons-react";
+import { useState } from "react";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
+  getCurrentPrincipal,
   listPromotionPipelines,
   type PromotionFreightComparisonStatus,
   type PromotionPipeline,
@@ -24,9 +26,16 @@ import {
 import { KargoLink } from "~/components/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
+import { PromotionCreateButton, PromotionCreateDialog } from "~/components/promotion-create-dialog";
 import { promotionScopeFilters } from "~/components/promotion-scope-filters";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
+import {
+  canWritePromotions,
+  pipelinePromotionChoices,
+  type PromotionChoice,
+} from "~/promotion-creation";
+import { submitPromotionCreation } from "~/promotion-creation.server";
 import {
   buildFreightColumns,
   buildFreightRows,
@@ -53,19 +62,23 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const repository = optionalValue(url.searchParams.get("repository"));
   const status = optionalFreightStatus(url.searchParams.get("status"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const result = await listPromotionPipelines({
-    client: createServerAPIClient(request, context),
-    query: {
-      application,
-      cluster,
-      integration,
-      limit: pageSize,
-      offset: (requestedPage - 1) * pageSize,
-      project,
-      repository,
-      status,
-    },
-  });
+  const client = createServerAPIClient(request, context);
+  const [result, principalResult] = await Promise.all([
+    listPromotionPipelines({
+      client,
+      query: {
+        application,
+        cluster,
+        integration,
+        limit: pageSize,
+        offset: (requestedPage - 1) * pageSize,
+        project,
+        repository,
+        status,
+      },
+    }),
+    getCurrentPrincipal({ client }),
+  ]);
 
   if (result.data) {
     const lastPage = Math.max(1, Math.ceil(result.data.total / pageSize));
@@ -91,13 +104,20 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         return filterFreightRows(buildFreightRows(columns), columns, status).length > 0;
       }) ?? [],
     project,
+    principal: principalResult.data,
     repository,
     status,
     total: result.data?.total ?? 0,
   };
 }
 
+export async function action({ context, request }: Route.ActionArgs) {
+  return submitPromotionCreation(request, context);
+}
+
 export default function PromotionPipelines({ loaderData }: Route.ComponentProps) {
+  const canWrite = canWritePromotions(loaderData.principal);
+
   return (
     <Stack gap="lg">
       <PageHeader
@@ -125,6 +145,7 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
       ) : (
         loaderData.pipelines.map((pipeline) => (
           <PipelineComparison
+            canWrite={canWrite}
             key={pipelineKey(pipeline)}
             pipeline={pipeline}
             status={loaderData.status}
@@ -197,9 +218,14 @@ function PipelineFilters({
 }
 
 function PipelineComparison({
+  canWrite,
   pipeline,
   status,
-}: Readonly<{ pipeline: PromotionPipeline; status?: PromotionFreightComparisonStatus }>) {
+}: Readonly<{
+  canWrite: boolean;
+  pipeline: PromotionPipeline;
+  status?: PromotionFreightComparisonStatus;
+}>) {
   const columns = buildFreightColumns(pipeline);
   const rows = filterFreightRows(buildFreightRows(columns), columns, status);
   const statuses = rows.map((row) => freightRowStatus(row, columns));
@@ -239,93 +265,111 @@ function PipelineComparison({
               ? `No ${status} Freight artifacts match this filter.`
               : "No Freight artifacts are currently reported."}
           </Text>
-        ) : (
-          <SimpleGrid
-            className="pipeline-flow"
-            cols={{ base: 1, sm: 2, xl: Math.max(1, Math.min(columns.length, 4)) }}
-            spacing="md"
-          >
-            {columns.map((column, index) => (
-              <PipelineStageCard
-                column={column}
-                columns={columns}
-                index={index}
-                key={column.key}
-                rows={rows}
-              />
-            ))}
-          </SimpleGrid>
-        )}
+        ) : null}
+        <SimpleGrid
+          className="pipeline-flow"
+          cols={{ base: 1, sm: 2, xl: Math.max(1, Math.min(columns.length, 4)) }}
+          spacing="md"
+        >
+          {columns.map((column, index) => (
+            <PipelineStageCard
+              canWrite={canWrite}
+              column={column}
+              columns={columns}
+              index={index}
+              key={column.key}
+              rows={rows}
+            />
+          ))}
+        </SimpleGrid>
       </Stack>
     </Paper>
   );
 }
 
 function PipelineStageCard({
+  canWrite,
   column,
   columns,
   index,
   rows,
 }: Readonly<{
+  canWrite: boolean;
   column: FreightColumn;
   columns: FreightColumn[];
   index: number;
   rows: FreightComparisonRow[];
 }>) {
   const stage = column.stage;
+  const choices = stage ? pipelinePromotionChoices(stage) : [];
+  const [dialogChoices, setDialogChoices] = useState<PromotionChoice[] | undefined>();
 
   return (
-    <Paper className="pipeline-stage-card" p="md" withBorder>
-      <Stack gap="md">
-        <Group align="flex-start" justify="space-between" wrap="nowrap">
-          <Group align="flex-start" gap="xs" wrap="nowrap">
-            <ThemeIcon radius="xl" size={26} variant="light">
-              {index + 1}
-            </ThemeIcon>
-            <Group gap={6}>
-              <Text fw={700}>{column.environment}</Text>
-              {!column.configured ? (
-                <Badge color="orange" size="xs" variant="light">
-                  Unconfigured
-                </Badge>
-              ) : null}
+    <>
+      <Paper className="pipeline-stage-card" p="md" withBorder>
+        <Stack gap="md">
+          <Group align="flex-start" justify="space-between" wrap="nowrap">
+            <Group align="flex-start" gap="xs" wrap="nowrap">
+              <ThemeIcon radius="xl" size={26} variant="light">
+                {index + 1}
+              </ThemeIcon>
+              <Group gap={6}>
+                <Text fw={700}>{column.environment}</Text>
+                {!column.configured ? (
+                  <Badge color="orange" size="xs" variant="light">
+                    Unconfigured
+                  </Badge>
+                ) : null}
+              </Group>
             </Group>
-          </Group>
-          <Stack align="flex-end" gap={1}>
-            {stage ? (
-              stage.kargoUrl ? (
-                <KargoLink size="sm" url={stage.kargoUrl}>
-                  {stage.name}
-                </KargoLink>
+            <Stack align="flex-end" gap={4}>
+              {stage ? (
+                stage.kargoUrl ? (
+                  <KargoLink size="sm" url={stage.kargoUrl}>
+                    {stage.name}
+                  </KargoLink>
+                ) : (
+                  <Text size="sm">{stage.name}</Text>
+                )
               ) : (
-                <Text size="sm">{stage.name}</Text>
-              )
-            ) : (
-              <Badge color="gray" size="sm" variant="light">
-                No Stage
-              </Badge>
-            )}
-            {stage?.pendingPromotionCount ? (
-              <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
-                {stage.pendingPromotionCount} pending
-              </Anchor>
-            ) : null}
-          </Stack>
-        </Group>
+                <Badge color="gray" size="sm" variant="light">
+                  No Stage
+                </Badge>
+              )}
+              {stage?.pendingPromotionCount ? (
+                <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
+                  {stage.pendingPromotionCount} pending
+                </Anchor>
+              ) : null}
+              {canWrite && stage ? (
+                <PromotionCreateButton
+                  choices={choices}
+                  onClick={() => setDialogChoices(choices)}
+                />
+              ) : null}
+            </Stack>
+          </Group>
 
-        {stage ? (
-          <Stack gap="xs">
-            {rows.map((row) => (
-              <FreightArtifactCard column={column} columns={columns} key={row.key} row={row} />
-            ))}
-          </Stack>
-        ) : (
-          <Text c="dimmed" size="sm">
-            Freight has not reached this configured environment.
-          </Text>
-        )}
-      </Stack>
-    </Paper>
+          {stage ? (
+            <Stack gap="xs">
+              {rows.map((row) => (
+                <FreightArtifactCard column={column} columns={columns} key={row.key} row={row} />
+              ))}
+            </Stack>
+          ) : (
+            <Text c="dimmed" size="sm">
+              Freight has not reached this configured environment.
+            </Text>
+          )}
+        </Stack>
+      </Paper>
+      {dialogChoices ? (
+        <PromotionCreateDialog
+          choices={dialogChoices}
+          onClose={() => setDialogChoices(undefined)}
+        />
+      ) : null}
+    </>
   );
 }
 

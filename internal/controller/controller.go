@@ -28,6 +28,7 @@ var (
 	errControllerEnrollmentConflict           = errors.New("controller enrollment conflicts with an existing identity")
 	errRunLogRejected                         = errors.New("run log was rejected")
 	errRunObservationRejected                 = errors.New("run observation was rejected")
+	errKargoPromotionDispatchRejected         = errors.New("kargo Promotion dispatch report was rejected")
 )
 
 type controllerEnroller interface {
@@ -40,6 +41,14 @@ type commandPoller interface {
 
 type runObservationReporter interface {
 	ReportObservation(ctx context.Context, runID uuid.UUID, observation api.RunObservation) error
+}
+
+type kargoPromotionDispatchReporter interface {
+	ReportKargoPromotionDispatch(
+		context.Context,
+		uuid.UUID,
+		api.KargoPromotionDispatchReport,
+	) error
 }
 
 type runLogReporter interface {
@@ -60,23 +69,25 @@ type runObserver struct {
 }
 
 type Controller struct {
-	clusterName    string
-	serverURL      string
-	logger         *slog.Logger
-	server         commandPoller
-	enrollment     controllerEnroller
-	reports        runObservationReporter
-	logs           runLogReporter
-	jobs           runJobs
-	retryDelay     time.Duration
-	observeEvery   time.Duration
-	heartbeatEvery time.Duration
-	now            func() time.Time
-	observerMutex  sync.Mutex
-	observedRuns   map[uuid.UUID]*runObserver
-	observers      sync.WaitGroup
-	stageObservers []*kargoStageObserver
-	workers        sync.WaitGroup
+	clusterName      string
+	serverURL        string
+	logger           *slog.Logger
+	server           commandPoller
+	enrollment       controllerEnroller
+	reports          runObservationReporter
+	promotionReports kargoPromotionDispatchReporter
+	logs             runLogReporter
+	jobs             runJobs
+	retryDelay       time.Duration
+	observeEvery     time.Duration
+	heartbeatEvery   time.Duration
+	now              func() time.Time
+	observerMutex    sync.Mutex
+	observedRuns     map[uuid.UUID]*runObserver
+	observers        sync.WaitGroup
+	stageObservers   []*kargoStageObserver
+	promotions       kargoPromotionCreator
+	workers          sync.WaitGroup
 }
 
 func New(
@@ -105,19 +116,20 @@ func New(
 	}
 
 	controller := &Controller{
-		clusterName:    cfg.ClusterName,
-		serverURL:      cfg.ServerURL,
-		logger:         logger.With("component", "controller"),
-		server:         server,
-		enrollment:     server,
-		reports:        server,
-		logs:           server,
-		jobs:           newKubernetesRunJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
-		retryDelay:     pollRetryDelay,
-		observeEvery:   jobObservationPeriod,
-		heartbeatEvery: observationHeartbeatPeriod,
-		now:            time.Now,
-		observedRuns:   make(map[uuid.UUID]*runObserver),
+		clusterName:      cfg.ClusterName,
+		serverURL:        cfg.ServerURL,
+		logger:           logger.With("component", "controller"),
+		server:           server,
+		enrollment:       server,
+		reports:          server,
+		promotionReports: server,
+		logs:             server,
+		jobs:             newKubernetesRunJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
+		retryDelay:       pollRetryDelay,
+		observeEvery:     jobObservationPeriod,
+		heartbeatEvery:   observationHeartbeatPeriod,
+		now:              time.Now,
+		observedRuns:     make(map[uuid.UUID]*runObserver),
 	}
 	if len(cfg.KargoIntegrations) > 0 {
 		controller.stageObservers = newKargoStageObservers(
@@ -126,6 +138,7 @@ func New(
 			server,
 			logger,
 		)
+		controller.promotions = newDynamicKargoPromotionCreator(cfg.KargoIntegrations, dynamicClient)
 	}
 
 	return controller, nil
@@ -266,6 +279,14 @@ func (c *Controller) handleCommand(ctx context.Context, command api.ControllerCo
 		}
 
 		return c.handleCancellation(ctx, *command.Cancel)
+	case api.ControllerCommandTypeCreateKargoPromotion:
+		if command.Promotion == nil {
+			c.logger.Warn("create-kargo-promotion command has no payload")
+
+			return nil
+		}
+
+		return c.handleKargoPromotionCreation(ctx, *command.Promotion)
 	default:
 		c.logger.Warn("unsupported controller command", "type", command.Type)
 

@@ -254,6 +254,49 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
 		}
 	}
+	if strings.Contains(response.Body.String(), `"kargoUrl"`) {
+		t.Errorf("creating Promotion response enabled Kargo link: %s", response.Body)
+	}
+}
+
+func TestOperatorPromotionKargoLinkRequiresSuccessfulDispatch(t *testing.T) {
+	t.Parallel()
+
+	record := promotion.Promotion{
+		Source:              promotion.SourceSlipramp,
+		Integration:         "prod",
+		ExternalPromotionID: "slipramp-018f90ff-9fd8-7b5f-b7e1-f32ff54c1930",
+		StageSnapshot:       []byte(`{"project":"kargo-core","name":"external-dns-prod"}`),
+		RepositorySnapshot:  []byte(`{"name":"ops"}`),
+		PolicySnapshot:      []byte(`{"effectiveMode":"review-required"}`),
+		Status:              promotion.StatusPreparing,
+		RequestedBySnapshot: productidentity.ActorSnapshot{
+			PrincipalID: uuid.New(),
+			Kind:        productidentity.KindUser,
+			DisplayName: "Operator",
+		},
+	}
+	record.RequestedByPrincipalID = record.RequestedBySnapshot.PrincipalID
+	integrations := promotion.IntegrationSet{"prod": {UIURL: "https://kargo.example.com"}}
+
+	body, err := promotionResponse(promotion.PromotionReview{Promotion: record}, nil, integrations)
+	if err != nil {
+		t.Fatalf("promotionResponse() error = %v", err)
+	}
+	if body.KargoURL != nil {
+		t.Errorf("undispatched operator Promotion KargoURL = %q", *body.KargoURL)
+	}
+
+	uid := "promotion-uid"
+	record.KargoPromotionUID = &uid
+	body, err = promotionResponse(promotion.PromotionReview{Promotion: record}, nil, integrations)
+	if err != nil {
+		t.Fatalf("dispatched promotionResponse() error = %v", err)
+	}
+	if body.KargoURL == nil || *body.KargoURL !=
+		"https://kargo.example.com/project/kargo-core/promotion/"+record.ExternalPromotionID {
+		t.Errorf("dispatched operator Promotion KargoURL = %v", body.KargoURL)
+	}
 }
 
 func TestReplaceKargoStageSnapshotRejectsClusterMismatch(t *testing.T) {
@@ -440,6 +483,7 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 		promotions: promotion.PromotionReviewList{
 			Items: []promotion.PromotionReview{{Promotion: promotion.Promotion{
 				ID:                     promotionID,
+				Source:                 promotion.SourceKargo,
 				Integration:            "prod",
 				ExternalPromotionID:    "external-dns-01jbe4q8",
 				StageID:                stageID,

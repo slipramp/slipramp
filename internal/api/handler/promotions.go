@@ -28,6 +28,11 @@ type PromotionCreationService interface {
 	Create(context.Context, promotion.OperatorPromotionRequest) (promotion.Promotion, error)
 }
 
+type PromotionCreationDispatchService interface {
+	Next(context.Context, string) (promotion.CreationCommand, error)
+	Report(context.Context, string, promotion.CreationDispatchReport) error
+}
+
 type PromotionStageService interface {
 	ReplaceStageSnapshot(
 		ctx context.Context,
@@ -743,7 +748,7 @@ func promotionResponse(
 		ExpiresAt:              record.ExpiresAt,
 		UpdatedAt:              record.UpdatedAt,
 	}
-	if record.Source == promotion.SourceKargo || record.KargoPromotionUID != nil || record.Status != promotion.StatusCreating {
+	if record.Source == promotion.SourceKargo || record.KargoPromotionUID != nil {
 		body.KargoURL = integrations.KargoPromotionURL(
 			record.Integration,
 			project,

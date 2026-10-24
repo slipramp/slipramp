@@ -47,7 +47,7 @@ subjects:
 {{- end }}
 {{- end }}
 {{- range $namespace, $_ := $namespaces }}
-{{- $roleName := printf "%s-kargo-stages" (include "slipramp-controller.fullname" $root) | trunc 63 | trimSuffix "-" }}
+{{- $roleName := printf "%s-kargo" (include "slipramp-controller.fullname" $root) | trunc 63 | trimSuffix "-" }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -59,7 +59,10 @@ metadata:
 rules:
   - apiGroups: [kargo.akuity.io]
     resources: [stages]
-    verbs: [get, list]
+    verbs: [get, list, promote]
+  - apiGroups: [kargo.akuity.io]
+    resources: [promotions]
+    verbs: [create, get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

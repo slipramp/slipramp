@@ -23,6 +23,11 @@ credentials:
       key: controller-token
 gitCredentials:
   acceptance: acceptance-git-client
+kargo:
+  integrations:
+    - name: acceptance
+      stageNamespaces:
+        - kargo-acceptance
 resources:
   requests:
     cpu: 25m

@@ -19,6 +19,7 @@ import (
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
@@ -353,6 +354,131 @@ func TestControllerPollPrioritizesCancelRun(t *testing.T) {
 	}
 	if runs.nextCalls != 0 {
 		t.Errorf("next assignment calls = %d, want 0", runs.nextCalls)
+	}
+}
+
+func TestControllerPollDispatchesKargoPromotionBeforeRunAssignment(t *testing.T) {
+	t.Parallel()
+
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1960")
+	dispatches := &recordingPromotionDispatchService{next: promotion.CreationCommand{
+		PromotionID:  promotionID,
+		Attempt:      2,
+		ExternalName: "slipramp-" + promotionID.String(),
+		Integration:  "prod",
+		Project:      "kargo-core",
+		Stage:        "external-dns-prod",
+		StageUID:     "stage-uid",
+		Freight:      "freight-42",
+	}}
+	runs := &recordingRunService{next: runAssignmentRecord()}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/poll?timeoutSeconds=0",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	response := httptest.NewRecorder()
+
+	newPromotionDispatchTestHandler(&recordingClusterService{}, runs, dispatches).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	var command api.ControllerCommand
+	if err := json.NewDecoder(response.Body).Decode(&command); err != nil {
+		t.Fatal(err)
+	}
+	if command.Type != api.ControllerCommandTypeCreateKargoPromotion || command.Promotion == nil ||
+		command.Promotion.ID != promotionID || command.Promotion.Attempt != 2 ||
+		command.Promotion.Project != "kargo-core" || command.Promotion.Freight != "freight-42" {
+		t.Errorf("command = %#v", command)
+	}
+	if dispatches.nextCluster != "colo" || dispatches.nextCalls != 1 || runs.nextCalls != 0 {
+		t.Errorf(
+			"dispatch calls = %d for %q, Run calls = %d",
+			dispatches.nextCalls,
+			dispatches.nextCluster,
+			runs.nextCalls,
+		)
+	}
+}
+
+func TestControllerReportsKargoPromotionDispatch(t *testing.T) {
+	t.Parallel()
+
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1961")
+	dispatches := &recordingPromotionDispatchService{}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/promotions/"+promotionID.String()+"/dispatch",
+		strings.NewReader(`{"attempt":2,"result":"created","kargoUid":"promotion-uid"}`),
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	request.Header.Set("Content-Type", "application/json")
+	controllers := &recordingClusterService{}
+	response := httptest.NewRecorder()
+
+	newPromotionDispatchTestHandler(controllers, nil, dispatches).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
+	}
+	if dispatches.reportCalls != 1 || dispatches.reportCluster != "colo" ||
+		dispatches.report.PromotionID != promotionID || dispatches.report.Attempt != 2 ||
+		dispatches.report.KargoUID == nil || *dispatches.report.KargoUID != "promotion-uid" {
+		t.Errorf("report = %#v for cluster %q", dispatches.report, dispatches.reportCluster)
+	}
+	if controllers.calls != 1 {
+		t.Errorf("controller contacts = %d, want 1", controllers.calls)
+	}
+}
+
+func TestControllerKargoPromotionDispatchMapsFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		token      string
+		reportErr  error
+		wantStatus int
+		wantCalls  int
+	}{
+		{name: "missing credential", wantStatus: http.StatusUnauthorized},
+		{name: "invalid report", token: "controller-token", reportErr: promotion.ErrInvalid, wantStatus: 400, wantCalls: 1},
+		{name: "wrong cluster", token: "controller-token", reportErr: promotion.ErrPromotionNotFound, wantStatus: 404, wantCalls: 1},
+		{name: "identity conflict", token: "controller-token", reportErr: promotion.ErrCreationDispatchConflict, wantStatus: 409, wantCalls: 1},
+		{name: "store failure", token: "controller-token", reportErr: errors.New("database unavailable"), wantStatus: 500, wantCalls: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			dispatches := &recordingPromotionDispatchService{reportErr: test.reportErr}
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/controller/v1/promotions/018f90ff-9fd8-7b5f-b7e1-f32ff54c1961/dispatch",
+				strings.NewReader(`{"attempt":1,"result":"created","kargoUid":"promotion-uid"}`),
+			)
+			if test.token != "" {
+				request.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+
+			newPromotionDispatchTestHandler(&recordingClusterService{}, nil, dispatches).ServeHTTP(response, request)
+
+			assertProblem(t, response, test.wantStatus)
+			if dispatches.reportCalls != test.wantCalls {
+				t.Errorf("report calls = %d, want %d", dispatches.reportCalls, test.wantCalls)
+			}
+			if strings.Contains(response.Body.String(), "database unavailable") {
+				t.Error("internal error details were exposed")
+			}
+		})
 	}
 }
 
@@ -752,6 +878,54 @@ type recordingArtifactService struct {
 	calls   int
 	request artifact.AppendLogChunkRequest
 	err     error
+}
+
+type recordingPromotionDispatchService struct {
+	next          promotion.CreationCommand
+	nextErr       error
+	nextCalls     int
+	nextCluster   string
+	report        promotion.CreationDispatchReport
+	reportErr     error
+	reportCalls   int
+	reportCluster string
+}
+
+func (s *recordingPromotionDispatchService) Next(
+	_ context.Context,
+	clusterName string,
+) (promotion.CreationCommand, error) {
+	s.nextCalls++
+	s.nextCluster = clusterName
+	return s.next, s.nextErr
+}
+
+func (s *recordingPromotionDispatchService) Report(
+	_ context.Context,
+	clusterName string,
+	report promotion.CreationDispatchReport,
+) error {
+	s.reportCalls++
+	s.reportCluster = clusterName
+	s.report = report
+	return s.reportErr
+}
+
+func newPromotionDispatchTestHandler(
+	clusters ClusterService,
+	runs RunService,
+	dispatches PromotionCreationDispatchService,
+) http.Handler {
+	identities := controllerIdentityFor("controller-token", "colo")
+	return NewHTTP(
+		Dependencies{
+			Clusters:             clusters,
+			ControllerIdentities: identities,
+			Runs:                 runs,
+			PromotionDispatches:  dispatches,
+		},
+		HTTPOptions{},
+	)
 }
 
 func (r *recordingArtifactService) AppendLogChunk(_ context.Context, request artifact.AppendLogChunkRequest) error {

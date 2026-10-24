@@ -15,8 +15,8 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { useMemo, useState } from "react";
-import { Form, Link, useNavigation } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Form, Link, useNavigation, useRevalidator } from "react-router";
 
 import { proxyArtifactDownload } from "~/api/artifact-download.server";
 import { createServerAPIClient, getServerAPIURL } from "~/api/client.server";
@@ -114,6 +114,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
 export default function PromotionDetail({ actionData, loaderData }: Route.ComponentProps) {
   useActionSuccessToast(actionData, "Decision recorded", actionData?.message);
+  useCreatingPromotionRefresh(loaderData.promotion?.status === "creating");
 
   if (!loaderData.promotion) {
     return (
@@ -170,6 +171,22 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       <DecisionPanel canWrite={canWrite} promotion={promotion} />
     </Stack>
   );
+}
+
+function useCreatingPromotionRefresh(creating: boolean) {
+  const revalidator = useRevalidator();
+
+  useEffect(() => {
+    if (!creating) return;
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible" && revalidator.state === "idle") {
+        void revalidator.revalidate();
+      }
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [creating, revalidator]);
 }
 
 function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {

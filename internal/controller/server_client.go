@@ -87,6 +87,12 @@ type controllerAPI interface {
 		body api.ReportRunObservationJSONRequestBody,
 		reqEditors ...api.RequestEditorFn,
 	) (*api.ReportRunObservationResponse, error)
+	ReportKargoPromotionDispatchWithResponse(
+		ctx context.Context,
+		promotionID uuid.UUID,
+		body api.ReportKargoPromotionDispatchJSONRequestBody,
+		reqEditors ...api.RequestEditorFn,
+	) (*api.ReportKargoPromotionDispatchResponse, error)
 	ReplaceKargoStageSnapshotWithResponse(
 		ctx context.Context,
 		integration api.CatalogName,
@@ -266,6 +272,37 @@ func (c *serverClient) ReportObservation(ctx context.Context, runID uuid.UUID, o
 		return rejectedServerResponse("report Run observation", response.StatusCode(), errRunObservationRejected)
 	default:
 		return rejectedServerResponse("report Run observation", response.StatusCode(), nil)
+	}
+}
+
+func (c *serverClient) ReportKargoPromotionDispatch(
+	ctx context.Context,
+	promotionID uuid.UUID,
+	report api.KargoPromotionDispatchReport,
+) error {
+	response, err := c.api.ReportKargoPromotionDispatchWithResponse(
+		ctx,
+		promotionID,
+		report,
+		controllerAuthorization(c.bearerToken),
+	)
+	if err != nil {
+		return fmt.Errorf("report Kargo Promotion dispatch: %w", err)
+	}
+
+	switch response.StatusCode() {
+	case http.StatusNoContent:
+		return nil
+	case http.StatusUnauthorized:
+		return errControllerCredentialRejected
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict:
+		return rejectedServerResponse(
+			"report Kargo Promotion dispatch",
+			response.StatusCode(),
+			errKargoPromotionDispatchRejected,
+		)
+	default:
+		return rejectedServerResponse("report Kargo Promotion dispatch", response.StatusCode(), nil)
 	}
 }
 

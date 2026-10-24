@@ -10,10 +10,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
+
+const maximumPromotionRequestTransactionAttempts = 3
 
 func (d *Database) AcceptPromotionRequest(
 	ctx context.Context,
@@ -22,6 +25,23 @@ func (d *Database) AcceptPromotionRequest(
 	if err := acceptance.Validate(); err != nil {
 		return promotion.Promotion{}, err
 	}
+
+	var record promotion.Promotion
+	var err error
+	for range maximumPromotionRequestTransactionAttempts {
+		record, err = d.acceptPromotionRequest(ctx, acceptance)
+		if !promotionRequestSerializationFailure(err) {
+			return record, err
+		}
+	}
+
+	return promotion.Promotion{}, err
+}
+
+func (d *Database) acceptPromotionRequest(
+	ctx context.Context,
+	acceptance promotion.PromotionAcceptance,
+) (promotion.Promotion, error) {
 
 	transaction, err := d.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
@@ -32,15 +52,15 @@ func (d *Database) AcceptPromotionRequest(
 	}()
 	queries := d.queries.WithTx(transaction)
 
-	existing, err := queries.GetPromotionByExternalIdentity(
+	existing, err := queries.LockPromotionByExternalIdentity(
 		ctx,
-		storedb.GetPromotionByExternalIdentityParams{
+		storedb.LockPromotionByExternalIdentityParams{
 			Integration:         acceptance.Integration,
 			ExternalPromotionID: acceptance.Request.ExternalPromotionID,
 		},
 	)
 	if err == nil {
-		return finishExistingPromotionRequest(ctx, transaction, existing, acceptance.RequestDigest)
+		return finishExistingPromotionRequest(ctx, queries, transaction, existing, acceptance)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, fmt.Errorf("get existing Kargo Promotion request: %w", err)
@@ -220,22 +240,64 @@ func (d *Database) existingPromotionRequest(
 
 func finishExistingPromotionRequest(
 	ctx context.Context,
+	queries *storedb.Queries,
 	transaction pgx.Tx,
 	row storedb.Promotion,
-	digest promotion.RequestDigest,
+	acceptance promotion.PromotionAcceptance,
 ) (promotion.Promotion, error) {
 	existing, err := promotionFromRow(row)
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
-	if existing.RequestDigest != digest {
+	if existing.RequestDigest != (promotion.RequestDigest{}) {
+		if existing.RequestDigest != acceptance.RequestDigest {
+			return promotion.Promotion{}, promotion.ErrIdentityConflict
+		}
+		if err := transaction.Commit(ctx); err != nil {
+			return promotion.Promotion{}, fmt.Errorf("commit repeated Kargo Promotion request: %w", err)
+		}
+
+		return existing, nil
+	}
+	if existing.Source != promotion.SourceSlipramp || existing.Status != promotion.StatusCreating {
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}
-	if err := transaction.Commit(ctx); err != nil {
-		return promotion.Promotion{}, fmt.Errorf("commit repeated Kargo Promotion request: %w", err)
+
+	var stage promotion.PromotionStageSnapshot
+	if err := json.Unmarshal(existing.StageSnapshot, &stage); err != nil {
+		return promotion.Promotion{}, fmt.Errorf("decode operator Promotion Stage snapshot: %w", err)
+	}
+	if stage.Project != acceptance.Request.Project || stage.Name != acceptance.Request.Stage {
+		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}
 
-	return existing, nil
+	row, err = queries.HydrateOperatorPromotion(
+		ctx,
+		storedb.HydrateOperatorPromotionParams{
+			RequestDigest:     acceptance.RequestDigest[:],
+			BaseRevision:      optionalString(acceptance.Request.BaseRevision),
+			CandidateRevision: optionalString(acceptance.Request.CandidateRevision),
+			CandidateBranch:   optionalString(acceptance.Request.CandidateBranch),
+			HydratedAt:        databaseTime(acceptance.AcceptedAt),
+			ID:                databaseUUID(existing.ID),
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return promotion.Promotion{}, promotion.ErrIdentityConflict
+	}
+	if err != nil {
+		return promotion.Promotion{}, fmt.Errorf("hydrate operator Promotion request: %w", err)
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return promotion.Promotion{}, fmt.Errorf("commit operator Promotion hydration: %w", err)
+	}
+
+	return promotionFromRow(row)
+}
+
+func promotionRequestSerializationFailure(err error) bool {
+	var databaseError *pgconn.PgError
+	return errors.As(err, &databaseError) && databaseError.Code == "40001"
 }
 
 func (d *Database) GetPromotionAwaitingDispatch(ctx context.Context) (promotion.Promotion, error) {

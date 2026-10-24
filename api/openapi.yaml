@@ -34,6 +34,8 @@ paths:
     $ref: ./paths/controllers.yaml#/enroll
   /controller/v1/poll:
     $ref: ./paths/controllers.yaml#/poll
+  /controller/v1/promotions/{promotionId}/dispatch:
+    $ref: ./paths/controllers.yaml#/promotionDispatch
   /controller/v1/runs/{runId}/observations:
     $ref: ./paths/controllers.yaml#/runObservations
   /controller/v1/runs/{runId}/log-chunks:

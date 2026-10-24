@@ -431,6 +431,7 @@ PromotionPipelineStage:
     - name
     - environment
     - freight
+    - promotionSources
     - pendingPromotionCount
     - lastObservedAt
   properties:
@@ -447,6 +448,10 @@ PromotionPipelineStage:
       maxLength: 200
     freight:
       $ref: "#/PromotionFreight"
+    promotionSources:
+      type: array
+      items:
+        $ref: "#/PromotionFreightSource"
     pendingPromotionCount:
       type: integer
       minimum: 0
@@ -457,6 +462,29 @@ PromotionPipelineStage:
       type: string
       format: uri
       description: Direct link to this Stage in the configured Kargo UI.
+
+PromotionFreightSource:
+  type: object
+  additionalProperties: false
+  required:
+    - stageId
+    - stageName
+    - environment
+    - freight
+  properties:
+    stageId:
+      type: string
+      format: uuid
+    stageName:
+      type: string
+      minLength: 1
+      maxLength: 253
+    environment:
+      type: string
+      minLength: 1
+      maxLength: 200
+    freight:
+      $ref: "#/PromotionFreight"
 
 PromotionPipeline:
   type: object
@@ -539,6 +567,7 @@ PromotionBranchDriftStage:
     - environment
     - targetBranch
     - sourcePaths
+    - freight
     - status
     - lastObservedAt
   properties:
@@ -575,6 +604,8 @@ PromotionBranchDriftStage:
         type: string
         minLength: 1
         maxLength: 1024
+    freight:
+      $ref: "#/PromotionFreight"
     status:
       $ref: "#/PromotionBranchDriftStatus"
     acknowledgedSourceCommit:

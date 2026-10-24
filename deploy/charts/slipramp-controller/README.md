@@ -51,9 +51,9 @@ Harness image entrypoint must be `slipramp-harness`.
 
 Kargo Stage observation is optional and configured separately from execution
 namespaces. For every distinct configured Stage namespace, the chart creates a
-dedicated Role and RoleBinding that can only get and list
-`kargo.akuity.io/v1alpha1` Stage resources. No cluster-wide Kargo permission is
-created.
+dedicated Role and RoleBinding. It can get, list, and promote
+`kargo.akuity.io/v1alpha1` Stage resources and get or create Promotion resources
+for operator-started Promotions. No cluster-wide Kargo permission is created.
 
 ```yaml
 kargo:

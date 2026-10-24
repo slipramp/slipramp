@@ -140,6 +140,9 @@ import type {
   ReplaceKargoStageSnapshotData,
   ReplaceKargoStageSnapshotErrors,
   ReplaceKargoStageSnapshotResponses,
+  ReportKargoPromotionDispatchData,
+  ReportKargoPromotionDispatchErrors,
+  ReportKargoPromotionDispatchResponses,
   ReportRunObservationData,
   ReportRunObservationErrors,
   ReportRunObservationResponses,
@@ -583,7 +586,7 @@ export const enrollController = <ThrowOnError extends boolean = false>(
 /**
  * Poll for a controller command
  *
- * Records the authenticated cluster controller as healthy and waits to assign or cancel a Run for its cluster. An empty response means no command became available before the requested wait elapsed.
+ * Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
  */
 export const pollForControllerCommand = <ThrowOnError extends boolean = false>(
   options?: Options<PollForControllerCommandData, ThrowOnError>,
@@ -602,6 +605,38 @@ export const pollForControllerCommand = <ThrowOnError extends boolean = false>(
     ],
     url: "/controller/v1/poll",
     ...options,
+  });
+
+/**
+ * Report Kargo Promotion creation
+ *
+ * Reports the result of materializing an operator-started Kargo Promotion. Repeating a report for the same attempt and result is idempotent. A stale report cannot move a Promotion backward.
+ */
+export const reportKargoPromotionDispatch = <ThrowOnError extends boolean = false>(
+  options: Options<ReportKargoPromotionDispatchData, ThrowOnError>,
+): RequestResult<
+  ReportKargoPromotionDispatchResponses,
+  ReportKargoPromotionDispatchErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ReportKargoPromotionDispatchResponses,
+    ReportKargoPromotionDispatchErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "ControllerBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/controller/v1/promotions/{promotionId}/dispatch",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

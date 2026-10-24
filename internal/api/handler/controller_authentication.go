@@ -96,6 +96,20 @@ func ControllerAuthentication(authenticator ControllerAuthenticator) api.StrictM
 						)
 					},
 				)
+			case api.ReportKargoPromotionDispatchRequestObject:
+				return authenticateControllerRequest(
+					ctx,
+					writer,
+					request,
+					value,
+					authenticator,
+					next,
+					func() any {
+						return api.ReportKargoPromotionDispatch401ApplicationProblemPlusJSONResponse(
+							controllerUnauthorizedProblem(),
+						)
+					},
+				)
 			case api.ReplaceKargoStageSnapshotRequestObject:
 				return authenticateControllerRequest(
 					ctx,

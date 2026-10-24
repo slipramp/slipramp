@@ -74,6 +74,10 @@ func (h *Handler) ListPromotionBranchDrift(
 	for _, item := range result.Items {
 		stages := make([]api.PromotionBranchDriftStage, 0, len(item.Stages))
 		for _, stage := range item.Stages {
+			freight, decodeErr := promotionFreightResponse(stage.Stage.Freight)
+			if decodeErr != nil {
+				return nil, decodeErr
+			}
 			response := api.PromotionBranchDriftStage{
 				ID:             stage.Stage.ID,
 				Integration:    api.CatalogName(stage.Stage.Integration),
@@ -84,6 +88,7 @@ func (h *Handler) ListPromotionBranchDrift(
 				Environment:    stage.Stage.Environment,
 				TargetBranch:   stage.Stage.TargetBranch,
 				SourcePaths:    stage.Stage.SourcePaths,
+				Freight:        freight,
 				Status:         api.PromotionBranchDriftStatus(stage.Status),
 				LastObservedAt: stage.Stage.LastObservedAt,
 				KargoURL: h.kargoIntegrations.KargoStageURL(

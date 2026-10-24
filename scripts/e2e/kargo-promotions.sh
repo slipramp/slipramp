@@ -36,6 +36,61 @@ wait_for_pending_promotion() {
   return 1
 }
 
+wait_for_kargo_stage() {
+  local deadline=$((SECONDS + timeout_seconds))
+  local response
+  while ((SECONDS < deadline)); do
+    if response=$(api_get '/api/v1/promotion-stages?integration=acceptance' 2>/dev/null); then
+      if jq -e '
+        any(.items[];
+          .name == "acceptance" and
+          .project == "kargo-acceptance" and
+          any(.freight.items[]; .name == "acceptance-freight")
+        )
+      ' <<<"$response" >/dev/null; then
+        printf '%s\n' "$response"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'Kargo acceptance Stage was not observed\n' >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
+}
+
+wait_for_operator_promotion_dispatch() {
+  local promotion_id=$1
+  local deadline=$((SECONDS + timeout_seconds))
+  local response
+  while ((SECONDS < deadline)); do
+    if response=$(api_get "/api/v1/promotions/$promotion_id" 2>/dev/null); then
+      if jq -e '
+        .source == "slipramp" and
+        .status == "creating" and
+        .dispatchAttemptCount >= 1 and
+        (.dispatchedAt != null) and
+        (.kargoPromotionUid != null)
+      ' <<<"$response" >/dev/null; then
+        printf '%s\n' "$response"
+        return 0
+      fi
+      if [[ $(jq -r '.status' <<<"$response") != creating ]]; then
+        printf 'Operator Promotion %s left creating before its callback\n' \
+          "$promotion_id" >&2
+        printf '%s\n' "$response" >&2
+        return 1
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'Operator Promotion %s was not dispatched\n' "$promotion_id" >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
+}
+
 check_guarded_promotion() {
   local external_id=$1
   local candidate_revision=$2
@@ -123,7 +178,7 @@ check_guarded_promotion() {
   log "Promotion $external_id reached pending with retained diff artifacts"
 }
 
-log "configuring the Kargo acceptance service account and Stage snapshot"
+log "configuring the Kargo acceptance service account"
 kargo_principal_id=$(curl --fail-with-body --silent --show-error \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $product_api_key" \
@@ -135,24 +190,62 @@ kargo_api_key=$(curl --fail-with-body --silent --show-error \
   --data '{"name":"Kargo acceptance","scopes":["slipramp:promotions:submit"]}' \
   "$server_url/api/v1/service-accounts/$kargo_principal_id/api-keys" | jq -er '.token')
 
-kargo_snapshot=$(jq -cn \
-  --arg observedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg repositoryURL "$(jq -r '.cloneUrl' <<<"$repository_response")" '{
-    snapshotId: "00000000-0000-4000-8000-000000000001",
-    observedAt: $observedAt,
-    stages: [{
-      project: "kargo-acceptance", name: "acceptance",
-      kubernetesUid: "acceptance-stage", resourceVersion: "1",
-      application: "acceptance", environment: "acceptance",
-      repositoryUrl: $repositoryURL, targetBranch: "stage/acceptance/acceptance",
-      sourcePaths: ["review/manifest.yaml"], freight: {}
-    }]
-  }')
-curl --fail-with-body --silent --show-error -X PUT \
+kargo_stage_snapshot=$(wait_for_kargo_stage)
+kargo_stage_id=$(jq -er \
+  '.items[] | select(.name == "acceptance" and .project == "kargo-acceptance") | .id' \
+  <<<"$kargo_stage_snapshot")
+
+log "testing operator-started Promotion dispatch and callback hydration"
+operator_creation=$(curl --fail-with-body --silent --show-error \
   -H 'Content-Type: application/json' \
-  -H 'Authorization: Bearer acceptance-controller-token' \
-  --data "$kargo_snapshot" \
-  "$server_url/controller/v1/kargo/acceptance/stages"
+  -H "Authorization: Bearer $product_api_key" \
+  --data "{\"sourceStageId\":\"$kargo_stage_id\",\"freightName\":\"acceptance-freight\"}" \
+  "$server_url/api/v1/promotion-stages/$kargo_stage_id/promotions")
+operator_id=$(jq -er '.id' <<<"$operator_creation")
+operator_external_id=$(jq -er '.externalPromotionId' <<<"$operator_creation")
+jq -e \
+  --arg stage "$kargo_stage_id" '
+    .source == "slipramp" and .status == "creating" and
+    .stageId == $stage and .sourceStageId == $stage and
+    .selectedFreight.name == "acceptance-freight" and
+    .selectedFreight.origin == "Warehouse/acceptance"
+  ' <<<"$operator_creation" >/dev/null
+operator_dispatched=$(wait_for_operator_promotion_dispatch "$operator_id")
+operator_kargo_uid=$(jq -er '.kargoPromotionUid' <<<"$operator_dispatched")
+"${kubectl_command[@]}" -n kargo-acceptance get promotion "$operator_external_id" -o json |
+  jq -e \
+    --arg id "$operator_id" \
+    --arg uid "$operator_kargo_uid" '
+      .metadata.uid == $uid and
+      .metadata.annotations["slipramp.com/promotion-id"] == $id and
+      .spec.stage == "acceptance" and
+      .spec.freight == "acceptance-freight"
+    ' >/dev/null
+
+operator_callback=$(jq -cn \
+  --arg externalId "$operator_external_id" \
+  --arg base "$fixture_commit" \
+  --arg candidate "$candidate_commit" '{
+    externalPromotionId: $externalId, project: "kargo-acceptance",
+    stage: "acceptance", baseRevision: $base, candidateRevision: $candidate,
+    candidateBranch: "kargo/promotion/acceptance"
+  }')
+operator_hydrated=$(submit_kargo_promotion "$operator_callback")
+jq -e --arg id "$operator_id" '
+  .id == $id and .status == "approved" and .reviewRequired == false
+  ' <<<"$operator_hydrated" >/dev/null
+api_get "/api/v1/promotions/$operator_id" |
+  jq -e \
+    --arg principal "$(jq -r '.requestedBy.principalId' <<<"$operator_creation")" '
+      .source == "slipramp" and .status == "approved" and
+      .requestedBy.principalId == $principal and
+      (.candidateCommit.sha != null) and (.dispatchedAt != null) and
+      (.kargoPromotionUid != null)
+    ' >/dev/null
+operator_retry=$(submit_kargo_promotion "$operator_callback")
+jq -e --arg id "$operator_id" '.id == $id and .status == "approved"' \
+  <<<"$operator_retry" >/dev/null
+
 kargo_stage_id=$(api_get '/api/v1/promotion-stages?integration=acceptance' |
   jq -er '.items[] | select(.name == "acceptance") | .id')
 

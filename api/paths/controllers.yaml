@@ -132,8 +132,9 @@ poll:
     summary: Poll for a controller command
     description: >-
       Records the authenticated cluster controller as healthy and waits to
-      assign or cancel a Run for its cluster. An empty response means no command
-      became available before the requested wait elapsed.
+      assign or cancel a Run or create a Kargo Promotion for its cluster. An
+      empty response means no command became available before the requested
+      wait elapsed.
     security:
       - ControllerBearer: []
     tags:
@@ -179,6 +180,72 @@ poll:
               $ref: ../components/common.yaml#/Problem
       "500":
         description: The controller poll could not be completed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+promotionDispatch:
+  post:
+    operationId: reportKargoPromotionDispatch
+    summary: Report Kargo Promotion creation
+    description: >-
+      Reports the result of materializing an operator-started Kargo Promotion.
+      Repeating a report for the same attempt and result is idempotent. A stale
+      report cannot move a Promotion backward.
+    security:
+      - ControllerBearer: []
+    tags:
+      - Controllers
+    parameters:
+      - name: promotionId
+        in: path
+        required: true
+        description: Slipramp Promotion whose Kargo resource was dispatched.
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/controllers.yaml#/KargoPromotionDispatchReport
+    responses:
+      "204":
+        description: The dispatch result was recorded or was already reflected in newer state.
+      "400":
+        description: The dispatch report is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Promotion is not assigned to this controller's cluster.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The report conflicts with the materialized Kargo Promotion identity.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The dispatch result could not be recorded.
         content:
           application/problem+json:
             schema:

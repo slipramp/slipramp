@@ -9,11 +9,12 @@ strict priority order.
 
 ## Kargo completion and operations
 
-Stage discovery, policies, durable requests, ordinary preparation Runs, diff
-artifacts, decisions, expiry, Freight comparisons, and background-refreshed
-branch drift with Stage-level pagination are implemented. Live Kargo acceptance
-and the standalone Kargo Gate retirement are complete. Remaining work concerns
-operations rather than rebuilding that vertical.
+Stage discovery, policies, durable external and operator-started requests,
+Controller materialization, callback hydration, ordinary preparation Runs, diff
+artifacts, decisions, expiry, Freight comparisons, promotion actions, and
+background-refreshed branch drift with Stage-level pagination are implemented.
+Live Kargo acceptance and the standalone Kargo Gate retirement are complete.
+Remaining work concerns operations rather than rebuilding that vertical.
 
 ### Live cutover and acceptance
 
@@ -28,10 +29,6 @@ unobserved `kargo-ivy` project retains its direct-push tasks.
 
 ### Remaining capabilities
 
-- [ ] Complete Controller dispatch, callback hydration, and pipeline/branch-drift
-      actions for [operator-started Promotions](./KARGO_PROMOTION_CREATION_PLAN.md).
-      Durable creation, source attribution, and requested-Freight topology are
-      implemented.
 - [ ] Add explicit, observable candidate-branch expiry and cleanup with protection
       for pending Promotions.
 - [ ] Document Stage freshness, preparation and diff failures, review expiry,

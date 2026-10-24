@@ -210,6 +210,59 @@ func TestServerClientSubmitsAuthenticatedKargoStageSnapshot(t *testing.T) {
 	}
 }
 
+func TestServerClientReportsAuthenticatedKargoPromotionDispatch(t *testing.T) {
+	t.Parallel()
+
+	var received receivedEnrollment
+	cfg := validConfig()
+	cfg.ServerURL = "https://slipramp.example.com/slipramp"
+	client, err := newServerClientWithHTTPClient(
+		cfg,
+		httpDoerFunc(func(request *http.Request) (*http.Response, error) {
+			body, readErr := io.ReadAll(request.Body)
+			if readErr != nil {
+				t.Fatalf("read request body: %v", readErr)
+			}
+			received = receivedEnrollment{
+				method:        request.Method,
+				path:          request.URL.Path,
+				authorization: request.Header.Get("Authorization"),
+				body:          string(body),
+			}
+
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+	}
+
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1962")
+	diagnostic := "apiserver unavailable"
+	err = client.ReportKargoPromotionDispatch(
+		t.Context(),
+		promotionID,
+		api.KargoPromotionDispatchReport{
+			Attempt:    2,
+			Result:     api.KargoPromotionDispatchReportResultRetryable,
+			Diagnostic: &diagnostic,
+		},
+	)
+	if err != nil {
+		t.Fatalf("ReportKargoPromotionDispatch() error = %v", err)
+	}
+	if received.method != http.MethodPost ||
+		received.path != "/slipramp/controller/v1/promotions/"+promotionID.String()+"/dispatch" ||
+		received.authorization != "Bearer controller-token" ||
+		!strings.Contains(received.body, `"result":"retryable"`) ||
+		!strings.Contains(received.body, `"diagnostic":"apiserver unavailable"`) {
+		t.Errorf("dispatch request = %#v", received)
+	}
+}
+
 func TestServerClientAppendsAuthenticatedRunLogChunk(t *testing.T) {
 	t.Parallel()
 

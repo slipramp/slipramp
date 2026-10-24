@@ -6,8 +6,9 @@ execute exact commits as Kubernetes Jobs across one or more Clusters.
 
 Slipramp supports manual/API Runs, named Git triggers, live and retained logs,
 declared artifacts, pinned preview/apply flows, OIDC/API-key authentication, and
-optional Kargo Promotion reviews with Git and Argo CD diffs. Its Server has no
-Kubernetes access; in-cluster Controllers manage execution through outbound HTTP.
+optional Kargo Stage inventory, operator-started Promotions, and Promotion
+reviews with Git and Argo CD diffs. Its Server has no Kubernetes access;
+in-cluster Controllers manage execution through outbound HTTP.
 
 Named Git-trigger deliveries retry Run creation with durable exponential backoff:
 five seconds initially, doubling to a five-minute cap, with terminal failure on
@@ -71,7 +72,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_OIDC_REDIRECT_URL`                | Required                         | Absolute provider callback URL ending at `/api/v1/auth/callback`                                                           |
 | `SLIPRAMP_OIDC_SUBJECT_ROLES`               | Required                         | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required  |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME`         | `12h`                            | Absolute lifetime of a local browser session                                                                               |
-| `SLIPRAMP_KARGO_INTEGRATIONS`               | `{}`                             | JSON object containing optional named Kargo promotion-review integrations; each may include a Kargo `uiUrl` for deep links |
+| `SLIPRAMP_KARGO_INTEGRATIONS`               | `{}`                             | JSON object containing optional named Kargo integrations for Stage inventory, operator creation, review preparation, and optional Kargo UI deep links |
 
 OIDC configuration is required for the Server to start. The subject-role map is
 the installation's enrollment and role authority: unknown subjects cannot sign

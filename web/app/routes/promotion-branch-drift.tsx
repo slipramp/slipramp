@@ -1,7 +1,9 @@
 import { Alert, Badge, Group, Paper, Stack, Table, Text, Title } from "@mantine/core";
+import { useState } from "react";
 import { redirect } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
+  getCurrentPrincipal,
   listPromotionBranchDrift,
   type GitCommit,
   type PromotionBranchDriftRepository,
@@ -13,9 +15,16 @@ import { CommitReference } from "~/components/git-commit";
 import { KargoLink } from "~/components/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { PageHeader } from "~/components/page";
+import { PromotionCreateButton, PromotionCreateDialog } from "~/components/promotion-create-dialog";
 import { promotionScopeFilters } from "~/components/promotion-scope-filters";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
+import {
+  canWritePromotions,
+  inPlacePromotionChoices,
+  type PromotionChoice,
+} from "~/promotion-creation";
+import { submitPromotionCreation } from "~/promotion-creation.server";
 
 import type { Route } from "./+types/promotion-branch-drift";
 
@@ -33,18 +42,22 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const repository = optionalValue(url.searchParams.get("repository"));
   const status = optionalStatus(url.searchParams.get("status"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
-  const result = await listPromotionBranchDrift({
-    client: createServerAPIClient(request, context),
-    query: {
-      application,
-      integration,
-      limit: pageSize,
-      offset: (requestedPage - 1) * pageSize,
-      project,
-      repository,
-      status,
-    },
-  });
+  const client = createServerAPIClient(request, context);
+  const [result, principalResult] = await Promise.all([
+    listPromotionBranchDrift({
+      client,
+      query: {
+        application,
+        integration,
+        limit: pageSize,
+        offset: (requestedPage - 1) * pageSize,
+        project,
+        repository,
+        status,
+      },
+    }),
+    getCurrentPrincipal({ client }),
+  ]);
 
   if (result.data) {
     const lastPage = Math.max(1, Math.ceil(result.data.total / pageSize));
@@ -62,6 +75,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     integration,
     page: requestedPage,
     project,
+    principal: principalResult.data,
     repositories: result.data?.items ?? [],
     repository,
     status,
@@ -69,7 +83,13 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   };
 }
 
+export async function action({ context, request }: Route.ActionArgs) {
+  return submitPromotionCreation(request, context);
+}
+
 export default function PromotionBranchDrift({ loaderData }: Route.ComponentProps) {
+  const canWrite = canWritePromotions(loaderData.principal);
+
   return (
     <Stack gap="lg">
       <PageHeader
@@ -95,7 +115,11 @@ export default function PromotionBranchDrift({ loaderData }: Route.ComponentProp
         </Paper>
       ) : (
         loaderData.repositories.map((repository) => (
-          <BranchDriftRepository key={repository.repository} repository={repository} />
+          <BranchDriftRepository
+            canWrite={canWrite}
+            key={repository.repository}
+            repository={repository}
+          />
         ))
       )}
 
@@ -159,8 +183,9 @@ function BranchDriftFilters({
 }
 
 function BranchDriftRepository({
+  canWrite,
   repository,
-}: Readonly<{ repository: PromotionBranchDriftRepository }>) {
+}: Readonly<{ canWrite: boolean; repository: PromotionBranchDriftRepository }>) {
   const sharedSourcePaths = commonSourcePaths(repository.stages);
 
   return (
@@ -209,11 +234,13 @@ function BranchDriftRepository({
                 <Table.Th>Status</Table.Th>
                 <Table.Th>Source updated</Table.Th>
                 <Table.Th>Last rendered</Table.Th>
+                <Table.Th aria-label="Actions" />
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {repository.stages.map((stage) => (
                 <BranchDriftRow
+                  canWrite={canWrite}
                   key={stage.id}
                   sharedSourcePaths={sharedSourcePaths}
                   sourceBranch={repository.sourceBranch}
@@ -229,59 +256,80 @@ function BranchDriftRepository({
 }
 
 function BranchDriftRow({
+  canWrite,
   sharedSourcePaths,
   sourceBranch,
   stage,
 }: Readonly<{
+  canWrite: boolean;
   sharedSourcePaths: string[];
   sourceBranch?: string;
   stage: PromotionBranchDriftStage;
 }>) {
   const stageSpecificPaths = stage.sourcePaths.filter((path) => !sharedSourcePaths.includes(path));
+  const choices = inPlacePromotionChoices(stage);
+  const [dialogChoices, setDialogChoices] = useState<PromotionChoice[] | undefined>();
 
   return (
-    <Table.Tr>
-      <Table.Td>
-        <Stack gap={0}>
-          {stage.kargoUrl ? (
-            <KargoLink fw={600} size="sm" url={stage.kargoUrl}>
-              {stage.name}
-            </KargoLink>
-          ) : (
-            <Text fw={600}>{stage.name}</Text>
-          )}
-          <Text size="sm">
-            {stage.application} · {stage.environment}
-          </Text>
-          <Text c="dimmed" size="xs">
-            {stage.integration} · {stage.cluster} · {stage.project}
-          </Text>
-          {stageSpecificPaths.length > 0 ? (
+    <>
+      <Table.Tr>
+        <Table.Td>
+          <Stack gap={0}>
+            {stage.kargoUrl ? (
+              <KargoLink fw={600} size="sm" url={stage.kargoUrl}>
+                {stage.name}
+              </KargoLink>
+            ) : (
+              <Text fw={600}>{stage.name}</Text>
+            )}
+            <Text size="sm">
+              {stage.application} · {stage.environment}
+            </Text>
             <Text c="dimmed" size="xs">
-              Also watches {stageSpecificPaths.join(", ")}
+              {stage.integration} · {stage.cluster} · {stage.project}
             </Text>
+            {stageSpecificPaths.length > 0 ? (
+              <Text c="dimmed" size="xs">
+                Also watches {stageSpecificPaths.join(", ")}
+              </Text>
+            ) : null}
+          </Stack>
+        </Table.Td>
+        <Table.Td>
+          <Stack align="flex-start" gap="xs">
+            <Badge color={statusColor(stage.status)} variant="light">
+              {statusLabel(stage.status)}
+            </Badge>
+            {stage.message ? (
+              <Text c="dimmed" maw={300} size="xs">
+                {stage.message}
+              </Text>
+            ) : null}
+          </Stack>
+        </Table.Td>
+        <Table.Td>
+          <CommitMoment branch={sourceBranch} commit={stage.sourceBranchCommit} />
+        </Table.Td>
+        <Table.Td>
+          <CommitMoment branch={stage.targetBranch} commit={stage.acknowledgedRenderCommit} />
+        </Table.Td>
+        <Table.Td ta="right">
+          {canWrite && stage.status === "drifted" ? (
+            <PromotionCreateButton
+              choices={choices}
+              onClick={() => setDialogChoices(choices)}
+              unavailableLabel="This Stage has no current Freight to promote in place."
+            />
           ) : null}
-        </Stack>
-      </Table.Td>
-      <Table.Td>
-        <Stack align="flex-start" gap="xs">
-          <Badge color={statusColor(stage.status)} variant="light">
-            {statusLabel(stage.status)}
-          </Badge>
-          {stage.message ? (
-            <Text c="dimmed" maw={300} size="xs">
-              {stage.message}
-            </Text>
-          ) : null}
-        </Stack>
-      </Table.Td>
-      <Table.Td>
-        <CommitMoment branch={sourceBranch} commit={stage.sourceBranchCommit} />
-      </Table.Td>
-      <Table.Td>
-        <CommitMoment branch={stage.targetBranch} commit={stage.acknowledgedRenderCommit} />
-      </Table.Td>
-    </Table.Tr>
+        </Table.Td>
+      </Table.Tr>
+      {dialogChoices ? (
+        <PromotionCreateDialog
+          choices={dialogChoices}
+          onClose={() => setDialogChoices(undefined)}
+        />
+      ) : null}
+    </>
   );
 }
 

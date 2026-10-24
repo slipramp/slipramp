@@ -28,6 +28,7 @@ type Handler struct {
 	artifacts            ArtifactService
 	promotionRequests    PromotionRequestService
 	promotionCreations   PromotionCreationService
+	promotionDispatches  PromotionCreationDispatchService
 	promotionStages      PromotionStageService
 	promotionReviews     PromotionReviewService
 	promotionProjects    PromotionProjectService
@@ -61,6 +62,7 @@ type Dependencies struct {
 	Artifacts             ArtifactService
 	PromotionRequests     PromotionRequestService
 	PromotionCreations    PromotionCreationService
+	PromotionDispatches   PromotionCreationDispatchService
 	PromotionStages       PromotionStageService
 	PromotionReviews      PromotionReviewService
 	PromotionProjects     PromotionProjectService
@@ -87,6 +89,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		artifacts:            dependencies.Artifacts,
 		promotionRequests:    dependencies.PromotionRequests,
 		promotionCreations:   dependencies.PromotionCreations,
+		promotionDispatches:  dependencies.PromotionDispatches,
 		promotionStages:      dependencies.PromotionStages,
 		promotionReviews:     dependencies.PromotionReviews,
 		promotionProjects:    dependencies.PromotionProjects,

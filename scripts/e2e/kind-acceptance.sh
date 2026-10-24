@@ -516,6 +516,14 @@ log "deploying PostgreSQL and RustFS"
   --for=condition=complete job/rustfs-init --timeout="${timeout_seconds}s"
 
 log "deploying the acceptance fixtures"
+"${kubectl_command[@]}" apply -f \
+  "$repository_root/deploy/e2e/kind/kargo-api.yaml"
+"${kubectl_command[@]}" wait --for=condition=Established \
+  crd/stages.kargo.akuity.io \
+  crd/promotions.kargo.akuity.io \
+  --timeout="${timeout_seconds}s"
+"${kubectl_command[@]}" apply -f \
+  "$repository_root/deploy/e2e/kind/kargo-stage.yaml"
 "${kubectl_command[@]}" -n "$system_namespace" create configmap \
   acceptance-repository \
   --from-file="repository.bundle=$temporary_directory/repository.bundle" \

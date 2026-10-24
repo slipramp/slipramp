@@ -29,7 +29,15 @@ type FreightPipelineListFilter struct {
 
 type FreightPipelineStage struct {
 	Stage                 Stage
+	PromotionSources      []FreightPromotionSource
 	PendingPromotionCount int
+}
+
+type FreightPromotionSource struct {
+	StageID     uuid.UUID
+	StageName   string
+	Environment string
+	Freight     []FreightItem
 }
 
 type FreightPipeline struct {
@@ -106,12 +114,17 @@ func (s *FreightPipelineService) List(
 	}
 
 	builders := make(map[pipelineKey]*pipelineBuilder)
+	activeStages := make(map[stageIdentity]Stage)
 	for _, stage := range stages {
-		if stage.ArchivedAt != nil || !stageMatchesPipelineFilter(stage, filter) {
+		if stage.ArchivedAt != nil {
 			continue
 		}
 		integration, ok := s.integrations.Lookup(stage.Integration)
 		if !ok {
+			continue
+		}
+		activeStages[newStageIdentity(stage)] = stage
+		if !stageMatchesPipelineFilter(stage, filter) {
 			continue
 		}
 
@@ -150,6 +163,13 @@ func (s *FreightPipelineService) List(
 
 	items := make([]FreightPipeline, 0, len(builders))
 	for _, builder := range builders {
+		for index := range builder.pipeline.Stages {
+			sources, sourceErr := promotionSources(builder.pipeline.Stages[index].Stage, activeStages)
+			if sourceErr != nil {
+				return FreightPipelineList{}, sourceErr
+			}
+			builder.pipeline.Stages[index].PromotionSources = sources
+		}
 		unknownEnvironments := make([]string, 0, len(builder.unknownEnvs))
 		for environment := range builder.unknownEnvs {
 			unknownEnvironments = append(unknownEnvironments, environment)
@@ -199,6 +219,63 @@ func (s *FreightPipelineService) List(
 	items = page(items, filter.Offset, filter.Limit)
 
 	return FreightPipelineList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+type stageIdentity struct {
+	integration string
+	cluster     string
+	project     string
+	name        string
+}
+
+func newStageIdentity(stage Stage) stageIdentity {
+	return stageIdentity{
+		integration: stage.Integration,
+		cluster:     stage.ClusterName,
+		project:     stage.Project,
+		name:        stage.Name,
+	}
+}
+
+func promotionSources(target Stage, stages map[stageIdentity]Stage) ([]FreightPromotionSource, error) {
+	sources := make([]FreightPromotionSource, 0)
+	sourceIndexes := make(map[uuid.UUID]int)
+	for _, request := range target.RequestedFreight {
+		for _, sourceName := range request.SourceStages {
+			identity := newStageIdentity(target)
+			identity.name = sourceName
+			source, ok := stages[identity]
+			if !ok {
+				continue
+			}
+
+			var freight struct {
+				Items []FreightItem `json:"items"`
+			}
+			if err := json.Unmarshal(source.Freight, &freight); err != nil {
+				return nil, fmt.Errorf("decode promotion source Freight for Stage %s: %w", source.ID, err)
+			}
+			for _, item := range freight.Items {
+				if item.Origin != request.Origin {
+					continue
+				}
+				index, exists := sourceIndexes[source.ID]
+				if !exists {
+					index = len(sources)
+					sourceIndexes[source.ID] = index
+					sources = append(sources, FreightPromotionSource{
+						StageID:     source.ID,
+						StageName:   source.Name,
+						Environment: source.Environment,
+						Freight:     []FreightItem{},
+					})
+				}
+				sources[index].Freight = append(sources[index].Freight, item)
+			}
+		}
+	}
+
+	return sources, nil
 }
 
 func (s FreightComparisonStatus) Valid() bool {

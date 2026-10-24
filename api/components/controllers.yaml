@@ -118,12 +118,89 @@ ControllerCommand:
       enum:
         - run-assignment
         - cancel-run
+        - create-kargo-promotion
     assignment:
       $ref: "#/RunAssignment"
       description: Present when type is run-assignment.
     cancel:
       $ref: "#/CancelRunCommand"
       description: Present when type is cancel-run.
+    promotion:
+      $ref: "#/KargoPromotionCreationCommand"
+      description: Present when type is create-kargo-promotion.
+
+KargoPromotionCreationCommand:
+  type: object
+  required:
+    - id
+    - attempt
+    - externalName
+    - integration
+    - project
+    - stage
+    - stageUid
+    - freight
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Durable Slipramp Promotion identity.
+    attempt:
+      type: integer
+      minimum: 1
+      description: Monotonic dispatch attempt used to reject stale reports.
+    externalName:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Deterministic name for the Kargo Promotion resource.
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    project:
+      $ref: ./runs.yaml#/CatalogName
+      description: Kubernetes namespace containing the Kargo project.
+    stage:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Exact target Kargo Stage name.
+    stageUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Observed Kubernetes UID of the target Stage.
+    freight:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Exact Kargo Freight name to promote.
+
+KargoPromotionDispatchReport:
+  type: object
+  required:
+    - attempt
+    - result
+  properties:
+    attempt:
+      type: integer
+      minimum: 1
+      description: Dispatch attempt from the creation command.
+    result:
+      type: string
+      enum:
+        - created
+        - retryable
+        - failed
+    kargoUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Kubernetes UID; required when result is created.
+    diagnostic:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Bounded failure detail; required for retryable and failed results.
 
 CancelRunCommand:
   type: object

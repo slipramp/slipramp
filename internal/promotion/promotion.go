@@ -66,6 +66,8 @@ var (
 	ErrFreightNotFound            = errors.New("promotion Freight was not found on the source Stage")
 	ErrFreightSource              = errors.New("promotion Freight source is not accepted by the target Stage")
 	ErrStageScope                 = errors.New("promotion source and target Stages must share integration, cluster, and project")
+	ErrNoCreationDispatch         = errors.New("no Promotion creation dispatch is available")
+	ErrCreationDispatchConflict   = errors.New("promotion creation dispatch conflicts with current state")
 )
 
 type PolicyMode string
@@ -407,8 +409,8 @@ func (p Promotion) Validate() error {
 		if p.Status == StatusCreating && hydrated {
 			return fmt.Errorf("%w: creating Promotion cannot have callback data", ErrInvalid)
 		}
-		if p.Status == StatusCreating && p.NextDispatchAt == nil {
-			return fmt.Errorf("%w: creating Promotion requires its next dispatch time", ErrInvalid)
+		if p.Status == StatusCreating && p.NextDispatchAt == nil && p.DispatchedAt == nil {
+			return fmt.Errorf("%w: creating Promotion must be due for dispatch or waiting for callback", ErrInvalid)
 		}
 	}
 	if p.DispatchAttemptCount < 0 {
@@ -421,6 +423,9 @@ func (p Promotion) Validate() error {
 		if p.DispatchedAt == nil {
 			return fmt.Errorf("%w: Kargo Promotion UID requires successful dispatch time", ErrInvalid)
 		}
+	}
+	if p.NextDispatchAt != nil && p.DispatchedAt != nil {
+		return fmt.Errorf("%w: Promotion cannot be due for dispatch after successful delivery", ErrInvalid)
 	}
 	if p.Status == StatusCreating && (p.PreparationRepositoryID != nil ||
 		p.PreparationCatalogRevisionID != nil || p.PreparationRunID != nil ||

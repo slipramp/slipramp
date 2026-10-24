@@ -413,6 +413,9 @@ Kargo remains responsible for rendering, pushing candidate branches, pushing
 the approved commit to the target branch, and Argo CD reconciliation. Slipramp
 owns inventory, optional review policy, preparation artifacts, and decisions.
 Approval records permission to proceed, not successful downstream execution.
+Kargo remains authoritative for Freight availability, soak requirements,
+verification, promotion windows, and Promotion admission. Slipramp does not
+precompute those rules or cancel or delete Kargo Promotions after creation.
 
 ### Stage inventory and policy
 
@@ -429,9 +432,12 @@ URL, Repository allowlist, ordered environments, preparation Repository/Target/
 Action, maximum observation age, and pending-review retention. The Server
 matches normalized observed repository URLs against that allowlist. The
 Controller derives application, environment, repository, target branch, source
-paths, typed Freight, and successful-render acknowledgement from Stage data.
-The adapter recognizes `app`, `argoApp`, `overlay`, `gitopsRepo`, `kustomizePath`,
-`stageBranchKustomization`, and `slipramp.com/promotion-source-paths` conventions.
+paths, typed current Freight, requested-Freight origin, direct-Warehouse
+allowance, declared source Stages, and successful-render acknowledgement from
+Stage data. The adapter recognizes `app`, `argoApp`, `overlay`, `gitopsRepo`,
+`kustomizePath`, `stageBranchKustomization`, and
+`slipramp.com/promotion-source-paths` conventions. Environment order is only a
+presentation setting and never implies Freight topology.
 
 Stage policy defaults to `automatic`. `review-required` optionally expires,
 after which new requests evaluate as automatic while the old policy remains
@@ -439,7 +445,7 @@ visible. Acceptance snapshots effective policy; later changes never alter an
 existing Promotion. Policy edits retain actor attribution and reject archived
 Stages.
 
-### Request, preparation, and decision
+### Request, creation, preparation, and decision
 
 `POST /api/v1/kargo/{integration}/promotions` requires a service-account API key
 with submit permission. Kargo provides external identity, project, Stage, full
@@ -453,16 +459,69 @@ reuse returns `409`. Persisting the request, actor, and snapshots precedes Run
 creation. Domain states, including terminal errors, return the same machine
 response shape rather than masquerading as transport errors.
 
+`Promotion` is the only user-facing lifecycle for both Kargo-originated and
+Slipramp-originated requests. Its source records which path created it; no
+parallel start or invocation resource exists. Kargo-originated Promotions begin
+with callback data and retain service-account attribution. Slipramp-originated
+Promotions are durable before the Kubernetes object exists and retain the
+human operator as `requestedBy` throughout callback correlation.
+
 `POST /api/v1/promotion-stages/{stageId}/promotions` accepts an exact observed
-source Stage and Freight name from an operator. In one transaction it requires
-fresh, active source and target Stages in the same integration, Cluster, and
-Kargo project; verifies the target's observed requested-Freight topology for a
-cross-Stage request; and snapshots the target, Repository, effective policy,
-selected Freight, and actor. The resulting Slipramp-originated Promotion has a
-deterministic external name and starts in `creating` with callback-derived Git
-fields absent. Controller delivery, callback hydration, and UI creation actions
-remain unfinished in the linked
-[implementation plan](./KARGO_PROMOTION_CREATION_PLAN.md).
+source Stage ID and Freight name from an operator with Promotion write
+permission. The browser never supplies trusted integration, Cluster, namespace,
+project, Stage name, or UID coordinates. In one transaction the Server resolves
+those values from durable observations, requires fresh active source and target
+Stages in the same integration, Cluster, and Kargo project, and confirms the
+source currently contains the exact Freight. A cross-Stage request must match
+the target's declared source Stage for that Freight origin; an in-place request
+must use the target as its source. The transaction snapshots the target,
+Repository, effective policy, selected Freight, and actor.
+
+Each request creates one Kargo Promotion for one exact Freight and one target
+Stage. The durable record uses source `slipramp`, snapshots the source Stage ID
+and selected Freight, and derives the external name `slipramp-<promotion-id>`.
+It starts in `creating`; request digest, base and candidate revisions, and
+candidate branch remain absent until callback hydration. Dispatch attempts,
+next and last attempt times, successful dispatch time, Kargo UID, and bounded
+diagnostics remain on the Promotion rather than a second public resource.
+
+The lifecycle is:
+
+```text
+creating --Kargo callback--> preparing --> pending --> approved/rejected/expired
+    |                              `-----------------------------> error
+    `--terminal creation failure-------------------------------> error
+```
+
+An automatic-policy callback moves directly from `creating` to `approved`.
+`creating` covers queued Controller delivery, bounded retries, and the period
+after Kubernetes creation while waiting for Kargo to submit callback data.
+
+Controller polling prioritizes Run cancellations, then due Promotion creation,
+then ordinary Run assignment. Claiming creation work atomically advances its
+attempt and next-attempt time under a fixed bounded backoff policy. The Server
+never uses Kubernetes or Kargo clients; a Controller configured for the
+integration and project namespace verifies the snapshotted Stage UID and
+creates the deterministic Kargo resource with
+`slipramp.com/promotion-id: <promotion-id>`, the target Stage, and the exact
+Freight. It adopts only an existing object whose annotation and spec match and
+durably reports `created`, `retryable`, or `failed` with the Kargo UID or a
+bounded diagnostic. Object creation and result reporting are idempotent, so an
+ambiguous poll or report is safe. Transient Kubernetes and transport failures
+back off without blocking later eligible work; invalid or forbidden admissions
+and an exhausted retry budget move the Promotion to `error`. The namespace Role
+permits Stage get/list/promote and Promotion get/create only; no Kargo API
+credential, impersonation, Job, broker, or second Controller channel is used.
+
+The ordinary Kargo callback hydrates a matching Slipramp-originated Promotion
+only while it is `creating`. It verifies the snapshotted project and Stage,
+fills the request digest and Git facts, preserves the original actor and all
+creation snapshots, and advances to `preparing` or `approved` according to the
+snapshotted policy. Callback hydration and Controller result reporting lock the
+same Promotion, so either order is safe and a late successful report only adds
+the Kargo UID and delivery time. Repeating an identical callback is idempotent;
+different content for the same external identity conflicts. A Kargo-originated
+callback with no existing record continues through the ordinary insertion path.
 
 Automatic requests become `approved` without a Run. Guarded requests become
 `preparing` and dispatch exactly one restart-safe, revision-pinned ordinary Run.
@@ -511,6 +570,24 @@ The Web provides projects, Promotions, Stage inventory/policy, Freight pipeline
 comparisons, and branch drift with shared integration, project, and application
 filters. Review detail links preparation Runs and renders sensitive Git and
 resource-filtered Argo CD diffs, hiding version-only changes by default.
+Operators can promote eligible exact Freight from observed upstream Stages on
+the pipeline view or rerun a drifted Stage in place from branch drift. Both
+flows use one dialog, can open the durable Promotion immediately or leave it in
+the background, and periodically refresh its detail while creation is in
+progress. The Kargo resource link appears only after successful Controller
+delivery is recorded.
+
+Pipeline choices come only from current Freight on the destination Stage's
+declared upstream Stages whose origin matches its requested Freight. They do not
+infer adjacency from environment order or browse direct Warehouse Freight that
+has not been observed on an upstream Stage. Branch drift offers the drifted
+Stage's current Freight back to that same Stage and warns that the action reruns
+its Kargo promotion template. The shared dialog shows target and source Stage,
+environments, exact Freight name and origin, and Git, image, and chart versions.
+A single choice is selected automatically; multiple choices require an explicit
+selection. **Promote and view** redirects to the durable detail page, while
+**Promote in background** closes the dialog and links the new Promotion from a
+toast. API errors remain in the dialog without losing page filters.
 
 Pipelines align typed Freight across configured environment order, preserve
 duplicate Stages and missing environments, and append unconfigured environments.
@@ -707,7 +784,9 @@ Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.
 Versions are pinned and warnings fail. Go uses golangci-lint v2; frontend uses
 Oxlint and Oxfmt. Disposable kind acceptance remains available through the
-local task but is not run in hosted CI. It covers execution and
-automatic/guarded Kargo preparation through real artifact uploads, including
-empty Git diffs; broader failure and live cutover coverage remains on the
-[roadmap](./ROADMAP.md).
+local task but is not run in hosted CI. It covers execution, operator-started
+Kargo creation through real Controller materialization and callback hydration,
+and automatic/guarded preparation through real artifact uploads, including
+empty Git diffs. Minimal Stage and Promotion CRDs exercise the Kubernetes API
+boundary without installing Kargo controllers; broader failure and live cutover
+coverage remains on the [roadmap](./ROADMAP.md).

@@ -108,6 +108,46 @@ func TestFreightPipelineServiceFiltersAndPaginatesPipelines(t *testing.T) {
 	}
 }
 
+func TestFreightPipelineServiceBuildsPromotionSourcesFromDeclaredTopology(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+	source := pipelineStage("prod", "kargo-core", "shared-source", "app-homelab", "homelab", now)
+	source.Freight = []byte(`{"items":[
+      {"origin":"Warehouse/app","name":"freight-42","artifacts":[{"kind":"image","version":"1.2.3"}]},
+      {"origin":"Warehouse/other","name":"freight-other","artifacts":[]}
+    ]}`)
+	target := pipelineStage("prod", "kargo-core", "app", "app-prod", "prod", now)
+	target.RequestedFreight = []FreightRequest{{
+		Origin:       "Warehouse/app",
+		SourceStages: []string{source.Name},
+	}}
+	service := NewFreightPipelineService(
+		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
+		&reviewStore{stages: []Stage{target, source}},
+	)
+
+	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: DefaultListLimit})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	var targetPipeline FreightPipeline
+	for _, pipeline := range result.Items {
+		if pipeline.Application == target.Application {
+			targetPipeline = pipeline
+		}
+	}
+	if len(targetPipeline.Stages) != 1 || len(targetPipeline.Stages[0].PromotionSources) != 1 {
+		t.Fatalf("target pipeline = %#v", targetPipeline)
+	}
+	promotionSource := targetPipeline.Stages[0].PromotionSources[0]
+	if promotionSource.StageID != source.ID || promotionSource.StageName != source.Name ||
+		promotionSource.Environment != source.Environment || len(promotionSource.Freight) != 1 ||
+		promotionSource.Freight[0].Name != "freight-42" {
+		t.Errorf("promotion source = %#v", promotionSource)
+	}
+}
+
 func TestFreightPipelineServiceFiltersComparisonStatusBeforePagination(t *testing.T) {
 	t.Parallel()
 
