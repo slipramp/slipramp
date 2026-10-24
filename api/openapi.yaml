@@ -16,6 +16,8 @@ paths:
     $ref: ./paths/inbox.yaml#/inbox
   /api/v1/inbox/problem-acknowledgements:
     $ref: ./paths/inbox.yaml#/problemAcknowledgements
+  /api/v1/notification-deliveries:
+    $ref: ./paths/notifications.yaml#/notificationDeliveries
   /api/v1/repositories/{repositoryId}:
     $ref: ./paths/repositories.yaml#/repository
   /api/v1/git-trigger-deliveries/failed:
@@ -137,6 +139,10 @@ components:
       $ref: ./components/inbox.yaml#/InboxDestination
     InboxProblemAcknowledgements:
       $ref: ./components/inbox.yaml#/InboxProblemAcknowledgements
+    NotificationDelivery:
+      $ref: ./components/notifications.yaml#/NotificationDelivery
+    NotificationDeliveryList:
+      $ref: ./components/notifications.yaml#/NotificationDeliveryList
     ProductPrincipal:
       $ref: ./components/authentication.yaml#/ProductPrincipal
     APIKey:

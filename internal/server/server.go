@@ -16,6 +16,7 @@ import (
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/inbox"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/promotion"
@@ -31,18 +32,20 @@ const (
 )
 
 type Server struct {
-	address               string
-	shutdownTimeout       time.Duration
-	placements            placement.Set
-	logger                *slog.Logger
-	httpServer            *http.Server
-	persistence           *persistence
-	repositoryRefresher   *repository.Refresher
-	commitHistoryIndexer  *repository.CommitHistoryIndexer
-	gitTriggerDispatcher  *gittrigger.Dispatcher
-	artifactReconciler    *artifact.Reconciler
-	promotionPreparations *promotion.PreparationCoordinator
-	promotionExpirations  *promotion.ExpirationCoordinator
+	address                string
+	shutdownTimeout        time.Duration
+	placements             placement.Set
+	logger                 *slog.Logger
+	httpServer             *http.Server
+	persistence            *persistence
+	repositoryRefresher    *repository.Refresher
+	commitHistoryIndexer   *repository.CommitHistoryIndexer
+	gitTriggerDispatcher   *gittrigger.Dispatcher
+	artifactReconciler     *artifact.Reconciler
+	notificationDispatcher *notification.Dispatcher
+	notificationRetention  *notification.RetentionReconciler
+	promotionPreparations  *promotion.PreparationCoordinator
+	promotionExpirations   *promotion.ExpirationCoordinator
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
@@ -148,6 +151,24 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		Acknowledgements: persistence.database,
 		Promotions:       promotionReviews,
 	})
+	notificationService, err := notification.NewService(cfg.Notifications, persistence.database)
+	if err != nil {
+		persistence.Close()
+
+		return nil, fmt.Errorf("initialize notifications: %w", err)
+	}
+	notificationRetention := notification.NewRetentionReconciler(
+		persistence.database,
+		cfg.Notifications.RetentionPeriod,
+		notification.DefaultRetentionInterval,
+		logger,
+	)
+	notificationDispatcher := notification.NewDispatcher(
+		cfg.Notifications,
+		persistence.database,
+		notification.DefaultDispatchInterval,
+		logger,
+	)
 	var promotionPreparations *promotion.PreparationCoordinator
 	var promotionExpirations *promotion.ExpirationCoordinator
 	if len(cfg.KargoIntegrations) > 0 {
@@ -157,6 +178,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			catalogs,
 			runs,
 			artifacts,
+			notificationService,
 			persistence.database,
 			promotion.DefaultPreparationInterval,
 			logger,
@@ -176,6 +198,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			Commits:               persistence.database,
 			Catalogs:              catalogs,
 			Inbox:                 inboxService,
+			Notifications:         notificationService,
 			Runs:                  runs,
 			Artifacts:             artifacts,
 			PromotionRequests:     promotionRequests,
@@ -199,6 +222,8 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	server.commitHistoryIndexer = commitHistoryIndexer
 	server.gitTriggerDispatcher = gitTriggerDispatcher
 	server.artifactReconciler = artifactReconciler
+	server.notificationDispatcher = notificationDispatcher
+	server.notificationRetention = notificationRetention
 	server.promotionPreparations = promotionPreparations
 	server.promotionExpirations = promotionExpirations
 
@@ -245,6 +270,12 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.artifactReconciler != nil {
 		workerCount++
 	}
+	if s.notificationDispatcher != nil {
+		workerCount++
+	}
+	if s.notificationRetention != nil {
+		workerCount++
+	}
 	if s.promotionPreparations != nil {
 		workerCount++
 	}
@@ -280,6 +311,18 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.artifactReconciler != nil {
 		go func() {
 			s.artifactReconciler.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.notificationDispatcher != nil {
+		go func() {
+			s.notificationDispatcher.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.notificationRetention != nil {
+		go func() {
+			s.notificationRetention.Run(runContext)
 			workersStopped <- struct{}{}
 		}()
 	}

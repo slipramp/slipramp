@@ -22,7 +22,7 @@ unless explicitly requested.
 
 | Component             | Responsibility                                                                                     | Boundary                                                               |
 | --------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Slipramp Server       | Repository refresh, catalog validation, scheduling, identity, Promotions, artifact ingestion, API  | No kubeconfig, Kubernetes client, or direct Kubernetes API access      |
+| Slipramp Server       | Repository refresh, catalog validation, scheduling, identity, Promotions, notifications, artifact ingestion, API | No kubeconfig, Kubernetes client, or direct Kubernetes API access      |
 | Controller            | Outbound command polling, local Jobs, observations, log forwarding, optional Kargo Stage discovery | One replica per execution Cluster; namespace-scoped Kubernetes access  |
 | Harness               | Wrap checkout and action processes, transfer artifacts, forward signals, preserve exit status      | Injected by Slipramp; runtime images and tools need no Slipramp SDK    |
 | Web                   | React Router SSR and browser UI                                                                    | Uses the generated Server client and forwards the browser's session    |
@@ -54,6 +54,8 @@ such as a tailnet already protects the transport.
 | Artifact         | Durable Run output, including logs, plans, and diff files                                                      |
 | Principal        | Durable user or service-account actor authenticated by a session or API key                                    |
 | Promotion        | Durable Kargo request, snapshotted policy, preparation, and optional operator decision                         |
+| Notification event | Immutable channel-neutral snapshot of one selected durable transition                                           |
+| Notification delivery | Per-destination operational state for delivering one notification event                                       |
 
 A Target's identity is its Repository plus `metadata.name`. Renaming creates a
 new identity and archives the old one. Removing a Target never destroys
@@ -292,6 +294,10 @@ Git uses separate credential paths. Server refresh credentials resolve to
 administrator-mounted Git configuration, not Kubernetes lookups. Controller
 checkout mappings resolve logical names to local Secrets with conventional
 `gitconfig`, `ssh-privatekey`, and `known_hosts` keys, mounted only for checkout.
+Slack notification destinations similarly resolve administrator-mounted files.
+The Server validates each file as an absolute HTTPS webhook URL at startup but
+persists only the destination name and type. Webhook URLs and secret-file paths
+are absent from PostgreSQL, structured logs, and the product API.
 
 Repository maintainers execute code with the authority granted by a Placement.
 Containers do not provide a complete security boundary. Safety policy is
@@ -514,6 +520,57 @@ and sort by Repository name, integration, project, application, environment,
 Stage name, and Stage ID. Pages without a status filter scan only Repositories
 represented on the page; status filters evaluate all matching Repositories to
 count results.
+
+## Notification delivery foundation
+
+Outbound notification configuration is installation-wide Server configuration.
+It names Slack destinations backed by secret files, an explicit absolute public
+Slipramp URL, and routes that match implemented event types exactly. The initial
+event contract is `review.requested` schema version 1 with a `promotion` subject,
+bounded title, summary, ordered facts, and an application-relative action path.
+The event model does not accept external action URLs. Retry attempts and maximum
+backoff are bounded configuration, and terminal history has a bounded retention
+period; pending deliveries are never eligible for retention.
+
+PostgreSQL stores immutable versioned notification events and one mutable
+delivery row per snapshotted destination. The event deduplication key is unique,
+and `(event_id, destination_name)` is the delivery uniqueness boundary. A focused
+enqueue service validates the channel-neutral payload, resolves routes once, and
+inserts the event and all selected deliveries in one transaction. Repeated use
+of the same key returns the existing logical event without adding destinations;
+a conflicting snapshot for that key is rejected. If no route matches, it writes
+nothing.
+
+The generated read-only `/api/v1/notification-deliveries` endpoint uses ordinary
+product read authorization and exposes event/subject identity, destination name
+and type, state, attempt count, bounded diagnostics, and timestamps. It omits
+payloads, deduplication keys, provider bodies, webhook URLs, and secret paths.
+Notification delivery history remains separate from the operational Inbox.
+
+A Server worker claims the oldest eligible pending delivery in PostgreSQL,
+durably advances its attempt count and jittered exponential retry time, and only
+then contacts Slack. Successful requests become `delivered`; timeouts, connection
+failures, rate limits, and retryable provider responses remain pending until the
+bounded attempt policy is exhausted. Permanent rendering, configuration, and
+provider rejections become `failed` immediately, while a snapshotted destination
+missing from current configuration follows the bounded retry policy. Rate-limit
+delays honor `Retry-After` up to the configured maximum backoff. Provider bodies
+and raw transport errors are never persisted, and stored diagnostics are bounded
+and scrubbed of configured webhook URLs. A restart after an ambiguous attempt
+can therefore resend at least once without losing the delivery, while separate
+destinations continue to make independent progress.
+
+The Slack renderer uses the immutable event snapshot and joins its relative
+action path to the configured public Slipramp URL. Messages contain a fallback,
+bounded context fields, and an authenticated Slipramp action link; they cannot
+approve or reject. When guarded Kargo Promotion preparation succeeds, routing is
+resolved before the state change and the same PostgreSQL transaction moves the
+Promotion to `pending`, inserts one deduplicated `review.requested` event, and
+inserts its selected deliveries. With no matching route, the transaction changes
+only the Promotion. Automatic Promotions and preparation failures emit no review
+request, and repeated reconciliation cannot enqueue another event. The dedicated
+Web view is not yet implemented. Notification failure remains operational state
+and never changes the originating Promotion or Run.
 
 ## API, operations, and delivery
 

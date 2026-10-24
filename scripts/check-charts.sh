@@ -107,6 +107,17 @@ assert_contains "$test_directory/server-scheduling.yaml" 'kubernetes.io/os: linu
 assert_contains "$test_directory/server-managed-secret.yaml" '^kind: Secret$'
 assert_contains "$test_directory/server-managed-secret.yaml" 'acceptance-artifact-token-secret-32'
 
+"$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/slipramp-required.yaml" \
+  --values "$testdata/slipramp-notifications.yaml" \
+  >"$test_directory/server-notifications.yaml"
+assert_contains "$test_directory/server-notifications.yaml" 'SLIPRAMP_NOTIFICATIONS_PUBLIC_URL'
+assert_contains "$test_directory/server-notifications.yaml" '/var/run/slipramp/notification-secrets/operations/webhook-url'
+assert_contains "$test_directory/server-notifications.yaml" 'secretName: slipramp-slack'
+assert_contains "$test_directory/server-notifications.yaml" 'key: webhook-url'
+assert_not_contains "$test_directory/server-notifications.yaml" 'hooks.slack.com'
+
 controller_render="$test_directory/controller.yaml"
 controller_repeat="$test_directory/controller-repeat.yaml"
 "$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
@@ -170,6 +181,20 @@ assert_render_fails "Kargo integration without environment order" \
   --set-string server.kargo.integrations.prod.preparation.action=prepare-review \
   --set-string server.kargo.integrations.prod.maximumStageObservationAge=5m \
   --set-string server.kargo.integrations.prod.pendingReviewRetention=192h
+assert_render_fails "Notification destination without public URL" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set-string server.notifications.destinations.operations.type=slack \
+  --set-string server.notifications.destinations.operations.secretName=slipramp-slack \
+  --set-string server.notifications.destinations.operations.secretKey=webhook-url \
+  --set-json 'server.notifications.routes=[{"events":["review.requested"],"destinations":["operations"]}]'
+assert_render_fails "Notification route with unknown destination" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --values "$testdata/slipramp-notifications.yaml" \
+  --set-json 'server.notifications.routes=[{"events":["review.requested"],"destinations":["unknown"]}]'
+assert_render_fails "Notification route with unknown event" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --values "$testdata/slipramp-notifications.yaml" \
+  --set-json 'server.notifications.routes=[{"events":["run.failed"],"destinations":["operations"]}]'
 assert_render_fails "Missing required Controller configuration" \
   invalid "$controller_chart"
 assert_render_fails "Controller replica count greater than one" \

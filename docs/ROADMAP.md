@@ -9,27 +9,16 @@ strict priority order.
 
 ## Notifications
 
-Outbound delivery is unimplemented. [NOTIFICATIONS.md](./NOTIFICATIONS.md)
-contains the accepted provider-neutral design with Slack as the first adapter.
+The provider-neutral persistence, routing, configuration, inspection,
+restart-persistent Slack delivery, and guarded Kargo Promotion integration are
+implemented.
+[NOTIFICATIONS.md](./NOTIFICATIONS.md) contains the accepted design.
 
-- [ ] Add startup configuration for destinations, exact-event routes, public Web
-      URL, bounded retry, retention, and secret-file mounts, including Helm
-      validation. Keep credentials and destination secret URLs out of PostgreSQL.
-- [ ] Add versioned immutable events and per-destination deliveries, grouped
-      SQL/migrations, an enqueue boundary, and a generated delivery-history API
-      for dedicated operator inspection.
-- [ ] Implement Slack rendering and delivery with restart-persistent attempts,
-      exponential backoff with jitter, rate-limit handling, bounded errors, terminal
-      failure, and independent progress for separate destinations.
-- [ ] Atomically enqueue one `review.requested` event and routed deliveries when
-      a guarded Promotion becomes `pending` and at least one configured route
-      matches. Persist no notification record when no destination is selected.
-      Repeated reconciliation or machine polls must not enqueue duplicates.
-- [ ] Expose non-sensitive delivery history and exhausted failures in a dedicated
-      operator view. Keep the implemented Inbox contract separate and do not
-      compose notification endpoints into it in the browser. Add deterministic
-      dispatcher tests and acceptance coverage for message content, authenticated
-      links, restart recovery, provider outage, and Inbox independence.
+- [ ] Add a dedicated operator Web view over the generated non-sensitive delivery
+      history API. Keep the Inbox contract separate and do not compose notification
+      endpoints into it in the browser. Add acceptance coverage for message
+      content, authenticated links, restart recovery, provider outage, and Inbox
+      independence.
 
 Delivery is at least once. Notification failure never changes a Promotion or
 Run outcome. Messages link to authenticated Slipramp; they contain no logs,
@@ -50,10 +39,11 @@ and stale observations are candidates. Signed webhooks and then email are
 possible adapters when required. Defer user subscriptions, routing expressions,
 template editors, interactive provider decisions, and a general event bus.
 
-Implementation must settle delivery/terminal-record retention, route filters
-needed by actual deployments, explicit operator retries, outage notification
-noise, and whether delivery history later participates in broader audit views.
-Pending deliveries cannot be pruned by retention.
+Exact-event installation-wide routing and bounded terminal-record retention are
+the implemented baseline. Future work must settle any typed route filters needed
+by actual deployments, explicit operator retries, outage notification noise, and
+whether delivery history later participates in broader audit views. Pending
+deliveries cannot be pruned by retention.
 
 ## Kargo completion and operations
 
@@ -89,8 +79,6 @@ deployment verification before they can be marked complete.
 
 - [ ] Add explicit, observable candidate-branch expiry and cleanup with protection
       for pending Promotions.
-- [ ] Deliver newly pending review notifications through the shared notification
-      work above.
 - [ ] Document Stage freshness, preparation and diff failures, review expiry,
       stale target pushes, and operational recovery.
 

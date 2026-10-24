@@ -120,6 +120,34 @@ type KargoStageSnapshot struct {
 	AcceptedAt  pgtype.Timestamptz
 }
 
+type NotificationDelivery struct {
+	ID               pgtype.UUID
+	EventID          pgtype.UUID
+	DestinationName  string
+	DestinationType  string
+	State            string
+	AttemptCount     int32
+	NextAttemptAt    pgtype.Timestamptz
+	LastError        *string
+	FirstAttemptedAt pgtype.Timestamptz
+	LastAttemptedAt  pgtype.Timestamptz
+	DeliveredAt      pgtype.Timestamptz
+	FailedAt         pgtype.Timestamptz
+	CreatedAt        pgtype.Timestamptz
+}
+
+type NotificationEvent struct {
+	ID               pgtype.UUID
+	EventType        string
+	SchemaVersion    int32
+	SubjectType      string
+	SubjectID        pgtype.UUID
+	OccurredAt       pgtype.Timestamptz
+	PayloadJson      []byte
+	DeduplicationKey string
+	CreatedAt        pgtype.Timestamptz
+}
+
 type OidcIdentity struct {
 	ID                  pgtype.UUID
 	PrincipalID         pgtype.UUID

@@ -78,6 +78,33 @@ Observed environments that are absent from the list remain visible after the
 configured columns. Changing Kargo integration configuration requires a Server
 rollout.
 
+Optional outbound notifications use an explicit public Slipramp URL, exact
+event routes, and Slack webhook URLs mounted from operator-managed Secrets:
+
+```yaml
+server:
+  notifications:
+    publicUrl: https://slipramp.example.com
+    destinations:
+      operations:
+        type: slack
+        secretName: slipramp-slack
+        secretKey: webhook-url
+    routes:
+      - events: [review.requested]
+        destinations: [operations]
+    retry:
+      maximumAttempts: 5
+      maximumBackoff: 1h
+    retentionPeriod: 720h
+```
+
+The chart mounts each webhook URL as a file and passes only that file path to
+the Server. The URL is not rendered into environment variables, generated
+Secrets, PostgreSQL, logs, or API responses. Routes accept only implemented
+exact event names. Retry and retention settings establish bounded policy for
+the delivery workers; pending deliveries are never eligible for retention.
+
 ## Ingress and operation
 
 The optional Ingress uses one host. `/api`, `/controller`, `/execution`,
@@ -88,9 +115,9 @@ an untrusted network.
 
 The Server's liveness probe uses `/healthz`. Readiness uses `/readyz` with a
 three-second Kubernetes timeout because the application bounds its dependency
-checks at two seconds. PostgreSQL and S3 Secret changes require an explicit
-Server rollout. The chart fixes Server and web replicas at one and does not
-claim high-availability support.
+checks at two seconds. PostgreSQL, S3, and Slack webhook Secret changes require
+an explicit Server rollout. The chart fixes Server and web replicas at one and
+does not claim high-availability support.
 
 Released chart versions are published as OCI artifacts in GHCR. Pin the chart
 version explicitly; the same release version is the default Server and web

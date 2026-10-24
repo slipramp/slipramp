@@ -1,7 +1,10 @@
 # Notification Delivery Design
 
-This unimplemented proposal defines the intended design for outbound Slipramp
-notifications. It is not an implemented or stable external contract.
+This document defines the accepted design for outbound Slipramp notifications.
+The provider-neutral configuration, persistence, routing/enqueue boundary,
+retention boundary, generated delivery-history API, restart-persistent Slack
+dispatcher, and Kargo Promotion enqueue integration are implemented. The Web
+view remains unfinished, and the external contract is not yet stable.
 
 Notification delivery is provider-neutral, with Slack as the first adapter.
 Notifications report durable domain transitions but never own or alter them.
@@ -153,10 +156,15 @@ notifications:
         - operations
 ```
 
-The implementation milestone selects the exact Server environment or mounted
-file representation and corresponding Helm values. Configuration validation
-rejects unknown destination types, missing secret files, duplicate destination
-names, unknown route destinations, empty routes, and non-absolute public URLs.
+The Server loads the public URL, destination map, routes, maximum attempts,
+maximum backoff, and retention period from `SLIPRAMP_NOTIFICATIONS_*`
+environment variables. Destination entries contain only an absolute
+`webhookUrlFile`; startup reads and validates that file as HTTPS. Helm accepts
+operator-managed Secret name/key references, mounts each key as a file, and
+renders only the file path into the destination environment JSON. Configuration
+validation rejects unknown destination types or event names, missing secret
+files, duplicate destination names, unknown route destinations, empty routes,
+and non-absolute public URLs.
 
 ### Review notification is shared without sharing approval state
 
@@ -299,8 +307,8 @@ content by re-reading the subject.
 
 ## Persistence
 
-Add one focused migration and group SQL in
-`internal/store/queries/notifications.sql`. The intended tables are:
+One focused migration and grouped SQL in
+`internal/store/queries/notifications.sql` implement these tables:
 
 ```text
 notification_events
@@ -334,9 +342,8 @@ notification_deliveries
 Domain data remains the audit and recovery source of truth. Notification
 events and deliveries are operational delivery records, not replacements for
 Promotion decisions, Run attribution, or a future administrative audit log.
-Terminal notification records may therefore use a bounded retention policy
-introduced with the implementation; pending records are never removed by
-retention.
+Terminal notification records use the configured bounded retention policy;
+pending records are never removed by retention.
 
 ## Delivery and Retry
 

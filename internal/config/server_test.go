@@ -1,6 +1,8 @@
 package config_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -33,6 +35,12 @@ const (
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
 	serverKargoIntegrationsEnvironment            = "SLIPRAMP_KARGO_INTEGRATIONS"
+	serverNotificationPublicURLEnvironment        = "SLIPRAMP_NOTIFICATIONS_PUBLIC_URL"
+	serverNotificationDestinationsEnvironment     = "SLIPRAMP_NOTIFICATIONS_DESTINATIONS"
+	serverNotificationRoutesEnvironment           = "SLIPRAMP_NOTIFICATIONS_ROUTES"
+	serverNotificationMaxAttemptsEnvironment      = "SLIPRAMP_NOTIFICATIONS_MAX_ATTEMPTS"
+	serverNotificationMaxBackoffEnvironment       = "SLIPRAMP_NOTIFICATIONS_MAX_BACKOFF"
+	serverNotificationRetentionPeriodEnvironment  = "SLIPRAMP_NOTIFICATIONS_RETENTION_PERIOD"
 )
 
 func TestLoadServerFromEnvironment(t *testing.T) {
@@ -217,6 +225,27 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 			},
 			wantError: serverKargoIntegrationsEnvironment,
 		},
+		{
+			name: "missing notification secret file",
+			environment: map[string]string{
+				serverNotificationDestinationsEnvironment: `{"operations":{"type":"slack","webhookUrlFile":"/missing/slack-webhook"}}`,
+			},
+			wantError: "read destination",
+		},
+		{
+			name: "malformed notification routes",
+			environment: map[string]string{
+				serverNotificationRoutesEnvironment: "not-json",
+			},
+			wantError: serverNotificationRoutesEnvironment,
+		},
+		{
+			name: "malformed notification attempts",
+			environment: map[string]string{
+				serverNotificationMaxAttemptsEnvironment: "many",
+			},
+			wantError: serverNotificationMaxAttemptsEnvironment,
+		},
 	}
 
 	for _, test := range tests {
@@ -227,6 +256,62 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
+}
+
+func TestLoadServerNotificationConfiguration(t *testing.T) {
+	t.Parallel()
+
+	secretPath := filepath.Join(t.TempDir(), "webhook-url")
+	if err := os.WriteFile(secretPath, []byte("https://hooks.slack.com/services/secret-value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	environment := requiredServerEnvironment()
+	environment[serverNotificationPublicURLEnvironment] = "https://slipramp.example.com"
+	environment[serverNotificationDestinationsEnvironment] = `{"operations":{"type":"slack","webhookUrlFile":"` +
+		secretPath + `"}}`
+	environment[serverNotificationRoutesEnvironment] =
+		`[{"events":["review.requested"],"destinations":["operations"]}]`
+	environment[serverNotificationMaxAttemptsEnvironment] = "7"
+	environment[serverNotificationMaxBackoffEnvironment] = "2h"
+	environment[serverNotificationRetentionPeriodEnvironment] = "1440h"
+
+	cfg, err := config.LoadServer(mapEnvironment(environment))
+	if err != nil {
+		t.Fatalf("LoadServer() error = %v", err)
+	}
+	destination, ok := cfg.Notifications.Destinations["operations"]
+	webhookURL, hasWebhookURL := destination.SlackWebhookURL()
+	if !ok || !hasWebhookURL || webhookURL != "https://hooks.slack.com/services/secret-value" {
+		t.Fatal("Slack destination did not load the webhook URL from its secret file")
+	}
+	if cfg.Notifications.PublicURL != "https://slipramp.example.com" ||
+		cfg.Notifications.Retry.MaximumAttempts != 7 ||
+		cfg.Notifications.Retry.MaximumBackoff != 2*time.Hour ||
+		cfg.Notifications.RetentionPeriod != 60*24*time.Hour {
+		t.Fatalf(
+			"notification policy = public URL %q, attempts %d, backoff %s, retention %s",
+			cfg.Notifications.PublicURL,
+			cfg.Notifications.Retry.MaximumAttempts,
+			cfg.Notifications.Retry.MaximumBackoff,
+			cfg.Notifications.RetentionPeriod,
+		)
+	}
+}
+
+func TestLoadServerRejectsDuplicateNotificationDestinationNames(t *testing.T) {
+	t.Parallel()
+
+	secretPath := filepath.Join(t.TempDir(), "webhook-url")
+	if err := os.WriteFile(secretPath, []byte("https://hooks.slack.com/services/secret-value"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	environment := map[string]string{
+		serverNotificationDestinationsEnvironment: `{"operations":{"type":"slack","webhookUrlFile":"` +
+			secretPath + `"},"operations":{"type":"slack","webhookUrlFile":"` + secretPath + `"}}`,
+	}
+
+	_, err := config.LoadServer(mapEnvironment(environment))
+	testcheck.ErrorContains(t, err, "duplicate notification destination")
 }
 
 func TestLoadServerRequiresEnvironmentLookup(t *testing.T) {
@@ -240,5 +325,15 @@ func mapEnvironment(values map[string]string) func(string) (string, bool) {
 	return func(name string) (string, bool) {
 		value, ok := values[name]
 		return value, ok
+	}
+}
+
+func requiredServerEnvironment() map[string]string {
+	return map[string]string{
+		serverOIDCIssuerEnvironment:       "https://identity.example.com",
+		serverOIDCClientIDEnvironment:     "slipramp",
+		serverOIDCClientSecretEnvironment: "client-secret",
+		serverOIDCRedirectURLEnvironment:  "https://slipramp.example.com/api/v1/auth/callback",
+		serverOIDCSubjectRolesEnvironment: `{"admin-subject":"admin"}`,
 	}
 }

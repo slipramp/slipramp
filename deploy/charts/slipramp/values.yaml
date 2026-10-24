@@ -69,6 +69,14 @@ server:
     credentials: {}
   kargo:
     integrations: {}
+  notifications:
+    publicUrl: ""
+    destinations: {}
+    routes: []
+    retry:
+      maximumAttempts: 5
+      maximumBackoff: 1h
+    retentionPeriod: 720h
   placements: {}
 
   livenessProbe:

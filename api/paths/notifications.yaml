@@ -1,0 +1,64 @@
+notificationDeliveries:
+  get:
+    operationId: listNotificationDeliveries
+    summary: List notification delivery history
+    description: >-
+      Returns non-sensitive outbound delivery state. Destination credentials,
+      secret-file paths, event payload snapshots, and provider response bodies
+      are never exposed.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Notifications]
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Notification delivery history in newest-first order.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/notifications.yaml#/NotificationDeliveryList
+      "400":
+        description: The requested page is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Notification delivery history could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

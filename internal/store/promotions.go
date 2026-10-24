@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/store/storedb"
@@ -357,8 +358,24 @@ func (d *Database) CompletePromotionPreparation(
 	gitArtifactID uuid.UUID,
 	argoArtifactID uuid.UUID,
 	completedAt time.Time,
+	notificationPlan *notification.EnqueuePlan,
 ) (promotion.Promotion, error) {
-	row, err := d.queries.CompletePromotionPreparation(
+	if notificationPlan != nil {
+		if err := notificationPlan.Validate(); err != nil {
+			return promotion.Promotion{}, err
+		}
+	}
+
+	transaction, err := d.pool.Begin(ctx)
+	if err != nil {
+		return promotion.Promotion{}, fmt.Errorf("begin Promotion preparation completion: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+	queries := d.queries.WithTx(transaction)
+
+	row, err := queries.CompletePromotionPreparation(
 		ctx,
 		storedb.CompletePromotionPreparationParams{
 			GitDiffArtifactID:      databaseUUID(gitArtifactID),
@@ -374,6 +391,20 @@ func (d *Database) CompletePromotionPreparation(
 	}
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("complete Promotion preparation: %w", err)
+	}
+	if notificationPlan != nil {
+		if _, err := enqueueNotification(
+			ctx,
+			queries,
+			notificationPlan.Event,
+			notificationPlan.Destinations,
+		); err != nil {
+			return promotion.Promotion{}, fmt.Errorf("enqueue Promotion review notification: %w", err)
+		}
+	}
+
+	if err := transaction.Commit(ctx); err != nil {
+		return promotion.Promotion{}, fmt.Errorf("commit Promotion preparation completion: %w", err)
 	}
 
 	return promotionFromRow(row)

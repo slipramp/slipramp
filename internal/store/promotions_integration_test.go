@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/artifact"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
@@ -236,6 +237,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 		gitArtifactID,
 		argoArtifactID,
 		preparationCompletedAt,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("complete Promotion preparation: %v", err)
@@ -340,6 +342,181 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if _, _, err := database.DecidePromotion(ctx, conflictingDecision); !errors.Is(err, promotion.ErrDecisionConflict) {
 		t.Errorf("conflicting DecidePromotion() error = %v", err)
 	}
+}
+
+func TestPromotionPreparationCompletionEnqueuesRoutedNotificationIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	service := notificationServiceForDestinations(t, fixture.database, "operations")
+	preparation := preparePromotionForCompletion(
+		t,
+		fixture,
+		"external-dns-notification",
+		createdAt.Add(10*time.Second),
+	)
+	event := promotionReviewNotification(t, preparation.record, preparation.completedAt, "Promotion needs review")
+	plan, err := service.Plan(event)
+	if err != nil || plan == nil {
+		t.Fatalf("Plan() = %#v, %v", plan, err)
+	}
+
+	pending, err := fixture.database.CompletePromotionPreparation(
+		fixture.ctx,
+		preparation.record.ID,
+		preparation.runID,
+		preparation.gitArtifactID,
+		preparation.argoArtifactID,
+		preparation.completedAt,
+		plan,
+	)
+	if err != nil || pending.Status != promotion.StatusPending {
+		t.Fatalf("CompletePromotionPreparation() = %#v, %v", pending, err)
+	}
+	page, err := service.ListDeliveries(fixture.ctx, notification.DeliveryHistoryFilter{Limit: 25})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].EventID != event.ID ||
+		page.Items[0].SubjectID != pending.ID || page.Items[0].DestinationName != "operations" {
+		t.Fatalf("notification delivery history = %#v", page)
+	}
+
+	if _, err := fixture.database.CompletePromotionPreparation(
+		fixture.ctx,
+		preparation.record.ID,
+		preparation.runID,
+		preparation.gitArtifactID,
+		preparation.argoArtifactID,
+		preparation.completedAt,
+		plan,
+	); !errors.Is(err, promotion.ErrTransitionConflict) {
+		t.Fatalf("repeated completion error = %v", err)
+	}
+	page, err = service.ListDeliveries(fixture.ctx, notification.DeliveryHistoryFilter{Limit: 25})
+	if err != nil || page.Total != 1 {
+		t.Fatalf("delivery history after repeated completion = %#v, %v", page, err)
+	}
+
+	unrouted, err := notification.NewService(notification.DefaultConfig(), fixture.database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unroutedPreparation := preparePromotionForCompletion(
+		t,
+		fixture,
+		"external-dns-unrouted",
+		createdAt.Add(30*time.Second),
+	)
+	unroutedEvent := promotionReviewNotification(
+		t,
+		unroutedPreparation.record,
+		unroutedPreparation.completedAt,
+		"Promotion needs review",
+	)
+	unroutedPlan, err := unrouted.Plan(unroutedEvent)
+	if err != nil || unroutedPlan != nil {
+		t.Fatalf("unrouted Plan() = %#v, %v", unroutedPlan, err)
+	}
+	pending, err = fixture.database.CompletePromotionPreparation(
+		fixture.ctx,
+		unroutedPreparation.record.ID,
+		unroutedPreparation.runID,
+		unroutedPreparation.gitArtifactID,
+		unroutedPreparation.argoArtifactID,
+		unroutedPreparation.completedAt,
+		unroutedPlan,
+	)
+	if err != nil || pending.Status != promotion.StatusPending {
+		t.Fatalf("unrouted CompletePromotionPreparation() = %#v, %v", pending, err)
+	}
+	page, err = service.ListDeliveries(fixture.ctx, notification.DeliveryHistoryFilter{Limit: 25})
+	if err != nil || page.Total != 1 {
+		t.Fatalf("delivery history after unrouted completion = %#v, %v", page, err)
+	}
+}
+
+func TestPromotionPreparationNotificationFailureRollsBackTransitionIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 23, 13, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	service := notificationServiceForDestinations(t, fixture.database, "operations")
+	preparation := preparePromotionForCompletion(
+		t,
+		fixture,
+		"external-dns-atomicity",
+		createdAt.Add(10*time.Second),
+	)
+	event := promotionReviewNotification(t, preparation.record, preparation.completedAt, "Promotion needs review")
+	plan, err := service.Plan(event)
+	if err != nil || plan == nil {
+		t.Fatalf("Plan() = %#v, %v", plan, err)
+	}
+
+	_, err = fixture.database.pool.Exec(fixture.ctx, `CREATE FUNCTION reject_notification_delivery() RETURNS trigger LANGUAGE plpgsql AS
+        $$ BEGIN RAISE EXCEPTION 'simulated notification delivery storage failure'; END; $$;
+        CREATE TRIGGER reject_notification_delivery BEFORE INSERT ON notification_deliveries
+        FOR EACH ROW EXECUTE FUNCTION reject_notification_delivery();`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.database.CompletePromotionPreparation(
+		fixture.ctx,
+		preparation.record.ID,
+		preparation.runID,
+		preparation.gitArtifactID,
+		preparation.argoArtifactID,
+		preparation.completedAt,
+		plan,
+	); err == nil || !strings.Contains(err.Error(), "simulated notification delivery storage failure") {
+		t.Fatalf("completion error = %v", err)
+	}
+
+	stored, err := fixture.database.GetPromotion(fixture.ctx, preparation.record.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Status != promotion.StatusPreparing || stored.PreparationCompletedAt != nil {
+		t.Fatalf("Promotion after notification rollback = %#v", stored)
+	}
+	var eventCount, deliveryCount int
+	if err := fixture.database.pool.QueryRow(
+		fixture.ctx,
+		"SELECT (SELECT count(*) FROM notification_events), (SELECT count(*) FROM notification_deliveries)",
+	).Scan(&eventCount, &deliveryCount); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 0 || deliveryCount != 0 {
+		t.Fatalf("notification rows after rollback = events %d, deliveries %d", eventCount, deliveryCount)
+	}
+}
+
+func promotionReviewNotification(
+	t *testing.T,
+	record promotion.Promotion,
+	occurredAt time.Time,
+	title string,
+) notification.Event {
+	t.Helper()
+
+	event, err := notification.NewReviewRequestedEvent(notification.ReviewRequestedInput{
+		ID:               uuid.New(),
+		SubjectID:        record.ID,
+		OccurredAt:       occurredAt,
+		DeduplicationKey: "promotion:" + record.ID.String() + ":review-requested",
+		Title:            title,
+		Summary:          "kargo-core/external-dns-prod is ready for review",
+		Facts:            []notification.Fact{{Label: "Repository", Value: "kcloud-ops"}},
+		Action: notification.Action{
+			Label: "Review in Slipramp",
+			Path:  "/promotions/" + record.ID.String(),
+		},
+		ExpiresAt: record.ExpiresAt,
+		CreatedAt: occurredAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return event
 }
 
 func TestPromotionDecisionAtExpiryPersistsExpiredStateIntegration(t *testing.T) {
@@ -598,6 +775,39 @@ func preparePromotionForReview(
 	acceptedAt time.Time,
 ) promotion.Promotion {
 	t.Helper()
+	preparation := preparePromotionForCompletion(t, fixture, externalID, acceptedAt)
+
+	record, err := fixture.database.CompletePromotionPreparation(
+		fixture.ctx,
+		preparation.record.ID,
+		preparation.runID,
+		preparation.gitArtifactID,
+		preparation.argoArtifactID,
+		preparation.completedAt,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("complete Promotion preparation: %v", err)
+	}
+
+	return record
+}
+
+type promotionPreparationCompletion struct {
+	record         promotion.Promotion
+	runID          uuid.UUID
+	gitArtifactID  uuid.UUID
+	argoArtifactID uuid.UUID
+	completedAt    time.Time
+}
+
+func preparePromotionForCompletion(
+	t *testing.T,
+	fixture promotionIntegrationFixture,
+	externalID string,
+	acceptedAt time.Time,
+) promotionPreparationCompletion {
+	t.Helper()
 
 	policy := promotion.StagePolicy{
 		StageID:              fixture.stage.ID,
@@ -668,19 +878,13 @@ func preparePromotionForReview(
 		promotion.ArgoDiffArtifactMediaType,
 		acceptedAt.Add(4*time.Second),
 	)
-	record, err = fixture.database.CompletePromotionPreparation(
-		fixture.ctx,
-		record.ID,
-		preparationRun.ID,
-		gitArtifactID,
-		argoArtifactID,
-		acceptedAt.Add(5*time.Second),
-	)
-	if err != nil {
-		t.Fatalf("complete Promotion preparation: %v", err)
+	return promotionPreparationCompletion{
+		record:         record,
+		runID:          preparationRun.ID,
+		gitArtifactID:  gitArtifactID,
+		argoArtifactID: argoArtifactID,
+		completedAt:    acceptedAt.Add(5 * time.Second),
 	}
-
-	return record
 }
 
 type promotionIntegrationFixture struct {

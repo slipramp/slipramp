@@ -17,6 +17,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -28,6 +29,7 @@ type recordingPreparationStore struct {
 	attachedRunID           uuid.UUID
 	completedGitArtifactID  uuid.UUID
 	completedArgoArtifactID uuid.UUID
+	notificationPlan        *notification.EnqueuePlan
 	failureMessage          string
 }
 
@@ -73,11 +75,29 @@ func (s *recordingPreparationStore) CompletePromotionPreparation(
 	gitArtifactID uuid.UUID,
 	argoArtifactID uuid.UUID,
 	_ time.Time,
+	notificationPlan *notification.EnqueuePlan,
 ) (Promotion, error) {
 	s.completedGitArtifactID = gitArtifactID
 	s.completedArgoArtifactID = argoArtifactID
+	s.notificationPlan = notificationPlan
 
 	return s.record, nil
+}
+
+type recordingPreparationNotifications struct {
+	event notification.Event
+}
+
+func (n *recordingPreparationNotifications) Plan(event notification.Event) (*notification.EnqueuePlan, error) {
+	n.event = event
+
+	return &notification.EnqueuePlan{
+		Event: event,
+		Destinations: []notification.DestinationSnapshot{{
+			Name: "operations",
+			Type: notification.DestinationTypeSlack,
+		}},
+	}, nil
 }
 
 func (s *recordingPreparationStore) FailPromotionPreparation(
@@ -341,6 +361,56 @@ func TestPreparationReconciliation(t *testing.T) {
 	}
 }
 
+func TestPreparationReconciliationPlansReviewRequestedNotification(t *testing.T) {
+	t.Parallel()
+
+	record := preparingPromotion()
+	runID := uuid.New()
+	record.PreparationRunID = &runID
+	expiresAt := time.Date(2026, time.October, 31, 18, 0, 0, 0, time.UTC)
+	record.ExpiresAt = &expiresAt
+	store := &recordingPreparationStore{record: record}
+	notifications := &recordingPreparationNotifications{}
+	succeeded := run.OutcomeSucceeded
+	coordinator := testPreparationCoordinator(
+		nil,
+		nil,
+		&recordingPreparationRuns{loaded: run.Run{
+			ID:      runID,
+			Phase:   run.PhaseFinished,
+			Outcome: &succeeded,
+		}},
+		validPreparationArtifacts(),
+		store,
+	)
+	coordinator.notifications = notifications
+	completedAt := time.Date(2026, time.October, 23, 18, 0, 0, 0, time.UTC)
+	coordinator.now = func() time.Time { return completedAt }
+
+	processed, err := coordinator.ReconcileNext(t.Context())
+	if err != nil || !processed {
+		t.Fatalf("ReconcileNext() = (%t, %v), want success", processed, err)
+	}
+	if store.notificationPlan == nil || store.notificationPlan.Event.ID != notifications.event.ID {
+		t.Fatalf("notification plan = %#v, planned event = %#v", store.notificationPlan, notifications.event)
+	}
+	if notifications.event.SubjectID != record.ID || !notifications.event.OccurredAt.Equal(completedAt) ||
+		notifications.event.DeduplicationKey != "promotion:"+record.ID.String()+":review-requested" {
+		t.Errorf("notification event = %#v", notifications.event)
+	}
+
+	var payload notification.ReviewRequestedPayload
+	if err := json.Unmarshal(notifications.event.Payload, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Title != "Promotion needs review" ||
+		payload.Summary != "kargo-core/external-dns-prod is ready for review" ||
+		payload.Action.Path != "/promotions/"+record.ID.String() ||
+		payload.ExpiresAt == nil || !payload.ExpiresAt.Equal(expiresAt) || len(payload.Facts) != 2 {
+		t.Errorf("review-requested payload = %#v", payload)
+	}
+}
+
 func testPreparationCoordinator(
 	repositories RepositoryLister,
 	catalogs PreparationCatalogs,
@@ -364,6 +434,7 @@ func testPreparationCoordinator(
 		catalogs,
 		runs,
 		artifacts,
+		nil,
 		store,
 		time.Second,
 		logger,

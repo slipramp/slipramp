@@ -1,0 +1,97 @@
+NotificationDeliveryList:
+  type: object
+  required:
+    - items
+    - limit
+    - offset
+    - total
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/NotificationDelivery"
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+    total:
+      type: integer
+      minimum: 0
+
+NotificationDelivery:
+  type: object
+  required:
+    - id
+    - eventId
+    - eventType
+    - subjectType
+    - subjectId
+    - occurredAt
+    - destinationName
+    - destinationType
+    - state
+    - attemptCount
+    - createdAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    eventId:
+      type: string
+      format: uuid
+    eventType:
+      type: string
+      enum:
+        - review.requested
+    subjectType:
+      type: string
+      enum:
+        - promotion
+    subjectId:
+      type: string
+      format: uuid
+    occurredAt:
+      type: string
+      format: date-time
+    destinationName:
+      type: string
+      minLength: 1
+      maxLength: 63
+    destinationType:
+      type: string
+      enum:
+        - slack
+    state:
+      type: string
+      enum:
+        - pending
+        - delivered
+        - failed
+    attemptCount:
+      type: integer
+      minimum: 0
+    nextAttemptAt:
+      type: string
+      format: date-time
+    lastError:
+      type: string
+      minLength: 1
+      maxLength: 512
+      description: Bounded non-sensitive diagnostic summary for the latest attempt.
+    firstAttemptedAt:
+      type: string
+      format: date-time
+    lastAttemptedAt:
+      type: string
+      format: date-time
+    deliveredAt:
+      type: string
+      format: date-time
+    failedAt:
+      type: string
+      format: date-time
+    createdAt:
+      type: string
+      format: date-time

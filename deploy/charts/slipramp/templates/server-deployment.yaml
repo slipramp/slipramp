@@ -1,3 +1,10 @@
+{{- range $routeIndex, $route := .Values.server.notifications.routes }}
+{{- range $destinationName := $route.destinations }}
+{{- if not (hasKey $.Values.server.notifications.destinations $destinationName) }}
+{{- fail (printf "server.notifications.routes[%d] selects unknown destination %q" $routeIndex $destinationName) }}
+{{- end }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -137,6 +144,22 @@ spec:
               value: {{ $credentials | toJson | quote }}
             - name: SLIPRAMP_KARGO_INTEGRATIONS
               value: {{ .Values.server.kargo.integrations | toJson | quote }}
+            - name: SLIPRAMP_NOTIFICATIONS_PUBLIC_URL
+              value: {{ .Values.server.notifications.publicUrl | quote }}
+            - name: SLIPRAMP_NOTIFICATIONS_DESTINATIONS
+              {{- $notificationDestinations := dict }}
+              {{- range $name, $destination := .Values.server.notifications.destinations }}
+              {{- $_ := set $notificationDestinations $name (dict "type" $destination.type "webhookUrlFile" (printf "/var/run/slipramp/notification-secrets/%s/webhook-url" $name)) }}
+              {{- end }}
+              value: {{ $notificationDestinations | toJson | quote }}
+            - name: SLIPRAMP_NOTIFICATIONS_ROUTES
+              value: {{ .Values.server.notifications.routes | toJson | quote }}
+            - name: SLIPRAMP_NOTIFICATIONS_MAX_ATTEMPTS
+              value: {{ .Values.server.notifications.retry.maximumAttempts | quote }}
+            - name: SLIPRAMP_NOTIFICATIONS_MAX_BACKOFF
+              value: {{ .Values.server.notifications.retry.maximumBackoff | quote }}
+            - name: SLIPRAMP_NOTIFICATIONS_RETENTION_PERIOD
+              value: {{ .Values.server.notifications.retentionPeriod | quote }}
           ports:
             - name: http
               containerPort: 8080
@@ -170,6 +193,11 @@ spec:
               mountPath: /var/run/slipramp/repository-credentials
               readOnly: true
             {{- end }}
+            {{- range $name, $_ := .Values.server.notifications.destinations }}
+            - name: notification-{{ sha256sum $name | trunc 12 }}
+              mountPath: /var/run/slipramp/notification-secrets/{{ $name }}
+              readOnly: true
+            {{- end }}
       volumes:
         - name: placements
           configMap:
@@ -185,6 +213,15 @@ spec:
         {{- if .Values.server.repositoryRefresh.credentials }}
         - name: repository-credentials
           emptyDir: {}
+        {{- end }}
+        {{- range $name, $destination := .Values.server.notifications.destinations }}
+        - name: notification-{{ sha256sum $name | trunc 12 }}
+          secret:
+            secretName: {{ $destination.secretName }}
+            defaultMode: 0440
+            items:
+              - key: {{ $destination.secretKey }}
+                path: webhook-url
         {{- end }}
       {{- with .Values.server.nodeSelector }}
       nodeSelector:

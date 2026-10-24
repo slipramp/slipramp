@@ -240,6 +240,72 @@ func (e LogCursorState) Valid() bool {
 	}
 }
 
+// Defines values for NotificationDeliveryDestinationType.
+const (
+	Slack NotificationDeliveryDestinationType = "slack"
+)
+
+// Valid indicates whether the value is a known member of the NotificationDeliveryDestinationType enum.
+func (e NotificationDeliveryDestinationType) Valid() bool {
+	switch e {
+	case Slack:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationDeliveryEventType.
+const (
+	ReviewRequested NotificationDeliveryEventType = "review.requested"
+)
+
+// Valid indicates whether the value is a known member of the NotificationDeliveryEventType enum.
+func (e NotificationDeliveryEventType) Valid() bool {
+	switch e {
+	case ReviewRequested:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationDeliveryState.
+const (
+	NotificationDeliveryStateDelivered NotificationDeliveryState = "delivered"
+	NotificationDeliveryStateFailed    NotificationDeliveryState = "failed"
+	NotificationDeliveryStatePending   NotificationDeliveryState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the NotificationDeliveryState enum.
+func (e NotificationDeliveryState) Valid() bool {
+	switch e {
+	case NotificationDeliveryStateDelivered:
+		return true
+	case NotificationDeliveryStateFailed:
+		return true
+	case NotificationDeliveryStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationDeliverySubjectType.
+const (
+	NotificationDeliverySubjectTypePromotion NotificationDeliverySubjectType = "promotion"
+)
+
+// Valid indicates whether the value is a known member of the NotificationDeliverySubjectType enum.
+func (e NotificationDeliverySubjectType) Valid() bool {
+	switch e {
+	case NotificationDeliverySubjectTypePromotion:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ParameterType.
 const (
 	ParameterTypeBoolean ParameterType = "boolean"
@@ -1223,6 +1289,49 @@ type LogSeal struct {
 	SizeBytes int64  `json:"sizeBytes"`
 }
 
+// NotificationDelivery defines model for NotificationDelivery.
+type NotificationDelivery struct {
+	AttemptCount     int                                 `json:"attemptCount"`
+	CreatedAt        time.Time                           `json:"createdAt"`
+	DeliveredAt      *time.Time                          `json:"deliveredAt,omitempty"`
+	DestinationName  string                              `json:"destinationName"`
+	DestinationType  NotificationDeliveryDestinationType `json:"destinationType"`
+	EventID          openapi_types.UUID                  `json:"eventId"`
+	EventType        NotificationDeliveryEventType       `json:"eventType"`
+	FailedAt         *time.Time                          `json:"failedAt,omitempty"`
+	FirstAttemptedAt *time.Time                          `json:"firstAttemptedAt,omitempty"`
+	ID               openapi_types.UUID                  `json:"id"`
+	LastAttemptedAt  *time.Time                          `json:"lastAttemptedAt,omitempty"`
+
+	// LastError Bounded non-sensitive diagnostic summary for the latest attempt.
+	LastError     *string                         `json:"lastError,omitempty"`
+	NextAttemptAt *time.Time                      `json:"nextAttemptAt,omitempty"`
+	OccurredAt    time.Time                       `json:"occurredAt"`
+	State         NotificationDeliveryState       `json:"state"`
+	SubjectID     openapi_types.UUID              `json:"subjectId"`
+	SubjectType   NotificationDeliverySubjectType `json:"subjectType"`
+}
+
+// NotificationDeliveryDestinationType defines model for NotificationDelivery.DestinationType.
+type NotificationDeliveryDestinationType string
+
+// NotificationDeliveryEventType defines model for NotificationDelivery.EventType.
+type NotificationDeliveryEventType string
+
+// NotificationDeliveryState defines model for NotificationDelivery.State.
+type NotificationDeliveryState string
+
+// NotificationDeliverySubjectType defines model for NotificationDelivery.SubjectType.
+type NotificationDeliverySubjectType string
+
+// NotificationDeliveryList defines model for NotificationDeliveryList.
+type NotificationDeliveryList struct {
+	Items  []NotificationDelivery `json:"items"`
+	Limit  int                    `json:"limit"`
+	Offset int                    `json:"offset"`
+	Total  int                    `json:"total"`
+}
+
 // Parameter defines model for Parameter.
 type Parameter struct {
 	Argument    *ParameterArgument `json:"argument,omitempty"`
@@ -2163,6 +2272,12 @@ type ListFailedGitTriggerDeliveriesParams struct {
 	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListNotificationDeliveriesParams defines parameters for ListNotificationDeliveries.
+type ListNotificationDeliveriesParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListPromotionBranchDriftParams defines parameters for ListPromotionBranchDrift.
 type ListPromotionBranchDriftParams struct {
 	Integration *CatalogName                `form:"integration,omitempty" json:"integration,omitempty"`
@@ -2645,6 +2760,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/kargo/{integration}/promotions (the `SubmitKargoPromotion` operationId).
 	SubmitKargoPromotion(ctx context.Context, integration CatalogName, body SubmitKargoPromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListNotificationDeliveries List notification delivery history
+	//
+	// Returns non-sensitive outbound delivery state. Destination credentials, secret-file paths, event payload snapshots, and provider response bodies are never exposed.
+	//
+	// Corresponds with GET /api/v1/notification-deliveries (the `ListNotificationDeliveries` operationId).
+	ListNotificationDeliveries(ctx context.Context, params *ListNotificationDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	//
@@ -3279,6 +3401,23 @@ func (c *Client) SubmitKargoPromotionWithBody(ctx context.Context, integration C
 // Corresponds with POST /api/v1/kargo/{integration}/promotions (the `SubmitKargoPromotion` operationId).
 func (c *Client) SubmitKargoPromotion(ctx context.Context, integration CatalogName, body SubmitKargoPromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSubmitKargoPromotionRequest(c.Server, integration, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListNotificationDeliveries List notification delivery history
+//
+// Returns non-sensitive outbound delivery state. Destination credentials, secret-file paths, event payload snapshots, and provider response bodies are never exposed.
+//
+// Corresponds with GET /api/v1/notification-deliveries (the `ListNotificationDeliveries` operationId).
+func (c *Client) ListNotificationDeliveries(ctx context.Context, params *ListNotificationDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListNotificationDeliveriesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4861,6 +5000,72 @@ func NewSubmitKargoPromotionRequestWithBody(server string, integration CatalogNa
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListNotificationDeliveriesRequest constructs an http.Request for the ListNotificationDeliveries method
+func NewListNotificationDeliveriesRequest(server string, params *ListNotificationDeliveriesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/notification-deliveries")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -7283,6 +7488,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/kargo/{integration}/promotions (the `SubmitKargoPromotion` operationId).
 	SubmitKargoPromotionWithResponse(ctx context.Context, integration CatalogName, body SubmitKargoPromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitKargoPromotionResponse, error)
 
+	// ListNotificationDeliveriesWithResponse List notification delivery history
+	//
+	// Returns non-sensitive outbound delivery state. Destination credentials, secret-file paths, event payload snapshots, and provider response bodies are never exposed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/notification-deliveries (the `ListNotificationDeliveries` operationId).
+	ListNotificationDeliveriesWithResponse(ctx context.Context, params *ListNotificationDeliveriesParams, reqEditors ...RequestEditorFn) (*ListNotificationDeliveriesResponse, error)
+
 	// ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 	//
 	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -8729,6 +8943,82 @@ func (r SubmitKargoPromotionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r SubmitKargoPromotionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListNotificationDeliveriesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NotificationDeliveryList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListNotificationDeliveriesResponse) GetJSON200() *NotificationDeliveryList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListNotificationDeliveriesResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListNotificationDeliveriesResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListNotificationDeliveriesResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListNotificationDeliveriesResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListNotificationDeliveriesResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListNotificationDeliveriesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListNotificationDeliveriesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListNotificationDeliveriesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListNotificationDeliveriesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -11773,6 +12063,21 @@ func (c *ClientWithResponses) SubmitKargoPromotionWithResponse(ctx context.Conte
 	return ParseSubmitKargoPromotionResponse(rsp)
 }
 
+// ListNotificationDeliveriesWithResponse List notification delivery history
+//
+// Returns non-sensitive outbound delivery state. Destination credentials, secret-file paths, event payload snapshots, and provider response bodies are never exposed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/notification-deliveries (the `ListNotificationDeliveries` operationId).
+func (c *ClientWithResponses) ListNotificationDeliveriesWithResponse(ctx context.Context, params *ListNotificationDeliveriesParams, reqEditors ...RequestEditorFn) (*ListNotificationDeliveriesResponse, error) {
+	rsp, err := c.ListNotificationDeliveries(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListNotificationDeliveriesResponse(rsp)
+}
+
 // ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 //
 // Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -13389,6 +13694,67 @@ func ParseSubmitKargoPromotionResponse(rsp *http.Response) (*SubmitKargoPromotio
 			return nil, err
 		}
 		response.ApplicationProblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListNotificationDeliveriesResponse parses an HTTP response from a ListNotificationDeliveriesWithResponse call
+func ParseListNotificationDeliveriesResponse(rsp *http.Response) (*ListNotificationDeliveriesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListNotificationDeliveriesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NotificationDeliveryList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
 
 	}
 
@@ -15717,6 +16083,9 @@ type ServerInterface interface {
 	// SubmitKargoPromotion Submit or poll a Kargo Promotion review request
 	// (POST /api/v1/kargo/{integration}/promotions)
 	SubmitKargoPromotion(w http.ResponseWriter, r *http.Request, integration CatalogName)
+	// ListNotificationDeliveries List notification delivery history
+	// (GET /api/v1/notification-deliveries)
+	ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, params ListNotificationDeliveriesParams)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(w http.ResponseWriter, r *http.Request, params ListPromotionBranchDriftParams)
@@ -16356,6 +16725,52 @@ func (siw *ServerInterfaceWrapper) SubmitKargoPromotion(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SubmitKargoPromotion(w, r, integration)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNotificationDeliveriesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationDeliveries(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18163,6 +18578,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/inbox", wrapper.GetInbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/inbox/problem-acknowledgements", wrapper.AcknowledgeInboxProblems)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/notification-deliveries", wrapper.ListNotificationDeliveries)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.UpdateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/git-trigger-deliveries/failed", wrapper.ListFailedGitTriggerDeliveries)
@@ -19555,6 +19971,98 @@ func (response SubmitKargoPromotion503ApplicationProblemPlusJSONResponse) VisitS
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveriesRequestObject struct {
+	Params ListNotificationDeliveriesParams
+}
+
+type ListNotificationDeliveriesResponseObject interface {
+	VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationDeliveries200JSONResponse NotificationDeliveryList
+
+func (response ListNotificationDeliveries200JSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveries400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNotificationDeliveries400ApplicationProblemPlusJSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveries401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNotificationDeliveries401ApplicationProblemPlusJSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveries403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNotificationDeliveries403ApplicationProblemPlusJSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveries405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNotificationDeliveries405ApplicationProblemPlusJSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveries500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListNotificationDeliveries500ApplicationProblemPlusJSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -23176,6 +23684,9 @@ type StrictServerInterface interface {
 	// SubmitKargoPromotion Submit or poll a Kargo Promotion review request
 	// (POST /api/v1/kargo/{integration}/promotions)
 	SubmitKargoPromotion(ctx context.Context, request SubmitKargoPromotionRequestObject) (SubmitKargoPromotionResponseObject, error)
+	// ListNotificationDeliveries List notification delivery history
+	// (GET /api/v1/notification-deliveries)
+	ListNotificationDeliveries(ctx context.Context, request ListNotificationDeliveriesRequestObject) (ListNotificationDeliveriesResponseObject, error)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(ctx context.Context, request ListPromotionBranchDriftRequestObject) (ListPromotionBranchDriftResponseObject, error)
@@ -23698,6 +24209,32 @@ func (sh *strictHandler) SubmitKargoPromotion(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SubmitKargoPromotionResponseObject); ok {
 		if err := validResponse.VisitSubmitKargoPromotionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNotificationDeliveries operation middleware
+func (sh *strictHandler) ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, params ListNotificationDeliveriesParams) {
+	var request ListNotificationDeliveriesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationDeliveries(ctx, request.(ListNotificationDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListNotificationDeliveriesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

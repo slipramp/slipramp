@@ -10,6 +10,7 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/auth"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
@@ -34,6 +35,7 @@ type Config struct {
 	ArtifactOrphanGracePeriod    time.Duration
 	ProductAuthentication        productauth.Config
 	KargoIntegrations            promotion.IntegrationSet
+	Notifications                notification.Config
 }
 
 func DefaultConfig() Config {
@@ -52,6 +54,7 @@ func DefaultConfig() Config {
 		ArtifactOrphanGracePeriod:    artifact.DefaultOrphanGracePeriod,
 		ProductAuthentication:        productauth.DefaultConfig(),
 		KargoIntegrations:            promotion.IntegrationSet{},
+		Notifications:                notification.DefaultConfig(),
 	}
 }
 
@@ -119,6 +122,9 @@ func (c Config) Validate() error {
 				integration.ClusterName,
 			)
 		}
+	}
+	if err := c.Notifications.Validate(); err != nil {
+		return fmt.Errorf("validate notifications: %w", err)
 	}
 
 	if err := c.Database.Validate(); err != nil {

@@ -1,0 +1,11 @@
+server:
+  notifications:
+    publicUrl: https://slipramp.example.com
+    destinations:
+      operations:
+        type: slack
+        secretName: slipramp-slack
+        secretKey: webhook-url
+    routes:
+      - events: [review.requested]
+        destinations: [operations]

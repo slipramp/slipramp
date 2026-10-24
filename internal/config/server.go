@@ -1,11 +1,17 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/server"
@@ -37,6 +43,12 @@ const (
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
 	serverKargoIntegrationsEnvironment            = "SLIPRAMP_KARGO_INTEGRATIONS"
+	serverNotificationPublicURLEnvironment        = "SLIPRAMP_NOTIFICATIONS_PUBLIC_URL"
+	serverNotificationDestinationsEnvironment     = "SLIPRAMP_NOTIFICATIONS_DESTINATIONS"
+	serverNotificationRoutesEnvironment           = "SLIPRAMP_NOTIFICATIONS_ROUTES"
+	serverNotificationMaxAttemptsEnvironment      = "SLIPRAMP_NOTIFICATIONS_MAX_ATTEMPTS"
+	serverNotificationMaxBackoffEnvironment       = "SLIPRAMP_NOTIFICATIONS_MAX_BACKOFF"
+	serverNotificationRetentionPeriodEnvironment  = "SLIPRAMP_NOTIFICATIONS_RETENTION_PERIOD"
 )
 
 type serverKargoIntegration struct {
@@ -52,6 +64,18 @@ type serverKargoIntegration struct {
 	MaximumStageObservationAge string `json:"maximumStageObservationAge"`
 	PendingReviewRetention     string `json:"pendingReviewRetention"`
 }
+
+type serverNotificationDestination struct {
+	Type           notification.DestinationType `json:"type"`
+	WebhookURLFile string                       `json:"webhookUrlFile"`
+}
+
+type serverNotificationRoute struct {
+	Events       []notification.EventType `json:"events"`
+	Destinations []string                 `json:"destinations"`
+}
+
+const maximumNotificationSecretFileSize = 16 * 1024
 
 func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, error) {
 	if lookupEnvironment == nil {
@@ -238,12 +262,159 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 
 		cfg.KargoIntegrations = integrations
 	}
+	if value, ok := lookupEnvironment(serverNotificationPublicURLEnvironment); ok {
+		cfg.Notifications.PublicURL = value
+	}
+	if value, ok := lookupEnvironment(serverNotificationDestinationsEnvironment); ok {
+		destinations, err := parseServerNotificationDestinations(value)
+		if err != nil {
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverNotificationDestinationsEnvironment, err)
+		}
+
+		cfg.Notifications.Destinations = destinations
+	}
+	if value, ok := lookupEnvironment(serverNotificationRoutesEnvironment); ok {
+		var encoded []serverNotificationRoute
+		if err := decodeStrictJSON(value, &encoded); err != nil {
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverNotificationRoutesEnvironment, err)
+		}
+		if encoded == nil {
+			encoded = []serverNotificationRoute{}
+		}
+		cfg.Notifications.Routes = make([]notification.Route, 0, len(encoded))
+		for _, route := range encoded {
+			cfg.Notifications.Routes = append(cfg.Notifications.Routes, notification.Route{
+				Events:       route.Events,
+				Destinations: route.Destinations,
+			})
+		}
+	}
+	if value, ok := lookupEnvironment(serverNotificationMaxAttemptsEnvironment); ok {
+		maximumAttempts, err := strconv.Atoi(value)
+		if err != nil {
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverNotificationMaxAttemptsEnvironment, err)
+		}
+		cfg.Notifications.Retry.MaximumAttempts = maximumAttempts
+	}
+	if value, ok := lookupEnvironment(serverNotificationMaxBackoffEnvironment); ok {
+		maximumBackoff, err := parseDurationEnvironment(serverNotificationMaxBackoffEnvironment, value)
+		if err != nil {
+			return server.Config{}, err
+		}
+		cfg.Notifications.Retry.MaximumBackoff = maximumBackoff
+	}
+	if value, ok := lookupEnvironment(serverNotificationRetentionPeriodEnvironment); ok {
+		retentionPeriod, err := parseDurationEnvironment(serverNotificationRetentionPeriodEnvironment, value)
+		if err != nil {
+			return server.Config{}, err
+		}
+		cfg.Notifications.RetentionPeriod = retentionPeriod
+	}
 
 	if err := cfg.Validate(); err != nil {
 		return server.Config{}, fmt.Errorf("validate server configuration: %w", err)
 	}
 
 	return cfg, nil
+}
+
+func parseServerNotificationDestinations(value string) (map[string]notification.Destination, error) {
+	decoder := json.NewDecoder(strings.NewReader(value))
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	if delimiter, ok := token.(json.Delim); !ok || delimiter != '{' {
+		return nil, errors.New("notification destinations must be an object")
+	}
+
+	destinations := map[string]notification.Destination{}
+	for decoder.More() {
+		nameToken, tokenErr := decoder.Token()
+		if tokenErr != nil {
+			return nil, tokenErr
+		}
+		name, ok := nameToken.(string)
+		if !ok {
+			return nil, errors.New("notification destination name must be a string")
+		}
+		if _, duplicate := destinations[name]; duplicate {
+			return nil, fmt.Errorf("duplicate notification destination name %q", name)
+		}
+
+		var raw json.RawMessage
+		if err := decoder.Decode(&raw); err != nil {
+			return nil, err
+		}
+		var encoded serverNotificationDestination
+		if err := decodeStrictJSONBytes(raw, &encoded); err != nil {
+			return nil, fmt.Errorf("destination %q: %w", name, err)
+		}
+		if encoded.Type != notification.DestinationTypeSlack {
+			return nil, fmt.Errorf("destination %q has unknown type %q", name, encoded.Type)
+		}
+
+		webhookURL, err := readNotificationSecretFile(encoded.WebhookURLFile)
+		if err != nil {
+			return nil, fmt.Errorf("read destination %q Slack webhook URL file", name)
+		}
+		destination, err := notification.NewSlackDestination(encoded.WebhookURLFile, string(webhookURL))
+		if err != nil {
+			return nil, fmt.Errorf("destination %q: %w", name, err)
+		}
+		destinations[name] = destination
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	if token, err := decoder.Token(); err != io.EOF {
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("unexpected trailing JSON token %v", token)
+	}
+
+	return destinations, nil
+}
+
+func readNotificationSecretFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = file.Close()
+	}()
+
+	value, err := io.ReadAll(io.LimitReader(file, maximumNotificationSecretFileSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(value) > maximumNotificationSecretFileSize {
+		return nil, fmt.Errorf("secret file exceeds %d bytes", maximumNotificationSecretFileSize)
+	}
+
+	return value, nil
+}
+
+func decodeStrictJSON(value string, destination any) error {
+	return decodeStrictJSONBytes([]byte(value), destination)
+}
+
+func decodeStrictJSONBytes(value []byte, destination any) error {
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(destination); err != nil {
+		return err
+	}
+	if token, err := decoder.Token(); err != io.EOF {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("unexpected trailing JSON token %v", token)
+	}
+
+	return nil
 }
 
 func parseServerKargoIntegrations(value string) (promotion.IntegrationSet, error) {

@@ -127,6 +127,36 @@ export type InboxProblemAcknowledgements = {
   problemIds: Array<string>;
 };
 
+export type NotificationDelivery = {
+  id: string;
+  eventId: string;
+  eventType: "review.requested";
+  subjectType: "promotion";
+  subjectId: string;
+  occurredAt: string;
+  destinationName: string;
+  destinationType: "slack";
+  state: "pending" | "delivered" | "failed";
+  attemptCount: number;
+  nextAttemptAt?: string;
+  /**
+   * Bounded non-sensitive diagnostic summary for the latest attempt.
+   */
+  lastError?: string;
+  firstAttemptedAt?: string;
+  lastAttemptedAt?: string;
+  deliveredAt?: string;
+  failedAt?: string;
+  createdAt: string;
+};
+
+export type NotificationDeliveryList = {
+  items: Array<NotificationDelivery>;
+  limit: number;
+  offset: number;
+  total: number;
+};
+
 export type ProductPrincipal = {
   principalId: string;
   kind: "user" | "service-account";
@@ -1449,6 +1479,52 @@ export type AcknowledgeInboxProblemsResponses = {
 
 export type AcknowledgeInboxProblemsResponse =
   AcknowledgeInboxProblemsResponses[keyof AcknowledgeInboxProblemsResponses];
+
+export type ListNotificationDeliveriesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/notification-deliveries";
+};
+
+export type ListNotificationDeliveriesErrors = {
+  /**
+   * The requested page is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Notification delivery history could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListNotificationDeliveriesError =
+  ListNotificationDeliveriesErrors[keyof ListNotificationDeliveriesErrors];
+
+export type ListNotificationDeliveriesResponses = {
+  /**
+   * Notification delivery history in newest-first order.
+   */
+  200: NotificationDeliveryList;
+};
+
+export type ListNotificationDeliveriesResponse =
+  ListNotificationDeliveriesResponses[keyof ListNotificationDeliveriesResponses];
 
 export type RemoveRepositoryData = {
   body?: never;

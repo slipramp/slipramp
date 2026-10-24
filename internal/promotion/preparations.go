@@ -2,6 +2,7 @@ package promotion
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -43,6 +45,7 @@ type PreparationStore interface {
 		gitArtifactID uuid.UUID,
 		argoArtifactID uuid.UUID,
 		completedAt time.Time,
+		notificationPlan *notification.EnqueuePlan,
 	) (Promotion, error)
 	FailPromotionPreparation(
 		ctx context.Context,
@@ -67,16 +70,21 @@ type PreparationArtifacts interface {
 	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
 }
 
+type PreparationNotifications interface {
+	Plan(notification.Event) (*notification.EnqueuePlan, error)
+}
+
 type PreparationCoordinator struct {
-	integrations IntegrationSet
-	repositories RepositoryLister
-	catalogs     PreparationCatalogs
-	runs         PreparationRuns
-	artifacts    PreparationArtifacts
-	store        PreparationStore
-	interval     time.Duration
-	logger       *slog.Logger
-	now          func() time.Time
+	integrations  IntegrationSet
+	repositories  RepositoryLister
+	catalogs      PreparationCatalogs
+	runs          PreparationRuns
+	artifacts     PreparationArtifacts
+	notifications PreparationNotifications
+	store         PreparationStore
+	interval      time.Duration
+	logger        *slog.Logger
+	now           func() time.Time
 }
 
 func NewPreparationCoordinator(
@@ -85,20 +93,22 @@ func NewPreparationCoordinator(
 	catalogs PreparationCatalogs,
 	runs PreparationRuns,
 	artifacts PreparationArtifacts,
+	notifications PreparationNotifications,
 	store PreparationStore,
 	interval time.Duration,
 	logger *slog.Logger,
 ) *PreparationCoordinator {
 	return &PreparationCoordinator{
-		integrations: integrations,
-		repositories: repositories,
-		catalogs:     catalogs,
-		runs:         runs,
-		artifacts:    artifacts,
-		store:        store,
-		interval:     interval,
-		logger:       logger.With("component", "promotion_preparation"),
-		now:          time.Now,
+		integrations:  integrations,
+		repositories:  repositories,
+		catalogs:      catalogs,
+		runs:          runs,
+		artifacts:     artifacts,
+		notifications: notifications,
+		store:         store,
+		interval:      interval,
+		logger:        logger.With("component", "promotion_preparation"),
+		now:           time.Now,
 	}
 }
 
@@ -325,6 +335,18 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 		return false, err
 	}
 
+	event, err := c.reviewRequestedEvent(record, completedAt)
+	if err != nil {
+		return false, err
+	}
+	var notificationPlan *notification.EnqueuePlan
+	if c.notifications != nil {
+		notificationPlan, err = c.notifications.Plan(event)
+		if err != nil {
+			return false, fmt.Errorf("plan review-requested notification: %w", err)
+		}
+	}
+
 	if _, err := c.store.CompletePromotionPreparation(
 		ctx,
 		record.ID,
@@ -332,6 +354,7 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 		gitDiff.ID,
 		argoDiff.ID,
 		completedAt,
+		notificationPlan,
 	); err != nil {
 		return false, err
 	}
@@ -344,4 +367,43 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 	)
 
 	return true, nil
+}
+
+func (c *PreparationCoordinator) reviewRequestedEvent(record Promotion, occurredAt time.Time) (notification.Event, error) {
+	var stage PromotionStageSnapshot
+	if err := json.Unmarshal(record.StageSnapshot, &stage); err != nil {
+		return notification.Event{}, fmt.Errorf("decode Promotion Stage snapshot for notification: %w", err)
+	}
+	if stage.Project == "" || stage.Name == "" || stage.RepositoryName == "" {
+		return notification.Event{}, fmt.Errorf("%w: Promotion Stage notification snapshot is incomplete", ErrInvalid)
+	}
+
+	facts := []notification.Fact{{Label: "Repository", Value: stage.RepositoryName}}
+	if record.ExpiresAt != nil {
+		facts = append(facts, notification.Fact{
+			Label: "Expires",
+			Value: record.ExpiresAt.UTC().Format(time.RFC3339),
+		})
+	}
+
+	event, err := notification.NewReviewRequestedEvent(notification.ReviewRequestedInput{
+		ID:               uuid.New(),
+		SubjectID:        record.ID,
+		OccurredAt:       occurredAt,
+		DeduplicationKey: "promotion:" + record.ID.String() + ":review-requested",
+		Title:            "Promotion needs review",
+		Summary:          stage.Project + "/" + stage.Name + " is ready for review",
+		Facts:            facts,
+		Action: notification.Action{
+			Label: "Review in Slipramp",
+			Path:  "/promotions/" + record.ID.String(),
+		},
+		ExpiresAt: record.ExpiresAt,
+		CreatedAt: occurredAt,
+	})
+	if err != nil {
+		return notification.Event{}, fmt.Errorf("build review-requested notification: %w", err)
+	}
+
+	return event, nil
 }

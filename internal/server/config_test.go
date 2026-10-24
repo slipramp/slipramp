@@ -49,6 +49,16 @@ func TestDefaultConfig(t *testing.T) {
 			settings.ProductAuthentication.SessionLifetime,
 		)
 	}
+	if settings.Notifications.Retry.MaximumAttempts != 5 ||
+		settings.Notifications.Retry.MaximumBackoff != time.Hour ||
+		settings.Notifications.RetentionPeriod != 30*24*time.Hour {
+		t.Errorf(
+			"notification defaults = attempts %d, backoff %s, retention %s",
+			settings.Notifications.Retry.MaximumAttempts,
+			settings.Notifications.Retry.MaximumBackoff,
+			settings.Notifications.RetentionPeriod,
+		)
+	}
 
 	if err := settings.Database.Validate(); err != nil {
 		t.Errorf("Database.Validate() error = %v", err)

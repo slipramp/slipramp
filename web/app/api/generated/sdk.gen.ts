@@ -89,6 +89,9 @@ import type {
   ListFailedGitTriggerDeliveriesData,
   ListFailedGitTriggerDeliveriesErrors,
   ListFailedGitTriggerDeliveriesResponses,
+  ListNotificationDeliveriesData,
+  ListNotificationDeliveriesErrors,
+  ListNotificationDeliveriesResponses,
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
@@ -318,6 +321,39 @@ export const acknowledgeInboxProblems = <ThrowOnError extends boolean = false>(
       "Content-Type": "application/json",
       ...options.headers,
     },
+  });
+
+/**
+ * List notification delivery history
+ *
+ * Returns non-sensitive outbound delivery state. Destination credentials, secret-file paths, event payload snapshots, and provider response bodies are never exposed.
+ */
+export const listNotificationDeliveries = <ThrowOnError extends boolean = false>(
+  options?: Options<ListNotificationDeliveriesData, ThrowOnError>,
+): RequestResult<
+  ListNotificationDeliveriesResponses,
+  ListNotificationDeliveriesErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListNotificationDeliveriesResponses,
+    ListNotificationDeliveriesErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/notification-deliveries",
+    ...options,
   });
 
 /**

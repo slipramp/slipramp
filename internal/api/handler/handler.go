@@ -23,6 +23,7 @@ type Handler struct {
 	commits              CommitService
 	catalogs             CatalogService
 	inbox                InboxService
+	notifications        NotificationService
 	runs                 RunService
 	artifacts            ArtifactService
 	promotionRequests    PromotionRequestService
@@ -54,6 +55,7 @@ type Dependencies struct {
 	Commits               CommitService
 	Catalogs              CatalogService
 	Inbox                 InboxService
+	Notifications         NotificationService
 	Runs                  RunService
 	Artifacts             ArtifactService
 	PromotionRequests     PromotionRequestService
@@ -78,6 +80,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		commits:              dependencies.Commits,
 		catalogs:             dependencies.Catalogs,
 		inbox:                dependencies.Inbox,
+		notifications:        dependencies.Notifications,
 		runs:                 dependencies.Runs,
 		artifacts:            dependencies.Artifacts,
 		promotionRequests:    dependencies.PromotionRequests,
