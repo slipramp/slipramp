@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -9,7 +10,10 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type BranchComparisonRequest struct {
@@ -34,11 +38,26 @@ type BranchScanner interface {
 }
 
 type GitBranchScanner struct {
-	credentials RefreshCredentials
+	credentials  RefreshCredentials
+	lifecycle    sync.RWMutex
+	mutex        sync.Mutex
+	root         string
+	repositories map[string]*gitBranchRepository
+	closed       bool
+}
+
+type gitBranchRepository struct {
+	mutex       sync.Mutex
+	path        string
+	cloneURL    string
+	initialized bool
 }
 
 func NewGitBranchScanner(credentials RefreshCredentials) *GitBranchScanner {
-	return &GitBranchScanner{credentials: credentials}
+	return &GitBranchScanner{
+		credentials:  credentials,
+		repositories: make(map[string]*gitBranchRepository),
+	}
 }
 
 func (s *GitBranchScanner) ScanBranches(
@@ -46,6 +65,12 @@ func (s *GitBranchScanner) ScanBranches(
 	repository Repository,
 	requests []BranchComparisonRequest,
 ) ([]BranchComparison, error) {
+	s.lifecycle.RLock()
+	defer s.lifecycle.RUnlock()
+	if s.closed {
+		return nil, errors.New("branch scanner is closed")
+	}
+
 	comparisons := make([]BranchComparison, len(requests))
 	if len(requests) == 0 {
 		return comparisons, nil
@@ -75,21 +100,19 @@ func (s *GitBranchScanner) ScanBranches(
 		validTargetBranches[request.TargetBranch] = struct{}{}
 	}
 
-	temporary, err := os.MkdirTemp("", "slipramp-branch-drift-*")
+	cachedRepository, err := s.cachedRepository(repository)
 	if err != nil {
-		return nil, fmt.Errorf("create branch drift directory: %w", err)
+		return nil, err
 	}
-	defer func() { _ = os.RemoveAll(temporary) }()
+	cachedRepository.mutex.Lock()
+	defer cachedRepository.mutex.Unlock()
 
-	repositoryPath := filepath.Join(temporary, "repository.git")
+	repositoryPath := cachedRepository.path
 	git := func(arguments ...string) (string, error) {
 		return runGit(ctx, environment, arguments...)
 	}
-	if _, err := git("init", "--quiet", "--bare", repositoryPath); err != nil {
-		return nil, fmt.Errorf("initialize branch drift repository: %w", err)
-	}
-	if _, err := git("--git-dir", repositoryPath, "remote", "add", "origin", repository.CloneURL); err != nil {
-		return nil, fmt.Errorf("configure branch drift remote: %w", err)
+	if err := initializeBranchRepository(git, cachedRepository, repository.CloneURL); err != nil {
+		return nil, err
 	}
 
 	sourceRef := "refs/heads/" + repository.Branch
@@ -215,6 +238,83 @@ func (s *GitBranchScanner) ScanBranches(
 	}
 
 	return comparisons, nil
+}
+
+func (s *GitBranchScanner) Close() error {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+
+	s.closed = true
+	s.mutex.Lock()
+	root := s.root
+	s.root = ""
+	s.repositories = nil
+	s.mutex.Unlock()
+	if root == "" {
+		return nil
+	}
+
+	return os.RemoveAll(root)
+}
+
+func (s *GitBranchScanner) cachedRepository(repository Repository) (*gitBranchRepository, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.root == "" {
+		root, err := os.MkdirTemp("", "slipramp-branch-drift-*")
+		if err != nil {
+			return nil, fmt.Errorf("create branch drift cache directory: %w", err)
+		}
+		s.root = root
+	}
+
+	key := branchRepositoryCacheKey(repository)
+	if cached, ok := s.repositories[key]; ok {
+		return cached, nil
+	}
+
+	cached := &gitBranchRepository{path: filepath.Join(s.root, key+".git")}
+	s.repositories[key] = cached
+
+	return cached, nil
+}
+
+func branchRepositoryCacheKey(repository Repository) string {
+	if repository.ID != uuid.Nil {
+		return repository.ID.String()
+	}
+
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(repository.CloneURL)))
+}
+
+func initializeBranchRepository(
+	git func(...string) (string, error),
+	cached *gitBranchRepository,
+	cloneURL string,
+) error {
+	if !cached.initialized {
+		if _, err := git("init", "--quiet", "--bare", cached.path); err != nil {
+			return fmt.Errorf("initialize branch drift repository: %w", err)
+		}
+		if _, err := git("--git-dir", cached.path, "remote", "add", "origin", cloneURL); err != nil {
+			return fmt.Errorf("configure branch drift remote: %w", err)
+		}
+		cached.cloneURL = cloneURL
+		cached.initialized = true
+
+		return nil
+	}
+
+	if cached.cloneURL == cloneURL {
+		return nil
+	}
+	if _, err := git("--git-dir", cached.path, "remote", "set-url", "origin", cloneURL); err != nil {
+		return fmt.Errorf("update branch drift remote: %w", err)
+	}
+	cached.cloneURL = cloneURL
+
+	return nil
 }
 
 func branchReferences(branches []string) []string {

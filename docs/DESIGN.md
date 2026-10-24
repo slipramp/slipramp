@@ -508,20 +508,23 @@ environments; otherwise it reports absence. Status filters select pipelines with
 at least one matching Freight artifact before pagination. Comparisons do not
 infer version or Git ancestry ordering.
 
-Branch drift groups active Stages by Repository and shares one bounded read-only
-Git scan, cached for the refresh interval. Relevant Repository or Stage changes
-invalidate the group; concurrent reads share work. Watched source-path changes
-and unexpected target movement are independent. Missing render acknowledgement
-is unknown; equal target/result revisions acknowledge a successful no-op.
-Repository and Stage scan failures remain visible. This cache is derived state
-rebuilt after restart.
+Branch drift groups active Stages by Repository. A background worker refreshes
+expired or invalidated groups with bounded, concurrent read-only Git scans while
+API reads serve cached evidence without waiting for Git. Each Repository has one
+in-flight scan and a reusable bare object cache for incremental fetches. Relevant
+Repository or Stage changes make the group unknown until its replacement scan
+completes; expired evidence remains readable while it refreshes. Watched
+source-path changes and unexpected target movement are independent. Missing
+render acknowledgement is unknown; equal target/result revisions acknowledge a
+successful no-op. Repository and Stage scan failures remain visible. This cache
+is derived state rebuilt after restart and removed during clean shutdown.
 
 Branch drift pagination counts matching Stages after all filters, with 25 rows
 per Web page. Results retain Repository groups, which may continue across pages,
 and sort by Repository name, integration, project, application, environment,
-Stage name, and Stage ID. Pages without a status filter scan only Repositories
-represented on the page; status filters evaluate all matching Repositories to
-count results.
+Stage name, and Stage ID. Pages without a status filter read only Repository
+groups represented on the page; status filters evaluate cached evidence for all
+matching Repositories to count results.
 
 ## Notification delivery
 

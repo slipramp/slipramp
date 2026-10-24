@@ -46,6 +46,7 @@ type Server struct {
 	notificationRetention  *notification.RetentionReconciler
 	promotionPreparations  *promotion.PreparationCoordinator
 	promotionExpirations   *promotion.ExpirationCoordinator
+	promotionBranchDrift   *promotion.BranchDriftService
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
@@ -145,6 +146,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		repository.NewGitBranchScanner(cfg.RepositoryRefreshCredentials),
 		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
+		logger,
 	)
 	inboxService := inbox.NewService(inbox.Dependencies{
 		State:            persistence.database,
@@ -226,6 +228,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	server.notificationRetention = notificationRetention
 	server.promotionPreparations = promotionPreparations
 	server.promotionExpirations = promotionExpirations
+	server.promotionBranchDrift = promotionBranchDrift
 
 	return server, nil
 }
@@ -246,6 +249,11 @@ func newServer(cfg Config, logger *slog.Logger, handler http.Handler) *Server {
 }
 
 func (s *Server) Close() {
+	if s.promotionBranchDrift != nil {
+		if err := s.promotionBranchDrift.Close(); err != nil {
+			s.logger.Warn("clean branch drift cache", "error", err)
+		}
+	}
 	s.persistence.Close()
 }
 
@@ -280,6 +288,9 @@ func (s *Server) Run(ctx context.Context) error {
 		workerCount++
 	}
 	if s.promotionExpirations != nil {
+		workerCount++
+	}
+	if s.promotionBranchDrift != nil {
 		workerCount++
 	}
 	if workerCount == 0 {
@@ -335,6 +346,12 @@ func (s *Server) Run(ctx context.Context) error {
 	if s.promotionExpirations != nil {
 		go func() {
 			s.promotionExpirations.Run(runContext)
+			workersStopped <- struct{}{}
+		}()
+	}
+	if s.promotionBranchDrift != nil {
+		go func() {
+			s.promotionBranchDrift.Run(runContext)
 			workersStopped <- struct{}{}
 		}()
 	}

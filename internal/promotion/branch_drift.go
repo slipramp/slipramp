@@ -5,14 +5,19 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/slipramp/slipramp/internal/repository"
 )
+
+const branchDriftScanConcurrency = 4
 
 type BranchDriftStatus string
 
@@ -73,8 +78,10 @@ type BranchDriftService struct {
 	scanner      repository.BranchScanner
 	cachePeriod  time.Duration
 	fetchTimeout time.Duration
+	logger       *slog.Logger
+	cacheMutex   sync.RWMutex
 	cache        map[uuid.UUID]branchDriftCacheEntry
-	scanLock     chan struct{}
+	refresh      chan struct{}
 	now          func() time.Time
 }
 
@@ -83,6 +90,7 @@ type branchDriftCacheEntry struct {
 	scannedAt   time.Time
 	error       string
 	stages      map[uuid.UUID]branchDriftEvidence
+	refreshing  bool
 }
 
 type branchDriftEvidence struct {
@@ -109,6 +117,7 @@ func NewBranchDriftService(
 	scanner repository.BranchScanner,
 	cachePeriod time.Duration,
 	fetchTimeout time.Duration,
+	logger *slog.Logger,
 ) *BranchDriftService {
 	return &BranchDriftService{
 		integrations: integrations,
@@ -116,10 +125,37 @@ func NewBranchDriftService(
 		scanner:      scanner,
 		cachePeriod:  cachePeriod,
 		fetchTimeout: fetchTimeout,
+		logger:       logger.With("component", "promotion_branch_drift"),
 		cache:        make(map[uuid.UUID]branchDriftCacheEntry),
-		scanLock:     make(chan struct{}, 1),
+		refresh:      make(chan struct{}, 1),
 		now:          time.Now,
 	}
+}
+
+func (s *BranchDriftService) Run(ctx context.Context) {
+	s.refreshAndLog(ctx)
+
+	ticker := time.NewTicker(s.cachePeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		case <-s.refresh:
+		}
+
+		s.refreshAndLog(ctx)
+	}
+}
+
+func (s *BranchDriftService) Close() error {
+	closer, ok := s.scanner.(interface{ Close() error })
+	if !ok {
+		return nil
+	}
+
+	return closer.Close()
 }
 
 func (s *BranchDriftService) List(
@@ -163,13 +199,6 @@ func (s *BranchDriftService) List(
 
 	names := slices.Sorted(maps.Keys(matchingStageCounts))
 
-	select {
-	case s.scanLock <- struct{}{}:
-		defer func() { <-s.scanLock }()
-	case <-ctx.Done():
-		return BranchDriftList{}, ctx.Err()
-	}
-
 	items := make([]BranchDriftRepository, 0, min(len(names), filter.Limit))
 	total := 0
 	for _, name := range names {
@@ -188,10 +217,7 @@ func (s *BranchDriftService) List(
 		if !ok {
 			item = missingBranchDriftRepository(name, groupStages, filter, s.currentTime())
 		} else {
-			entry, scanErr := s.cachedScan(ctx, record, groupStages)
-			if scanErr != nil {
-				return BranchDriftList{}, scanErr
-			}
+			entry := s.readCache(record, groupStages)
 			item = BranchDriftRepository{
 				Repository: record,
 				ScannedAt:  entry.scannedAt,
@@ -230,21 +256,14 @@ func (s BranchDriftStatus) Valid() bool {
 	}
 }
 
-func (s *BranchDriftService) cachedScan(
+func (s *BranchDriftService) scanRepository(
 	ctx context.Context,
 	record repository.Repository,
 	stages []Stage,
+	fingerprint [sha256.Size]byte,
 ) (branchDriftCacheEntry, error) {
-	fingerprint := branchDriftFingerprint(record, stages)
-	now := s.currentTime()
-	if cached, ok := s.cache[record.ID]; ok && cached.fingerprint == fingerprint &&
-		now.Before(cached.scannedAt.Add(s.cachePeriod)) {
-		return cached, nil
-	}
-
 	entry := branchDriftCacheEntry{
 		fingerprint: fingerprint,
-		scannedAt:   now,
 		stages:      make(map[uuid.UUID]branchDriftEvidence, len(stages)),
 	}
 	requests := make([]repository.BranchComparisonRequest, 0, len(stages))
@@ -276,6 +295,9 @@ func (s *BranchDriftService) cachedScan(
 		fetchContext, cancel := context.WithTimeout(ctx, s.fetchTimeout)
 		comparisons, scanErr := s.scanner.ScanBranches(fetchContext, record, requests)
 		cancel()
+		if ctx.Err() != nil {
+			return branchDriftCacheEntry{}, ctx.Err()
+		}
 		if scanErr != nil {
 			entry.error = scanErr.Error()
 			for _, stageID := range requestStageIDs {
@@ -284,11 +306,16 @@ func (s *BranchDriftService) cachedScan(
 				entry.stages[stageID] = evidence
 			}
 		} else if len(comparisons) != len(requests) {
-			return branchDriftCacheEntry{}, fmt.Errorf(
+			entry.error = fmt.Sprintf(
 				"branch drift scanner returned %d comparisons for %d requests",
 				len(comparisons),
 				len(requests),
 			)
+			for _, stageID := range requestStageIDs {
+				evidence := entry.stages[stageID]
+				evidence.message = "Repository branches could not be scanned."
+				entry.stages[stageID] = evidence
+			}
 		} else {
 			for index, comparison := range comparisons {
 				stageID := requestStageIDs[index]
@@ -310,10 +337,206 @@ func (s *BranchDriftService) cachedScan(
 			}
 		}
 	}
-
-	s.cache[record.ID] = entry
-
+	entry.scannedAt = s.currentTime()
 	return entry, nil
+}
+
+func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
+	stages, err := s.store.ListPromotionStages(ctx)
+	if err != nil {
+		return 0, err
+	}
+	repositories, err := s.store.ListRepositories(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	repositoriesByName := make(map[string]repository.Repository, len(repositories))
+	for _, record := range repositories {
+		repositoriesByName[record.Name] = record
+	}
+	stagesByRepository := make(map[string][]Stage)
+	for _, stage := range stages {
+		if stage.ArchivedAt != nil {
+			continue
+		}
+		if _, configured := s.integrations.Lookup(stage.Integration); !configured {
+			continue
+		}
+		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)
+	}
+
+	type scan struct {
+		record      repository.Repository
+		stages      []Stage
+		fingerprint [sha256.Size]byte
+	}
+	now := s.currentTime()
+	active := make(map[uuid.UUID]struct{}, len(stagesByRepository))
+	scans := make([]scan, 0, len(stagesByRepository))
+	for _, name := range slices.Sorted(maps.Keys(stagesByRepository)) {
+		groupStages := stagesByRepository[name]
+		record, ok := repositoriesByName[name]
+		if !ok {
+			continue
+		}
+		active[record.ID] = struct{}{}
+		slices.SortFunc(groupStages, compareBranchDriftStages)
+		fingerprint := branchDriftFingerprint(record, groupStages)
+		cached, found := s.cacheEntry(record.ID)
+		if found && cached.fingerprint == fingerprint {
+			if cached.refreshing || now.Before(cached.scannedAt.Add(s.cachePeriod)) {
+				continue
+			}
+			cached.refreshing = true
+			s.storeCache(record.ID, cached)
+		} else {
+			s.storeCache(record.ID, pendingBranchDriftCacheEntry(fingerprint, groupStages, now))
+		}
+		scans = append(scans, scan{record: record, stages: groupStages, fingerprint: fingerprint})
+	}
+	s.pruneCache(active)
+
+	group, groupContext := errgroup.WithContext(ctx)
+	group.SetLimit(branchDriftScanConcurrency)
+	for _, item := range scans {
+		group.Go(func() error {
+			entry, scanErr := s.scanRepository(groupContext, item.record, item.stages, item.fingerprint)
+			if scanErr != nil {
+				s.finishRefresh(item.record.ID, item.fingerprint)
+
+				return scanErr
+			}
+			s.storeRefreshedCache(item.record.ID, entry)
+
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return 0, err
+	}
+
+	return len(scans), nil
+}
+
+func (s *BranchDriftService) storeRefreshedCache(repositoryID uuid.UUID, entry branchDriftCacheEntry) {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	cached, ok := s.cache[repositoryID]
+	if !ok || cached.fingerprint != entry.fingerprint {
+		return
+	}
+	s.cache[repositoryID] = entry
+}
+
+func (s *BranchDriftService) finishRefresh(repositoryID uuid.UUID, fingerprint [sha256.Size]byte) {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	entry, ok := s.cache[repositoryID]
+	if !ok || entry.fingerprint != fingerprint {
+		return
+	}
+	entry.refreshing = false
+	s.cache[repositoryID] = entry
+}
+
+func (s *BranchDriftService) readCache(
+	record repository.Repository,
+	stages []Stage,
+) branchDriftCacheEntry {
+	fingerprint := branchDriftFingerprint(record, stages)
+	cached, ok := s.cacheEntry(record.ID)
+	if !ok || cached.fingerprint != fingerprint {
+		s.requestRefresh()
+		scannedAt := s.currentTime()
+		if ok {
+			scannedAt = cached.scannedAt
+		}
+
+		return pendingBranchDriftCacheEntry(fingerprint, stages, scannedAt)
+	}
+	if !cached.refreshing && !s.currentTime().Before(cached.scannedAt.Add(s.cachePeriod)) {
+		s.requestRefresh()
+	}
+
+	return cached
+}
+
+func (s *BranchDriftService) cacheEntry(repositoryID uuid.UUID) (branchDriftCacheEntry, bool) {
+	s.cacheMutex.RLock()
+	defer s.cacheMutex.RUnlock()
+
+	entry, ok := s.cache[repositoryID]
+
+	return entry, ok
+}
+
+func (s *BranchDriftService) storeCache(repositoryID uuid.UUID, entry branchDriftCacheEntry) {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	s.cache[repositoryID] = entry
+}
+
+func (s *BranchDriftService) pruneCache(active map[uuid.UUID]struct{}) {
+	s.cacheMutex.Lock()
+	defer s.cacheMutex.Unlock()
+
+	for repositoryID := range s.cache {
+		if _, ok := active[repositoryID]; !ok {
+			delete(s.cache, repositoryID)
+		}
+	}
+}
+
+func (s *BranchDriftService) requestRefresh() {
+	select {
+	case s.refresh <- struct{}{}:
+	default:
+	}
+}
+
+func (s *BranchDriftService) refreshAndLog(ctx context.Context) {
+	count, err := s.Refresh(ctx)
+	if err != nil {
+		if ctx.Err() == nil {
+			s.logger.Error("refresh promotion branch drift", "error", err)
+		}
+
+		return
+	}
+	if count > 0 {
+		s.logger.Debug("refreshed promotion branch drift", "repositories", count)
+	}
+}
+
+func pendingBranchDriftCacheEntry(
+	fingerprint [sha256.Size]byte,
+	stages []Stage,
+	scannedAt time.Time,
+) branchDriftCacheEntry {
+	entry := branchDriftCacheEntry{
+		fingerprint: fingerprint,
+		scannedAt:   scannedAt,
+		stages:      make(map[uuid.UUID]branchDriftEvidence, len(stages)),
+		refreshing:  true,
+	}
+	for _, stage := range stages {
+		acknowledgement, err := decodeSuccessfulRenderAcknowledgement(stage.SuccessfulRenderAcknowledgement)
+		message := "Branch drift refresh is pending."
+		if err != nil {
+			message = err.Error()
+		}
+		entry.stages[stage.ID] = branchDriftEvidence{
+			status:          BranchDriftStatusUnknown,
+			acknowledgement: acknowledgement,
+			message:         message,
+		}
+	}
+
+	return entry
 }
 
 func decodeSuccessfulRenderAcknowledgement(value json.RawMessage) (successfulRenderAcknowledgement, error) {

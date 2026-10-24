@@ -51,7 +51,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`     | `{}`                             | JSON object mapping cluster names to their bootstrap enrollment credentials                                                |
 | `SLIPRAMP_PLACEMENTS_FILE`                  | Unset                            | Path to the versioned YAML placement configuration                                                                         |
 | `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS`   | `{}`                             | JSON object mapping refresh credential names to mounted Git config files                                                   |
-| `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL`      | `1m`                             | Interval between repository branch refreshes                                                                               |
+| `SLIPRAMP_REPOSITORY_REFRESH_INTERVAL`      | `1m`                             | Interval between repository and promotion branch-drift refreshes                                                           |
 | `SLIPRAMP_REPOSITORY_FETCH_TIMEOUT`         | `30s`                            | Deadline for fetching one repository branch                                                                                |
 | `SLIPRAMP_DATABASE_URL`                     | Local development PostgreSQL URL | PostgreSQL connection URL                                                                                                  |
 | `SLIPRAMP_DATABASE_CONNECT_TIMEOUT`         | `10s`                            | PostgreSQL startup deadline                                                                                                |

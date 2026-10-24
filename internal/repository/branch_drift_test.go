@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -61,6 +63,10 @@ func TestGitBranchScannerComparesRepositoryBranchesAndAcknowledgedRender(t *test
 		comparisons[0].SourceBranchAuthoredAt == nil {
 		t.Errorf("no-op branch commit dates = %#v", comparisons[0])
 	}
+	cachedRepository := scanner.repositories[branchRepositoryCacheKey(record)]
+	if cachedRepository == nil || !cachedRepository.initialized {
+		t.Fatal("branch scan did not initialize its repository cache")
+	}
 
 	writeTestFile(t, workingDirectory, "apps/example/base/deployment.yaml", "version: two\n")
 	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-am", "relevant source update")
@@ -72,6 +78,9 @@ func TestGitBranchScannerComparesRepositoryBranchesAndAcknowledgedRender(t *test
 	}
 	if !comparisons[0].SourceDrift || comparisons[0].TargetDrift {
 		t.Errorf("source drift comparison = %#v", comparisons[0])
+	}
+	if scanner.repositories[branchRepositoryCacheKey(record)] != cachedRepository {
+		t.Error("branch scan replaced its repository cache")
 	}
 
 	runTestGit(t, "-C", workingDirectory, "switch", "--quiet", "stage/example/prod")
@@ -90,6 +99,13 @@ func TestGitBranchScannerComparesRepositoryBranchesAndAcknowledgedRender(t *test
 	}
 	if !comparisons[0].SourceDrift || !comparisons[0].TargetDrift {
 		t.Errorf("source and target drift comparison = %#v", comparisons[0])
+	}
+	root := scanner.root
+	if err := scanner.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if _, err := os.Stat(root); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("branch scanner cache still exists after Close(): %v", err)
 	}
 }
 
@@ -111,7 +127,9 @@ func TestGitBranchScannerReportsMissingTargetBranchPerStage(t *testing.T) {
 	commit := strings.TrimSpace(runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"))
 	runTestGit(t, "clone", "--quiet", "--bare", workingDirectory, remoteDirectory)
 
-	comparisons, err := NewGitBranchScanner(nil).ScanBranches(
+	scanner := NewGitBranchScanner(nil)
+	t.Cleanup(func() { _ = scanner.Close() })
+	comparisons, err := scanner.ScanBranches(
 		t.Context(),
 		Repository{CloneURL: remoteDirectory, Branch: "main"},
 		[]BranchComparisonRequest{{

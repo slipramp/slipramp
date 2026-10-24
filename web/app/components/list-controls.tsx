@@ -55,7 +55,7 @@ export function SearchParamFilters({
   const [addedNames, setAddedNames] = useState<string[]>([]);
   const addedFilterToFocus = useRef<string>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const visibleNames = [...new Set([...activeNames, ...addedNames])];
+  const visibleNames = [...activeNames.filter((name) => !addedNames.includes(name)), ...addedNames];
 
   useEffect(() => {
     const name = addedFilterToFocus.current;

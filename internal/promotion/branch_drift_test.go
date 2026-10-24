@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -28,10 +31,34 @@ func (s *branchDriftTestStore) ListRepositories(context.Context) ([]repository.R
 }
 
 type recordingBranchScanner struct {
+	mutex    sync.Mutex
 	calls    []repository.Repository
 	requests [][]repository.BranchComparisonRequest
 	results  []repository.BranchComparison
 	err      error
+}
+
+type blockingBranchScanner struct {
+	started chan string
+	release chan struct{}
+}
+
+func (s *blockingBranchScanner) ScanBranches(
+	ctx context.Context,
+	record repository.Repository,
+	requests []repository.BranchComparisonRequest,
+) ([]repository.BranchComparison, error) {
+	select {
+	case s.started <- record.Name:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	select {
+	case <-s.release:
+		return make([]repository.BranchComparison, len(requests)), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 func (s *recordingBranchScanner) ScanBranches(
@@ -39,6 +66,8 @@ func (s *recordingBranchScanner) ScanBranches(
 	record repository.Repository,
 	requests []repository.BranchComparisonRequest,
 ) ([]repository.BranchComparison, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	s.calls = append(s.calls, record)
 	s.requests = append(s.requests, requests)
 
@@ -97,10 +126,14 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 		scanner,
 		time.Minute,
 		30*time.Second,
+		branchDriftTestLogger(),
 	)
 	clock := now
 	service.now = func() time.Time { return clock }
 
+	if _, err := service.Refresh(t.Context()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
 	result, err := service.List(t.Context(), BranchDriftListFilter{Limit: DefaultListLimit})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -138,19 +171,115 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 
 	store.stages[0].LastObservedAt = now.Add(time.Second)
 	clock = now.Add(30 * time.Second)
-	if _, err := service.List(t.Context(), BranchDriftListFilter{Limit: DefaultListLimit}); err != nil {
-		t.Fatalf("cached List() error = %v", err)
+	if _, err := service.Refresh(t.Context()); err != nil {
+		t.Fatalf("cached Refresh() error = %v", err)
 	}
 	if len(scanner.calls) != 1 {
 		t.Errorf("cached repository scans = %d, want 1", len(scanner.calls))
 	}
 
 	clock = now.Add(time.Minute)
-	if _, err := service.List(t.Context(), BranchDriftListFilter{Limit: DefaultListLimit}); err != nil {
-		t.Fatalf("expired-cache List() error = %v", err)
+	if _, err := service.Refresh(t.Context()); err != nil {
+		t.Fatalf("expired-cache Refresh() error = %v", err)
 	}
 	if len(scanner.calls) != 2 {
 		t.Errorf("expired-cache repository scans = %d, want 2", len(scanner.calls))
+	}
+}
+
+func TestBranchDriftServiceRefreshesRepositoriesWithoutBlockingReads(t *testing.T) {
+	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
+	store := &branchDriftTestStore{}
+	for _, name := range []string{"alpha", "beta"} {
+		store.stages = append(store.stages, branchDriftTestStage(
+			"prod", name, name+"-prod",
+			strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40), now,
+		))
+		store.repositories = append(store.repositories, repository.Repository{
+			ID:     uuid.New(),
+			Name:   name,
+			Branch: "main",
+		})
+	}
+	scanner := &blockingBranchScanner{
+		started: make(chan string, 2),
+		release: make(chan struct{}),
+	}
+	service := NewBranchDriftService(
+		IntegrationSet{"prod": {}},
+		store,
+		scanner,
+		time.Minute,
+		30*time.Second,
+		branchDriftTestLogger(),
+	)
+	service.now = func() time.Time { return now }
+
+	refreshResult := make(chan error, 1)
+	go func() {
+		_, err := service.Refresh(t.Context())
+		refreshResult <- err
+	}()
+
+	started := make([]string, 0, 2)
+	for range 2 {
+		select {
+		case name := <-scanner.started:
+			started = append(started, name)
+		case <-time.After(time.Second):
+			t.Fatal("repository scans did not start concurrently")
+		}
+	}
+	slices.Sort(started)
+	if !slices.Equal(started, []string{"alpha", "beta"}) {
+		t.Fatalf("concurrent scans started for %v", started)
+	}
+
+	secondCount, err := service.Refresh(t.Context())
+	if err != nil {
+		t.Fatalf("concurrent Refresh() error = %v", err)
+	}
+	if secondCount != 0 {
+		t.Errorf("concurrent Refresh() scans = %d, want shared in-flight scans", secondCount)
+	}
+
+	listResult := make(chan BranchDriftList, 1)
+	listError := make(chan error, 1)
+	go func() {
+		result, listErr := service.List(t.Context(), BranchDriftListFilter{Limit: DefaultListLimit})
+		listResult <- result
+		listError <- listErr
+	}()
+	select {
+	case result := <-listResult:
+		if err := <-listError; err != nil {
+			t.Fatalf("List() during refresh error = %v", err)
+		}
+		if result.Total != 2 || len(result.Items) != 2 {
+			t.Fatalf("List() during refresh = %#v", result)
+		}
+		for _, item := range result.Items {
+			if item.Stages[0].Status != BranchDriftStatusUnknown ||
+				!strings.Contains(item.Stages[0].Message, "refresh is pending") {
+				t.Errorf("pending branch drift = %#v", item.Stages[0])
+			}
+		}
+	case <-time.After(time.Second):
+		t.Fatal("List() waited for repository scans")
+	}
+
+	close(scanner.release)
+	if err := <-refreshResult; err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+	result, err := service.List(t.Context(), BranchDriftListFilter{Limit: DefaultListLimit})
+	if err != nil {
+		t.Fatalf("List() after refresh error = %v", err)
+	}
+	for _, item := range result.Items {
+		if item.Stages[0].Status != BranchDriftStatusCurrent {
+			t.Errorf("refreshed branch drift = %#v", item.Stages[0])
+		}
 	}
 }
 
@@ -163,6 +292,7 @@ func TestBranchDriftServiceRejectsInvalidStatusFilter(t *testing.T) {
 		&recordingBranchScanner{},
 		time.Minute,
 		30*time.Second,
+		branchDriftTestLogger(),
 	)
 
 	_, err := service.List(t.Context(), BranchDriftListFilter{
@@ -204,32 +334,28 @@ func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
 	slices.Reverse(store.stages)
 
 	for _, test := range []struct {
-		name    string
-		filter  BranchDriftListFilter
-		total   int
-		stages  []string
-		scanned []string
+		name   string
+		filter BranchDriftListFilter
+		total  int
+		stages []string
 	}{
 		{
-			name:    "first page within one repository",
-			filter:  BranchDriftListFilter{Limit: 2},
-			total:   9,
-			stages:  []string{"alpha-one", "alpha-three"},
-			scanned: []string{"alpha"},
+			name:   "first page within one repository",
+			filter: BranchDriftListFilter{Limit: 2},
+			total:  9,
+			stages: []string{"alpha-one", "alpha-three"},
 		},
 		{
-			name:    "page spans repository boundary",
-			filter:  BranchDriftListFilter{Limit: 2, Offset: 2},
-			total:   9,
-			stages:  []string{"alpha-two", "beta-one"},
-			scanned: []string{"alpha", "beta"},
+			name:   "page spans repository boundary",
+			filter: BranchDriftListFilter{Limit: 2, Offset: 2},
+			total:  9,
+			stages: []string{"alpha-two", "beta-one"},
 		},
 		{
-			name:    "page continues within repository",
-			filter:  BranchDriftListFilter{Limit: 2, Offset: 4},
-			total:   9,
-			stages:  []string{"beta-three", "beta-two"},
-			scanned: []string{"beta"},
+			name:   "page continues within repository",
+			filter: BranchDriftListFilter{Limit: 2, Offset: 4},
+			total:  9,
+			stages: []string{"beta-three", "beta-two"},
 		},
 		{
 			name:   "last page retains missing repository error",
@@ -243,45 +369,39 @@ func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
 			total:  9,
 		},
 		{
-			name:    "repository filter counts stages",
-			filter:  BranchDriftListFilter{Repository: "beta", Limit: 2, Offset: 2},
-			total:   3,
-			stages:  []string{"beta-two"},
-			scanned: []string{"beta"},
+			name:   "repository filter counts stages",
+			filter: BranchDriftListFilter{Repository: "beta", Limit: 2, Offset: 2},
+			total:  3,
+			stages: []string{"beta-two"},
 		},
 		{
-			name:    "application filter before pagination",
-			filter:  BranchDriftListFilter{Application: "beta-two", Limit: 2},
-			total:   1,
-			stages:  []string{"beta-two"},
-			scanned: []string{"beta"},
+			name:   "application filter before pagination",
+			filter: BranchDriftListFilter{Application: "beta-two", Limit: 2},
+			total:  1,
+			stages: []string{"beta-two"},
 		},
 		{
-			name:    "status filter before pagination",
-			filter:  BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 1},
-			total:   4,
-			stages:  []string{"alpha-two", "beta-one"},
-			scanned: []string{"alpha", "beta"},
+			name:   "status filter before pagination",
+			filter: BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 1},
+			total:  4,
+			stages: []string{"alpha-two", "beta-one"},
 		},
 		{
-			name:    "status filtered last page",
-			filter:  BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 3},
-			total:   4,
-			stages:  []string{"beta-two"},
-			scanned: []string{"alpha", "beta"},
+			name:   "status filtered last page",
+			filter: BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 3},
+			total:  4,
+			stages: []string{"beta-two"},
 		},
 		{
-			name:    "status filtered offset beyond results",
-			filter:  BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 4},
-			total:   4,
-			scanned: []string{"alpha", "beta"},
+			name:   "status filtered offset beyond results",
+			filter: BranchDriftListFilter{Status: BranchDriftStatusCurrent, Limit: 2, Offset: 4},
+			total:  4,
 		},
 		{
-			name:    "unknown status paginates missing repository",
-			filter:  BranchDriftListFilter{Status: BranchDriftStatusUnknown, Limit: 2, Offset: 1},
-			total:   3,
-			stages:  []string{"missing-three", "missing-two"},
-			scanned: []string{"alpha", "beta"},
+			name:   "unknown status paginates missing repository",
+			filter: BranchDriftListFilter{Status: BranchDriftStatusUnknown, Limit: 2, Offset: 1},
+			total:  3,
+			stages: []string{"missing-three", "missing-two"},
 		},
 		{
 			name:   "no matching stages",
@@ -296,7 +416,11 @@ func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
 			}}
 			service := NewBranchDriftService(
 				IntegrationSet{"prod": {}}, store, scanner, time.Minute, 30*time.Second,
+				branchDriftTestLogger(),
 			)
+			if _, err := service.Refresh(t.Context()); err != nil {
+				t.Fatalf("Refresh() error = %v", err)
+			}
 			result, err := service.List(t.Context(), test.filter)
 			if err != nil {
 				t.Fatalf("List() error = %v", err)
@@ -329,14 +453,15 @@ func TestBranchDriftServicePaginatesStagesAcrossRepositoryGroups(t *testing.T) {
 					t.Errorf("repository %s scan did not include all Stages", record.Name)
 				}
 			}
-			if !slices.Equal(scanned, test.scanned) {
-				t.Errorf("scanned repositories = %v, want %v", scanned, test.scanned)
+			slices.Sort(scanned)
+			if !slices.Equal(scanned, []string{"alpha", "beta"}) {
+				t.Errorf("scanned repositories = %v, want [alpha beta]", scanned)
 			}
 
 			if _, err := service.List(t.Context(), test.filter); err != nil {
 				t.Fatalf("cached List() error = %v", err)
 			}
-			if len(scanner.calls) != len(test.scanned) {
+			if len(scanner.calls) != 2 {
 				t.Error("cached List() rescanned repositories")
 			}
 		})
@@ -362,6 +487,7 @@ func TestBranchDriftServiceAppliesStatusFilterToMissingRepositories(t *testing.T
 		&recordingBranchScanner{},
 		time.Minute,
 		30*time.Second,
+		branchDriftTestLogger(),
 	)
 	service.now = func() time.Time { return now }
 
@@ -428,9 +554,13 @@ func TestBranchDriftServiceUsesAcknowledgementsAndFiltersWithoutScanningUnknownS
 		scanner,
 		time.Minute,
 		30*time.Second,
+		branchDriftTestLogger(),
 	)
 	service.now = func() time.Time { return now }
 
+	if _, err := service.Refresh(t.Context()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
 	result, err := service.List(t.Context(), BranchDriftListFilter{
 		Integration: "prod",
 		Project:     "wanted",
@@ -487,6 +617,10 @@ func branchDriftTestStage(
 		SuccessfulRenderAcknowledgement: acknowledgement,
 		LastObservedAt:                  now,
 	}
+}
+
+func branchDriftTestLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func slicesClone(values []repository.BranchComparison) []repository.BranchComparison {

@@ -10,35 +10,21 @@ strict priority order.
 ## Kargo completion and operations
 
 Stage discovery, policies, durable requests, ordinary preparation Runs, diff
-artifacts, decisions, expiry, Freight comparisons, and cached branch drift with
-Stage-level pagination are implemented. Remaining work concerns live acceptance
-and operations rather than rebuilding that vertical.
+artifacts, decisions, expiry, Freight comparisons, and background-refreshed
+branch drift with Stage-level pagination are implemented. Live Kargo acceptance
+and the standalone Kargo Gate retirement are complete. Remaining work concerns
+operations rather than rebuilding that vertical.
 
 ### Live cutover and acceptance
 
-The recorded 2026-10-22 `ops-ci-homelab` exercise covered a guarded request,
-real Git/Argo CD artifacts including an empty Git diff, operator approval,
-target-branch push, and healthy/synced Argo CD reconciliation. Preparation
-failures were observed during bring-up and recovered through new Promotions.
-Disposable kind coverage also exercises automatic approval and guarded
-preparation, with authenticated Stage snapshots and deterministic Argo CD
-fixtures. On 2026-10-23, all 109 Stages in the eight observed Kargo projects
-cut over from Kargo Gate to Slipramp-backed tasks. The two `ops-ci` policies
-remain review-required and the other observed Stages retain the default
-automatic policy. The intentionally unobserved `kargo-ivy` project retains its
-direct-push tasks. These do not close the entire live cutover matrix.
+On 2026-10-23, all 109 Stages in the eight observed Kargo projects cut over from
+Kargo Gate to Slipramp-backed tasks, completed the live acceptance matrix, and
+retained their configured automatic or review-required policies. The standalone
+Kargo Gate service and credentials were then retired. The intentionally
+unobserved `kargo-ivy` project retains its direct-push tasks.
 
-- [ ] Complete the noncritical live Stage matrix: automatic, approved, rejected,
-      expired, preparation-failed, and stale-target outcomes; retain reproducible
-      evidence for rejection, expiry, and stale-target cases still outstanding.
-- [ ] Confirm removal of the standalone `kargo-gate` Deployment, Service, routes,
-      PVC, service account, RBAC, machine key, and obsolete Argo CD/Git credentials
-      after acceptance. Do not add legacy importers or compatibility routes.
 - [ ] Inventory existing candidate branches and retain or deliberately clean
       them only after verifying that no pending Promotion depends on them.
-
-The last two items were open in the previous cutover record and require live
-deployment verification before they can be marked complete.
 
 ### Remaining capabilities
 
