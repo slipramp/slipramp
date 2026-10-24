@@ -277,28 +277,6 @@ func (d *Database) GetPromotion(ctx context.Context, promotionID uuid.UUID) (pro
 	return promotionFromRow(row)
 }
 
-func (d *Database) GetPromotionByExternalIdentity(
-	ctx context.Context,
-	integration string,
-	externalPromotionID string,
-) (promotion.Promotion, error) {
-	row, err := d.queries.GetPromotionByExternalIdentity(
-		ctx,
-		storedb.GetPromotionByExternalIdentityParams{
-			Integration:         integration,
-			ExternalPromotionID: externalPromotionID,
-		},
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return promotion.Promotion{}, promotion.ErrPromotionNotFound
-	}
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("get Promotion by external identity: %w", err)
-	}
-
-	return promotionFromRow(row)
-}
-
 func (d *Database) GetPromotionDecision(
 	ctx context.Context,
 	promotionID uuid.UUID,

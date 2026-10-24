@@ -366,8 +366,8 @@ func (c *Controller) handleKargoPromotionCreation(
 	}
 
 	reportErr := c.promotionReports.ReportKargoPromotionDispatch(ctx, command.ID, report)
-	if errors.Is(reportErr, errControllerCredentialRejected) {
-		return reportErr
+	if permanentServerError(reportErr) {
+		return fmt.Errorf("report Kargo Promotion %s creation: %w", command.ID, reportErr)
 	}
 	if reportErr != nil {
 		c.logger.Warn(
@@ -444,8 +444,8 @@ func (c *Controller) handleKargoPromotionReconciliation(
 			Diagnostic: observation.Diagnostic,
 		},
 	)
-	if errors.Is(reportErr, errControllerCredentialRejected) {
-		return reportErr
+	if permanentServerError(reportErr) {
+		return fmt.Errorf("report Kargo Promotion %s reconciliation: %w", command.ID, reportErr)
 	}
 	if reportErr != nil {
 		c.logger.Warn(

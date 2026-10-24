@@ -52,10 +52,6 @@ func (s *recordingPromotionCreationService) Create(
 	return s.record, s.err
 }
 
-func (s *recordingPromotionReviewService) ExpirePending(context.Context) error {
-	return s.err
-}
-
 func (s *recordingPromotionReviewService) ListStages(
 	_ context.Context,
 	filter promotion.StageListFilter,

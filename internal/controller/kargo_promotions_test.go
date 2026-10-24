@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/http"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -181,14 +182,15 @@ func TestKargoPromotionCreatorClassifiesAdmissionFailures(t *testing.T) {
 func TestControllerReportsKargoPromotionCreationResults(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
+	type creationResult struct {
 		name       string
 		ensure     kargoPromotionMaterialization
 		ensureErr  error
 		result     api.KargoPromotionDispatchReportResult
 		reportErr  error
 		wantHandle error
-	}{
+	}
+	tests := []creationResult{
 		{
 			name:   "created",
 			ensure: kargoPromotionMaterialization{Name: "stage.01test.freight", UID: "promotion-uid", Created: true},
@@ -204,19 +206,18 @@ func TestControllerReportsKargoPromotionCreationResults(t *testing.T) {
 			ensureErr: errors.New("apiserver unavailable"),
 			result:    api.KargoPromotionDispatchReportResultRetryable,
 		},
-		{
-			name:      "ambiguous report",
+	}
+	for _, report := range kargoPromotionReportErrors() {
+		result := creationResult{
+			name:      report.name,
 			ensure:    kargoPromotionMaterialization{Name: "stage.01test.freight", UID: "promotion-uid", Created: true},
 			result:    api.KargoPromotionDispatchReportResultCreated,
-			reportErr: errors.New("connection reset"),
-		},
-		{
-			name:       "rejected credential",
-			ensure:     kargoPromotionMaterialization{Name: "stage.01test.freight", UID: "promotion-uid", Created: true},
-			result:     api.KargoPromotionDispatchReportResultCreated,
-			reportErr:  errControllerCredentialRejected,
-			wantHandle: errControllerCredentialRejected,
-		},
+			reportErr: report.err,
+		}
+		if report.permanent {
+			result.wantHandle = report.err
+		}
+		tests = append(tests, result)
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -326,43 +327,90 @@ func TestKargoPromotionReconcilerIgnoresNonterminalPhaseAndRejectsUIDReplacement
 func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 	t.Parallel()
 
-	command := testKargoPromotionReconciliationCommand()
-	observation := &kargoPromotionTerminalObservation{
-		Name:       command.KargoName,
-		UID:        command.KargoUID,
-		Phase:      api.KargoPromotionReconciliationReportPhaseSucceeded,
-		Diagnostic: "terminal before callback",
-	}
-	var reported api.KargoPromotionReconciliationReport
-	app := &Controller{
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-		promotionReconciler: kargoPromotionReconcilerFunc(func(
-			context.Context,
-			api.KargoPromotionReconciliationCommand,
-		) (*kargoPromotionTerminalObservation, error) {
-			return observation, nil
-		}),
-		promotionReconciliationReports: kargoPromotionReconciliationReporterFunc(func(
-			ctx context.Context,
-			promotionID uuid.UUID,
-			report api.KargoPromotionReconciliationReport,
-		) error {
-			if err := ctx.Err(); err != nil {
-				t.Errorf("report context was canceled with the Kubernetes attempt: %v", err)
+	tests := append([]kargoPromotionReportErrorCase{{name: "accepted"}}, kargoPromotionReportErrors()...)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			command := testKargoPromotionReconciliationCommand()
+			observation := &kargoPromotionTerminalObservation{
+				Name:       command.KargoName,
+				UID:        command.KargoUID,
+				Phase:      api.KargoPromotionReconciliationReportPhaseSucceeded,
+				Diagnostic: "terminal before callback",
 			}
-			if promotionID != command.ID {
-				t.Errorf("reported Promotion ID = %s", promotionID)
+			var reported api.KargoPromotionReconciliationReport
+			app := &Controller{
+				logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+				promotionReconciler: kargoPromotionReconcilerFunc(func(
+					context.Context,
+					api.KargoPromotionReconciliationCommand,
+				) (*kargoPromotionTerminalObservation, error) {
+					return observation, nil
+				}),
+				promotionReconciliationReports: kargoPromotionReconciliationReporterFunc(func(
+					ctx context.Context,
+					promotionID uuid.UUID,
+					report api.KargoPromotionReconciliationReport,
+				) error {
+					if err := ctx.Err(); err != nil {
+						t.Errorf("report context was canceled with the Kubernetes attempt: %v", err)
+					}
+					if promotionID != command.ID {
+						t.Errorf("reported Promotion ID = %s", promotionID)
+					}
+					reported = report
+					return test.err
+				}),
 			}
-			reported = report
-			return nil
-		}),
+			var wantHandle error
+			if test.permanent {
+				wantHandle = test.err
+			}
+			if err := app.handleKargoPromotionReconciliation(t.Context(), command); !errors.Is(err, wantHandle) {
+				t.Fatalf("handleKargoPromotionReconciliation() error = %v, want %v", err, wantHandle)
+			}
+			if reported.KargoName != observation.Name || reported.KargoUID != observation.UID ||
+				reported.Phase != observation.Phase || reported.Diagnostic != observation.Diagnostic {
+				t.Errorf("report = %#v", reported)
+			}
+		})
 	}
-	if err := app.handleKargoPromotionReconciliation(t.Context(), command); err != nil {
-		t.Fatalf("handleKargoPromotionReconciliation() error = %v", err)
-	}
-	if reported.KargoName != observation.Name || reported.KargoUID != observation.UID ||
-		reported.Phase != observation.Phase || reported.Diagnostic != observation.Diagnostic {
-		t.Errorf("report = %#v", reported)
+}
+
+type kargoPromotionReportErrorCase struct {
+	name      string
+	err       error
+	permanent bool
+}
+
+func kargoPromotionReportErrors() []kargoPromotionReportErrorCase {
+	return []kargoPromotionReportErrorCase{
+		{name: "rejected credential", err: errControllerCredentialRejected, permanent: true},
+		{
+			name:      "invalid report",
+			err:       newServerResponseError("report Kargo Promotion", http.StatusBadRequest),
+			permanent: true,
+		},
+		{
+			name:      "malformed response",
+			err:       invalidServerResponse("report Kargo Promotion", "response JSON does not match the API contract"),
+			permanent: true,
+		},
+		{
+			name:      "missing Promotion",
+			err:       newServerResponseError("report Kargo Promotion", http.StatusNotFound),
+			permanent: true,
+		},
+		{
+			name:      "identity conflict",
+			err:       newServerResponseError("report Kargo Promotion", http.StatusConflict),
+			permanent: true,
+		},
+		{name: "ambiguous report", err: errors.New("connection reset")},
+		{name: "request timeout", err: newServerResponseError("report Kargo Promotion", http.StatusRequestTimeout)},
+		{name: "rate limited", err: newServerResponseError("report Kargo Promotion", http.StatusTooManyRequests)},
+		{name: "Server unavailable", err: newServerResponseError("report Kargo Promotion", http.StatusServiceUnavailable)},
 	}
 }
 

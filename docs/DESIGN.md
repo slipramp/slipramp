@@ -277,6 +277,14 @@ and interrupts polling, including rejection from background log or inventory
 requests. Malformed polling responses fail the Controller rather than silently
 discarding work.
 
+Kargo creation and reconciliation reports use the same failure categories.
+Transport failures and HTTP 408/429/5xx leave durable Server scheduling to
+redeliver the command. Permanent report rejections, including unknown Promotion
+identity, conflicting Kargo name or UID, invalid requests, and malformed responses,
+stop the Controller with the Promotion ID and rejection diagnostic. Kubernetes
+resources remain available for inspection and recovery. Valid delayed or repeated
+reports remain idempotent on the Server, including callback races.
+
 Every execution namespace is exclusively owned by one Controller and its
 control plane. A Controller may own several namespaces, rejects assignments
 outside its configured list, and scans those namespaces individually before
@@ -528,6 +536,11 @@ makes identical repeated submissions/polls recover one Promotion; conflicting
 reuse returns `409`. Persisting the request, actor, and snapshots precedes Run
 creation. Domain states, including terminal errors, return the same machine
 response shape rather than masquerading as transport errors.
+
+Repeated callbacks validate the request digest and expire the matching pending
+Promotion at the acceptance time in the same row-locked transaction. Concurrent
+insertion recovery retries through that path. Callback handling does not sweep
+other Promotions; background and review expiry remain separate entry points.
 
 Promotion Stage, Repository, policy, and selected Freight snapshots are typed
 domain values. Stage inventory and frozen snapshots share typed Freight and

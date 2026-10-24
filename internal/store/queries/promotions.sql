@@ -290,12 +290,6 @@ SELECT *
 FROM promotions
 WHERE id = sqlc.arg(id);
 
--- name: GetPromotionByExternalIdentity :one
-SELECT *
-FROM promotions
-WHERE integration = sqlc.arg(integration)
-  AND external_promotion_id = sqlc.arg(external_promotion_id);
-
 -- name: LockPromotionByExternalIdentity :one
 SELECT *
 FROM promotions

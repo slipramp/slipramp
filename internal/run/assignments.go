@@ -5,7 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
+
+type AssignmentStore interface {
+	GetAssignedRunForCluster(ctx context.Context, clusterName string) (Run, error)
+	ClaimQueuedRun(ctx context.Context, clusterName string, claimedAt time.Time) (Run, error)
+}
 
 // NextRunAssignment returns a stable assignment for a cluster. Assigned Runs
 // are returned again until the controller reports that the Job was

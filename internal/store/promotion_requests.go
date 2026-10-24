@@ -28,9 +28,10 @@ func (d *Database) AcceptPromotionRequest(
 
 	var record promotion.Promotion
 	var err error
+	// Concurrent inserts retry through the same row-locked acceptance path.
 	for range maximumPromotionRequestTransactionAttempts {
 		record, err = d.acceptPromotionRequest(ctx, acceptance)
-		if !promotionRequestSerializationFailure(err) {
+		if !promotionRequestSerializationFailure(err) && !constraintMatches(err, promotionIdentityConstraint) {
 			return record, err
 		}
 	}
@@ -189,11 +190,6 @@ func (d *Database) acceptPromotionRequest(
 		return promotion.Promotion{}, err
 	}
 	row, err := queries.CreatePromotion(ctx, params)
-	if constraintMatches(err, promotionIdentityConstraint) {
-		_ = transaction.Rollback(ctx)
-
-		return d.existingPromotionRequest(ctx, acceptance)
-	}
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("insert Kargo Promotion request: %w", err)
 	}
@@ -202,25 +198,6 @@ func (d *Database) acceptPromotionRequest(
 	}
 
 	return promotionFromRow(row)
-}
-
-func (d *Database) existingPromotionRequest(
-	ctx context.Context,
-	acceptance promotion.PromotionAcceptance,
-) (promotion.Promotion, error) {
-	existing, err := d.GetPromotionByExternalIdentity(
-		ctx,
-		acceptance.Integration,
-		acceptance.Request.ExternalPromotionID,
-	)
-	if err != nil {
-		return promotion.Promotion{}, err
-	}
-	if existing.RequestDigest != acceptance.RequestDigest {
-		return promotion.Promotion{}, promotion.ErrIdentityConflict
-	}
-
-	return existing, nil
 }
 
 func finishExistingPromotionRequest(
@@ -237,6 +214,18 @@ func finishExistingPromotionRequest(
 	if existing.RequestDigest != (promotion.RequestDigest{}) {
 		if existing.RequestDigest != acceptance.RequestDigest {
 			return promotion.Promotion{}, promotion.ErrIdentityConflict
+		}
+		expiredRow, err := queries.ExpirePendingPromotion(ctx, storedb.ExpirePendingPromotionParams{
+			ID:        databaseUUID(existing.ID),
+			ExpiredAt: databaseTime(acceptance.AcceptedAt),
+		})
+		if err == nil {
+			existing, err = promotionFromRow(expiredRow)
+			if err != nil {
+				return promotion.Promotion{}, err
+			}
+		} else if !errors.Is(err, pgx.ErrNoRows) {
+			return promotion.Promotion{}, fmt.Errorf("expire repeated Kargo Promotion request: %w", err)
 		}
 		if err := transaction.Commit(ctx); err != nil {
 			return promotion.Promotion{}, fmt.Errorf("commit repeated Kargo Promotion request: %w", err)

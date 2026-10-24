@@ -45,7 +45,6 @@ type PromotionStageService interface {
 }
 
 type PromotionReviewService interface {
-	ExpirePending(context.Context) error
 	ListStages(context.Context, promotion.StageListFilter) (promotion.StageReviewList, error)
 	UpdateStagePolicy(
 		context.Context,
@@ -80,12 +79,6 @@ func (h *Handler) SubmitKargoPromotion(
 	if principal == nil {
 		return nil, errors.New("authenticated Kargo service account is missing")
 	}
-	if h.promotionReviews != nil {
-		if err := h.promotionReviews.ExpirePending(ctx); err != nil {
-			return nil, err
-		}
-	}
-
 	record, err := h.promotionRequests.SubmitKargoPromotion(
 		ctx,
 		string(request.Integration),

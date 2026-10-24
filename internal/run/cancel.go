@@ -5,9 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/productidentity"
 )
+
+type CancellationStore interface {
+	CancelRun(
+		ctx context.Context,
+		runID uuid.UUID,
+		requestedAt time.Time,
+		canceledBy *productidentity.ActorSnapshot,
+	) (Run, error)
+	GetRunToCancelForCluster(ctx context.Context, clusterName string) (Run, error)
+}
 
 // CancelRun records cancel intent. Queued Runs finish without controller
 // involvement; active Runs remain active until their controller reports the

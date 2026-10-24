@@ -931,6 +931,72 @@ func TestPromotionDecisionAtExpiryPersistsExpiredStateIntegration(t *testing.T) 
 	}
 }
 
+func TestRepeatedPromotionRequestExpiresOnlyMatchingReviewIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	pending := preparePromotionForReview(t, fixture, "callback-expiry", createdAt.Add(2*time.Minute))
+	unrelated := preparePromotionForReview(t, fixture, "unrelated-expiry", pending.CreatedAt)
+	if pending.ExpiresAt == nil || unrelated.ExpiresAt == nil || !pending.ExpiresAt.Equal(*unrelated.ExpiresAt) {
+		t.Fatal("prepared Promotions must share a review deadline")
+	}
+
+	callback := fixture.acceptance(t, fixture.request(pending.ExternalPromotionID), *pending.ExpiresAt)
+	beforeDeadline := callback
+	beforeDeadline.AcceptedAt = pending.ExpiresAt.Add(-time.Microsecond)
+	unchanged, err := fixture.database.AcceptPromotionRequest(fixture.ctx, beforeDeadline)
+	if err != nil || unchanged.ID != pending.ID || unchanged.Status != promotion.StatusPending ||
+		!unchanged.UpdatedAt.Equal(pending.UpdatedAt) || unchanged.Message != nil {
+		t.Fatalf("callback before expiry = %#v, %v", unchanged, err)
+	}
+
+	conflicting := callback
+	conflicting.Request.CandidateRevision = strings.Repeat("a", 40)
+	conflicting.RequestDigest, err = conflicting.Request.Digest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx, conflicting,
+	); !errors.Is(err, promotion.ErrIdentityConflict) {
+		t.Fatalf("conflicting callback at expiry error = %v", err)
+	}
+	unchanged, err = fixture.database.GetPromotion(fixture.ctx, pending.ID)
+	if err != nil || unchanged.Status != promotion.StatusPending ||
+		!unchanged.UpdatedAt.Equal(pending.UpdatedAt) || unchanged.Message != nil {
+		t.Fatalf("conflicting callback changed Promotion = %#v, %v", unchanged, err)
+	}
+
+	for _, test := range []struct {
+		name string
+		at   time.Time
+	}{
+		{name: "exact deadline", at: *pending.ExpiresAt},
+		{name: "repeated expired callback", at: pending.ExpiresAt.Add(time.Minute)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			acceptance := callback
+			acceptance.AcceptedAt = test.at
+			record, err := fixture.database.AcceptPromotionRequest(fixture.ctx, acceptance)
+			if err != nil || record.ID != pending.ID || record.Status != promotion.StatusExpired ||
+				record.Message == nil || *record.Message != "The review window expired before a decision was recorded." ||
+				!record.UpdatedAt.Equal(*pending.ExpiresAt) {
+				t.Fatalf("expired callback = %#v, %v", record, err)
+			}
+			stored, err := fixture.database.GetPromotion(fixture.ctx, pending.ID)
+			if err != nil || stored.Status != record.Status || stored.Message == nil ||
+				*stored.Message != *record.Message || !stored.UpdatedAt.Equal(record.UpdatedAt) {
+				t.Errorf("persisted expired Promotion = %#v, %v", stored, err)
+			}
+		})
+	}
+
+	unchanged, err = fixture.database.GetPromotion(fixture.ctx, unrelated.ID)
+	if err != nil || unchanged.Status != promotion.StatusPending ||
+		!unchanged.UpdatedAt.Equal(unrelated.UpdatedAt) || unchanged.Message != nil {
+		t.Errorf("unrelated eligible Promotion changed = %#v, %v", unchanged, err)
+	}
+}
+
 func TestConcurrentPromotionDecisionsRecordOneImmutableResultIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 21, 12, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)

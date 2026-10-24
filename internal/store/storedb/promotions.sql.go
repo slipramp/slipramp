@@ -1082,66 +1082,6 @@ func (q *Queries) GetPromotionAwaitingDispatch(ctx context.Context, attemptedAt 
 	return i, err
 }
 
-const getPromotionByExternalIdentity = `-- name: GetPromotionByExternalIdentity :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
-FROM promotions
-WHERE integration = $1
-  AND external_promotion_id = $2
-`
-
-type GetPromotionByExternalIdentityParams struct {
-	Integration         string
-	ExternalPromotionID string
-}
-
-func (q *Queries) GetPromotionByExternalIdentity(ctx context.Context, arg GetPromotionByExternalIdentityParams) (Promotion, error) {
-	row := q.db.QueryRow(ctx, getPromotionByExternalIdentity, arg.Integration, arg.ExternalPromotionID)
-	var i Promotion
-	err := row.Scan(
-		&i.ID,
-		&i.Integration,
-		&i.ExternalPromotionID,
-		&i.RequestDigest,
-		&i.StageID,
-		&i.StageSnapshot,
-		&i.RepositoryID,
-		&i.RepositorySnapshot,
-		&i.BaseRevision,
-		&i.CandidateRevision,
-		&i.CandidateBranch,
-		&i.TargetBranch,
-		&i.PolicySnapshot,
-		&i.ReviewRequired,
-		&i.Status,
-		&i.Message,
-		&i.PreparationRepositoryID,
-		&i.PreparationCatalogRevisionID,
-		&i.PreparationRunID,
-		&i.GitDiffArtifactID,
-		&i.ArgoDiffArtifactID,
-		&i.RequestedByPrincipalID,
-		&i.RequestedBySnapshot,
-		&i.CreatedAt,
-		&i.PreparationCompletedAt,
-		&i.DecidedAt,
-		&i.ExpiresAt,
-		&i.UpdatedAt,
-		&i.Source,
-		&i.SourceStageID,
-		&i.SelectedFreightSnapshot,
-		&i.DispatchAttemptCount,
-		&i.NextDispatchAt,
-		&i.LastDispatchAt,
-		&i.DispatchedAt,
-		&i.KargoPromotionUid,
-		&i.NextReconciliationAt,
-		&i.LastReconciliationAt,
-		&i.PreparationFailureCount,
-		&i.NextPreparationAttemptAt,
-	)
-	return i, err
-}
-
 const getPromotionDecision = `-- name: GetPromotionDecision :one
 SELECT promotion_id, decision, comment, decided_by_principal_id, decided_by_snapshot, decided_at
 FROM promotion_decisions
