@@ -344,7 +344,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	}
 }
 
-func TestPromotionPreparationCompletionEnqueuesRoutedNotificationIntegration(t *testing.T) {
+func TestPromotionPreparationCompletionEnqueuesRoutedNotificationAndKeepsInboxIndependentIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
 	service := notificationServiceForDestinations(t, fixture.database, "operations")
@@ -380,6 +380,7 @@ func TestPromotionPreparationCompletionEnqueuesRoutedNotificationIntegration(t *
 		page.Items[0].SubjectID != pending.ID || page.Items[0].DestinationName != "operations" {
 		t.Fatalf("notification delivery history = %#v", page)
 	}
+	routedPending := pending
 
 	if _, err := fixture.database.CompletePromotionPreparation(
 		fixture.ctx,
@@ -429,9 +430,63 @@ func TestPromotionPreparationCompletionEnqueuesRoutedNotificationIntegration(t *
 	if err != nil || pending.Status != promotion.StatusPending {
 		t.Fatalf("unrouted CompletePromotionPreparation() = %#v, %v", pending, err)
 	}
+	unroutedPending := pending
 	page, err = service.ListDeliveries(fixture.ctx, notification.DeliveryHistoryFilter{Limit: 25})
 	if err != nil || page.Total != 1 {
 		t.Fatalf("delivery history after unrouted completion = %#v, %v", page, err)
+	}
+
+	inboxPromotions, err := fixture.database.ListInboxPromotions(fixture.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(inboxPromotions) != 2 || inboxPromotions[0].ID != unroutedPending.ID ||
+		inboxPromotions[1].ID != routedPending.ID {
+		t.Fatalf("Inbox Promotions with routed and unrouted notifications = %#v", inboxPromotions)
+	}
+
+	attempt, err := fixture.database.ClaimNextNotificationDelivery(
+		fixture.ctx,
+		notification.DeliveryClaim{
+			AttemptedAt:    createdAt.Add(time.Minute),
+			MaximumBackoff: time.Minute,
+			Jitter:         1,
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated, failErr := fixture.database.FailNotificationDelivery(
+		fixture.ctx,
+		attempt.ID,
+		attempt.AttemptCount,
+		createdAt.Add(time.Minute+time.Second),
+		"Slack temporarily rejected the delivery (HTTP 503).",
+	); failErr != nil || !updated {
+		t.Fatalf("FailNotificationDelivery() = %t, %v", updated, failErr)
+	}
+
+	inboxPromotions, err = fixture.database.ListInboxPromotions(fixture.ctx)
+	if err != nil || len(inboxPromotions) != 2 {
+		t.Fatalf("Inbox Promotions after notification failure = %#v, %v", inboxPromotions, err)
+	}
+	if _, _, err := fixture.database.DecidePromotion(fixture.ctx, promotion.Decision{
+		PromotionID:          routedPending.ID,
+		Decision:             promotion.DecisionApproved,
+		DecidedByPrincipalID: fixture.principal.ID,
+		DecidedBySnapshot:    fixture.actor,
+		DecidedAt:            createdAt.Add(2 * time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	inboxPromotions, err = fixture.database.ListInboxPromotions(fixture.ctx)
+	if err != nil || len(inboxPromotions) != 1 || inboxPromotions[0].ID != unroutedPending.ID {
+		t.Fatalf("Inbox Promotions after resolving routed review = %#v, %v", inboxPromotions, err)
+	}
+	page, err = service.ListDeliveries(fixture.ctx, notification.DeliveryHistoryFilter{Limit: 25})
+	if err != nil || page.Total != 1 || page.Items[0].State != notification.DeliveryStateFailed {
+		t.Fatalf("delivery history after resolving Inbox decision = %#v, %v", page, err)
 	}
 }
 

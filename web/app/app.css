@@ -28,6 +28,66 @@
   --slipramp-accent: var(--mantine-color-sun-4);
 }
 
+:root[data-slipramp-theme="kawaii"][data-mantine-color-scheme] {
+  color-scheme: light;
+  --mantine-color-text: #513b49;
+  --mantine-color-body: #fff9fc;
+  --mantine-color-dimmed: #8e7080;
+  --mantine-color-default: #fffdfd;
+  --mantine-color-default-hover: #fff2f8;
+  --mantine-color-default-color: #513b49;
+  --mantine-color-default-border: #f1d8e6;
+  --mantine-color-lilac-0: var(--mantine-color-sakura-0);
+  --mantine-color-lilac-1: var(--mantine-color-sakura-1);
+  --mantine-color-lilac-2: var(--mantine-color-sakura-2);
+  --mantine-color-lilac-3: var(--mantine-color-sakura-3);
+  --mantine-color-lilac-4: var(--mantine-color-sakura-4);
+  --mantine-color-lilac-5: var(--mantine-color-sakura-5);
+  --mantine-color-lilac-6: var(--mantine-color-sakura-6);
+  --mantine-color-lilac-7: var(--mantine-color-sakura-7);
+  --mantine-color-lilac-8: var(--mantine-color-sakura-8);
+  --mantine-color-lilac-9: var(--mantine-color-sakura-9);
+  --mantine-color-lilac-text: var(--mantine-color-sakura-6);
+  --mantine-color-lilac-filled: var(--mantine-color-sakura-6);
+  --mantine-color-lilac-filled-hover: var(--mantine-color-sakura-7);
+  --mantine-color-lilac-light: rgb(228 81 140 / 13%);
+  --mantine-color-lilac-light-hover: rgb(228 81 140 / 20%);
+  --mantine-color-lilac-light-color: var(--mantine-color-sakura-8);
+  --mantine-color-lilac-outline: var(--mantine-color-sakura-6);
+  --mantine-color-lilac-outline-hover: rgb(228 81 140 / 6%);
+  --mantine-primary-color-0: var(--mantine-color-sakura-0);
+  --mantine-primary-color-1: var(--mantine-color-sakura-1);
+  --mantine-primary-color-2: var(--mantine-color-sakura-2);
+  --mantine-primary-color-3: var(--mantine-color-sakura-3);
+  --mantine-primary-color-4: var(--mantine-color-sakura-4);
+  --mantine-primary-color-5: var(--mantine-color-sakura-5);
+  --mantine-primary-color-6: var(--mantine-color-sakura-6);
+  --mantine-primary-color-7: var(--mantine-color-sakura-7);
+  --mantine-primary-color-8: var(--mantine-color-sakura-8);
+  --mantine-primary-color-9: var(--mantine-color-sakura-9);
+  --mantine-primary-color-filled: var(--mantine-color-sakura-6);
+  --mantine-primary-color-filled-hover: var(--mantine-color-sakura-7);
+  --mantine-primary-color-light: rgb(228 81 140 / 13%);
+  --mantine-primary-color-light-hover: rgb(228 81 140 / 20%);
+  --mantine-primary-color-light-color: var(--mantine-color-sakura-8);
+  --mantine-radius-xs: 0.5rem;
+  --mantine-radius-sm: 0.75rem;
+  --mantine-radius-md: 1rem;
+  --mantine-radius-lg: 1.25rem;
+  --mantine-radius-xl: 1.75rem;
+  --slipramp-header: rgb(255 250 253 / 91%);
+  --slipramp-navbar: rgb(255 245 250 / 94%);
+  --slipramp-filter: rgb(255 248 252 / 94%);
+  --slipramp-border: #f1d8e6;
+  --slipramp-filter-border: var(--mantine-color-sakura-1);
+  --slipramp-shadow: rgb(181 50 104 / 8%);
+  --slipramp-brand-shadow: rgb(228 81 140 / 28%);
+  --slipramp-hover: rgb(255 227 237 / 55%);
+  --slipramp-inset: rgb(255 251 253 / 82%);
+  --slipramp-glow: rgb(247 168 199 / 22%);
+  --slipramp-accent: var(--mantine-color-sun-4);
+}
+
 :root {
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -47,6 +107,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+:root[data-slipramp-theme="kawaii"] body {
+  background:
+    radial-gradient(circle at 8% 8%, rgb(255 201 221 / 42%), transparent 22rem),
+    radial-gradient(circle at 92% 16%, rgb(186 240 223 / 38%), transparent 25rem),
+    radial-gradient(circle at 15% 100%, rgb(255 232 138 / 20%), transparent 24rem),
+    linear-gradient(145deg, #fff9fc 0%, #fffdf8 52%, #f8fffd 100%);
+  background-attachment: fixed;
+}
+
 a {
   text-underline-offset: 0.18em;
 }
@@ -55,6 +124,50 @@ a {
   background: var(--slipramp-header);
   border-color: var(--slipramp-border);
   backdrop-filter: blur(16px);
+}
+
+.product-header-controls {
+  flex: 0 0 auto;
+}
+
+.product-header-mascot-slot {
+  position: relative;
+  display: none;
+  align-self: stretch;
+  width: 7.25rem;
+  pointer-events: none;
+}
+
+.product-header-mascot {
+  position: absolute;
+  z-index: 2;
+  top: 0.35rem;
+  right: 0;
+  display: block;
+  width: 8.5rem;
+  max-width: none;
+  filter: drop-shadow(0 8px 12px rgb(181 50 104 / 13%));
+  transform-origin: 58% 12%;
+  user-select: none;
+}
+
+:root[data-slipramp-theme="kawaii"] .product-header-mascot-slot {
+  display: block;
+}
+
+:root[data-slipramp-theme="kawaii"] .product-header-mascot {
+  animation: product-header-mascot-float 4s ease-in-out infinite;
+}
+
+@keyframes product-header-mascot-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+
+  50% {
+    transform: translateY(-2px) rotate(-1deg);
+  }
 }
 
 .global-loading-bar {
@@ -117,6 +230,18 @@ a {
   text-decoration: none;
 }
 
+:root[data-slipramp-theme="kawaii"] .product-brand {
+  color: var(--mantine-color-sakura-9);
+}
+
+:root[data-slipramp-theme="kawaii"] .product-brand::after {
+  color: var(--mantine-color-sun-6);
+  content: "\2726";
+  font-size: 0.8rem;
+  text-shadow: 0 2px 8px rgb(250 176 5 / 32%);
+  transform: rotate(12deg);
+}
+
 .product-mark {
   display: block;
   width: 28px;
@@ -161,6 +286,13 @@ a {
   box-shadow: inset 3px 0 0 var(--slipramp-accent);
 }
 
+:root[data-slipramp-theme="kawaii"] .navigation-link[data-active] {
+  background: linear-gradient(105deg, rgb(255 227 237 / 88%), rgb(238 229 255 / 74%));
+  box-shadow:
+    inset 3px 0 0 var(--mantine-color-sakura-5),
+    0 5px 18px rgb(181 50 104 / 8%);
+}
+
 .page-surface {
   display: flex;
   flex-direction: column;
@@ -195,6 +327,15 @@ a {
 
 .page-surface h1 {
   letter-spacing: -0.035em;
+}
+
+.page-header-heading {
+  flex: 1 1 24rem;
+  min-width: 0;
+}
+
+.page-header-copy {
+  min-width: 0;
 }
 
 .page-back-link {
@@ -257,6 +398,12 @@ a {
 .mantine-Paper-root[data-with-border] {
   border-color: var(--slipramp-border);
   box-shadow: 0 1px 2px var(--slipramp-shadow);
+}
+
+:root[data-slipramp-theme="kawaii"] .mantine-Paper-root[data-with-border] {
+  box-shadow:
+    0 10px 32px rgb(181 50 104 / 7%),
+    inset 0 1px 0 rgb(255 255 255 / 90%);
 }
 
 .mantine-Table-th {
@@ -340,5 +487,26 @@ a {
 @media (max-width: 47.99em) {
   .page-surface {
     max-width: 100%;
+  }
+}
+
+@media (width < 36em) {
+  .page-header-heading {
+    align-items: flex-end;
+  }
+
+  .product-header-mascot-slot {
+    width: 4.75rem;
+  }
+
+  .product-header-mascot {
+    top: 0.7rem;
+    width: 6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-slipramp-theme="kawaii"] .product-header-mascot {
+    animation: none;
   }
 }

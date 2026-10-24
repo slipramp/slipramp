@@ -3,8 +3,8 @@
 This document defines the accepted design for outbound Slipramp notifications.
 The provider-neutral configuration, persistence, routing/enqueue boundary,
 retention boundary, generated delivery-history API, restart-persistent Slack
-dispatcher, and Kargo Promotion enqueue integration are implemented. The Web
-view remains unfinished, and the external contract is not yet stable.
+dispatcher, Kargo Promotion enqueue integration, and operator delivery-history
+Web view are implemented. The external contract is not yet stable.
 
 Notification delivery is provider-neutral, with Slack as the first adapter.
 Notifications report durable domain transitions but never own or alter them.
@@ -428,9 +428,9 @@ artifact, product-session, or Kargo submission credentials.
 
 ## API and Web Application
 
-OpenAPI remains the source of truth for every product endpoint. The initial
-notification surface should expose bounded delivery history or detail so
-operators can inspect attempt timing without reading Server logs.
+OpenAPI remains the source of truth for every product endpoint. The notification
+surface exposes bounded delivery history so operators can inspect attempt timing
+without reading Server logs.
 
 The homepage continues to read one complete `/api/v1/inbox` projection. The Web
 must not join a notification-delivery endpoint into the Inbox or gain a fallback
@@ -439,12 +439,13 @@ or item kind. If terminal failures are added to the Inbox later, the Server must
 extend the complete projection and treat failure data as required; a source
 error cannot be presented as **All clear**.
 
-The first UI slice does not require a template editor, routing editor, or
-destination-secret management. Configuration remains deployment-owned. The UI
-for delivery inspection shows the event type, subject link, destination name,
-state, attempts, last attempt, and redacted failure summary. Transient Web
-action toasts are local interaction feedback and are unrelated to this outbound
-delivery subsystem.
+The dedicated `/notification-deliveries` Web view reads only the generated
+delivery-history client and remains separate from the Inbox projection. It shows
+the event type, authenticated subject link, destination name and type, state,
+attempt count, attempt timing, and redacted failure summary. It does not provide
+a template editor, routing editor, destination-secret management, or retry
+control; configuration remains deployment-owned. Transient Web action toasts are
+local interaction feedback and are unrelated to this outbound delivery subsystem.
 
 An explicit operator retry endpoint may be added after automatic retry behavior
 is exercised. If added, it returns the same delivery to `pending` under an

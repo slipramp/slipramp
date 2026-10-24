@@ -19,17 +19,19 @@ export function PageHeader({
   title,
 }: Readonly<PageHeaderProps>) {
   return (
-    <Stack gap="xs">
+    <Stack className="page-header" gap="xs">
       {back}
       <Group align="flex-end" justify="space-between" wrap="wrap">
-        <Stack gap={2} style={{ minWidth: 0 }}>
-          <Group gap="sm" wrap="wrap">
-            <Title order={1}>{title}</Title>
-            {badges}
-          </Group>
-          {typeof description === "string" ? <Text c="dimmed">{description}</Text> : description}
-          {details}
-        </Stack>
+        <Group className="page-header-heading" gap="md" wrap="nowrap">
+          <Stack className="page-header-copy" gap={2}>
+            <Group gap="sm" wrap="wrap">
+              <Title order={1}>{title}</Title>
+              {badges}
+            </Group>
+            {typeof description === "string" ? <Text c="dimmed">{description}</Text> : description}
+            {details}
+          </Stack>
+        </Group>
         {actions ? (
           <Group gap="sm" wrap="wrap">
             {actions}

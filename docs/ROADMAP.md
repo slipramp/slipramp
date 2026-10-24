@@ -7,44 +7,6 @@ When work lands, update the design and remove or narrow the corresponding item.
 The sections below group related work; they are not release commitments or a
 strict priority order.
 
-## Notifications
-
-The provider-neutral persistence, routing, configuration, inspection,
-restart-persistent Slack delivery, and guarded Kargo Promotion integration are
-implemented.
-[NOTIFICATIONS.md](./NOTIFICATIONS.md) contains the accepted design.
-
-- [ ] Add a dedicated operator Web view over the generated non-sensitive delivery
-      history API. Keep the Inbox contract separate and do not compose notification
-      endpoints into it in the browser. Add acceptance coverage for message
-      content, authenticated links, restart recovery, provider outage, and Inbox
-      independence.
-
-Delivery is at least once. Notification failure never changes a Promotion or
-Run outcome. Messages link to authenticated Slipramp; they contain no logs,
-sensitive diffs, artifact bodies, or credentials. Slack cannot approve or reject.
-
-Notifications and the Inbox are complementary rather than mutually dependent.
-The Inbox projects current, role-aware decisions and problems even without a
-notification route. Notification events preserve selected transition snapshots
-and delivery history after the current Inbox condition resolves. Inbox reads
-never emit notifications, and acknowledging a problem never suppresses or
-retries delivery. Operational event deduplication must follow the same source
-episode boundary used by the Inbox without reusing Inbox occurrence IDs as the
-notification contract.
-
-Introduce more events only with transition, deduplication, recovery, and noise
-semantics: review resolution, failed Runs/refreshes, unreachable Controllers,
-and stale observations are candidates. Signed webhooks and then email are
-possible adapters when required. Defer user subscriptions, routing expressions,
-template editors, interactive provider decisions, and a general event bus.
-
-Exact-event installation-wide routing and bounded terminal-record retention are
-the implemented baseline. Future work must settle any typed route filters needed
-by actual deployments, explicit operator retries, outage notification noise, and
-whether delivery history later participates in broader audit views. Pending
-deliveries cannot be pruned by retention.
-
 ## Kargo completion and operations
 
 Stage discovery, policies, durable requests, ordinary preparation Runs, diff
@@ -164,6 +126,11 @@ an operator need justifies a focused design:
 - Pull-request and ephemeral environments; Actions outside Targets.
 - Tool-specific parsing/provider integrations and richer drift detection beyond
   user Actions and implemented Kargo branch drift.
+- Additional outbound notification events and adapters, typed routing filters,
+  explicit delivery retries, user subscriptions, or interactive provider
+  decisions. Add them only for a concrete operator need and preserve the
+  transition, deduplication, recovery, noise, and security boundaries in
+  [NOTIFICATIONS.md](./NOTIFICATIONS.md).
 - Protected Targets, branch restrictions, maintenance windows, image policy, or
   broader authorization. Such controls must preserve the opt-in safety model.
 - Workflow graphs and multi-step pipelines, only if independent Actions and

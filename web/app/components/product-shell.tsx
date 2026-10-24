@@ -31,21 +31,25 @@ import {
   IconLayoutSidebarLeftExpand,
   IconLogout,
   IconMoon,
+  IconNotification,
+  IconPalette,
   IconRobot,
   IconRocket,
   IconRoute,
   IconServer2,
   IconShieldCheck,
+  IconSparkles,
   IconSun,
   IconTargetArrow,
   type TablerIcon,
 } from "@tabler/icons-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Form, Link, useLocation, useNavigation } from "react-router";
 
 import type { ProductPrincipal } from "~/api/generated";
 import { Identity } from "~/components/identity";
 import { PerformanceFooter } from "~/components/performance-footer";
+import { useThemePreset, type ThemePreset } from "~/theme-preset";
 
 type NavigationItem = {
   icon: TablerIcon;
@@ -60,6 +64,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
       { icon: IconTargetArrow, label: "Targets", to: "/targets" },
       { icon: IconHistory, label: "Runs", to: "/runs" },
       { icon: IconGitCommit, label: "Commits", to: "/commits" },
+      { icon: IconNotification, label: "Notifications", to: "/notification-deliveries" },
     ],
     label: "Operate",
   },
@@ -148,7 +153,17 @@ export function ProductShell({
               Infrastructure control plane
             </Text>
           </Group>
-          <ColorSchemeControl />
+          <Group className="product-header-controls" gap="xs" h="100%" wrap="nowrap">
+            <Box aria-hidden="true" className="product-header-mascot-slot">
+              <img
+                alt=""
+                className="product-header-mascot"
+                decoding="async"
+                src="/slipramp-mascot.png"
+              />
+            </Box>
+            <AppearanceControl />
+          </Group>
         </Group>
       </AppShell.Header>
 
@@ -270,20 +285,36 @@ function NavigationGroup({
   );
 }
 
-function ColorSchemeControl() {
+function AppearanceControl() {
   const computedColorScheme = useComputedColorScheme("light");
   const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const { setThemePreset, themePreset } = useThemePreset();
+
+  useEffect(() => {
+    if (themePreset === "kawaii" && colorScheme !== "light") {
+      setColorScheme("light");
+    }
+  }, [colorScheme, setColorScheme, themePreset]);
+
+  function selectThemePreset(preset: ThemePreset) {
+    setThemePreset(preset);
+    if (preset === "kawaii") {
+      setColorScheme("light");
+    }
+  }
 
   return (
-    <Menu position="bottom-end" shadow="md" width={160}>
+    <Menu position="bottom-end" shadow="md" width={200}>
       <Menu.Target>
         <ActionIcon
-          aria-label="Choose color scheme"
+          aria-label="Choose theme and appearance"
           size="lg"
-          title="Choose color scheme"
+          title="Choose theme and appearance"
           variant="light"
         >
-          {computedColorScheme === "dark" ? (
+          {themePreset === "kawaii" ? (
+            <IconSparkles size={19} stroke={1.8} />
+          ) : computedColorScheme === "dark" ? (
             <IconMoon size={19} stroke={1.8} />
           ) : (
             <IconSun size={19} stroke={1.8} />
@@ -291,13 +322,38 @@ function ColorSchemeControl() {
         </ActionIcon>
       </Menu.Target>
       <Menu.Dropdown>
-        <Menu.Label>Appearance</Menu.Label>
+        <Menu.Label>Theme</Menu.Label>
+        {(
+          [
+            { icon: IconPalette, label: "Standard", value: "standard" },
+            { icon: IconSparkles, label: "Kawaii", value: "kawaii" },
+          ] as const
+        ).map((preset) => {
+          const PresetIcon = preset.icon;
+          return (
+            <Menu.Item
+              key={preset.value}
+              leftSection={<PresetIcon size={16} stroke={1.8} />}
+              onClick={() => selectThemePreset(preset.value)}
+              rightSection={
+                themePreset === preset.value ? <IconCheck size={15} stroke={2} /> : null
+              }
+            >
+              {preset.label}
+            </Menu.Item>
+          );
+        })}
+        <Menu.Divider />
+        <Menu.Label>
+          {themePreset === "kawaii" ? "Appearance · Kawaii is light" : "Appearance"}
+        </Menu.Label>
         {(["auto", "light", "dark"] as const).map((scheme) => {
           const SchemeIcon =
             scheme === "auto" ? IconDeviceDesktop : scheme === "light" ? IconSun : IconMoon;
 
           return (
             <Menu.Item
+              disabled={themePreset === "kawaii" && scheme !== "light"}
               key={scheme}
               leftSection={<SchemeIcon size={16} stroke={1.8} />}
               onClick={() => setColorScheme(scheme)}

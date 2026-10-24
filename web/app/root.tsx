@@ -31,6 +31,7 @@ import { ProductShell } from "~/components/product-shell";
 import { pageTitle } from "~/page-title";
 import { serverPerformanceMiddleware } from "~/performance.server";
 import { sliprampTheme } from "~/theme";
+import { ThemePresetScript } from "~/theme-preset";
 
 import type { Route } from "./+types/root";
 
@@ -75,6 +76,7 @@ export function Layout({ children }: Readonly<{ children: ReactNode }>) {
         <link href="/favicon.ico" rel="icon" sizes="any" />
         <link href="/apple-touch-icon.png" rel="apple-touch-icon" />
         <ColorSchemeScript defaultColorScheme="auto" />
+        <ThemePresetScript />
         <Meta />
         <Links />
       </head>

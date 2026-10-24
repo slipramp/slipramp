@@ -568,9 +568,11 @@ resolved before the state change and the same PostgreSQL transaction moves the
 Promotion to `pending`, inserts one deduplicated `review.requested` event, and
 inserts its selected deliveries. With no matching route, the transaction changes
 only the Promotion. Automatic Promotions and preparation failures emit no review
-request, and repeated reconciliation cannot enqueue another event. The dedicated
-Web view is not yet implemented. Notification failure remains operational state
-and never changes the originating Promotion or Run.
+request, and repeated reconciliation cannot enqueue another event. A dedicated
+`/notification-deliveries` Web view uses the generated client to show paginated,
+non-sensitive history with subject links, attempt timing, and bounded failure
+summaries. It does not compose delivery data into the Inbox. Notification failure
+remains operational state and never changes the originating Promotion or Run.
 
 ## API, operations, and delivery
 

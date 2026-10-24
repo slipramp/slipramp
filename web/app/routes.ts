@@ -23,6 +23,7 @@ export default [
   ),
   route("runs", "routes/runs.tsx"),
   route("runs/:runId", "routes/run.tsx"),
+  route("notification-deliveries", "routes/notification-deliveries.tsx"),
   route("promotions", "routes/promotions.tsx"),
   route("promotions/:promotionId", "routes/promotion.tsx"),
   route("promotion-projects", "routes/promotion-projects.tsx"),

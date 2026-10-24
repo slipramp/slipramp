@@ -13,6 +13,32 @@ const lilac: MantineColorsTuple = [
   "#5b3597",
 ];
 
+const mint: MantineColorsTuple = [
+  "#effcf8",
+  "#dcf8ef",
+  "#baf0df",
+  "#8be4ca",
+  "#60d8b6",
+  "#42cda8",
+  "#2ebc98",
+  "#24977b",
+  "#227862",
+  "#1f6252",
+];
+
+const sakura: MantineColorsTuple = [
+  "#fff0f6",
+  "#ffe3ed",
+  "#ffc9dd",
+  "#f7a8c7",
+  "#ef83ad",
+  "#e9679b",
+  "#e4518c",
+  "#cc3d78",
+  "#b53268",
+  "#9f2a59",
+];
+
 const sun: MantineColorsTuple = [
   "#fff9db",
   "#fff3bf",
@@ -27,7 +53,7 @@ const sun: MantineColorsTuple = [
 ];
 
 export const sliprampTheme = createTheme({
-  colors: { lilac, sun },
+  colors: { lilac, mint, sakura, sun },
   cursorType: "pointer",
   defaultRadius: "md",
   fontFamily: '"Manrope Variable", "Avenir Next", "Segoe UI", sans-serif',
