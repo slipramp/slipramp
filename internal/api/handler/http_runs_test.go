@@ -629,32 +629,25 @@ func TestCancelRunMapsExpectedFailures(t *testing.T) {
 }
 
 type recordingRunService struct {
-	request         run.CreateRequest
-	created         run.Run
-	err             error
-	rerunRequest    run.RerunRequest
-	rerun           run.Run
-	rerunError      error
-	loaded          run.Run
-	loadError       error
-	nextClusterName string
-	next            run.Run
-	nextError       error
-	nextCalls       int
-	observation     run.Observation
-	reportError     error
-	reportCalls     int
-	cancelID        uuid.UUID
-	cancelRequest   run.CancelRequest
-	canceled        run.Run
-	cancelError     error
-	cancelCalls     int
-	nextCancel      run.Run
-	nextCancelError error
-	nextCancelCalls int
-	listFilter      run.RunListFilter
-	listed          []run.Run
-	listError       error
+	request       run.CreateRequest
+	created       run.Run
+	err           error
+	rerunRequest  run.RerunRequest
+	rerun         run.Run
+	rerunError    error
+	loaded        run.Run
+	loadError     error
+	observation   run.Observation
+	reportError   error
+	reportCalls   int
+	cancelID      uuid.UUID
+	cancelRequest run.CancelRequest
+	canceled      run.Run
+	cancelError   error
+	cancelCalls   int
+	listFilter    run.RunListFilter
+	listed        []run.Run
+	listError     error
 }
 
 func (s *recordingRunService) ListRuns(_ context.Context, filter run.RunListFilter) (run.RunList, error) {
@@ -673,25 +666,6 @@ func (s *recordingRunService) CancelRun(_ context.Context, request run.CancelReq
 	s.cancelRequest = request
 
 	return s.canceled, s.cancelError
-}
-
-func (s *recordingRunService) NextRunToCancel(_ context.Context, _ string) (run.Run, error) {
-	s.nextCancelCalls++
-	if s.nextCancelError != nil {
-		return run.Run{}, s.nextCancelError
-	}
-	if s.nextCancel.ID == uuid.Nil {
-		return run.Run{}, run.ErrNoRunToCancel
-	}
-
-	return s.nextCancel, nil
-}
-
-func (s *recordingRunService) NextRunAssignment(_ context.Context, clusterName string) (run.Run, error) {
-	s.nextCalls++
-	s.nextClusterName = clusterName
-
-	return s.next, s.nextError
 }
 
 func (s *recordingRunService) CreateRun(_ context.Context, request run.CreateRequest) (run.Run, error) {

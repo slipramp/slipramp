@@ -160,6 +160,8 @@ type Promotion struct {
 	PreparationRepositoryID      *uuid.UUID
 	PreparationCatalogRevisionID *uuid.UUID
 	PreparationRunID             *uuid.UUID
+	PreparationFailureCount      int
+	NextPreparationAttemptAt     *time.Time
 	GitDiffArtifactID            *uuid.UUID
 	ArgoDiffArtifactID           *uuid.UUID
 	RequestedByPrincipalID       uuid.UUID
@@ -463,6 +465,13 @@ func (p Promotion) Validate() error {
 	}
 	if p.PreparationRunID != nil && p.PreparationCatalogRevisionID == nil {
 		return fmt.Errorf("%w: preparation Run requires a reserved catalog revision", ErrInvalid)
+	}
+	if p.PreparationFailureCount < 0 || (!p.ReviewRequired && p.PreparationFailureCount != 0) {
+		return fmt.Errorf("%w: preparation failure count is invalid", ErrInvalid)
+	}
+	if p.NextPreparationAttemptAt != nil && (p.Status != StatusPreparing ||
+		p.PreparationFailureCount == 0 || p.NextPreparationAttemptAt.Before(p.CreatedAt)) {
+		return fmt.Errorf("%w: preparation retry time is invalid", ErrInvalid)
 	}
 	if p.ReviewRequired &&
 		(p.Status == StatusPending || p.Status == StatusApproved || p.Status == StatusRejected ||

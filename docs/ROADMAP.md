@@ -55,8 +55,10 @@ execution without requiring a trigger.
 - [ ] Broaden acceptance for multiple execution Clusters, Pod loss, network
       interruptions, Controller/Server restarts, and PostgreSQL/S3 outages, including
       retained log recovery and cancellation under failure. Unit coverage includes
-      responsive command polling during blocked Run work and coalesced cancellation;
-      exercise these paths against real dependencies as part of acceptance.
+      responsive command polling during blocked Run work, coalesced cancellation,
+      and bounded Kargo command attempts;
+      exercise these paths against real dependencies as part of acceptance, along
+      with Promotion preparation retry recovery and terminal diagnostics.
 - [ ] Expand operational diagnostics beyond current readiness and observation
       freshness, guided by those failure cases.
 - [ ] Document upgrades, coordinated PostgreSQL/object-storage backups, restore,
@@ -99,6 +101,8 @@ approval need their own explicit opt-in policy design, separate from Kargo.
 
 - [ ] Define policy selection, snapshotted approval state, expiry/rejection,
       attribution, and races with cancellation, reruns, and Git coalescing.
+      Extend the Run-owned transition rules under the existing PostgreSQL
+      transaction boundary.
 - [ ] Keep a waiting Run `queued` and exclude it from assignment until review is
       satisfied. Approval is orthogonal to phase and outcome, not a new execution
       phase or invocation resource. Rejection/expiry should cancel the undispatched

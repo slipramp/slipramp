@@ -89,9 +89,8 @@ type DecisionRequest struct {
 }
 
 type ReviewStore interface {
-	ListPromotionStages(context.Context) ([]Stage, error)
+	StageReviewStore
 	GetPromotionStage(context.Context, uuid.UUID) (Stage, error)
-	GetPromotionStagePolicy(context.Context, uuid.UUID) (StagePolicy, error)
 	UpsertPromotionStagePolicy(context.Context, StagePolicy) (StagePolicy, error)
 	ListPromotions(context.Context) ([]Promotion, error)
 	GetPromotion(context.Context, uuid.UUID) (Promotion, error)
@@ -117,64 +116,6 @@ func (s *ReviewService) ExpirePendingAt(ctx context.Context, at time.Time) error
 	_, err := s.store.ExpirePendingPromotions(ctx, at.UTC().Truncate(time.Microsecond))
 
 	return err
-}
-
-func (s *ReviewService) ListStages(
-	ctx context.Context,
-	filter StageListFilter,
-) (StageReviewList, error) {
-	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
-		return StageReviewList{}, err
-	}
-	if err := s.ExpirePending(ctx); err != nil {
-		return StageReviewList{}, err
-	}
-
-	stages, err := s.store.ListPromotionStages(ctx)
-	if err != nil {
-		return StageReviewList{}, err
-	}
-	promotions, err := s.store.ListPromotions(ctx)
-	if err != nil {
-		return StageReviewList{}, err
-	}
-	pendingCounts := make(map[uuid.UUID]int)
-	for _, record := range promotions {
-		if record.Status == StatusPending {
-			pendingCounts[record.StageID]++
-		}
-	}
-
-	items := make([]StageReview, 0, len(stages))
-	for _, stage := range stages {
-		if !stageMatchesFilter(stage, filter) {
-			continue
-		}
-		policy, policyErr := s.policy(ctx, stage.ID)
-		if policyErr != nil {
-			return StageReviewList{}, policyErr
-		}
-		items = append(items, StageReview{
-			Stage:                 stage,
-			Policy:                policy,
-			PendingPromotionCount: pendingCounts[stage.ID],
-		})
-	}
-	slices.SortFunc(items, func(left, right StageReview) int {
-		if value := compareText(left.Stage.Integration, right.Stage.Integration); value != 0 {
-			return value
-		}
-		if value := compareText(left.Stage.Project, right.Stage.Project); value != 0 {
-			return value
-		}
-
-		return compareText(left.Stage.Name, right.Stage.Name)
-	})
-
-	total := len(items)
-	items = page(items, filter.Offset, filter.Limit)
-
-	return StageReviewList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
 }
 
 func (s *ReviewService) UpdateStagePolicy(
@@ -322,18 +263,6 @@ func (s *ReviewService) Decide(
 	return PromotionReview{Promotion: updated, Decision: &decision}, nil
 }
 
-func (s *ReviewService) policy(ctx context.Context, stageID uuid.UUID) (PolicyView, error) {
-	record, err := s.store.GetPromotionStagePolicy(ctx, stageID)
-	if errors.Is(err, ErrPolicyNotFound) {
-		return policyView(nil, s.currentTime()), nil
-	}
-	if err != nil {
-		return PolicyView{}, err
-	}
-
-	return policyView(&record, s.currentTime()), nil
-}
-
 func (s *ReviewService) currentTime() time.Time {
 	return s.now().UTC().Truncate(time.Microsecond)
 }
@@ -368,26 +297,6 @@ func validateListWindow(limit, offset int) error {
 	}
 
 	return nil
-}
-
-func stageMatchesFilter(stage Stage, filter StageListFilter) bool {
-	if filter.Integration != "" && stage.Integration != filter.Integration {
-		return false
-	}
-	if filter.Cluster != "" && stage.ClusterName != filter.Cluster {
-		return false
-	}
-	if filter.Project != "" && stage.Project != filter.Project {
-		return false
-	}
-	if filter.Application != "" && stage.Application != filter.Application {
-		return false
-	}
-	if filter.Archived != nil && (stage.ArchivedAt != nil) != *filter.Archived {
-		return false
-	}
-
-	return true
 }
 
 func promotionMatchesFilter(record Promotion, filter PromotionListFilter) (bool, error) {

@@ -25,8 +25,6 @@ type RunService interface {
 	GetRun(context.Context, uuid.UUID) (run.Run, error)
 	ListRuns(context.Context, run.RunListFilter) (run.RunList, error)
 	CancelRun(ctx context.Context, request run.CancelRequest) (run.Run, error)
-	NextRunAssignment(ctx context.Context, clusterName string) (run.Run, error)
-	NextRunToCancel(ctx context.Context, clusterName string) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
 }
 

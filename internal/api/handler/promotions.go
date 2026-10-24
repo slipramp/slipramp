@@ -29,12 +29,10 @@ type PromotionCreationService interface {
 }
 
 type PromotionCreationDispatchService interface {
-	Next(context.Context, string) (promotion.CreationCommand, error)
 	Report(context.Context, string, promotion.CreationDispatchReport) error
 }
 
 type PromotionCreationReconciliationService interface {
-	Next(context.Context, string) (promotion.CreationReconciliationCommand, error)
 	Report(context.Context, string, promotion.CreationReconciliationReport) error
 }
 

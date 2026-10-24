@@ -23,7 +23,8 @@ const (
 )
 
 type PreparationStore interface {
-	GetPromotionAwaitingDispatch(context.Context) (Promotion, error)
+	GetPromotionAwaitingDispatch(context.Context, time.Time) (Promotion, error)
+	RecordPromotionPreparationFailure(context.Context, PreparationFailure) (PreparationFailureState, bool, error)
 	ReservePromotionPreparationRevision(
 		ctx context.Context,
 		promotionID uuid.UUID,
@@ -31,13 +32,7 @@ type PreparationStore interface {
 		catalogRevisionID uuid.UUID,
 		updatedAt time.Time,
 	) (Promotion, error)
-	AttachPromotionPreparationRun(
-		ctx context.Context,
-		promotionID uuid.UUID,
-		runID uuid.UUID,
-		updatedAt time.Time,
-	) (Promotion, error)
-	GetPromotionWithFinishedPreparation(context.Context) (Promotion, error)
+	GetPromotionWithFinishedPreparation(context.Context, time.Time) (Promotion, error)
 	CompletePromotionPreparation(
 		ctx context.Context,
 		promotionID uuid.UUID,
@@ -157,31 +152,40 @@ func (c *PreparationCoordinator) processAndLog(ctx context.Context) {
 }
 
 func (c *PreparationCoordinator) DispatchNext(ctx context.Context) (bool, error) {
-	record, err := c.store.GetPromotionAwaitingDispatch(ctx)
+	record, err := c.store.GetPromotionAwaitingDispatch(ctx, c.now().UTC())
 	if errors.Is(err, ErrNoPreparationWork) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
+	if err := c.dispatch(ctx, record); err != nil {
+		return c.recordFailure(ctx, record, err)
+	}
+
+	return true, nil
+}
+
+func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion) error {
+	var err error
 
 	if record.PreparationCatalogRevisionID == nil {
 		record, err = c.reservePreparationRevision(ctx, record)
 		if err != nil {
-			return false, err
+			return err
 		}
 	}
 	if record.PreparationRepositoryID == nil || record.PreparationCatalogRevisionID == nil {
-		return false, fmt.Errorf("%w: preparation catalog revision was not reserved", ErrInvalid)
+		return fmt.Errorf("%w: preparation catalog revision was not reserved", ErrInvalid)
 	}
 
 	parameters, err := record.PreparationParameters()
 	if err != nil {
-		return false, err
+		return err
 	}
 	integration, ok := c.integrations.Lookup(record.Integration)
 	if !ok {
-		return false, ErrIntegrationNotFound
+		return ErrIntegrationNotFound
 	}
 	idempotencyKey := record.ID.String()
 	revisionID := *record.PreparationCatalogRevisionID
@@ -207,12 +211,9 @@ func (c *PreparationCoordinator) DispatchNext(ctx context.Context) (bool, error)
 		Actor:          &actor,
 	})
 	if err != nil {
-		return false, fmt.Errorf("create preparation Run for Promotion %s: %w", record.ID, err)
+		return fmt.Errorf("create preparation Run for Promotion %s: %w", record.ID, err)
 	}
 
-	if _, err := c.store.AttachPromotionPreparationRun(ctx, record.ID, created.ID, c.now().UTC()); err != nil {
-		return false, fmt.Errorf("attach preparation Run to Promotion %s: %w", record.ID, err)
-	}
 	c.logger.Info(
 		"Promotion preparation Run created",
 		"promotion", record.ID,
@@ -221,7 +222,7 @@ func (c *PreparationCoordinator) DispatchNext(ctx context.Context) (bool, error)
 		"catalog_revision", revisionID,
 	)
 
-	return true, nil
+	return nil
 }
 
 func (c *PreparationCoordinator) reservePreparationRevision(
@@ -270,24 +271,32 @@ func (c *PreparationCoordinator) reservePreparationRevision(
 }
 
 func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error) {
-	record, err := c.store.GetPromotionWithFinishedPreparation(ctx)
+	record, err := c.store.GetPromotionWithFinishedPreparation(ctx, c.now().UTC())
 	if errors.Is(err, ErrNoPreparationWork) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
+	if err := c.reconcile(ctx, record); err != nil {
+		return c.recordFailure(ctx, record, err)
+	}
+
+	return true, nil
+}
+
+func (c *PreparationCoordinator) reconcile(ctx context.Context, record Promotion) error {
 	if record.PreparationRunID == nil {
-		return false, fmt.Errorf("%w: finished preparation has no Run", ErrInvalid)
+		return fmt.Errorf("%w: finished preparation has no Run", ErrInvalid)
 	}
 
 	preparationRun, err := c.runs.GetRun(ctx, *record.PreparationRunID)
 	if err != nil {
-		return false, fmt.Errorf("get preparation Run %s: %w", *record.PreparationRunID, err)
+		return fmt.Errorf("get preparation Run %s: %w", *record.PreparationRunID, err)
 	}
 	completedAt := c.now().UTC()
 	if preparationRun.Phase != run.PhaseFinished || preparationRun.Outcome == nil {
-		return false, fmt.Errorf("%w: selected preparation Run is not finished", ErrTransitionConflict)
+		return fmt.Errorf("%w: selected preparation Run is not finished", ErrTransitionConflict)
 	}
 	if *preparationRun.Outcome != run.OutcomeSucceeded {
 		message := fmt.Sprintf("Preparation Run finished with outcome %s.", *preparationRun.Outcome)
@@ -298,15 +307,15 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 			message,
 			completedAt,
 		); err != nil {
-			return false, err
+			return err
 		}
 
-		return true, nil
+		return nil
 	}
 
 	artifacts, err := c.artifacts.List(ctx, preparationRun.ID)
 	if err != nil {
-		return false, fmt.Errorf("list preparation Run artifacts: %w", err)
+		return fmt.Errorf("list preparation Run artifacts: %w", err)
 	}
 	gitDiff, err := c.validPreparationArtifact(
 		ctx,
@@ -315,11 +324,7 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 		GitDiffArtifactMediaType,
 	)
 	if err != nil {
-		if errors.Is(err, ErrInvalidPreparationArtifact) {
-			return c.failInvalidArtifacts(ctx, record, preparationRun.ID, completedAt, err)
-		}
-
-		return false, err
+		return err
 	}
 	argoDiff, err := c.validPreparationArtifact(
 		ctx,
@@ -328,22 +333,18 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 		ArgoDiffArtifactMediaType,
 	)
 	if err != nil {
-		if errors.Is(err, ErrInvalidPreparationArtifact) {
-			return c.failInvalidArtifacts(ctx, record, preparationRun.ID, completedAt, err)
-		}
-
-		return false, err
+		return err
 	}
 
 	event, err := c.reviewRequestedEvent(record, completedAt)
 	if err != nil {
-		return false, err
+		return err
 	}
 	var notificationPlan *notification.EnqueuePlan
 	if c.notifications != nil {
 		notificationPlan, err = c.notifications.Plan(event)
 		if err != nil {
-			return false, fmt.Errorf("plan review-requested notification: %w", err)
+			return fmt.Errorf("plan review-requested notification: %w", err)
 		}
 	}
 
@@ -356,7 +357,7 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 		completedAt,
 		notificationPlan,
 	); err != nil {
-		return false, err
+		return err
 	}
 	c.logger.Info(
 		"Promotion preparation completed",
@@ -365,6 +366,28 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 		"git_diff_artifact", gitDiff.ID,
 		"argo_diff_artifact", argoDiff.ID,
 	)
+
+	return nil
+}
+
+func (c *PreparationCoordinator) recordFailure(ctx context.Context, record Promotion, cause error) (bool, error) {
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	failure := preparationFailure(record, c.now().UTC(), cause)
+	state, recorded, err := c.store.RecordPromotionPreparationFailure(ctx, failure)
+	if err != nil {
+		return false, fmt.Errorf("record Promotion preparation failure: %w", err)
+	}
+	if recorded {
+		c.logger.Warn(
+			"Promotion preparation could not complete",
+			"promotion", record.ID,
+			"failure_count", state.Count,
+			"terminal", state.Terminal,
+			"diagnostic", failure.Diagnostic,
+		)
+	}
 
 	return true, nil
 }

@@ -318,8 +318,8 @@ func promotionRequestSerializationFailure(err error) bool {
 	return errors.As(err, &databaseError) && databaseError.Code == "40001"
 }
 
-func (d *Database) GetPromotionAwaitingDispatch(ctx context.Context) (promotion.Promotion, error) {
-	row, err := d.queries.GetPromotionAwaitingDispatch(ctx)
+func (d *Database) GetPromotionAwaitingDispatch(ctx context.Context, at time.Time) (promotion.Promotion, error) {
+	row, err := d.queries.GetPromotionAwaitingDispatch(ctx, databaseTime(at))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, promotion.ErrNoPreparationWork
 	}
@@ -330,8 +330,8 @@ func (d *Database) GetPromotionAwaitingDispatch(ctx context.Context) (promotion.
 	return promotionFromRow(row)
 }
 
-func (d *Database) GetPromotionWithFinishedPreparation(ctx context.Context) (promotion.Promotion, error) {
-	row, err := d.queries.GetPromotionWithFinishedPreparation(ctx)
+func (d *Database) GetPromotionWithFinishedPreparation(ctx context.Context, at time.Time) (promotion.Promotion, error) {
+	row, err := d.queries.GetPromotionWithFinishedPreparation(ctx, databaseTime(at))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, promotion.ErrNoPreparationWork
 	}

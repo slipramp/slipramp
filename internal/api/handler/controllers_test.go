@@ -18,6 +18,7 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/controllercommand"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
@@ -200,7 +201,7 @@ func TestControllerPollReturnsNoContentWithoutWaiting(t *testing.T) {
 	t.Parallel()
 
 	controllers := &recordingClusterService{}
-	runs := &recordingRunService{nextError: run.ErrNoRunAssignment}
+	commands := &recordingControllerCommands{}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -210,15 +211,7 @@ func TestControllerPollReturnsNoContentWithoutWaiting(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		controllers,
-		controllerIdentityFor("controller-token", "colo"),
-		nil,
-		nil,
-		runs,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newControllerCommandTestHandler(controllers, commands, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Errorf("status = %d, want %d", response.Code, http.StatusNoContent)
@@ -226,8 +219,8 @@ func TestControllerPollReturnsNoContentWithoutWaiting(t *testing.T) {
 	if controllers.clusterName != "colo" {
 		t.Errorf("cluster name = %q, want %q", controllers.clusterName, "colo")
 	}
-	if runs.nextCalls != 1 || runs.nextClusterName != "colo" {
-		t.Errorf("next assignment calls = %d for %q, want 1 for colo", runs.nextCalls, runs.nextClusterName)
+	if commands.calls != 1 || commands.clusterName != "colo" {
+		t.Errorf("command selection calls = %d for %q, want 1 for colo", commands.calls, commands.clusterName)
 	}
 }
 
@@ -236,20 +229,12 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 
 	record := runAssignmentRecord()
 	controllers := &recordingClusterService{}
-	runs := &recordingRunService{next: record}
+	commands := &recordingControllerCommands{command: controllercommand.Assignment{Run: record}}
 	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/controller/v1/poll", nil)
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		controllers,
-		controllerIdentityFor("controller-token", "colo"),
-		nil,
-		nil,
-		runs,
-		&recordingArtifactService{},
-		nil,
-	).ServeHTTP(response, request)
+	newControllerCommandTestHandler(controllers, commands, &recordingArtifactService{}).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
@@ -298,18 +283,18 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 	if assignment.ArtifactAccess.Token != "run-token" {
 		t.Errorf("artifact access = %#v", assignment.ArtifactAccess)
 	}
-	if runs.nextCalls != 1 {
-		t.Errorf("next assignment calls = %d, want 1", runs.nextCalls)
+	if commands.calls != 1 {
+		t.Errorf("command selection calls = %d, want 1", commands.calls)
 	}
 }
 
-func TestControllerPollPrioritizesCancelRun(t *testing.T) {
+func TestControllerPollReturnsCancellation(t *testing.T) {
 	t.Parallel()
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	jobUID := "job-uid"
-	runs := &recordingRunService{
-		nextCancel: run.Run{
+	commands := &recordingControllerCommands{command: controllercommand.Cancellation{
+		Run: run.Run{
 			ID:     runID,
 			Phase:  run.PhaseRunning,
 			JobUID: &jobUID,
@@ -317,8 +302,7 @@ func TestControllerPollPrioritizesCancelRun(t *testing.T) {
 				JobNamespace: "slipramp-runs",
 			}},
 		},
-		next: runAssignmentRecord(),
-	}
+	}}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -328,15 +312,7 @@ func TestControllerPollPrioritizesCancelRun(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newAdminTestHandler(
-		&recordingClusterService{},
-		controllerIdentityFor("controller-token", "colo"),
-		nil,
-		nil,
-		runs,
-		nil,
-		nil,
-	).ServeHTTP(response, request)
+	newControllerCommandTestHandler(&recordingClusterService{}, commands, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
@@ -352,16 +328,13 @@ func TestControllerPollPrioritizesCancelRun(t *testing.T) {
 		command.Cancel.JobUID == nil || *command.Cancel.JobUID != jobUID {
 		t.Errorf("command = %#v", command)
 	}
-	if runs.nextCalls != 0 {
-		t.Errorf("next assignment calls = %d, want 0", runs.nextCalls)
-	}
 }
 
-func TestControllerPollDispatchesKargoPromotionBeforeRunAssignment(t *testing.T) {
+func TestControllerPollReturnsKargoPromotionCreation(t *testing.T) {
 	t.Parallel()
 
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1960")
-	dispatches := &recordingPromotionDispatchService{next: promotion.CreationCommand{
+	selected := promotion.CreationCommand{
 		PromotionID:  promotionID,
 		Attempt:      2,
 		ExternalName: "external-dns-prod-slipramp-" + promotionID.String(),
@@ -370,8 +343,8 @@ func TestControllerPollDispatchesKargoPromotionBeforeRunAssignment(t *testing.T)
 		Stage:        "external-dns-prod",
 		StageUID:     "stage-uid",
 		Freight:      "freight-42",
-	}}
-	runs := &recordingRunService{next: runAssignmentRecord()}
+	}
+	commands := &recordingControllerCommands{command: controllercommand.PromotionCreation{Command: selected}}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -381,7 +354,7 @@ func TestControllerPollDispatchesKargoPromotionBeforeRunAssignment(t *testing.T)
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newPromotionDispatchTestHandler(&recordingClusterService{}, runs, dispatches).ServeHTTP(response, request)
+	newControllerCommandTestHandler(&recordingClusterService{}, commands, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
@@ -394,14 +367,6 @@ func TestControllerPollDispatchesKargoPromotionBeforeRunAssignment(t *testing.T)
 		command.Promotion.ID != promotionID || command.Promotion.Attempt != 2 ||
 		command.Promotion.Project != "kargo-core" || command.Promotion.Freight != "freight-42" {
 		t.Errorf("command = %#v", command)
-	}
-	if dispatches.nextCluster != "colo" || dispatches.nextCalls != 1 || runs.nextCalls != 0 {
-		t.Errorf(
-			"dispatch calls = %d for %q, Run calls = %d",
-			dispatches.nextCalls,
-			dispatches.nextCluster,
-			runs.nextCalls,
-		)
 	}
 }
 
@@ -421,7 +386,7 @@ func TestControllerReportsKargoPromotionDispatch(t *testing.T) {
 	controllers := &recordingClusterService{}
 	response := httptest.NewRecorder()
 
-	newPromotionDispatchTestHandler(controllers, nil, dispatches).ServeHTTP(response, request)
+	newPromotionDispatchTestHandler(controllers, dispatches).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
@@ -437,18 +402,18 @@ func TestControllerReportsKargoPromotionDispatch(t *testing.T) {
 	}
 }
 
-func TestControllerPollReconcilesMaterializedKargoPromotionBeforeRunAssignment(t *testing.T) {
+func TestControllerPollReturnsKargoPromotionReconciliation(t *testing.T) {
 	t.Parallel()
 
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1963")
-	reconciliations := &recordingPromotionReconciliationService{next: promotion.CreationReconciliationCommand{
+	selected := promotion.CreationReconciliationCommand{
 		PromotionID: promotionID,
 		Integration: "prod",
 		Project:     "kargo-core",
 		KargoName:   "external-dns-prod.01test.freight",
 		KargoUID:    "promotion-uid",
-	}}
-	runs := &recordingRunService{next: runAssignmentRecord()}
+	}
+	commands := &recordingControllerCommands{command: controllercommand.PromotionReconciliation{Command: selected}}
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodPost,
@@ -458,11 +423,7 @@ func TestControllerPollReconcilesMaterializedKargoPromotionBeforeRunAssignment(t
 	request.Header.Set("Authorization", "Bearer controller-token")
 	response := httptest.NewRecorder()
 
-	newPromotionReconciliationTestHandler(
-		&recordingClusterService{},
-		runs,
-		reconciliations,
-	).ServeHTTP(response, request)
+	newControllerCommandTestHandler(&recordingClusterService{}, commands, nil).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
@@ -473,17 +434,9 @@ func TestControllerPollReconcilesMaterializedKargoPromotionBeforeRunAssignment(t
 	}
 	if command.Type != api.ControllerCommandTypeReconcileKargoPromotion ||
 		command.PromotionReconciliation == nil || command.PromotionReconciliation.ID != promotionID ||
-		command.PromotionReconciliation.KargoName != reconciliations.next.KargoName ||
-		command.PromotionReconciliation.KargoUID != reconciliations.next.KargoUID {
+		command.PromotionReconciliation.KargoName != selected.KargoName ||
+		command.PromotionReconciliation.KargoUID != selected.KargoUID {
 		t.Errorf("command = %#v", command)
-	}
-	if reconciliations.nextCluster != "colo" || reconciliations.nextCalls != 1 || runs.nextCalls != 0 {
-		t.Errorf(
-			"reconciliation calls = %d for %q, Run calls = %d",
-			reconciliations.nextCalls,
-			reconciliations.nextCluster,
-			runs.nextCalls,
-		)
 	}
 }
 
@@ -508,7 +461,7 @@ func TestControllerReportsKargoPromotionReconciliation(t *testing.T) {
 	controllers := &recordingClusterService{}
 	response := httptest.NewRecorder()
 
-	newPromotionReconciliationTestHandler(controllers, nil, reconciliations).ServeHTTP(response, request)
+	newPromotionReconciliationTestHandler(controllers, reconciliations).ServeHTTP(response, request)
 
 	if response.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
@@ -559,7 +512,7 @@ func TestControllerKargoPromotionDispatchMapsFailures(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 
-			newPromotionDispatchTestHandler(&recordingClusterService{}, nil, dispatches).ServeHTTP(response, request)
+			newPromotionDispatchTestHandler(&recordingClusterService{}, dispatches).ServeHTTP(response, request)
 
 			assertProblem(t, response, test.wantStatus)
 			if dispatches.reportCalls != test.wantCalls {
@@ -604,6 +557,7 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 			t.Parallel()
 
 			controllers := &recordingClusterService{}
+			commands := &recordingControllerCommands{}
 			request := httptest.NewRequestWithContext(
 				context.Background(),
 				http.MethodPost,
@@ -615,23 +569,15 @@ func TestControllerPollRejectsInvalidCredentials(t *testing.T) {
 			}
 
 			response := httptest.NewRecorder()
-			newAdminTestHandler(
-				controllers,
-				controllerIdentityFor("controller-token", "colo"),
-				nil,
-				nil,
-				nil,
-				nil,
-				nil,
-			).ServeHTTP(response, request)
+			newControllerCommandTestHandler(controllers, commands, nil).ServeHTTP(response, request)
 
 			assertProblem(t, response, http.StatusUnauthorized)
 			if challenge := response.Header().Get("WWW-Authenticate"); challenge != "Bearer" {
 				t.Errorf("WWW-Authenticate = %q, want %q", challenge, "Bearer")
 			}
 
-			if controllers.calls != 0 {
-				t.Errorf("work wait calls = %d, want 0", controllers.calls)
+			if controllers.calls != 0 || commands.calls != 0 {
+				t.Errorf("contact calls = %d, command selection calls = %d; want none", controllers.calls, commands.calls)
 			}
 		})
 	}
@@ -643,9 +589,11 @@ func TestControllerPollMapsFailures(t *testing.T) {
 	tests := []struct {
 		name          string
 		path          string
-		serviceError  error
+		contactError  error
+		commandError  error
 		wantStatus    int
-		wantCalls     int
+		wantContacts  int
+		wantCommands  int
 		privateDetail string
 	}{
 		{
@@ -654,11 +602,20 @@ func TestControllerPollMapsFailures(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name:          "service failure",
+			name:          "contact failure",
 			path:          "/controller/v1/poll?timeoutSeconds=0",
-			serviceError:  errors.New("database unavailable"),
+			contactError:  errors.New("database unavailable"),
 			wantStatus:    http.StatusInternalServerError,
-			wantCalls:     1,
+			wantContacts:  1,
+			privateDetail: "database unavailable",
+		},
+		{
+			name:          "command selection failure",
+			path:          "/controller/v1/poll?timeoutSeconds=0",
+			commandError:  errors.New("database unavailable"),
+			wantStatus:    http.StatusInternalServerError,
+			wantContacts:  1,
+			wantCommands:  1,
 			privateDetail: "database unavailable",
 		},
 	}
@@ -667,24 +624,18 @@ func TestControllerPollMapsFailures(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			controllers := &recordingClusterService{err: test.serviceError}
+			controllers := &recordingClusterService{err: test.contactError}
+			commands := &recordingControllerCommands{err: test.commandError}
 			request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, test.path, nil)
 			request.Header.Set("Authorization", "Bearer controller-token")
 			response := httptest.NewRecorder()
 
-			newAdminTestHandler(
-				controllers,
-				controllerIdentityFor("controller-token", "colo"),
-				nil,
-				nil,
-				nil,
-				nil,
-				nil,
-			).ServeHTTP(response, request)
+			newControllerCommandTestHandler(controllers, commands, nil).ServeHTTP(response, request)
 
 			assertProblem(t, response, test.wantStatus)
-			if controllers.calls != test.wantCalls {
-				t.Errorf("work wait calls = %d, want %d", controllers.calls, test.wantCalls)
+			if controllers.calls != test.wantContacts || commands.calls != test.wantCommands {
+				t.Errorf("contact calls = %d, command selection calls = %d; want %d, %d",
+					controllers.calls, commands.calls, test.wantContacts, test.wantCommands)
 			}
 			if test.privateDetail != "" &&
 				strings.Contains(response.Body.String(), test.privateDetail) {
@@ -971,10 +922,6 @@ type recordingArtifactService struct {
 }
 
 type recordingPromotionDispatchService struct {
-	next          promotion.CreationCommand
-	nextErr       error
-	nextCalls     int
-	nextCluster   string
 	report        promotion.CreationDispatchReport
 	reportErr     error
 	reportCalls   int
@@ -982,23 +929,37 @@ type recordingPromotionDispatchService struct {
 }
 
 type recordingPromotionReconciliationService struct {
-	next          promotion.CreationReconciliationCommand
-	nextErr       error
-	nextCalls     int
-	nextCluster   string
 	report        promotion.CreationReconciliationReport
 	reportErr     error
 	reportCalls   int
 	reportCluster string
 }
 
-func (s *recordingPromotionDispatchService) Next(
-	_ context.Context,
-	clusterName string,
-) (promotion.CreationCommand, error) {
-	s.nextCalls++
-	s.nextCluster = clusterName
-	return s.next, s.nextErr
+type recordingControllerCommands struct {
+	command     controllercommand.Command
+	err         error
+	calls       int
+	clusterName string
+}
+
+func (s *recordingControllerCommands) Next(_ context.Context, clusterName string) (controllercommand.Command, error) {
+	s.calls++
+	s.clusterName = clusterName
+
+	return s.command, s.err
+}
+
+func newControllerCommandTestHandler(
+	clusters ClusterService,
+	commands ControllerCommandService,
+	artifacts ArtifactService,
+) http.Handler {
+	return NewHTTP(Dependencies{
+		Clusters:             clusters,
+		ControllerIdentities: controllerIdentityFor("controller-token", "colo"),
+		ControllerCommands:   commands,
+		Artifacts:            artifacts,
+	}, HTTPOptions{})
 }
 
 func (s *recordingPromotionDispatchService) Report(
@@ -1010,15 +971,6 @@ func (s *recordingPromotionDispatchService) Report(
 	s.reportCluster = clusterName
 	s.report = report
 	return s.reportErr
-}
-
-func (s *recordingPromotionReconciliationService) Next(
-	_ context.Context,
-	clusterName string,
-) (promotion.CreationReconciliationCommand, error) {
-	s.nextCalls++
-	s.nextCluster = clusterName
-	return s.next, s.nextErr
 }
 
 func (s *recordingPromotionReconciliationService) Report(
@@ -1034,7 +986,6 @@ func (s *recordingPromotionReconciliationService) Report(
 
 func newPromotionDispatchTestHandler(
 	clusters ClusterService,
-	runs RunService,
 	dispatches PromotionCreationDispatchService,
 ) http.Handler {
 	identities := controllerIdentityFor("controller-token", "colo")
@@ -1042,7 +993,6 @@ func newPromotionDispatchTestHandler(
 		Dependencies{
 			Clusters:             clusters,
 			ControllerIdentities: identities,
-			Runs:                 runs,
 			PromotionDispatches:  dispatches,
 		},
 		HTTPOptions{},
@@ -1051,14 +1001,12 @@ func newPromotionDispatchTestHandler(
 
 func newPromotionReconciliationTestHandler(
 	clusters ClusterService,
-	runs RunService,
 	reconciliations PromotionCreationReconciliationService,
 ) http.Handler {
 	return NewHTTP(
 		Dependencies{
 			Clusters:                 clusters,
 			ControllerIdentities:     controllerIdentityFor("controller-token", "colo"),
-			Runs:                     runs,
 			PromotionReconciliations: reconciliations,
 		},
 		HTTPOptions{},

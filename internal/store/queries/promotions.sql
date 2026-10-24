@@ -76,6 +76,53 @@ SELECT *
 FROM promotion_stages
 ORDER BY integration, project, name;
 
+-- name: CountPromotionStageReviews :one
+SELECT count(*)
+FROM promotion_stages
+WHERE (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
+  AND (sqlc.narg(cluster_name)::text IS NULL OR cluster_name = sqlc.narg(cluster_name))
+  AND (sqlc.narg(project)::text IS NULL OR project = sqlc.narg(project))
+  AND (sqlc.narg(application)::text IS NULL OR application = sqlc.narg(application))
+  AND (sqlc.narg(archived)::boolean IS NULL OR (archived_at IS NOT NULL) = sqlc.narg(archived));
+
+-- name: ListPromotionStageReviews :many
+WITH paged_stages AS (
+    SELECT id
+    FROM promotion_stages
+    WHERE (sqlc.narg(integration)::text IS NULL OR integration = sqlc.narg(integration))
+      AND (sqlc.narg(cluster_name)::text IS NULL OR cluster_name = sqlc.narg(cluster_name))
+      AND (sqlc.narg(project)::text IS NULL OR project = sqlc.narg(project))
+      AND (sqlc.narg(application)::text IS NULL OR application = sqlc.narg(application))
+      AND (sqlc.narg(archived)::boolean IS NULL OR (archived_at IS NOT NULL) = sqlc.narg(archived))
+    ORDER BY integration COLLATE "C", project COLLATE "C", name COLLATE "C"
+    LIMIT sqlc.arg(result_limit)
+    OFFSET sqlc.arg(result_offset)::bigint
+), pending_counts AS (
+    SELECT promotions.stage_id, count(*) AS pending_promotion_count
+    FROM promotions
+    JOIN paged_stages ON paged_stages.id = promotions.stage_id
+    WHERE promotions.status = 'pending'
+    GROUP BY promotions.stage_id
+)
+SELECT
+    sqlc.embed(promotion_stages),
+    promotion_stage_policies.stage_id AS policy_stage_id,
+    promotion_stage_policies.mode AS policy_mode,
+    promotion_stage_policies.expires_at AS policy_expires_at,
+    promotion_stage_policies.reason AS policy_reason,
+    promotion_stage_policies.updated_by_principal_id AS policy_updated_by_principal_id,
+    promotion_stage_policies.updated_by_snapshot AS policy_updated_by_snapshot,
+    promotion_stage_policies.updated_at AS policy_updated_at,
+    COALESCE(pending_counts.pending_promotion_count, 0)::bigint AS pending_promotion_count
+FROM paged_stages
+JOIN promotion_stages ON promotion_stages.id = paged_stages.id
+LEFT JOIN promotion_stage_policies ON promotion_stage_policies.stage_id = promotion_stages.id
+LEFT JOIN pending_counts ON pending_counts.stage_id = promotion_stages.id
+ORDER BY
+    promotion_stages.integration COLLATE "C",
+    promotion_stages.project COLLATE "C",
+    promotion_stages.name COLLATE "C";
+
 -- name: UpsertPromotionStagePolicy :one
 INSERT INTO promotion_stage_policies (
     stage_id,
@@ -393,6 +440,7 @@ FROM promotions
 WHERE review_required
   AND status = 'preparing'
   AND preparation_run_id IS NULL
+  AND (next_preparation_attempt_at IS NULL OR next_preparation_attempt_at <= sqlc.arg(attempted_at))
 ORDER BY created_at, id
 LIMIT 1;
 
@@ -421,23 +469,67 @@ JOIN runs ON runs.id = promotions.preparation_run_id
 WHERE promotions.review_required
   AND promotions.status = 'preparing'
   AND runs.phase = 'finished'
+  AND (promotions.next_preparation_attempt_at IS NULL
+       OR promotions.next_preparation_attempt_at <= sqlc.arg(attempted_at))
 ORDER BY promotions.created_at, promotions.id
 LIMIT 1;
 
--- name: AttachPromotionPreparationRun :one
+-- name: RecordPromotionPreparationFailure :one
 UPDATE promotions
-SET preparation_run_id = sqlc.arg(preparation_run_id),
-    updated_at = sqlc.arg(updated_at)
+SET preparation_failure_count = preparation_failure_count + 1,
+    next_preparation_attempt_at = CASE
+        WHEN sqlc.arg(permanent)::boolean
+            OR preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer THEN NULL
+        ELSE sqlc.arg(failed_at)::timestamptz + make_interval(secs =>
+            LEAST(sqlc.arg(max_delay_seconds)::double precision,
+                  sqlc.arg(initial_delay_seconds)::double precision * power(2, preparation_failure_count)))
+    END,
+    status = CASE
+        WHEN sqlc.arg(permanent)::boolean
+            OR preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer THEN 'error'
+        ELSE status
+    END,
+    preparation_completed_at = CASE
+        WHEN sqlc.arg(permanent)::boolean
+            OR preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer THEN sqlc.arg(failed_at)
+        ELSE preparation_completed_at
+    END,
+    message = CASE
+        WHEN NOT sqlc.arg(permanent)::boolean
+            AND preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer
+        THEN sqlc.arg(exhausted_message)::text
+        ELSE sqlc.arg(diagnostic)::text
+    END,
+    updated_at = sqlc.arg(failed_at)
 WHERE id = sqlc.arg(id)
   AND review_required
   AND status = 'preparing'
-  AND preparation_catalog_revision_id IS NOT NULL
-  AND (preparation_run_id IS NULL OR preparation_run_id = sqlc.arg(preparation_run_id))
-RETURNING *;
+  AND preparation_run_id IS NOT DISTINCT FROM sqlc.narg(preparation_run_id)::uuid
+  AND (next_preparation_attempt_at IS NULL OR next_preparation_attempt_at <= sqlc.arg(failed_at))
+RETURNING preparation_failure_count, status;
+
+-- name: LinkPromotionPreparationRun :execrows
+UPDATE promotions
+SET preparation_run_id = sqlc.arg(preparation_run_id),
+    preparation_failure_count = 0,
+    next_preparation_attempt_at = NULL,
+    message = NULL,
+    updated_at = sqlc.arg(created_at)
+WHERE id = sqlc.arg(id)
+  AND review_required
+  AND status = 'preparing'
+  AND preparation_repository_id = sqlc.arg(repository_id)
+  AND preparation_catalog_revision_id = sqlc.arg(catalog_revision_id)
+  AND requested_by_principal_id = sqlc.arg(created_by_principal_id)
+  AND requested_by_snapshot = sqlc.arg(created_by_snapshot)::jsonb
+  AND preparation_run_id IS NULL
+  AND (next_preparation_attempt_at IS NULL OR next_preparation_attempt_at <= sqlc.arg(created_at));
 
 -- name: CompletePromotionPreparation :one
 UPDATE promotions
 SET status = 'pending',
+    next_preparation_attempt_at = NULL,
+    message = NULL,
     git_diff_artifact_id = sqlc.arg(git_diff_artifact_id),
     argo_diff_artifact_id = sqlc.arg(argo_diff_artifact_id),
     preparation_completed_at = sqlc.arg(preparation_completed_at),
@@ -451,6 +543,7 @@ RETURNING *;
 -- name: FailPromotionPreparation :one
 UPDATE promotions
 SET status = 'error',
+    next_preparation_attempt_at = NULL,
     message = sqlc.arg(message),
     preparation_completed_at = sqlc.arg(preparation_completed_at),
     updated_at = sqlc.arg(updated_at)

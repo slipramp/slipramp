@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/google/uuid"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -341,10 +343,13 @@ func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 			return observation, nil
 		}),
 		promotionReconciliationReports: kargoPromotionReconciliationReporterFunc(func(
-			_ context.Context,
+			ctx context.Context,
 			promotionID uuid.UUID,
 			report api.KargoPromotionReconciliationReport,
 		) error {
+			if err := ctx.Err(); err != nil {
+				t.Errorf("report context was canceled with the Kubernetes attempt: %v", err)
+			}
 			if promotionID != command.ID {
 				t.Errorf("reported Promotion ID = %s", promotionID)
 			}
@@ -358,6 +363,94 @@ func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 	if reported.KargoName != observation.Name || reported.KargoUID != observation.UID ||
 		reported.Phase != observation.Phase || reported.Diagnostic != observation.Diagnostic {
 		t.Errorf("report = %#v", reported)
+	}
+}
+
+func TestControllerResumesPollingAfterKargoOperationDeadline(t *testing.T) {
+	t.Parallel()
+
+	creation := testKargoPromotionCommand()
+	reconciliation := testKargoPromotionReconciliationCommand()
+	tests := []struct {
+		name    string
+		command api.ControllerCommand
+	}{
+		{
+			name: "creation",
+			command: api.ControllerCommand{
+				Type: api.ControllerCommandTypeCreateKargoPromotion, Promotion: &creation,
+			},
+		},
+		{
+			name: "reconciliation",
+			command: api.ControllerCommand{
+				Type: api.ControllerCommandTypeReconcileKargoPromotion, PromotionReconciliation: &reconciliation,
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			synctest.Test(t, func(t *testing.T) {
+				ctx, stop := context.WithCancel(t.Context())
+				defer stop()
+				waitForDeadline := func(attemptContext context.Context) error {
+					<-attemptContext.Done()
+					if !errors.Is(attemptContext.Err(), context.DeadlineExceeded) {
+						t.Errorf("Kubernetes attempt error = %v, want deadline exceeded", attemptContext.Err())
+					}
+
+					return attemptContext.Err()
+				}
+				app := newTestController(&stubRunJobs{}, &memoryLogReporter{})
+				app.promotions = kargoPromotionCreatorFunc(func(
+					ctx context.Context,
+					_ api.KargoPromotionCreationCommand,
+				) (kargoPromotionMaterialization, error) {
+					return kargoPromotionMaterialization{}, waitForDeadline(ctx)
+				})
+				app.promotionReconciler = kargoPromotionReconcilerFunc(func(
+					ctx context.Context,
+					_ api.KargoPromotionReconciliationCommand,
+				) (*kargoPromotionTerminalObservation, error) {
+					return nil, waitForDeadline(ctx)
+				})
+				var reported bool
+				app.promotionReports = kargoPromotionDispatchReporterFunc(func(
+					ctx context.Context,
+					_ uuid.UUID,
+					report api.KargoPromotionDispatchReport,
+				) error {
+					reported = true
+					if ctx.Err() != nil || report.Result != api.KargoPromotionDispatchReportResultRetryable {
+						t.Errorf("timed-out creation report = %#v, context error = %v", report, ctx.Err())
+					}
+
+					return nil
+				})
+				polls := 0
+				app.server = commandPollerFunc(func(context.Context) (*api.ControllerCommand, error) {
+					polls++
+					if polls == 1 {
+						return &test.command, nil
+					}
+					stop()
+
+					return nil, nil
+				})
+
+				startedAt := time.Now()
+				if err := app.Run(ctx); err != nil {
+					t.Fatalf("Run() error = %v", err)
+				}
+				if polls != 2 || time.Since(startedAt) != kargoPromotionOperationTimeout+app.retryDelay {
+					t.Errorf("polls = %d after %s, want polling to resume after the bounded attempt", polls, time.Since(startedAt))
+				}
+				if reported != (test.command.Promotion != nil) {
+					t.Errorf("creation retry report sent = %t", reported)
+				}
+			})
+		})
 	}
 }
 

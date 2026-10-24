@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/jackc/pgx/v5"
 
@@ -12,11 +11,7 @@ import (
 	"github.com/slipramp/slipramp/internal/store/storedb"
 )
 
-func (d *Database) ApplyRunObservation(
-	ctx context.Context,
-	observation run.Observation,
-	allowedCurrentPhases []run.Phase,
-) error {
+func (d *Database) ApplyRunObservation(ctx context.Context, observation run.Observation) error {
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin Run observation transaction: %w", err)
@@ -40,12 +35,14 @@ func (d *Database) ApplyRunObservation(
 		return fmt.Errorf("get current Run phase: %w", err)
 	}
 
-	currentPhase := run.Phase(current.Phase)
-	if !slices.Contains(allowedCurrentPhases, currentPhase) ||
-		!sameJob(current.JobUid, observation.JobUID) ||
-		!sameFinishedOutcome(currentPhase, current.Outcome, observation.Outcome) ||
-		!validCanceledObservation(current.CancellationRequestedAt.Valid, observation.Outcome) {
-		return run.ErrObservationConflict
+	state := run.ObservationTransitionState{
+		Phase:                 run.Phase(current.Phase),
+		Outcome:               runOutcome(current.Outcome),
+		JobUID:                current.JobUid,
+		CancellationRequested: current.CancellationRequestedAt.Valid,
+	}
+	if err := run.ValidateObservationTransition(state, observation); err != nil {
+		return err
 	}
 
 	if err := queries.UpdateRunObservation(
@@ -64,7 +61,7 @@ func (d *Database) ApplyRunObservation(
 		return fmt.Errorf("update Run observation: %w", err)
 	}
 
-	phaseChanged := currentPhase != observation.Phase
+	phaseChanged := state.Phase != observation.Phase
 	if phaseChanged {
 		err = queries.CreateRunPhaseTransition(
 			ctx,
@@ -88,24 +85,6 @@ func (d *Database) ApplyRunObservation(
 	}
 
 	return nil
-}
-
-func sameJob(current, observed *string) bool {
-	return current == nil || observed != nil && *current == *observed
-}
-
-func sameFinishedOutcome(currentPhase run.Phase, currentOutcome *string, observedOutcome *run.Outcome) bool {
-	if currentPhase != run.PhaseFinished {
-		return true
-	}
-
-	return currentOutcome != nil && observedOutcome != nil &&
-		*currentOutcome == string(*observedOutcome)
-}
-
-func validCanceledObservation(cancellationRequested bool, observedOutcome *run.Outcome) bool {
-	return observedOutcome == nil || *observedOutcome != run.OutcomeCanceled ||
-		cancellationRequested
 }
 
 func outcomeString(value *run.Outcome) *string {

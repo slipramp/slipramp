@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"strings"
@@ -26,14 +27,15 @@ type recordingPreparationStore struct {
 	record                  Promotion
 	reservedRepositoryID    uuid.UUID
 	reservedRevisionID      uuid.UUID
-	attachedRunID           uuid.UUID
 	completedGitArtifactID  uuid.UUID
 	completedArgoArtifactID uuid.UUID
 	notificationPlan        *notification.EnqueuePlan
 	failureMessage          string
+	failure                 PreparationFailure
+	failureError            error
 }
 
-func (s *recordingPreparationStore) GetPromotionAwaitingDispatch(context.Context) (Promotion, error) {
+func (s *recordingPreparationStore) GetPromotionAwaitingDispatch(context.Context, time.Time) (Promotion, error) {
 	return s.record, nil
 }
 
@@ -52,20 +54,18 @@ func (s *recordingPreparationStore) ReservePromotionPreparationRevision(
 	return s.record, nil
 }
 
-func (s *recordingPreparationStore) AttachPromotionPreparationRun(
-	_ context.Context,
-	_ uuid.UUID,
-	runID uuid.UUID,
-	_ time.Time,
-) (Promotion, error) {
-	s.attachedRunID = runID
-	s.record.PreparationRunID = &runID
-
+func (s *recordingPreparationStore) GetPromotionWithFinishedPreparation(context.Context, time.Time) (Promotion, error) {
 	return s.record, nil
 }
 
-func (s *recordingPreparationStore) GetPromotionWithFinishedPreparation(context.Context) (Promotion, error) {
-	return s.record, nil
+func (s *recordingPreparationStore) RecordPromotionPreparationFailure(
+	_ context.Context,
+	failure PreparationFailure,
+) (PreparationFailureState, bool, error) {
+	s.failure = failure
+	s.failureMessage = failure.Diagnostic
+
+	return PreparationFailureState{Count: 1, Terminal: failure.Permanent}, true, s.failureError
 }
 
 func (s *recordingPreparationStore) CompletePromotionPreparation(
@@ -211,9 +211,8 @@ func TestPreparationDispatchReservesRevisionAndCreatesIdempotentRun(t *testing.T
 	if err != nil || !processed {
 		t.Fatalf("DispatchNext() = (%t, %v), want success", processed, err)
 	}
-	if store.reservedRepositoryID != repositoryID || store.reservedRevisionID != revisionID ||
-		store.attachedRunID != runID {
-		t.Errorf("reservation = (%s, %s), attached Run = %s", store.reservedRepositoryID, store.reservedRevisionID, store.attachedRunID)
+	if store.reservedRepositoryID != repositoryID || store.reservedRevisionID != revisionID {
+		t.Errorf("reservation = (%s, %s)", store.reservedRepositoryID, store.reservedRevisionID)
 	}
 	request := runs.request
 	if request.CatalogRevisionID == nil || *request.CatalogRevisionID != revisionID ||
@@ -257,6 +256,63 @@ func TestPreparationDispatchReusesReservedRevisionAfterRestart(t *testing.T) {
 	}
 }
 
+func TestPreparationDispatchRecordsSafeFailureAndOnlyStopsOnStorageFailure(t *testing.T) {
+	t.Parallel()
+
+	for _, permanent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("permanent=%t", permanent), func(t *testing.T) {
+			t.Parallel()
+
+			record := preparingPromotion()
+			repositoryID := uuid.New()
+			revisionID := uuid.New()
+			record.PreparationRepositoryID = &repositoryID
+			record.PreparationCatalogRevisionID = &revisionID
+			store := &recordingPreparationStore{record: record}
+			cause := errors.New("postgres://user:secret@database")
+			if permanent {
+				cause = fmt.Errorf("%w: secret parameter", run.ErrInvalidParameters)
+			}
+			coordinator := testPreparationCoordinator(nil, nil, &recordingPreparationRuns{err: cause}, nil, store)
+			processed, err := coordinator.DispatchNext(t.Context())
+			if err != nil || !processed || store.failure.Permanent != permanent {
+				t.Fatalf("DispatchNext() = (%t, %v), failure = %#v", processed, err, store.failure)
+			}
+			if store.failure.PromotionID != record.ID || store.failure.PreparationRunID != nil ||
+				strings.Contains(store.failure.Diagnostic, "secret") {
+				t.Fatalf("unsafe or unrelated failure = %#v", store.failure)
+			}
+
+			store.failureError = errors.New("failed to persist retry state")
+			if processed, err := coordinator.DispatchNext(t.Context()); err == nil || processed {
+				t.Fatalf("storage failure = (%t, %v), want stopped drain", processed, err)
+			}
+		})
+	}
+}
+
+func TestPreparationReconciliationIsolatesReadFailuresWithoutCreatingAnotherRun(t *testing.T) {
+	t.Parallel()
+
+	record := preparingPromotion()
+	runID := uuid.New()
+	record.PreparationRunID = &runID
+	store := &recordingPreparationStore{record: record}
+	succeeded := run.OutcomeSucceeded
+	runs := &recordingPreparationRuns{loaded: run.Run{ID: runID, Phase: run.PhaseFinished, Outcome: &succeeded}}
+	coordinator := testPreparationCoordinator(nil, nil, runs, recordingPreparationArtifacts{
+		errors: map[string]error{"list": errors.New("sensitive storage failure")},
+	}, store)
+	processed, err := coordinator.ReconcileNext(t.Context())
+	if err != nil || !processed || store.failure.Permanent || store.failure.PreparationRunID == nil ||
+		*store.failure.PreparationRunID != runID || strings.Contains(store.failure.Diagnostic, "sensitive") {
+		t.Fatalf("ReconcileNext() = (%t, %v), failure = %#v", processed, err, store.failure)
+	}
+	if runs.request.RepositoryID != uuid.Nil {
+		t.Fatal("reconciliation created another preparation Run")
+	}
+}
+
 func TestPreparationReconciliation(t *testing.T) {
 	t.Parallel()
 
@@ -283,7 +339,7 @@ func TestPreparationReconciliation(t *testing.T) {
 			configureArtifacts: func(artifacts *recordingPreparationArtifacts) {
 				delete(artifacts.records, GitDiffArtifactName)
 			},
-			wantMessage: "git-diff artifact is missing",
+			wantMessage: ErrInvalidPreparationArtifact.Error(),
 		},
 		{
 			name:    "deleted artifact",
@@ -293,7 +349,7 @@ func TestPreparationReconciliation(t *testing.T) {
 				gitDiff.RetentionState = artifact.RetentionDeleted
 				artifacts.records[GitDiffArtifactName] = gitDiff
 			},
-			wantMessage: "not a retained sensitive sealed",
+			wantMessage: ErrInvalidPreparationArtifact.Error(),
 		},
 		{
 			name:    "invalid Argo diff shape",
@@ -308,7 +364,7 @@ func TestPreparationReconciliation(t *testing.T) {
 				artifacts.records[ArgoDiffArtifactName] = record
 				artifacts.contents[record.ID] = contents
 			},
-			wantMessage: "artifact is malformed",
+			wantMessage: ErrInvalidPreparationArtifact.Error(),
 		},
 		{
 			name:    "oversized diff",
@@ -318,7 +374,7 @@ func TestPreparationReconciliation(t *testing.T) {
 				record.SizeBytes = MaximumPreparationArtifactSizeBytes + 1
 				artifacts.records[GitDiffArtifactName] = record
 			},
-			wantMessage: "exceeds the",
+			wantMessage: ErrInvalidPreparationArtifact.Error(),
 		},
 	}
 

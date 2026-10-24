@@ -148,6 +148,10 @@ Action, Runtime, Placement, source, and actor. Authenticated request idempotency
 is scoped to the submitting Principal. Historical creator and cancellation
 attribution includes both a Principal reference and an immutable actor snapshot.
 
+Promotion preparation Run insertion and linkage to its requesting Promotion
+commit in the same transaction, so an ambiguous creation response cannot leave
+an executing Run detached from preparation recovery.
+
 A Controller claims the oldest eligible queued Run for its Cluster. PostgreSQL
 coordinates one active Run per Target and ordinary FIFO scheduling among
 eligible Runs. Infrastructure commands are never retried implicitly.
@@ -157,6 +161,12 @@ terminal outcome (`succeeded`, `failed`, `canceled`, `timed-out`), cancellation
 intent, Job identity, exit code, diagnostics, and observation freshness are
 separate facts. A disconnected Controller or stale observation derives an
 unknown observation; it does not change phase or fail an active Run.
+
+The Run package owns Controller observation rules for phase progression,
+pinned Job identity, repeated terminal outcomes, and cancellation intent.
+PostgreSQL reads the current facts under a row lock and invokes that domain
+validation before writing the observation and phase history in the same
+transaction. Callers do not supply their own allowed predecessor phases.
 
 Finished Runs support two explicit rerun modes. Exact reruns copy the frozen
 execution snapshot, commit, catalog revision, parameters, and retained inputs.
@@ -233,12 +243,24 @@ or leader election. Assignment remains `assigned` until the Controller reports
 the materialized Job UID and `preparing` phase. Permanent rendering or admission
 failures finish the Run as failed rather than blocking delivery.
 
+The Server's Controller command scheduler selects Run cancellations, then due
+Promotion creation, then due pre-callback Promotion reconciliation, then Run
+assignments, composing existing Run and Promotion values. The HTTP adapter
+owns authentication, long polling, and generated response mapping, including
+assignment artifact credentials.
+
 Controller polling dispatches Run work to one local worker per Run before Job
 materialization begins. That worker owns materialization, observation, log
 completion, terminal reporting, and cleanup. Duplicate assignments reuse the
 worker, and repeated cancellation commands coalesce without blocking polling.
 Completed workers remain registered through an in-flight poll response so a
 late assignment cannot recreate a finished Job.
+
+Promotion creation and pre-callback reconciliation have a 15-second Kubernetes
+operation budget per delivered command. Server reporting retains the Controller
+context, so an expired creation attempt can still report a retryable result.
+An expired reconciliation attempt leaves its durable inspection schedule intact.
+These commands run inline; polling resumes after the bounded operation and report.
 
 Controller HTTP failures have explicit operational categories. Transport
 failures, HTTP 408/429, and Server errors retry; invalid requests, unknown
@@ -475,6 +497,12 @@ visible. Acceptance snapshots effective policy; later changes never alter an
 existing Promotion. Policy edits retain actor attribution and reject archived
 Stages.
 
+Stage inventory reads apply filters, lexical ordering, total counts, and
+pagination in PostgreSQL. The requested page includes stored policies and
+pending Promotion counts without loading Promotion history or querying policies
+individually. The Promotion domain evaluates every policy on that page at the
+same request time, including the automatic default and expired policies.
+
 ### Request, creation, preparation, and decision
 
 `POST /api/v1/kargo/{integration}/promotions` requires a service-account API key
@@ -532,11 +560,11 @@ An automatic-policy callback moves directly from `creating` to `approved`.
 `creating` covers queued Controller delivery, bounded retries, and the period
 after Kubernetes creation while waiting for Kargo to submit callback data.
 
-Controller polling prioritizes Run cancellations, then due Promotion creation,
-then due pre-callback Promotion reconciliation, then ordinary Run assignment.
-Claiming creation work atomically advances its attempt and next-attempt time
-under a fixed bounded backoff policy. The Server never uses Kubernetes or Kargo
-clients; a Controller configured for the integration and project namespace
+Promotion creation and pre-callback reconciliation share Controller command
+scheduling with Run delivery. Claiming creation work atomically advances its
+attempt and next-attempt time under a fixed bounded backoff policy. The Server
+never uses Kubernetes or Kargo clients; a Controller configured for the
+integration and project namespace
 verifies the snapshotted Stage UID and creates the Kargo resource with
 `slipramp.com/promotion-id: <promotion-id>`, the target Stage, and the exact
 Freight. Before creation or after an ambiguous result, it finds the object by
@@ -579,6 +607,15 @@ ordinary insertion path.
 
 Automatic requests become `approved` without a Run. Guarded requests become
 `preparing` and dispatch exactly one restart-safe, revision-pinned ordinary Run.
+Preparation dispatch and completed-output reconciliation isolate failures per
+Promotion. Known invalid requests, configuration, or artifacts fail immediately
+with fixed non-sensitive diagnostics. Other failures persist a retry count and
+next attempt, using eight failures with exponential backoff from five seconds
+to a five-minute maximum. Waiting items do not block later eligible work;
+exhaustion moves the Promotion to `error`. Successful Run creation resets the
+failure budget for output reconciliation. These retries never rerun an
+infrastructure command.
+
 The configured Action receives these string parameters, passed as named flags
 to the tools command: `promotion-id`, `external-promotion-id`, `project`,
 `stage`, `application`, `environment`, `repository-name`, `repository-url`,

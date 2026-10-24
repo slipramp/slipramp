@@ -13,6 +13,7 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/controllercommand"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/inbox"
@@ -140,6 +141,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database)
 	promotionDispatches := promotion.NewCreationDispatchService(persistence.database)
 	promotionReconciliations := promotion.NewCreationReconciliationService(persistence.database)
+	controllerCommands := controllercommand.NewScheduler(runs, promotionDispatches, promotionReconciliations)
 	promotionReviews := promotion.NewReviewService(persistence.database)
 	promotionProjects := promotion.NewProjectService(cfg.KargoIntegrations, persistence.database)
 	promotionPipelines := promotion.NewFreightPipelineService(cfg.KargoIntegrations, persistence.database)
@@ -198,6 +200,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		handler.Dependencies{
 			Clusters:                 clusters,
 			ControllerIdentities:     identities,
+			ControllerCommands:       controllerCommands,
 			Repositories:             repositories,
 			GitTriggerDeliveries:     persistence.database,
 			Commits:                  persistence.database,

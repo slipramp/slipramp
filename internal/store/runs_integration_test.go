@@ -209,7 +209,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: record.ID, ClusterName: "colo", Phase: run.PhasePreparing,
 			JobUID: &jobUID, ObservedAt: preparingAt,
 		},
-		[]run.Phase{run.PhaseAssigned, run.PhasePreparing},
 	); err != nil {
 		t.Fatalf("observe Run preparing: %v", err)
 	}
@@ -219,7 +218,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: record.ID, ClusterName: "colo", Phase: run.PhasePreparing,
 			JobUID: &jobUID, ObservedAt: preparingAt.Add(time.Second),
 		},
-		[]run.Phase{run.PhaseAssigned, run.PhasePreparing},
 	); err != nil {
 		t.Fatalf("repeat preparing observation: %v", err)
 	}
@@ -230,7 +228,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
 			JobUID: &otherJobUID, ObservedAt: preparingAt.Add(time.Second),
 		},
-		[]run.Phase{run.PhasePreparing},
 	); !errors.Is(err, run.ErrObservationConflict) {
 		t.Fatalf("mismatched Job observation error = %v, want observation conflict", err)
 	}
@@ -242,7 +239,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
 			JobUID: &jobUID, ObservedAt: runningAt,
 		},
-		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning},
 	); err != nil {
 		t.Fatalf("observe Run running: %v", err)
 	}
@@ -254,7 +250,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: record.ID, ClusterName: "edge", Phase: run.PhaseFinished,
 			Outcome: &succeeded, JobUID: &jobUID, ObservedAt: runningAt.Add(time.Minute),
 		},
-		[]run.Phase{run.PhaseRunning},
 	); !errors.Is(err, run.ErrRunNotFound) {
 		t.Fatalf("wrong-cluster observation error = %v, want Run not found", err)
 	}
@@ -274,7 +269,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			Outcome: &succeeded, JobUID: &jobUID, Reason: &completedReason,
 			ExitCode: &exitCode, ObservedAt: completedAt,
 		},
-		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning, run.PhaseFinished},
 	); err != nil {
 		t.Fatalf("complete first Run: %v", err)
 	}
@@ -284,7 +278,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
 			JobUID: &jobUID, ObservedAt: completedAt.Add(time.Minute),
 		},
-		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning},
 	); !errors.Is(err, run.ErrObservationConflict) {
 		t.Fatalf("backward transition error = %v, want observation conflict", err)
 	}
@@ -298,7 +291,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ExitCode:   &repeatedExitCode,
 			ObservedAt: completedAt.Add(time.Second),
 		},
-		[]run.Phase{run.PhaseAssigned, run.PhasePreparing, run.PhaseRunning, run.PhaseFinished},
 	); err != nil {
 		t.Fatalf("repeat finished observation: %v", err)
 	}
@@ -309,7 +301,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			Outcome: &succeeded, JobUID: &jobUID,
 			ObservedAt: completedAt.Add(-time.Second),
 		},
-		[]run.Phase{run.PhaseFinished},
 	); err != nil {
 		t.Fatalf("repeat stale finished observation: %v", err)
 	}
@@ -358,7 +349,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: second.ID, ClusterName: "colo", Phase: run.PhaseFinished,
 			Outcome: &canceled, ObservedAt: completedAt.Add(2 * time.Minute),
 		},
-		[]run.Phase{run.PhaseAssigned},
 	); !errors.Is(err, run.ErrObservationConflict) {
 		t.Fatalf("unrequested cancel error = %v, want observation conflict", err)
 	}
@@ -395,7 +385,6 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			ID: second.ID, ClusterName: "colo", Phase: run.PhaseFinished,
 			Outcome: &canceled, ObservedAt: cancelAt.Add(time.Minute),
 		},
-		[]run.Phase{run.PhaseAssigned},
 	); err != nil {
 		t.Fatalf("complete canceled Run: %v", err)
 	}

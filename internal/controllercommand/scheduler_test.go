@@ -1,0 +1,168 @@
+package controllercommand
+
+import (
+	"context"
+	"errors"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/run"
+)
+
+func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
+	t.Parallel()
+
+	record := run.Run{ID: uuid.New()}
+	creation := promotion.CreationCommand{PromotionID: uuid.New(), Attempt: 2}
+	reconciliation := promotion.CreationReconciliationCommand{PromotionID: uuid.New(), KargoUID: "promotion-uid"}
+	failure := errors.New("source unavailable")
+	tests := []struct {
+		name              string
+		cancelError       error
+		creationError     error
+		reconcileError    error
+		assignmentError   error
+		withoutCreations  bool
+		withoutReconciles bool
+		want              Command
+		wantError         error
+		wantCalls         string
+	}{
+		{
+			name: "cancellation before other work", want: Cancellation{Run: record}, wantCalls: "cancel",
+		},
+		{
+			name: "creation before reconciliation and assignment", cancelError: run.ErrNoRunToCancel,
+			want: PromotionCreation{Command: creation}, wantCalls: "cancel,create",
+		},
+		{
+			name: "reconciliation before assignment", cancelError: run.ErrNoRunToCancel,
+			creationError: promotion.ErrNoCreationDispatch,
+			want:          PromotionReconciliation{Command: reconciliation}, wantCalls: "cancel,create,reconcile",
+		},
+		{
+			name: "assignment", cancelError: run.ErrNoRunToCancel, creationError: promotion.ErrNoCreationDispatch,
+			reconcileError: promotion.ErrNoCreationReconciliation,
+			want:           Assignment{Run: record}, wantCalls: "cancel,create,reconcile,assign",
+		},
+		{
+			name: "no work", cancelError: run.ErrNoRunToCancel, creationError: promotion.ErrNoCreationDispatch,
+			reconcileError: promotion.ErrNoCreationReconciliation, assignmentError: run.ErrNoRunAssignment,
+			wantCalls: "cancel,create,reconcile,assign",
+		},
+		{
+			name: "cancellation failure stops selection", cancelError: failure,
+			wantError: failure, wantCalls: "cancel",
+		},
+		{
+			name: "creation failure stops selection", cancelError: run.ErrNoRunToCancel, creationError: failure,
+			wantError: failure, wantCalls: "cancel,create",
+		},
+		{
+			name: "reconciliation failure stops selection", cancelError: run.ErrNoRunToCancel,
+			creationError: promotion.ErrNoCreationDispatch, reconcileError: failure,
+			wantError: failure, wantCalls: "cancel,create,reconcile",
+		},
+		{
+			name: "assignment failure", cancelError: run.ErrNoRunToCancel,
+			creationError: promotion.ErrNoCreationDispatch, reconcileError: promotion.ErrNoCreationReconciliation,
+			assignmentError: failure, wantError: failure, wantCalls: "cancel,create,reconcile,assign",
+		},
+		{
+			name: "optional creation source", cancelError: run.ErrNoRunToCancel, withoutCreations: true,
+			want: PromotionReconciliation{Command: reconciliation}, wantCalls: "cancel,reconcile",
+		},
+		{
+			name: "optional reconciliation source", cancelError: run.ErrNoRunToCancel,
+			creationError: promotion.ErrNoCreationDispatch, withoutReconciles: true,
+			want: Assignment{Run: record}, wantCalls: "cancel,create,assign",
+		},
+		{
+			name: "no Promotion sources", cancelError: run.ErrNoRunToCancel,
+			withoutCreations: true, withoutReconciles: true,
+			want: Assignment{Run: record}, wantCalls: "cancel,assign",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+			var calls []string
+			recordCall := func(callCtx context.Context, cluster, operation string) {
+				t.Helper()
+				if callCtx != ctx || cluster != "colo" {
+					t.Errorf("%s received context %v and Cluster %q", operation, callCtx, cluster)
+				}
+				calls = append(calls, operation)
+			}
+			runs := schedulerRunSource{
+				cancel: func(ctx context.Context, cluster string) (run.Run, error) {
+					recordCall(ctx, cluster, "cancel")
+					return record, test.cancelError
+				},
+				assign: func(ctx context.Context, cluster string) (run.Run, error) {
+					recordCall(ctx, cluster, "assign")
+					return record, test.assignmentError
+				},
+			}
+			var creations PromotionCreationSource
+			if !test.withoutCreations {
+				creations = schedulerCreationSource(func(ctx context.Context, cluster string) (promotion.CreationCommand, error) {
+					recordCall(ctx, cluster, "create")
+					return creation, test.creationError
+				})
+			}
+			var reconciliations PromotionReconciliationSource
+			if !test.withoutReconciles {
+				reconciliations = schedulerReconciliationSource(func(
+					ctx context.Context,
+					cluster string,
+				) (promotion.CreationReconciliationCommand, error) {
+					recordCall(ctx, cluster, "reconcile")
+					return reconciliation, test.reconcileError
+				})
+			}
+
+			got, err := NewScheduler(runs, creations, reconciliations).Next(ctx, "colo")
+			if !errors.Is(err, test.wantError) || !reflect.DeepEqual(got, test.want) {
+				t.Errorf("Next() = %#v, %v; want %#v, %v", got, err, test.want, test.wantError)
+			}
+			if gotCalls := strings.Join(calls, ","); gotCalls != test.wantCalls {
+				t.Errorf("source calls = %q, want %q", gotCalls, test.wantCalls)
+			}
+		})
+	}
+}
+
+type schedulerRunSource struct {
+	cancel func(context.Context, string) (run.Run, error)
+	assign func(context.Context, string) (run.Run, error)
+}
+
+func (s schedulerRunSource) NextRunToCancel(ctx context.Context, cluster string) (run.Run, error) {
+	return s.cancel(ctx, cluster)
+}
+
+func (s schedulerRunSource) NextRunAssignment(ctx context.Context, cluster string) (run.Run, error) {
+	return s.assign(ctx, cluster)
+}
+
+type schedulerCreationSource func(context.Context, string) (promotion.CreationCommand, error)
+
+func (s schedulerCreationSource) Next(ctx context.Context, cluster string) (promotion.CreationCommand, error) {
+	return s(ctx, cluster)
+}
+
+type schedulerReconciliationSource func(context.Context, string) (promotion.CreationReconciliationCommand, error)
+
+func (s schedulerReconciliationSource) Next(
+	ctx context.Context,
+	cluster string,
+) (promotion.CreationReconciliationCommand, error) {
+	return s(ctx, cluster)
+}

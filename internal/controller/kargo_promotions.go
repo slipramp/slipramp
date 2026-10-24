@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,7 +19,10 @@ import (
 	"github.com/slipramp/slipramp/internal/promotion"
 )
 
-const promotionIDAnnotation = "slipramp.com/promotion-id"
+const (
+	promotionIDAnnotation          = "slipramp.com/promotion-id"
+	kargoPromotionOperationTimeout = 15 * time.Second
+)
 
 var kargoPromotionResource = schema.GroupVersionResource{
 	Group:    "kargo.akuity.io",
@@ -341,7 +345,9 @@ func (c *Controller) handleKargoPromotionCreation(
 			command.Integration,
 		)
 	} else {
-		materialization, materializeErr = c.promotions.Ensure(ctx, command)
+		attemptContext, cancel := context.WithTimeout(ctx, kargoPromotionOperationTimeout)
+		materialization, materializeErr = c.promotions.Ensure(attemptContext, command)
+		cancel()
 	}
 
 	report := api.KargoPromotionDispatchReport{Attempt: command.Attempt}
@@ -410,7 +416,9 @@ func (c *Controller) handleKargoPromotionReconciliation(
 		return nil
 	}
 
-	observation, err := c.promotionReconciler.Reconcile(ctx, command)
+	attemptContext, cancel := context.WithTimeout(ctx, kargoPromotionOperationTimeout)
+	observation, err := c.promotionReconciler.Reconcile(attemptContext, command)
+	cancel()
 	if err != nil {
 		c.logger.Warn(
 			"reconcile Kargo Promotion",

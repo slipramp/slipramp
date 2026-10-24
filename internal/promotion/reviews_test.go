@@ -12,14 +12,25 @@ import (
 )
 
 type reviewStore struct {
-	stages     []Stage
-	policies   map[uuid.UUID]StagePolicy
-	promotions []Promotion
-	decisions  map[uuid.UUID]Decision
+	stages      []Stage
+	policies    map[uuid.UUID]StagePolicy
+	promotions  []Promotion
+	decisions   map[uuid.UUID]Decision
+	stagePage   StageReviewPage
+	stageFilter StageListFilter
+	stageCalls  int
+	expiredAt   time.Time
 }
 
 func (s *reviewStore) ListPromotionStages(context.Context) ([]Stage, error) {
 	return s.stages, nil
+}
+
+func (s *reviewStore) ListPromotionStageReviews(_ context.Context, filter StageListFilter) (StageReviewPage, error) {
+	s.stageFilter = filter
+	s.stageCalls++
+
+	return s.stagePage, nil
 }
 
 func (s *reviewStore) GetPromotionStage(_ context.Context, id uuid.UUID) (Stage, error) {
@@ -106,6 +117,7 @@ func (s *reviewStore) ExpirePendingPromotions(
 	_ context.Context,
 	at time.Time,
 ) ([]Promotion, error) {
+	s.expiredAt = at
 	var expired []Promotion
 	for index, record := range s.promotions {
 		if record.Status != StatusPending || record.ExpiresAt == nil || record.ExpiresAt.After(at) {
@@ -120,58 +132,74 @@ func (s *reviewStore) ExpirePendingPromotions(
 	return expired, nil
 }
 
-func TestReviewServiceListsStageInventoryWithEffectivePolicy(t *testing.T) {
+func TestReviewServiceForwardsStagePageAndEvaluatesPoliciesAtOneTime(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 21, 18, 0, 0, 0, time.UTC)
 	actor := reviewActor(t, now)
 	active := reviewStage("prod", "colo", "kargo-core", "external-dns-prod", now)
-	otherActive := reviewStage("prod", "colo", "kargo-core", "metrics-prod", now)
-	archived := reviewStage("prod", "colo", "kargo-core", "metrics-prod", now)
-	archived.ArchivedAt = new(now.Add(time.Minute))
+	expired := reviewStage("prod", "colo", "kargo-core", "metrics-prod", now)
+	defaultPolicy := reviewStage("prod", "colo", "kargo-core", "cert-manager-prod", now)
 	policyUpdatedAt := now.Add(-2 * time.Hour)
 	expiresAt := now.Add(-time.Hour)
 	store := &reviewStore{
-		stages: []Stage{archived, otherActive, active},
-		policies: map[uuid.UUID]StagePolicy{
-			active.ID: {
-				StageID:              active.ID,
-				Mode:                 PolicyModeReviewRequired,
-				ExpiresAt:            &expiresAt,
-				UpdatedByPrincipalID: actor.PrincipalID,
-				UpdatedBySnapshot:    actor,
-				UpdatedAt:            policyUpdatedAt,
+		stagePage: StageReviewPage{
+			Total: 17,
+			Items: []StageReviewRecord{
+				{
+					Stage: active,
+					Policy: &StagePolicy{
+						StageID: active.ID, Mode: PolicyModeReviewRequired, ExpiresAt: new(now.Add(30 * time.Minute)),
+						UpdatedByPrincipalID: actor.PrincipalID, UpdatedBySnapshot: actor, UpdatedAt: policyUpdatedAt,
+					},
+					PendingPromotionCount: 3,
+				},
+				{
+					Stage: expired,
+					Policy: &StagePolicy{
+						StageID: expired.ID, Mode: PolicyModeReviewRequired, ExpiresAt: &expiresAt,
+						UpdatedByPrincipalID: actor.PrincipalID, UpdatedBySnapshot: actor, UpdatedAt: policyUpdatedAt,
+					},
+				},
+				{Stage: defaultPolicy},
 			},
 		},
-		promotions: []Promotion{
-			{ID: uuid.New(), StageID: active.ID, Status: StatusPending},
-			{ID: uuid.New(), StageID: active.ID, Status: StatusApproved},
-		},
-		decisions: map[uuid.UUID]Decision{},
+		promotions: []Promotion{{ID: uuid.New(), Status: StatusPending, ExpiresAt: &now}},
 	}
 	service := NewReviewService(store)
-	service.now = func() time.Time { return now }
+	clockCalls := 0
+	service.now = func() time.Time {
+		clockCalls++
+		return now.Add(time.Duration(clockCalls-1) * time.Hour)
+	}
 	includeArchived := false
+	filter := StageListFilter{
+		Integration: "prod", Cluster: "colo", Project: "kargo-core", Application: active.Application,
+		Archived: &includeArchived, Limit: 3, Offset: 2,
+	}
 
-	result, err := service.ListStages(
-		t.Context(),
-		StageListFilter{
-			Application: active.Application,
-			Archived:    &includeArchived,
-			Limit:       DefaultListLimit,
-		},
-	)
+	result, err := service.ListStages(t.Context(), filter)
 	if err != nil {
 		t.Fatalf("ListStages() error = %v", err)
 	}
-	if result.Total != 1 || len(result.Items) != 1 {
+	if store.stageFilter != filter || store.stageCalls != 1 ||
+		result.Total != 17 || result.Limit != filter.Limit || result.Offset != filter.Offset || len(result.Items) != 3 {
 		t.Fatalf("ListStages() = %#v", result)
 	}
 	item := result.Items[0]
-	if item.Stage.ID != active.ID || item.PendingPromotionCount != 1 ||
+	if item.Stage.ID != active.ID || item.PendingPromotionCount != 3 ||
 		item.Policy.ConfiguredMode != PolicyModeReviewRequired ||
-		item.Policy.EffectiveMode != PolicyModeAutomatic || item.Policy.UpdatedBy == nil {
+		item.Policy.EffectiveMode != PolicyModeReviewRequired || item.Policy.UpdatedBy == nil {
 		t.Errorf("Stage review = %#v", item)
+	}
+	if result.Items[1].Stage.ID != expired.ID || result.Items[1].Policy.ConfiguredMode != PolicyModeReviewRequired ||
+		result.Items[1].Policy.EffectiveMode != PolicyModeAutomatic ||
+		result.Items[2].Stage.ID != defaultPolicy.ID || result.Items[2].Policy.ConfiguredMode != PolicyModeAutomatic ||
+		result.Items[2].Policy.UpdatedBy != nil {
+		t.Errorf("expired/default Stage policies = %#v", result.Items[1:])
+	}
+	if clockCalls != 1 || !store.expiredAt.Equal(now) || store.promotions[0].Status != StatusExpired {
+		t.Errorf("evaluation times = %d clock calls, expired at %v, Promotions %#v", clockCalls, store.expiredAt, store.promotions)
 	}
 }
 

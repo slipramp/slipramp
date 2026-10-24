@@ -18,6 +18,7 @@ type ControllerIdentityService interface {
 type Handler struct {
 	clusters                 ClusterService
 	identities               ControllerIdentityService
+	controllerCommands       ControllerCommandService
 	repositories             RepositoryService
 	gitTriggerDeliveries     GitTriggerDeliveryService
 	commits                  CommitService
@@ -53,6 +54,7 @@ type ProductAuthenticationService interface {
 type Dependencies struct {
 	Clusters                 ClusterService
 	ControllerIdentities     ControllerIdentityService
+	ControllerCommands       ControllerCommandService
 	Repositories             RepositoryService
 	GitTriggerDeliveries     GitTriggerDeliveryService
 	Commits                  CommitService
@@ -81,6 +83,7 @@ func newHandler(dependencies Dependencies) *Handler {
 	return &Handler{
 		clusters:                 dependencies.Clusters,
 		identities:               dependencies.ControllerIdentities,
+		controllerCommands:       dependencies.ControllerCommands,
 		repositories:             dependencies.Repositories,
 		gitTriggerDeliveries:     dependencies.GitTriggerDeliveries,
 		commits:                  dependencies.Commits,

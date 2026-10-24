@@ -237,7 +237,6 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 			ID: runB.ID, ClusterName: "colo", Phase: run.PhasePreparing,
 			JobUID: &jobUID, ObservedAt: baseTime.Add(4 * time.Minute),
 		},
-		[]run.Phase{run.PhaseAssigned},
 	); err != nil {
 		t.Fatalf("prepare revision B Run: %v", err)
 	}
@@ -247,7 +246,6 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 			ID: runB.ID, ClusterName: "colo", Phase: run.PhaseRunning,
 			JobUID: &jobUID, ObservedAt: baseTime.Add(5 * time.Minute),
 		},
-		[]run.Phase{run.PhasePreparing},
 	); err != nil {
 		t.Fatalf("start revision B Run: %v", err)
 	}
@@ -324,7 +322,6 @@ func TestGitTriggerLatestWinsBehindActiveRunIntegration(t *testing.T) {
 			Outcome: &succeeded, JobUID: &jobUID, Reason: &completedReason,
 			ObservedAt: baseTime.Add(9 * time.Minute),
 		},
-		[]run.Phase{run.PhaseRunning},
 	); err != nil {
 		t.Fatalf("finish revision B Run: %v", err)
 	}
@@ -488,7 +485,6 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 			ID: manual.ID, ClusterName: "colo", Phase: run.PhaseFinished,
 			Outcome: &succeeded, ObservedAt: baseTime.Add(6 * time.Minute),
 		},
-		[]run.Phase{run.PhaseAssigned},
 	); err != nil {
 		t.Fatalf("finish manual Run: %v", err)
 	}

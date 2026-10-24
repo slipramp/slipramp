@@ -54,10 +54,6 @@ type CancellationStore interface {
 	GetRunToCancelForCluster(ctx context.Context, clusterName string) (Run, error)
 }
 
-type ObservationStore interface {
-	ApplyRunObservation(ctx context.Context, observation Observation, allowedCurrentPhases []Phase) error
-}
-
 type RepositoryService interface {
 	GetRepository(ctx context.Context, repositoryID uuid.UUID) (repository.Repository, error)
 }

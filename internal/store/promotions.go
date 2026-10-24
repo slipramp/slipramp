@@ -349,30 +349,6 @@ func (d *Database) ExpirePendingPromotions(
 	return records, nil
 }
 
-func (d *Database) AttachPromotionPreparationRun(
-	ctx context.Context,
-	promotionID uuid.UUID,
-	runID uuid.UUID,
-	updatedAt time.Time,
-) (promotion.Promotion, error) {
-	row, err := d.queries.AttachPromotionPreparationRun(
-		ctx,
-		storedb.AttachPromotionPreparationRunParams{
-			PreparationRunID: databaseUUID(runID),
-			UpdatedAt:        databaseTime(updatedAt),
-			ID:               databaseUUID(promotionID),
-		},
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return promotion.Promotion{}, promotion.ErrTransitionConflict
-	}
-	if err != nil {
-		return promotion.Promotion{}, fmt.Errorf("attach Promotion preparation Run: %w", err)
-	}
-
-	return promotionFromRow(row)
-}
-
 func (d *Database) CompletePromotionPreparation(
 	ctx context.Context,
 	promotionID uuid.UUID,
@@ -771,6 +747,8 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		PreparationRepositoryID:      applicationUUID(row.PreparationRepositoryID),
 		PreparationCatalogRevisionID: applicationUUID(row.PreparationCatalogRevisionID),
 		PreparationRunID:             applicationUUID(row.PreparationRunID),
+		PreparationFailureCount:      int(row.PreparationFailureCount),
+		NextPreparationAttemptAt:     applicationTime(row.NextPreparationAttemptAt),
 		GitDiffArtifactID:            applicationUUID(row.GitDiffArtifactID),
 		ArgoDiffArtifactID:           applicationUUID(row.ArgoDiffArtifactID),
 		RequestedByPrincipalID:       uuid.UUID(row.RequestedByPrincipalID.Bytes),

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -150,25 +149,4 @@ func validateArgoDiffArtifact(contents []byte) error {
 	}
 
 	return nil
-}
-
-func (c *PreparationCoordinator) failInvalidArtifacts(
-	ctx context.Context,
-	record Promotion,
-	runID uuid.UUID,
-	completedAt time.Time,
-	cause error,
-) (bool, error) {
-	message := "Preparation Run artifacts are invalid: " + cause.Error() + "."
-	if _, err := c.store.FailPromotionPreparation(
-		ctx,
-		record.ID,
-		runID,
-		message,
-		completedAt,
-	); err != nil {
-		return false, err
-	}
-
-	return true, nil
 }

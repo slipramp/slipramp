@@ -280,6 +280,9 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 	if err := linkGitTriggerRun(ctx, queries, record); err != nil {
 		return run.Run{}, err
 	}
+	if err := linkPromotionPreparationRun(ctx, queries, record, createdBySnapshot); err != nil {
+		return run.Run{}, err
+	}
 
 	if err := transaction.Commit(ctx); err != nil {
 		return run.Run{}, fmt.Errorf("commit run transaction: %w", err)

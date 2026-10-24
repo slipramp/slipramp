@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -492,11 +493,6 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	preparationRun.RequestDigest = strings.Repeat("a", 64)
 	preparationRun.CreatedBy = &fixture.actor
 	preparationRun.CreatedAt = createdAt.Add(4*time.Minute + time.Second)
-	preparationRun, err = database.CreateRun(ctx, preparationRun)
-	if err != nil {
-		t.Fatalf("create preparation Run: %v", err)
-	}
-	runID := preparationRun.ID
 	promotionRecord, err = database.ReservePromotionPreparationRevision(
 		ctx,
 		promotionRecord.ID,
@@ -507,14 +503,30 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve preparation revision: %v", err)
 	}
-	promotionRecord, err = database.AttachPromotionPreparationRun(
-		ctx,
-		promotionRecord.ID,
-		runID,
-		createdAt.Add(4*time.Minute+2*time.Second),
-	)
+	_, err = database.pool.Exec(ctx, `CREATE FUNCTION reject_preparation_link() RETURNS trigger LANGUAGE plpgsql AS
+        $$ BEGIN RAISE EXCEPTION 'simulated preparation link failure'; END; $$;
+        CREATE TRIGGER reject_preparation_link BEFORE UPDATE OF preparation_run_id ON promotions
+        FOR EACH ROW EXECUTE FUNCTION reject_preparation_link();`)
 	if err != nil {
-		t.Fatalf("attach preparation Run: %v", err)
+		t.Fatal(err)
+	}
+	if _, err := database.CreateRun(ctx, preparationRun); err == nil {
+		t.Fatal("expected preparation link failure")
+	}
+	assertRunCounts(t, database, 1, 1)
+	if _, err := database.pool.Exec(
+		ctx, "DROP TRIGGER reject_preparation_link ON promotions; DROP FUNCTION reject_preparation_link()",
+	); err != nil {
+		t.Fatal(err)
+	}
+	preparationRun, err = database.CreateRun(ctx, preparationRun)
+	if err != nil {
+		t.Fatalf("create preparation Run: %v", err)
+	}
+	runID := preparationRun.ID
+	promotionRecord, err = database.GetPromotion(ctx, promotionRecord.ID)
+	if err != nil || promotionRecord.PreparationRunID == nil || *promotionRecord.PreparationRunID != runID {
+		t.Fatalf("atomically linked preparation Run = %#v, %v", promotionRecord, err)
 	}
 	gitArtifactID := createPromotionArtifact(
 		t,
@@ -571,27 +583,19 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	preparationRun.IdempotencyKey = &preparationRunKey
 	preparationRun.RequestDigest = strings.Repeat("b", 64)
 	preparationRun.CreatedAt = createdAt.Add(8 * time.Minute)
-	preparationRun, err = database.CreateRun(ctx, preparationRun)
-	if err != nil {
-		t.Fatalf("create second preparation Run: %v", err)
-	}
 	preparing, err = database.ReservePromotionPreparationRevision(
 		ctx,
 		preparing.ID,
 		preparationRun.RepositoryID,
 		preparationRun.CatalogRevisionID,
-		createdAt.Add(8*time.Minute+time.Second),
+		preparationRun.CreatedAt,
 	)
 	if err != nil {
 		t.Fatalf("reserve second preparation revision: %v", err)
 	}
-	if _, err := database.AttachPromotionPreparationRun(
-		ctx,
-		preparing.ID,
-		preparationRun.ID,
-		createdAt.Add(8*time.Minute+2*time.Second),
-	); err != nil {
-		t.Fatalf("AttachPromotionPreparationRun() error = %v", err)
+	preparationRun, err = database.CreateRun(ctx, preparationRun)
+	if err != nil {
+		t.Fatalf("create second preparation Run: %v", err)
 	}
 	failed, err := database.FailPromotionPreparation(
 		ctx,
@@ -603,15 +607,6 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if err != nil || failed.Status != promotion.StatusError {
 		t.Errorf("FailPromotionPreparation() = %#v, %v", failed, err)
 	}
-	if _, err := database.AttachPromotionPreparationRun(
-		ctx,
-		preparing.ID,
-		preparationRun.ID,
-		createdAt.Add(8*time.Minute+4*time.Second),
-	); !errors.Is(err, promotion.ErrTransitionConflict) {
-		t.Errorf("attach after failure error = %v", err)
-	}
-
 	comment := "Validated the RBAC migration"
 	decision := promotion.Decision{
 		PromotionID:          promotionRecord.ID,
@@ -1092,6 +1087,101 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	}
 }
 
+func TestPromotionStageReviewProjectionFiltersAndPaginatesIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	if _, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx, fixture.acceptance(t, fixture.request("automatic"), createdAt.Add(2*time.Minute)),
+	); err != nil {
+		t.Fatal(err)
+	}
+	preparePromotionForReview(t, fixture, "pending", createdAt.Add(3*time.Minute))
+	if _, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx, fixture.acceptance(t, fixture.request("preparing"), createdAt.Add(3*time.Minute+time.Second)),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	base := fixture.stage
+	metrics := promotionTestStage("prod", "colo", "kargo-core", "metrics-prod", createdAt)
+	platform := promotionTestStage("prod", "colo", "kargo-platform", "external-dns-prod", createdAt)
+	archived := promotionTestStage("prod", "colo", "kargo-core", "archived-prod", createdAt)
+	edge := promotionTestStage("edge", "edge-cluster", "kargo-core", "external-dns-prod", createdAt)
+	replaceSnapshot := func(stages []promotion.Stage, observedAt time.Time) {
+		t.Helper()
+		for index := range stages {
+			stages[index].FirstObservedAt = observedAt
+			stages[index].LastObservedAt = observedAt
+		}
+		if err := fixture.database.ReplacePromotionStageSnapshot(
+			fixture.ctx,
+			promotionTestSnapshot(uuid.New(), stages[0].Integration, stages[0].ClusterName, observedAt),
+			stages,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	replaceSnapshot([]promotion.Stage{metrics, archived, base, platform}, createdAt.Add(4*time.Minute))
+	replaceSnapshot([]promotion.Stage{platform, metrics, base}, createdAt.Add(5*time.Minute))
+	replaceSnapshot([]promotion.Stage{edge}, createdAt.Add(5*time.Minute))
+
+	for _, test := range []struct {
+		name   string
+		filter promotion.StageListFilter
+		total  int
+		ids    []uuid.UUID
+	}{
+		{
+			name:   "ordered page includes archived by default",
+			filter: promotion.StageListFilter{Limit: 2, Offset: 1}, total: 5,
+			ids: []uuid.UUID{archived.ID, base.ID},
+		},
+		{
+			name: "active inventory", filter: promotion.StageListFilter{Archived: new(false), Limit: 10}, total: 4,
+			ids: []uuid.UUID{edge.ID, base.ID, metrics.ID, platform.ID},
+		},
+		{
+			name: "archived inventory", filter: promotion.StageListFilter{Archived: new(true), Limit: 10}, total: 1,
+			ids: []uuid.UUID{archived.ID},
+		},
+		{
+			name: "combined filters", total: 1, ids: []uuid.UUID{base.ID},
+			filter: promotion.StageListFilter{
+				Integration: "prod", Cluster: "colo", Project: "kargo-core", Application: "external-dns",
+				Archived: new(false), Limit: 10,
+			},
+		},
+		{
+			name:   "mismatched integration and cluster",
+			filter: promotion.StageListFilter{Integration: "prod", Cluster: "edge-cluster", Limit: 10},
+		},
+		{name: "empty page retains total", filter: promotion.StageListFilter{Limit: 2, Offset: 1 << 31}, total: 5},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			page, err := fixture.database.ListPromotionStageReviews(fixture.ctx, test.filter)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids := make([]uuid.UUID, 0, len(page.Items))
+			for _, item := range page.Items {
+				ids = append(ids, item.Stage.ID)
+				if item.Stage.ID == base.ID {
+					if item.PendingPromotionCount != 1 || item.Policy == nil ||
+						item.Policy.Mode != promotion.PolicyModeReviewRequired ||
+						item.Policy.UpdatedBySnapshot != fixture.actor {
+						t.Errorf("joined review policy and pending count = %#v", item)
+					}
+				} else if item.PendingPromotionCount != 0 || item.Policy != nil {
+					t.Errorf("Stage without reviews or policy = %#v", item)
+				}
+			}
+			if page.Total != test.total || !slices.Equal(ids, test.ids) {
+				t.Errorf("Stage page = %v, total %d; want %v, total %d", ids, page.Total, test.ids, test.total)
+			}
+		})
+	}
+}
+
 func createPromotionArtifact(
 	t *testing.T,
 	database *Database,
@@ -1199,26 +1289,18 @@ func preparePromotionForCompletion(
 	preparationRun.RequestDigest = strings.Repeat("c", 64)
 	preparationRun.CreatedBy = &fixture.actor
 	preparationRun.CreatedAt = acceptedAt.Add(time.Second)
-	preparationRun, err = fixture.database.CreateRun(fixture.ctx, preparationRun)
-	if err != nil {
-		t.Fatalf("create preparation Run: %v", err)
-	}
 	if _, err := fixture.database.ReservePromotionPreparationRevision(
 		fixture.ctx,
 		record.ID,
 		preparationRun.RepositoryID,
 		preparationRun.CatalogRevisionID,
-		acceptedAt.Add(2*time.Second),
+		preparationRun.CreatedAt,
 	); err != nil {
 		t.Fatalf("reserve preparation revision: %v", err)
 	}
-	if _, err := fixture.database.AttachPromotionPreparationRun(
-		fixture.ctx,
-		record.ID,
-		preparationRun.ID,
-		acceptedAt.Add(3*time.Second),
-	); err != nil {
-		t.Fatalf("attach preparation Run: %v", err)
+	preparationRun, err = fixture.database.CreateRun(fixture.ctx, preparationRun)
+	if err != nil {
+		t.Fatalf("create preparation Run: %v", err)
 	}
 	gitArtifactID := createPromotionArtifact(
 		t,

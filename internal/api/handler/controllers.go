@@ -14,6 +14,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/controllercommand"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
@@ -22,6 +23,10 @@ import (
 type ClusterService interface {
 	ListClusters(ctx context.Context) ([]cluster.Status, error)
 	RecordControllerContact(ctx context.Context, clusterName string) error
+}
+
+type ControllerCommandService interface {
+	Next(context.Context, string) (controllercommand.Command, error)
 }
 
 const (
@@ -128,12 +133,17 @@ func (h *Handler) PollForControllerCommand(
 		return nil, err
 	}
 
-	command, err := h.nextControllerCommand(ctx, principal.ClusterName)
+	command, err := h.controllerCommands.Next(ctx, principal.ClusterName)
 	if err != nil {
 		return nil, err
 	}
 	if command != nil {
-		return api.PollForControllerCommand200JSONResponse(*command), nil
+		body, err := h.controllerCommandResponse(command)
+		if err != nil {
+			return nil, err
+		}
+
+		return api.PollForControllerCommand200JSONResponse(body), nil
 	}
 
 	if timeoutSeconds == 0 {
@@ -149,7 +159,7 @@ func (h *Handler) PollForControllerCommand(
 	case <-timer.C:
 	}
 
-	command, err = h.nextControllerCommand(ctx, principal.ClusterName)
+	command, err = h.controllerCommands.Next(ctx, principal.ClusterName)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +167,12 @@ func (h *Handler) PollForControllerCommand(
 		return api.PollForControllerCommand204Response{}, nil
 	}
 
-	return api.PollForControllerCommand200JSONResponse(*command), nil
+	body, err := h.controllerCommandResponse(command)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.PollForControllerCommand200JSONResponse(body), nil
 }
 
 func (h *Handler) ReportRunObservation(
@@ -374,61 +389,24 @@ func reconcileKargoPromotionCommand(command promotion.CreationReconciliationComm
 	}
 }
 
-func (h *Handler) nextControllerCommand(ctx context.Context, clusterName string) (*api.ControllerCommand, error) {
-	record, err := h.runs.NextRunToCancel(ctx, clusterName)
-	if err == nil {
-		command := cancelRunCommand(record)
-
-		return &command, nil
-	}
-	if !errors.Is(err, run.ErrNoRunToCancel) {
-		return nil, err
-	}
-
-	if h.promotionDispatches != nil {
-		promotionCommand, dispatchErr := h.promotionDispatches.Next(ctx, clusterName)
-		if dispatchErr == nil {
-			command := createKargoPromotionCommand(promotionCommand)
-
-			return &command, nil
+func (h *Handler) controllerCommandResponse(command controllercommand.Command) (api.ControllerCommand, error) {
+	switch selected := command.(type) {
+	case controllercommand.Cancellation:
+		return cancelRunCommand(selected.Run), nil
+	case controllercommand.PromotionCreation:
+		return createKargoPromotionCommand(selected.Command), nil
+	case controllercommand.PromotionReconciliation:
+		return reconcileKargoPromotionCommand(selected.Command), nil
+	case controllercommand.Assignment:
+		assignment, err := h.runAssignmentResponse(selected.Run)
+		if err != nil {
+			return api.ControllerCommand{}, err
 		}
-		if !errors.Is(dispatchErr, promotion.ErrNoCreationDispatch) {
-			return nil, dispatchErr
-		}
+
+		return runAssignmentCommand(assignment), nil
+	default:
+		return api.ControllerCommand{}, fmt.Errorf("unsupported Controller command %T", command)
 	}
-
-	if h.promotionReconciliations != nil {
-		reconciliation, reconcileErr := h.promotionReconciliations.Next(ctx, clusterName)
-		if reconcileErr == nil {
-			command := reconcileKargoPromotionCommand(reconciliation)
-
-			return &command, nil
-		}
-		if !errors.Is(reconcileErr, promotion.ErrNoCreationReconciliation) {
-			return nil, reconcileErr
-		}
-	}
-
-	assignment, err := h.nextRunAssignment(ctx, clusterName)
-	if errors.Is(err, run.ErrNoRunAssignment) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	command := runAssignmentCommand(assignment)
-
-	return &command, nil
-}
-
-func (h *Handler) nextRunAssignment(ctx context.Context, clusterName string) (api.RunAssignment, error) {
-	record, err := h.runs.NextRunAssignment(ctx, clusterName)
-	if err != nil {
-		return api.RunAssignment{}, err
-	}
-
-	return h.runAssignmentResponse(record)
 }
 
 func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, error) {
