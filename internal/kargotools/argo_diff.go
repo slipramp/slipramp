@@ -4,28 +4,17 @@ import (
 	"errors"
 	"sort"
 	"strings"
+
+	"github.com/slipramp/slipramp/internal/argodiff"
 )
 
-type ArgoDiff struct {
-	Resources []ResourceDiff `json:"resources"`
-}
-
-type ResourceDiff struct {
-	Group               string `json:"group,omitempty"`
-	Kind                string `json:"kind"`
-	Namespace           string `json:"namespace,omitempty"`
-	Name                string `json:"name"`
-	Diff                string `json:"diff"`
-	VersionMetadataOnly bool   `json:"versionMetadataOnly,omitempty"`
-}
-
-func ParseArgoDiff(output []byte) (ArgoDiff, error) {
-	result := ArgoDiff{Resources: []ResourceDiff{}}
+func ParseArgoDiff(output []byte) (argodiff.Document, error) {
+	result := argodiff.Document{Resources: []argodiff.Resource{}}
 	if strings.TrimSpace(string(output)) == "" {
 		return result, nil
 	}
 
-	var current *ResourceDiff
+	var current *argodiff.Resource
 	body := []string{}
 	flush := func() error {
 		if current == nil {
@@ -45,7 +34,7 @@ func ParseArgoDiff(output []byte) (ArgoDiff, error) {
 		resource, ok := parseArgoDiffHeader(line)
 		if ok {
 			if err := flush(); err != nil {
-				return ArgoDiff{}, err
+				return argodiff.Document{}, err
 			}
 			current = &resource
 			continue
@@ -55,10 +44,10 @@ func ParseArgoDiff(output []byte) (ArgoDiff, error) {
 		}
 	}
 	if err := flush(); err != nil {
-		return ArgoDiff{}, err
+		return argodiff.Document{}, err
 	}
 	if len(result.Resources) == 0 {
-		return ArgoDiff{}, errors.New("argo CD returned non-empty output without resource diff headers")
+		return argodiff.Document{}, errors.New("argo CD returned non-empty output without resource diff headers")
 	}
 
 	sort.Slice(result.Resources, func(left, right int) bool {
@@ -68,28 +57,31 @@ func ParseArgoDiff(output []byte) (ArgoDiff, error) {
 		secondKey := second.Group + "\x00" + second.Kind + "\x00" + second.Namespace + "\x00" + second.Name
 		return firstKey < secondKey
 	})
+	if err := result.Validate(); err != nil {
+		return argodiff.Document{}, err
+	}
 
 	return result, nil
 }
 
-func parseArgoDiffHeader(line string) (ResourceDiff, bool) {
+func parseArgoDiffHeader(line string) (argodiff.Resource, bool) {
 	if !strings.HasPrefix(line, "===== ") {
-		return ResourceDiff{}, false
+		return argodiff.Resource{}, false
 	}
 	header := strings.TrimPrefix(line, "===== ")
 	withoutSuffix := strings.TrimRight(header, "=")
 	if len(header)-len(withoutSuffix) < 5 {
-		return ResourceDiff{}, false
+		return argodiff.Resource{}, false
 	}
 	fields := strings.Fields(withoutSuffix)
 	if len(fields) != 2 {
-		return ResourceDiff{}, false
+		return argodiff.Resource{}, false
 	}
 	groupKind := strings.SplitN(fields[0], "/", 2)
 	if len(groupKind) != 2 || groupKind[1] == "" {
-		return ResourceDiff{}, false
+		return argodiff.Resource{}, false
 	}
-	resource := ResourceDiff{Group: groupKind[0], Kind: groupKind[1]}
+	resource := argodiff.Resource{Group: groupKind[0], Kind: groupKind[1]}
 	namespaceName := strings.SplitN(fields[1], "/", 2)
 	if len(namespaceName) == 2 {
 		resource.Namespace = namespaceName[0]
@@ -98,7 +90,7 @@ func parseArgoDiffHeader(line string) (ResourceDiff, bool) {
 		resource.Name = namespaceName[0]
 	}
 	if resource.Name == "" {
-		return ResourceDiff{}, false
+		return argodiff.Resource{}, false
 	}
 
 	return resource, true

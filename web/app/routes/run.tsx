@@ -306,7 +306,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         title={`Run ${run.id.slice(0, 8)}`}
       />
 
-      <KawaiiActivity activity={runActivity(run)} />
+      <KawaiiActivity activity={runActivity(run)} animationKey={run.id} />
 
       {actionData?.error ? (
         <Alert color="red" title="Run operation failed">

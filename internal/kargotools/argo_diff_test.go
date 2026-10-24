@@ -3,6 +3,8 @@ package kargotools
 import (
 	"reflect"
 	"testing"
+
+	"github.com/slipramp/slipramp/internal/argodiff"
 )
 
 func TestParseArgoDiff(t *testing.T) {
@@ -31,7 +33,7 @@ func TestParseArgoDiff(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want := ArgoDiff{Resources: []ResourceDiff{
+		want := argodiff.Document{Resources: []argodiff.Resource{
 			{
 				Kind:                "Service",
 				Namespace:           "default",

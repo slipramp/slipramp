@@ -149,7 +149,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         title={promotion.externalPromotionId}
       />
 
-      <KawaiiActivity activity={promotionActivity(promotion)} />
+      <KawaiiActivity activity={promotionActivity(promotion)} animationKey={promotion.id} />
 
       {actionData?.error ? (
         <Alert color="red" title="Decision failed">

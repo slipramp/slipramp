@@ -84,11 +84,11 @@ export function RecentRuns({
                       </Stack>
                     </Table.Td>
                     <Table.Td>
-                      <Group gap="xs" wrap="nowrap">
-                        <KawaiiActivity activity={runActivity(run)} compact />
+                      <Group gap="xs" justify="space-between" wrap="nowrap">
                         <Badge color={runStatusColor(run)} variant="light">
                           {run.outcome ?? run.phase}
                         </Badge>
+                        <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
                       </Group>
                     </Table.Td>
                     <Table.Td>

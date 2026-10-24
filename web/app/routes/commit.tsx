@@ -210,11 +210,11 @@ function RunAssociations({ runs }: Readonly<{ runs: Run[] }>) {
                   </Stack>
                 </Table.Td>
                 <Table.Td>
-                  <Group gap="xs" wrap="nowrap">
-                    <KawaiiActivity activity={runActivity(run)} compact />
+                  <Group gap="xs" justify="space-between" wrap="nowrap">
                     <Badge color={runStatusColor(run)} variant="light">
                       {run.outcome ?? run.phase}
                     </Badge>
+                    <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
                   </Group>
                 </Table.Td>
                 <Table.Td>
@@ -281,11 +281,15 @@ function PromotionAssociations({
                   <Badge variant="outline">{promotionCommitRole(promotion, commitSha)}</Badge>
                 </Table.Td>
                 <Table.Td>
-                  <Group gap="xs" wrap="nowrap">
-                    <KawaiiActivity activity={promotionActivity(promotion)} compact />
+                  <Group gap="xs" justify="space-between" wrap="nowrap">
                     <Badge color={promotionStatusColor(promotion.status)} variant="light">
                       {promotionStatusLabel(promotion.status)}
                     </Badge>
+                    <KawaiiActivity
+                      activity={promotionActivity(promotion)}
+                      animationKey={promotion.id}
+                      compact
+                    />
                   </Group>
                 </Table.Td>
                 <Table.Td style={{ whiteSpace: "nowrap" }}>

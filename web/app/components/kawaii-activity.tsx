@@ -1,11 +1,12 @@
-import type { ExecutionActivity } from "~/execution-activity";
+import { activityAnimationDelay, type ExecutionActivity } from "~/execution-activity";
 
 import styles from "./kawaii-activity.module.css";
 
 export function KawaiiActivity({
   activity,
+  animationKey,
   compact = false,
-}: Readonly<{ activity?: ExecutionActivity; compact?: boolean }>) {
+}: Readonly<{ activity?: ExecutionActivity; animationKey: string; compact?: boolean }>) {
   if (!activity) return null;
 
   return (
@@ -15,10 +16,15 @@ export function KawaiiActivity({
       data-compact={compact || undefined}
       data-kawaii-activity
     >
-      <div aria-hidden="true" className={styles.worker} />
+      <div aria-hidden="true" className={styles.scene}>
+        <div
+          className={styles.sprite}
+          data-animation={activity.animation}
+          style={{ animationDelay: `${activityAnimationDelay(animationKey)}ms` }}
+        />
+      </div>
       {!compact ? (
         <div className={styles.copy}>
-          <span className={styles.eyebrow}>Axolotl on the job</span>
           <p className={styles.title}>{activity.title}</p>
           <p className={styles.description}>{activity.description}</p>
         </div>

@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/argodiff"
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/notification"
@@ -330,7 +331,7 @@ func (c *PreparationCoordinator) reconcile(ctx context.Context, record Promotion
 		ctx,
 		artifacts,
 		ArgoDiffArtifactName,
-		ArgoDiffArtifactMediaType,
+		argodiff.MediaType,
 	)
 	if err != nil {
 		return err

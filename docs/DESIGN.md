@@ -641,7 +641,9 @@ exact revisions, and emits deterministic bounded files:
 Both are sensitive and limited to 16 MiB each during Server validation. An
 empty Git diff is a zero-byte file; empty Argo output is `{"resources":[]}`.
 Structured resources identify group, kind, namespace, name, diff, and whether
-the change is version metadata only. Argo CD targets come from the Runtime
+the change is version metadata only. The tools producer and Server validator
+share one typed Argo diff format, including its media type and strict JSON
+validation. Argo CD targets come from the Runtime
 credential file `/run/slipramp/credentials/argocd/targets.json`, keyed by
 normalized environment, with `server`, `authToken`, and optional `plaintext`
 and `grpcWeb`. Unknown environments fail closed. Tokens use child environment
@@ -862,15 +864,17 @@ Targets have their own searchable, repository-filtered, paginated index.
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 
-The optional kawaii theme adds a typing axolotl at a laptop beside status badges
-and on detail pages for assigned, preparing, and running Runs and for creating
-or preparing Promotions. Queued or finished Runs, unknown Run observations, and
-Promotions awaiting review or already decided do not show activity. Cancellation
-intent retains activity with stopping text until the Run finishes. Promotion
-details refresh throughout creation and preparation. In the kawaii theme, visible
-lists refresh while Runs are unfinished or Promotions are creating or preparing.
-Activity respects reduced motion preferences and leaves textual status indicators
-available.
+The optional kawaii theme adds an animated axolotl beside status badges and on
+detail pages. While a Run is queued, she plays on her phone beside waiting text.
+After assignment, she works at a laptop throughout preparation and execution.
+Creating or preparing Promotions also show the laptop animation. Finished Runs,
+unknown Run observations, and Promotions awaiting review or already decided do
+not show activity. Cancellation intent retains the corresponding animation with
+stopping text until the Run finishes. Promotion details refresh throughout
+creation and preparation. In the kawaii theme, visible lists refresh while Runs
+are unfinished or Promotions are creating or preparing. Animation timing varies
+by Run or Promotion identity and stays stable across refreshes. Activity respects
+reduced motion preferences and leaves textual status indicators available.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

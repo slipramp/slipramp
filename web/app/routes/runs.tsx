@@ -264,16 +264,18 @@ function HistoryTable({
                   </Group>
                 </Table.Td>
                 <Table.Td>
-                  <Group gap="xs" wrap="nowrap">
-                    <KawaiiActivity activity={runActivity(run)} compact />
-                    <Badge color={runStatusColor(run)} variant="light">
-                      {run.outcome ?? run.phase}
-                    </Badge>
-                    {run.observationState === "unknown" ? (
-                      <Badge color="yellow" variant="outline">
-                        Unknown
+                  <Group gap="xs" justify="space-between" wrap="nowrap">
+                    <Group gap="xs" wrap="nowrap">
+                      <Badge color={runStatusColor(run)} variant="light">
+                        {run.outcome ?? run.phase}
                       </Badge>
-                    ) : null}
+                      {run.observationState === "unknown" ? (
+                        <Badge color="yellow" variant="outline">
+                          Unknown
+                        </Badge>
+                      ) : null}
+                    </Group>
+                    <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
                   </Group>
                 </Table.Td>
                 <Table.Td>

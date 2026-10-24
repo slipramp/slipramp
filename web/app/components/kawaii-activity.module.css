@@ -13,31 +13,37 @@
   background: linear-gradient(110deg, #fff0f7, #fffaf2 58%, #effcf8);
 }
 
-.worker {
+.scene {
+  display: grid;
   flex: 0 0 8rem;
   width: 8rem;
+  aspect-ratio: 6 / 5;
+  place-items: center;
+}
+
+.sprite {
+  width: 100%;
   aspect-ratio: 6 / 5;
   background-image: url("/slipramp-axolotl-working.webp");
   background-repeat: no-repeat;
   background-position: 0 55%;
   background-size: 400% auto;
-  animation: working 1.6s step-end infinite;
+  animation: frames 1.6s step-end infinite;
+}
+
+.sprite[data-animation="phone"] {
+  width: 84%;
+  aspect-ratio: 72 / 71;
+  background-image: url("/slipramp-axolotl-queued.webp");
+  animation-duration: 2.4s;
 }
 
 .copy {
   min-width: 0;
 }
 
-.eyebrow {
-  color: var(--mantine-color-sakura-8);
-  font-size: 0.65rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .title {
-  margin: 0.15rem 0 0.25rem;
+  margin: 0 0 0.25rem;
   font-size: var(--mantine-font-size-md);
   font-weight: 700;
 }
@@ -59,13 +65,13 @@
   background: none;
 }
 
-.activity[data-compact] .worker {
+.activity[data-compact] .scene {
   flex-basis: 100%;
   width: 100%;
 }
 
-/* Four equal sprite cells share a stationary laptop; paws and eyes change. */
-@keyframes working {
+/* Both sprites have four equal cells; only paws, eyes, and expression change. */
+@keyframes frames {
   0%,
   100% {
     background-position-x: 0;
@@ -90,14 +96,15 @@
     padding: 0.75rem;
   }
 
-  .activity:not([data-compact]) .worker {
+  .activity:not([data-compact]) .scene {
     flex-basis: 6rem;
     width: 6rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .worker {
+  .sprite,
+  .sprite[data-animation="phone"] {
     animation: none;
   }
 }

@@ -256,11 +256,15 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
         )}
       </Table.Td>
       <Table.Td>
-        <Group gap="xs" wrap="nowrap">
-          <KawaiiActivity activity={promotionActivity(promotion)} compact />
+        <Group gap="xs" justify="space-between" wrap="nowrap">
           <Badge color={promotionStatusColor(promotion.status)} variant="light">
             {promotionStatusLabel(promotion.status)}
           </Badge>
+          <KawaiiActivity
+            activity={promotionActivity(promotion)}
+            animationKey={promotion.id}
+            compact
+          />
         </Group>
       </Table.Td>
       <Table.Td>

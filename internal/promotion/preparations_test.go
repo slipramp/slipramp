@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/argodiff"
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/notification"
@@ -568,7 +569,7 @@ func validPreparationArtifacts() recordingPreparationArtifacts {
 	return recordingPreparationArtifacts{
 		records: map[string]artifact.Artifact{
 			GitDiffArtifactName:  makeArtifact(GitDiffArtifactName, GitDiffArtifactMediaType),
-			ArgoDiffArtifactName: makeArtifact(ArgoDiffArtifactName, ArgoDiffArtifactMediaType),
+			ArgoDiffArtifactName: makeArtifact(ArgoDiffArtifactName, argodiff.MediaType),
 		},
 		contents: contentByID,
 	}

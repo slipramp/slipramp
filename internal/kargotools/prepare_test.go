@@ -2,12 +2,13 @@ package kargotools
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/slipramp/slipramp/internal/argodiff"
 )
 
 func TestPrepareWritesReadOnlyGitAndStructuredArgoArtifacts(t *testing.T) {
@@ -72,8 +73,8 @@ EOF
 		t.Fatalf("Git diff artifact lacks a final newline: %q", gitDiff)
 	}
 
-	var argoDiff ArgoDiff
-	if err := json.Unmarshal([]byte(readTestFile(t, argoDiffPath)), &argoDiff); err != nil {
+	argoDiff, err := argodiff.Decode([]byte(readTestFile(t, argoDiffPath)))
+	if err != nil {
 		t.Fatal(err)
 	}
 	if len(argoDiff.Resources) != 1 || argoDiff.Resources[0].Name != "example" ||

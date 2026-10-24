@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/argodiff"
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
@@ -1315,7 +1316,7 @@ func preparePromotionForCompletion(
 		fixture.database,
 		preparationRun.ID,
 		promotion.ArgoDiffArtifactName,
-		promotion.ArgoDiffArtifactMediaType,
+		argodiff.MediaType,
 		acceptedAt.Add(4*time.Second),
 	)
 	return promotionPreparationCompletion{
