@@ -208,6 +208,34 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "kargo integration \"prod\" selects unregistered cluster \"colo\"",
 		},
 		{
+			name: "valid Kargo candidate branch cleanup",
+			configure: func(settings *Config) {
+				settings.ControllerEnrollmentTokens["colo"] = "enrollment-token"
+				settings.RepositoryRefreshCredentials["github-write"] = "/var/run/secrets/github.gitconfig"
+				settings.KargoIntegrations = validKargoIntegrations()
+				integration := settings.KargoIntegrations["prod"]
+				integration.CandidateBranchCleanup = &promotion.CandidateBranchCleanupConfig{
+					Retention:   7 * 24 * time.Hour,
+					Credentials: map[string]string{"kcloud-ops": "github-write"},
+				}
+				settings.KargoIntegrations["prod"] = integration
+			},
+		},
+		{
+			name: "unknown Kargo candidate branch cleanup credential",
+			configure: func(settings *Config) {
+				settings.ControllerEnrollmentTokens["colo"] = "enrollment-token"
+				settings.KargoIntegrations = validKargoIntegrations()
+				integration := settings.KargoIntegrations["prod"]
+				integration.CandidateBranchCleanup = &promotion.CandidateBranchCleanupConfig{
+					Retention:   7 * 24 * time.Hour,
+					Credentials: map[string]string{"kcloud-ops": "missing"},
+				}
+				settings.KargoIntegrations["prod"] = integration
+			},
+			wantError: "unknown Server Git credential \"missing\"",
+		},
+		{
 			name: "invalid database",
 			configure: func(settings *Config) {
 				settings.Database.URL = ""

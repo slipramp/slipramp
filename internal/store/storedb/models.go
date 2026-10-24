@@ -214,6 +214,17 @@ type Promotion struct {
 	NextPreparationAttemptAt     pgtype.Timestamptz
 }
 
+type PromotionCandidateBranchCleanup struct {
+	RepositoryID     pgtype.UUID
+	Status           string
+	StartedAt        pgtype.Timestamptz
+	FinishedAt       pgtype.Timestamptz
+	ObservedBranches int32
+	DeletedBranches  int32
+	RetainedBranches int32
+	Error            *string
+}
+
 type PromotionDecision struct {
 	PromotionID          pgtype.UUID
 	Decision             string

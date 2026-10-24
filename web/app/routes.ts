@@ -4,6 +4,7 @@ export default [
   index("routes/index.tsx"),
   route("targets", "routes/targets.tsx"),
   route("commits", "routes/commits.tsx"),
+  route("mascot", "routes/mascot.tsx"),
   route("api/v1/auth/login", "routes/auth-login.ts"),
   route("api/v1/auth/callback", "routes/auth-callback.ts"),
   route("logout", "routes/logout.ts"),

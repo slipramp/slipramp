@@ -45,6 +45,9 @@ server:
       github-readonly:
         secretName: github-refresh
         gitConfigKey: gitconfig
+      github-write:
+        secretName: github-promotion-cleanup
+        gitConfigKey: gitconfig
 ```
 
 The resulting Git config path is
@@ -69,6 +72,10 @@ server:
           repository: kcloud-ops
           target: kargo-promotions
           action: prepare-review
+        candidateBranchCleanup:
+          retention: 168h
+          credentials:
+            kcloud-ops: github-write
         maximumStageObservationAge: 5m
         pendingReviewRetention: 192h
 ```
@@ -79,6 +86,15 @@ The optional `uiUrl` enables direct Project, Stage, and Promotion links from the
 Observed environments that are absent from the list remain visible after the
 configured columns. Changing Kargo integration configuration requires a Server
 rollout.
+
+Candidate branch cleanup is opt-in per integration. It scans remote
+`kargo/promotion/*` refs on the repository refresh interval and deletes a ref
+only after every referencing Promotion is terminal, the retention window has
+elapsed, and the remote tip still matches a recorded candidate revision. The
+credential name must reference `server.repositoryRefresh.credentials` and must
+have permission to delete branches. Untracked and moved refs are reported in
+Server logs and are never deleted automatically. PostgreSQL retains only the
+latest cleanup outcome and aggregate branch counts for each Repository.
 
 Optional outbound notifications use an explicit public Slipramp URL, exact
 event routes, and Slack webhook URLs mounted from operator-managed Secrets:

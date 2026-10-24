@@ -190,6 +190,9 @@ func (d *Database) acceptPromotionRequest(
 		return promotion.Promotion{}, err
 	}
 	row, err := queries.CreatePromotion(ctx, params)
+	if constraintMatches(err, promotionCandidateBranchConstraint) {
+		return promotion.Promotion{}, promotion.ErrIdentityConflict
+	}
 	if err != nil {
 		return promotion.Promotion{}, fmt.Errorf("insert Kargo Promotion request: %w", err)
 	}
@@ -262,6 +265,9 @@ func finishExistingPromotionRequest(
 			ID:                databaseUUID(existing.ID),
 		},
 	)
+	if constraintMatches(err, promotionCandidateBranchConstraint) {
+		return promotion.Promotion{}, promotion.ErrIdentityConflict
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}

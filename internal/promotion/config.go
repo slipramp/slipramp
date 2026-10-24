@@ -21,12 +21,18 @@ type PreparationConfig struct {
 	Action     string
 }
 
+type CandidateBranchCleanupConfig struct {
+	Retention   time.Duration
+	Credentials map[string]string
+}
+
 type IntegrationConfig struct {
 	ClusterName                string
 	UIURL                      string
 	Repositories               []string
 	EnvironmentOrder           []string
 	Preparation                PreparationConfig
+	CandidateBranchCleanup     *CandidateBranchCleanupConfig
 	MaximumStageObservationAge time.Duration
 	PendingReviewRetention     time.Duration
 }
@@ -46,6 +52,16 @@ func (s IntegrationSet) Lookup(name string) (IntegrationConfig, bool) {
 	integration, ok := s[name]
 
 	return integration, ok
+}
+
+func (s IntegrationSet) CandidateBranchCleanupEnabled() bool {
+	for _, config := range s {
+		if config.CandidateBranchCleanup != nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s IntegrationSet) Validate() error {
@@ -121,6 +137,25 @@ func (c IntegrationConfig) Validate() error {
 	}
 	if err := kubevalidate.DNSLabel("Kargo preparation action", c.Preparation.Action); err != nil {
 		return err
+	}
+	if c.CandidateBranchCleanup != nil {
+		if c.CandidateBranchCleanup.Retention <= 0 {
+			return fmt.Errorf("kargo candidate branch cleanup retention must be positive")
+		}
+		if len(c.CandidateBranchCleanup.Credentials) == 0 {
+			return fmt.Errorf("at least one Kargo candidate branch cleanup credential is required")
+		}
+		for repositoryName, credentialName := range c.CandidateBranchCleanup.Credentials {
+			if _, ok := seenRepositories[repositoryName]; !ok {
+				return fmt.Errorf(
+					"kargo candidate branch cleanup repository %q is not in the repository allowlist",
+					repositoryName,
+				)
+			}
+			if err := kubevalidate.DNSLabel("candidate branch cleanup credential name", credentialName); err != nil {
+				return err
+			}
+		}
 	}
 	if c.MaximumStageObservationAge <= 0 {
 		return fmt.Errorf("maximum Kargo Stage observation age must be positive")

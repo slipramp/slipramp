@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   activityAnimationDelay,
+  activityAnimationPose,
   promotionActivity,
   runActivity,
   runResultActivity,
@@ -21,11 +22,85 @@ test("animation offsets are stable and spread out similar Run IDs", () => {
   assert.ok(offsets.every((offset) => offset <= 0 && offset > -10000));
 });
 
-test("queued Runs use the phone and executing Runs use the laptop", () => {
+test("waiting animation variants are stable and spread across IDs", () => {
+  const ids = Array.from({ length: 30 }, (_, index) => `run-${index}`);
+  const variants = ids.map((id) => activityAnimationPose("waiting", id));
+
+  assert.deepEqual(
+    ids.map((id) => activityAnimationPose("waiting", id)),
+    variants,
+  );
+  assert.deepEqual(
+    new Set(variants),
+    new Set([
+      "phone-scroll",
+      "book-browse",
+      "iced-coffee-sip",
+      "popcorn-munch",
+      "headphone-headbang",
+    ]),
+  );
+});
+
+test("working animation variants are stable and spread across IDs", () => {
+  const ids = Array.from({ length: 20 }, (_, index) => `run-${index}`);
+  const variants = ids.map((id) => activityAnimationPose("working", id));
+
+  assert.deepEqual(
+    ids.map((id) => activityAnimationPose("working", id)),
+    variants,
+  );
+  assert.deepEqual(
+    new Set(variants),
+    new Set(["laptop-typing", "blueprint-review", "clipboard-check", "walkie-talkie"]),
+  );
+});
+
+test("celebrating animation variants are stable and spread across IDs", () => {
+  const ids = Array.from({ length: 20 }, (_, index) => `run-${index}`);
+  const variants = ids.map((id) => activityAnimationPose("celebrating", id));
+
+  assert.deepEqual(
+    ids.map((id) => activityAnimationPose("celebrating", id)),
+    variants,
+  );
+  assert.deepEqual(
+    new Set(variants),
+    new Set(["beer-sip", "pennant-wave", "check-badge", "beer-toast"]),
+  );
+});
+
+test("frustrated animation variants are stable and spread across IDs", () => {
+  const ids = Array.from({ length: 40 }, (_, index) => `run-${index}`);
+  const variants = ids.map((id) => activityAnimationPose("frustrated", id));
+
+  assert.deepEqual(
+    ids.map((id) => activityAnimationPose("frustrated", id)),
+    variants,
+  );
+  assert.deepEqual(
+    new Set(variants),
+    new Set([
+      "laptop-slump",
+      "wrench-fumble",
+      "button-panic",
+      "play-dead",
+      "trash-can-hide",
+      "lever-regret",
+      "anvil-bonk",
+    ]),
+  );
+});
+
+test("the phone animation maps to its descriptive pose", () => {
+  assert.equal(activityAnimationPose("phone", "run-1"), "phone-scroll");
+});
+
+test("queued Runs use a waiting pose and executing Runs use a working pose", () => {
   for (const phase of ["queued", "assigned", "preparing", "running"]) {
     assert.equal(
       runActivity({ observationState: "current", phase }).animation,
-      phase === "queued" ? "phone" : "working",
+      phase === "queued" ? "waiting" : "working",
       phase,
     );
   }
@@ -185,7 +260,7 @@ test("cancellation intent shows stopping until the Run finishes", () => {
   for (const phase of ["queued", "assigned", "preparing", "running"]) {
     const activity = runActivity({ cancellationRequestedAt, phase });
     assert.equal(activity.title, "Stopping your run", phase);
-    assert.equal(activity.animation, phase === "queued" ? "phone" : "working", phase);
+    assert.equal(activity.animation, phase === "queued" ? "waiting" : "working", phase);
   }
   assert.equal(runActivity({ cancellationRequestedAt, phase: "finished" }), undefined);
 });

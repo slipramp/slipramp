@@ -55,6 +55,10 @@ server:
           repository: acceptance
           target: kargo-promotions
           action: prepare-review
+        candidateBranchCleanup:
+          retention: 5s
+          credentials:
+            acceptance: acceptance
         maximumStageObservationAge: 5m
         pendingReviewRetention: 1h
   placements:

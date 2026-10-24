@@ -472,6 +472,9 @@ git -C "$fixture_directory" checkout --quiet -b kargo/promotion/acceptance
 printf 'image: acceptance:new\n' >"$fixture_directory/review/manifest.yaml"
 git -C "$fixture_directory" commit --quiet -am 'Promotion candidate'
 candidate_commit=$(git -C "$fixture_directory" rev-parse HEAD)
+git -C "$fixture_directory" branch kargo/promotion/acceptance-operator
+git -C "$fixture_directory" branch kargo/promotion/acceptance-automatic
+git -C "$fixture_directory" branch kargo/promotion/acceptance-guarded
 git -C "$fixture_directory" checkout --quiet main
 git -C "$fixture_directory" bundle create \
   "$temporary_directory/repository.bundle" --all

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -61,6 +62,10 @@ type serverKargoIntegration struct {
 		Target     string `json:"target"`
 		Action     string `json:"action"`
 	} `json:"preparation"`
+	CandidateBranchCleanup *struct {
+		Retention   string            `json:"retention"`
+		Credentials map[string]string `json:"credentials"`
+	} `json:"candidateBranchCleanup"`
 	MaximumStageObservationAge string `json:"maximumStageObservationAge"`
 	PendingReviewRetention     string `json:"pendingReviewRetention"`
 }
@@ -436,6 +441,23 @@ func parseServerKargoIntegrations(value string) (promotion.IntegrationSet, error
 		if err != nil {
 			return nil, fmt.Errorf("integration %q pending review retention: %w", name, err)
 		}
+		var branchCleanup *promotion.CandidateBranchCleanupConfig
+		if encodedIntegration.CandidateBranchCleanup != nil {
+			cleanupRetention, cleanupErr := time.ParseDuration(
+				encodedIntegration.CandidateBranchCleanup.Retention,
+			)
+			if cleanupErr != nil {
+				return nil, fmt.Errorf(
+					"integration %q candidate branch cleanup retention: %w",
+					name,
+					cleanupErr,
+				)
+			}
+			branchCleanup = &promotion.CandidateBranchCleanupConfig{
+				Retention:   cleanupRetention,
+				Credentials: maps.Clone(encodedIntegration.CandidateBranchCleanup.Credentials),
+			}
+		}
 
 		integrations[name] = promotion.IntegrationConfig{
 			ClusterName:      encodedIntegration.Cluster,
@@ -447,6 +469,7 @@ func parseServerKargoIntegrations(value string) (promotion.IntegrationSet, error
 				Target:     encodedIntegration.Preparation.Target,
 				Action:     encodedIntegration.Preparation.Action,
 			},
+			CandidateBranchCleanup:     branchCleanup,
 			MaximumStageObservationAge: maximumAge,
 			PendingReviewRetention:     retention,
 		}

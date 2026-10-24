@@ -147,6 +147,14 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		cfg.RepositoryFetchTimeout,
 		logger,
 	)
+	promotionCandidateBranches := promotion.NewCandidateBranchService(
+		cfg.KargoIntegrations,
+		persistence.database,
+		repository.NewGitCandidateBranchRemote(cfg.RepositoryRefreshCredentials),
+		cfg.RepositoryRefreshInterval,
+		cfg.RepositoryFetchTimeout,
+		logger,
+	)
 	inboxService := inbox.NewService(inbox.Dependencies{
 		State:            persistence.database,
 		Acknowledgements: persistence.database,
@@ -196,6 +204,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			logger,
 		)
 		workers = append(workers, promotionPreparations.Run, promotionExpirations.Run)
+	}
+	if cfg.KargoIntegrations.CandidateBranchCleanupEnabled() {
+		workers = append(workers, promotionCandidateBranches.Run)
 	}
 	workers = append(workers, promotionBranchDrift.Run)
 	httpHandler := handler.NewHTTP(

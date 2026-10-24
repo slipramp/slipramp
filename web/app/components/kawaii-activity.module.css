@@ -6,7 +6,7 @@
   display: flex;
   gap: 1.25rem;
   align-items: center;
-  padding: 0.75rem 1.25rem;
+  padding: 1rem 1.25rem;
   overflow: hidden;
   border: 1px solid var(--activity-border, var(--slipramp-border));
   border-radius: var(--mantine-radius-lg);
@@ -29,41 +29,118 @@
 }
 
 .scene {
-  display: grid;
+  position: relative;
   flex: 0 0 8rem;
   width: 8rem;
-  aspect-ratio: 6 / 5;
-  place-items: center;
+  height: 7rem;
 }
 
 .sprite {
-  width: 100%;
-  aspect-ratio: 6 / 5;
-  background-image: url("../assets/slipramp-axolotl-working.webp");
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8.75rem;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background-image: url("../assets/slipramp-axolotl-laptop-typing.webp");
   background-repeat: no-repeat;
-  background-position: 0 55%;
+  background-position: 0;
   background-size: 400% auto;
   animation: frames 1.6s step-end infinite;
 }
 
-.sprite[data-animation="phone"] {
-  width: 84%;
-  aspect-ratio: 72 / 71;
-  background-image: url("../assets/slipramp-axolotl-queued.webp");
+.sprite[data-pose="phone-scroll"] {
+  background-image: url("../assets/slipramp-axolotl-phone-scroll.webp");
   animation-duration: 2.4s;
 }
 
-.sprite[data-animation="celebrating"] {
-  width: 84%;
-  aspect-ratio: 48 / 47;
-  background-image: url("../assets/slipramp-axolotl-succeeded.webp");
+.sprite[data-pose="book-browse"] {
+  background-image: url("../assets/slipramp-axolotl-book-browse.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="iced-coffee-sip"] {
+  background-image: url("../assets/slipramp-axolotl-iced-coffee-sip.webp");
   animation-duration: 2.8s;
 }
 
-.sprite[data-animation="frustrated"] {
-  aspect-ratio: 144 / 121;
-  background-image: url("../assets/slipramp-axolotl-failed.webp");
+.sprite[data-pose="popcorn-munch"] {
+  background-image: url("../assets/slipramp-axolotl-popcorn-munch.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="headphone-headbang"] {
+  background-image: url("../assets/slipramp-axolotl-headphone-headbang.webp");
+  animation-duration: 1.6s;
+}
+
+.sprite[data-pose="blueprint-review"] {
+  background-image: url("../assets/slipramp-axolotl-blueprint-review.webp");
+}
+
+.sprite[data-pose="clipboard-check"] {
+  background-image: url("../assets/slipramp-axolotl-clipboard-check.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="walkie-talkie"] {
+  background-image: url("../assets/slipramp-axolotl-walkie-talkie.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="beer-sip"] {
+  background-image: url("../assets/slipramp-axolotl-beer-sip.webp");
   animation-duration: 2.8s;
+}
+
+.sprite[data-pose="pennant-wave"] {
+  background-image: url("../assets/slipramp-axolotl-pennant-wave.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="check-badge"] {
+  background-image: url("../assets/slipramp-axolotl-check-badge.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="beer-toast"] {
+  background-image: url("../assets/slipramp-axolotl-beer-toast.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="laptop-slump"] {
+  background-image: url("../assets/slipramp-axolotl-laptop-slump.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="wrench-fumble"] {
+  background-image: url("../assets/slipramp-axolotl-wrench-fumble.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="button-panic"] {
+  background-image: url("../assets/slipramp-axolotl-button-panic.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="play-dead"] {
+  background-image: url("../assets/slipramp-axolotl-play-dead.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="trash-can-hide"] {
+  background-image: url("../assets/slipramp-axolotl-trash-can-hide.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="lever-regret"] {
+  background-image: url("../assets/slipramp-axolotl-lever-regret.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="anvil-bonk"] {
+  background-image: url("../assets/slipramp-axolotl-anvil-bonk.webp");
+  animation-duration: 2.4s;
 }
 
 .copy {
@@ -120,6 +197,11 @@
 .activity[data-compact] .scene {
   flex-basis: 100%;
   width: 100%;
+  height: 100%;
+}
+
+.activity[data-compact] .sprite {
+  width: 3rem;
 }
 
 /* Each sprite has four equal cells with registered character positions. */
@@ -145,18 +227,23 @@
 @media (width < 36em) {
   :global(:root[data-slipramp-theme="kawaii"]) .activity:not([data-compact]) {
     gap: 0.75rem;
-    padding: 0.75rem;
+    padding: 1rem 0.75rem;
   }
 
   .activity:not([data-compact]) .scene {
     flex-basis: 6rem;
     width: 6rem;
+    height: 5rem;
+  }
+
+  .activity:not([data-compact]) .sprite {
+    width: 6.5rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sprite,
-  .sprite[data-animation] {
+  .sprite[data-pose] {
     animation: none;
   }
 }

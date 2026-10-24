@@ -1,4 +1,8 @@
-import { activityAnimationDelay, type ExecutionActivity } from "~/execution-activity";
+import {
+  activityAnimationDelay,
+  activityAnimationPose,
+  type ExecutionActivity,
+} from "~/execution-activity";
 
 import styles from "./kawaii-activity.module.css";
 
@@ -8,6 +12,8 @@ export function KawaiiActivity({
   compact = false,
 }: Readonly<{ activity?: ExecutionActivity; animationKey: string; compact?: boolean }>) {
   if (!activity) return null;
+
+  const pose = activityAnimationPose(activity.animation, animationKey);
 
   return (
     <div
@@ -22,7 +28,7 @@ export function KawaiiActivity({
       <div aria-hidden="true" className={styles.scene}>
         <div
           className={styles.sprite}
-          data-animation={activity.animation}
+          data-pose={pose}
           style={{ animationDelay: `${activityAnimationDelay(animationKey)}ms` }}
         />
       </div>

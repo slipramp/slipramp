@@ -91,6 +91,31 @@ wait_for_operator_promotion_dispatch() {
   return 1
 }
 
+wait_for_candidate_branch_cleanup() {
+  local deleted_branch=$1
+  local protected_branch=$2
+  local deadline=$((SECONDS + timeout_seconds))
+  while ((SECONDS < deadline)); do
+    if ! candidate_branch_exists "$deleted_branch" &&
+      candidate_branch_exists "$protected_branch" &&
+      candidate_branch_exists kargo/promotion/acceptance; then
+      return 0
+    fi
+    sleep 1
+  done
+
+  printf 'Candidate branch cleanup did not reach the expected safe state\n' >&2
+  "${kubectl_command[@]}" -n "$system_namespace" exec deployment/acceptance-git -- \
+    git --git-dir=/srv/repository.git show-ref >&2
+  return 1
+}
+
+candidate_branch_exists() {
+  local branch=$1
+  "${kubectl_command[@]}" -n "$system_namespace" exec deployment/acceptance-git -- \
+    git --git-dir=/srv/repository.git show-ref --verify --quiet "refs/heads/$branch"
+}
+
 check_guarded_promotion() {
   local external_id=$1
   local candidate_revision=$2
@@ -228,7 +253,7 @@ operator_callback=$(jq -cn \
   --arg candidate "$candidate_commit" '{
     externalPromotionId: $externalId, project: "kargo-acceptance",
     stage: "acceptance", baseRevision: $base, candidateRevision: $candidate,
-    candidateBranch: "kargo/promotion/acceptance"
+    candidateBranch: "kargo/promotion/acceptance-operator"
   }')
 operator_hydrated=$(submit_kargo_promotion "$operator_callback")
 jq -e --arg id "$operator_id" '
@@ -254,7 +279,7 @@ automatic_request=$(jq -cn \
   --arg base "$fixture_commit" --arg candidate "$candidate_commit" '{
     externalPromotionId: "acceptance-automatic", project: "kargo-acceptance",
     stage: "acceptance", baseRevision: $base, candidateRevision: $candidate,
-    candidateBranch: "kargo/promotion/acceptance"
+    candidateBranch: "kargo/promotion/acceptance-automatic"
   }')
 automatic_response=$(submit_kargo_promotion "$automatic_request")
 automatic_id=$(jq -er '.id' <<<"$automatic_response")
@@ -275,7 +300,7 @@ curl --fail-with-body --silent --show-error -X PUT \
   --data '{"mode":"review-required","reason":"Acceptance review preparation"}' \
   "$server_url/api/v1/promotion-stages/$kargo_stage_id/policy" |
   jq -e '.effectiveMode == "review-required"' >/dev/null
-check_guarded_promotion acceptance-guarded "$candidate_commit" kargo/promotion/acceptance
+check_guarded_promotion acceptance-guarded "$candidate_commit" kargo/promotion/acceptance-guarded
 check_guarded_promotion acceptance-empty "$fixture_commit" kargo/promotion/acceptance-empty
 
 api_get "/api/v1/runs?repositoryId=$repository_id&target=kargo-promotions" |
@@ -283,3 +308,8 @@ api_get "/api/v1/runs?repositoryId=$repository_id&target=kargo-promotions" |
     (.items | length) == 2 and
     all(.items[]; .source.promotion.promotionId != $automatic)
   ' >/dev/null
+
+wait_for_candidate_branch_cleanup \
+  kargo/promotion/acceptance-automatic \
+  kargo/promotion/acceptance-guarded
+log "Candidate branch cleanup deleted expired exact refs and retained protected and untracked refs"

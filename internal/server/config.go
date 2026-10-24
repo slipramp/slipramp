@@ -113,6 +113,11 @@ func (c Config) Validate() error {
 	if err := c.KargoIntegrations.Validate(); err != nil {
 		return fmt.Errorf("validate Kargo integrations: %w", err)
 	}
+	type branchCleanupSelection struct {
+		credential string
+		retention  time.Duration
+	}
+	branchCleanupSelections := make(map[string]branchCleanupSelection)
 	for _, integrationName := range c.KargoIntegrations.Names() {
 		integration, _ := c.KargoIntegrations.Lookup(integrationName)
 		if _, ok := c.ControllerEnrollmentTokens[integration.ClusterName]; !ok {
@@ -121,6 +126,29 @@ func (c Config) Validate() error {
 				integrationName,
 				integration.ClusterName,
 			)
+		}
+		if integration.CandidateBranchCleanup == nil {
+			continue
+		}
+		for repositoryName, credentialName := range integration.CandidateBranchCleanup.Credentials {
+			if _, ok := c.RepositoryRefreshCredentials[credentialName]; !ok {
+				return fmt.Errorf(
+					"kargo integration %q candidate branch cleanup selects unknown Server Git credential %q",
+					integrationName,
+					credentialName,
+				)
+			}
+			selection := branchCleanupSelection{
+				credential: credentialName,
+				retention:  integration.CandidateBranchCleanup.Retention,
+			}
+			if existing, ok := branchCleanupSelections[repositoryName]; ok && existing != selection {
+				return fmt.Errorf(
+					"kargo candidate branch cleanup repository %q has conflicting integration configuration",
+					repositoryName,
+				)
+			}
+			branchCleanupSelections[repositoryName] = selection
 		}
 	}
 	if err := c.Notifications.Validate(); err != nil {

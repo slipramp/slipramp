@@ -54,6 +54,23 @@ func TestIntegrationSetValidate(t *testing.T) {
 	if err := integrations.Validate(); err == nil {
 		t.Fatal("Validate() error = nil for non-HTTP Kargo UI URL")
 	}
+
+	integration.UIURL = "https://kargo.example.com"
+	integration.CandidateBranchCleanup = &CandidateBranchCleanupConfig{
+		Retention:   0,
+		Credentials: map[string]string{"kcloud-ops": "github-write"},
+	}
+	integrations["prod"] = integration
+	if err := integrations.Validate(); err == nil {
+		t.Fatal("Validate() error = nil for zero candidate branch retention")
+	}
+
+	integration.CandidateBranchCleanup.Retention = 7 * 24 * time.Hour
+	integration.CandidateBranchCleanup.Credentials = map[string]string{"other": "github-write"}
+	integrations["prod"] = integration
+	if err := integrations.Validate(); err == nil {
+		t.Fatal("Validate() error = nil for candidate branch repository outside allowlist")
+	}
 }
 
 func TestIntegrationSetBuildsKargoLinks(t *testing.T) {

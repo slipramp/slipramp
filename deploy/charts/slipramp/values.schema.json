@@ -451,6 +451,20 @@
             "action": { "$ref": "#/$defs/dnsLabel" }
           }
         },
+        "candidateBranchCleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["retention", "credentials"],
+          "properties": {
+            "retention": { "$ref": "#/$defs/duration" },
+            "credentials": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": { "$ref": "#/$defs/dnsLabel" },
+              "additionalProperties": { "$ref": "#/$defs/dnsLabel" }
+            }
+          }
+        },
         "maximumStageObservationAge": { "$ref": "#/$defs/duration" },
         "pendingReviewRetention": { "$ref": "#/$defs/duration" }
       }

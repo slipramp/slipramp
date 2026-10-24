@@ -73,7 +73,8 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		serverKargoIntegrationsEnvironment: `{"prod":{"cluster":"colo","repositories":["kcloud-ops"],` +
 			`"uiUrl":"https://kargo.example.com","environmentOrder":["homelab","prod"],` +
 			`"preparation":{"repository":"kcloud-ops","target":"kargo-promotions",` +
-			`"action":"prepare-review"},"maximumStageObservationAge":"5m",` +
+			`"action":"prepare-review"},"candidateBranchCleanup":{"retention":"168h",` +
+			`"credentials":{"kcloud-ops":"github-server"}},"maximumStageObservationAge":"5m",` +
 			`"pendingReviewRetention":"192h"}}`,
 	}
 
@@ -174,6 +175,11 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		integration.PendingReviewRetention != 192*time.Hour ||
 		len(integration.EnvironmentOrder) != 2 || integration.EnvironmentOrder[0] != "homelab" {
 		t.Errorf("KargoIntegrations[prod] = %#v, %t", integration, ok)
+	}
+	if integration.CandidateBranchCleanup == nil ||
+		integration.CandidateBranchCleanup.Retention != 7*24*time.Hour ||
+		integration.CandidateBranchCleanup.Credentials["kcloud-ops"] != "github-server" {
+		t.Errorf("KargoIntegrations[prod].CandidateBranchCleanup = %#v", integration.CandidateBranchCleanup)
 	}
 }
 

@@ -13,7 +13,9 @@ Stage discovery, policies, durable external and operator-started requests,
 Controller materialization, restart-safe pre-callback terminal reconciliation,
 callback hydration, ordinary preparation Runs, diff artifacts, decisions,
 expiry, Freight comparisons, promotion actions, and background-refreshed branch
-drift with Stage-level pagination are implemented.
+drift with Stage-level pagination are implemented. Opt-in candidate-branch
+cleanup scans remote inventory, protects nonterminal Promotions, exact-tip
+guards deletions after retention, and records the latest outcome per Repository.
 Live Kargo acceptance and the standalone Kargo Gate retirement are complete.
 Remaining work concerns operations rather than rebuilding that vertical.
 
@@ -25,13 +27,11 @@ retained their configured automatic or review-required policies. The standalone
 Kargo Gate service and credentials were then retired. The intentionally
 unobserved `kargo-ivy` project retains its direct-push tasks.
 
-- [ ] Inventory existing candidate branches and retain or deliberately clean
-      them only after verifying that no pending Promotion depends on them.
+- [ ] Enable candidate-branch cleanup per Repository after confirming retention
+      and write credentials.
 
 ### Remaining capabilities
 
-- [ ] Add explicit, observable candidate-branch expiry and cleanup with protection
-      for pending Promotions.
 - [ ] Document Stage freshness, preparation and diff failures, review expiry,
       stale target pushes, and operational recovery.
 

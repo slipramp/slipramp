@@ -1,7 +1,53 @@
 import type { Promotion, Run } from "~/api/generated";
 
+export type ExecutionAnimation = "waiting" | "phone" | "working" | "celebrating" | "frustrated";
+
+export type ExecutionAnimationPose =
+  | "phone-scroll"
+  | "book-browse"
+  | "iced-coffee-sip"
+  | "popcorn-munch"
+  | "headphone-headbang"
+  | "laptop-typing"
+  | "blueprint-review"
+  | "clipboard-check"
+  | "walkie-talkie"
+  | "beer-sip"
+  | "pennant-wave"
+  | "check-badge"
+  | "beer-toast"
+  | "laptop-slump"
+  | "wrench-fumble"
+  | "button-panic"
+  | "play-dead"
+  | "trash-can-hide"
+  | "lever-regret"
+  | "anvil-bonk";
+
+export const executionAnimationPosePools = {
+  waiting: [
+    "phone-scroll",
+    "book-browse",
+    "iced-coffee-sip",
+    "popcorn-munch",
+    "headphone-headbang",
+  ],
+  phone: ["phone-scroll"],
+  working: ["laptop-typing", "blueprint-review", "clipboard-check", "walkie-talkie"],
+  celebrating: ["beer-sip", "pennant-wave", "check-badge", "beer-toast"],
+  frustrated: [
+    "laptop-slump",
+    "wrench-fumble",
+    "button-panic",
+    "play-dead",
+    "trash-can-hide",
+    "lever-regret",
+    "anvil-bonk",
+  ],
+} as const satisfies Record<ExecutionAnimation, readonly ExecutionAnimationPose[]>;
+
 export type ExecutionActivity = {
-  animation: "phone" | "working" | "celebrating" | "frustrated";
+  animation: ExecutionAnimation;
   title: string;
   description?: string;
   tone?: "success" | "error" | "neutral";
@@ -11,13 +57,34 @@ export type ExecutionActivity = {
   };
 };
 
-export function activityAnimationDelay(animationKey: string): number {
+function activityAnimationHash(animationKey: string): number {
   let hash = 2166136261;
   for (let index = 0; index < animationKey.length; index++) {
     hash = Math.imul(hash ^ animationKey.charCodeAt(index), 16777619);
   }
 
-  return -((hash >>> 0) % 10000);
+  return hash >>> 0;
+}
+
+export function activityAnimationDelay(animationKey: string): number {
+  return -(activityAnimationHash(animationKey) % 10000);
+}
+
+function animationPoseFromPool(
+  animation: ExecutionAnimation,
+  animationKey: string,
+  poses: readonly ExecutionAnimationPose[],
+): ExecutionAnimationPose {
+  const index = activityAnimationHash(`${animation}:${animationKey}`) % poses.length;
+
+  return poses[index]!;
+}
+
+export function activityAnimationPose(
+  animation: ExecutionAnimation,
+  animationKey: string,
+): ExecutionAnimationPose {
+  return animationPoseFromPool(animation, animationKey, executionAnimationPosePools[animation]);
 }
 
 export function runActivity(
@@ -29,7 +96,7 @@ export function runActivity(
 
   if (run.cancellationRequestedAt) {
     return {
-      animation: run.phase === "queued" ? "phone" : "working",
+      animation: run.phase === "queued" ? "waiting" : "working",
       title: "Stopping your run",
       description: "Waiting for the action to stop.",
     };
@@ -38,7 +105,7 @@ export function runActivity(
   switch (run.phase) {
     case "queued":
       return {
-        animation: "phone",
+        animation: "waiting",
         title: "Waiting for a turn",
         description: "Your run is queued and waiting to be picked up by the Controller.",
       };

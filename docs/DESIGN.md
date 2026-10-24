@@ -501,7 +501,8 @@ Kubernetes namespace; the authenticated Controller supplies Cluster identity.
 
 Named integrations are Server startup configuration: Cluster, optional Kargo UI
 URL, Repository allowlist, ordered environments, preparation Repository/Target/
-Action, maximum observation age, and pending-review retention. The Server
+Action, maximum observation age, pending-review retention, and optional
+candidate-branch cleanup policy. The Server
 matches normalized observed repository URLs against that allowlist. The
 Controller derives application, environment, repository, target branch, source
 paths, typed current Freight, requested-Freight origin, direct-Warehouse
@@ -686,15 +687,43 @@ approval and expiry do not invent human decisions or actors.
 
 Kargo pushes the approved candidate to the target branch without forcing, then
 continues `argocd-update`. If the target moved, Git rejects the stale push.
-Neither the Server nor preparation mutates Git refs or executes Kubernetes
-operations.
+Preparation never mutates Git refs, and neither the Server nor preparation
+executes Kubernetes operations. The only Server-side Git mutation is the
+explicitly configured terminal candidate-branch cleanup described below.
+
+### Candidate branch cleanup
+
+Candidate branch cleanup is opt-in per Kargo integration. Each enabled
+Repository selects a write-capable Git credential from the Server's mounted
+repository credential pool and a retention period. On the repository refresh
+interval, the Server lists remote `kargo/promotion/*` refs and joins that
+inventory with durable Promotions. PostgreSQL remains authoritative for
+Promotion state; the remote is authoritative for which refs currently exist.
+
+A branch is eligible only when every referencing Promotion is terminal, the
+latest terminal update plus retention has elapsed, and the current remote tip
+equals a candidate revision recorded for that branch. A unique
+`(repository, candidate branch)` constraint prevents a new Promotion from
+reusing an old branch during cleanup. Immediately before deletion the Git
+adapter rereads the exact ref, then pushes a deletion guarded by
+`--force-with-lease=<ref>:<expected revision>`. An absent ref is an idempotent
+success; a moved ref is retained. Transport failures are retried by the next
+scan and never retry a Promotion command.
+
+Untracked refs, refs whose tips do not match durable candidate revisions, refs
+used by nonterminal Promotions, and refs belonging to an integration that did
+not enable cleanup are never deleted automatically. Detailed branch decisions
+are logged. PostgreSQL keeps one last-run status per Repository with start and
+finish times, aggregate observed, deleted, and retained counts, and a bounded
+failure diagnostic. A new scan replaces that summary instead of retaining a
+branch-level deletion history.
 
 ### Operational views
 
 The Web provides projects, Promotions, Stage inventory/policy, Freight pipeline
-comparisons, and branch drift with shared integration, project, and application
-filters. Review detail links preparation Runs and renders sensitive Git and
-resource-filtered Argo CD diffs, hiding version-only changes by default.
+comparisons, and branch drift. Review detail links preparation Runs and renders
+sensitive Git and resource-filtered Argo CD diffs, hiding version-only changes
+by default.
 Operators can promote eligible exact Freight from observed upstream Stages on
 the pipeline view or rerun a drifted Stage in place from branch drift. Both
 flows use one dialog, can open the durable Promotion immediately or leave it in
@@ -898,13 +927,16 @@ Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 
 The optional kawaii theme adds an animated axolotl beside status badges and on
-detail pages. While a Run is queued, she plays on her phone beside waiting
-text. After assignment, she works at a laptop throughout preparation and
-execution. Creating or preparing Promotions also show the laptop animation.
-Terminal mascots appear only on Run detail pages: successful Runs celebrate
-with a beer; failed or timed-out Runs slump at their laptops with a slow blink
-and tiny sigh; canceled Runs use a neutral phone animation. These outcome cards
-replace the terminal result alert. Successful cards show only the mascot and
+detail pages. While a Run is queued, she uses a deterministic waiting pose such
+as reading, sipping iced coffee, eating popcorn, listening to music, or playing
+on her phone. After assignment, she uses a deterministic working pose throughout
+preparation and execution. Creating or preparing Promotions use the same
+working-pose selection.
+Terminal mascots appear only on Run detail pages: successful Runs choose a
+deterministic celebration pose; failed or timed-out Runs choose a deterministic
+failure pose ranging from a laptop slump to tool fumbles, emergency controls,
+and harmless slapstick retreats; canceled Runs use a neutral phone animation.
+These outcome cards replace the terminal result alert. Successful cards show only the mascot and
 the `Run succeeded` title. Failed, timed-out, and canceled cards retain the
 original outcome message, reason, and process exit code, including zero. The
 standard theme keeps the result alert, which also remains as a diagnostic
@@ -915,8 +947,12 @@ live animation with stopping text until the Run finishes. Promotion details
 refresh throughout creation and preparation. In the kawaii theme, visible lists
 refresh while Runs are unfinished or Promotions are creating or preparing.
 Animation timing varies by Run or Promotion identity and stays stable across
-refreshes. Activity respects reduced motion preferences and leaves textual
-status indicators available.
+refreshes. Waiting, working, celebration, and failure mascot poses also vary
+deterministically by that identity, so the same Run or Promotion keeps its
+selected pose across refreshes. The unlinked `/mascot` route groups every
+production animation by state at its detail, mobile, and compact display sizes
+for visual review. Activity respects reduced motion preferences and leaves
+textual status indicators available.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

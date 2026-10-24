@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	promotionIdentityConstraint     = "promotions_external_identity_key"
-	kargoSnapshotIdentityConstraint = "kargo_stage_snapshots_pkey"
+	promotionIdentityConstraint        = "promotions_external_identity_key"
+	promotionCandidateBranchConstraint = "promotions_candidate_branch_identity_key"
+	kargoSnapshotIdentityConstraint    = "kargo_stage_snapshots_pkey"
 )
 
 func recordPromotionCommits(
