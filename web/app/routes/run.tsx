@@ -72,6 +72,7 @@ import { pageTitle } from "~/page-title";
 import { runActivity, runResultActivity } from "~/execution-activity";
 import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
+import { targetFilterPath } from "~/target-filter";
 
 import styles from "./run.module.css";
 import type { Route } from "./+types/run";
@@ -219,6 +220,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     applyConsumer !== undefined;
   const resultActivity = runResultActivity(run);
   const activity = resultActivity ?? runActivity(run);
+  const actor = run.createdBy?.displayName ?? (run.source.type === "git" ? "Automation" : "System");
   const rerunSubmitting =
     navigation.state === "submitting" &&
     (navigation.formData?.get("intent") === "rerun-exact" ||
@@ -323,17 +325,42 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
           </>
         }
         description={
-          <Text c="dimmed">
-            {run.target} · {run.action} ·{" "}
-            <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
-          </Text>
+          <Group gap="xs">
+            <Text c="dimmed">Run {run.id.slice(0, 8)}</Text>
+            <Text c="dimmed">·</Text>
+            <Timestamp c="dimmed" value={run.createdAt} />
+            <Text c="dimmed">·</Text>
+            <RelativeTime c="dimmed" value={run.createdAt} />
+          </Group>
         }
         details={
-          <Text c="dimmed" size="sm">
-            Source: {runSourceLabel(run.source)}
-          </Text>
+          <Group gap="xs" wrap="wrap">
+            <Text c="dimmed" size="sm">
+              Source: {runSourceLabel(run.source)}
+            </Text>
+            <Text c="dimmed" size="sm">
+              ·
+            </Text>
+            <Identity avatarSize={22} name={actor} nameProps={{ fw: 500, size: "sm" }} />
+          </Group>
         }
-        title={`Run ${run.id.slice(0, 8)}`}
+        title={
+          <>
+            <Anchor
+              component={Link}
+              inherit
+              to={`/repositories/${run.repositoryId}/targets/${encodeURIComponent(run.target)}`}
+            >
+              {run.target}
+            </Anchor>
+            <Text c="dimmed" component="span" inherit>
+              {" / "}
+            </Text>
+            <Text component="span" inherit>
+              {run.action}
+            </Text>
+          </>
+        }
       />
 
       <KawaiiActivity activity={activity} animationKey={run.id} />
@@ -480,8 +507,6 @@ function PlanLineage({
 }
 
 function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string; run: Run }>) {
-  const actor = run.createdBy?.displayName ?? (run.source.type === "git" ? "Automation" : "System");
-
   return (
     <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
       <Paper p="lg" withBorder>
@@ -493,32 +518,23 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
                 {repositoryName ?? shortIdentifier(run.repositoryId)}
               </Anchor>
             </Fact>
-            <Fact label="Target / action">
-              <Anchor
-                component={Link}
-                to={`/repositories/${run.repositoryId}/targets/${encodeURIComponent(run.target)}`}
-              >
-                {run.target} · {run.action}
+            <Fact label="Runtime">
+              <Anchor component={Link} to={targetFilterPath("runtime", run.runtime)}>
+                {run.runtime}
               </Anchor>
             </Fact>
-            <Fact label="Cluster / placement">
-              <Text size="sm">
-                {run.cluster} · {run.placement}
-              </Text>
+            <Fact label="Cluster">
+              <Anchor component={Link} to={`/clusters/${encodeURIComponent(run.cluster)}`}>
+                {run.cluster}
+              </Anchor>
             </Fact>
-            <Fact label="Source / actor">
-              <Stack gap={4}>
-                <Text size="sm">{runSourceLabel(run.source)}</Text>
-                <Identity avatarSize={24} name={actor} nameProps={{ fw: 500, size: "xs" }} />
-              </Stack>
-            </Fact>
-            <Fact label="Git revision">
-              <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
+            <Fact label="Placement">
+              <Anchor component={Link} to={targetFilterPath("placement", run.placement)}>
+                {run.placement}
+              </Anchor>
             </Fact>
             <Fact label="Catalog revision">
-              <Code title={run.catalogRevisionId}>
-                {shortIdentifier(run.catalogRevisionId, 12)}
-              </Code>
+              <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
             </Fact>
             <Fact label="Run ID">
               <Code style={{ overflowWrap: "anywhere" }}>{run.id}</Code>

@@ -10,6 +10,7 @@ import { SectionHeader } from "~/components/page";
 import { formatDuration, shortIdentifier } from "~/display";
 import { runActivity } from "~/execution-activity";
 import { runStatusColor } from "~/run-status";
+import { targetFilterPath } from "~/target-filter";
 
 export const recentRunLimit = 10;
 
@@ -17,13 +18,17 @@ export function RecentRuns({
   available,
   description,
   emptyMessage,
+  linkPlacement = false,
   runs,
+  showTarget = true,
   viewAllTo,
 }: Readonly<{
   available: boolean;
   description: string;
   emptyMessage: string;
+  linkPlacement?: boolean;
   runs: Run[];
+  showTarget?: boolean;
   viewAllTo: string;
 }>) {
   useActivityRefresh(runs.some((run) => run.phase !== "finished"));
@@ -60,7 +65,7 @@ export function RecentRuns({
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Run</Table.Th>
-                  <Table.Th>Workload</Table.Th>
+                  <Table.Th>{showTarget ? "Workload" : "Action"}</Table.Th>
                   <Table.Th>Status</Table.Th>
                   <Table.Th>Execution</Table.Th>
                   <Table.Th>Created</Table.Th>
@@ -76,12 +81,18 @@ export function RecentRuns({
                       </Anchor>
                     </Table.Td>
                     <Table.Td>
-                      <Stack gap={0}>
-                        <Text size="sm">{run.target}</Text>
-                        <Text c="dimmed" size="xs">
+                      {showTarget ? (
+                        <Stack gap={0}>
+                          <Text size="sm">{run.target}</Text>
+                          <Text c="dimmed" size="xs">
+                            {run.action}
+                          </Text>
+                        </Stack>
+                      ) : (
+                        <Text fw={600} size="sm">
                           {run.action}
                         </Text>
-                      </Stack>
+                      )}
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" justify="space-between" wrap="nowrap">
@@ -94,9 +105,20 @@ export function RecentRuns({
                     <Table.Td>
                       <Stack gap={0}>
                         <Text size="sm">{run.cluster}</Text>
-                        <Text c="dimmed" size="xs">
-                          {run.placement}
-                        </Text>
+                        {linkPlacement ? (
+                          <Anchor
+                            c="dimmed"
+                            component={Link}
+                            size="xs"
+                            to={targetFilterPath("placement", run.placement)}
+                          >
+                            {run.placement}
+                          </Anchor>
+                        ) : (
+                          <Text c="dimmed" size="xs">
+                            {run.placement}
+                          </Text>
+                        )}
                       </Stack>
                     </Table.Td>
                     <Table.Td>

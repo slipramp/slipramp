@@ -178,6 +178,14 @@ WHERE targets.archived_at IS NULL
       OR targets.repository_id = sqlc.narg(repository_id)
   )
   AND (
+      sqlc.narg(runtime)::text IS NULL
+      OR catalog_targets.definition->'spec'->>'runtime' = sqlc.narg(runtime)
+  )
+  AND (
+      sqlc.narg(placement)::text IS NULL
+      OR catalog_targets.definition->'spec'->>'placement' = sqlc.narg(placement)
+  )
+  AND (
       sqlc.narg(search_query)::text IS NULL
       OR strpos(lower(targets.name), lower(sqlc.narg(search_query))) > 0
       OR strpos(lower(repositories.name), lower(sqlc.narg(search_query))) > 0
@@ -216,6 +224,14 @@ WHERE targets.archived_at IS NULL
   AND (
       sqlc.narg(repository_id)::uuid IS NULL
       OR targets.repository_id = sqlc.narg(repository_id)
+  )
+  AND (
+      sqlc.narg(runtime)::text IS NULL
+      OR catalog_targets.definition->'spec'->>'runtime' = sqlc.narg(runtime)
+  )
+  AND (
+      sqlc.narg(placement)::text IS NULL
+      OR catalog_targets.definition->'spec'->>'placement' = sqlc.narg(placement)
   )
   AND (
       sqlc.narg(search_query)::text IS NULL

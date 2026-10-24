@@ -471,7 +471,7 @@ function Fact({ label, value }: Readonly<{ label: string; value: string }>) {
       <Text c="dimmed" size="xs">
         {label}
       </Text>
-      <Text>{value}</Text>
+      <Text style={{ overflowWrap: "anywhere" }}>{value}</Text>
     </Stack>
   );
 }

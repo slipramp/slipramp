@@ -13,6 +13,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -59,12 +60,22 @@ func (h *Handler) ListTargets(
 			return api.ListTargets400ApplicationProblemPlusJSONResponse(problem), nil
 		}
 	}
+	runtime, problem := targetCatalogNameFilter(request.Params.Runtime, "runtime")
+	if problem != nil {
+		return api.ListTargets400ApplicationProblemPlusJSONResponse(*problem), nil
+	}
+	placement, problem := targetCatalogNameFilter(request.Params.Placement, "placement")
+	if problem != nil {
+		return api.ListTargets400ApplicationProblemPlusJSONResponse(*problem), nil
+	}
 
 	targets, err := h.catalogs.ListTargets(
 		ctx,
 		catalog.TargetListFilter{
 			RepositoryID: request.Params.RepositoryID,
 			Query:        query,
+			Runtime:      runtime,
+			Placement:    placement,
 			Limit:        int32(limit),
 			Offset:       int32(offset),
 		},
@@ -107,6 +118,21 @@ func (h *Handler) ListTargets(
 		Offset: int(offset),
 		Total:  targets.Total,
 	}, nil
+}
+
+func targetCatalogNameFilter(value *string, name string) (string, *api.Problem) {
+	if value == nil {
+		return "", nil
+	}
+
+	trimmed := strings.TrimSpace(*value)
+	if err := kubevalidate.DNSLabel(name, trimmed); err != nil {
+		problem := NewProblem(http.StatusBadRequest, name+" must be a valid catalog name")
+
+		return "", &problem
+	}
+
+	return trimmed, nil
 }
 
 func (h *Handler) GetRepositoryCatalog(

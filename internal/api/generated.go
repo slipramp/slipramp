@@ -2111,6 +2111,7 @@ type Run struct {
 
 	// RerunOfRunID Immediate parent Run when this Run was created by a rerun operation.
 	RerunOfRunID *openapi_types.UUID `json:"rerunOfRunId,omitempty"`
+	Runtime      CatalogName         `json:"runtime"`
 	Source       RunSource           `json:"source"`
 	StartedAt    *time.Time          `json:"startedAt,omitempty"`
 	Target       CatalogName         `json:"target"`
@@ -2406,7 +2407,7 @@ type TargetSpec struct {
 
 // TargetStatus defines model for TargetStatus.
 type TargetStatus struct {
-	// DesiredCommit Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
+	// DesiredCommit Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
 	DesiredCommit GitCommit `json:"desiredCommit"`
 }
 
@@ -2415,13 +2416,15 @@ type TargetSummary struct {
 	Actions           []string           `json:"actions"`
 	CatalogCommit     GitCommit          `json:"catalogCommit"`
 	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
-	DesiredCommit     GitCommit          `json:"desiredCommit"`
-	Name              string             `json:"name"`
-	Placement         *string            `json:"placement,omitempty"`
-	RepositoryID      openapi_types.UUID `json:"repositoryId"`
-	RepositoryName    string             `json:"repositoryName"`
-	Runtime           *string            `json:"runtime,omitempty"`
-	Title             *string            `json:"title,omitempty"`
+
+	// DesiredCommit Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
+	DesiredCommit  GitCommit          `json:"desiredCommit"`
+	Name           string             `json:"name"`
+	Placement      *string            `json:"placement,omitempty"`
+	RepositoryID   openapi_types.UUID `json:"repositoryId"`
+	RepositoryName string             `json:"repositoryName"`
+	Runtime        *string            `json:"runtime,omitempty"`
+	Title          *string            `json:"title,omitempty"`
 }
 
 // TargetSummaryList defines model for TargetSummaryList.
@@ -2679,6 +2682,12 @@ type ListServiceAccountAPIKeysParams struct {
 type ListTargetsParams struct {
 	// RepositoryID Limit targets to one active repository.
 	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
+
+	// Runtime Limit targets to an exact target-level Runtime default.
+	Runtime *CatalogName `form:"runtime,omitempty" json:"runtime,omitempty"`
+
+	// Placement Limit targets to an exact target-level Placement default.
+	Placement *CatalogName `form:"placement,omitempty" json:"placement,omitempty"`
 
 	// Q Case-insensitive target, repository, or action search.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
@@ -7382,6 +7391,30 @@ func NewListTargetsRequest(server string, params *ListTargetsParams) (*http.Requ
 		if params.RepositoryID != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repositoryId", *params.RepositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Runtime != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "runtime", *params.Runtime, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Placement != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "placement", *params.Placement, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -19698,6 +19731,32 @@ func (siw *ServerInterfaceWrapper) ListTargets(w http.ResponseWriter, r *http.Re
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repositoryId"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "runtime" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "runtime", r.URL.Query(), &params.Runtime, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "runtime"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runtime", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "placement" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "placement", r.URL.Query(), &params.Placement, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "placement"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placement", Err: err})
 		}
 		return
 	}

@@ -23,6 +23,7 @@ import { pageTitle } from "~/page-title";
 import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 import { pageFromSearchParam } from "~/search-params";
+import { targetFilterPath } from "~/target-filter";
 
 import type { Route } from "./+types/runs";
 
@@ -280,7 +281,17 @@ function HistoryTable({
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={0}>
-                    <Text size="sm">{runSourceLabel(run.source)}</Text>
+                    {run.source.type === "promotion" && run.source.promotion ? (
+                      <Anchor
+                        component={Link}
+                        size="sm"
+                        to={`/promotions/${run.source.promotion.promotionId}`}
+                      >
+                        {runSourceLabel(run.source)}
+                      </Anchor>
+                    ) : (
+                      <Text size="sm">{runSourceLabel(run.source)}</Text>
+                    )}
                     <Identity
                       avatarSize={22}
                       name={run.createdBy?.displayName ?? "System"}
@@ -290,10 +301,21 @@ function HistoryTable({
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={0}>
-                    <Text size="sm">{run.cluster}</Text>
-                    <Text c="dimmed" size="xs">
+                    <Anchor
+                      component={Link}
+                      size="sm"
+                      to={`/clusters/${encodeURIComponent(run.cluster)}`}
+                    >
+                      {run.cluster}
+                    </Anchor>
+                    <Anchor
+                      c="dimmed"
+                      component={Link}
+                      size="xs"
+                      to={targetFilterPath("placement", run.placement)}
+                    >
                       {run.placement}
-                    </Text>
+                    </Anchor>
                   </Stack>
                 </Table.Td>
                 <Table.Td>

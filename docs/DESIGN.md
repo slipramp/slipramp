@@ -62,9 +62,11 @@ new identity and archives the old one. Removing a Target never destroys
 infrastructure. Historical Runs retain their catalog revision.
 
 `sync` is an optional recognized Action name. Targets without it remain useful
-collections of operations. Track desired, last attempted, and last successful
-reconciliation commits where applicable without claiming generic infrastructure
-is continuously in sync.
+collections of operations. The Target's desired commit is a relevance marker
+for scheduling and Git delivery coalescing, not an applied-infrastructure or
+Run checkout revision. Slipramp does not currently infer reconciliation state
+from successful Runs or claim that generic infrastructure is continuously in
+sync.
 
 Actions are independent executions. Multi-step procedures belong inside the
 invoked script, task runner, or container rather than a Slipramp workflow graph.
@@ -104,10 +106,11 @@ A valid commit creates or reuses an immutable catalog revision. An invalid
 commit records its SHA and diagnostics while the last valid revision stays
 active; it does not advance Target state or create Runs. Changed paths between
 accepted heads match Target `watch` patterns, including recursive `**`, to
-advance each affected Target's durable desired commit. New and reactivated
-Targets begin at the commit where they become active; removed Targets archive.
-Repository refresh indexes Git; target reconciliation executes optional `sync`.
-Watch patterns alone never start execution.
+advance each affected Target's durable desired commit. The Web presents this as
+the Target's last relevant change rather than a convergence status. New and
+reactivated Targets begin at the commit where they become active; removed
+Targets archive. Repository refresh indexes Git; target reconciliation executes
+optional `sync`. Watch patterns alone never start execution.
 
 Catalog revision reads contain only immutable definitions and revision metadata.
 The active catalog view pairs that revision with mutable Target state, read from
@@ -922,7 +925,8 @@ path. A required projection-read failure produces an unavailable state and canno
 be presented as **All clear**. Dependency health remains outside the Inbox and is
 exposed through readiness for external monitoring and failure diagnosis.
 
-Targets have their own searchable, repository-filtered, paginated index.
+Targets have their own searchable, repository-, Runtime-, and Placement-filtered,
+paginated index.
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 

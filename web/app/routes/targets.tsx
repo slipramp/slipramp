@@ -34,6 +34,8 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
   const repositoryId = url.searchParams.get("repositoryId")?.trim() ?? "";
+  const runtime = url.searchParams.get("runtime")?.trim() ?? "";
+  const placement = url.searchParams.get("placement")?.trim() ?? "";
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
   const offset = (requestedPage - 1) * pageSize;
@@ -46,6 +48,8 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         offset,
         q: query || undefined,
         repositoryId: repositoryId || undefined,
+        runtime: runtime || undefined,
+        placement: placement || undefined,
       },
     }),
   ]);
@@ -64,6 +68,8 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       query,
       repositories,
       repositoryId,
+      runtime,
+      placement,
       targets: [],
       totalTargetCount: 0,
     };
@@ -88,13 +94,17 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     query,
     repositories,
     repositoryId,
+    runtime,
+    placement,
     targets: initialTargetsResult.data.items,
     totalTargetCount: initialTargetsResult.data.total,
   };
 }
 
 export default function TargetIndex({ loaderData }: Route.ComponentProps) {
-  const filtered = Boolean(loaderData.query || loaderData.repositoryId);
+  const filtered = Boolean(
+    loaderData.query || loaderData.repositoryId || loaderData.runtime || loaderData.placement,
+  );
 
   return (
     <Stack gap="lg">
@@ -126,6 +136,8 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
             query={loaderData.query}
             repositories={loaderData.repositories}
             repositoryId={loaderData.repositoryId}
+            runtime={loaderData.runtime}
+            placement={loaderData.placement}
           />
 
           {loaderData.targets.length === 0 ? (
@@ -143,7 +155,7 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
               }
               description={
                 filtered
-                  ? "Try a different target, action, or repository filter."
+                  ? "Try a different target, action, repository, Runtime, or Placement filter."
                   : "Connect a repository with an accepted catalog to populate this view."
               }
               title={filtered ? "No matching targets" : "No targets available"}
@@ -151,14 +163,14 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
           ) : (
             <>
               <Paper withBorder>
-                <Table.ScrollContainer minWidth={820} type="native">
+                <Table.ScrollContainer minWidth={900} type="native">
                   <Table highlightOnHover verticalSpacing="sm">
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>Target</Table.Th>
                         <Table.Th>Runtime / placement</Table.Th>
-                        <Table.Th>Desired revision</Table.Th>
-                        <Table.Th aria-label="Actions" />
+                        <Table.Th>Last relevant change</Table.Th>
+                        <Table.Th>Actions</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
@@ -190,29 +202,41 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                           </Table.Td>
                           <Table.Td>
                             <Stack gap={0}>
-                              <Text size="sm">
-                                {target.placement ?? "Action-defined placement"}
-                              </Text>
-                              <Text c="dimmed" size="xs">
-                                {target.runtime ?? "Action-defined runtime"}
-                              </Text>
-                            </Stack>
-                          </Table.Td>
-                          <Table.Td>
-                            <Stack gap={0}>
-                              <CommitReference
-                                commit={target.desiredCommit}
-                                repositoryId={target.repositoryId}
-                              />
-                              {target.desiredCommit.sha !== target.catalogCommit.sha ? (
+                              {target.runtime ? (
+                                <Anchor
+                                  component={Link}
+                                  size="sm"
+                                  to={targetFilterPath(loaderData, "runtime", target.runtime)}
+                                >
+                                  {target.runtime}
+                                </Anchor>
+                              ) : (
+                                <Text size="sm">Action-defined runtime</Text>
+                              )}
+                              {target.placement ? (
+                                <Anchor
+                                  c="dimmed"
+                                  component={Link}
+                                  size="xs"
+                                  to={targetFilterPath(loaderData, "placement", target.placement)}
+                                >
+                                  {target.placement}
+                                </Anchor>
+                              ) : (
                                 <Text c="dimmed" size="xs">
-                                  differs from catalog
+                                  Action-defined placement
                                 </Text>
-                              ) : null}
+                              )}
                             </Stack>
                           </Table.Td>
                           <Table.Td>
-                            <Menu position="bottom-end" shadow="md" width={220}>
+                            <CommitReference
+                              commit={target.desiredCommit}
+                              repositoryId={target.repositoryId}
+                            />
+                          </Table.Td>
+                          <Table.Td>
+                            <Menu position="bottom-start" shadow="md" width={220}>
                               <Menu.Target>
                                 <Button
                                   rightSection={<IconChevronDown aria-hidden size={14} />}
@@ -263,10 +287,14 @@ function TargetFilters({
   query,
   repositories,
   repositoryId,
+  runtime,
+  placement,
 }: Readonly<{
   query: string;
   repositories: Array<{ id: string; name: string }>;
   repositoryId: string;
+  runtime: string;
+  placement: string;
 }>) {
   return (
     <SearchParamFilters
@@ -294,9 +322,45 @@ function TargetFilters({
           name: "repositoryId",
           value: repositoryId,
         },
+        {
+          active: Boolean(runtime),
+          kind: "text",
+          label: "Runtime",
+          name: "runtime",
+          placeholder: "Runtime name",
+          value: runtime,
+        },
+        {
+          active: Boolean(placement),
+          kind: "text",
+          label: "Placement",
+          name: "placement",
+          placeholder: "Placement name",
+          value: placement,
+        },
       ]}
     />
   );
+}
+
+function targetFilterPath(
+  filters: Readonly<{
+    query: string;
+    repositoryId: string;
+    runtime: string;
+    placement: string;
+  }>,
+  name: "runtime" | "placement",
+  value: string,
+) {
+  const searchParams = new URLSearchParams();
+  if (filters.query) searchParams.set("q", filters.query);
+  if (filters.repositoryId) searchParams.set("repositoryId", filters.repositoryId);
+  if (filters.runtime) searchParams.set("runtime", filters.runtime);
+  if (filters.placement) searchParams.set("placement", filters.placement);
+  searchParams.set(name, value);
+
+  return `/targets?${searchParams.toString()}`;
 }
 
 function repositoryNoun(count: number) {

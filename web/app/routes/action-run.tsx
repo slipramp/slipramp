@@ -1,5 +1,6 @@
 import {
   Alert,
+  Anchor,
   Badge,
   Button,
   Code,
@@ -29,13 +30,21 @@ import {
   getRepositoryCatalog,
   listRepositories,
   type Action,
+  type ArtifactDeclaration,
   type Parameter,
   type Target,
 } from "~/api/generated";
 import { CommitReference } from "~/components/git-commit";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader } from "~/components/page";
+import {
+  CommandBlock,
+  MappingTable,
+  ResourceRequirementsTable,
+  TechnicalValue,
+} from "~/components/technical-definition";
 import { pageTitle } from "~/page-title";
+import { targetFilterPath } from "~/target-filter";
 
 import type { Route } from "./+types/action-run";
 
@@ -152,14 +161,14 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
         description={`${targetLabel} · ${loaderData.repository?.name ?? "Repository"}`}
         details={
           <Text c="dimmed" size="sm">
-            Exact revision{" "}
-            <CommitReference
-              commit={target.status.desiredCommit}
-              repositoryId={params.repositoryId}
-            />{" "}
-            · catalog{" "}
+            Runs at catalog{" "}
             <CommitReference
               commit={loaderData.catalog.commit}
+              repositoryId={params.repositoryId}
+            />{" "}
+            · last relevant change{" "}
+            <CommitReference
+              commit={target.status.desiredCommit}
               repositoryId={params.repositoryId}
             />
           </Text>
@@ -184,14 +193,6 @@ function ActionContext({
 }: Readonly<{ actionDefinition: Action; target: Target }>) {
   const effective = effectiveAction(target, actionDefinition);
   const credentials = sortedEntries(effective.credentials);
-  const resources = [
-    ...sortedEntries(effective.resources.requests).map(
-      ([name, value]) => [`Request ${name}`, value] as const,
-    ),
-    ...sortedEntries(effective.resources.limits).map(
-      ([name, value]) => [`Limit ${name}`, value] as const,
-    ),
-  ];
   const artifacts = sortedEntries(actionDefinition.artifacts);
 
   return (
@@ -204,17 +205,34 @@ function ActionContext({
               The command and execution context are frozen into the new Run.
             </Text>
           </Stack>
-          <Stack gap={4}>
-            <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-              Argument array
-            </Text>
-            <Code block>{JSON.stringify(actionDefinition.command, null, 2)}</Code>
-          </Stack>
+          <CommandBlock command={actionDefinition.command} />
+          <TechnicalValue label="Target path" value={target.spec.path ?? "Repository root"} />
           <SimpleGrid cols={{ base: 1, sm: 2 }}>
-            <ContextValue label="Target path" value={target.spec.path ?? "Repository root"} />
-            <ContextValue label="Runtime" value={effective.runtime ?? "Not configured"} />
-            <ContextValue label="Placement" value={effective.placement ?? "Not configured"} />
-            <ContextValue label="Timeout" value={effective.timeout ?? "Placement default"} />
+            <TechnicalValue
+              label="Runtime"
+              value={
+                effective.runtime ? (
+                  <Anchor component={Link} to={targetFilterPath("runtime", effective.runtime)}>
+                    {effective.runtime}
+                  </Anchor>
+                ) : (
+                  "Not configured"
+                )
+              }
+            />
+            <TechnicalValue
+              label="Placement"
+              value={
+                effective.placement ? (
+                  <Anchor component={Link} to={targetFilterPath("placement", effective.placement)}>
+                    {effective.placement}
+                  </Anchor>
+                ) : (
+                  "Not configured"
+                )
+              }
+            />
+            <TechnicalValue label="Timeout" value={effective.timeout ?? "Placement default"} />
           </SimpleGrid>
         </Stack>
       </Paper>
@@ -228,36 +246,17 @@ function ActionContext({
               never shown here.
             </Text>
           </Stack>
-          <ContextEntries
+          <MappingTable
             empty="No credential bindings"
             entries={credentials}
             label="Credential bindings"
           />
-          <ContextEntries empty="Placement defaults" entries={resources} label="Resources" />
-          <Stack gap="xs">
-            <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-              Declared outputs
-            </Text>
-            {artifacts.length === 0 ? (
-              <Text c="dimmed" size="sm">
-                No output artifacts
-              </Text>
-            ) : (
-              <Stack gap="xs">
-                {artifacts.map(([name, artifact]) => (
-                  <Group gap="xs" key={name} wrap="wrap">
-                    <Badge variant="light">{name}</Badge>
-                    <Text size="sm">{artifact.mediaType ?? "Unspecified media type"}</Text>
-                    {artifact.sensitive ? (
-                      <Badge color="orange" size="xs" variant="outline">
-                        Sensitive
-                      </Badge>
-                    ) : null}
-                  </Group>
-                ))}
-              </Stack>
-            )}
-          </Stack>
+          <ResourceRequirementsTable
+            empty="Placement defaults"
+            limits={effective.resources.limits}
+            requests={effective.resources.requests}
+          />
+          <ArtifactOutputs artifacts={artifacts} />
         </Stack>
       </Paper>
     </SimpleGrid>
@@ -371,43 +370,37 @@ function ParameterControl({
   }
 }
 
-function ContextValue({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <Stack gap={2}>
-      <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-        {label}
-      </Text>
-      <Text size="sm">{value}</Text>
-    </Stack>
-  );
-}
-
-function ContextEntries({
-  empty,
-  entries,
-  label,
-}: Readonly<{
-  empty: string;
-  entries: ReadonlyArray<readonly [string, string]>;
-  label: string;
-}>) {
+function ArtifactOutputs({
+  artifacts,
+}: Readonly<{ artifacts: ReadonlyArray<readonly [string, ArtifactDeclaration]> }>) {
   return (
     <Stack gap="xs">
       <Text c="dimmed" fw={700} size="xs" tt="uppercase">
-        {label}
+        Declared outputs
       </Text>
-      {entries.length === 0 ? (
+      {artifacts.length === 0 ? (
         <Text c="dimmed" size="sm">
-          {empty}
+          No output artifacts
         </Text>
       ) : (
-        <Group gap="xs">
-          {entries.map(([name, value]) => (
-            <Badge key={name} variant="light">
-              {name} → {value}
-            </Badge>
+        <Stack gap="xs">
+          {artifacts.map(([name, artifact]) => (
+            <Paper className="technical-data-table" key={name} p="sm" withBorder>
+              <Stack gap="sm">
+                <Group gap="xs" justify="space-between" wrap="wrap">
+                  <Code>{name}</Code>
+                  {artifact.sensitive ? (
+                    <Badge color="orange" size="xs" variant="outline">
+                      Sensitive
+                    </Badge>
+                  ) : null}
+                </Group>
+                <TechnicalValue label="Path" value={artifact.path} />
+                <TechnicalValue label="Media type" value={artifact.mediaType ?? "Unspecified"} />
+              </Stack>
+            </Paper>
           ))}
-        </Group>
+        </Stack>
       )}
     </Stack>
   );

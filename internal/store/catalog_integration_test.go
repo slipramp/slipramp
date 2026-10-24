@@ -419,6 +419,30 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 		t.Errorf("target search = %#v", search)
 	}
 
+	runtimeFiltered, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
+		Runtime: "terraform",
+		Limit:   25,
+	})
+	if err != nil {
+		t.Fatalf("filter active targets by runtime: %v", err)
+	}
+	if runtimeFiltered.Total != 1 || len(runtimeFiltered.Items) != 1 ||
+		runtimeFiltered.Items[0].Target.Metadata.Name != "network" {
+		t.Errorf("runtime target filter = %#v", runtimeFiltered)
+	}
+
+	placementFiltered, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
+		Placement: "infrastructure",
+		Limit:     25,
+	})
+	if err != nil {
+		t.Fatalf("filter active targets by placement: %v", err)
+	}
+	if placementFiltered.Total != 1 || len(placementFiltered.Items) != 1 ||
+		placementFiltered.Items[0].Target.Metadata.Name != "network" {
+		t.Errorf("placement target filter = %#v", placementFiltered)
+	}
+
 	filtered, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
 		RepositoryID: &secondRepositoryID,
 		Limit:        25,

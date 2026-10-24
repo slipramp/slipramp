@@ -26,6 +26,8 @@ type TargetList struct {
 type TargetListFilter struct {
 	RepositoryID *uuid.UUID
 	Query        string
+	Runtime      string
+	Placement    string
 	Limit        int32
 	Offset       int32
 }

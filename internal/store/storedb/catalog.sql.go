@@ -78,29 +78,44 @@ WHERE targets.archived_at IS NULL
   )
   AND (
       $2::text IS NULL
-      OR strpos(lower(targets.name), lower($2)) > 0
-      OR strpos(lower(repositories.name), lower($2)) > 0
+      OR catalog_targets.definition->'spec'->>'runtime' = $2
+  )
+  AND (
+      $3::text IS NULL
+      OR catalog_targets.definition->'spec'->>'placement' = $3
+  )
+  AND (
+      $4::text IS NULL
+      OR strpos(lower(targets.name), lower($4)) > 0
+      OR strpos(lower(repositories.name), lower($4)) > 0
       OR strpos(
           lower(coalesce(catalog_targets.definition->'metadata'->>'title', '')),
-          lower($2)
+          lower($4)
       ) > 0
       OR EXISTS (
           SELECT 1
           FROM jsonb_object_keys(
               catalog_targets.definition->'spec'->'actions'
           ) AS action(name)
-          WHERE strpos(lower(action.name), lower($2)) > 0
+          WHERE strpos(lower(action.name), lower($4)) > 0
       )
   )
 `
 
 type CountActiveTargetsParams struct {
 	RepositoryID pgtype.UUID
+	Runtime      *string
+	Placement    *string
 	SearchQuery  *string
 }
 
 func (q *Queries) CountActiveTargets(ctx context.Context, arg CountActiveTargetsParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countActiveTargets, arg.RepositoryID, arg.SearchQuery)
+	row := q.db.QueryRow(ctx, countActiveTargets,
+		arg.RepositoryID,
+		arg.Runtime,
+		arg.Placement,
+		arg.SearchQuery,
+	)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -300,18 +315,26 @@ WHERE targets.archived_at IS NULL
   )
   AND (
       $2::text IS NULL
-      OR strpos(lower(targets.name), lower($2)) > 0
-      OR strpos(lower(repositories.name), lower($2)) > 0
+      OR catalog_targets.definition->'spec'->>'runtime' = $2
+  )
+  AND (
+      $3::text IS NULL
+      OR catalog_targets.definition->'spec'->>'placement' = $3
+  )
+  AND (
+      $4::text IS NULL
+      OR strpos(lower(targets.name), lower($4)) > 0
+      OR strpos(lower(repositories.name), lower($4)) > 0
       OR strpos(
           lower(coalesce(catalog_targets.definition->'metadata'->>'title', '')),
-          lower($2)
+          lower($4)
       ) > 0
       OR EXISTS (
           SELECT 1
           FROM jsonb_object_keys(
               catalog_targets.definition->'spec'->'actions'
           ) AS action(name)
-          WHERE strpos(lower(action.name), lower($2)) > 0
+          WHERE strpos(lower(action.name), lower($4)) > 0
       )
   )
 ORDER BY
@@ -321,12 +344,14 @@ ORDER BY
     )),
     lower(repositories.name),
     targets.name
-LIMIT $4
-OFFSET $3
+LIMIT $6
+OFFSET $5
 `
 
 type ListActiveTargetsParams struct {
 	RepositoryID pgtype.UUID
+	Runtime      *string
+	Placement    *string
 	SearchQuery  *string
 	ResultOffset int32
 	ResultLimit  int32
@@ -344,6 +369,8 @@ type ListActiveTargetsRow struct {
 func (q *Queries) ListActiveTargets(ctx context.Context, arg ListActiveTargetsParams) ([]ListActiveTargetsRow, error) {
 	rows, err := q.db.Query(ctx, listActiveTargets,
 		arg.RepositoryID,
+		arg.Runtime,
+		arg.Placement,
 		arg.SearchQuery,
 		arg.ResultOffset,
 		arg.ResultLimit,

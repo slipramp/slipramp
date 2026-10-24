@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
@@ -39,7 +40,10 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 			Parameters:        map[string]any{"mode": "safe", "refresh": true},
 			PlacementName:     "infrastructure",
 			ClusterName:       "colo",
-			Source:            run.Source{Type: run.SourceTypeAPI},
+			Snapshot: run.Snapshot{
+				Runtime: catalog.Runtime{Metadata: catalog.Metadata{Name: "terraform"}},
+			},
+			Source: run.Source{Type: run.SourceTypeAPI},
 			CreatedBy: &productidentity.ActorSnapshot{
 				PrincipalID: principalID,
 				Kind:        productidentity.KindUser,
@@ -80,7 +84,8 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	if result.ID != runID || result.Phase != api.RunPhaseQueued ||
-		result.CatalogRevisionID != revisionID || result.Cluster != "colo" ||
+		result.CatalogRevisionID != revisionID || result.Runtime != "terraform" ||
+		result.Placement != "infrastructure" || result.Cluster != "colo" ||
 		!result.CreatedAt.Equal(createdAt) || result.CreatedBy == nil ||
 		result.CreatedBy.PrincipalID != principalID ||
 		result.CreatedBy.DisplayName != "Ada Lovelace" {

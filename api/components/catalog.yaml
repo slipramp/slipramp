@@ -96,6 +96,12 @@ TargetSummary:
       minLength: 1
     desiredCommit:
       $ref: ./common.yaml#/GitCommit
+      description: >-
+        Latest accepted Git commit whose changed paths matched this target's
+        watch patterns, or the commit where the target most recently became
+        active. This is a target-scoped relevance marker for scheduling and Git
+        delivery coalescing, not an applied-infrastructure or Run checkout
+        revision.
 
 Runtime:
   type: object
@@ -166,7 +172,9 @@ TargetStatus:
       description: >-
         Latest accepted Git commit whose changed paths matched this target's
         watch patterns, or the commit where the target most recently became
-        active.
+        active. This is a target-scoped relevance marker for scheduling and Git
+        delivery coalescing, not an applied-infrastructure or Run checkout
+        revision.
 
 ResourceMetadata:
   type: object

@@ -2,18 +2,18 @@ import {
   Alert,
   Anchor,
   Badge,
+  Box,
   Code,
   Group,
   Paper,
-  SimpleGrid,
   Stack,
   Text,
   ThemeIcon,
   Title,
   Tooltip,
 } from "@mantine/core";
-import { IconArrowsDiff, IconCheck, IconMinus } from "@tabler/icons-react";
-import { useState } from "react";
+import { IconArrowRight, IconArrowsDiff, IconCheck, IconMinus } from "@tabler/icons-react";
+import { Fragment, useState } from "react";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -270,22 +270,24 @@ function PipelineComparison({
               : "No Freight artifacts are currently reported."}
           </Text>
         ) : null}
-        <SimpleGrid
-          className="pipeline-flow"
-          cols={{ base: 1, sm: 2, xl: Math.max(1, Math.min(columns.length, 4)) }}
-          spacing="md"
-        >
+        <Box className="pipeline-flow">
           {columns.map((column, index) => (
-            <PipelineStageCard
-              canWrite={canWrite}
-              column={column}
-              columns={columns}
-              index={index}
-              key={column.key}
-              rows={rows}
-            />
+            <Fragment key={column.key}>
+              {index > 0 ? (
+                <Box aria-hidden className="pipeline-stage-arrow">
+                  <IconArrowRight size={38} stroke={1.8} />
+                </Box>
+              ) : null}
+              <PipelineStageCard
+                canWrite={canWrite}
+                column={column}
+                columns={columns}
+                index={index}
+                rows={rows}
+              />
+            </Fragment>
           ))}
-        </SimpleGrid>
+        </Box>
       </Stack>
     </Paper>
   );

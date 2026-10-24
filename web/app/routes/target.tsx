@@ -1,10 +1,9 @@
 import {
   Accordion,
   Alert,
+  Anchor,
   Badge,
   Button,
-  Code,
-  Divider,
   Group,
   Paper,
   SimpleGrid,
@@ -14,6 +13,7 @@ import {
   Title,
 } from "@mantine/core";
 import { IconPlayerPlay } from "@tabler/icons-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 import { actionRunPath, effectiveAction, parameterDelivery, sortedEntries } from "~/action-run";
@@ -21,6 +21,7 @@ import { createServerAPIClient } from "~/api/client.server";
 import {
   getRepositoryCatalog,
   listRepositories,
+  listRuns,
   type Action,
   type ArtifactDeclaration,
   type ArtifactInput,
@@ -28,10 +29,19 @@ import {
   type Target,
 } from "~/api/generated";
 import { pageTitle } from "~/page-title";
+import { targetFilterPath } from "~/target-filter";
 import { CommitReference } from "~/components/git-commit";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, SectionHeader } from "~/components/page";
+import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { RunHistoryButton } from "~/components/run-history-button";
+import {
+  CodeList,
+  CommandBlock,
+  MappingTable,
+  ResourceRequirementsTable,
+  TechnicalValue,
+} from "~/components/technical-definition";
 
 import type { Route } from "./+types/target";
 
@@ -44,9 +54,17 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [repositoriesResult, catalogResult] = await Promise.all([
+  const [repositoriesResult, catalogResult, runsResult] = await Promise.all([
     listRepositories({ client, query: { limit: 200 } }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
+    listRuns({
+      client,
+      query: {
+        limit: recentRunLimit,
+        repositoryId: params.repositoryId,
+        target: params.targetName,
+      },
+    }),
   ]);
   const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
   const target = catalogResult.data?.targets.find(
@@ -59,6 +77,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     repository,
     repositoryId: params.repositoryId,
     repositoryListAvailable: repositoriesResult.data !== undefined,
+    recentRuns: runsResult.data?.items ?? [],
+    runsAvailable: runsResult.data !== undefined,
     target,
   };
 }
@@ -138,32 +158,28 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
         }
         description={target.metadata.title ? target.metadata.name : "Operational target"}
         details={
-          <Stack gap={0}>
-            <Text c="dimmed" size="sm">
-              {target.source.path} · document {target.source.document}
-            </Text>
-            <Text c="dimmed" size="xs">
-              Desired{" "}
-              <CommitReference
-                commit={target.status.desiredCommit}
-                repositoryId={loaderData.repositoryId}
-              />{" "}
-              · Catalog{" "}
-              <CommitReference
-                commit={loaderData.catalog.commit}
-                repositoryId={loaderData.repositoryId}
-              />
-            </Text>
-          </Stack>
+          <Text c="dimmed" size="xs">
+            Last relevant change{" "}
+            <CommitReference
+              commit={target.status.desiredCommit}
+              repositoryId={loaderData.repositoryId}
+            />{" "}
+            · Catalog{" "}
+            <CommitReference
+              commit={loaderData.catalog.commit}
+              repositoryId={loaderData.repositoryId}
+            />
+          </Text>
         }
         title={target.metadata.title ?? target.metadata.name}
       />
 
-      <TargetDefaults target={target} />
-
       <Stack gap="md">
-        <SectionHeader title="Actions" />
-        <Accordion chevronPosition="left" variant="separated">
+        <SectionHeader
+          description="Each action resolves the target defaults below into an immutable execution."
+          title="Actions"
+        />
+        <Accordion chevronPosition="left" className="target-actions" variant="separated">
           {actions.map(([name, actionDefinition]) => (
             <ActionAccordionItem
               actionDefinition={actionDefinition}
@@ -175,6 +191,18 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
           ))}
         </Accordion>
       </Stack>
+
+      <RecentRuns
+        available={loaderData.runsAvailable}
+        description={`The latest ${recentRunLimit} executions of this target.`}
+        emptyMessage="No Runs have been created for this target."
+        linkPlacement
+        runs={loaderData.recentRuns}
+        showTarget={false}
+        viewAllTo={`/runs?repositoryId=${loaderData.repositoryId}&target=${encodeURIComponent(target.metadata.name)}`}
+      />
+
+      <TargetDefaults target={target} />
     </Stack>
   );
 }
@@ -193,12 +221,10 @@ function RepositoryLink({
 
 function TargetDefaults({ target }: Readonly<{ target: Target }>) {
   const credentials = sortedEntries(target.spec.credentials);
-  const requests = sortedEntries(target.spec.resources?.requests);
-  const limits = sortedEntries(target.spec.resources?.limits);
 
   return (
-    <Paper p="md" withBorder>
-      <Stack gap="md">
+    <Paper p="lg" withBorder>
+      <Stack gap="lg">
         <Stack gap={2}>
           <Title order={2}>Target defaults</Title>
           <Text c="dimmed" size="sm">
@@ -206,25 +232,45 @@ function TargetDefaults({ target }: Readonly<{ target: Target }>) {
           </Text>
         </Stack>
 
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
-          <DefinitionValue label="Path" value={target.spec.path ?? "Repository root"} />
-          <DefinitionValue label="Runtime" value={target.spec.runtime ?? "Set by action"} />
-          <DefinitionValue label="Placement" value={target.spec.placement ?? "Set by action"} />
-          <DefinitionValue label="Timeout" value={target.spec.timeout ?? "Placement default"} />
+        <TechnicalValue label="Path" value={target.spec.path ?? "Repository root"} />
+        <SimpleGrid cols={{ base: 1, sm: 3 }}>
+          <TechnicalValue
+            label="Runtime"
+            value={
+              target.spec.runtime ? (
+                <Anchor component={Link} to={targetFilterPath("runtime", target.spec.runtime)}>
+                  {target.spec.runtime}
+                </Anchor>
+              ) : (
+                "Set by action"
+              )
+            }
+          />
+          <TechnicalValue
+            label="Placement"
+            value={
+              target.spec.placement ? (
+                <Anchor component={Link} to={targetFilterPath("placement", target.spec.placement)}>
+                  {target.spec.placement}
+                </Anchor>
+              ) : (
+                "Set by action"
+              )
+            }
+          />
+          <TechnicalValue label="Timeout" value={target.spec.timeout ?? "Placement default"} />
         </SimpleGrid>
 
-        <DefinitionEntries
-          empty="No watch paths"
-          entries={(target.spec.watch ?? []).map((path) => [path, ""] as const)}
-          label="Watch paths"
-          valuesOnly
-        />
-        <DefinitionEntries
+        <CodeList empty="No watch paths" label="Watch paths" values={target.spec.watch ?? []} />
+        <MappingTable
           empty="No target credential bindings"
           entries={credentials}
           label="Credential bindings"
         />
-        <ResourceEntries limits={limits} requests={requests} />
+        <ResourceRequirementsTable
+          limits={target.spec.resources?.limits}
+          requests={target.spec.resources?.requests}
+        />
       </Stack>
     </Paper>
   );
@@ -244,43 +290,43 @@ function ActionAccordionItem({
   const parameterCount = Object.keys(actionDefinition.parameters ?? {}).length;
   const artifactCount = Object.keys(actionDefinition.artifacts ?? {}).length;
   const inputCount = Object.keys(actionDefinition.inputs ?? {}).length;
+  const summary = [
+    parameterCount > 0 ? `${parameterCount} parameter${parameterCount === 1 ? "" : "s"}` : null,
+    artifactCount > 0 ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"}` : null,
+    inputCount > 0 ? `${inputCount} input${inputCount === 1 ? "" : "s"}` : null,
+  ].filter(Boolean);
 
   return (
-    <Accordion.Item id={`action-${name}`} value={name}>
-      <Group align="center" gap="sm" pr="sm" wrap="nowrap">
-        <Accordion.Control style={{ flex: 1 }}>
+    <Accordion.Item className="target-action-card" id={`action-${name}`} value={name}>
+      <Group align="center" className="target-action-row" gap="sm" wrap="wrap">
+        <Accordion.Control style={{ flex: "1 1 24rem", minWidth: 0 }}>
           <Stack gap="xs">
-            <Group justify="space-between">
-              <Group gap="xs">
-                <Text fw={600}>{name}</Text>
-                {actionDefinition.intent ? (
-                  <Badge variant="outline">{actionDefinition.intent}</Badge>
-                ) : null}
-              </Group>
-              <Group gap="xs">
-                {parameterCount > 0 ? (
-                  <Badge variant="light">{parameterCount} parameters</Badge>
-                ) : null}
-                {artifactCount > 0 ? (
-                  <Badge variant="light">{artifactCount} artifacts</Badge>
-                ) : null}
-                {inputCount > 0 ? <Badge variant="light">{inputCount} inputs</Badge> : null}
-              </Group>
+            <Group gap="sm" wrap="wrap">
+              <Text fw={700} size="lg">
+                {name}
+              </Text>
+              {actionDefinition.intent ? (
+                <Badge variant="outline">{actionDefinition.intent}</Badge>
+              ) : null}
+              {summary.length > 0 ? (
+                <Text c="dimmed" size="sm">
+                  {summary.join(" · ")}
+                </Text>
+              ) : null}
             </Group>
-            <Text c="dimmed" lineClamp={1} size="sm">
+            <Text c="dimmed" ff="monospace" lineClamp={1} size="sm">
               {actionDefinition.command.join(" ")}
             </Text>
           </Stack>
         </Accordion.Control>
         <Button
+          className="target-action-button"
           component={Link}
-          leftSection={<IconPlayerPlay aria-hidden size={15} />}
-          size="xs"
+          leftSection={<IconPlayerPlay aria-hidden size={16} />}
           style={{ flexShrink: 0 }}
           to={actionRunPath(repositoryId, target.metadata.name, name)}
-          variant="light"
         >
-          Run
+          Run action
         </Button>
       </Group>
       <Accordion.Panel>
@@ -301,26 +347,38 @@ function ActionDetail({
   const parameters = sortedEntries(actionDefinition.parameters);
   const artifacts = sortedEntries(actionDefinition.artifacts);
   const inputs = sortedEntries(actionDefinition.inputs);
+  const triggers = actionDefinition.triggers ?? [];
 
   return (
     <Stack gap="lg">
-      <Stack gap={4}>
-        <Text c="dimmed" size="xs" tt="uppercase">
-          Argument array
-        </Text>
-        <Code block>{JSON.stringify(actionDefinition.command, null, 2)}</Code>
-      </Stack>
+      <CommandBlock command={actionDefinition.command} />
 
       <SimpleGrid cols={{ base: 1, sm: 3 }}>
         <EffectiveValue
           inherited={!actionDefinition.runtime}
           label="Runtime"
-          value={effective.runtime ?? "Not configured"}
+          value={
+            effective.runtime ? (
+              <Anchor component={Link} to={targetFilterPath("runtime", effective.runtime)}>
+                {effective.runtime}
+              </Anchor>
+            ) : (
+              "Not configured"
+            )
+          }
         />
         <EffectiveValue
           inherited={!actionDefinition.placement}
           label="Placement"
-          value={effective.placement ?? "Not configured"}
+          value={
+            effective.placement ? (
+              <Anchor component={Link} to={targetFilterPath("placement", effective.placement)}>
+                {effective.placement}
+              </Anchor>
+            ) : (
+              "Not configured"
+            )
+          }
         />
         <EffectiveValue
           inherited={!actionDefinition.timeout}
@@ -329,15 +387,17 @@ function ActionDetail({
         />
       </SimpleGrid>
 
-      <DefinitionEntries
-        empty="No credential bindings"
-        entries={sortedEntries(effective.credentials)}
-        label="Effective credential bindings"
-      />
-      <ResourceEntries
-        limits={sortedEntries(effective.resources.limits)}
-        requests={sortedEntries(effective.resources.requests)}
-      />
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
+        <MappingTable
+          empty="No credential bindings"
+          entries={sortedEntries(effective.credentials)}
+          label="Effective credential bindings"
+        />
+        <ResourceRequirementsTable
+          limits={effective.resources.limits}
+          requests={effective.resources.requests}
+        />
+      </SimpleGrid>
 
       {inputs.length > 0 ? (
         <Alert color="blue" title="Artifact input required">
@@ -345,38 +405,40 @@ function ActionDetail({
         </Alert>
       ) : null}
 
-      <Divider />
-      <DefinitionTable
-        columns={["Parameter", "Type", "Required", "Delivery", "Allowed values"]}
-        empty="No parameters"
-        rows={parameters.map(([parameterName, parameter]) =>
-          parameterRow(parameterName, parameter),
-        )}
-        title="Parameters"
-      />
-      <DefinitionTable
-        columns={["Artifact", "Path", "Media type", "Sensitive"]}
-        empty="No declared artifacts"
-        rows={artifacts.map(([artifactName, artifact]) => artifactRow(artifactName, artifact))}
-        title="Artifacts"
-      />
-      <DefinitionTable
-        columns={["Input", "Source action", "Mount path", "Compatibility"]}
-        empty="No artifact inputs"
-        rows={inputs.map(([inputName, input]) => inputRow(inputName, input))}
-        title="Inputs"
-      />
-    </Stack>
-  );
-}
-
-function DefinitionValue({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <Stack gap={0}>
-      <Text c="dimmed" size="xs" tt="uppercase">
-        {label}
-      </Text>
-      <Text size="sm">{value}</Text>
+      {parameters.length > 0 ? (
+        <DefinitionTable
+          columns={["Parameter", "Type", "Required", "Delivery", "Allowed values"]}
+          rows={parameters.map(([parameterName, parameter]) =>
+            parameterRow(parameterName, parameter),
+          )}
+          title="Parameters"
+        />
+      ) : null}
+      {artifacts.length > 0 ? (
+        <DefinitionTable
+          columns={["Artifact", "Path", "Media type", "Sensitive"]}
+          rows={artifacts.map(([artifactName, artifact]) => artifactRow(artifactName, artifact))}
+          title="Artifacts"
+        />
+      ) : null}
+      {inputs.length > 0 ? (
+        <DefinitionTable
+          columns={["Input", "Source action", "Mount path", "Compatibility"]}
+          rows={inputs.map(([inputName, input]) => inputRow(inputName, input))}
+          title="Inputs"
+        />
+      ) : null}
+      {triggers.length > 0 ? (
+        <DefinitionTable
+          columns={["Trigger", "Event", "Static parameters"]}
+          rows={triggers.map((trigger) => [
+            trigger.name,
+            "Git change",
+            trigger.parameters ? JSON.stringify(trigger.parameters) : "—",
+          ])}
+          title="Triggers"
+        />
+      ) : null}
     </Stack>
   );
 }
@@ -385,84 +447,25 @@ function EffectiveValue({
   inherited,
   label,
   value,
-}: Readonly<{ inherited: boolean; label: string; value: string }>) {
+}: Readonly<{ inherited: boolean; label: string; value: ReactNode }>) {
   return (
-    <Stack gap={2}>
-      <Text c="dimmed" size="xs" tt="uppercase">
-        {label}
-      </Text>
-      <Text fw={500} size="sm">
-        {value}
-      </Text>
-      <Text c="dimmed" size="xs">
-        {inherited ? "Inherited" : "Action override"}
-      </Text>
-    </Stack>
+    <TechnicalValue
+      description={inherited ? "Inherited from target" : "Action override"}
+      label={label}
+      value={value}
+    />
   );
-}
-
-function DefinitionEntries({
-  empty,
-  entries,
-  label,
-  valuesOnly = false,
-}: Readonly<{
-  empty: string;
-  entries: ReadonlyArray<readonly [string, string]>;
-  label: string;
-  valuesOnly?: boolean;
-}>) {
-  return (
-    <Stack gap="xs">
-      <Text c="dimmed" size="xs" tt="uppercase">
-        {label}
-      </Text>
-      {entries.length === 0 ? (
-        <Text c="dimmed" size="sm">
-          {empty}
-        </Text>
-      ) : (
-        <Group gap="xs">
-          {entries.map(([name, value]) => (
-            <Badge key={name} variant="light">
-              {valuesOnly ? name : `${name} → ${value}`}
-            </Badge>
-          ))}
-        </Group>
-      )}
-    </Stack>
-  );
-}
-
-function ResourceEntries({
-  limits,
-  requests,
-}: Readonly<{
-  limits: ReadonlyArray<readonly [string, string]>;
-  requests: ReadonlyArray<readonly [string, string]>;
-}>) {
-  const entries = [
-    ...requests.map(([name, value]) => [`Request ${name}`, value] as const),
-    ...limits.map(([name, value]) => [`Limit ${name}`, value] as const),
-  ];
-
-  return <DefinitionEntries empty="No resource values" entries={entries} label="Resources" />;
 }
 
 function DefinitionTable({
   columns,
-  empty,
   rows,
   title,
-}: Readonly<{ columns: string[]; empty: string; rows: string[][]; title: string }>) {
+}: Readonly<{ columns: string[]; rows: string[][]; title: string }>) {
   return (
     <Stack gap="xs">
       <Title order={4}>{title}</Title>
-      {rows.length === 0 ? (
-        <Text c="dimmed" size="sm">
-          {empty}
-        </Text>
-      ) : (
+      <Paper className="technical-data-table" withBorder>
         <Table.ScrollContainer minWidth={640} type="native">
           <Table verticalSpacing="xs">
             <Table.Thead>
@@ -483,7 +486,7 @@ function DefinitionTable({
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
-      )}
+      </Paper>
     </Stack>
   );
 }

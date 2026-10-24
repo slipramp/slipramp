@@ -154,7 +154,8 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		"/api/v1/targets?repositoryId="+repositoryID.String()+"&q=network&limit=1&offset=2",
+		"/api/v1/targets?repositoryId="+repositoryID.String()+
+			"&runtime=terraform&placement=infrastructure&q=network&limit=1&offset=2",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -171,7 +172,8 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 	}
 	if catalogs.listCalls != 1 || catalogs.filter.RepositoryID == nil ||
 		*catalogs.filter.RepositoryID != repositoryID ||
-		catalogs.filter.Query != "network" || catalogs.filter.Limit != 1 ||
+		catalogs.filter.Query != "network" || catalogs.filter.Runtime != "terraform" ||
+		catalogs.filter.Placement != "infrastructure" || catalogs.filter.Limit != 1 ||
 		catalogs.filter.Offset != 2 {
 		t.Errorf("target filter = %#v", catalogs.filter)
 	}
@@ -186,7 +188,7 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 	}
 }
 
-func TestListTargetsRejectsInvalidPagination(t *testing.T) {
+func TestListTargetsRejectsInvalidFilters(t *testing.T) {
 	t.Parallel()
 
 	tests := []string{
@@ -194,6 +196,8 @@ func TestListTargetsRejectsInvalidPagination(t *testing.T) {
 		"/api/v1/targets?limit=101",
 		"/api/v1/targets?offset=-1",
 		"/api/v1/targets?q=%20%20",
+		"/api/v1/targets?runtime=%20%20",
+		"/api/v1/targets?placement=INVALID_NAME",
 	}
 	for _, path := range tests {
 		request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, path, nil)

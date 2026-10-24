@@ -362,6 +362,7 @@ func runResponse(
 		Target:                  api.CatalogName(record.TargetName),
 		Action:                  api.CatalogName(record.ActionName),
 		Parameters:              parameters,
+		Runtime:                 api.CatalogName(record.Snapshot.Runtime.Metadata.Name),
 		Placement:               api.CatalogName(record.PlacementName),
 		Cluster:                 api.CatalogName(record.ClusterName),
 		Source:                  apiRunSource(record.Source),

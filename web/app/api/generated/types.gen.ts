@@ -334,6 +334,9 @@ export type TargetSummary = {
   actions: Array<string>;
   runtime?: string;
   placement?: string;
+  /**
+   * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
+   */
   desiredCommit: GitCommit;
 };
 
@@ -486,6 +489,7 @@ export type Run = {
   parameters: {
     [key: string]: ParameterValue;
   };
+  runtime: CatalogName;
   placement: CatalogName;
   cluster: CatalogName;
   source: RunSource;
@@ -989,7 +993,7 @@ export type TargetSpec = {
 
 export type TargetStatus = {
   /**
-   * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active.
+   * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
    */
   desiredCommit: GitCommit;
 };
@@ -1997,6 +2001,14 @@ export type ListTargetsData = {
      * Limit targets to one active repository.
      */
     repositoryId?: string;
+    /**
+     * Limit targets to an exact target-level Runtime default.
+     */
+    runtime?: CatalogName;
+    /**
+     * Limit targets to an exact target-level Placement default.
+     */
+    placement?: CatalogName;
     /**
      * Case-insensitive target, repository, or action search.
      */

@@ -91,10 +91,20 @@ func (d *Database) ListActiveTargets(
 	if filter.Query != "" {
 		searchQuery = &filter.Query
 	}
+	var runtime *string
+	if filter.Runtime != "" {
+		runtime = &filter.Runtime
+	}
+	var placement *string
+	if filter.Placement != "" {
+		placement = &filter.Placement
+	}
 
 	countParams := storedb.CountActiveTargetsParams{
 		RepositoryID: repositoryID,
 		SearchQuery:  searchQuery,
+		Runtime:      runtime,
+		Placement:    placement,
 	}
 	total, err := d.queries.CountActiveTargets(ctx, countParams)
 	if err != nil {
@@ -106,6 +116,8 @@ func (d *Database) ListActiveTargets(
 		storedb.ListActiveTargetsParams{
 			RepositoryID: repositoryID,
 			SearchQuery:  searchQuery,
+			Runtime:      runtime,
+			Placement:    placement,
 			ResultLimit:  filter.Limit,
 			ResultOffset: filter.Offset,
 		},
