@@ -29,6 +29,7 @@ var (
 	errRunLogRejected                         = errors.New("run log was rejected")
 	errRunObservationRejected                 = errors.New("run observation was rejected")
 	errKargoPromotionDispatchRejected         = errors.New("kargo Promotion dispatch report was rejected")
+	errKargoPromotionReconciliationRejected   = errors.New("kargo Promotion reconciliation report was rejected")
 )
 
 type controllerEnroller interface {
@@ -51,6 +52,14 @@ type kargoPromotionDispatchReporter interface {
 	) error
 }
 
+type kargoPromotionReconciliationReporter interface {
+	ReportKargoPromotionReconciliation(
+		context.Context,
+		uuid.UUID,
+		api.KargoPromotionReconciliationReport,
+	) error
+}
+
 type runLogReporter interface {
 	GetLogCursor(context.Context, uuid.UUID) (logCursor, error)
 	AppendLogChunk(context.Context, uuid.UUID, int64, []byte) error
@@ -69,25 +78,27 @@ type runObserver struct {
 }
 
 type Controller struct {
-	clusterName      string
-	serverURL        string
-	logger           *slog.Logger
-	server           commandPoller
-	enrollment       controllerEnroller
-	reports          runObservationReporter
-	promotionReports kargoPromotionDispatchReporter
-	logs             runLogReporter
-	jobs             runJobs
-	retryDelay       time.Duration
-	observeEvery     time.Duration
-	heartbeatEvery   time.Duration
-	now              func() time.Time
-	observerMutex    sync.Mutex
-	observedRuns     map[uuid.UUID]*runObserver
-	observers        sync.WaitGroup
-	stageObservers   []*kargoStageObserver
-	promotions       kargoPromotionCreator
-	workers          sync.WaitGroup
+	clusterName                    string
+	serverURL                      string
+	logger                         *slog.Logger
+	server                         commandPoller
+	enrollment                     controllerEnroller
+	reports                        runObservationReporter
+	promotionReports               kargoPromotionDispatchReporter
+	promotionReconciliationReports kargoPromotionReconciliationReporter
+	logs                           runLogReporter
+	jobs                           runJobs
+	retryDelay                     time.Duration
+	observeEvery                   time.Duration
+	heartbeatEvery                 time.Duration
+	now                            func() time.Time
+	observerMutex                  sync.Mutex
+	observedRuns                   map[uuid.UUID]*runObserver
+	observers                      sync.WaitGroup
+	stageObservers                 []*kargoStageObserver
+	promotions                     kargoPromotionCreator
+	promotionReconciler            kargoPromotionReconciler
+	workers                        sync.WaitGroup
 }
 
 func New(
@@ -116,20 +127,21 @@ func New(
 	}
 
 	controller := &Controller{
-		clusterName:      cfg.ClusterName,
-		serverURL:        cfg.ServerURL,
-		logger:           logger.With("component", "controller"),
-		server:           server,
-		enrollment:       server,
-		reports:          server,
-		promotionReports: server,
-		logs:             server,
-		jobs:             newKubernetesRunJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
-		retryDelay:       pollRetryDelay,
-		observeEvery:     jobObservationPeriod,
-		heartbeatEvery:   observationHeartbeatPeriod,
-		now:              time.Now,
-		observedRuns:     make(map[uuid.UUID]*runObserver),
+		clusterName:                    cfg.ClusterName,
+		serverURL:                      cfg.ServerURL,
+		logger:                         logger.With("component", "controller"),
+		server:                         server,
+		enrollment:                     server,
+		reports:                        server,
+		promotionReports:               server,
+		promotionReconciliationReports: server,
+		logs:                           server,
+		jobs:                           newKubernetesRunJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
+		retryDelay:                     pollRetryDelay,
+		observeEvery:                   jobObservationPeriod,
+		heartbeatEvery:                 observationHeartbeatPeriod,
+		now:                            time.Now,
+		observedRuns:                   make(map[uuid.UUID]*runObserver),
 	}
 	if len(cfg.KargoIntegrations) > 0 {
 		controller.stageObservers = newKargoStageObservers(
@@ -138,7 +150,9 @@ func New(
 			server,
 			logger,
 		)
-		controller.promotions = newDynamicKargoPromotionCreator(cfg.KargoIntegrations, dynamicClient)
+		promotionManager := newDynamicKargoPromotionCreator(cfg.KargoIntegrations, dynamicClient)
+		controller.promotions = promotionManager
+		controller.promotionReconciler = promotionManager
 	}
 
 	return controller, nil
@@ -287,6 +301,14 @@ func (c *Controller) handleCommand(ctx context.Context, command api.ControllerCo
 		}
 
 		return c.handleKargoPromotionCreation(ctx, *command.Promotion)
+	case api.ControllerCommandTypeReconcileKargoPromotion:
+		if command.PromotionReconciliation == nil {
+			c.logger.Warn("reconcile-kargo-promotion command has no payload")
+
+			return nil
+		}
+
+		return c.handleKargoPromotionReconciliation(ctx, *command.PromotionReconciliation)
 	default:
 		c.logger.Warn("unsupported controller command", "type", command.Type)
 

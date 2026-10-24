@@ -45,29 +45,33 @@ const (
 )
 
 var (
-	ErrInvalid                    = errors.New("invalid promotion")
-	ErrStageNotFound              = errors.New("promotion Stage not found")
-	ErrPolicyNotFound             = errors.New("promotion policy not found")
-	ErrIntegrationNotFound        = errors.New("kargo integration not found")
-	ErrIntegrationCluster         = errors.New("kargo integration belongs to another cluster")
-	ErrRepositoryNotAllowed       = errors.New("kargo Stage repository is not allowed by the integration")
-	ErrStageArchived              = errors.New("promotion Stage is archived")
-	ErrStageStale                 = errors.New("promotion Stage observation is stale")
-	ErrRepositoryUnavailable      = errors.New("promotion repository is unavailable")
-	ErrSnapshotConflict           = errors.New("kargo Stage snapshot identity conflicts with durable state")
-	ErrStaleSnapshot              = errors.New("kargo Stage snapshot is stale")
-	ErrPromotionNotFound          = errors.New("promotion not found")
-	ErrNoPreparationWork          = errors.New("no Promotion preparation work is available")
-	ErrIdentityConflict           = errors.New("external Promotion identity already exists")
-	ErrTransitionConflict         = errors.New("promotion state transition conflicts with current state")
-	ErrDecisionConflict           = errors.New("promotion already has a different decision")
-	ErrDecisionNotFound           = errors.New("promotion decision not found")
-	ErrInvalidPreparationArtifact = errors.New("promotion preparation artifact is invalid")
-	ErrFreightNotFound            = errors.New("promotion Freight was not found on the source Stage")
-	ErrFreightSource              = errors.New("promotion Freight source is not accepted by the target Stage")
-	ErrStageScope                 = errors.New("promotion source and target Stages must share integration, cluster, and project")
-	ErrNoCreationDispatch         = errors.New("no Promotion creation dispatch is available")
-	ErrCreationDispatchConflict   = errors.New("promotion creation dispatch conflicts with current state")
+	ErrInvalid                        = errors.New("invalid promotion")
+	ErrStageNotFound                  = errors.New("promotion Stage not found")
+	ErrPolicyNotFound                 = errors.New("promotion policy not found")
+	ErrIntegrationNotFound            = errors.New("kargo integration not found")
+	ErrIntegrationCluster             = errors.New("kargo integration belongs to another cluster")
+	ErrRepositoryNotAllowed           = errors.New("kargo Stage repository is not allowed by the integration")
+	ErrStageArchived                  = errors.New("promotion Stage is archived")
+	ErrStageStale                     = errors.New("promotion Stage observation is stale")
+	ErrRepositoryUnavailable          = errors.New("promotion repository is unavailable")
+	ErrSnapshotConflict               = errors.New("kargo Stage snapshot identity conflicts with durable state")
+	ErrStaleSnapshot                  = errors.New("kargo Stage snapshot is stale")
+	ErrPromotionNotFound              = errors.New("promotion not found")
+	ErrNoPreparationWork              = errors.New("no Promotion preparation work is available")
+	ErrIdentityConflict               = errors.New("external Promotion identity already exists")
+	ErrTransitionConflict             = errors.New("promotion state transition conflicts with current state")
+	ErrDecisionConflict               = errors.New("promotion already has a different decision")
+	ErrDecisionNotFound               = errors.New("promotion decision not found")
+	ErrInvalidPreparationArtifact     = errors.New("promotion preparation artifact is invalid")
+	ErrFreightNotFound                = errors.New("promotion Freight was not found on the source Stage")
+	ErrFreightSource                  = errors.New("promotion Freight source is not accepted by the target Stage")
+	ErrStageScope                     = errors.New("promotion source and target Stages must share integration, cluster, and project")
+	ErrNoCreationDispatch             = errors.New("no Promotion creation dispatch is available")
+	ErrCreationDispatchConflict       = errors.New("promotion creation dispatch conflicts with current state")
+	ErrNoCreationReconciliation       = errors.New("no Promotion creation reconciliation is available")
+	ErrCreationReconciliationConflict = errors.New(
+		"promotion creation reconciliation conflicts with current state",
+	)
 )
 
 type PolicyMode string
@@ -151,6 +155,8 @@ type Promotion struct {
 	LastDispatchAt               *time.Time
 	DispatchedAt                 *time.Time
 	KargoPromotionUID            *string
+	NextReconciliationAt         *time.Time
+	LastReconciliationAt         *time.Time
 	PreparationRepositoryID      *uuid.UUID
 	PreparationCatalogRevisionID *uuid.UUID
 	PreparationRunID             *uuid.UUID
@@ -354,7 +360,7 @@ func (p Promotion) Validate() error {
 	if !p.Source.Valid() {
 		return fmt.Errorf("%w: Promotion source is invalid", ErrInvalid)
 	}
-	if err := validateText("external Promotion ID", p.ExternalPromotionID, maximumTextLength); err != nil {
+	if err := validateText("external Promotion ID", p.ExternalPromotionID, maximumKargoPromotionNameLength); err != nil {
 		return err
 	}
 	if !validJSONObject(p.StageSnapshot) || !validJSONObject(p.RepositorySnapshot) ||
@@ -399,7 +405,8 @@ func (p Promotion) Validate() error {
 	}
 	if p.Source == SourceKargo {
 		if p.SourceStageID != nil || len(p.SelectedFreightSnapshot) != 0 || p.DispatchAttemptCount != 0 ||
-			p.NextDispatchAt != nil || p.LastDispatchAt != nil || p.DispatchedAt != nil || p.KargoPromotionUID != nil {
+			p.NextDispatchAt != nil || p.LastDispatchAt != nil || p.DispatchedAt != nil || p.KargoPromotionUID != nil ||
+			p.NextReconciliationAt != nil || p.LastReconciliationAt != nil {
 			return fmt.Errorf("%w: Kargo-originated Promotion cannot have creation dispatch state", ErrInvalid)
 		}
 	} else {
@@ -423,6 +430,20 @@ func (p Promotion) Validate() error {
 		if p.DispatchedAt == nil {
 			return fmt.Errorf("%w: Kargo Promotion UID requires successful dispatch time", ErrInvalid)
 		}
+	}
+	if p.NextReconciliationAt != nil &&
+		(p.Source != SourceSlipramp || p.Status != StatusCreating || p.KargoPromotionUID == nil) {
+		return fmt.Errorf("%w: only materialized creating Promotions can be due for reconciliation", ErrInvalid)
+	}
+	if p.Status == StatusCreating && p.KargoPromotionUID != nil && p.NextReconciliationAt == nil {
+		return fmt.Errorf("%w: materialized creating Promotion must be due for reconciliation", ErrInvalid)
+	}
+	if p.LastReconciliationAt != nil && (p.Source != SourceSlipramp || p.KargoPromotionUID == nil) {
+		return fmt.Errorf("%w: Promotion reconciliation requires a materialized Kargo resource", ErrInvalid)
+	}
+	if (p.NextReconciliationAt != nil && p.NextReconciliationAt.Before(p.CreatedAt)) ||
+		(p.LastReconciliationAt != nil && p.LastReconciliationAt.Before(p.CreatedAt)) {
+		return fmt.Errorf("%w: Promotion reconciliation times cannot precede creation", ErrInvalid)
 	}
 	if p.NextDispatchAt != nil && p.DispatchedAt != nil {
 		return fmt.Errorf("%w: Promotion cannot be due for dispatch after successful delivery", ErrInvalid)

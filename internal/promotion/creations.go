@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +13,8 @@ import (
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
+
+const maximumKargoPromotionNameLength = 253
 
 type OperatorPromotionRequest struct {
 	TargetStageID uuid.UUID
@@ -31,6 +34,16 @@ type OperatorPromotionAcceptance struct {
 	AcceptedAt                 time.Time
 	MaximumStageObservationAge time.Duration
 	PendingReviewRetention     time.Duration
+}
+
+func CreationExternalName(stageName string, promotionID uuid.UUID) string {
+	suffix := "-slipramp-" + promotionID.String()
+	maximumPrefixLength := maximumKargoPromotionNameLength - len(suffix)
+	if len(stageName) > maximumPrefixLength {
+		stageName = strings.TrimRight(stageName[:maximumPrefixLength], "-.")
+	}
+
+	return stageName + suffix
 }
 
 type OperatorPromotionStore interface {

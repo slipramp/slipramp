@@ -744,6 +744,8 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		LastDispatchAt:               applicationTime(row.LastDispatchAt),
 		DispatchedAt:                 applicationTime(row.DispatchedAt),
 		KargoPromotionUID:            row.KargoPromotionUid,
+		NextReconciliationAt:         applicationTime(row.NextReconciliationAt),
+		LastReconciliationAt:         applicationTime(row.LastReconciliationAt),
 		PreparationRepositoryID:      applicationUUID(row.PreparationRepositoryID),
 		PreparationCatalogRevisionID: applicationUUID(row.PreparationCatalogRevisionID),
 		PreparationRunID:             applicationUUID(row.PreparationRunID),

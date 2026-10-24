@@ -33,6 +33,11 @@ type PromotionCreationDispatchService interface {
 	Report(context.Context, string, promotion.CreationDispatchReport) error
 }
 
+type PromotionCreationReconciliationService interface {
+	Next(context.Context, string) (promotion.CreationReconciliationCommand, error)
+	Report(context.Context, string, promotion.CreationReconciliationReport) error
+}
+
 type PromotionStageService interface {
 	ReplaceStageSnapshot(
 		ctx context.Context,
@@ -738,6 +743,8 @@ func promotionResponse(
 		LastDispatchAt:         record.LastDispatchAt,
 		DispatchedAt:           record.DispatchedAt,
 		KargoPromotionUID:      record.KargoPromotionUID,
+		NextReconciliationAt:   record.NextReconciliationAt,
+		LastReconciliationAt:   record.LastReconciliationAt,
 		PreparationRunID:       record.PreparationRunID,
 		GitDiffArtifactID:      record.GitDiffArtifactID,
 		ArgoDiffArtifactID:     record.ArgoDiffArtifactID,

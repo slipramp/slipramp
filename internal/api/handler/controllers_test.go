@@ -364,7 +364,7 @@ func TestControllerPollDispatchesKargoPromotionBeforeRunAssignment(t *testing.T)
 	dispatches := &recordingPromotionDispatchService{next: promotion.CreationCommand{
 		PromotionID:  promotionID,
 		Attempt:      2,
-		ExternalName: "slipramp-" + promotionID.String(),
+		ExternalName: "external-dns-prod-slipramp-" + promotionID.String(),
 		Integration:  "prod",
 		Project:      "kargo-core",
 		Stage:        "external-dns-prod",
@@ -414,7 +414,7 @@ func TestControllerReportsKargoPromotionDispatch(t *testing.T) {
 		context.Background(),
 		http.MethodPost,
 		"/controller/v1/promotions/"+promotionID.String()+"/dispatch",
-		strings.NewReader(`{"attempt":2,"result":"created","kargoUid":"promotion-uid"}`),
+		strings.NewReader(`{"attempt":2,"result":"created","kargoName":"stage.01test.freight","kargoUid":"promotion-uid"}`),
 	)
 	request.Header.Set("Authorization", "Bearer controller-token")
 	request.Header.Set("Content-Type", "application/json")
@@ -428,8 +428,98 @@ func TestControllerReportsKargoPromotionDispatch(t *testing.T) {
 	}
 	if dispatches.reportCalls != 1 || dispatches.reportCluster != "colo" ||
 		dispatches.report.PromotionID != promotionID || dispatches.report.Attempt != 2 ||
+		dispatches.report.KargoName == nil || *dispatches.report.KargoName != "stage.01test.freight" ||
 		dispatches.report.KargoUID == nil || *dispatches.report.KargoUID != "promotion-uid" {
 		t.Errorf("report = %#v for cluster %q", dispatches.report, dispatches.reportCluster)
+	}
+	if controllers.calls != 1 {
+		t.Errorf("controller contacts = %d, want 1", controllers.calls)
+	}
+}
+
+func TestControllerPollReconcilesMaterializedKargoPromotionBeforeRunAssignment(t *testing.T) {
+	t.Parallel()
+
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1963")
+	reconciliations := &recordingPromotionReconciliationService{next: promotion.CreationReconciliationCommand{
+		PromotionID: promotionID,
+		Integration: "prod",
+		Project:     "kargo-core",
+		KargoName:   "external-dns-prod.01test.freight",
+		KargoUID:    "promotion-uid",
+	}}
+	runs := &recordingRunService{next: runAssignmentRecord()}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/poll?timeoutSeconds=0",
+		nil,
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	response := httptest.NewRecorder()
+
+	newPromotionReconciliationTestHandler(
+		&recordingClusterService{},
+		runs,
+		reconciliations,
+	).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	var command api.ControllerCommand
+	if err := json.NewDecoder(response.Body).Decode(&command); err != nil {
+		t.Fatal(err)
+	}
+	if command.Type != api.ControllerCommandTypeReconcileKargoPromotion ||
+		command.PromotionReconciliation == nil || command.PromotionReconciliation.ID != promotionID ||
+		command.PromotionReconciliation.KargoName != reconciliations.next.KargoName ||
+		command.PromotionReconciliation.KargoUID != reconciliations.next.KargoUID {
+		t.Errorf("command = %#v", command)
+	}
+	if reconciliations.nextCluster != "colo" || reconciliations.nextCalls != 1 || runs.nextCalls != 0 {
+		t.Errorf(
+			"reconciliation calls = %d for %q, Run calls = %d",
+			reconciliations.nextCalls,
+			reconciliations.nextCluster,
+			runs.nextCalls,
+		)
+	}
+}
+
+func TestControllerReportsKargoPromotionReconciliation(t *testing.T) {
+	t.Parallel()
+
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1964")
+	reconciliations := &recordingPromotionReconciliationService{}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/controller/v1/promotions/"+promotionID.String()+"/reconciliation",
+		strings.NewReader(`{
+          "kargoName":"external-dns-prod.01test.freight",
+          "kargoUid":"promotion-uid",
+          "phase":"Succeeded",
+          "diagnostic":"terminal before callback"
+        }`),
+	)
+	request.Header.Set("Authorization", "Bearer controller-token")
+	request.Header.Set("Content-Type", "application/json")
+	controllers := &recordingClusterService{}
+	response := httptest.NewRecorder()
+
+	newPromotionReconciliationTestHandler(controllers, nil, reconciliations).ServeHTTP(response, request)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusNoContent, response.Body)
+	}
+	if reconciliations.reportCalls != 1 || reconciliations.reportCluster != "colo" ||
+		reconciliations.report.PromotionID != promotionID ||
+		reconciliations.report.KargoName != "external-dns-prod.01test.freight" ||
+		reconciliations.report.KargoUID != "promotion-uid" ||
+		reconciliations.report.Phase != promotion.CreationReconciliationSucceeded ||
+		reconciliations.report.Diagnostic != "terminal before callback" {
+		t.Errorf("report = %#v for cluster %q", reconciliations.report, reconciliations.reportCluster)
 	}
 	if controllers.calls != 1 {
 		t.Errorf("controller contacts = %d, want 1", controllers.calls)
@@ -461,7 +551,7 @@ func TestControllerKargoPromotionDispatchMapsFailures(t *testing.T) {
 				context.Background(),
 				http.MethodPost,
 				"/controller/v1/promotions/018f90ff-9fd8-7b5f-b7e1-f32ff54c1961/dispatch",
-				strings.NewReader(`{"attempt":1,"result":"created","kargoUid":"promotion-uid"}`),
+				strings.NewReader(`{"attempt":1,"result":"created","kargoName":"stage.01test.freight","kargoUid":"promotion-uid"}`),
 			)
 			if test.token != "" {
 				request.Header.Set("Authorization", "Bearer "+test.token)
@@ -891,6 +981,17 @@ type recordingPromotionDispatchService struct {
 	reportCluster string
 }
 
+type recordingPromotionReconciliationService struct {
+	next          promotion.CreationReconciliationCommand
+	nextErr       error
+	nextCalls     int
+	nextCluster   string
+	report        promotion.CreationReconciliationReport
+	reportErr     error
+	reportCalls   int
+	reportCluster string
+}
+
 func (s *recordingPromotionDispatchService) Next(
 	_ context.Context,
 	clusterName string,
@@ -911,6 +1012,26 @@ func (s *recordingPromotionDispatchService) Report(
 	return s.reportErr
 }
 
+func (s *recordingPromotionReconciliationService) Next(
+	_ context.Context,
+	clusterName string,
+) (promotion.CreationReconciliationCommand, error) {
+	s.nextCalls++
+	s.nextCluster = clusterName
+	return s.next, s.nextErr
+}
+
+func (s *recordingPromotionReconciliationService) Report(
+	_ context.Context,
+	clusterName string,
+	report promotion.CreationReconciliationReport,
+) error {
+	s.reportCalls++
+	s.reportCluster = clusterName
+	s.report = report
+	return s.reportErr
+}
+
 func newPromotionDispatchTestHandler(
 	clusters ClusterService,
 	runs RunService,
@@ -923,6 +1044,22 @@ func newPromotionDispatchTestHandler(
 			ControllerIdentities: identities,
 			Runs:                 runs,
 			PromotionDispatches:  dispatches,
+		},
+		HTTPOptions{},
+	)
+}
+
+func newPromotionReconciliationTestHandler(
+	clusters ClusterService,
+	runs RunService,
+	reconciliations PromotionCreationReconciliationService,
+) http.Handler {
+	return NewHTTP(
+		Dependencies{
+			Clusters:                 clusters,
+			ControllerIdentities:     controllerIdentityFor("controller-token", "colo"),
+			Runs:                     runs,
+			PromotionReconciliations: reconciliations,
 		},
 		HTTPOptions{},
 	)

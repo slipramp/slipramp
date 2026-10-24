@@ -93,6 +93,12 @@ type controllerAPI interface {
 		body api.ReportKargoPromotionDispatchJSONRequestBody,
 		reqEditors ...api.RequestEditorFn,
 	) (*api.ReportKargoPromotionDispatchResponse, error)
+	ReportKargoPromotionReconciliationWithResponse(
+		ctx context.Context,
+		promotionID uuid.UUID,
+		body api.ReportKargoPromotionReconciliationJSONRequestBody,
+		reqEditors ...api.RequestEditorFn,
+	) (*api.ReportKargoPromotionReconciliationResponse, error)
 	ReplaceKargoStageSnapshotWithResponse(
 		ctx context.Context,
 		integration api.CatalogName,
@@ -303,6 +309,37 @@ func (c *serverClient) ReportKargoPromotionDispatch(
 		)
 	default:
 		return rejectedServerResponse("report Kargo Promotion dispatch", response.StatusCode(), nil)
+	}
+}
+
+func (c *serverClient) ReportKargoPromotionReconciliation(
+	ctx context.Context,
+	promotionID uuid.UUID,
+	report api.KargoPromotionReconciliationReport,
+) error {
+	response, err := c.api.ReportKargoPromotionReconciliationWithResponse(
+		ctx,
+		promotionID,
+		report,
+		controllerAuthorization(c.bearerToken),
+	)
+	if err != nil {
+		return fmt.Errorf("report Kargo Promotion reconciliation: %w", err)
+	}
+
+	switch response.StatusCode() {
+	case http.StatusNoContent:
+		return nil
+	case http.StatusUnauthorized:
+		return errControllerCredentialRejected
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusConflict:
+		return rejectedServerResponse(
+			"report Kargo Promotion reconciliation",
+			response.StatusCode(),
+			errKargoPromotionReconciliationRejected,
+		)
+	default:
+		return rejectedServerResponse("report Kargo Promotion reconciliation", response.StatusCode(), nil)
 	}
 }
 

@@ -177,7 +177,6 @@ function PromotionChoiceDetails({ choice }: Readonly<{ choice: PromotionChoice }
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <PromotionFact label="Source Stage" value={choice.sourceStageName} />
           <PromotionFact label="Source environment" value={choice.sourceEnvironment} />
-          <PromotionFact label="Freight" value={choice.freight.name} />
           <PromotionFact label="Origin" value={choice.freight.origin} />
         </SimpleGrid>
         {choice.freight.artifacts.length === 0 ? (

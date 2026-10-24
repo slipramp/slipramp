@@ -119,6 +119,7 @@ ControllerCommand:
         - run-assignment
         - cancel-run
         - create-kargo-promotion
+        - reconcile-kargo-promotion
     assignment:
       $ref: "#/RunAssignment"
       description: Present when type is run-assignment.
@@ -128,6 +129,9 @@ ControllerCommand:
     promotion:
       $ref: "#/KargoPromotionCreationCommand"
       description: Present when type is create-kargo-promotion.
+    promotionReconciliation:
+      $ref: "#/KargoPromotionReconciliationCommand"
+      description: Present when type is reconcile-kargo-promotion.
 
 KargoPromotionCreationCommand:
   type: object
@@ -196,11 +200,77 @@ KargoPromotionDispatchReport:
       minLength: 1
       maxLength: 200
       description: Kubernetes UID; required when result is created.
+    kargoName:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Admission-assigned Kargo Promotion name; required when result is created.
     diagnostic:
       type: string
       minLength: 1
       maxLength: 4096
       description: Bounded failure detail; required for retryable and failed results.
+
+KargoPromotionReconciliationCommand:
+  type: object
+  required:
+    - id
+    - integration
+    - project
+    - kargoName
+    - kargoUid
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Durable Slipramp Promotion identity carried by the stable annotation.
+    integration:
+      $ref: ./runs.yaml#/CatalogName
+    project:
+      $ref: ./runs.yaml#/CatalogName
+      description: Kubernetes namespace containing the Kargo project.
+    kargoName:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Canonical admission-assigned Kargo Promotion name.
+    kargoUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Kubernetes UID recorded when the Promotion was materialized.
+
+KargoPromotionReconciliationReport:
+  type: object
+  required:
+    - kargoName
+    - kargoUid
+    - phase
+    - diagnostic
+  properties:
+    kargoName:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Canonical name of the observed Kargo Promotion.
+    kargoUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Kubernetes UID of the observed Kargo Promotion.
+    phase:
+      type: string
+      enum:
+        - Failed
+        - Errored
+        - Aborted
+        - Succeeded
+      description: Terminal Kargo phase observed before callback hydration.
+    diagnostic:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Bounded description of the terminal pre-callback state.
 
 CancelRunCommand:
   type: object

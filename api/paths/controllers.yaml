@@ -132,9 +132,10 @@ poll:
     summary: Poll for a controller command
     description: >-
       Records the authenticated cluster controller as healthy and waits to
-      assign or cancel a Run or create a Kargo Promotion for its cluster. An
-      empty response means no command became available before the requested
-      wait elapsed.
+      assign or cancel a Run, create a Kargo Promotion, or reconcile a
+      materialized Promotion awaiting callback for its cluster. An empty
+      response means no command became available before the requested wait
+      elapsed.
     security:
       - ControllerBearer: []
     tags:
@@ -246,6 +247,74 @@ promotionDispatch:
               $ref: ../components/common.yaml#/Problem
       "500":
         description: The dispatch result could not be recorded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+promotionReconciliation:
+  post:
+    operationId: reportKargoPromotionReconciliation
+    summary: Report terminal Kargo Promotion reconciliation
+    description: >-
+      Reports a terminal phase observed on a materialized operator-started
+      Kargo Promotion before its callback hydrated Slipramp state. Identity is
+      checked against both the canonical Kargo name and Kubernetes UID.
+      Repeating an accepted report is idempotent, and a callback that wins the
+      row lock first cannot be moved backward.
+    security:
+      - ControllerBearer: []
+    tags:
+      - Controllers
+    parameters:
+      - name: promotionId
+        in: path
+        required: true
+        description: Slipramp Promotion whose Kargo resource was reconciled.
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/controllers.yaml#/KargoPromotionReconciliationReport
+    responses:
+      "204":
+        description: The terminal phase was recorded or newer callback state already won the race.
+      "400":
+        description: The reconciliation report is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Promotion is not assigned to this controller's cluster.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The report conflicts with the canonical Kargo Promotion identity.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The reconciliation result could not be recorded.
         content:
           application/problem+json:
             schema:

@@ -126,7 +126,7 @@ func (d *Database) CreateOperatorPromotion(
 		ID:                      acceptance.ID,
 		Source:                  promotion.SourceSlipramp,
 		Integration:             target.Integration,
-		ExternalPromotionID:     "slipramp-" + acceptance.ID.String(),
+		ExternalPromotionID:     promotion.CreationExternalName(target.Name, acceptance.ID),
 		StageID:                 target.ID,
 		SourceStageID:           &sourceStageID,
 		StageSnapshot:           stageSnapshot,

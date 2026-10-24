@@ -23,7 +23,7 @@ unless explicitly requested.
 | Component             | Responsibility                                                                                     | Boundary                                                               |
 | --------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Slipramp Server       | Repository refresh, catalog validation, scheduling, identity, Promotions, notifications, artifact ingestion, API | No kubeconfig, Kubernetes client, or direct Kubernetes API access      |
-| Controller            | Outbound command polling, local Jobs, observations, log forwarding, optional Kargo Stage discovery | One replica per execution Cluster; namespace-scoped Kubernetes access  |
+| Controller            | Outbound command polling, local Jobs, observations, log forwarding, and configured Kargo discovery/materialization/reconciliation | One replica per execution Cluster; namespace-scoped Kubernetes access  |
 | Harness               | Wrap checkout and action processes, transfer artifacts, forward signals, preserve exit status      | Injected by Slipramp; runtime images and tools need no Slipramp SDK    |
 | Web                   | React Router SSR and browser UI                                                                    | Uses the generated Server client and forwards the browser's session    |
 | PostgreSQL            | Authoritative product state, identity, history, metadata, and scheduling coordination              | Stores credential digests and references, never injected secret values |
@@ -479,18 +479,23 @@ Repository, effective policy, selected Freight, and actor.
 
 Each request creates one Kargo Promotion for one exact Freight and one target
 Stage. The durable record uses source `slipramp`, snapshots the source Stage ID
-and selected Freight, and derives the external name `slipramp-<promotion-id>`.
-It starts in `creating`; request digest, base and candidate revisions, and
-candidate branch remain absent until callback hydration. Dispatch attempts,
-next and last attempt times, successful dispatch time, Kargo UID, and bounded
-diagnostics remain on the Promotion rather than a second public resource.
+and selected Freight, and uses
+`<stage-name>-slipramp-<promotion-id>` as its provisional external name. Kargo
+admission may replace that name; the Controller reports the admitted name and
+Kubernetes UID, and the Server atomically makes that name authoritative before
+callback correlation. The record starts in `creating`;
+request digest, base and candidate revisions, and candidate branch remain absent
+until callback hydration. Dispatch attempts, next and last attempt times,
+successful dispatch time, Kargo UID, next and last reconciliation times, and
+bounded diagnostics remain on the Promotion rather than a second public
+resource.
 
 The lifecycle is:
 
 ```text
 creating --Kargo callback--> preparing --> pending --> approved/rejected/expired
     |                              `-----------------------------> error
-    `--terminal creation failure-------------------------------> error
+    `--terminal creation failure or pre-callback Kargo phase---> error
 ```
 
 An automatic-policy callback moves directly from `creating` to `approved`.
@@ -498,30 +503,49 @@ An automatic-policy callback moves directly from `creating` to `approved`.
 after Kubernetes creation while waiting for Kargo to submit callback data.
 
 Controller polling prioritizes Run cancellations, then due Promotion creation,
-then ordinary Run assignment. Claiming creation work atomically advances its
-attempt and next-attempt time under a fixed bounded backoff policy. The Server
-never uses Kubernetes or Kargo clients; a Controller configured for the
-integration and project namespace verifies the snapshotted Stage UID and
-creates the deterministic Kargo resource with
+then due pre-callback Promotion reconciliation, then ordinary Run assignment.
+Claiming creation work atomically advances its attempt and next-attempt time
+under a fixed bounded backoff policy. The Server never uses Kubernetes or Kargo
+clients; a Controller configured for the integration and project namespace
+verifies the snapshotted Stage UID and creates the Kargo resource with
 `slipramp.com/promotion-id: <promotion-id>`, the target Stage, and the exact
-Freight. It adopts only an existing object whose annotation and spec match and
-durably reports `created`, `retryable`, or `failed` with the Kargo UID or a
-bounded diagnostic. Object creation and result reporting are idempotent, so an
-ambiguous poll or report is safe. Transient Kubernetes and transport failures
-back off without blocking later eligible work; invalid or forbidden admissions
-and an exhausted retry budget move the Promotion to `error`. The namespace Role
-permits Stage get/list/promote and Promotion get/create only; no Kargo API
+Freight. Before creation or after an ambiguous result, it finds the object by
+that stable annotation and adopts only an object whose annotation and spec
+match. It durably reports `created`, `retryable`, or `failed` with the admitted
+Kargo name and UID or a bounded diagnostic. Object creation and result
+reporting are idempotent, so an ambiguous poll or report is safe. Transient
+Kubernetes and transport failures back off without blocking later eligible
+work; invalid or forbidden admissions and an exhausted retry budget move the
+Promotion to `error`. The namespace Role permits Stage get/list/promote and
+Promotion create/get/list only; no Kargo API
 credential, impersonation, Job, broker, or second Controller channel is used.
+
+Successful materialization starts a durable fixed-interval reconciliation
+schedule while the Promotion remains `creating`. Each claim moves its next due
+time before delivery, so a lost command, lost report, Server restart, or
+Controller restart only delays another inspection. The responsible Controller
+lists the project namespace, finds exactly one resource by the stable
+`slipramp.com/promotion-id` annotation, and requires both its Kubernetes UID and
+canonical admission-assigned name to match the durable identity. Nonterminal
+and missing phases leave the Promotion scheduled. If the resource reaches
+`Failed`, `Errored`, `Aborted`, or `Succeeded` before callback hydration, the
+Controller reports the terminal phase and a bounded diagnostic over the same
+authenticated outbound API.
 
 The ordinary Kargo callback hydrates a matching Slipramp-originated Promotion
 only while it is `creating`. It verifies the snapshotted project and Stage,
 fills the request digest and Git facts, preserves the original actor and all
-creation snapshots, and advances to `preparing` or `approved` according to the
-snapshotted policy. Callback hydration and Controller result reporting lock the
-same Promotion, so either order is safe and a late successful report only adds
-the Kargo UID and delivery time. Repeating an identical callback is idempotent;
-different content for the same external identity conflicts. A Kargo-originated
-callback with no existing record continues through the ordinary insertion path.
+creation snapshots, clears reconciliation scheduling, and advances to
+`preparing` or `approved` according to the snapshotted policy. Callback
+hydration, creation reporting, and terminal reconciliation reporting lock the
+same Promotion. If the callback wins, a late terminal report is an idempotent
+no-op; if a terminal report wins, it atomically moves the still-unhydrated
+Promotion to `error` and the callback conflicts. A late successful creation
+report only adds the canonical Kargo name, UID, and delivery time after a
+callback. Repeating an identical callback or terminal report is idempotent;
+different callback content or a mismatched canonical name or UID conflicts. A
+Kargo-originated callback with no existing record continues through the
+ordinary insertion path.
 
 Automatic requests become `approved` without a Run. Guarded requests become
 `preparing` and dispatch exactly one restart-safe, revision-pinned ordinary Run.

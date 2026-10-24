@@ -150,7 +150,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 		t.Fatalf("CreateOperatorPromotion() error = %v", err)
 	}
 	if record.Source != promotion.SourceSlipramp || record.Status != promotion.StatusCreating ||
-		record.ExternalPromotionID != "slipramp-"+record.ID.String() || record.SourceStageID == nil ||
+		record.ExternalPromotionID != fixture.stage.Name+"-slipramp-"+record.ID.String() || record.SourceStageID == nil ||
 		*record.SourceStageID != fixture.stage.ID || record.RequestDigest != (promotion.RequestDigest{}) ||
 		record.BaseRevision != "" || record.CandidateRevision != "" || record.CandidateBranch != "" ||
 		record.NextDispatchAt == nil || !record.NextDispatchAt.Equal(acceptedAt) {
@@ -282,6 +282,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	}
 
 	uid := "kargo-promotion-uid"
+	kargoName := automatic.ExternalPromotionID
 	reported, err := fixture.database.ReportPromotionCreation(
 		fixture.ctx,
 		promotion.CreationDispatchReport{
@@ -289,6 +290,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 			ClusterName: fixture.stage.ClusterName,
 			Attempt:     claimed.DispatchAttemptCount,
 			Result:      promotion.CreationDispatchCreated,
+			KargoName:   &kargoName,
 			KargoUID:    &uid,
 			ReportedAt:  createdAt.Add(200 * time.Second),
 		},

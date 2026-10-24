@@ -26,3 +26,25 @@ placements:
       kargo-argocd:
         secretRef:
           name: kargo-argocd
+  prod-infrastructure:
+    cluster: prod-sjc1
+    jobNamespace: slipramp-dev-runs
+    serviceAccountName: infrastructure-admin
+    timeout: 45m
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+    credentials:
+      ops-ci:
+        secretRef:
+          name: ops-ci
+      prod-known-hosts:
+        secretRef:
+          name: kcloud-ops-known-hosts
+      kcloud-ops-git:
+        secretRef:
+          name: kcloud-ops-git

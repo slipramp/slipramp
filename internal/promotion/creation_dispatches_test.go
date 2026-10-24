@@ -56,7 +56,7 @@ func TestCreationDispatchServiceBuildsCommandAndReport(t *testing.T) {
 	store := &creationDispatchTestStore{record: Promotion{
 		ID:                      promotionID,
 		Integration:             "prod",
-		ExternalPromotionID:     "slipramp-" + promotionID.String(),
+		ExternalPromotionID:     "external-dns-prod-slipramp-" + promotionID.String(),
 		StageSnapshot:           stageSnapshot,
 		SelectedFreightSnapshot: freightSnapshot,
 		DispatchAttemptCount:    2,
@@ -78,17 +78,20 @@ func TestCreationDispatchServiceBuildsCommandAndReport(t *testing.T) {
 		t.Errorf("claim = %#v", store.claim)
 	}
 
+	name := "external-dns-prod.01test.freight"
 	uid := "promotion-uid"
 	err = service.Report(t.Context(), "colo", CreationDispatchReport{
 		PromotionID: promotionID,
 		Attempt:     2,
 		Result:      CreationDispatchCreated,
+		KargoName:   &name,
 		KargoUID:    &uid,
 	})
 	if err != nil {
 		t.Fatalf("Report() error = %v", err)
 	}
 	if store.report.ClusterName != "colo" || !store.report.ReportedAt.Equal(now.Truncate(time.Microsecond)) ||
+		store.report.KargoName == nil || *store.report.KargoName != name ||
 		store.report.KargoUID == nil || *store.report.KargoUID != uid {
 		t.Errorf("report = %#v", store.report)
 	}
@@ -103,11 +106,13 @@ func TestCreationDispatchReportValidation(t *testing.T) {
 		Attempt:     1,
 		ReportedAt:  time.Now().UTC(),
 	}
+	name := "external-dns-prod.01test.freight"
 	uid := "promotion-uid"
 	diagnostic := "admission denied"
 
 	created := base
 	created.Result = CreationDispatchCreated
+	created.KargoName = &name
 	created.KargoUID = &uid
 	if err := created.Validate(); err != nil {
 		t.Fatalf("created report error = %v", err)

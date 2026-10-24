@@ -143,6 +143,9 @@ import type {
   ReportKargoPromotionDispatchData,
   ReportKargoPromotionDispatchErrors,
   ReportKargoPromotionDispatchResponses,
+  ReportKargoPromotionReconciliationData,
+  ReportKargoPromotionReconciliationErrors,
+  ReportKargoPromotionReconciliationResponses,
   ReportRunObservationData,
   ReportRunObservationErrors,
   ReportRunObservationResponses,
@@ -586,7 +589,7 @@ export const enrollController = <ThrowOnError extends boolean = false>(
 /**
  * Poll for a controller command
  *
- * Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
+ * Records the authenticated cluster controller as healthy and waits to assign or cancel a Run, create a Kargo Promotion, or reconcile a materialized Promotion awaiting callback for its cluster. An empty response means no command became available before the requested wait elapsed.
  */
 export const pollForControllerCommand = <ThrowOnError extends boolean = false>(
   options?: Options<PollForControllerCommandData, ThrowOnError>,
@@ -632,6 +635,38 @@ export const reportKargoPromotionDispatch = <ThrowOnError extends boolean = fals
       },
     ],
     url: "/controller/v1/promotions/{promotionId}/dispatch",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Report terminal Kargo Promotion reconciliation
+ *
+ * Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+ */
+export const reportKargoPromotionReconciliation = <ThrowOnError extends boolean = false>(
+  options: Options<ReportKargoPromotionReconciliationData, ThrowOnError>,
+): RequestResult<
+  ReportKargoPromotionReconciliationResponses,
+  ReportKargoPromotionReconciliationErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ReportKargoPromotionReconciliationResponses,
+    ReportKargoPromotionReconciliationErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "ControllerBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/controller/v1/promotions/{promotionId}/reconciliation",
     ...options,
     headers: {
       "Content-Type": "application/json",

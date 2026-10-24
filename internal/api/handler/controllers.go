@@ -234,6 +234,7 @@ func (h *Handler) ReportKargoPromotionDispatch(
 			PromotionID: request.PromotionID,
 			Attempt:     request.Body.Attempt,
 			Result:      promotion.CreationDispatchResult(request.Body.Result),
+			KargoName:   request.Body.KargoName,
 			KargoUID:    request.Body.KargoUID,
 			Diagnostic:  request.Body.Diagnostic,
 		},
@@ -261,6 +262,59 @@ func (h *Handler) ReportKargoPromotionDispatch(
 	}
 
 	return api.ReportKargoPromotionDispatch204Response{}, nil
+}
+
+func (h *Handler) ReportKargoPromotionReconciliation(
+	ctx context.Context,
+	request api.ReportKargoPromotionReconciliationRequestObject,
+) (api.ReportKargoPromotionReconciliationResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "A Kargo Promotion reconciliation report is required.")
+
+		return api.ReportKargoPromotionReconciliation400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	err = h.promotionReconciliations.Report(
+		ctx,
+		principal.ClusterName,
+		promotion.CreationReconciliationReport{
+			PromotionID: request.PromotionID,
+			KargoName:   request.Body.KargoName,
+			KargoUID:    request.Body.KargoUID,
+			Phase:       promotion.CreationReconciliationPhase(request.Body.Phase),
+			Diagnostic:  request.Body.Diagnostic,
+		},
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, promotion.ErrInvalid):
+			problem := NewProblem(http.StatusBadRequest, err.Error())
+
+			return api.ReportKargoPromotionReconciliation400ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, promotion.ErrPromotionNotFound):
+			problem := NewProblem(http.StatusNotFound, "The Promotion is not assigned to this controller's cluster.")
+
+			return api.ReportKargoPromotionReconciliation404ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, promotion.ErrCreationReconciliationConflict):
+			problem := NewProblem(
+				http.StatusConflict,
+				"The reconciliation report conflicts with the canonical Kargo Promotion identity.",
+			)
+
+			return api.ReportKargoPromotionReconciliation409ApplicationProblemPlusJSONResponse(problem), nil
+		default:
+			return nil, err
+		}
+	}
+	if err := h.clusters.RecordControllerContact(ctx, principal.ClusterName); err != nil {
+		return nil, err
+	}
+
+	return api.ReportKargoPromotionReconciliation204Response{}, nil
 }
 
 func runObservationOutcome(value *api.RunObservationOutcome) *run.Outcome {
@@ -307,6 +361,19 @@ func createKargoPromotionCommand(command promotion.CreationCommand) api.Controll
 	}
 }
 
+func reconcileKargoPromotionCommand(command promotion.CreationReconciliationCommand) api.ControllerCommand {
+	return api.ControllerCommand{
+		Type: api.ControllerCommandTypeReconcileKargoPromotion,
+		PromotionReconciliation: &api.KargoPromotionReconciliationCommand{
+			ID:          command.PromotionID,
+			Integration: api.CatalogName(command.Integration),
+			Project:     api.CatalogName(command.Project),
+			KargoName:   command.KargoName,
+			KargoUID:    command.KargoUID,
+		},
+	}
+}
+
 func (h *Handler) nextControllerCommand(ctx context.Context, clusterName string) (*api.ControllerCommand, error) {
 	record, err := h.runs.NextRunToCancel(ctx, clusterName)
 	if err == nil {
@@ -327,6 +394,18 @@ func (h *Handler) nextControllerCommand(ctx context.Context, clusterName string)
 		}
 		if !errors.Is(dispatchErr, promotion.ErrNoCreationDispatch) {
 			return nil, dispatchErr
+		}
+	}
+
+	if h.promotionReconciliations != nil {
+		reconciliation, reconcileErr := h.promotionReconciliations.Next(ctx, clusterName)
+		if reconcileErr == nil {
+			command := reconcileKargoPromotionCommand(reconciliation)
+
+			return &command, nil
+		}
+		if !errors.Is(reconcileErr, promotion.ErrNoCreationReconciliation) {
+			return nil, reconcileErr
 		}
 	}
 

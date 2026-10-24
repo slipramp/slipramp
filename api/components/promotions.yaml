@@ -118,7 +118,7 @@ KargoPromotionRequest:
     externalPromotionId:
       type: string
       minLength: 1
-      maxLength: 200
+      maxLength: 253
     project:
       $ref: ./runs.yaml#/CatalogName
     stage:
@@ -152,7 +152,7 @@ KargoPromotionResponse:
     externalPromotionId:
       type: string
       minLength: 1
-      maxLength: 200
+      maxLength: 253
     status:
       $ref: "#/PromotionStatus"
     reviewRequired:
@@ -800,7 +800,7 @@ Promotion:
     externalPromotionId:
       type: string
       minLength: 1
-      maxLength: 200
+      maxLength: 253
     stageId:
       type: string
       format: uuid
@@ -857,6 +857,14 @@ Promotion:
       type: string
       minLength: 1
       maxLength: 200
+    nextReconciliationAt:
+      type: string
+      format: date-time
+      description: Next durable inspection time while the materialized resource awaits callback.
+    lastReconciliationAt:
+      type: string
+      format: date-time
+      description: Most recent time reconciliation work was claimed by the responsible Controller.
     preparationRunId:
       type: string
       format: uuid

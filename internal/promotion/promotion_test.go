@@ -82,6 +82,7 @@ func TestPromotionValidateCreatingOperatorPromotion(t *testing.T) {
 	record.NextDispatchAt = nil
 	record.DispatchedAt = &dispatchedAt
 	record.KargoPromotionUID = &kargoUID
+	record.NextReconciliationAt = &dispatchedAt
 	record.UpdatedAt = dispatchedAt
 	if err := record.Validate(); err != nil {
 		t.Fatalf("dispatched Validate() error = %v", err)

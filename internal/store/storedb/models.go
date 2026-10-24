@@ -208,6 +208,8 @@ type Promotion struct {
 	LastDispatchAt               pgtype.Timestamptz
 	DispatchedAt                 pgtype.Timestamptz
 	KargoPromotionUid            *string
+	NextReconciliationAt         pgtype.Timestamptz
+	LastReconciliationAt         pgtype.Timestamptz
 }
 
 type PromotionDecision struct {

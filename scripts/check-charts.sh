@@ -157,7 +157,7 @@ assert_contains "$kargo_controller_render" 'apiGroups: \[kargo.akuity.io\]'
 assert_contains "$kargo_controller_render" 'resources: \[stages\]'
 assert_contains "$kargo_controller_render" 'verbs: \[get, list, promote\]'
 assert_contains "$kargo_controller_render" 'resources: \[promotions\]'
-assert_contains "$kargo_controller_render" 'verbs: \[create, get\]'
+assert_contains "$kargo_controller_render" 'verbs: \[create, get, list\]'
 assert_not_contains "$kargo_controller_render" '^kind: ClusterRole'
 
 assert_render_fails "Missing required Server configuration" \

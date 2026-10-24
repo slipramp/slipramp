@@ -115,7 +115,7 @@ func (d *Database) ReportPromotionCreation(
 	}()
 	queries := d.queries.WithTx(transaction)
 
-	row, err := queries.LockPromotionCreationDispatch(ctx, databaseUUID(report.PromotionID))
+	row, err := queries.LockPromotionCreation(ctx, databaseUUID(report.PromotionID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, promotion.ErrPromotionNotFound
 	}
@@ -140,7 +140,8 @@ func (d *Database) ReportPromotionCreation(
 	updated := current
 	switch report.Result {
 	case promotion.CreationDispatchCreated:
-		if current.KargoPromotionUID != nil && *current.KargoPromotionUID != *report.KargoUID {
+		if current.KargoPromotionUID != nil &&
+			(*current.KargoPromotionUID != *report.KargoUID || current.ExternalPromotionID != *report.KargoName) {
 			return promotion.Promotion{}, promotion.ErrCreationDispatchConflict
 		}
 		if current.KargoPromotionUID == nil {
@@ -148,6 +149,7 @@ func (d *Database) ReportPromotionCreation(
 				ctx,
 				storedb.RecordCreatedPromotionDispatchParams{
 					DispatchedAt:      databaseTime(report.ReportedAt),
+					KargoName:         *report.KargoName,
 					KargoPromotionUid: report.KargoUID,
 					ID:                databaseUUID(report.PromotionID),
 				},

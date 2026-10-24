@@ -139,6 +139,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	promotionRequests := promotion.NewRequestService(cfg.KargoIntegrations, persistence.database)
 	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database)
 	promotionDispatches := promotion.NewCreationDispatchService(persistence.database)
+	promotionReconciliations := promotion.NewCreationReconciliationService(persistence.database)
 	promotionReviews := promotion.NewReviewService(persistence.database)
 	promotionProjects := promotion.NewProjectService(cfg.KargoIntegrations, persistence.database)
 	promotionPipelines := promotion.NewFreightPipelineService(cfg.KargoIntegrations, persistence.database)
@@ -195,27 +196,28 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	}
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
-			Clusters:              clusters,
-			ControllerIdentities:  identities,
-			Repositories:          repositories,
-			GitTriggerDeliveries:  persistence.database,
-			Commits:               persistence.database,
-			Catalogs:              catalogs,
-			Inbox:                 inboxService,
-			Notifications:         notificationService,
-			Runs:                  runs,
-			Artifacts:             artifacts,
-			PromotionRequests:     promotionRequests,
-			PromotionCreations:    promotionCreations,
-			PromotionDispatches:   promotionDispatches,
-			PromotionStages:       promotionStages,
-			PromotionReviews:      promotionReviews,
-			PromotionProjects:     promotionProjects,
-			PromotionPipelines:    promotionPipelines,
-			PromotionBranchDrift:  promotionBranchDrift,
-			KargoIntegrations:     cfg.KargoIntegrations,
-			Readiness:             readinessService,
-			ProductAuthentication: productAuthenticationService,
+			Clusters:                 clusters,
+			ControllerIdentities:     identities,
+			Repositories:             repositories,
+			GitTriggerDeliveries:     persistence.database,
+			Commits:                  persistence.database,
+			Catalogs:                 catalogs,
+			Inbox:                    inboxService,
+			Notifications:            notificationService,
+			Runs:                     runs,
+			Artifacts:                artifacts,
+			PromotionRequests:        promotionRequests,
+			PromotionCreations:       promotionCreations,
+			PromotionDispatches:      promotionDispatches,
+			PromotionReconciliations: promotionReconciliations,
+			PromotionStages:          promotionStages,
+			PromotionReviews:         promotionReviews,
+			PromotionProjects:        promotionProjects,
+			PromotionPipelines:       promotionPipelines,
+			PromotionBranchDrift:     promotionBranchDrift,
+			KargoIntegrations:        cfg.KargoIntegrations,
+			Readiness:                readinessService,
+			ProductAuthentication:    productAuthenticationService,
 		},
 		handler.HTTPOptions{
 			ControllerEnrollmentTokens: cfg.ControllerEnrollmentTokens,

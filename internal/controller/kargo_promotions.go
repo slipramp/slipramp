@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +43,27 @@ func isPermanentKargoPromotionError(err error) bool {
 }
 
 type kargoPromotionCreator interface {
-	Ensure(context.Context, api.KargoPromotionCreationCommand) (string, bool, error)
+	Ensure(context.Context, api.KargoPromotionCreationCommand) (kargoPromotionMaterialization, error)
+}
+
+type kargoPromotionReconciler interface {
+	Reconcile(
+		context.Context,
+		api.KargoPromotionReconciliationCommand,
+	) (*kargoPromotionTerminalObservation, error)
+}
+
+type kargoPromotionMaterialization struct {
+	Name    string
+	UID     string
+	Created bool
+}
+
+type kargoPromotionTerminalObservation struct {
+	Name       string
+	UID        string
+	Phase      api.KargoPromotionReconciliationReportPhase
+	Diagnostic string
 }
 
 type dynamicKargoPromotionCreator struct {
@@ -70,11 +91,11 @@ func newDynamicKargoPromotionCreator(
 func (c *dynamicKargoPromotionCreator) Ensure(
 	ctx context.Context,
 	command api.KargoPromotionCreationCommand,
-) (string, bool, error) {
+) (kargoPromotionMaterialization, error) {
 	integration := string(command.Integration)
 	namespace := string(command.Project)
 	if !slices.Contains(c.allowedNamespaces[integration], namespace) {
-		return "", false, permanentKargoPromotionFailure(
+		return kargoPromotionMaterialization{}, permanentKargoPromotionFailure(
 			"Kargo integration %q does not observe project namespace %q",
 			integration,
 			namespace,
@@ -84,22 +105,30 @@ func (c *dynamicKargoPromotionCreator) Ensure(
 	stage, err := c.stages.Namespace(namespace).Get(ctx, command.Stage, metav1.GetOptions{})
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return "", false, permanentKargoPromotionFailure(
+			return kargoPromotionMaterialization{}, permanentKargoPromotionFailure(
 				"target Kargo Stage %s/%s no longer exists",
 				namespace,
 				command.Stage,
 			)
 		}
-		return "", false, classifyKargoPromotionAPIError("get target Kargo Stage", err)
+		return kargoPromotionMaterialization{}, classifyKargoPromotionAPIError("get target Kargo Stage", err)
 	}
 	if string(stage.GetUID()) != command.StageUID {
-		return "", false, permanentKargoPromotionFailure(
+		return kargoPromotionMaterialization{}, permanentKargoPromotionFailure(
 			"target Kargo Stage %s/%s UID changed from %q to %q",
 			namespace,
 			command.Stage,
 			command.StageUID,
 			stage.GetUID(),
 		)
+	}
+
+	existing, err := c.findKargoPromotion(ctx, namespace, command)
+	if err != nil {
+		return kargoPromotionMaterialization{}, err
+	}
+	if existing != nil {
+		return kargoPromotionIdentity(existing, false)
 	}
 
 	desired := &unstructured.Unstructured{Object: map[string]any{
@@ -119,30 +148,155 @@ func (c *dynamicKargoPromotionCreator) Ensure(
 	}}
 	created, err := c.promotions.Namespace(namespace).Create(ctx, desired, metav1.CreateOptions{})
 	if err == nil {
-		uid := string(created.GetUID())
-		if uid == "" {
-			return "", false, errors.New("created Kargo Promotion has no Kubernetes UID")
+		if err := validateExistingKargoPromotion(created, command); err != nil {
+			return kargoPromotionMaterialization{}, err
 		}
-
-		return uid, true, nil
+		return kargoPromotionIdentity(created, true)
 	}
 	if !apierrors.IsAlreadyExists(err) {
-		return "", false, classifyKargoPromotionAPIError("create Kargo Promotion", err)
+		return kargoPromotionMaterialization{}, classifyKargoPromotionAPIError("create Kargo Promotion", err)
 	}
 
-	existing, err := c.promotions.Namespace(namespace).Get(ctx, command.ExternalName, metav1.GetOptions{})
+	existing, err = c.promotions.Namespace(namespace).Get(ctx, command.ExternalName, metav1.GetOptions{})
 	if err != nil {
-		return "", false, classifyKargoPromotionAPIError("get existing Kargo Promotion", err)
+		return kargoPromotionMaterialization{}, classifyKargoPromotionAPIError("get existing Kargo Promotion", err)
 	}
 	if err := validateExistingKargoPromotion(existing, command); err != nil {
-		return "", false, err
-	}
-	uid := string(existing.GetUID())
-	if uid == "" {
-		return "", false, permanentKargoPromotionFailure("existing Kargo Promotion has no Kubernetes UID")
+		return kargoPromotionMaterialization{}, err
 	}
 
-	return uid, false, nil
+	return kargoPromotionIdentity(existing, false)
+}
+
+func (c *dynamicKargoPromotionCreator) Reconcile(
+	ctx context.Context,
+	command api.KargoPromotionReconciliationCommand,
+) (*kargoPromotionTerminalObservation, error) {
+	integration := string(command.Integration)
+	namespace := string(command.Project)
+	if !slices.Contains(c.allowedNamespaces[integration], namespace) {
+		return nil, fmt.Errorf(
+			"kargo integration %q does not observe project namespace %q",
+			integration,
+			namespace,
+		)
+	}
+
+	items, err := c.promotions.Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, classifyKargoPromotionAPIError("list Kargo Promotions for reconciliation", err)
+	}
+
+	var found *unstructured.Unstructured
+	for index := range items.Items {
+		candidate := &items.Items[index]
+		if candidate.GetAnnotations()[promotionIDAnnotation] != command.ID.String() {
+			continue
+		}
+		if found != nil {
+			return nil, fmt.Errorf("multiple Kargo Promotions claim Slipramp Promotion %s", command.ID)
+		}
+		found = candidate
+	}
+	if found == nil {
+		return nil, fmt.Errorf("kargo Promotion for Slipramp Promotion %s was not found", command.ID)
+	}
+	if found.GetName() != command.KargoName || string(found.GetUID()) != command.KargoUID {
+		return nil, fmt.Errorf(
+			"kargo Promotion %s/%s identity does not match canonical name %q and UID %q",
+			namespace,
+			found.GetName(),
+			command.KargoName,
+			command.KargoUID,
+		)
+	}
+
+	phase, foundPhase, err := unstructured.NestedString(found.Object, "status", "phase")
+	if err != nil {
+		return nil, fmt.Errorf("read Kargo Promotion %s/%s phase: %w", namespace, found.GetName(), err)
+	}
+	if !foundPhase || !terminalKargoPromotionPhase(phase) {
+		return nil, nil
+	}
+	message, _, err := unstructured.NestedString(found.Object, "status", "message")
+	if err != nil {
+		return nil, fmt.Errorf("read Kargo Promotion %s/%s message: %w", namespace, found.GetName(), err)
+	}
+	diagnostic := fmt.Sprintf(
+		"Kargo Promotion %s/%s reached terminal phase %s before Slipramp received its callback.",
+		namespace,
+		found.GetName(),
+		phase,
+	)
+	if strings.TrimSpace(message) != "" {
+		diagnostic += " " + strings.TrimSpace(message)
+	}
+
+	return &kargoPromotionTerminalObservation{
+		Name:       found.GetName(),
+		UID:        string(found.GetUID()),
+		Phase:      api.KargoPromotionReconciliationReportPhase(phase),
+		Diagnostic: boundedKargoPromotionDiagnostic(diagnostic),
+	}, nil
+}
+
+func terminalKargoPromotionPhase(phase string) bool {
+	switch api.KargoPromotionReconciliationReportPhase(phase) {
+	case api.KargoPromotionReconciliationReportPhaseFailed,
+		api.KargoPromotionReconciliationReportPhaseErrored,
+		api.KargoPromotionReconciliationReportPhaseAborted,
+		api.KargoPromotionReconciliationReportPhaseSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *dynamicKargoPromotionCreator) findKargoPromotion(
+	ctx context.Context,
+	namespace string,
+	command api.KargoPromotionCreationCommand,
+) (*unstructured.Unstructured, error) {
+	items, err := c.promotions.Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, classifyKargoPromotionAPIError("list Kargo Promotions", err)
+	}
+
+	var found *unstructured.Unstructured
+	for index := range items.Items {
+		candidate := &items.Items[index]
+		if candidate.GetAnnotations()[promotionIDAnnotation] != command.ID.String() {
+			continue
+		}
+		if found != nil {
+			return nil, permanentKargoPromotionFailure(
+				"multiple Kargo Promotions claim Slipramp Promotion %s",
+				command.ID,
+			)
+		}
+		found = candidate
+	}
+	if found == nil {
+		return nil, nil
+	}
+	if err := validateExistingKargoPromotion(found, command); err != nil {
+		return nil, err
+	}
+
+	return found, nil
+}
+
+func kargoPromotionIdentity(
+	object *unstructured.Unstructured,
+	created bool,
+) (kargoPromotionMaterialization, error) {
+	name := object.GetName()
+	uid := string(object.GetUID())
+	if name == "" || uid == "" {
+		return kargoPromotionMaterialization{}, errors.New("kargo promotion has no admitted name or Kubernetes UID")
+	}
+
+	return kargoPromotionMaterialization{Name: name, UID: uid, Created: created}, nil
 }
 
 func validateExistingKargoPromotion(
@@ -179,8 +333,7 @@ func (c *Controller) handleKargoPromotionCreation(
 	ctx context.Context,
 	command api.KargoPromotionCreationCommand,
 ) error {
-	var uid string
-	var created bool
+	var materialization kargoPromotionMaterialization
 	var materializeErr error
 	if c.promotions == nil {
 		materializeErr = permanentKargoPromotionFailure(
@@ -188,13 +341,14 @@ func (c *Controller) handleKargoPromotionCreation(
 			command.Integration,
 		)
 	} else {
-		uid, created, materializeErr = c.promotions.Ensure(ctx, command)
+		materialization, materializeErr = c.promotions.Ensure(ctx, command)
 	}
 
 	report := api.KargoPromotionDispatchReport{Attempt: command.Attempt}
 	if materializeErr == nil {
 		report.Result = api.KargoPromotionDispatchReportResultCreated
-		report.KargoUID = &uid
+		report.KargoName = &materialization.Name
+		report.KargoUID = &materialization.UID
 	} else {
 		diagnostic := boundedKargoPromotionDiagnostic(materializeErr.Error())
 		report.Diagnostic = &diagnostic
@@ -234,8 +388,74 @@ func (c *Controller) handleKargoPromotionCreation(
 	c.logger.Info(
 		"Kargo Promotion materialized",
 		"promotion_id", command.ID,
-		"kargo_uid", uid,
-		"created", created,
+		"kargo_name", materialization.Name,
+		"kargo_uid", materialization.UID,
+		"created", materialization.Created,
+	)
+
+	return nil
+}
+
+func (c *Controller) handleKargoPromotionReconciliation(
+	ctx context.Context,
+	command api.KargoPromotionReconciliationCommand,
+) error {
+	if c.promotionReconciler == nil {
+		c.logger.Warn(
+			"reconcile Kargo Promotion without a configured integration",
+			"promotion_id", command.ID,
+			"integration", command.Integration,
+		)
+
+		return nil
+	}
+
+	observation, err := c.promotionReconciler.Reconcile(ctx, command)
+	if err != nil {
+		c.logger.Warn(
+			"reconcile Kargo Promotion",
+			"promotion_id", command.ID,
+			"kargo_name", command.KargoName,
+			"kargo_uid", command.KargoUID,
+			"error", err,
+		)
+
+		return nil
+	}
+	if observation == nil {
+		return nil
+	}
+
+	reportErr := c.promotionReconciliationReports.ReportKargoPromotionReconciliation(
+		ctx,
+		command.ID,
+		api.KargoPromotionReconciliationReport{
+			KargoName:  observation.Name,
+			KargoUID:   observation.UID,
+			Phase:      observation.Phase,
+			Diagnostic: observation.Diagnostic,
+		},
+	)
+	if errors.Is(reportErr, errControllerCredentialRejected) {
+		return reportErr
+	}
+	if reportErr != nil {
+		c.logger.Warn(
+			"report Kargo Promotion reconciliation",
+			"promotion_id", command.ID,
+			"phase", observation.Phase,
+			"error", reportErr,
+		)
+
+		return nil
+	}
+
+	c.logger.Info(
+		"Kargo Promotion terminal phase reconciled",
+		"promotion_id", command.ID,
+		"kargo_name", observation.Name,
+		"kargo_uid", observation.UID,
+		"phase", observation.Phase,
 	)
 
 	return nil
@@ -243,7 +463,14 @@ func (c *Controller) handleKargoPromotionCreation(
 
 func boundedKargoPromotionDiagnostic(value string) string {
 	const maximumRunes = 4096
-	value = strings.TrimSpace(value)
+	value = strings.Map(func(character rune) rune {
+		if unicode.IsControl(character) {
+			return ' '
+		}
+
+		return character
+	}, value)
+	value = strings.Join(strings.Fields(value), " ")
 	if value == "" {
 		value = "Kargo Promotion creation failed without a diagnostic."
 	}

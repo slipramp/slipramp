@@ -55,6 +55,7 @@ type CreationDispatchReport struct {
 	ClusterName string
 	Attempt     int
 	Result      CreationDispatchResult
+	KargoName   *string
 	KargoUID    *string
 	Diagnostic  *string
 	ReportedAt  time.Time
@@ -190,12 +191,15 @@ func (r CreationDispatchReport) Validate() error {
 	}
 	switch r.Result {
 	case CreationDispatchCreated:
-		if r.KargoUID == nil || r.Diagnostic != nil {
-			return fmt.Errorf("%w: created dispatch requires only the Kargo UID", ErrInvalid)
+		if r.KargoName == nil || r.KargoUID == nil || r.Diagnostic != nil {
+			return fmt.Errorf("%w: created dispatch requires only the Kargo name and UID", ErrInvalid)
+		}
+		if err := kubevalidate.DNSSubdomain("Kargo Promotion name", *r.KargoName); err != nil {
+			return invalid(err)
 		}
 		return validateText("Kargo Promotion UID", *r.KargoUID, maximumTextLength)
 	case CreationDispatchRetryable, CreationDispatchFailed:
-		if r.KargoUID != nil || r.Diagnostic == nil {
+		if r.KargoName != nil || r.KargoUID != nil || r.Diagnostic == nil {
 			return fmt.Errorf("%w: failed dispatch requires only a diagnostic", ErrInvalid)
 		}
 		if strings.TrimSpace(*r.Diagnostic) != *r.Diagnostic {

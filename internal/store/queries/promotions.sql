@@ -264,6 +264,7 @@ SET request_digest = sqlc.arg(request_digest),
     candidate_branch = sqlc.arg(candidate_branch),
     status = CASE WHEN review_required THEN 'preparing' ELSE 'approved' END,
     next_dispatch_at = NULL,
+    next_reconciliation_at = NULL,
     message = NULL,
     updated_at = GREATEST(updated_at, sqlc.arg(hydrated_at))
 WHERE id = sqlc.arg(id)
@@ -300,6 +301,7 @@ RETURNING *;
 UPDATE promotions
 SET status = 'error',
     next_dispatch_at = NULL,
+    next_reconciliation_at = NULL,
     message = sqlc.arg(message),
     updated_at = sqlc.arg(failed_at)
 WHERE id = sqlc.arg(id)
@@ -307,7 +309,7 @@ WHERE id = sqlc.arg(id)
   AND status = 'creating'
 RETURNING *;
 
--- name: LockPromotionCreationDispatch :one
+-- name: LockPromotionCreation :one
 SELECT *
 FROM promotions
 WHERE id = sqlc.arg(id)
@@ -317,7 +319,12 @@ FOR UPDATE;
 UPDATE promotions
 SET next_dispatch_at = NULL,
     dispatched_at = COALESCE(dispatched_at, sqlc.arg(dispatched_at)),
+    external_promotion_id = sqlc.arg(kargo_name),
     kargo_promotion_uid = sqlc.arg(kargo_promotion_uid),
+    next_reconciliation_at = CASE
+        WHEN status = 'creating' THEN COALESCE(next_reconciliation_at, sqlc.arg(dispatched_at))
+        ELSE NULL
+    END,
     message = CASE WHEN status = 'creating' THEN NULL ELSE message END,
     updated_at = GREATEST(updated_at, sqlc.arg(dispatched_at))
 WHERE id = sqlc.arg(id)
@@ -334,9 +341,45 @@ RETURNING *;
 UPDATE promotions
 SET status = 'error',
     next_dispatch_at = NULL,
+    next_reconciliation_at = NULL,
     message = sqlc.arg(message),
     updated_at = sqlc.arg(reported_at)
 WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: LockNextPromotionCreationReconciliation :one
+SELECT *
+FROM promotions
+WHERE source = 'slipramp'
+  AND status = 'creating'
+  AND kargo_promotion_uid IS NOT NULL
+  AND next_reconciliation_at <= sqlc.arg(due_at)
+  AND stage_snapshot ->> 'cluster' = sqlc.arg(cluster_name)::text
+ORDER BY next_reconciliation_at, created_at, id
+FOR UPDATE SKIP LOCKED
+LIMIT 1;
+
+-- name: ClaimPromotionCreationReconciliation :one
+UPDATE promotions
+SET next_reconciliation_at = sqlc.arg(next_reconciliation_at),
+    last_reconciliation_at = sqlc.arg(claimed_at)
+WHERE id = sqlc.arg(id)
+  AND source = 'slipramp'
+  AND status = 'creating'
+  AND kargo_promotion_uid IS NOT NULL
+  AND next_reconciliation_at = sqlc.arg(expected_next_reconciliation_at)
+RETURNING *;
+
+-- name: RecordTerminalPromotionCreationReconciliation :one
+UPDATE promotions
+SET status = 'error',
+    next_reconciliation_at = NULL,
+    message = sqlc.arg(message),
+    updated_at = GREATEST(updated_at, sqlc.arg(reported_at))
+WHERE id = sqlc.arg(id)
+  AND source = 'slipramp'
+  AND status = 'creating'
+  AND request_digest IS NULL
 RETURNING *;
 
 -- name: ListPromotions :many

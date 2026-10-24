@@ -109,7 +109,7 @@ func NewRequestService(integrations IntegrationSet, requests PromotionRequestSto
 }
 
 func (r KargoRequest) Validate() error {
-	if err := validateText("external Promotion ID", r.ExternalPromotionID, maximumTextLength); err != nil {
+	if err := validateText("external Promotion ID", r.ExternalPromotionID, maximumKargoPromotionNameLength); err != nil {
 		return err
 	}
 	if err := kubevalidate.DNSLabel("Kargo project", r.Project); err != nil {

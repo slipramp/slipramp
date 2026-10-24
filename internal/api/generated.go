@@ -116,9 +116,10 @@ func (e ClusterConnectionState) Valid() bool {
 
 // Defines values for ControllerCommandType.
 const (
-	ControllerCommandTypeCancelRun            ControllerCommandType = "cancel-run"
-	ControllerCommandTypeCreateKargoPromotion ControllerCommandType = "create-kargo-promotion"
-	ControllerCommandTypeRunAssignment        ControllerCommandType = "run-assignment"
+	ControllerCommandTypeCancelRun               ControllerCommandType = "cancel-run"
+	ControllerCommandTypeCreateKargoPromotion    ControllerCommandType = "create-kargo-promotion"
+	ControllerCommandTypeReconcileKargoPromotion ControllerCommandType = "reconcile-kargo-promotion"
+	ControllerCommandTypeRunAssignment           ControllerCommandType = "run-assignment"
 )
 
 // Valid indicates whether the value is a known member of the ControllerCommandType enum.
@@ -127,6 +128,8 @@ func (e ControllerCommandType) Valid() bool {
 	case ControllerCommandTypeCancelRun:
 		return true
 	case ControllerCommandTypeCreateKargoPromotion:
+		return true
+	case ControllerCommandTypeReconcileKargoPromotion:
 		return true
 	case ControllerCommandTypeRunAssignment:
 		return true
@@ -237,6 +240,30 @@ func (e KargoPromotionDispatchReportResult) Valid() bool {
 	case KargoPromotionDispatchReportResultFailed:
 		return true
 	case KargoPromotionDispatchReportResultRetryable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for KargoPromotionReconciliationReportPhase.
+const (
+	KargoPromotionReconciliationReportPhaseAborted   KargoPromotionReconciliationReportPhase = "Aborted"
+	KargoPromotionReconciliationReportPhaseErrored   KargoPromotionReconciliationReportPhase = "Errored"
+	KargoPromotionReconciliationReportPhaseFailed    KargoPromotionReconciliationReportPhase = "Failed"
+	KargoPromotionReconciliationReportPhaseSucceeded KargoPromotionReconciliationReportPhase = "Succeeded"
+)
+
+// Valid indicates whether the value is a known member of the KargoPromotionReconciliationReportPhase enum.
+func (e KargoPromotionReconciliationReportPhase) Valid() bool {
+	switch e {
+	case KargoPromotionReconciliationReportPhaseAborted:
+		return true
+	case KargoPromotionReconciliationReportPhaseErrored:
+		return true
+	case KargoPromotionReconciliationReportPhaseFailed:
+		return true
+	case KargoPromotionReconciliationReportPhaseSucceeded:
 		return true
 	default:
 		return false
@@ -1145,7 +1172,10 @@ type ControllerCommand struct {
 
 	// Promotion Present when type is create-kargo-promotion.
 	Promotion *KargoPromotionCreationCommand `json:"promotion,omitempty"`
-	Type      ControllerCommandType          `json:"type"`
+
+	// PromotionReconciliation Present when type is reconcile-kargo-promotion.
+	PromotionReconciliation *KargoPromotionReconciliationCommand `json:"promotionReconciliation,omitempty"`
+	Type                    ControllerCommandType                `json:"type"`
 }
 
 // ControllerCommandType defines model for ControllerCommand.Type.
@@ -1345,6 +1375,9 @@ type KargoPromotionDispatchReport struct {
 	// Diagnostic Bounded failure detail; required for retryable and failed results.
 	Diagnostic *string `json:"diagnostic,omitempty"`
 
+	// KargoName Admission-assigned Kargo Promotion name; required when result is created.
+	KargoName *string `json:"kargoName,omitempty"`
+
 	// KargoUID Kubernetes UID; required when result is created.
 	KargoUID *string                            `json:"kargoUid,omitempty"`
 	Result   KargoPromotionDispatchReportResult `json:"result"`
@@ -1352,6 +1385,40 @@ type KargoPromotionDispatchReport struct {
 
 // KargoPromotionDispatchReportResult defines model for KargoPromotionDispatchReport.Result.
 type KargoPromotionDispatchReportResult string
+
+// KargoPromotionReconciliationCommand defines model for KargoPromotionReconciliationCommand.
+type KargoPromotionReconciliationCommand struct {
+	// ID Durable Slipramp Promotion identity carried by the stable annotation.
+	ID          openapi_types.UUID `json:"id"`
+	Integration CatalogName        `json:"integration"`
+
+	// KargoName Canonical admission-assigned Kargo Promotion name.
+	KargoName string `json:"kargoName"`
+
+	// KargoUID Kubernetes UID recorded when the Promotion was materialized.
+	KargoUID string `json:"kargoUid"`
+
+	// Project Kubernetes namespace containing the Kargo project.
+	Project CatalogName `json:"project"`
+}
+
+// KargoPromotionReconciliationReport defines model for KargoPromotionReconciliationReport.
+type KargoPromotionReconciliationReport struct {
+	// Diagnostic Bounded description of the terminal pre-callback state.
+	Diagnostic string `json:"diagnostic"`
+
+	// KargoName Canonical name of the observed Kargo Promotion.
+	KargoName string `json:"kargoName"`
+
+	// KargoUID Kubernetes UID of the observed Kargo Promotion.
+	KargoUID string `json:"kargoUid"`
+
+	// Phase Terminal Kargo phase observed before callback hydration.
+	Phase KargoPromotionReconciliationReportPhase `json:"phase"`
+}
+
+// KargoPromotionReconciliationReportPhase Terminal Kargo phase observed before callback hydration.
+type KargoPromotionReconciliationReportPhase string
 
 // KargoPromotionRequest defines model for KargoPromotionRequest.
 type KargoPromotionRequest struct {
@@ -1517,10 +1584,16 @@ type Promotion struct {
 	KargoPromotionUID    *string             `json:"kargoPromotionUid,omitempty"`
 
 	// KargoURL Direct link to this Promotion in the configured Kargo UI.
-	KargoURL               *string                `json:"kargoUrl,omitempty"`
-	LastDispatchAt         *time.Time             `json:"lastDispatchAt,omitempty"`
-	Message                *string                `json:"message,omitempty"`
-	NextDispatchAt         *time.Time             `json:"nextDispatchAt,omitempty"`
+	KargoURL       *string    `json:"kargoUrl,omitempty"`
+	LastDispatchAt *time.Time `json:"lastDispatchAt,omitempty"`
+
+	// LastReconciliationAt Most recent time reconciliation work was claimed by the responsible Controller.
+	LastReconciliationAt *time.Time `json:"lastReconciliationAt,omitempty"`
+	Message              *string    `json:"message,omitempty"`
+	NextDispatchAt       *time.Time `json:"nextDispatchAt,omitempty"`
+
+	// NextReconciliationAt Next durable inspection time while the materialized resource awaits callback.
+	NextReconciliationAt   *time.Time             `json:"nextReconciliationAt,omitempty"`
 	PolicySnapshot         map[string]interface{} `json:"policySnapshot"`
 	PreparationCompletedAt *time.Time             `json:"preparationCompletedAt,omitempty"`
 	PreparationRun         *Run                   `json:"preparationRun,omitempty"`
@@ -2625,6 +2698,9 @@ type ReplaceKargoStageSnapshotJSONRequestBody = KargoStageSnapshot
 // ReportKargoPromotionDispatchJSONRequestBody defines body for ReportKargoPromotionDispatch for application/json ContentType.
 type ReportKargoPromotionDispatchJSONRequestBody = KargoPromotionDispatchReport
 
+// ReportKargoPromotionReconciliationJSONRequestBody defines body for ReportKargoPromotionReconciliation for application/json ContentType.
+type ReportKargoPromotionReconciliationJSONRequestBody = KargoPromotionReconciliationReport
+
 // SealRunLogJSONRequestBody defines body for SealRunLog for application/json ContentType.
 type SealRunLogJSONRequestBody = LogSeal
 
@@ -3209,7 +3285,7 @@ type ClientInterface interface {
 
 	// PollForControllerCommand Poll for a controller command
 	//
-	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run, create a Kargo Promotion, or reconcile a materialized Promotion awaiting callback for its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
 	// Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
 	PollForControllerCommand(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3231,6 +3307,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
 	ReportKargoPromotionDispatch(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportKargoPromotionReconciliationWithBody Report terminal Kargo Promotion reconciliation
+	//
+	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+	ReportKargoPromotionReconciliationWithBody(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+	//
+	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+	ReportKargoPromotionReconciliation(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRunLogCursor Get the durable Run log cursor
 	//
@@ -4301,7 +4395,7 @@ func (c *Client) ReplaceKargoStageSnapshot(ctx context.Context, integration Cata
 
 // PollForControllerCommand Poll for a controller command
 //
-// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
+// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run, create a Kargo Promotion, or reconcile a materialized Promotion awaiting callback for its cluster. An empty response means no command became available before the requested wait elapsed.
 //
 // Corresponds with POST /controller/v1/poll (the `PollForControllerCommand` operationId).
 func (c *Client) PollForControllerCommand(ctx context.Context, params *PollForControllerCommandParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4344,6 +4438,44 @@ func (c *Client) ReportKargoPromotionDispatchWithBody(ctx context.Context, promo
 // Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
 func (c *Client) ReportKargoPromotionDispatch(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReportKargoPromotionDispatchRequest(c.Server, promotionID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportKargoPromotionReconciliationWithBody Report terminal Kargo Promotion reconciliation
+//
+// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+func (c *Client) ReportKargoPromotionReconciliationWithBody(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportKargoPromotionReconciliationRequestWithBody(c.Server, promotionID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+//
+// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+func (c *Client) ReportKargoPromotionReconciliation(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportKargoPromotionReconciliationRequest(c.Server, promotionID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7326,6 +7458,53 @@ func NewReportKargoPromotionDispatchRequestWithBody(server string, promotionID o
 	return req, nil
 }
 
+// NewReportKargoPromotionReconciliationRequest calls the generic ReportKargoPromotionReconciliation builder with application/json body
+func NewReportKargoPromotionReconciliationRequest(server string, promotionID openapi_types.UUID, body ReportKargoPromotionReconciliationJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportKargoPromotionReconciliationRequestWithBody(server, promotionID, "application/json", bodyReader)
+}
+
+// NewReportKargoPromotionReconciliationRequestWithBody constructs an http.Request for the ReportKargoPromotionReconciliation method, with any body, and a specified content type
+func NewReportKargoPromotionReconciliationRequestWithBody(server string, promotionID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "promotionId", promotionID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/promotions/%s/reconciliation", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetRunLogCursorRequest constructs an http.Request for the GetRunLogCursor method
 func NewGetRunLogCursorRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
 	var err error
@@ -8184,7 +8363,7 @@ type ClientWithResponsesInterface interface {
 
 	// PollForControllerCommandWithResponse Poll for a controller command
 	//
-	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
+	// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run, create a Kargo Promotion, or reconcile a materialized Promotion awaiting callback for its cluster. An empty response means no command became available before the requested wait elapsed.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8208,6 +8387,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
 	ReportKargoPromotionDispatchWithResponse(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportKargoPromotionDispatchResponse, error)
+
+	// ReportKargoPromotionReconciliationWithBodyWithResponse Report terminal Kargo Promotion reconciliation
+	//
+	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+	ReportKargoPromotionReconciliationWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportKargoPromotionReconciliationResponse, error)
+
+	// ReportKargoPromotionReconciliationWithResponse Report terminal Kargo Promotion reconciliation
+	//
+	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+	ReportKargoPromotionReconciliationWithResponse(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportKargoPromotionReconciliationResponse, error)
 
 	// GetRunLogCursorWithResponse Get the durable Run log cursor
 	//
@@ -11827,6 +12024,82 @@ func (r ReportKargoPromotionDispatchResponse) ContentType() string {
 	return ""
 }
 
+type ReportKargoPromotionReconciliationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ReportKargoPromotionReconciliationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReportKargoPromotionReconciliationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReportKargoPromotionReconciliationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReportKargoPromotionReconciliationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetRunLogCursorResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13203,7 +13476,7 @@ func (c *ClientWithResponses) ReplaceKargoStageSnapshotWithResponse(ctx context.
 
 // PollForControllerCommandWithResponse Poll for a controller command
 //
-// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run or create a Kargo Promotion for its cluster. An empty response means no command became available before the requested wait elapsed.
+// Records the authenticated cluster controller as healthy and waits to assign or cancel a Run, create a Kargo Promotion, or reconcile a materialized Promotion awaiting callback for its cluster. An empty response means no command became available before the requested wait elapsed.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -13244,6 +13517,36 @@ func (c *ClientWithResponses) ReportKargoPromotionDispatchWithResponse(ctx conte
 		return nil, err
 	}
 	return ParseReportKargoPromotionDispatchResponse(rsp)
+}
+
+// ReportKargoPromotionReconciliationWithBodyWithResponse Report terminal Kargo Promotion reconciliation
+//
+// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+func (c *ClientWithResponses) ReportKargoPromotionReconciliationWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportKargoPromotionReconciliationResponse, error) {
+	rsp, err := c.ReportKargoPromotionReconciliationWithBody(ctx, promotionID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportKargoPromotionReconciliationResponse(rsp)
+}
+
+// ReportKargoPromotionReconciliationWithResponse Report terminal Kargo Promotion reconciliation
+//
+// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
+func (c *ClientWithResponses) ReportKargoPromotionReconciliationWithResponse(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionReconciliationJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportKargoPromotionReconciliationResponse, error) {
+	rsp, err := c.ReportKargoPromotionReconciliation(ctx, promotionID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportKargoPromotionReconciliationResponse(rsp)
 }
 
 // GetRunLogCursorWithResponse Get the durable Run log cursor
@@ -16353,6 +16656,70 @@ func ParseReportKargoPromotionDispatchResponse(rsp *http.Response) (*ReportKargo
 	return response, nil
 }
 
+// ParseReportKargoPromotionReconciliationResponse parses an HTTP response from a ReportKargoPromotionReconciliationWithResponse call
+func ParseReportKargoPromotionReconciliationResponse(rsp *http.Response) (*ReportKargoPromotionReconciliationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReportKargoPromotionReconciliationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetRunLogCursorResponse parses an HTTP response from a GetRunLogCursorWithResponse call
 func ParseGetRunLogCursorResponse(rsp *http.Response) (*GetRunLogCursorResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -16943,6 +17310,9 @@ type ServerInterface interface {
 	// ReportKargoPromotionDispatch Report Kargo Promotion creation
 	// (POST /controller/v1/promotions/{promotionId}/dispatch)
 	ReportKargoPromotionDispatch(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID)
+	// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+	// (POST /controller/v1/promotions/{promotionId}/reconciliation)
+	ReportKargoPromotionReconciliation(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID)
 	// GetRunLogCursor Get the durable Run log cursor
 	// (GET /controller/v1/runs/{runId}/log)
 	GetRunLogCursor(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
@@ -19041,6 +19411,32 @@ func (siw *ServerInterfaceWrapper) ReportKargoPromotionDispatch(w http.ResponseW
 	handler.ServeHTTP(w, r)
 }
 
+// ReportKargoPromotionReconciliation operation middleware
+func (siw *ServerInterfaceWrapper) ReportKargoPromotionReconciliation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "promotionId" -------------
+	var promotionID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "promotionId", r.PathValue("promotionId"), &promotionID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "promotionId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportKargoPromotionReconciliation(w, r, promotionID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRunLogCursor operation middleware
 func (siw *ServerInterfaceWrapper) GetRunLogCursor(w http.ResponseWriter, r *http.Request) {
 
@@ -19424,6 +19820,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/promotions/{promotionId}/dispatch", wrapper.ReportKargoPromotionDispatch)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/promotions/{promotionId}/reconciliation", wrapper.ReportKargoPromotionReconciliation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/observations", wrapper.ReportRunObservation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log-chunks", wrapper.AppendRunLogChunk)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.GetRunLogCursor)
@@ -24031,6 +24428,107 @@ func (response ReportKargoPromotionDispatch500ApplicationProblemPlusJSONResponse
 	return err
 }
 
+type ReportKargoPromotionReconciliationRequestObject struct {
+	PromotionID openapi_types.UUID `json:"promotionId"`
+	Body        *ReportKargoPromotionReconciliationJSONRequestBody
+}
+
+type ReportKargoPromotionReconciliationResponseObject interface {
+	VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error
+}
+
+type ReportKargoPromotionReconciliation204Response struct {
+}
+
+func (response ReportKargoPromotionReconciliation204Response) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportKargoPromotionReconciliation400ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionReconciliation400ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionReconciliation401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionReconciliation401ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionReconciliation404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionReconciliation404ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionReconciliation405ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionReconciliation405ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionReconciliation409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionReconciliation409ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionReconciliation500ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportKargoPromotionReconciliation500ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRunLogCursorRequestObject struct {
 	RunID openapi_types.UUID `json:"runId"`
 }
@@ -24847,6 +25345,9 @@ type StrictServerInterface interface {
 	// ReportKargoPromotionDispatch Report Kargo Promotion creation
 	// (POST /controller/v1/promotions/{promotionId}/dispatch)
 	ReportKargoPromotionDispatch(ctx context.Context, request ReportKargoPromotionDispatchRequestObject) (ReportKargoPromotionDispatchResponseObject, error)
+	// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+	// (POST /controller/v1/promotions/{promotionId}/reconciliation)
+	ReportKargoPromotionReconciliation(ctx context.Context, request ReportKargoPromotionReconciliationRequestObject) (ReportKargoPromotionReconciliationResponseObject, error)
 	// GetRunLogCursor Get the durable Run log cursor
 	// (GET /controller/v1/runs/{runId}/log)
 	GetRunLogCursor(ctx context.Context, request GetRunLogCursorRequestObject) (GetRunLogCursorResponseObject, error)
@@ -26195,6 +26696,39 @@ func (sh *strictHandler) ReportKargoPromotionDispatch(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReportKargoPromotionDispatchResponseObject); ok {
 		if err := validResponse.VisitReportKargoPromotionDispatchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportKargoPromotionReconciliation operation middleware
+func (sh *strictHandler) ReportKargoPromotionReconciliation(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID) {
+	var request ReportKargoPromotionReconciliationRequestObject
+
+	request.PromotionID = promotionID
+
+	var body ReportKargoPromotionReconciliationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportKargoPromotionReconciliation(ctx, request.(ReportKargoPromotionReconciliationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportKargoPromotionReconciliation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportKargoPromotionReconciliationResponseObject); ok {
+		if err := validResponse.VisitReportKargoPromotionReconciliationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

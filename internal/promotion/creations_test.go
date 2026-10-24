@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
@@ -73,6 +75,35 @@ func TestCreationServiceBuildsOperatorAcceptance(t *testing.T) {
 		store.acceptance.RequestedByPrincipalID != principal.ID ||
 		store.acceptance.AcceptedAt.Nanosecond() != 123456000 {
 		t.Errorf("acceptance = %#v, record = %#v", store.acceptance, record)
+	}
+}
+
+func TestCreationExternalNamePrefixesStageAndPreservesPromotionID(t *testing.T) {
+	t.Parallel()
+
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1930")
+	if name := CreationExternalName("external-dns-prod", promotionID); name !=
+		"external-dns-prod-slipramp-"+promotionID.String() {
+		t.Errorf("CreationExternalName() = %q", name)
+	}
+
+	longStageName := strings.Repeat("a.", 104) + "a"
+	name := CreationExternalName(longStageName, promotionID)
+	if len(name) != maximumKargoPromotionNameLength || !strings.HasSuffix(name, "-slipramp-"+promotionID.String()) {
+		t.Errorf("long CreationExternalName() = %q (%d bytes)", name, len(name))
+	}
+	if err := kubevalidate.DNSSubdomain("generated Kargo Promotion name", name); err != nil {
+		t.Errorf("long CreationExternalName() is invalid: %v", err)
+	}
+	request := validKargoRequest()
+	request.ExternalPromotionID = name
+	if _, err := request.Digest(); err != nil {
+		t.Errorf("253-character callback identity is invalid: %v", err)
+	}
+	record := validPromotion()
+	record.ExternalPromotionID = name
+	if err := record.Validate(); err != nil {
+		t.Errorf("253-character durable identity is invalid: %v", err)
 	}
 }
 

@@ -276,17 +276,19 @@ mapping checkout credential `kcloud-ops` to Secret `kcloud-ops-git`. It owns
 the `slipramp-dev-runs` execution namespace and runs promotion preparation
 Jobs without sharing the production Controller's `slipramp-runs` namespace.
 The development `prod-sjc1` Controller must use
-`slipramp-local-prod-sjc1-enrollment-token` and observe the `kargo-core`,
+`slipramp-local-prod-sjc1-enrollment-token`, own its cluster-local
+`slipramp-dev-runs` namespace, and observe the `kargo-core`,
 `kargo-devops`, `kargo-ivy`, `kargo-network`, `kargo-platform`, `kargo-play`,
 `kargo-sandbox`, `kargo-storage`, and `kargo-virt` namespaces for the `homelab`
 integration, because the centralized Kargo Stage objects live in that cluster.
 
-The local `homelab-infrastructure` Placement exposes the `ops-ci`,
-`homelab-known-hosts`, `kcloud-ops-git`, and `kargo-argocd` Secret sources in
-the `slipramp-dev-runs` namespace. The Controller bootstrap remains
-responsible for materializing those Secrets and the private-GHCR pull
-credential. The configured Kargo integration is named `homelab`; configure the
-Controller's Stage observer and Kargo PromotionTask to use that same name.
+The local `homelab-infrastructure` and `prod-infrastructure` Placements expose
+their cluster-local `ops-ci`, host-known-hosts, and `kcloud-ops-git` Secret
+sources in `slipramp-dev-runs`; the homelab Placement also exposes
+`kargo-argocd`. The Controller bootstrap remains responsible for materializing
+those Secrets and the private-GHCR pull credential in each cluster. The
+configured Kargo integration is named `homelab`; configure the Controller's
+Stage observer and Kargo PromotionTask to use that same name.
 After signing in,
 create an operator service account and API key with
 `slipramp:promotions:submit` for the PromotionTask; there is intentionally no

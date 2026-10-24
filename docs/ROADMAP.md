@@ -10,9 +10,10 @@ strict priority order.
 ## Kargo completion and operations
 
 Stage discovery, policies, durable external and operator-started requests,
-Controller materialization, callback hydration, ordinary preparation Runs, diff
-artifacts, decisions, expiry, Freight comparisons, promotion actions, and
-background-refreshed branch drift with Stage-level pagination are implemented.
+Controller materialization, restart-safe pre-callback terminal reconciliation,
+callback hydration, ordinary preparation Runs, diff artifacts, decisions,
+expiry, Freight comparisons, promotion actions, and background-refreshed branch
+drift with Stage-level pagination are implemented.
 Live Kargo acceptance and the standalone Kargo Gate retirement are complete.
 Remaining work concerns operations rather than rebuilding that vertical.
 

@@ -202,7 +202,7 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 			ID:                      promotionID,
 			Source:                  promotion.SourceSlipramp,
 			Integration:             "prod",
-			ExternalPromotionID:     "slipramp-" + promotionID.String(),
+			ExternalPromotionID:     "external-dns-prod-slipramp-" + promotionID.String(),
 			StageID:                 targetStageID,
 			SourceStageID:           &sourceStageID,
 			StageSnapshot:           []byte(`{"project":"kargo-core","name":"external-dns-prod"}`),
@@ -265,7 +265,7 @@ func TestOperatorPromotionKargoLinkRequiresSuccessfulDispatch(t *testing.T) {
 	record := promotion.Promotion{
 		Source:              promotion.SourceSlipramp,
 		Integration:         "prod",
-		ExternalPromotionID: "slipramp-018f90ff-9fd8-7b5f-b7e1-f32ff54c1930",
+		ExternalPromotionID: "external-dns-prod-slipramp-018f90ff-9fd8-7b5f-b7e1-f32ff54c1930",
 		StageSnapshot:       []byte(`{"project":"kargo-core","name":"external-dns-prod"}`),
 		RepositorySnapshot:  []byte(`{"name":"ops"}`),
 		PolicySnapshot:      []byte(`{"effectiveMode":"review-required"}`),

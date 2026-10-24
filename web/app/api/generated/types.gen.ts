@@ -413,7 +413,7 @@ export type CancelRunCommand = {
 };
 
 export type ControllerCommand = {
-  type: "run-assignment" | "cancel-run" | "create-kargo-promotion";
+  type: "run-assignment" | "cancel-run" | "create-kargo-promotion" | "reconcile-kargo-promotion";
   /**
    * Present when type is run-assignment.
    */
@@ -426,6 +426,10 @@ export type ControllerCommand = {
    * Present when type is create-kargo-promotion.
    */
   promotion?: KargoPromotionCreationCommand;
+  /**
+   * Present when type is reconcile-kargo-promotion.
+   */
+  promotionReconciliation?: KargoPromotionReconciliationCommand;
 };
 
 export type RunObservation = {
@@ -643,6 +647,14 @@ export type Promotion = {
   lastDispatchAt?: string;
   dispatchedAt?: string;
   kargoPromotionUid?: string;
+  /**
+   * Next durable inspection time while the materialized resource awaits callback.
+   */
+  nextReconciliationAt?: string;
+  /**
+   * Most recent time reconciliation work was claimed by the responsible Controller.
+   */
+  lastReconciliationAt?: string;
   preparationRunId?: string;
   preparationRun?: Run;
   gitDiffArtifactId?: string;
@@ -1111,6 +1123,26 @@ export type KargoPromotionCreationCommand = {
   freight: string;
 };
 
+export type KargoPromotionReconciliationCommand = {
+  /**
+   * Durable Slipramp Promotion identity carried by the stable annotation.
+   */
+  id: string;
+  integration: CatalogName;
+  /**
+   * Kubernetes namespace containing the Kargo project.
+   */
+  project: CatalogName;
+  /**
+   * Canonical admission-assigned Kargo Promotion name.
+   */
+  kargoName: string;
+  /**
+   * Kubernetes UID recorded when the Promotion was materialized.
+   */
+  kargoUid: string;
+};
+
 export type KargoPromotionDispatchReport = {
   /**
    * Dispatch attempt from the creation command.
@@ -1122,9 +1154,32 @@ export type KargoPromotionDispatchReport = {
    */
   kargoUid?: string;
   /**
+   * Admission-assigned Kargo Promotion name; required when result is created.
+   */
+  kargoName?: string;
+  /**
    * Bounded failure detail; required for retryable and failed results.
    */
   diagnostic?: string;
+};
+
+export type KargoPromotionReconciliationReport = {
+  /**
+   * Canonical name of the observed Kargo Promotion.
+   */
+  kargoName: string;
+  /**
+   * Kubernetes UID of the observed Kargo Promotion.
+   */
+  kargoUid: string;
+  /**
+   * Terminal Kargo phase observed before callback hydration.
+   */
+  phase: "Failed" | "Errored" | "Aborted" | "Succeeded";
+  /**
+   * Bounded description of the terminal pre-callback state.
+   */
+  diagnostic: string;
 };
 
 export type LogSeal = {
@@ -2107,6 +2162,58 @@ export type ReportKargoPromotionDispatchResponses = {
 
 export type ReportKargoPromotionDispatchResponse =
   ReportKargoPromotionDispatchResponses[keyof ReportKargoPromotionDispatchResponses];
+
+export type ReportKargoPromotionReconciliationData = {
+  body: KargoPromotionReconciliationReport;
+  path: {
+    /**
+     * Slipramp Promotion whose Kargo resource was reconciled.
+     */
+    promotionId: string;
+  };
+  query?: never;
+  url: "/controller/v1/promotions/{promotionId}/reconciliation";
+};
+
+export type ReportKargoPromotionReconciliationErrors = {
+  /**
+   * The reconciliation report is invalid.
+   */
+  400: Problem;
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The Promotion is not assigned to this controller's cluster.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The report conflicts with the canonical Kargo Promotion identity.
+   */
+  409: Problem;
+  /**
+   * The reconciliation result could not be recorded.
+   */
+  500: Problem;
+};
+
+export type ReportKargoPromotionReconciliationError =
+  ReportKargoPromotionReconciliationErrors[keyof ReportKargoPromotionReconciliationErrors];
+
+export type ReportKargoPromotionReconciliationResponses = {
+  /**
+   * The terminal phase was recorded or newer callback state already won the race.
+   */
+  204: void;
+};
+
+export type ReportKargoPromotionReconciliationResponse =
+  ReportKargoPromotionReconciliationResponses[keyof ReportKargoPromotionReconciliationResponses];
 
 export type ReportRunObservationData = {
   body: RunObservation;
