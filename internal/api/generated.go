@@ -165,6 +165,60 @@ func (e HealthResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for InboxDestinationType.
+const (
+	InboxDestinationTypeCluster    InboxDestinationType = "cluster"
+	InboxDestinationTypePromotion  InboxDestinationType = "promotion"
+	InboxDestinationTypeRepository InboxDestinationType = "repository"
+	InboxDestinationTypeRun        InboxDestinationType = "run"
+)
+
+// Valid indicates whether the value is a known member of the InboxDestinationType enum.
+func (e InboxDestinationType) Valid() bool {
+	switch e {
+	case InboxDestinationTypeCluster:
+		return true
+	case InboxDestinationTypePromotion:
+		return true
+	case InboxDestinationTypeRepository:
+		return true
+	case InboxDestinationTypeRun:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InboxItemKind.
+const (
+	InboxItemKindClusterUnreachable InboxItemKind = "cluster-unreachable"
+	InboxItemKindGitTriggerFailure  InboxItemKind = "git-trigger-failure"
+	InboxItemKindPromotionError     InboxItemKind = "promotion-error"
+	InboxItemKindPromotionReview    InboxItemKind = "promotion-review"
+	InboxItemKindRepositoryRefresh  InboxItemKind = "repository-refresh"
+	InboxItemKindRunObservation     InboxItemKind = "run-observation"
+)
+
+// Valid indicates whether the value is a known member of the InboxItemKind enum.
+func (e InboxItemKind) Valid() bool {
+	switch e {
+	case InboxItemKindClusterUnreachable:
+		return true
+	case InboxItemKindGitTriggerFailure:
+		return true
+	case InboxItemKindPromotionError:
+		return true
+	case InboxItemKindPromotionReview:
+		return true
+	case InboxItemKindRepositoryRefresh:
+		return true
+	case InboxItemKindRunObservation:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LogCursorState.
 const (
 	LogCursorStateFailed LogCursorState = "failed"
@@ -1070,6 +1124,62 @@ type HealthResponse struct {
 // HealthResponseStatus defines model for HealthResponse.Status.
 type HealthResponseStatus string
 
+// Inbox defines model for Inbox.
+type Inbox struct {
+	Activity     InboxActivity     `json:"activity"`
+	Capabilities InboxCapabilities `json:"capabilities"`
+	Decisions    []InboxItem       `json:"decisions"`
+
+	// GeneratedAt UTC evaluation time shared by every item in this projection.
+	GeneratedAt time.Time   `json:"generatedAt"`
+	Problems    []InboxItem `json:"problems"`
+}
+
+// InboxActivity defines model for InboxActivity.
+type InboxActivity struct {
+	Queued   int `json:"queued"`
+	Running  int `json:"running"`
+	Starting int `json:"starting"`
+}
+
+// InboxCapabilities defines model for InboxCapabilities.
+type InboxCapabilities struct {
+	// AcknowledgeProblems Whether this credential may acknowledge current Inbox problems.
+	AcknowledgeProblems bool `json:"acknowledgeProblems"`
+}
+
+// InboxDestination defines model for InboxDestination.
+type InboxDestination struct {
+	// ID Resource identity for the destination.
+	ID   string               `json:"id"`
+	Type InboxDestinationType `json:"type"`
+}
+
+// InboxDestinationType defines model for InboxDestination.Type.
+type InboxDestinationType string
+
+// InboxItem defines model for InboxItem.
+type InboxItem struct {
+	ActionLabel string           `json:"actionLabel"`
+	Description string           `json:"description"`
+	Destination InboxDestination `json:"destination"`
+
+	// ID Opaque identity for this decision or exact problem occurrence.
+	ID         string        `json:"id"`
+	Kind       InboxItemKind `json:"kind"`
+	OccurredAt time.Time     `json:"occurredAt"`
+	Title      string        `json:"title"`
+}
+
+// InboxItemKind defines model for InboxItem.Kind.
+type InboxItemKind string
+
+// InboxProblemAcknowledgements defines model for InboxProblemAcknowledgements.
+type InboxProblemAcknowledgements struct {
+	// ProblemIds Exact current problem-occurrence IDs to acknowledge.
+	ProblemIds []string `json:"problemIds"`
+}
+
 // KargoPromotionRequest defines model for KargoPromotionRequest.
 type KargoPromotionRequest struct {
 	BaseRevision        GitRevision `json:"baseRevision"`
@@ -1971,6 +2081,21 @@ type Conflict = Problem
 // Forbidden An RFC 9457 problem detail.
 type Forbidden = Problem
 
+// InboxBadRequest An RFC 9457 problem detail.
+type InboxBadRequest = Problem
+
+// InboxForbidden An RFC 9457 problem detail.
+type InboxForbidden = Problem
+
+// InboxInternalError An RFC 9457 problem detail.
+type InboxInternalError = Problem
+
+// InboxMethodNotAllowed An RFC 9457 problem detail.
+type InboxMethodNotAllowed = Problem
+
+// InboxUnauthorized An RFC 9457 problem detail.
+type InboxUnauthorized = Problem
+
 // InternalError An RFC 9457 problem detail.
 type InternalError = Problem
 
@@ -2193,6 +2318,9 @@ type UploadRunArtifactParams struct {
 
 // CreateAPIKeyJSONRequestBody defines body for CreateAPIKey for application/json ContentType.
 type CreateAPIKeyJSONRequestBody = APIKeyCreate
+
+// AcknowledgeInboxProblemsJSONRequestBody defines body for AcknowledgeInboxProblems for application/json ContentType.
+type AcknowledgeInboxProblemsJSONRequestBody = InboxProblemAcknowledgements
 
 // SubmitKargoPromotionJSONRequestBody defines body for SubmitKargoPromotion for application/json ContentType.
 type SubmitKargoPromotionJSONRequestBody = KargoPromotionRequest
@@ -2478,6 +2606,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/git-trigger-deliveries/failed (the `ListFailedGitTriggerDeliveries` operationId).
 	ListFailedGitTriggerDeliveries(ctx context.Context, params *ListFailedGitTriggerDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetInbox Get the current operational Inbox
+	//
+	// Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
+	//
+	// Corresponds with GET /api/v1/inbox (the `GetInbox` operationId).
+	GetInbox(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AcknowledgeInboxProblemsWithBody Acknowledge an exact batch of current Inbox problems
+	//
+	// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+	AcknowledgeInboxProblemsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AcknowledgeInboxProblems Acknowledge an exact batch of current Inbox problems
+	//
+	// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+	AcknowledgeInboxProblems(ctx context.Context, body AcknowledgeInboxProblemsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// SubmitKargoPromotionWithBody Submit or poll a Kargo Promotion review request
 	//
@@ -3037,6 +3190,61 @@ func (c *Client) ListCommits(ctx context.Context, params *ListCommitsParams, req
 // Corresponds with GET /api/v1/git-trigger-deliveries/failed (the `ListFailedGitTriggerDeliveries` operationId).
 func (c *Client) ListFailedGitTriggerDeliveries(ctx context.Context, params *ListFailedGitTriggerDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListFailedGitTriggerDeliveriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetInbox Get the current operational Inbox
+//
+// Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
+//
+// Corresponds with GET /api/v1/inbox (the `GetInbox` operationId).
+func (c *Client) GetInbox(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetInboxRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AcknowledgeInboxProblemsWithBody Acknowledge an exact batch of current Inbox problems
+//
+// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+func (c *Client) AcknowledgeInboxProblemsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAcknowledgeInboxProblemsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AcknowledgeInboxProblems Acknowledge an exact batch of current Inbox problems
+//
+// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+func (c *Client) AcknowledgeInboxProblems(ctx context.Context, body AcknowledgeInboxProblemsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAcknowledgeInboxProblemsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4539,6 +4747,73 @@ func NewListFailedGitTriggerDeliveriesRequest(server string, params *ListFailedG
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetInboxRequest constructs an http.Request for the GetInbox method
+func NewGetInboxRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/inbox")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAcknowledgeInboxProblemsRequest calls the generic AcknowledgeInboxProblems builder with application/json body
+func NewAcknowledgeInboxProblemsRequest(server string, body AcknowledgeInboxProblemsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAcknowledgeInboxProblemsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewAcknowledgeInboxProblemsRequestWithBody constructs an http.Request for the AcknowledgeInboxProblems method, with any body, and a specified content type
+func NewAcknowledgeInboxProblemsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/inbox/problem-acknowledgements")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6967,6 +7242,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/git-trigger-deliveries/failed (the `ListFailedGitTriggerDeliveries` operationId).
 	ListFailedGitTriggerDeliveriesWithResponse(ctx context.Context, params *ListFailedGitTriggerDeliveriesParams, reqEditors ...RequestEditorFn) (*ListFailedGitTriggerDeliveriesResponse, error)
 
+	// GetInboxWithResponse Get the current operational Inbox
+	//
+	// Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/inbox (the `GetInbox` operationId).
+	GetInboxWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetInboxResponse, error)
+
+	// AcknowledgeInboxProblemsWithBodyWithResponse Acknowledge an exact batch of current Inbox problems
+	//
+	// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+	AcknowledgeInboxProblemsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AcknowledgeInboxProblemsResponse, error)
+
+	// AcknowledgeInboxProblemsWithResponse Acknowledge an exact batch of current Inbox problems
+	//
+	// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+	AcknowledgeInboxProblemsWithResponse(ctx context.Context, body AcknowledgeInboxProblemsJSONRequestBody, reqEditors ...RequestEditorFn) (*AcknowledgeInboxProblemsResponse, error)
+
 	// SubmitKargoPromotionWithBodyWithResponse Submit or poll a Kargo Promotion review request
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -8199,6 +8501,144 @@ func (r ListFailedGitTriggerDeliveriesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListFailedGitTriggerDeliveriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetInboxResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Inbox
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *InboxUnauthorized
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *InboxForbidden
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *InboxMethodNotAllowed
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *InboxInternalError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetInboxResponse) GetJSON200() *Inbox {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetInboxResponse) GetApplicationProblemJSON401() *InboxUnauthorized {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetInboxResponse) GetApplicationProblemJSON403() *InboxForbidden {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetInboxResponse) GetApplicationProblemJSON405() *InboxMethodNotAllowed {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetInboxResponse) GetApplicationProblemJSON500() *InboxInternalError {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetInboxResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetInboxResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetInboxResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetInboxResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AcknowledgeInboxProblemsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *InboxBadRequest
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *InboxUnauthorized
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *InboxForbidden
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *InboxMethodNotAllowed
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *InboxInternalError
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON400() *InboxBadRequest {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON401() *InboxUnauthorized {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON403() *InboxForbidden {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON405() *InboxMethodNotAllowed {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON500() *InboxInternalError {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r AcknowledgeInboxProblemsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AcknowledgeInboxProblemsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AcknowledgeInboxProblemsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AcknowledgeInboxProblemsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -11262,6 +11702,51 @@ func (c *ClientWithResponses) ListFailedGitTriggerDeliveriesWithResponse(ctx con
 	return ParseListFailedGitTriggerDeliveriesResponse(rsp)
 }
 
+// GetInboxWithResponse Get the current operational Inbox
+//
+// Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/inbox (the `GetInbox` operationId).
+func (c *ClientWithResponses) GetInboxWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetInboxResponse, error) {
+	rsp, err := c.GetInbox(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetInboxResponse(rsp)
+}
+
+// AcknowledgeInboxProblemsWithBodyWithResponse Acknowledge an exact batch of current Inbox problems
+//
+// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+func (c *ClientWithResponses) AcknowledgeInboxProblemsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AcknowledgeInboxProblemsResponse, error) {
+	rsp, err := c.AcknowledgeInboxProblemsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAcknowledgeInboxProblemsResponse(rsp)
+}
+
+// AcknowledgeInboxProblemsWithResponse Acknowledge an exact batch of current Inbox problems
+//
+// Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/inbox/problem-acknowledgements (the `AcknowledgeInboxProblems` operationId).
+func (c *ClientWithResponses) AcknowledgeInboxProblemsWithResponse(ctx context.Context, body AcknowledgeInboxProblemsJSONRequestBody, reqEditors ...RequestEditorFn) (*AcknowledgeInboxProblemsResponse, error) {
+	rsp, err := c.AcknowledgeInboxProblems(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAcknowledgeInboxProblemsResponse(rsp)
+}
+
 // SubmitKargoPromotionWithBodyWithResponse Submit or poll a Kargo Promotion review request
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -12714,6 +13199,117 @@ func ParseListFailedGitTriggerDeliveriesResponse(rsp *http.Response) (*ListFaile
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetInboxResponse parses an HTTP response from a GetInboxWithResponse call
+func ParseGetInboxResponse(rsp *http.Response) (*GetInboxResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetInboxResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Inbox
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest InboxUnauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest InboxForbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest InboxMethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InboxInternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAcknowledgeInboxProblemsResponse parses an HTTP response from a AcknowledgeInboxProblemsWithResponse call
+func ParseAcknowledgeInboxProblemsResponse(rsp *http.Response) (*AcknowledgeInboxProblemsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AcknowledgeInboxProblemsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest InboxBadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest InboxUnauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest InboxForbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest InboxMethodNotAllowed
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InboxInternalError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -15112,6 +15708,12 @@ type ServerInterface interface {
 	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
 	// (GET /api/v1/git-trigger-deliveries/failed)
 	ListFailedGitTriggerDeliveries(w http.ResponseWriter, r *http.Request, params ListFailedGitTriggerDeliveriesParams)
+	// GetInbox Get the current operational Inbox
+	// (GET /api/v1/inbox)
+	GetInbox(w http.ResponseWriter, r *http.Request)
+	// AcknowledgeInboxProblems Acknowledge an exact batch of current Inbox problems
+	// (POST /api/v1/inbox/problem-acknowledgements)
+	AcknowledgeInboxProblems(w http.ResponseWriter, r *http.Request)
 	// SubmitKargoPromotion Submit or poll a Kargo Promotion review request
 	// (POST /api/v1/kargo/{integration}/promotions)
 	SubmitKargoPromotion(w http.ResponseWriter, r *http.Request, integration CatalogName)
@@ -15700,6 +16302,34 @@ func (siw *ServerInterfaceWrapper) ListFailedGitTriggerDeliveries(w http.Respons
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListFailedGitTriggerDeliveries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInbox operation middleware
+func (siw *ServerInterfaceWrapper) GetInbox(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInbox(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AcknowledgeInboxProblems operation middleware
+func (siw *ServerInterfaceWrapper) AcknowledgeInboxProblems(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AcknowledgeInboxProblems(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17531,6 +18161,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/readyz", wrapper.GetReadiness)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/inbox", wrapper.GetInbox)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/inbox/problem-acknowledgements", wrapper.AcknowledgeInboxProblems)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.UpdateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/git-trigger-deliveries/failed", wrapper.ListFailedGitTriggerDeliveries)
@@ -17585,6 +18217,16 @@ type BadRequestApplicationProblemPlusJSONResponse Problem
 type ConflictApplicationProblemPlusJSONResponse Problem
 
 type ForbiddenApplicationProblemPlusJSONResponse Problem
+
+type InboxBadRequestApplicationProblemPlusJSONResponse Problem
+
+type InboxForbiddenApplicationProblemPlusJSONResponse Problem
+
+type InboxInternalErrorApplicationProblemPlusJSONResponse Problem
+
+type InboxMethodNotAllowedApplicationProblemPlusJSONResponse Problem
+
+type InboxUnauthorizedApplicationProblemPlusJSONResponse Problem
 
 type InternalErrorApplicationProblemPlusJSONResponse Problem
 
@@ -18590,6 +19232,187 @@ func (response ListFailedGitTriggerDeliveries405ApplicationProblemPlusJSONRespon
 type ListFailedGitTriggerDeliveries500ApplicationProblemPlusJSONResponse Problem
 
 func (response ListFailedGitTriggerDeliveries500ApplicationProblemPlusJSONResponse) VisitListFailedGitTriggerDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetInboxRequestObject struct {
+}
+
+type GetInboxResponseObject interface {
+	VisitGetInboxResponse(w http.ResponseWriter) error
+}
+
+type GetInbox200JSONResponse Inbox
+
+func (response GetInbox200JSONResponse) VisitGetInboxResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetInbox401ApplicationProblemPlusJSONResponse struct {
+	InboxUnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetInbox401ApplicationProblemPlusJSONResponse) VisitGetInboxResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetInbox403ApplicationProblemPlusJSONResponse struct {
+	InboxForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetInbox403ApplicationProblemPlusJSONResponse) VisitGetInboxResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetInbox405ApplicationProblemPlusJSONResponse struct {
+	InboxMethodNotAllowedApplicationProblemPlusJSONResponse
+}
+
+func (response GetInbox405ApplicationProblemPlusJSONResponse) VisitGetInboxResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetInbox500ApplicationProblemPlusJSONResponse struct {
+	InboxInternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetInbox500ApplicationProblemPlusJSONResponse) VisitGetInboxResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcknowledgeInboxProblemsRequestObject struct {
+	Body *AcknowledgeInboxProblemsJSONRequestBody
+}
+
+type AcknowledgeInboxProblemsResponseObject interface {
+	VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error
+}
+
+type AcknowledgeInboxProblems204Response struct {
+}
+
+func (response AcknowledgeInboxProblems204Response) VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type AcknowledgeInboxProblems400ApplicationProblemPlusJSONResponse struct {
+	InboxBadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response AcknowledgeInboxProblems400ApplicationProblemPlusJSONResponse) VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcknowledgeInboxProblems401ApplicationProblemPlusJSONResponse struct {
+	InboxUnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response AcknowledgeInboxProblems401ApplicationProblemPlusJSONResponse) VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcknowledgeInboxProblems403ApplicationProblemPlusJSONResponse struct {
+	InboxForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response AcknowledgeInboxProblems403ApplicationProblemPlusJSONResponse) VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcknowledgeInboxProblems405ApplicationProblemPlusJSONResponse struct {
+	InboxMethodNotAllowedApplicationProblemPlusJSONResponse
+}
+
+func (response AcknowledgeInboxProblems405ApplicationProblemPlusJSONResponse) VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AcknowledgeInboxProblems500ApplicationProblemPlusJSONResponse struct {
+	InboxInternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response AcknowledgeInboxProblems500ApplicationProblemPlusJSONResponse) VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -22344,6 +23167,12 @@ type StrictServerInterface interface {
 	// ListFailedGitTriggerDeliveries List failed Git-trigger deliveries
 	// (GET /api/v1/git-trigger-deliveries/failed)
 	ListFailedGitTriggerDeliveries(ctx context.Context, request ListFailedGitTriggerDeliveriesRequestObject) (ListFailedGitTriggerDeliveriesResponseObject, error)
+	// GetInbox Get the current operational Inbox
+	// (GET /api/v1/inbox)
+	GetInbox(ctx context.Context, request GetInboxRequestObject) (GetInboxResponseObject, error)
+	// AcknowledgeInboxProblems Acknowledge an exact batch of current Inbox problems
+	// (POST /api/v1/inbox/problem-acknowledgements)
+	AcknowledgeInboxProblems(ctx context.Context, request AcknowledgeInboxProblemsRequestObject) (AcknowledgeInboxProblemsResponseObject, error)
 	// SubmitKargoPromotion Submit or poll a Kargo Promotion review request
 	// (POST /api/v1/kargo/{integration}/promotions)
 	SubmitKargoPromotion(ctx context.Context, request SubmitKargoPromotionRequestObject) (SubmitKargoPromotionResponseObject, error)
@@ -22781,6 +23610,61 @@ func (sh *strictHandler) ListFailedGitTriggerDeliveries(w http.ResponseWriter, r
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListFailedGitTriggerDeliveriesResponseObject); ok {
 		if err := validResponse.VisitListFailedGitTriggerDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetInbox operation middleware
+func (sh *strictHandler) GetInbox(w http.ResponseWriter, r *http.Request) {
+	var request GetInboxRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetInbox(ctx, request.(GetInboxRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetInbox")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetInboxResponseObject); ok {
+		if err := validResponse.VisitGetInboxResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AcknowledgeInboxProblems operation middleware
+func (sh *strictHandler) AcknowledgeInboxProblems(w http.ResponseWriter, r *http.Request) {
+	var request AcknowledgeInboxProblemsRequestObject
+
+	var body AcknowledgeInboxProblemsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AcknowledgeInboxProblems(ctx, request.(AcknowledgeInboxProblemsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AcknowledgeInboxProblems")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AcknowledgeInboxProblemsResponseObject); ok {
+		if err := validResponse.VisitAcknowledgeInboxProblemsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

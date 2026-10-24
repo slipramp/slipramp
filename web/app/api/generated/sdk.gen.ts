@@ -10,6 +10,9 @@ import type {
 } from "./client";
 import { client } from "./client.gen";
 import type {
+  AcknowledgeInboxProblemsData,
+  AcknowledgeInboxProblemsErrors,
+  AcknowledgeInboxProblemsResponses,
   AppendRunLogChunkData,
   AppendRunLogChunkErrors,
   AppendRunLogChunkResponses,
@@ -53,6 +56,9 @@ import type {
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
+  GetInboxData,
+  GetInboxErrors,
+  GetInboxResponses,
   GetPromotionData,
   GetPromotionErrors,
   GetPromotionResponses,
@@ -249,6 +255,64 @@ export const createRepository = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/repositories",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get the current operational Inbox
+ *
+ * Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
+ */
+export const getInbox = <ThrowOnError extends boolean = false>(
+  options?: Options<GetInboxData, ThrowOnError>,
+): RequestResult<GetInboxResponses, GetInboxErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetInboxResponses, GetInboxErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/inbox",
+    ...options,
+  });
+
+/**
+ * Acknowledge an exact batch of current Inbox problems
+ *
+ * Persists acknowledgements only for requested IDs that are current problem occurrences. Unknown, resolved, replaced, decision, and already acknowledged IDs are ignored.
+ */
+export const acknowledgeInboxProblems = <ThrowOnError extends boolean = false>(
+  options: Options<AcknowledgeInboxProblemsData, ThrowOnError>,
+): RequestResult<AcknowledgeInboxProblemsResponses, AcknowledgeInboxProblemsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    AcknowledgeInboxProblemsResponses,
+    AcknowledgeInboxProblemsErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/inbox/problem-acknowledgements",
     ...options,
     headers: {
       "Content-Type": "application/json",

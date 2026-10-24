@@ -4,8 +4,22 @@ import "time"
 
 const observationFreshnessWindow = time.Minute
 
-func DeriveObservationState(record Run, clusterConnected bool, now time.Time) (ObservationState, bool) {
-	switch record.Phase {
+type ObservationStatus struct {
+	Phase          Phase
+	AssignedAt     *time.Time
+	LastObservedAt *time.Time
+}
+
+func (r Run) ObservationStatus() ObservationStatus {
+	return ObservationStatus{
+		Phase:          r.Phase,
+		AssignedAt:     r.AssignedAt,
+		LastObservedAt: r.LastObservedAt,
+	}
+}
+
+func DeriveObservationState(status ObservationStatus, clusterConnected bool, now time.Time) (ObservationState, bool) {
+	switch status.Phase {
 	case PhaseAssigned, PhasePreparing, PhaseRunning:
 	case PhaseQueued, PhaseFinished:
 		return "", false
@@ -18,15 +32,15 @@ func DeriveObservationState(record Run, clusterConnected bool, now time.Time) (O
 	}
 
 	staleBefore := now.Add(-observationFreshnessWindow)
-	if record.LastObservedAt == nil {
-		if record.AssignedAt != nil && !record.AssignedAt.Before(staleBefore) {
+	if status.LastObservedAt == nil {
+		if status.AssignedAt != nil && !status.AssignedAt.Before(staleBefore) {
 			return ObservationStatePending, true
 		}
 
 		return ObservationStateUnknown, true
 	}
 
-	if record.LastObservedAt.Before(staleBefore) {
+	if status.LastObservedAt.Before(staleBefore) {
 		return ObservationStateUnknown, true
 	}
 

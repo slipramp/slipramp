@@ -10,10 +10,12 @@ import {
   Text,
   ThemeIcon,
 } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import {
   IconActivityHeartbeat,
   IconAlertTriangle,
   IconArrowRight,
+  IconCheck,
   IconCircleCheck,
   IconGitBranch,
   IconGitPullRequest,
@@ -21,27 +23,28 @@ import {
   IconTargetArrow,
   type TablerIcon,
 } from "@tabler/icons-react";
-import { Link } from "react-router";
+import { useEffect, useRef } from "react";
+import { Link, useFetcher } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
-  getCurrentPrincipal,
+  acknowledgeInboxProblems,
+  getInbox,
   getReadiness,
-  listClusters,
-  listFailedGitTriggerDeliveries,
-  listPromotions,
-  listRepositories,
-  listRuns,
+  type Inbox as InboxProjection,
+  type InboxItem,
   type ReadinessResponse,
 } from "~/api/generated";
 import { RelativeTime } from "~/components/display";
 import { EmptyState, PageHeader, SectionHeader } from "~/components/page";
-import { buildInbox, type InboxItem, type InboxItemKind } from "~/inbox";
+import { problemDetail } from "~/form-data";
+import { acknowledgementProblemIDs, inboxDestinationHref } from "~/inbox";
 import { pageTitle } from "~/page-title";
+import { asReadinessResponse } from "~/readiness";
 
 import type { Route } from "./+types/index";
 
-const domainPageLimit = 100;
+type AcknowledgementActionResult = { error?: string };
 
 export function meta() {
   return [{ title: pageTitle("Inbox") }];
@@ -49,236 +52,211 @@ export function meta() {
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [
-    principalResult,
-    readinessResult,
-    repositoriesResult,
-    clustersResult,
-    pendingPromotionsResult,
-    errorPromotionsResult,
-    queuedRunsResult,
-    assignedRunsResult,
-    preparingRunsResult,
-    runningRunsResult,
-    failedGitDeliveriesResult,
-  ] = await Promise.all([
-    getCurrentPrincipal({ client }),
+  const [inboxResult, readinessResult] = await Promise.all([
+    getInbox({ client }),
     getReadiness({ client }),
-    listRepositories({
-      client,
-      query: { limit: 200, refreshStatus: "failed" },
-    }),
-    listClusters({
-      client,
-      query: { connection: "unreachable", limit: 200 },
-    }),
-    listPromotions({
-      client,
-      query: { limit: domainPageLimit, status: "pending" },
-    }),
-    listPromotions({
-      client,
-      query: { limit: domainPageLimit, status: "error" },
-    }),
-    listRuns({ client, query: { limit: 1, phase: "queued" } }),
-    listRuns({ client, query: { limit: domainPageLimit, phase: "assigned" } }),
-    listRuns({ client, query: { limit: domainPageLimit, phase: "preparing" } }),
-    listRuns({ client, query: { limit: domainPageLimit, phase: "running" } }),
-    listFailedGitTriggerDeliveries({ client, query: { limit: domainPageLimit } }),
   ]);
 
-  const runResults = [assignedRunsResult, preparingRunsResult, runningRunsResult];
-  const promotions = [
-    ...(pendingPromotionsResult.data?.items ?? []),
-    ...(errorPromotionsResult.data?.items ?? []),
-  ];
-  const activeRuns = runResults.flatMap((result) => result.data?.items ?? []);
-  const inbox = buildInbox({
-    activeRuns,
-    failedGitDeliveries: failedGitDeliveriesResult.data?.items ?? [],
-    principal: principalResult.data,
-    promotions,
-    readiness: readinessReport(readinessResult.data ?? readinessResult.error),
-    repositories: repositoriesResult.data?.items ?? [],
-    unreachableClusters: clustersResult.data?.items ?? [],
-  });
-
-  const unavailableSources = new Set<string>();
-  if (!failedGitDeliveriesResult.data) unavailableSources.add("Git-trigger failures");
-  if (!principalResult.data) unavailableSources.add("your permissions");
-  if (!readinessReport(readinessResult.data ?? readinessResult.error)) {
-    unavailableSources.add("server readiness");
-  }
-  if (!repositoriesResult.data) unavailableSources.add("repository health");
-  if (!clustersResult.data) unavailableSources.add("cluster health");
-  if (!pendingPromotionsResult.data || !errorPromotionsResult.data) {
-    unavailableSources.add("Promotions");
-  }
-  if (
-    !queuedRunsResult.data ||
-    !assignedRunsResult.data ||
-    !preparingRunsResult.data ||
-    !runningRunsResult.data
-  ) {
-    unavailableSources.add("Runs");
-  }
-
-  const limitedSources = new Set<string>();
-  if (
-    failedGitDeliveriesResult.data &&
-    failedGitDeliveriesResult.data.total > failedGitDeliveriesResult.data.items.length
-  ) {
-    limitedSources.add("Git-trigger failures");
-  }
-  if (
-    (pendingPromotionsResult.data?.total ?? 0) >
-      (pendingPromotionsResult.data?.items.length ?? 0) ||
-    (errorPromotionsResult.data?.total ?? 0) > (errorPromotionsResult.data?.items.length ?? 0)
-  ) {
-    limitedSources.add("Promotions");
-  }
-  if ((repositoriesResult.data?.total ?? 0) > (repositoriesResult.data?.items.length ?? 0)) {
-    limitedSources.add("repositories");
-  }
-  if ((clustersResult.data?.total ?? 0) > (clustersResult.data?.items.length ?? 0)) {
-    limitedSources.add("clusters");
-  }
-  if (runResults.some((result) => (result.data?.total ?? 0) > (result.data?.items.length ?? 0))) {
-    limitedSources.add("active Runs");
-  }
-
-  const activity =
-    queuedRunsResult.data &&
-    assignedRunsResult.data &&
-    preparingRunsResult.data &&
-    runningRunsResult.data
-      ? {
-          queued: queuedRunsResult.data.total,
-          running: runningRunsResult.data.total,
-          starting: assignedRunsResult.data.total + preparingRunsResult.data.total,
-        }
-      : undefined;
-
   return {
-    activity,
-    decisions: inbox.decisions,
-    limitedSources: [...limitedSources],
-    problems: inbox.problems,
-    unavailableSources: [...unavailableSources],
+    inbox: inboxResult.data,
+    inboxError: inboxResult.error
+      ? problemDetail(inboxResult.error, "The operational Inbox could not be loaded.")
+      : undefined,
+    readiness: asReadinessResponse(readinessResult.data ?? readinessResult.error),
   };
 }
 
+export async function action({
+  context,
+  request,
+}: Route.ActionArgs): Promise<AcknowledgementActionResult> {
+  const problemIDs = acknowledgementProblemIDs(await request.formData());
+  if (!problemIDs) {
+    return { error: "Choose one or more current Inbox problems to acknowledge." };
+  }
+
+  const result = await acknowledgeInboxProblems({
+    body: { problemIds: problemIDs },
+    client: createServerAPIClient(request, context),
+  });
+
+  return result.error === undefined
+    ? {}
+    : {
+        error: problemDetail(result.error, "The Inbox problems could not be acknowledged."),
+      };
+}
+
 export default function Inbox({ loaderData }: Route.ComponentProps) {
-  const attentionCount = loaderData.decisions.length + loaderData.problems.length;
+  const inbox = loaderData.inbox;
+  const attentionCount = inbox ? inbox.decisions.length + inbox.problems.length : undefined;
 
   return (
     <Stack gap="lg">
       <PageHeader
         actions={
-          <Badge
-            color={attentionCount === 0 ? "green" : "yellow"}
-            leftSection={
-              attentionCount === 0 ? <IconCircleCheck aria-hidden size={15} /> : undefined
-            }
-            size="lg"
-            variant="light"
-          >
-            {attentionCount === 0
-              ? "All clear"
-              : `${attentionCount} ${attentionCount === 1 ? "item" : "items"}`}
-          </Badge>
+          attentionCount === undefined ? (
+            <Badge
+              color="red"
+              leftSection={<IconAlertTriangle aria-hidden size={15} />}
+              size="lg"
+              variant="light"
+            >
+              Unavailable
+            </Badge>
+          ) : (
+            <Badge
+              color={attentionCount === 0 ? "green" : "yellow"}
+              leftSection={
+                attentionCount === 0 ? <IconCircleCheck aria-hidden size={15} /> : undefined
+              }
+              size="lg"
+              variant="light"
+            >
+              {attentionCount === 0
+                ? "All clear"
+                : `${attentionCount} ${attentionCount === 1 ? "item" : "items"}`}
+            </Badge>
+          )
         }
         description="Decisions and operational conditions that need your attention."
         title="Inbox"
       />
 
-      {loaderData.unavailableSources.length > 0 ? (
-        <Alert color="yellow" icon={<IconAlertTriangle size={18} />} title="Inbox is incomplete">
-          Slipramp could not load {humanList(loaderData.unavailableSources)}. Available items are
-          still shown below.
-        </Alert>
-      ) : null}
-
-      {loaderData.limitedSources.length > 0 ? (
-        <Alert color="blue" title="Some results are not shown">
-          This first version limits the number of {humanList(loaderData.limitedSources)} loaded into
-          the Inbox. Use the linked domain views for the complete history.
-        </Alert>
-      ) : null}
-
       <Grid gap="xl">
         <Grid.Col span={{ base: 12, lg: 8 }}>
-          {attentionCount === 0 ? (
-            <EmptyState
-              action={
-                <Button
-                  component={Link}
-                  leftSection={<IconTargetArrow aria-hidden size={16} />}
-                  to="/targets"
-                  variant="light"
-                >
-                  Browse targets
-                </Button>
-              }
-              description="There are no decisions or operational problems that currently need you."
-              title="You’re all caught up"
-            />
+          {inbox ? (
+            <InboxContents inbox={inbox} />
           ) : (
-            <Stack gap="xl">
-              {loaderData.decisions.length > 0 ? (
-                <InboxSection
-                  description="Requests waiting for an operator decision."
-                  items={loaderData.decisions}
-                  title="Needs a decision"
-                />
-              ) : null}
-              {loaderData.problems.length > 0 ? (
-                <InboxSection
-                  description="Current conditions that may need investigation."
-                  items={loaderData.problems}
-                  title="Problems"
-                />
-              ) : null}
-            </Stack>
+            <Alert color="red" icon={<IconAlertTriangle size={18} />} title="Inbox unavailable">
+              {loaderData.inboxError ?? "Slipramp could not load the operational Inbox."}{" "}
+              {readinessDescription(loaderData.readiness)}
+            </Alert>
           )}
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, lg: 4 }}>
-          <RunActivity activity={loaderData.activity} />
+          <RunActivity activity={inbox?.activity} />
         </Grid.Col>
       </Grid>
     </Stack>
   );
 }
 
+function InboxContents({ inbox }: Readonly<{ inbox: InboxProjection }>) {
+  const attentionCount = inbox.decisions.length + inbox.problems.length;
+
+  if (attentionCount === 0) {
+    return (
+      <EmptyState
+        action={
+          <Button
+            component={Link}
+            leftSection={<IconTargetArrow aria-hidden size={16} />}
+            to="/targets"
+            variant="light"
+          >
+            Browse targets
+          </Button>
+        }
+        description="There are no decisions or operational problems that currently need you."
+        title="You’re all caught up"
+      />
+    );
+  }
+
+  return (
+    <Stack gap="xl">
+      {inbox.decisions.length > 0 ? (
+        <InboxSection
+          description="Requests waiting for an operator decision."
+          items={inbox.decisions}
+          title="Needs a decision"
+        />
+      ) : null}
+      {inbox.problems.length > 0 ? (
+        <InboxSection
+          canAcknowledge={inbox.capabilities.acknowledgeProblems}
+          description="Current conditions that may need investigation."
+          items={inbox.problems}
+          title="Problems"
+        />
+      ) : null}
+    </Stack>
+  );
+}
+
 function InboxSection({
+  canAcknowledge = false,
   description,
   items,
   title,
-}: Readonly<{ description: string; items: InboxItem[]; title: string }>) {
+}: Readonly<{
+  canAcknowledge?: boolean;
+  description: string;
+  items: InboxItem[];
+  title: string;
+}>) {
+  const fetcher = useFetcher<typeof action>();
+  const acknowledgingAll = fetcher.state !== "idle";
+  useAcknowledgementError(fetcher.data);
+
   return (
     <Stack gap="sm">
       <SectionHeader
         actions={
-          <Badge color="gray" variant="light">
-            {items.length}
-          </Badge>
+          <Group gap="xs">
+            <Badge color="gray" variant="light">
+              {items.length}
+            </Badge>
+            {canAcknowledge ? (
+              <fetcher.Form method="post">
+                {items.map((item) => (
+                  <input key={item.id} name="problemId" type="hidden" value={item.id} />
+                ))}
+                <Button
+                  leftSection={<IconCheck aria-hidden size={14} />}
+                  loading={acknowledgingAll}
+                  size="compact-sm"
+                  type="submit"
+                  variant="light"
+                >
+                  Acknowledge all
+                </Button>
+              </fetcher.Form>
+            ) : null}
+          </Group>
         }
         description={description}
         title={title}
       />
       <Stack gap="sm">
         {items.map((item) => (
-          <InboxItemCard item={item} key={item.id} />
+          <InboxItemCard
+            acknowledgementsEnabled={canAcknowledge}
+            bulkAcknowledgementPending={acknowledgingAll}
+            item={item}
+            key={item.id}
+          />
         ))}
       </Stack>
     </Stack>
   );
 }
 
-function InboxItemCard({ item }: Readonly<{ item: InboxItem }>) {
+function InboxItemCard({
+  acknowledgementsEnabled,
+  bulkAcknowledgementPending,
+  item,
+}: Readonly<{
+  acknowledgementsEnabled: boolean;
+  bulkAcknowledgementPending: boolean;
+  item: InboxItem;
+}>) {
+  const fetcher = useFetcher<typeof action>();
   const presentation = itemPresentation(item.kind);
   const ItemIcon = presentation.icon;
+  useAcknowledgementError(fetcher.data);
 
   return (
     <Paper className="inbox-item" data-tone={presentation.tone} p="md" withBorder>
@@ -291,15 +269,27 @@ function InboxItemCard({ item }: Readonly<{ item: InboxItem }>) {
             <Text fw={650} style={{ flex: "1 1 15rem", minWidth: 0 }}>
               {item.title}
             </Text>
-            <Group gap="xs" style={{ marginInlineStart: "auto" }} wrap="nowrap">
-              {item.occurredAt ? (
-                <RelativeTime c="dimmed" size="xs" value={item.occurredAt} />
+            <Group gap="xs" style={{ marginInlineStart: "auto" }} wrap="wrap">
+              <RelativeTime c="dimmed" size="xs" value={item.occurredAt} />
+              {acknowledgementsEnabled ? (
+                <fetcher.Form method="post">
+                  <input name="problemId" type="hidden" value={item.id} />
+                  <Button
+                    disabled={bulkAcknowledgementPending}
+                    loading={fetcher.state !== "idle"}
+                    size="compact-sm"
+                    type="submit"
+                    variant="subtle"
+                  >
+                    Acknowledge
+                  </Button>
+                </fetcher.Form>
               ) : null}
               <Button
                 component={Link}
                 rightSection={<IconArrowRight aria-hidden size={14} />}
                 size="compact-sm"
-                to={item.href}
+                to={inboxDestinationHref(item.destination)}
                 variant="light"
               >
                 {item.actionLabel}
@@ -313,6 +303,21 @@ function InboxItemCard({ item }: Readonly<{ item: InboxItem }>) {
       </Group>
     </Paper>
   );
+}
+
+function useAcknowledgementError(actionData: AcknowledgementActionResult | undefined) {
+  const shownActionData = useRef<AcknowledgementActionResult | undefined>(undefined);
+
+  useEffect(() => {
+    if (!actionData?.error || shownActionData.current === actionData) return;
+
+    shownActionData.current = actionData;
+    notifications.show({
+      color: "red",
+      message: actionData.error,
+      title: "Acknowledgement failed",
+    });
+  }, [actionData]);
 }
 
 function RunActivity({
@@ -368,7 +373,7 @@ function ActivityCount({ label, value }: Readonly<{ label: string; value?: numbe
   );
 }
 
-function itemPresentation(kind: InboxItemKind): {
+function itemPresentation(kind: InboxItem["kind"]): {
   color: "orange" | "red" | "yellow";
   icon: TablerIcon;
   tone: "critical" | "warning";
@@ -384,23 +389,24 @@ function itemPresentation(kind: InboxItemKind): {
       return { color: "red", icon: IconServerOff, tone: "critical" };
     case "git-trigger-failure":
     case "promotion-error":
-    case "dependency-unavailable":
       return { color: "red", icon: IconAlertTriangle, tone: "critical" };
   }
 }
 
-function readinessReport(value: unknown): ReadinessResponse | undefined {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !("status" in value) ||
-    !("database" in value) ||
-    !("artifactStorage" in value)
-  ) {
-    return undefined;
+function readinessDescription(readiness: ReadinessResponse | undefined) {
+  if (!readiness) {
+    return "Server readiness could not be determined.";
   }
 
-  return value as ReadinessResponse;
+  const unavailable = [
+    readiness.database === "unavailable" ? "PostgreSQL" : undefined,
+    readiness.artifactStorage === "unavailable" ? "artifact storage" : undefined,
+  ].filter((dependency): dependency is string => dependency !== undefined);
+  if (unavailable.length > 0) {
+    return `Readiness reports ${humanList(unavailable)} unavailable.`;
+  }
+
+  return "Server dependencies are ready; retry the request or inspect Server logs.";
 }
 
 function humanList(items: string[]) {

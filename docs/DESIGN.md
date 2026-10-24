@@ -383,6 +383,7 @@ signs in through OIDC.
 | -------------------------------------------------------------------------------- | ------------------------ | ---------------------------- |
 | Read product state, history, logs, artifact metadata and non-sensitive downloads | viewer                   | `slipramp:read`              |
 | Create or cancel Runs                                                            | operator                 | `slipramp:runs:write`        |
+| Acknowledge Inbox problems                                                       | operator                 | `slipramp:inbox:write`       |
 | Submit or poll Kargo Promotions                                                  | operator service account | `slipramp:promotions:submit` |
 | Decide Promotions or change Stage policy                                         | operator                 | `slipramp:promotions:write`  |
 | Administer Repositories, service accounts, and their keys                        | admin                    | `slipramp:admin`             |
@@ -531,13 +532,28 @@ boundary; the pre-provisioned bucket is checked at startup without requiring
 bucket-administration privileges. The separate Web process uses strict
 TypeScript, React Router v8 Framework/SSR mode, and Mantine UI v9.
 
-The current homepage is a role-aware operational Inbox composed by the Web
-from domain APIs and readiness. It groups pending Promotion decisions and
-operational problems; it has no dedicated Inbox API or durable acknowledgement
-state yet. Targets have their own searchable, repository-filtered, paginated
-index. Repository, commit, Cluster, Run/log/artifact, Promotion, and Access
-screens use the same authenticated contract. The proposed Server projection is
-in [INBOX.md](./INBOX.md).
+The homepage is a role-aware operational Inbox delivered through one generated
+Server API. Its complete read model groups pending Promotion decisions and
+current operational problems, uses one evaluation time and deterministic
+occurrence identities, reports exact Run activity counts, and groups stale Runs
+beneath unreachable Clusters. Derived problems remain owned by their source
+domains rather than a second durable problem lifecycle table.
+
+Operators and administrators may acknowledge an exact batch of rendered problem
+occurrences. PostgreSQL stores the acknowledgement per Principal and occurrence,
+so it survives browser and Web restarts, remains visible to other Principals,
+and does not hide a later occurrence of the same condition. Decisions cannot be
+acknowledged, and newly concurrent problems are absent from the submitted batch.
+The capability comes from the complete role-and-scope authorization result.
+
+The Web reads this projection without domain pagination or a fallback composition
+path. A required projection-read failure produces an unavailable state and cannot
+be presented as **All clear**. Dependency health remains outside the Inbox and is
+exposed through readiness for external monitoring and failure diagnosis.
+
+Targets have their own searchable, repository-filtered, paginated index.
+Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
+the same authenticated contract.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

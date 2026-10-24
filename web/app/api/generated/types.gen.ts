@@ -69,6 +69,64 @@ export type Problem = {
   instance?: string;
 };
 
+export type Inbox = {
+  /**
+   * UTC evaluation time shared by every item in this projection.
+   */
+  generatedAt: string;
+  capabilities: InboxCapabilities;
+  decisions: Array<InboxItem>;
+  problems: Array<InboxItem>;
+  activity: InboxActivity;
+};
+
+export type InboxCapabilities = {
+  /**
+   * Whether this credential may acknowledge current Inbox problems.
+   */
+  acknowledgeProblems: boolean;
+};
+
+export type InboxActivity = {
+  queued: number;
+  starting: number;
+  running: number;
+};
+
+export type InboxItem = {
+  /**
+   * Opaque identity for this decision or exact problem occurrence.
+   */
+  id: string;
+  kind:
+    | "promotion-review"
+    | "promotion-error"
+    | "git-trigger-failure"
+    | "repository-refresh"
+    | "cluster-unreachable"
+    | "run-observation";
+  title: string;
+  description: string;
+  occurredAt: string;
+  actionLabel: string;
+  destination: InboxDestination;
+};
+
+export type InboxDestination = {
+  type: "promotion" | "repository" | "cluster" | "run";
+  /**
+   * Resource identity for the destination.
+   */
+  id: string;
+};
+
+export type InboxProblemAcknowledgements = {
+  /**
+   * Exact current problem-occurrence IDs to acknowledge.
+   */
+  problemIds: Array<string>;
+};
+
 export type ProductPrincipal = {
   principalId: string;
   kind: "user" | "service-account";
@@ -1029,6 +1087,7 @@ export type ArtifactProvenance = {
 export type ApiKeyScope =
   | "slipramp:read"
   | "slipramp:runs:write"
+  | "slipramp:inbox:write"
   | "slipramp:promotions:submit"
   | "slipramp:promotions:write"
   | "slipramp:admin";
@@ -1310,6 +1369,86 @@ export type CreateRepositoryResponses = {
 };
 
 export type CreateRepositoryResponse = CreateRepositoryResponses[keyof CreateRepositoryResponses];
+
+export type GetInboxData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/inbox";
+};
+
+export type GetInboxErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The complete Inbox projection or acknowledgement could not be completed.
+   */
+  500: Problem;
+};
+
+export type GetInboxError = GetInboxErrors[keyof GetInboxErrors];
+
+export type GetInboxResponses = {
+  /**
+   * The complete operational Inbox evaluated at one point in time.
+   */
+  200: Inbox;
+};
+
+export type GetInboxResponse = GetInboxResponses[keyof GetInboxResponses];
+
+export type AcknowledgeInboxProblemsData = {
+  body: InboxProblemAcknowledgements;
+  path?: never;
+  query?: never;
+  url: "/api/v1/inbox/problem-acknowledgements";
+};
+
+export type AcknowledgeInboxProblemsErrors = {
+  /**
+   * The request body or problem occurrence IDs are invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The complete Inbox projection or acknowledgement could not be completed.
+   */
+  500: Problem;
+};
+
+export type AcknowledgeInboxProblemsError =
+  AcknowledgeInboxProblemsErrors[keyof AcknowledgeInboxProblemsErrors];
+
+export type AcknowledgeInboxProblemsResponses = {
+  /**
+   * The matching current problem occurrences were acknowledged.
+   */
+  204: void;
+};
+
+export type AcknowledgeInboxProblemsResponse =
+  AcknowledgeInboxProblemsResponses[keyof AcknowledgeInboxProblemsResponses];
 
 export type RemoveRepositoryData = {
   body?: never;

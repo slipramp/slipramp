@@ -1,0 +1,92 @@
+inbox:
+  get:
+    operationId: getInbox
+    summary: Get the current operational Inbox
+    description: >-
+      Returns a complete role-aware projection of pending decisions, visible
+      unacknowledged problems, and current Run activity. The operation fails
+      instead of returning a knowingly partial projection.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Inbox]
+    responses:
+      "200":
+        description: The complete operational Inbox evaluated at one point in time.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/inbox.yaml#/Inbox
+      "401":
+        $ref: "#/components/responses/InboxUnauthorized"
+      "403":
+        $ref: "#/components/responses/InboxForbidden"
+      "405":
+        $ref: "#/components/responses/InboxMethodNotAllowed"
+      "500":
+        $ref: "#/components/responses/InboxInternalError"
+
+problemAcknowledgements:
+  post:
+    operationId: acknowledgeInboxProblems
+    summary: Acknowledge an exact batch of current Inbox problems
+    description: >-
+      Persists acknowledgements only for requested IDs that are current problem
+      occurrences. Unknown, resolved, replaced, decision, and already
+      acknowledged IDs are ignored.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Inbox]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/inbox.yaml#/InboxProblemAcknowledgements
+    responses:
+      "204":
+        description: The matching current problem occurrences were acknowledged.
+      "400":
+        $ref: "#/components/responses/InboxBadRequest"
+      "401":
+        $ref: "#/components/responses/InboxUnauthorized"
+      "403":
+        $ref: "#/components/responses/InboxForbidden"
+      "405":
+        $ref: "#/components/responses/InboxMethodNotAllowed"
+      "500":
+        $ref: "#/components/responses/InboxInternalError"
+
+components:
+  responses:
+    InboxBadRequest:
+      description: The request body or problem occurrence IDs are invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    InboxUnauthorized:
+      description: A valid product session or bearer credential is required.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    InboxForbidden:
+      description: The authenticated principal lacks the required role or scope.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    InboxMethodNotAllowed:
+      description: The HTTP method is not supported for this resource.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem
+    InboxInternalError:
+      description: The complete Inbox projection or acknowledgement could not be completed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../components/common.yaml#/Problem

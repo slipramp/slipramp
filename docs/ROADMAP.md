@@ -7,43 +7,6 @@ When work lands, update the design and remove or narrow the corresponding item.
 The sections below group related work; they are not release commitments or a
 strict priority order.
 
-## Operational Inbox
-
-The Web homepage already composes pending decisions and operational problems.
-The dedicated Server projection and durable acknowledgements are unimplemented.
-The accepted detailed proposal is [INBOX.md](./INBOX.md).
-
-- [ ] Define `GET /api/v1/inbox` and the exact-batch
-      `POST /api/v1/inbox/problem-acknowledgements` contract; generate all clients.
-- [ ] Add `inbox:write` permission and `slipramp:inbox:write` scope across
-      identity validation, database constraints, Access UI, and authorization tests.
-- [ ] Persist per-Principal acknowledgements keyed by opaque problem-occurrence
-      ID, with idempotent batch insertion and complete internal domain reads.
-- [ ] Implement `internal/inbox` projection using one evaluation time,
-      deterministic occurrence identity, capabilities, activity counts, Promotion
-      expiry, and stale-Run grouping beneath unreachable Clusters.
-- [ ] Track dependency outage transitions so a new outage is a new occurrence.
-      Keep readiness available separately when PostgreSQL or the Inbox API fails.
-- [ ] Add generated handlers and fail-closed authorization; reject partial
-      source reads instead of presenting an incomplete **All clear** result.
-- [ ] Replace the Web's domain fan-out and pagination limits with the dedicated
-      API and readiness fallback. Add **Acknowledge** and **Acknowledge all** using
-      only rendered problem IDs, with pending and error states.
-- [ ] Verify two-Principal isolation, recurrence, concurrent resolution/new
-      problems, role/scope behavior, database persistence, and Web cutover through
-      focused unit, HTTP, integration, and acceptance coverage.
-
-Completion means acknowledgements survive reloads, affect only the acting
-Principal and exact occurrence, and cannot hide decisions or concurrent unseen
-problems. Do not add a durable problem lifecycle table or retain both Web and
-Server composition paths.
-
-Later decisions, driven by actual scale or operator need: an acknowledged view
-and unacknowledge API; team acknowledgement or assignment; durable occurrence
-history; acknowledgement retention; pagination and whole-query batch semantics;
-server-pushed updates; and broader audit or escalation behavior. Cleanup must
-never silently resurface an active acknowledged occurrence.
-
 ## Notifications
 
 Outbound delivery is unimplemented. [NOTIFICATIONS.md](./NOTIFICATIONS.md)

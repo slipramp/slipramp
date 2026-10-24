@@ -11,6 +11,9 @@ It then verifies the accepted baseline end to end:
 - repository registration, authenticated refresh, and catalog indexing;
 - OIDC administrator login through Dex followed by product API authentication
   with a key created through the authenticated management API;
+- complete operational Inbox projection through the Web and generated API,
+  including per-Principal acknowledgement isolation, persistence across a Web
+  restart, decision preservation, and recurrence after Controller recovery;
 - idempotent manual Run creation and exact-commit checkout;
 - preview logs and a declared plan artifact downloaded through the web process;
 - promotion of that plan into an apply Run pinned to its commit and catalog

@@ -88,6 +88,19 @@ func TestServiceReportsConnectionState(t *testing.T) {
 	}
 }
 
+func TestDeriveConnectionStateUsesProvidedEvaluationTime(t *testing.T) {
+	t.Parallel()
+
+	at := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+	observation := Observation{LastSeenAt: at.Add(-connectionWindow)}
+	if state := DeriveConnectionState(observation, at); state != ConnectionStateConnected {
+		t.Errorf("state at freshness boundary = %q, want %q", state, ConnectionStateConnected)
+	}
+	if state := DeriveConnectionState(observation, at.Add(time.Nanosecond)); state != ConnectionStateUnreachable {
+		t.Errorf("state after freshness boundary = %q, want %q", state, ConnectionStateUnreachable)
+	}
+}
+
 type recordingStore struct {
 	clusterName string
 	observedAt  time.Time

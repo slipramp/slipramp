@@ -13,16 +13,12 @@ import {
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import {
-  getReadiness,
-  listClusters,
-  type DependencyStatus,
-  type ReadinessResponse,
-} from "~/api/generated";
+import { getReadiness, listClusters, type DependencyStatus } from "~/api/generated";
 import { Datestamp, RelativeTime } from "~/components/display";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { EmptyState, PageHeader } from "~/components/page";
 import { pageTitle } from "~/page-title";
+import { asReadinessResponse } from "~/readiness";
 import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/clusters";
@@ -69,7 +65,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     connection: normalizedConnection,
     page,
     query,
-    readiness: readinessReport(readinessResult.data ?? readinessResult.error),
+    readiness: asReadinessResponse(readinessResult.data ?? readinessResult.error),
     total: clustersResult.data?.total ?? 0,
   } as const;
 }
@@ -200,18 +196,4 @@ function DependencyCard({ label, status }: Readonly<{ label: string; status?: De
       </Group>
     </Paper>
   );
-}
-
-function readinessReport(value: unknown): ReadinessResponse | undefined {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !("status" in value) ||
-    !("database" in value) ||
-    !("artifactStorage" in value)
-  ) {
-    return undefined;
-  }
-
-  return value as ReadinessResponse;
 }

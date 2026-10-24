@@ -85,7 +85,7 @@ func TestDeriveObservationState(t *testing.T) {
 			t.Parallel()
 
 			state, present := DeriveObservationState(
-				Run{
+				ObservationStatus{
 					AssignedAt:     test.assignedAt,
 					Phase:          test.phase,
 					LastObservedAt: test.lastObservedAt,

@@ -99,6 +99,24 @@ func TestProductAuthenticationRejectsInsufficientRoleOrScope(t *testing.T) {
 			operationID: "CreateRun",
 		},
 		{
+			name: "viewer cannot acknowledge Inbox problems",
+			authentication: productAuthentication(
+				productidentity.RoleViewer,
+				productidentity.AuthenticationMethodWebSession,
+				nil,
+			),
+			operationID: "AcknowledgeInboxProblems",
+		},
+		{
+			name: "read key cannot acknowledge Inbox problems",
+			authentication: productAuthentication(
+				productidentity.RoleOperator,
+				productidentity.AuthenticationMethodAPIKey,
+				[]productidentity.Scope{productidentity.ScopeRead},
+			),
+			operationID: "AcknowledgeInboxProblems",
+		},
+		{
 			name: "restricted API key",
 			authentication: productAuthentication(
 				productidentity.RoleAdmin,
@@ -139,10 +157,16 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 	tests := []struct {
 		name        string
 		operationID string
+		scope       productidentity.Scope
 	}{
-		{name: "Run cancellation", operationID: "CancelRun"},
-		{name: "Run rerun", operationID: "RerunRun"},
-		{name: "API key revocation", operationID: "RevokeAPIKey"},
+		{name: "Run cancellation", operationID: "CancelRun", scope: productidentity.ScopeRunsWrite},
+		{name: "Run rerun", operationID: "RerunRun", scope: productidentity.ScopeRunsWrite},
+		{name: "API key revocation", operationID: "RevokeAPIKey", scope: productidentity.ScopeRunsWrite},
+		{
+			name:        "Inbox acknowledgement",
+			operationID: "AcknowledgeInboxProblems",
+			scope:       productidentity.ScopeInboxWrite,
+		},
 	}
 
 	for _, test := range tests {
@@ -152,7 +176,7 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 			authentication := productAuthentication(
 				productidentity.RoleOperator,
 				productidentity.AuthenticationMethodAPIKey,
-				[]productidentity.Scope{productidentity.ScopeRunsWrite},
+				[]productidentity.Scope{test.scope},
 			)
 			var attached productidentity.Authentication
 			response := runProductMiddleware(

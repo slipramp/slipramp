@@ -75,10 +75,10 @@ check_guarded_promotion() {
     --arg principal "$kargo_principal_id" '
       .reviewRequired and .status == "pending" and
       .requestedBy.principalId == $principal and
-      .candidateRevision == $candidate and
+      .candidateCommit.sha == $candidate and
       .preparationRun.phase == "finished" and
       .preparationRun.outcome == "succeeded" and
-      .preparationRun.commitSha == $commit and
+      .preparationRun.commit.sha == $commit and
       .preparationRun.catalogRevisionId == $catalog and
       .preparationRun.source.type == "promotion" and
       .preparationRun.source.promotion.promotionId == $promotion and
@@ -87,7 +87,7 @@ check_guarded_promotion() {
         .kind == "output" and .state == "sealed" and .sensitive and
         .retentionState == "retained" and
         .provenance.producerRunId == $run and
-        .provenance.commitSha == $commit and
+        .provenance.commit.sha == $commit and
         .provenance.catalogRevisionId == $catalog) and
       .gitDiffArtifact.mediaType == "text/x-diff; charset=utf-8" and
       .argoDiffArtifact.mediaType == "application/vnd.slipramp.argocd-diff+json"

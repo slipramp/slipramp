@@ -15,6 +15,7 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/gittrigger"
+	"github.com/slipramp/slipramp/internal/inbox"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/promotion"
@@ -142,6 +143,11 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
 	)
+	inboxService := inbox.NewService(inbox.Dependencies{
+		State:            persistence.database,
+		Acknowledgements: persistence.database,
+		Promotions:       promotionReviews,
+	})
 	var promotionPreparations *promotion.PreparationCoordinator
 	var promotionExpirations *promotion.ExpirationCoordinator
 	if len(cfg.KargoIntegrations) > 0 {
@@ -169,6 +175,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			GitTriggerDeliveries:  persistence.database,
 			Commits:               persistence.database,
 			Catalogs:              catalogs,
+			Inbox:                 inboxService,
 			Runs:                  runs,
 			Artifacts:             artifacts,
 			PromotionRequests:     promotionRequests,

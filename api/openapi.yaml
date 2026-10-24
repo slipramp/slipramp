@@ -12,6 +12,10 @@ paths:
     $ref: ./paths/system.yaml#/readiness
   /api/v1/repositories:
     $ref: ./paths/repositories.yaml#/repositories
+  /api/v1/inbox:
+    $ref: ./paths/inbox.yaml#/inbox
+  /api/v1/inbox/problem-acknowledgements:
+    $ref: ./paths/inbox.yaml#/problemAcknowledgements
   /api/v1/repositories/{repositoryId}:
     $ref: ./paths/repositories.yaml#/repository
   /api/v1/git-trigger-deliveries/failed:
@@ -121,6 +125,18 @@ components:
       $ref: ./components/common.yaml#/GitCommit
     Problem:
       $ref: ./components/common.yaml#/Problem
+    Inbox:
+      $ref: ./components/inbox.yaml#/Inbox
+    InboxCapabilities:
+      $ref: ./components/inbox.yaml#/InboxCapabilities
+    InboxActivity:
+      $ref: ./components/inbox.yaml#/InboxActivity
+    InboxItem:
+      $ref: ./components/inbox.yaml#/InboxItem
+    InboxDestination:
+      $ref: ./components/inbox.yaml#/InboxDestination
+    InboxProblemAcknowledgements:
+      $ref: ./components/inbox.yaml#/InboxProblemAcknowledgements
     ProductPrincipal:
       $ref: ./components/authentication.yaml#/ProductPrincipal
     APIKey:

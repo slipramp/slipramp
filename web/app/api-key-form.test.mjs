@@ -40,3 +40,15 @@ test("accepts the Kargo Promotion scopes", () => {
     scopes: ["slipramp:promotions:submit", "slipramp:promotions:write"],
   });
 });
+
+test("accepts the Inbox acknowledgement scope", () => {
+  const formData = new FormData();
+  formData.set("name", "operations console");
+  formData.set("scopes", "slipramp:read,slipramp:inbox:write");
+
+  assert.deepEqual(apiKeyCreateBody(formData), {
+    expiresAt: undefined,
+    name: "operations console",
+    scopes: ["slipramp:read", "slipramp:inbox:write"],
+  });
+});

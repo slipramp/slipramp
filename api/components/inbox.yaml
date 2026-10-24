@@ -1,0 +1,134 @@
+Inbox:
+  type: object
+  additionalProperties: false
+  required:
+    - generatedAt
+    - capabilities
+    - decisions
+    - problems
+    - activity
+  properties:
+    generatedAt:
+      type: string
+      format: date-time
+      description: UTC evaluation time shared by every item in this projection.
+    capabilities:
+      $ref: "#/InboxCapabilities"
+    decisions:
+      type: array
+      items:
+        $ref: "#/InboxItem"
+    problems:
+      type: array
+      items:
+        $ref: "#/InboxItem"
+    activity:
+      $ref: "#/InboxActivity"
+
+InboxCapabilities:
+  type: object
+  additionalProperties: false
+  required:
+    - acknowledgeProblems
+  properties:
+    acknowledgeProblems:
+      type: boolean
+      description: Whether this credential may acknowledge current Inbox problems.
+
+InboxActivity:
+  type: object
+  additionalProperties: false
+  required:
+    - queued
+    - starting
+    - running
+  properties:
+    queued:
+      type: integer
+      minimum: 0
+    starting:
+      type: integer
+      minimum: 0
+    running:
+      type: integer
+      minimum: 0
+
+InboxItem:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - kind
+    - title
+    - description
+    - occurredAt
+    - actionLabel
+    - destination
+  properties:
+    id:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Opaque identity for this decision or exact problem occurrence.
+    kind:
+      type: string
+      enum:
+        - promotion-review
+        - promotion-error
+        - git-trigger-failure
+        - repository-refresh
+        - cluster-unreachable
+        - run-observation
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+    description:
+      type: string
+      minLength: 1
+      maxLength: 4096
+    occurredAt:
+      type: string
+      format: date-time
+    actionLabel:
+      type: string
+      minLength: 1
+      maxLength: 100
+    destination:
+      $ref: "#/InboxDestination"
+
+InboxDestination:
+  type: object
+  additionalProperties: false
+  required:
+    - type
+    - id
+  properties:
+    type:
+      type: string
+      enum:
+        - promotion
+        - repository
+        - cluster
+        - run
+    id:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Resource identity for the destination.
+
+InboxProblemAcknowledgements:
+  type: object
+  additionalProperties: false
+  required:
+    - problemIds
+  properties:
+    problemIds:
+      type: array
+      minItems: 1
+      maxItems: 500
+      uniqueItems: true
+      items:
+        type: string
+        pattern: ^[0-9a-f]{64}$
+      description: Exact current problem-occurrence IDs to acknowledge.

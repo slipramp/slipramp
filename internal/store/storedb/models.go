@@ -106,6 +106,12 @@ type GitTriggerDelivery struct {
 	SupersededAt      pgtype.Timestamptz
 }
 
+type InboxProblemAcknowledgement struct {
+	PrincipalID    pgtype.UUID
+	ProblemID      string
+	AcknowledgedAt pgtype.Timestamptz
+}
+
 type KargoStageSnapshot struct {
 	SnapshotID  pgtype.UUID
 	Integration string

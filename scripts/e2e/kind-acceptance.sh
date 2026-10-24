@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -Eeuo pipefail
+
+trap 'status=$?; printf "acceptance command failed at %s:%s: %s\n" "${BASH_SOURCE[0]}" "$LINENO" "$BASH_COMMAND" >&2; exit "$status"' ERR
 
 repository_root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 kind_bin=${SLIPRAMP_KIND_BIN:-"$repository_root/.bin/kind"}
@@ -22,6 +24,7 @@ web_url="http://127.0.0.1:$web_port"
 oidc_host=acceptance-dex.slipramp-system.svc.cluster.local
 product_api_key=
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/slipramp-kind-acceptance.XXXXXX")
+product_cookie_jar="$temporary_directory/oidc-cookies.txt"
 cluster_created=false
 server_forward_pid=
 web_forward_pid=
@@ -152,15 +155,14 @@ start_oidc_forward() {
 }
 
 create_product_api_key_via_oidc() {
-  local cookie_jar="$temporary_directory/oidc-cookies.txt"
   local headers="$temporary_directory/oidc-login-headers.txt"
   local response_body="$temporary_directory/oidc-response.json"
   local authorization_url
   local oauth_result principal_response key_response
 
   curl --fail --silent --show-error \
-    --cookie "$cookie_jar" \
-    --cookie-jar "$cookie_jar" \
+    --cookie "$product_cookie_jar" \
+    --cookie-jar "$product_cookie_jar" \
     --dump-header "$headers" \
     --output /dev/null \
     "$web_url/api/v1/auth/login"
@@ -175,13 +177,13 @@ create_product_api_key_via_oidc() {
   test -n "$authorization_url"
 
   oauth_result=$(curl --silent --show-error --location \
-    --cookie "$cookie_jar" \
-    --cookie-jar "$cookie_jar" \
+    --cookie "$product_cookie_jar" \
+    --cookie-jar "$product_cookie_jar" \
     --connect-to "$oidc_host:5556:127.0.0.1:$oidc_port" \
     --output "$response_body" \
     --write-out '%{http_code} %{url_effective}' \
     "${authorization_url}&connector_id=mock")
-  if ! grep -Fq $'\tslipramp_session\t' "$cookie_jar"; then
+  if ! grep -Fq $'\tslipramp_session\t' "$product_cookie_jar"; then
     printf 'OIDC login ended at %s without a session cookie\n' \
       "$oauth_result" >&2
     jq -c . "$response_body" >&2 2>/dev/null || true
@@ -189,13 +191,13 @@ create_product_api_key_via_oidc() {
   fi
 
   principal_response=$(curl --fail --silent --show-error \
-    --cookie "$cookie_jar" \
+    --cookie "$product_cookie_jar" \
     "$server_url/api/v1/auth/session")
   jq -e '.kind == "user" and .role == "admin"' \
     <<<"$principal_response" >/dev/null
 
   key_response=$(curl --fail --silent --show-error \
-    --cookie "$cookie_jar" \
+    --cookie "$product_cookie_jar" \
     -H 'Content-Type: application/json' \
     --data '{
       "name":"acceptance automation",
@@ -209,6 +211,57 @@ api_get() {
   curl --fail --silent --show-error \
     -H "Authorization: Bearer $product_api_key" \
     "$server_url$1"
+}
+
+api_get_with_key() {
+  local api_key=$1
+  local path=$2
+  curl --fail --silent --show-error \
+    -H "Authorization: Bearer $api_key" \
+    "$server_url$path"
+}
+
+wait_for_cluster_inbox_problem() {
+  local api_key=$1
+  local deadline=$((SECONDS + timeout_seconds))
+  local response problem_id
+  while ((SECONDS < deadline)); do
+    if response=$(api_get_with_key "$api_key" /api/v1/inbox 2>/dev/null); then
+      problem_id=$(jq -r \
+        '.problems[] | select(.kind == "cluster-unreachable" and .destination.id == "kind") | .id' \
+        <<<"$response")
+      if [[ -n "$problem_id" ]]; then
+        printf '%s\n' "$problem_id"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'cluster-unreachable Inbox problem did not appear\n' >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
+}
+
+wait_for_cluster_inbox_recovery() {
+  local api_key=$1
+  local deadline=$((SECONDS + timeout_seconds))
+  local response problem_count
+  while ((SECONDS < deadline)); do
+    if response=$(api_get_with_key "$api_key" /api/v1/inbox 2>/dev/null); then
+      problem_count=$(jq \
+        '[.problems[] | select(.kind == "cluster-unreachable" and .destination.id == "kind")] | length' \
+        <<<"$response")
+      if [[ "$problem_count" == 0 ]]; then
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'cluster-unreachable Inbox problem did not recover\n' >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
 }
 
 create_run() {
@@ -247,7 +300,7 @@ wait_for_repository() {
       status=$(jq -r --arg id "$repository_id" \
         '.items[] | select(.id == $id) | .refresh.status' <<<"$response")
       commit=$(jq -r --arg id "$repository_id" \
-        '.items[] | select(.id == $id) | .refresh.commitSha // ""' <<<"$response")
+        '.items[] | select(.id == $id) | .refresh.commit.sha // ""' <<<"$response")
       if [[ "$status" == succeeded && "$commit" == "$fixture_commit" ]]; then
         return 0
       fi
@@ -558,13 +611,14 @@ log "signing in through OIDC and creating the acceptance API key"
 create_product_api_key_via_oidc
 
 log "registering and refreshing the Git fixture"
-repository_response=$(curl --fail --silent --show-error \
+repository_response=$(curl --fail-with-body --silent --show-error \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $product_api_key" \
   --data '{
     "name":"acceptance",
     "cloneUrl":"ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git",
     "branch":"main",
+    "commitIndexing":"observedHeads",
     "refreshCredentialName":"acceptance",
     "checkoutCredentialName":"acceptance"
   }' \
@@ -574,7 +628,7 @@ wait_for_repository
 
 catalog_response=$(api_get "/api/v1/repositories/$repository_id/catalog")
 jq -e --arg commit "$fixture_commit" '
-  .commitSha == $commit and
+  .commit.sha == $commit and
   any(.targets[]; .metadata.name == "acceptance") and
   any(.runtimes[]; .metadata.name == "acceptance")
 ' <<<"$catalog_response" >/dev/null
@@ -586,7 +640,7 @@ preview_retry=$(create_run preview "$preview_parameters" '{}' acceptance-preview
 test "$preview_run" = "$preview_retry"
 wait_for_run_outcome "$preview_run" succeeded
 preview_response=$(api_get "/api/v1/runs/$preview_run")
-jq -e --arg commit "$fixture_commit" '.commitSha == $commit' \
+jq -e --arg commit "$fixture_commit" '.commit.sha == $commit' \
   <<<"$preview_response" >/dev/null
 
 plan_id=$(artifact_id "$preview_run" plan)
@@ -600,10 +654,10 @@ apply_run=$(create_run apply '{}' "$apply_inputs" acceptance-apply)
 wait_for_run_outcome "$apply_run" succeeded
 apply_response=$(api_get "/api/v1/runs/$apply_run")
 jq -e \
-  --arg commit "$(jq -r '.commitSha' <<<"$preview_response")" \
+  --arg commit "$(jq -r '.commit.sha' <<<"$preview_response")" \
   --arg revision "$(jq -r '.catalogRevisionId' <<<"$preview_response")" \
   --arg artifact "$plan_id" '
-    .commitSha == $commit and
+    .commit.sha == $commit and
     .catalogRevisionId == $revision and
     .inputs.plan.artifactId == $artifact
   ' <<<"$apply_response" >/dev/null
@@ -643,6 +697,68 @@ wait_for_run_outcome "$server_recovery_run" succeeded
 assert_log_contains "$server_recovery_run" 'acceptance recovery completed'
 
 source "$repository_root/scripts/e2e/kargo-promotions.sh"
+
+log "testing operational Inbox projection and personal acknowledgements"
+inbox_principal_id=$(curl --fail-with-body --silent --show-error \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $product_api_key" \
+  --data '{"displayName":"Inbox acceptance","role":"operator"}' \
+  "$server_url/api/v1/service-accounts" | jq -er '.principalId')
+inbox_api_key=$(curl --fail-with-body --silent --show-error \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $product_api_key" \
+  --data '{"name":"Inbox acceptance","scopes":["slipramp:read","slipramp:inbox:write"]}' \
+  "$server_url/api/v1/service-accounts/$inbox_principal_id/api-keys" | jq -er '.token')
+
+"${kubectl_command[@]}" -n "$system_namespace" scale \
+  deployment/slipramp-controller --replicas=0
+first_inbox_problem=$(wait_for_cluster_inbox_problem "$product_api_key")
+second_principal_problem=$(wait_for_cluster_inbox_problem "$inbox_api_key")
+test "$first_inbox_problem" = "$second_principal_problem"
+
+curl --fail --silent --show-error \
+  --cookie "$product_cookie_jar" \
+  "$web_url/" >"$temporary_directory/inbox-before.html"
+grep -Fq 'kind is unreachable' "$temporary_directory/inbox-before.html"
+grep -Fq 'Acknowledge all' "$temporary_directory/inbox-before.html"
+
+curl --fail --silent --show-error \
+  --cookie "$product_cookie_jar" \
+  --data-urlencode "problemId=$first_inbox_problem" \
+  "$web_url/?index" >/dev/null
+api_get /api/v1/inbox |
+  jq -e --arg id "$first_inbox_problem" \
+    'all(.problems[]; .id != $id) and (.decisions | length) == 2' >/dev/null
+api_get_with_key "$inbox_api_key" /api/v1/inbox |
+  jq -e --arg id "$first_inbox_problem" 'any(.problems[]; .id == $id)' >/dev/null
+
+"${kubectl_command[@]}" -n "$system_namespace" rollout restart deployment/slipramp-web
+"${kubectl_command[@]}" -n "$system_namespace" rollout status \
+  deployment/slipramp-web --timeout="${timeout_seconds}s"
+start_web_forward
+curl --fail --silent --show-error \
+  --cookie "$product_cookie_jar" \
+  "$web_url/" >"$temporary_directory/inbox-after.html"
+if grep -Fq 'kind is unreachable' "$temporary_directory/inbox-after.html"; then
+  printf 'acknowledged Inbox problem reappeared after Web restart\n' >&2
+  exit 1
+fi
+grep -Fq 'Needs a decision' "$temporary_directory/inbox-after.html"
+
+"${kubectl_command[@]}" -n "$system_namespace" scale \
+  deployment/slipramp-controller --replicas=1
+"${kubectl_command[@]}" -n "$system_namespace" rollout status \
+  deployment/slipramp-controller --timeout="${timeout_seconds}s"
+wait_for_cluster_inbox_recovery "$inbox_api_key"
+
+"${kubectl_command[@]}" -n "$system_namespace" scale \
+  deployment/slipramp-controller --replicas=0
+recurrent_inbox_problem=$(wait_for_cluster_inbox_problem "$product_api_key")
+test "$recurrent_inbox_problem" != "$first_inbox_problem"
+"${kubectl_command[@]}" -n "$system_namespace" scale \
+  deployment/slipramp-controller --replicas=1
+"${kubectl_command[@]}" -n "$system_namespace" rollout status \
+  deployment/slipramp-controller --timeout="${timeout_seconds}s"
 
 log "kind acceptance passed"
 printf 'Repository commit: %s\n' "$fixture_commit"

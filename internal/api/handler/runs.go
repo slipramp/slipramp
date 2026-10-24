@@ -470,7 +470,11 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 			return nil, err
 		}
 
-		state, present := run.DeriveObservationState(record, connectedClusters[record.ClusterName], now)
+		state, present := run.DeriveObservationState(
+			record.ObservationStatus(),
+			connectedClusters[record.ClusterName],
+			now,
+		)
 		if present {
 			value := api.RunObservationState(state)
 			body.ObservationState = &value

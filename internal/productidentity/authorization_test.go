@@ -39,6 +39,19 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			want:       true,
 		},
 		{
+			name:       "viewer session cannot acknowledge Inbox problems",
+			role:       RoleViewer,
+			method:     AuthenticationMethodWebSession,
+			permission: PermissionInboxWrite,
+		},
+		{
+			name:       "operator session acknowledges Inbox problems",
+			role:       RoleOperator,
+			method:     AuthenticationMethodWebSession,
+			permission: PermissionInboxWrite,
+			want:       true,
+		},
+		{
 			name:       "operator session cannot administer",
 			role:       RoleOperator,
 			method:     AuthenticationMethodWebSession,
@@ -101,6 +114,36 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			scopes:     []Scope{ScopeRunsWrite},
 			permission: PermissionAPIKeyRevoke,
 			want:       true,
+		},
+		{
+			name:       "Inbox key acknowledges problems",
+			role:       RoleOperator,
+			method:     AuthenticationMethodAPIKey,
+			scopes:     []Scope{ScopeInboxWrite},
+			permission: PermissionInboxWrite,
+			want:       true,
+		},
+		{
+			name:       "Inbox key does not imply read",
+			role:       RoleOperator,
+			method:     AuthenticationMethodAPIKey,
+			scopes:     []Scope{ScopeInboxWrite},
+			permission: PermissionRead,
+		},
+		{
+			name:       "Inbox key grants owner revoke permission",
+			role:       RoleOperator,
+			method:     AuthenticationMethodAPIKey,
+			scopes:     []Scope{ScopeInboxWrite},
+			permission: PermissionAPIKeyRevoke,
+			want:       true,
+		},
+		{
+			name:       "viewer Inbox scope cannot acknowledge problems",
+			role:       RoleViewer,
+			method:     AuthenticationMethodAPIKey,
+			scopes:     []Scope{ScopeInboxWrite},
+			permission: PermissionInboxWrite,
 		},
 		{
 			name:       "admin key grants run permission",
@@ -218,6 +261,14 @@ func TestAuthenticationValidate(t *testing.T) {
 				t.Error("Validate() error = nil")
 			}
 		})
+	}
+}
+
+func TestInboxWriteScopeIsValid(t *testing.T) {
+	t.Parallel()
+
+	if err := validateScopes([]Scope{ScopeInboxWrite}); err != nil {
+		t.Fatalf("validateScopes() error = %v", err)
 	}
 }
 

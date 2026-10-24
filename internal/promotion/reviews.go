@@ -108,7 +108,11 @@ func NewReviewService(store ReviewStore) *ReviewService {
 }
 
 func (s *ReviewService) ExpirePending(ctx context.Context) error {
-	_, err := s.store.ExpirePendingPromotions(ctx, s.currentTime())
+	return s.ExpirePendingAt(ctx, s.currentTime())
+}
+
+func (s *ReviewService) ExpirePendingAt(ctx context.Context, at time.Time) error {
+	_, err := s.store.ExpirePendingPromotions(ctx, at.UTC().Truncate(time.Microsecond))
 
 	return err
 }
