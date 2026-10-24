@@ -67,13 +67,14 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 	}
 
 	query := storedb.ListRunsParams{
-		RepositoryID: repositoryID,
-		CommitSha:    commitSHA,
-		TargetName:   targetName,
-		ClusterName:  clusterName,
-		Phase:        phase,
-		ResultLimit:  filter.Limit,
-		ResultOffset: filter.Offset,
+		RepositoryID:    repositoryID,
+		CommitSha:       commitSHA,
+		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
+		TargetName:      targetName,
+		ClusterName:     clusterName,
+		Phase:           phase,
+		ResultLimit:     filter.Limit,
+		ResultOffset:    filter.Offset,
 	}
 	rows, err := d.queries.ListRuns(
 		ctx,
@@ -83,11 +84,12 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		return run.RunList{}, fmt.Errorf("list Runs: %w", err)
 	}
 	total, err := d.queries.CountRuns(ctx, storedb.CountRunsParams{
-		RepositoryID: repositoryID,
-		CommitSha:    commitSHA,
-		TargetName:   targetName,
-		ClusterName:  clusterName,
-		Phase:        phase,
+		RepositoryID:    repositoryID,
+		CommitSha:       commitSHA,
+		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
+		TargetName:      targetName,
+		ClusterName:     clusterName,
+		Phase:           phase,
 	})
 	if err != nil {
 		return run.RunList{}, fmt.Errorf("count Runs: %w", err)

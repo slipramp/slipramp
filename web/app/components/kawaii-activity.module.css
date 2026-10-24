@@ -8,9 +8,24 @@
   align-items: center;
   padding: 0.75rem 1.25rem;
   overflow: hidden;
-  border: 1px solid var(--slipramp-border);
+  border: 1px solid var(--activity-border, var(--slipramp-border));
   border-radius: var(--mantine-radius-lg);
-  background: linear-gradient(110deg, #fff0f7, #fffaf2 58%, #effcf8);
+  background: var(--activity-background, linear-gradient(110deg, #fff0f7, #fffaf2 58%, #effcf8));
+}
+
+.activity[data-tone="success"] {
+  --activity-border: #c4e4d2;
+  --activity-background: linear-gradient(110deg, #edf9f1, #fffaf0 60%, #f3fcf8);
+}
+
+.activity[data-tone="error"] {
+  --activity-border: #edc6d4;
+  --activity-background: linear-gradient(110deg, #fff0f4, #fff8f7 60%, #fcf3fa);
+}
+
+.activity[data-tone="neutral"] {
+  --activity-border: #e3dce7;
+  --activity-background: linear-gradient(110deg, #f7f3fa, #fffbfc);
 }
 
 .scene {
@@ -24,7 +39,7 @@
 .sprite {
   width: 100%;
   aspect-ratio: 6 / 5;
-  background-image: url("/slipramp-axolotl-working.webp");
+  background-image: url("../assets/slipramp-axolotl-working.webp");
   background-repeat: no-repeat;
   background-position: 0 55%;
   background-size: 400% auto;
@@ -34,12 +49,26 @@
 .sprite[data-animation="phone"] {
   width: 84%;
   aspect-ratio: 72 / 71;
-  background-image: url("/slipramp-axolotl-queued.webp");
+  background-image: url("../assets/slipramp-axolotl-queued.webp");
   animation-duration: 2.4s;
+}
+
+.sprite[data-animation="celebrating"] {
+  width: 84%;
+  aspect-ratio: 48 / 47;
+  background-image: url("../assets/slipramp-axolotl-succeeded.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-animation="frustrated"] {
+  aspect-ratio: 144 / 121;
+  background-image: url("../assets/slipramp-axolotl-failed.webp");
+  animation-duration: 2.8s;
 }
 
 .copy {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .title {
@@ -52,6 +81,29 @@
   margin: 0;
   color: var(--mantine-color-dimmed);
   font-size: var(--mantine-font-size-sm);
+  white-space: pre-wrap;
+}
+
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 0.75rem;
+  align-items: center;
+  margin-top: 0.5rem;
+  font-size: var(--mantine-font-size-sm);
+}
+
+.result p {
+  margin: 0;
+}
+
+.result code {
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--activity-border, var(--slipramp-border));
+  border-radius: var(--mantine-radius-xs);
+  background: rgb(255 255 255 / 65%);
+  color: var(--mantine-color-text);
+  font-size: 0.85em;
 }
 
 :global(:root[data-slipramp-theme="kawaii"]) .activity[data-compact] {
@@ -70,7 +122,7 @@
   width: 100%;
 }
 
-/* Both sprites have four equal cells; only paws, eyes, and expression change. */
+/* Each sprite has four equal cells with registered character positions. */
 @keyframes frames {
   0%,
   100% {
@@ -104,7 +156,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sprite,
-  .sprite[data-animation="phone"] {
+  .sprite[data-animation] {
     animation: none;
   }
 }

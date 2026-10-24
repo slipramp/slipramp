@@ -3,7 +3,7 @@ import { IconListDetails } from "@tabler/icons-react";
 import { Link } from "react-router";
 
 import type { Run } from "~/api/generated";
-import { useKawaiiActivityRefresh } from "~/components/activity-refresh";
+import { useActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime } from "~/components/display";
 import { KawaiiActivity } from "~/components/kawaii-activity";
 import { SectionHeader } from "~/components/page";
@@ -26,7 +26,7 @@ export function RecentRuns({
   runs: Run[];
   viewAllTo: string;
 }>) {
-  useKawaiiActivityRefresh(runs.some((run) => run.phase !== "finished"));
+  useActivityRefresh(runs.some((run) => run.phase !== "finished"));
 
   return (
     <Stack gap="md">

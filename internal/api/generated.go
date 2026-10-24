@@ -2626,6 +2626,9 @@ type ListRunsParams struct {
 	// CommitSha Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
 	CommitSha *string `form:"commitSha,omitempty" json:"commitSha,omitempty"`
 
+	// InputArtifactID Limit results to Runs that consume this exact artifact.
+	InputArtifactID *openapi_types.UUID `form:"inputArtifactId,omitempty" json:"inputArtifactId,omitempty"`
+
 	// Cluster Limit results to Runs assigned to one execution cluster.
 	Cluster *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 
@@ -3192,7 +3195,7 @@ type ClientInterface interface {
 
 	// ListRuns List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
 	//
 	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4111,7 +4114,7 @@ func (c *Client) GetCommit(ctx context.Context, repositoryID openapi_types.UUID,
 
 // ListRuns List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
 //
 // Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6719,6 +6722,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
+		if params.InputArtifactID != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "inputArtifactId", *params.InputArtifactID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Cluster != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -8359,7 +8374,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListRunsWithResponse List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13446,7 +13461,7 @@ func (c *ClientWithResponses) GetCommitWithResponse(ctx context.Context, reposit
 
 // ListRunsWithResponse List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, target, and cluster filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19186,6 +19201,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "commitSha"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "commitSha", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "inputArtifactId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "inputArtifactId", r.URL.Query(), &params.InputArtifactID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "inputArtifactId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "inputArtifactId", Err: err})
 		}
 		return
 	}

@@ -4,7 +4,8 @@ runs:
     summary: List recent Runs
     description: >-
       Lists Runs in descending creation order with offset pagination.
-      Repository, commit, target, and cluster filters scope execution history.
+      Repository, commit, input artifact, target, and cluster filters scope
+      execution history.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -35,6 +36,13 @@ runs:
         schema:
           type: string
           pattern: '^(?:[0-9a-f]{40}|[0-9a-f]{64})$'
+      - name: inputArtifactId
+        in: query
+        required: false
+        description: Limit results to Runs that consume this exact artifact.
+        schema:
+          type: string
+          format: uuid
       - name: cluster
         in: query
         required: false

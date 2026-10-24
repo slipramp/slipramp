@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -43,6 +44,77 @@ func TestServerStopsWhenContextIsCanceled(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("serve() did not return after its context was canceled")
 	}
+}
+
+func TestServerWorkersShareCancellationAndFinishBeforeReturn(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		listener := newBlockingListener()
+		logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+		app := newServer(DefaultConfig(), logger, http.NewServeMux())
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		started := make(chan context.Context, 3)
+		canceled := make(chan struct{}, 3)
+		releaseCleanup := make(chan struct{})
+		defer func() {
+			select {
+			case <-releaseCleanup:
+			default:
+				close(releaseCleanup)
+			}
+		}()
+		for index := range 3 {
+			app.workers = append(app.workers, func(workerContext context.Context) {
+				started <- workerContext
+				<-workerContext.Done()
+				canceled <- struct{}{}
+				if index == 0 {
+					<-releaseCleanup
+				}
+			})
+		}
+		serveResult := make(chan error, 1)
+		go func() {
+			serveResult <- app.serveWithWorkers(ctx, listener)
+		}()
+
+		synctest.Wait()
+		if len(started) != 3 {
+			t.Fatalf("started workers = %d, want 3", len(started))
+		}
+		sharedContext := <-started
+		for range 2 {
+			if workerContext := <-started; workerContext != sharedContext {
+				t.Error("workers received different contexts")
+			}
+		}
+		if sharedContext.Err() != nil {
+			t.Fatal("workers started with a canceled context")
+		}
+
+		cancel()
+		synctest.Wait()
+		if len(canceled) != 3 || !errors.Is(sharedContext.Err(), context.Canceled) {
+			t.Errorf("canceled workers = %d, context error = %v", len(canceled), sharedContext.Err())
+		}
+		select {
+		case err := <-serveResult:
+			t.Fatalf("serveWithWorkers() returned before worker cleanup: %v", err)
+		default:
+		}
+
+		close(releaseCleanup)
+		synctest.Wait()
+		select {
+		case err := <-serveResult:
+			if err != nil {
+				t.Errorf("serveWithWorkers() error = %v", err)
+			}
+		default:
+			t.Fatal("serveWithWorkers() did not return after worker cleanup")
+		}
+	})
 }
 
 func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {

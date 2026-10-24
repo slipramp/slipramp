@@ -234,14 +234,6 @@ a {
   color: var(--mantine-color-sakura-9);
 }
 
-:root[data-slipramp-theme="kawaii"] .product-brand::after {
-  color: var(--mantine-color-sun-6);
-  content: "\2726";
-  font-size: 0.8rem;
-  text-shadow: 0 2px 8px rgb(250 176 5 / 32%);
-  transform: rotate(12deg);
-}
-
 .product-mark {
   display: block;
   width: 28px;

@@ -286,6 +286,16 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	if err != nil || bound.ID != output.ID {
 		t.Fatalf("GetRunInputArtifact() = %#v, error = %v", bound, err)
 	}
+	consumers, err := database.ListRuns(
+		ctx,
+		run.RunListFilter{InputArtifactID: &output.ID, Limit: 10},
+	)
+	if err != nil {
+		t.Fatalf("ListRuns() by input Artifact error = %v", err)
+	}
+	if len(consumers.Items) != 1 || consumers.Items[0].ID != consumerID || consumers.Total != 1 {
+		t.Errorf("ListRuns() by input Artifact = %#v, want consuming Run", consumers)
+	}
 
 	later := artifact.LogChunk{
 		ArtifactID:  artifactID,

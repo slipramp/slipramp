@@ -898,16 +898,25 @@ Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 
 The optional kawaii theme adds an animated axolotl beside status badges and on
-detail pages. While a Run is queued, she plays on her phone beside waiting text.
-After assignment, she works at a laptop throughout preparation and execution.
-Creating or preparing Promotions also show the laptop animation. Finished Runs,
-unknown Run observations, and Promotions awaiting review or already decided do
-not show activity. Cancellation intent retains the corresponding animation with
-stopping text until the Run finishes. Promotion details refresh throughout
-creation and preparation. In the kawaii theme, visible lists refresh while Runs
-are unfinished or Promotions are creating or preparing. Animation timing varies
-by Run or Promotion identity and stays stable across refreshes. Activity respects
-reduced motion preferences and leaves textual status indicators available.
+detail pages. While a Run is queued, she plays on her phone beside waiting
+text. After assignment, she works at a laptop throughout preparation and
+execution. Creating or preparing Promotions also show the laptop animation.
+Terminal mascots appear only on Run detail pages: successful Runs celebrate
+with a beer; failed or timed-out Runs slump at their laptops with a slow blink
+and tiny sigh; canceled Runs use a neutral phone animation. These outcome cards
+replace the terminal result alert. Successful cards show only the mascot and
+the `Run succeeded` title. Failed, timed-out, and canceled cards retain the
+original outcome message, reason, and process exit code, including zero. The
+standard theme keeps the result alert, which also remains as a diagnostic
+fallback when no terminal outcome is available. Unknown observations suppress
+activity only for unfinished Runs; Promotions awaiting review or already
+decided do not show activity. Cancellation intent retains the corresponding
+live animation with stopping text until the Run finishes. Promotion details
+refresh throughout creation and preparation. In the kawaii theme, visible lists
+refresh while Runs are unfinished or Promotions are creating or preparing.
+Animation timing varies by Run or Promotion identity and stays stable across
+refreshes. Activity respects reduced motion preferences and leaves textual
+status indicators available.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

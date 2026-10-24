@@ -47,6 +47,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Form, Link, useLocation, useNavigation } from "react-router";
 
 import type { ProductPrincipal } from "~/api/generated";
+import mascotUrl from "~/assets/slipramp-mascot.webp";
+import { ActivityRefreshControl, ActivityRefreshProvider } from "~/components/activity-refresh";
 import { Identity } from "~/components/identity";
 import { PerformanceFooter } from "~/components/performance-footer";
 import { useThemePreset, type ThemePreset } from "~/theme-preset";
@@ -92,6 +94,17 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
 ];
 
 export function ProductShell({
+  children,
+  principal,
+}: Readonly<{ children: ReactNode; principal?: ProductPrincipal }>) {
+  return (
+    <ActivityRefreshProvider>
+      <ProductShellLayout principal={principal}>{children}</ProductShellLayout>
+    </ActivityRefreshProvider>
+  );
+}
+
+function ProductShellLayout({
   children,
   principal,
 }: Readonly<{ children: ReactNode; principal?: ProductPrincipal }>) {
@@ -159,13 +172,9 @@ export function ProductShell({
           </Group>
           <Group className="product-header-controls" gap="xs" h="100%" wrap="nowrap">
             <Box aria-hidden="true" className="product-header-mascot-slot">
-              <img
-                alt=""
-                className="product-header-mascot"
-                decoding="async"
-                src="/slipramp-mascot.webp"
-              />
+              <img alt="" className="product-header-mascot" decoding="async" src={mascotUrl} />
             </Box>
+            <ActivityRefreshControl />
             <AppearanceControl />
           </Group>
         </Group>

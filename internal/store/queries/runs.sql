@@ -76,6 +76,15 @@ AND (
     OR commit_sha = sqlc.narg(commit_sha)
 )
 AND (
+    sqlc.narg(input_artifact_id)::uuid IS NULL
+    OR EXISTS (
+        SELECT 1
+        FROM run_artifact_inputs
+        WHERE run_artifact_inputs.run_id = runs.id
+          AND run_artifact_inputs.artifact_id = sqlc.narg(input_artifact_id)
+    )
+)
+AND (
     sqlc.narg(target_name)::text IS NULL
     OR target_name = sqlc.narg(target_name)
 )
@@ -101,6 +110,15 @@ WHERE (
 AND (
     sqlc.narg(commit_sha)::text IS NULL
     OR commit_sha = sqlc.narg(commit_sha)
+)
+AND (
+    sqlc.narg(input_artifact_id)::uuid IS NULL
+    OR EXISTS (
+        SELECT 1
+        FROM run_artifact_inputs
+        WHERE run_artifact_inputs.run_id = runs.id
+          AND run_artifact_inputs.artifact_id = sqlc.narg(input_artifact_id)
+    )
 )
 AND (
     sqlc.narg(target_name)::text IS NULL

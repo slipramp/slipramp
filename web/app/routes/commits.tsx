@@ -1,4 +1,4 @@
-import { Alert, Anchor, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Group, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -173,7 +173,7 @@ function CommitTable({
   return (
     <Paper withBorder>
       <Table.ScrollContainer minWidth={760} type="native">
-        <Table verticalSpacing="sm">
+        <Table verticalSpacing="xs">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Commit</Table.Th>
@@ -186,18 +186,19 @@ function CommitTable({
             {commits.map((item) => (
               <Table.Tr key={`${item.repositoryId}:${item.commit.sha}`}>
                 <Table.Td>
-                  <Stack gap={2} maw={520}>
+                  <Group gap="xs" maw={620} wrap="nowrap">
+                    <CommitReference commit={item.commit} repositoryId={item.repositoryId} />
                     <Anchor
                       component={Link}
                       fw={600}
                       lineClamp={1}
+                      style={{ minWidth: 0 }}
                       title={item.commit.title}
                       to={commitPath(item.repositoryId, item.commit.sha)}
                     >
                       {item.commit.title ?? "Untitled commit"}
                     </Anchor>
-                    <CommitReference commit={item.commit} repositoryId={item.repositoryId} />
-                  </Stack>
+                  </Group>
                 </Table.Td>
                 <Table.Td>
                   <Anchor component={Link} to={`/repositories/${item.repositoryId}`}>

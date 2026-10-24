@@ -150,13 +150,14 @@ func (h *Handler) ListRuns(
 	records, err := h.runs.ListRuns(
 		ctx,
 		run.RunListFilter{
-			RepositoryID: request.Params.RepositoryID,
-			CommitSHA:    commitSHA,
-			TargetName:   targetName,
-			ClusterName:  clusterName,
-			Phase:        phase,
-			Limit:        limit,
-			Offset:       offset,
+			RepositoryID:    request.Params.RepositoryID,
+			CommitSHA:       commitSHA,
+			InputArtifactID: request.Params.InputArtifactID,
+			TargetName:      targetName,
+			ClusterName:     clusterName,
+			Phase:           phase,
+			Limit:           limit,
+			Offset:          offset,
 		},
 	)
 	if errors.Is(err, run.ErrInvalidRequest) {

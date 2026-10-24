@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/slipramp/slipramp/internal/api/handler"
@@ -33,21 +34,14 @@ const (
 )
 
 type Server struct {
-	address                string
-	shutdownTimeout        time.Duration
-	placements             placement.Set
-	logger                 *slog.Logger
-	httpServer             *http.Server
-	persistence            *persistence
-	repositoryRefresher    *repository.Refresher
-	commitHistoryIndexer   *repository.CommitHistoryIndexer
-	gitTriggerDispatcher   *gittrigger.Dispatcher
-	artifactReconciler     *artifact.Reconciler
-	notificationDispatcher *notification.Dispatcher
-	notificationRetention  *notification.RetentionReconciler
-	promotionPreparations  *promotion.PreparationCoordinator
-	promotionExpirations   *promotion.ExpirationCoordinator
-	promotionBranchDrift   *promotion.BranchDriftService
+	address              string
+	shutdownTimeout      time.Duration
+	placements           placement.Set
+	logger               *slog.Logger
+	httpServer           *http.Server
+	persistence          *persistence
+	workers              []func(context.Context)
+	promotionBranchDrift *promotion.BranchDriftService
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
@@ -176,10 +170,16 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		notification.DefaultDispatchInterval,
 		logger,
 	)
-	var promotionPreparations *promotion.PreparationCoordinator
-	var promotionExpirations *promotion.ExpirationCoordinator
+	workers := []func(context.Context){
+		repositoryRefresher.Run,
+		commitHistoryIndexer.Run,
+		gitTriggerDispatcher.Run,
+		artifactReconciler.Run,
+		notificationDispatcher.Run,
+		notificationRetention.Run,
+	}
 	if len(cfg.KargoIntegrations) > 0 {
-		promotionPreparations = promotion.NewPreparationCoordinator(
+		promotionPreparations := promotion.NewPreparationCoordinator(
 			cfg.KargoIntegrations,
 			repositories,
 			catalogs,
@@ -190,12 +190,14 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			promotion.DefaultPreparationInterval,
 			logger,
 		)
-		promotionExpirations = promotion.NewExpirationCoordinator(
+		promotionExpirations := promotion.NewExpirationCoordinator(
 			persistence.database,
 			promotion.DefaultExpirationInterval,
 			logger,
 		)
+		workers = append(workers, promotionPreparations.Run, promotionExpirations.Run)
 	}
+	workers = append(workers, promotionBranchDrift.Run)
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
 			Clusters:                 clusters,
@@ -229,14 +231,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	)
 	server := newServer(cfg, logger, httpHandler)
 	server.persistence = persistence
-	server.repositoryRefresher = repositoryRefresher
-	server.commitHistoryIndexer = commitHistoryIndexer
-	server.gitTriggerDispatcher = gitTriggerDispatcher
-	server.artifactReconciler = artifactReconciler
-	server.notificationDispatcher = notificationDispatcher
-	server.notificationRetention = notificationRetention
-	server.promotionPreparations = promotionPreparations
-	server.promotionExpirations = promotionExpirations
+	server.workers = workers
 	server.promotionBranchDrift = promotionBranchDrift
 
 	return server, nil
@@ -274,102 +269,23 @@ func (s *Server) Run(ctx context.Context) error {
 		return fmt.Errorf("listen on %s: %w", s.address, err)
 	}
 
-	workerCount := 0
-	if s.repositoryRefresher != nil {
-		workerCount++
-	}
-	if s.commitHistoryIndexer != nil {
-		workerCount++
-	}
-	if s.gitTriggerDispatcher != nil {
-		workerCount++
-	}
-	if s.artifactReconciler != nil {
-		workerCount++
-	}
-	if s.notificationDispatcher != nil {
-		workerCount++
-	}
-	if s.notificationRetention != nil {
-		workerCount++
-	}
-	if s.promotionPreparations != nil {
-		workerCount++
-	}
-	if s.promotionExpirations != nil {
-		workerCount++
-	}
-	if s.promotionBranchDrift != nil {
-		workerCount++
-	}
-	if workerCount == 0 {
-		return s.serve(ctx, listener)
-	}
+	return s.serveWithWorkers(ctx, listener)
+}
 
+func (s *Server) serveWithWorkers(ctx context.Context, listener net.Listener) error {
 	runContext, stop := context.WithCancel(ctx)
 	defer stop()
 
-	workersStopped := make(chan struct{}, workerCount)
-	if s.repositoryRefresher != nil {
-		go func() {
-			s.repositoryRefresher.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.commitHistoryIndexer != nil {
-		go func() {
-			s.commitHistoryIndexer.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.gitTriggerDispatcher != nil {
-		go func() {
-			s.gitTriggerDispatcher.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.artifactReconciler != nil {
-		go func() {
-			s.artifactReconciler.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.notificationDispatcher != nil {
-		go func() {
-			s.notificationDispatcher.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.notificationRetention != nil {
-		go func() {
-			s.notificationRetention.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.promotionPreparations != nil {
-		go func() {
-			s.promotionPreparations.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.promotionExpirations != nil {
-		go func() {
-			s.promotionExpirations.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
-	}
-	if s.promotionBranchDrift != nil {
-		go func() {
-			s.promotionBranchDrift.Run(runContext)
-			workersStopped <- struct{}{}
-		}()
+	var workers sync.WaitGroup
+	for _, runWorker := range s.workers {
+		workers.Go(func() {
+			runWorker(runContext)
+		})
 	}
 
 	serveErr := s.serve(runContext, listener)
 	stop()
-	for range workerCount {
-		<-workersStopped
-	}
+	workers.Wait()
 
 	return serveErr
 }

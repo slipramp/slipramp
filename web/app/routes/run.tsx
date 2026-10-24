@@ -6,6 +6,7 @@ import {
   Button,
   Code,
   Group,
+  Menu,
   Modal,
   Paper,
   SimpleGrid,
@@ -18,6 +19,7 @@ import {
 import {
   IconBan,
   IconCheck,
+  IconChevronDown,
   IconClock,
   IconClockExclamation,
   IconLoader2,
@@ -30,7 +32,7 @@ import {
   type TablerIcon,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Form, Link, redirect, useFetcher, useNavigation } from "react-router";
+import { Form, Link, redirect, useNavigation } from "react-router";
 
 import {
   ANSI_DEFAULT_BACKGROUND,
@@ -45,6 +47,7 @@ import {
   getRun,
   listRepositories,
   listRunArtifacts,
+  listRuns,
   rerunRun,
   type Artifact,
   type LogEvent,
@@ -52,6 +55,7 @@ import {
   type RunArtifactConsumer,
   type RunArtifactInput,
 } from "~/api/generated";
+import { useActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime, Timestamp } from "~/components/display";
 import { CommitDetails, CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
@@ -65,10 +69,11 @@ import {
   shortIdentifier,
 } from "~/display";
 import { pageTitle } from "~/page-title";
-import { runActivity } from "~/execution-activity";
+import { runActivity, runResultActivity } from "~/execution-activity";
 import { runStatusColor } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 
+import styles from "./run.module.css";
 import type { Route } from "./+types/run";
 
 const elapsedTimerIntervalMs = 1000;
@@ -86,9 +91,15 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     listRunArtifacts({ client, path: { runId: params.runId } }),
     listRepositories({ client, query: { limit: 200 } }),
   ]);
+  const planArtifact = artifactResult.data?.items.find((artifact) => artifact.name === "plan");
+  const planRunsResult = planArtifact
+    ? await listRuns({ client, query: { inputArtifactId: planArtifact.id, limit: 100 } })
+    : undefined;
 
   return {
     artifacts: artifactResult.data?.items,
+    planRuns: planRunsResult?.data?.items ?? [],
+    planRunsAvailable: planRunsResult === undefined || planRunsResult.data !== undefined,
     repositoryName: repositoriesResult.data?.items.find(
       (repository) => repository.id === runResult.data?.repositoryId,
     )?.name,
@@ -181,22 +192,13 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
 export default function RunDetail({ actionData, loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
-  const { data: pollerData, load: loadRun, state: pollingState } = useFetcher<typeof loader>();
-  const polledData = pollerData?.runId === loaderData.runId ? pollerData : undefined;
-  const currentData = polledData ?? loaderData;
-  const phase = currentData.run?.phase;
+  useActivityRefresh(
+    loaderData.run?.phase !== "finished" ||
+      loaderData.planRuns.some((run) => run.phase !== "finished"),
+    runRevalidationIntervalMs,
+  );
 
-  useEffect(() => {
-    if (phase === undefined || phase === "finished" || pollingState !== "idle") return;
-
-    const timer = window.setTimeout(
-      () => void loadRun(`/runs/${loaderData.runId}`),
-      runRevalidationIntervalMs,
-    );
-    return () => window.clearTimeout(timer);
-  }, [loaderData.runId, loadRun, phase, pollingState]);
-
-  if (!currentData.run) {
+  if (!loaderData.run) {
     return (
       <Stack gap="md">
         <PageBackLink label="Back to run history" to="/runs" />
@@ -207,58 +209,86 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     );
   }
 
-  const run = currentData.run;
+  const run = loaderData.run;
+  const planArtifact = loaderData.artifacts?.find((artifact) => artifact.name === "plan");
+  const applyConsumer = run.artifactConsumers.plan?.find((consumer) => consumer.action === "apply");
+  const planCanBeApplied =
+    run.outcome === "succeeded" &&
+    planArtifact?.state === "sealed" &&
+    planArtifact.retentionState === "retained" &&
+    applyConsumer !== undefined;
+  const resultActivity = runResultActivity(run);
+  const activity = resultActivity ?? runActivity(run);
+  const rerunSubmitting =
+    navigation.state === "submitting" &&
+    (navigation.formData?.get("intent") === "rerun-exact" ||
+      navigation.formData?.get("intent") === "rerun-latest");
+  const hasArtifactInputs = Object.keys(run.inputs).length > 0;
   return (
     <Stack gap="lg">
       <PageHeader
         actions={
           run.phase === "finished" ? (
             <Group gap="sm" wrap="wrap">
-              <Form method="post">
-                <input name="intent" type="hidden" value="rerun-exact" />
-                <input
-                  name="idempotencyKey"
-                  type="hidden"
-                  value={`${currentData.rerunKey}:exact`}
-                />
-                <Button
-                  leftSection={<IconRefresh aria-hidden size={16} />}
-                  loading={
+              {planCanBeApplied ? (
+                <ArtifactAction
+                  artifact={planArtifact}
+                  consumer={applyConsumer}
+                  prominent
+                  submitting={
                     navigation.state === "submitting" &&
-                    navigation.formData?.get("intent") === "rerun-exact"
+                    navigation.formData?.get("artifactId") === planArtifact.id &&
+                    navigation.formData?.get("actionName") === applyConsumer.action
                   }
-                  size="compact-md"
-                  type="submit"
-                >
-                  {run.outcome === "succeeded" ? "Run same revision" : "Retry same revision"}
-                </Button>
-              </Form>
-              <Form method="post">
-                <input name="intent" type="hidden" value="rerun-latest" />
-                <input
-                  name="idempotencyKey"
-                  type="hidden"
-                  value={`${currentData.rerunKey}:latest`}
                 />
-                <Button
-                  disabled={Object.keys(run.inputs).length > 0}
-                  leftSection={<IconPlayerPlay aria-hidden size={16} />}
-                  loading={
-                    navigation.state === "submitting" &&
-                    navigation.formData?.get("intent") === "rerun-latest"
-                  }
-                  size="compact-md"
-                  title={
-                    Object.keys(run.inputs).length > 0
-                      ? "Runs with artifact inputs stay pinned to the producing revision."
-                      : "Resolve this target, action, and its parameters from the latest catalog revision."
-                  }
-                  type="submit"
-                  variant="light"
-                >
-                  Run latest revision
-                </Button>
-              </Form>
+              ) : null}
+              <Menu position="bottom-end" shadow="md" width={220}>
+                <Menu.Target>
+                  <Button
+                    leftSection={<IconRefresh aria-hidden size={16} />}
+                    loading={rerunSubmitting}
+                    rightSection={<IconChevronDown aria-hidden size={14} />}
+                    size="compact-md"
+                    variant={planCanBeApplied ? "light" : undefined}
+                  >
+                    Run again
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  <Menu.Label>Choose revision</Menu.Label>
+                  <Form method="post">
+                    <input name="intent" type="hidden" value="rerun-exact" />
+                    <input
+                      name="idempotencyKey"
+                      type="hidden"
+                      value={`${loaderData.rerunKey}:exact`}
+                    />
+                    <Menu.Item leftSection={<IconRefresh aria-hidden size={16} />} type="submit">
+                      Same revision
+                    </Menu.Item>
+                  </Form>
+                  <Form method="post">
+                    <input name="intent" type="hidden" value="rerun-latest" />
+                    <input
+                      name="idempotencyKey"
+                      type="hidden"
+                      value={`${loaderData.rerunKey}:latest`}
+                    />
+                    <Menu.Item
+                      disabled={hasArtifactInputs}
+                      leftSection={<IconPlayerPlay aria-hidden size={16} />}
+                      title={
+                        hasArtifactInputs
+                          ? "Runs with artifact inputs stay pinned to the producing revision."
+                          : "Resolve this target, action, and its parameters from the latest catalog revision."
+                      }
+                      type="submit"
+                    >
+                      Latest revision
+                    </Menu.Item>
+                  </Form>
+                </Menu.Dropdown>
+              </Menu>
             </Group>
           ) : run.cancellationRequestedAt === undefined ? (
             <Form method="post">
@@ -306,7 +336,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         title={`Run ${run.id.slice(0, 8)}`}
       />
 
-      <KawaiiActivity activity={runActivity(run)} animationKey={run.id} />
+      <KawaiiActivity activity={activity} animationKey={run.id} />
 
       {actionData?.error ? (
         <Alert color="red" title="Run operation failed">
@@ -314,7 +344,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
-      {run.observationState === "unknown" ? (
+      {run.phase !== "finished" && run.observationState === "unknown" ? (
         <Alert color="yellow" title="Execution observation unavailable">
           The cluster controller is unreachable or has not reported this Run recently. Its durable
           phase remains {run.phase} until observations resume.
@@ -340,8 +370,13 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
-      {run.phase === "finished" && (run.outcomeReason || run.outcomeMessage) ? (
-        <Alert color={runStatusColor(run)} title={run.outcomeReason ?? "Run finished"}>
+      {run.phase === "finished" &&
+      (run.outcomeReason || run.outcomeMessage || run.exitCode !== undefined) ? (
+        <Alert
+          className={resultActivity ? styles.terminalNotice : undefined}
+          color={runStatusColor(run)}
+          title={run.outcomeReason ?? resultActivity?.title ?? "Run finished"}
+        >
           <Stack gap={4}>
             {run.outcomeMessage ? <Text>{run.outcomeMessage}</Text> : null}
             {run.exitCode !== undefined ? (
@@ -355,16 +390,92 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
       <LiveLog key={run.id} runId={run.id} />
-      <RunOverview repositoryName={currentData.repositoryName} run={run} />
+      {planArtifact ? (
+        <PlanLineage
+          available={loaderData.planRunsAvailable}
+          plan={planArtifact}
+          runs={loaderData.planRuns}
+        />
+      ) : null}
+      <RunOverview repositoryName={loaderData.repositoryName} run={run} />
       <ParameterTable parameters={run.parameters} />
 
       <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
       <ArtifactTable
-        artifacts={currentData.artifacts ?? []}
+        artifacts={loaderData.artifacts ?? []}
         consumers={run.artifactConsumers}
         producerSucceeded={run.outcome === "succeeded"}
       />
     </Stack>
+  );
+}
+
+function PlanLineage({
+  available,
+  plan,
+  runs,
+}: Readonly<{ available: boolean; plan: Artifact; runs: Run[] }>) {
+  return (
+    <Paper p="md" withBorder>
+      <Stack gap="sm">
+        <SectionHeader
+          actions={
+            <Group gap="sm">
+              <Badge variant="light">
+                {runs.length} {runs.length === 1 ? "run" : "runs"}
+              </Badge>
+              {plan.state === "sealed" && plan.retentionState === "retained" ? (
+                <Anchor href={`/api/v1/artifacts/${plan.id}/download`} size="sm">
+                  Download plan
+                </Anchor>
+              ) : null}
+            </Group>
+          }
+          description="Apply runs stay linked to the exact retained plan they consume."
+          title="Plan"
+        />
+        {!available ? (
+          <Alert color="red" title="Plan history unavailable">
+            Runs created from this plan could not be loaded.
+          </Alert>
+        ) : runs.length === 0 ? (
+          <Text c="dimmed" size="sm">
+            No runs have been created from this plan.
+          </Text>
+        ) : (
+          <Table.ScrollContainer minWidth={540} type="native">
+            <Table verticalSpacing="xs">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Run</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Created</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {runs.map((consumerRun) => (
+                  <Table.Tr key={consumerRun.id}>
+                    <Table.Td>
+                      <Anchor component={Link} fw={600} to={`/runs/${consumerRun.id}`}>
+                        {consumerRun.action} · {shortIdentifier(consumerRun.id)}
+                      </Anchor>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={runStatusColor(consumerRun)} variant="light">
+                        {consumerRun.outcome ?? consumerRun.phase}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <RelativeTime size="sm" value={consumerRun.createdAt} />
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+      </Stack>
+    </Paper>
   );
 }
 
@@ -1076,10 +1187,12 @@ function ArtifactTable({
 function ArtifactAction({
   artifact,
   consumer,
+  prominent = false,
   submitting,
 }: Readonly<{
   artifact: Artifact;
   consumer: RunArtifactConsumer;
+  prominent?: boolean;
   submitting: boolean;
 }>) {
   const label =
@@ -1094,7 +1207,13 @@ function ArtifactAction({
       <input name="artifactName" type="hidden" value={artifact.name} />
       <input name="actionName" type="hidden" value={consumer.action} />
       <input name="inputName" type="hidden" value={consumer.input} />
-      <Button loading={submitting} size="compact-sm" type="submit" variant="light">
+      <Button
+        leftSection={prominent ? <IconPlayerPlay aria-hidden size={16} /> : undefined}
+        loading={submitting}
+        size={prominent ? "compact-md" : "compact-sm"}
+        type="submit"
+        variant={prominent ? "filled" : "light"}
+      >
         {label}
       </Button>
     </Form>

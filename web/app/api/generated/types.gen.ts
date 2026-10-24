@@ -2593,6 +2593,10 @@ export type ListRunsData = {
      */
     commitSha?: string;
     /**
+     * Limit results to Runs that consume this exact artifact.
+     */
+    inputArtifactId?: string;
+    /**
      * Limit results to Runs assigned to one execution cluster.
      */
     cluster?: CatalogName;

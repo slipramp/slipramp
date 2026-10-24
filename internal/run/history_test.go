@@ -15,15 +15,17 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 	want := []Run{{ID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1400")}}
 	runs.listed = want
 	repositoryID := testRepositoryID
+	inputArtifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1410")
 
 	listed, err := service.ListRuns(
 		context.Background(),
 		RunListFilter{
-			RepositoryID: &repositoryID,
-			CommitSHA:    testCommitSHA,
-			TargetName:   "network",
-			ClusterName:  "colo",
-			Phase:        PhaseRunning,
+			RepositoryID:    &repositoryID,
+			CommitSHA:       testCommitSHA,
+			InputArtifactID: &inputArtifactID,
+			TargetName:      "network",
+			ClusterName:     "colo",
+			Phase:           PhaseRunning,
 		},
 	)
 	if err != nil {
@@ -35,11 +37,24 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 	if runs.listFilter.RepositoryID == nil ||
 		*runs.listFilter.RepositoryID != repositoryID ||
 		runs.listFilter.CommitSHA != testCommitSHA ||
+		runs.listFilter.InputArtifactID == nil ||
+		*runs.listFilter.InputArtifactID != inputArtifactID ||
 		runs.listFilter.TargetName != "network" ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != PhaseRunning ||
 		runs.listFilter.Limit != DefaultRunListLimit {
 		t.Errorf("ListRuns() filter = %#v", runs.listFilter)
+	}
+}
+
+func TestListRunsRejectsEmptyInputArtifactID(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	emptyID := uuid.Nil
+	_, err := service.ListRuns(context.Background(), RunListFilter{InputArtifactID: &emptyID})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
 }
 

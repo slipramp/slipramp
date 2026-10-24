@@ -1,9 +1,14 @@
 import type { Promotion, Run } from "~/api/generated";
 
 export type ExecutionActivity = {
-  animation: "phone" | "working";
+  animation: "phone" | "working" | "celebrating" | "frustrated";
   title: string;
-  description: string;
+  description?: string;
+  tone?: "success" | "error" | "neutral";
+  result?: {
+    reason?: string;
+    exitCode?: number;
+  };
 };
 
 export function activityAnimationDelay(animationKey: string): number {
@@ -56,6 +61,58 @@ export function runActivity(
         description: "Your action is running. Follow along in the live logs below.",
       };
   }
+}
+
+export function runResultActivity(
+  run: Pick<Run, "phase" | "outcome" | "outcomeReason" | "outcomeMessage" | "exitCode">,
+): ExecutionActivity | undefined {
+  if (run.phase !== "finished") return undefined;
+
+  let activity: ExecutionActivity;
+
+  switch (run.outcome) {
+    case "succeeded":
+      return {
+        animation: "celebrating",
+        tone: "success",
+        title: "Run succeeded",
+      };
+    case "failed":
+      activity = {
+        animation: "frustrated",
+        tone: "error",
+        title: "Run failed",
+        description: "The action failed. Details are in the logs below.",
+      };
+      break;
+    case "timed-out":
+      activity = {
+        animation: "frustrated",
+        tone: "error",
+        title: "Run timed out",
+        description: "The action exceeded its time limit.",
+      };
+      break;
+    case "canceled":
+      activity = {
+        animation: "phone",
+        tone: "neutral",
+        title: "Run canceled",
+        description: "Your run was canceled.",
+      };
+      break;
+    default:
+      return undefined;
+  }
+
+  return {
+    ...activity,
+    description: run.outcomeMessage ?? activity.description,
+    result: {
+      reason: run.outcomeReason,
+      exitCode: run.exitCode,
+    },
+  };
 }
 
 export function promotionActivity(

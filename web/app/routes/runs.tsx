@@ -10,7 +10,7 @@ import {
   type Repository,
   type Run,
 } from "~/api/generated";
-import { useKawaiiActivityRefresh } from "~/components/activity-refresh";
+import { useActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime, Timestamp } from "~/components/display";
 import { CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
@@ -103,7 +103,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 }
 
 export default function RunHistory({ loaderData }: Route.ComponentProps) {
-  useKawaiiActivityRefresh(loaderData.runs.some((run) => run.phase !== "finished"));
+  useActivityRefresh(loaderData.runs.some((run) => run.phase !== "finished"));
   const repositoryNames = new Map(
     loaderData.repositories.map((repository) => [repository.id, repository.name]),
   );

@@ -299,6 +299,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	t.Parallel()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	inputArtifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1210")
 	newestID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	olderID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
 	observedAt := time.Now().UTC()
@@ -327,6 +328,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		http.MethodGet,
 		"/api/v1/runs?repositoryId="+repositoryID.String()+
 			"&commitSha=0123456789abcdef0123456789abcdef01234567"+
+			"&inputArtifactId="+inputArtifactID.String()+
 			"&target=network&cluster=colo&phase=running&limit=12&offset=4",
 		nil,
 	)
@@ -340,6 +342,8 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	if runs.listFilter.RepositoryID == nil ||
 		*runs.listFilter.RepositoryID != repositoryID ||
 		runs.listFilter.CommitSHA != "0123456789abcdef0123456789abcdef01234567" ||
+		runs.listFilter.InputArtifactID == nil ||
+		*runs.listFilter.InputArtifactID != inputArtifactID ||
 		runs.listFilter.TargetName != "network" ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != run.PhaseRunning ||

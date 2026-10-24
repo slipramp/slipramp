@@ -3,7 +3,7 @@ import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import { getCommit, listPromotions, listRuns, type Promotion, type Run } from "~/api/generated";
-import { useKawaiiActivityRefresh } from "~/components/activity-refresh";
+import { useActivityRefresh } from "~/components/activity-refresh";
 import { RelativeTime } from "~/components/display";
 import { CommitDetails } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
@@ -92,7 +92,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 }
 
 export default function Commit({ loaderData }: Route.ComponentProps) {
-  useKawaiiActivityRefresh(
+  useActivityRefresh(
     loaderData.runs.some((run) => run.phase !== "finished") ||
       loaderData.promotions.some((promotion) => promotionActivity(promotion) !== undefined),
   );

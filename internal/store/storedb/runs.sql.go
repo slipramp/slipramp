@@ -164,31 +164,42 @@ AND (
     OR commit_sha = $2
 )
 AND (
-    $3::text IS NULL
-    OR target_name = $3
+    $3::uuid IS NULL
+    OR EXISTS (
+        SELECT 1
+        FROM run_artifact_inputs
+        WHERE run_artifact_inputs.run_id = runs.id
+          AND run_artifact_inputs.artifact_id = $3
+    )
 )
 AND (
     $4::text IS NULL
-    OR cluster_name = $4
+    OR target_name = $4
 )
 AND (
     $5::text IS NULL
-    OR phase = $5
+    OR cluster_name = $5
+)
+AND (
+    $6::text IS NULL
+    OR phase = $6
 )
 `
 
 type CountRunsParams struct {
-	RepositoryID pgtype.UUID
-	CommitSha    *string
-	TargetName   *string
-	ClusterName  *string
-	Phase        *string
+	RepositoryID    pgtype.UUID
+	CommitSha       *string
+	InputArtifactID pgtype.UUID
+	TargetName      *string
+	ClusterName     *string
+	Phase           *string
 }
 
 func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countRuns,
 		arg.RepositoryID,
 		arg.CommitSha,
+		arg.InputArtifactID,
 		arg.TargetName,
 		arg.ClusterName,
 		arg.Phase,
@@ -752,36 +763,47 @@ AND (
     OR commit_sha = $2
 )
 AND (
-    $3::text IS NULL
-    OR target_name = $3
+    $3::uuid IS NULL
+    OR EXISTS (
+        SELECT 1
+        FROM run_artifact_inputs
+        WHERE run_artifact_inputs.run_id = runs.id
+          AND run_artifact_inputs.artifact_id = $3
+    )
 )
 AND (
     $4::text IS NULL
-    OR cluster_name = $4
+    OR target_name = $4
 )
 AND (
     $5::text IS NULL
-    OR phase = $5
+    OR cluster_name = $5
+)
+AND (
+    $6::text IS NULL
+    OR phase = $6
 )
 ORDER BY created_at DESC, id DESC
-LIMIT $7
-OFFSET $6
+LIMIT $8
+OFFSET $7
 `
 
 type ListRunsParams struct {
-	RepositoryID pgtype.UUID
-	CommitSha    *string
-	TargetName   *string
-	ClusterName  *string
-	Phase        *string
-	ResultOffset int32
-	ResultLimit  int32
+	RepositoryID    pgtype.UUID
+	CommitSha       *string
+	InputArtifactID pgtype.UUID
+	TargetName      *string
+	ClusterName     *string
+	Phase           *string
+	ResultOffset    int32
+	ResultLimit     int32
 }
 
 func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, error) {
 	rows, err := q.db.Query(ctx, listRuns,
 		arg.RepositoryID,
 		arg.CommitSha,
+		arg.InputArtifactID,
 		arg.TargetName,
 		arg.ClusterName,
 		arg.Phase,

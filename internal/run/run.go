@@ -123,13 +123,14 @@ type RerunRequest struct {
 }
 
 type RunListFilter struct {
-	RepositoryID *uuid.UUID
-	CommitSHA    string
-	TargetName   string
-	ClusterName  string
-	Phase        Phase
-	Limit        int32
-	Offset       int32
+	RepositoryID    *uuid.UUID
+	CommitSHA       string
+	InputArtifactID *uuid.UUID
+	TargetName      string
+	ClusterName     string
+	Phase           Phase
+	Limit           int32
+	Offset          int32
 }
 
 type RunList struct {
