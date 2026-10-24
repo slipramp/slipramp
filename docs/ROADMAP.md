@@ -22,12 +22,15 @@ target-branch push, and healthy/synced Argo CD reconciliation. Preparation
 failures were observed during bring-up and recovered through new Promotions.
 Disposable kind coverage also exercises automatic approval and guarded
 preparation, with authenticated Stage snapshots and deterministic Argo CD
-fixtures. These do not close the entire live cutover matrix.
+fixtures. On 2026-10-23, all 109 Stages in the eight observed Kargo projects
+cut over from Kargo Gate to Slipramp-backed tasks. The two `ops-ci` policies
+remain review-required and the other observed Stages retain the default
+automatic policy. The intentionally unobserved `kargo-ivy` project retains its
+direct-push tasks. These do not close the entire live cutover matrix.
 
 - [ ] Complete the noncritical live Stage matrix: automatic, approved, rejected,
       expired, preparation-failed, and stale-target outcomes; retain reproducible
       evidence for rejection, expiry, and stale-target cases still outstanding.
-- [ ] Confirm/recreate any active per-Stage policies explicitly.
 - [ ] Confirm removal of the standalone `kargo-gate` Deployment, Service, routes,
       PVC, service account, RBAC, machine key, and obsolete Argo CD/Git credentials
       after acceptance. Do not add legacy importers or compatibility routes.

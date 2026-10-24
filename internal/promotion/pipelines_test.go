@@ -1,6 +1,7 @@
 package promotion
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -107,6 +108,107 @@ func TestFreightPipelineServiceFiltersAndPaginatesPipelines(t *testing.T) {
 	}
 }
 
+func TestFreightPipelineServiceFiltersComparisonStatusBeforePagination(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
+	alphaHomelab := pipelineStage("prod", "kargo-core", "alpha", "alpha-homelab", "homelab", now)
+	bravoHomelab := pipelineStage("prod", "kargo-core", "bravo", "bravo-homelab", "homelab", now)
+	bravoProd := pipelineStage("prod", "kargo-core", "bravo", "bravo-prod", "prod", now)
+	charlieHomelab := pipelineStage("prod", "kargo-core", "charlie", "charlie-homelab", "homelab", now)
+	charlieProd := pipelineStage("prod", "kargo-core", "charlie", "charlie-prod", "prod", now)
+	deltaHomelab := pipelineStage("prod", "kargo-core", "delta", "delta-homelab", "homelab", now)
+	deltaProd := pipelineStage("prod", "kargo-core", "delta", "delta-prod", "prod", now)
+
+	alphaHomelab.Freight = pipelineFreight("1.0.0")
+	bravoHomelab.Freight = pipelineFreight("1.0.0")
+	bravoProd.Freight = pipelineFreight("1.0.0")
+	charlieHomelab.Freight = pipelineFreight("1.0.0")
+	charlieProd.Freight = pipelineFreight("2.0.0")
+	deltaHomelab.Freight = pipelineFreight("2.0.0")
+	deltaProd.Freight = pipelineFreight("3.0.0")
+
+	store := &reviewStore{stages: []Stage{
+		alphaHomelab,
+		bravoHomelab,
+		bravoProd,
+		charlieHomelab,
+		charlieProd,
+		deltaHomelab,
+		deltaProd,
+	}}
+	service := NewFreightPipelineService(
+		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
+		store,
+	)
+
+	equal, err := service.List(t.Context(), FreightPipelineListFilter{
+		Status: FreightComparisonStatusEqual,
+		Limit:  DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("equal List() error = %v", err)
+	}
+	if equal.Total != 1 || len(equal.Items) != 1 || equal.Items[0].Application != "bravo" {
+		t.Errorf("equal List() = %#v", equal)
+	}
+
+	different, err := service.List(t.Context(), FreightPipelineListFilter{
+		Status: FreightComparisonStatusDifferent,
+		Limit:  1,
+		Offset: 1,
+	})
+	if err != nil {
+		t.Fatalf("different List() error = %v", err)
+	}
+	if different.Total != 2 || len(different.Items) != 1 || different.Items[0].Application != "delta" {
+		t.Errorf("different List() = %#v", different)
+	}
+}
+
+func TestFreightPipelineServiceRequiresStagesInTwoEnvironmentsForComparison(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
+	homelabA := pipelineStage("prod", "kargo-core", "app", "app-homelab-a", "homelab", now)
+	homelabB := pipelineStage("prod", "kargo-core", "app", "app-homelab-b", "homelab", now)
+	homelabA.Freight = pipelineFreight("1.0.0")
+	homelabB.Freight = pipelineFreight("2.0.0")
+
+	service := NewFreightPipelineService(
+		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
+		&reviewStore{stages: []Stage{homelabA, homelabB}},
+	)
+	for _, status := range []FreightComparisonStatus{
+		FreightComparisonStatusEqual,
+		FreightComparisonStatusDifferent,
+	} {
+		result, err := service.List(t.Context(), FreightPipelineListFilter{
+			Status: status,
+			Limit:  DefaultListLimit,
+		})
+		if err != nil {
+			t.Fatalf("%s List() error = %v", status, err)
+		}
+		if result.Total != 0 || len(result.Items) != 0 {
+			t.Errorf("%s List() = %#v", status, result)
+		}
+	}
+}
+
+func TestFreightPipelineServiceRejectsInvalidComparisonStatus(t *testing.T) {
+	t.Parallel()
+
+	service := NewFreightPipelineService(IntegrationSet{}, &reviewStore{})
+	_, err := service.List(t.Context(), FreightPipelineListFilter{
+		Status: "drifted",
+		Limit:  DefaultListLimit,
+	})
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("List() error = %v, want ErrInvalid", err)
+	}
+}
+
 func pipelineStage(
 	integration string,
 	project string,
@@ -120,4 +222,9 @@ func pipelineStage(
 	stage.Environment = environment
 
 	return stage
+}
+
+func pipelineFreight(version string) []byte {
+	return []byte(`{"items":[{"origin":"Warehouse/app","name":"freight","artifacts":[` +
+		`{"kind":"image","repository":"ghcr.io/example/app","version":"` + version + `"}]}]}`)
 }

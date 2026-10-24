@@ -503,8 +503,10 @@ resource-filtered Argo CD diffs, hiding version-only changes by default.
 
 Pipelines align typed Freight across configured environment order, preserve
 duplicate Stages and missing environments, and append unconfigured environments.
-Comparison reports equality, difference, or absence without inferring version
-or Git ancestry ordering.
+Comparison reports equality or difference only when Stages exist in at least two
+environments; otherwise it reports absence. Status filters select pipelines with
+at least one matching Freight artifact before pagination. Comparisons do not
+infer version or Git ancestry ordering.
 
 Branch drift groups active Stages by Repository and shares one bounded read-only
 Git scan, cached for the refresh interval. Relevant Repository or Stage changes

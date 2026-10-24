@@ -1182,6 +1182,8 @@ export type PromotionStagePolicyUpdate = {
   reason?: string;
 };
 
+export type PromotionFreightComparisonStatus = "equal" | "different";
+
 export type PromotionPipelineStage = {
   id: string;
   name: string;
@@ -3503,6 +3505,10 @@ export type ListPromotionPipelinesData = {
     application?: string;
     cluster?: CatalogName;
     repository?: CatalogName;
+    /**
+     * Include pipelines containing at least one comparable Freight artifact with this status. Freight is comparable only when Stages are present in at least two environments.
+     */
+    status?: PromotionFreightComparisonStatus;
     limit?: number;
     offset?: number;
   };

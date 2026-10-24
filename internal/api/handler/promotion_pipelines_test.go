@@ -79,7 +79,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		t.Context(),
 		http.MethodGet,
 		"/api/v1/promotion-pipelines?integration=prod&cluster=colo&project=kargo-core&"+
-			"repository=ops&application=external-dns&limit=10&offset=2",
+			"repository=ops&application=external-dns&status=different&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -92,7 +92,8 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 	}
 	if pipelines.filter.Integration != "prod" || pipelines.filter.Cluster != "colo" ||
 		pipelines.filter.Project != "kargo-core" || pipelines.filter.Repository != "ops" ||
-		pipelines.filter.Application != "external-dns" || pipelines.filter.Limit != 10 ||
+		pipelines.filter.Application != "external-dns" ||
+		pipelines.filter.Status != promotion.FreightComparisonStatusDifferent || pipelines.filter.Limit != 10 ||
 		pipelines.filter.Offset != 2 {
 		t.Errorf("pipeline filter = %#v", pipelines.filter)
 	}

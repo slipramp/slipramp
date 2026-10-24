@@ -408,6 +408,24 @@ func (e PromotionFreightArtifactKind) Valid() bool {
 	}
 }
 
+// Defines values for PromotionFreightComparisonStatus.
+const (
+	Different PromotionFreightComparisonStatus = "different"
+	Equal     PromotionFreightComparisonStatus = "equal"
+)
+
+// Valid indicates whether the value is a known member of the PromotionFreightComparisonStatus enum.
+func (e PromotionFreightComparisonStatus) Valid() bool {
+	switch e {
+	case Different:
+		return true
+	case Equal:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromotionPolicyMode.
 const (
 	Automatic      PromotionPolicyMode = "automatic"
@@ -1513,6 +1531,9 @@ type PromotionFreightArtifact struct {
 // PromotionFreightArtifactKind defines model for PromotionFreightArtifact.Kind.
 type PromotionFreightArtifactKind string
 
+// PromotionFreightComparisonStatus defines model for PromotionFreightComparisonStatus.
+type PromotionFreightComparisonStatus string
+
 // PromotionFreightItem defines model for PromotionFreightItem.
 type PromotionFreightItem struct {
 	Artifacts []PromotionFreightArtifact `json:"artifacts"`
@@ -2296,8 +2317,11 @@ type ListPromotionPipelinesParams struct {
 	Application *string      `form:"application,omitempty" json:"application,omitempty"`
 	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Repository  *CatalogName `form:"repository,omitempty" json:"repository,omitempty"`
-	Limit       *Limit       `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset      *Offset      `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Status Include pipelines containing at least one comparable Freight artifact with this status. Freight is comparable only when Stages are present in at least two environments.
+	Status *PromotionFreightComparisonStatus `form:"status,omitempty" json:"status,omitempty"`
+	Limit  *Limit                            `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *Offset                           `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListPromotionProjectsParams defines parameters for ListPromotionProjects.
@@ -5275,6 +5299,18 @@ func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipeli
 		if params.Repository != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repository", *params.Repository, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -16961,6 +16997,19 @@ func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter,
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repository"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "status" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
 		}
 		return
 	}

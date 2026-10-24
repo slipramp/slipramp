@@ -1,4 +1,5 @@
 import type {
+  PromotionFreightComparisonStatus,
   PromotionFreightArtifact,
   PromotionPipeline,
   PromotionPipelineStage,
@@ -18,8 +19,6 @@ export type FreightComparisonRow = {
   repository?: string;
   values: Record<string, string[]>;
 };
-
-export type FreightComparisonStatus = "equal" | "different";
 
 export function buildFreightColumns(pipeline: PromotionPipeline): FreightColumn[] {
   const configured = new Set(pipeline.environmentOrder);
@@ -103,19 +102,33 @@ export function freightNames(stage: PromotionPipelineStage) {
     .filter((name, index, names) => names.indexOf(name) === index);
 }
 
-export function freightRowMatches(row: FreightComparisonRow, columns: FreightColumn[]) {
-  const values = columns.map((column) => (row.values[column.key] ?? []).join("\n"));
+export function freightRowStatus(
+  row: FreightComparisonRow,
+  columns: FreightColumn[],
+): PromotionFreightComparisonStatus | undefined {
+  const presentColumns = columns.filter((column) => column.stage);
+  const environments = new Set(presentColumns.map((column) => column.environment));
+  if (environments.size < 2) return undefined;
 
-  return values.length > 0 && values.every((value) => value !== "" && value === values[0]);
+  const values = presentColumns.map((column) => row.values[column.key] ?? []);
+  const expected = values[0] ?? [];
+  const equal =
+    expected.length > 0 &&
+    values.every(
+      (value) =>
+        value.length === expected.length &&
+        value.every((version, index) => version === expected[index]),
+    );
+
+  return equal ? "equal" : "different";
 }
 
 export function filterFreightRows(
   rows: FreightComparisonRow[],
   columns: FreightColumn[],
-  status?: FreightComparisonStatus,
+  status?: PromotionFreightComparisonStatus,
 ) {
   if (!status) return rows;
 
-  const matches = status === "equal";
-  return rows.filter((row) => freightRowMatches(row, columns) === matches);
+  return rows.filter((row) => freightRowStatus(row, columns) === status);
 }

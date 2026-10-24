@@ -23,6 +23,9 @@ func (h *Handler) ListPromotionPipelines(
 	if request.Params.Application != nil {
 		filter.Application = *request.Params.Application
 	}
+	if request.Params.Status != nil {
+		filter.Status = promotion.FreightComparisonStatus(*request.Params.Status)
+	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
 	}

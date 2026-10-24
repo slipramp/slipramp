@@ -321,6 +321,7 @@ export type {
   PromotionDecisionUpdate,
   PromotionFreight,
   PromotionFreightArtifact,
+  PromotionFreightComparisonStatus,
   PromotionFreightItem,
   PromotionId,
   PromotionList,

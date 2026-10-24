@@ -14,7 +14,7 @@ import {
 } from "@mantine/core";
 import { useDebouncedCallback } from "@mantine/hooks";
 import { IconFilter, IconPlus, IconX } from "@tabler/icons-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Form, Link, useSearchParams, useSubmit } from "react-router";
 
 const filterDebounceMs = 250;
@@ -53,7 +53,25 @@ export function SearchParamFilters({
   const submitTextFilters = useDebouncedCallback(submitFilters, filterDebounceMs);
   const activeNames = filters.filter((filter) => filter.active).map((filter) => filter.name);
   const [addedNames, setAddedNames] = useState<string[]>([]);
+  const addedFilterToFocus = useRef<string>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const visibleNames = [...new Set([...activeNames, ...addedNames])];
+
+  useEffect(() => {
+    const name = addedFilterToFocus.current;
+    if (name === null || !addedNames.includes(name)) return;
+
+    addedFilterToFocus.current = null;
+    const control = formRef.current?.elements.namedItem(name);
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+      control.focus();
+    }
+  }, [addedNames]);
+
+  function addFilter(name: string) {
+    addedFilterToFocus.current = name;
+    setAddedNames((current) => [...current, name]);
+  }
 
   function handleChange(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
@@ -110,7 +128,7 @@ export function SearchParamFilters({
 
   return (
     <Paper className="filter-panel" p="md" withBorder>
-      <Form method="get" onChange={handleChange} onSubmit={handleSubmit} replace>
+      <Form ref={formRef} method="get" onChange={handleChange} onSubmit={handleSubmit} replace>
         <Stack gap="md">
           <Group justify="space-between">
             <Group gap="xs">
@@ -134,7 +152,7 @@ export function SearchParamFilters({
                   Clear all
                 </Button>
               ) : null}
-              <Menu position="bottom-end" shadow="md" width={220}>
+              <Menu position="bottom-end" returnFocus={false} shadow="md" width={220}>
                 <Menu.Target>
                   <Button
                     disabled={availableFilters.length === 0}
@@ -149,10 +167,7 @@ export function SearchParamFilters({
                 <Menu.Dropdown>
                   <Menu.Label>Available filters</Menu.Label>
                   {availableFilters.map((filter) => (
-                    <Menu.Item
-                      key={filter.name}
-                      onClick={() => setAddedNames((current) => [...current, filter.name])}
-                    >
+                    <Menu.Item key={filter.name} onClick={() => addFilter(filter.name)}>
                       {filter.label}
                     </Menu.Item>
                   ))}
@@ -178,7 +193,9 @@ export function SearchParamFilters({
                   <Text c="dimmed" size="sm">
                     is
                   </Text>
-                  <Box className="filter-clause-control">{renderFilterControl(filter)}</Box>
+                  <Box className="filter-clause-control">
+                    <FilterControl filter={filter} />
+                  </Box>
                   <ActionIcon
                     aria-label={`Remove ${filter.label} filter`}
                     color="gray"
@@ -198,14 +215,13 @@ export function SearchParamFilters({
   );
 }
 
-function renderFilterControl(filter: SearchParamFilter) {
+function FilterControl({ filter }: Readonly<{ filter: SearchParamFilter }>) {
   if (filter.kind === "select") {
     return (
       <NativeSelect
         aria-label={`${filter.label} filter`}
         data={filter.data}
         defaultValue={filter.value ?? ""}
-        key={`${filter.name}:${filter.value ?? ""}`}
         name={filter.name}
         onChange={(event) => {
           if (event.currentTarget.value !== "") return;
@@ -226,7 +242,6 @@ function renderFilterControl(filter: SearchParamFilter) {
     <TextInput
       aria-label={`${filter.label} filter`}
       defaultValue={filter.value}
-      key={`${filter.name}:${filter.value ?? ""}`}
       maxLength={filter.maxLength}
       name={filter.name}
       placeholder={filter.placeholder}

@@ -2,9 +2,18 @@ package promotion
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"slices"
 
 	"github.com/google/uuid"
+)
+
+type FreightComparisonStatus string
+
+const (
+	FreightComparisonStatusEqual     FreightComparisonStatus = "equal"
+	FreightComparisonStatusDifferent FreightComparisonStatus = "different"
 )
 
 type FreightPipelineListFilter struct {
@@ -13,6 +22,7 @@ type FreightPipelineListFilter struct {
 	Project     string
 	Repository  string
 	Application string
+	Status      FreightComparisonStatus
 	Limit       int
 	Offset      int
 }
@@ -62,6 +72,9 @@ func (s *FreightPipelineService) List(
 ) (FreightPipelineList, error) {
 	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
 		return FreightPipelineList{}, err
+	}
+	if filter.Status != "" && !filter.Status.Valid() {
+		return FreightPipelineList{}, fmt.Errorf("%w: Freight comparison status filter is invalid", ErrInvalid)
 	}
 
 	stages, err := s.store.ListPromotionStages(ctx)
@@ -158,7 +171,13 @@ func (s *FreightPipelineService) List(
 
 			return compareText(left.Stage.ID.String(), right.Stage.ID.String())
 		})
-		items = append(items, builder.pipeline)
+		matches, err := freightPipelineMatchesStatus(builder.pipeline, filter.Status)
+		if err != nil {
+			return FreightPipelineList{}, err
+		}
+		if matches {
+			items = append(items, builder.pipeline)
+		}
 	}
 
 	slices.SortFunc(items, func(left, right FreightPipeline) int {
@@ -180,6 +199,97 @@ func (s *FreightPipelineService) List(
 	items = page(items, filter.Offset, filter.Limit)
 
 	return FreightPipelineList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+func (s FreightComparisonStatus) Valid() bool {
+	return s == FreightComparisonStatusEqual || s == FreightComparisonStatusDifferent
+}
+
+func freightPipelineMatchesStatus(pipeline FreightPipeline, status FreightComparisonStatus) (bool, error) {
+	if status == "" {
+		return true, nil
+	}
+
+	environments := make(map[string]struct{}, len(pipeline.Stages))
+	rows := make(map[freightComparisonRowKey]map[uuid.UUID][]string)
+	for _, pipelineStage := range pipeline.Stages {
+		environments[pipelineStage.Stage.Environment] = struct{}{}
+
+		var freight freightComparisonDocument
+		if err := json.Unmarshal(pipelineStage.Stage.Freight, &freight); err != nil {
+			return false, fmt.Errorf("decode Freight for Stage %s: %w", pipelineStage.Stage.ID, err)
+		}
+		for _, item := range freight.Items {
+			for _, artifact := range item.Artifacts {
+				key := freightComparisonRowKey{
+					origin:     item.Origin,
+					kind:       artifact.Kind,
+					repository: artifact.Repository,
+				}
+				values := rows[key]
+				if values == nil {
+					values = make(map[uuid.UUID][]string)
+					rows[key] = values
+				}
+				if !slices.Contains(values[pipelineStage.Stage.ID], artifact.Version) {
+					values[pipelineStage.Stage.ID] = append(values[pipelineStage.Stage.ID], artifact.Version)
+				}
+			}
+		}
+	}
+
+	if len(environments) < 2 {
+		return false, nil
+	}
+
+	for _, values := range rows {
+		equal := freightValuesEqual(values, pipeline.Stages)
+		if (status == FreightComparisonStatusEqual) == equal {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+type freightComparisonDocument struct {
+	Items []freightComparisonItem `json:"items"`
+}
+
+type freightComparisonItem struct {
+	Origin    string                      `json:"origin"`
+	Artifacts []freightComparisonArtifact `json:"artifacts"`
+}
+
+type freightComparisonArtifact struct {
+	Kind       string `json:"kind"`
+	Repository string `json:"repository"`
+	Version    string `json:"version"`
+}
+
+type freightComparisonRowKey struct {
+	origin     string
+	kind       string
+	repository string
+}
+
+func freightValuesEqual(values map[uuid.UUID][]string, stages []FreightPipelineStage) bool {
+	var expected []string
+	for _, pipelineStage := range stages {
+		versions := slices.Sorted(slices.Values(values[pipelineStage.Stage.ID]))
+		if len(versions) == 0 {
+			return false
+		}
+		if expected == nil {
+			expected = versions
+			continue
+		}
+		if !slices.Equal(versions, expected) {
+			return false
+		}
+	}
+
+	return len(expected) > 0
 }
 
 func stageMatchesPipelineFilter(stage Stage, filter FreightPipelineListFilter) bool {

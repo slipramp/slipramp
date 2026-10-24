@@ -315,6 +315,14 @@ promotionPipelines:
         in: query
         schema:
           $ref: ../components/runs.yaml#/CatalogName
+      - name: status
+        in: query
+        description: >-
+          Include pipelines containing at least one comparable Freight artifact
+          with this status. Freight is comparable only when Stages are present
+          in at least two environments.
+        schema:
+          $ref: ../components/promotions.yaml#/PromotionFreightComparisonStatus
       - $ref: "#/components/parameters/Limit"
       - $ref: "#/components/parameters/Offset"
     responses:
