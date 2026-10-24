@@ -235,8 +235,8 @@ Development tool and package versions are pinned by `Taskfile.yml`, `go.mod`,
 `package.json`, and `pnpm-lock.yaml`; `task deps` installs the pinned Go tools
 and pnpm release into the ignored repository cache. The local stack includes a
 Dex password database and development-only Server configuration for the
-`kcloud-ops` repository and homelab Controller. Run the Server and web process
-in separate terminals:
+`kcloud-ops` repository and development homelab Controller. Run the Server and
+web process in separate terminals:
 
 ```console
 task deps
@@ -269,11 +269,12 @@ developer's existing SSH agent or default key and `known_hosts`. Confirm that
 before registering the repositories. The Kargo integration allows both
 repositories because the `kargo-ivy` project promotes `universe`; its review
 preparation still runs from the `kcloud-ops` catalog.
-The homelab Controller must use
+The development homelab Controller must use
 `slipramp-local-homelab-enrollment-token` as its enrollment token and continue
 mapping checkout credential `kcloud-ops` to Secret `kcloud-ops-git`. It owns
-the `slipramp-runs` execution namespace and runs promotion preparation Jobs.
-The `prod-sjc1` Controller must use
+the `slipramp-dev-runs` execution namespace and runs promotion preparation
+Jobs without sharing the production Controller's `slipramp-runs` namespace.
+The development `prod-sjc1` Controller must use
 `slipramp-local-prod-sjc1-enrollment-token` and observe the `kargo-core`,
 `kargo-devops`, `kargo-ivy`, `kargo-network`, `kargo-platform`, `kargo-play`,
 `kargo-sandbox`, `kargo-storage`, and `kargo-virt` namespaces for the `homelab`
@@ -281,10 +282,11 @@ integration, because the centralized Kargo Stage objects live in that cluster.
 
 The local `homelab-infrastructure` Placement exposes the `ops-ci`,
 `homelab-known-hosts`, `kcloud-ops-git`, and `kargo-argocd` Secret sources in
-the `slipramp-runs` namespace. The Controller bootstrap remains responsible
-for materializing those Secrets and the private-GHCR pull credential. The
-configured Kargo integration is named `homelab`; configure the Controller's
-Stage observer and Kargo PromotionTask to use that same name. After signing in,
+the `slipramp-dev-runs` namespace. The Controller bootstrap remains
+responsible for materializing those Secrets and the private-GHCR pull
+credential. The configured Kargo integration is named `homelab`; configure the
+Controller's Stage observer and Kargo PromotionTask to use that same name.
+After signing in,
 create an operator service account and API key with
 `slipramp:promotions:submit` for the PromotionTask; there is intentionally no
 bootstrap API key in source control.

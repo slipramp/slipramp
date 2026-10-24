@@ -47,7 +47,8 @@ RETURNING
     observed_commit_sha,
     last_refresh_attempted_at,
     last_refresh_succeeded_at,
-    last_refresh_error
+    last_refresh_error,
+    refresh_failure_started_at
 `
 
 type CreateRepositoryParams struct {
@@ -63,20 +64,21 @@ type CreateRepositoryParams struct {
 }
 
 type CreateRepositoryRow struct {
-	ID                     pgtype.UUID
-	Name                   string
-	CloneUrl               string
-	Branch                 string
-	CommitIndexingMode     string
-	CommitUrlTemplate      *string
-	RefreshCredentialName  *string
-	CheckoutCredentialName *string
-	CreatedAt              pgtype.Timestamptz
-	RefreshStatus          string
-	ObservedCommitSha      *string
-	LastRefreshAttemptedAt pgtype.Timestamptz
-	LastRefreshSucceededAt pgtype.Timestamptz
-	LastRefreshError       *string
+	ID                      pgtype.UUID
+	Name                    string
+	CloneUrl                string
+	Branch                  string
+	CommitIndexingMode      string
+	CommitUrlTemplate       *string
+	RefreshCredentialName   *string
+	CheckoutCredentialName  *string
+	CreatedAt               pgtype.Timestamptz
+	RefreshStatus           string
+	ObservedCommitSha       *string
+	LastRefreshAttemptedAt  pgtype.Timestamptz
+	LastRefreshSucceededAt  pgtype.Timestamptz
+	LastRefreshError        *string
+	RefreshFailureStartedAt pgtype.Timestamptz
 }
 
 func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryParams) (CreateRepositoryRow, error) {
@@ -107,6 +109,7 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 		&i.LastRefreshAttemptedAt,
 		&i.LastRefreshSucceededAt,
 		&i.LastRefreshError,
+		&i.RefreshFailureStartedAt,
 	)
 	return i, err
 }
@@ -127,6 +130,7 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
+    repositories.refresh_failure_started_at,
     catalog_revisions.commit_sha AS active_catalog_commit_sha,
     repository_commit_history_indexes.status AS commit_history_status,
     repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
@@ -159,6 +163,7 @@ type GetActiveRepositoryRow struct {
 	LastRefreshAttemptedAt       pgtype.Timestamptz
 	LastRefreshSucceededAt       pgtype.Timestamptz
 	LastRefreshError             *string
+	RefreshFailureStartedAt      pgtype.Timestamptz
 	ActiveCatalogCommitSha       *string
 	CommitHistoryStatus          *string
 	CommitHistoryDesiredHeadSha  *string
@@ -187,6 +192,7 @@ func (q *Queries) GetActiveRepository(ctx context.Context, id pgtype.UUID) (GetA
 		&i.LastRefreshAttemptedAt,
 		&i.LastRefreshSucceededAt,
 		&i.LastRefreshError,
+		&i.RefreshFailureStartedAt,
 		&i.ActiveCatalogCommitSha,
 		&i.CommitHistoryStatus,
 		&i.CommitHistoryDesiredHeadSha,
@@ -215,6 +221,7 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
+    repositories.refresh_failure_started_at,
     catalog_revisions.commit_sha AS active_catalog_commit_sha,
     repository_commit_history_indexes.status AS commit_history_status,
     repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
@@ -247,6 +254,7 @@ type ListRepositoriesRow struct {
 	LastRefreshAttemptedAt       pgtype.Timestamptz
 	LastRefreshSucceededAt       pgtype.Timestamptz
 	LastRefreshError             *string
+	RefreshFailureStartedAt      pgtype.Timestamptz
 	ActiveCatalogCommitSha       *string
 	CommitHistoryStatus          *string
 	CommitHistoryDesiredHeadSha  *string
@@ -281,6 +289,7 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 			&i.LastRefreshAttemptedAt,
 			&i.LastRefreshSucceededAt,
 			&i.LastRefreshError,
+			&i.RefreshFailureStartedAt,
 			&i.ActiveCatalogCommitSha,
 			&i.CommitHistoryStatus,
 			&i.CommitHistoryDesiredHeadSha,
@@ -308,7 +317,11 @@ SET refresh_status = 'failed',
         observed_commit_sha
     ),
     last_refresh_attempted_at = $2,
-    last_refresh_error = $3
+    last_refresh_error = $3,
+    refresh_failure_started_at = CASE
+        WHEN refresh_status = 'failed' THEN refresh_failure_started_at
+        ELSE $2
+    END
 WHERE id = $4
   AND removed_at IS NULL
 `

@@ -159,8 +159,30 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		refresh.CommitSHA == nil || *refresh.CommitSHA != commitSHA ||
 		refresh.AttemptedAt == nil || !refresh.AttemptedAt.Equal(failedAt) ||
 		refresh.SucceededAt == nil || !refresh.SucceededAt.Equal(succeededAt) ||
+		refresh.FailureStartedAt == nil || !refresh.FailureStartedAt.Equal(failedAt) ||
 		refresh.FailureReason == nil || *refresh.FailureReason != failureReason {
 		t.Errorf("refresh state after failure = %#v", refresh)
+	}
+
+	repeatedFailureAt := failedAt.Add(time.Minute)
+	if err := database.RecordRepositoryRefresh(
+		ctx,
+		first.ID,
+		repository.RefreshResult{
+			AttemptedAt:   repeatedFailureAt,
+			FailureReason: &failureReason,
+		},
+	); err != nil {
+		t.Fatalf("record repeated repository refresh failure: %v", err)
+	}
+	repositories, err = database.ListRepositories(ctx)
+	if err != nil {
+		t.Fatalf("list repositories after repeated refresh failure: %v", err)
+	}
+	repeatedRefresh := repositories[1].Refresh
+	if repeatedRefresh.AttemptedAt == nil || !repeatedRefresh.AttemptedAt.Equal(repeatedFailureAt) ||
+		repeatedRefresh.FailureStartedAt == nil || !repeatedRefresh.FailureStartedAt.Equal(failedAt) {
+		t.Errorf("refresh state after repeated failure = %#v", repeatedRefresh)
 	}
 	if repositories[1].ActiveCatalogCommitSHA == nil ||
 		*repositories[1].ActiveCatalogCommitSHA != commitSHA {

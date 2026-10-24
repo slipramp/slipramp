@@ -110,4 +110,4 @@ COPY --from=web-build --chown=node:node /out ./
 
 USER node
 EXPOSE 3000
-CMD ["./node_modules/.bin/react-router-serve", "./build/server/index.js"]
+CMD ["node", "./server.mjs"]

@@ -75,6 +75,7 @@ SET refresh_status = 'succeeded',
     last_refresh_attempted_at = sqlc.arg(attempted_at),
     last_refresh_succeeded_at = sqlc.arg(attempted_at),
     last_refresh_error = NULL,
+    refresh_failure_started_at = NULL,
     active_catalog_revision_id = sqlc.arg(catalog_revision_id)
 WHERE id = sqlc.arg(repository_id)
   AND removed_at IS NULL;

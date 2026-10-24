@@ -107,6 +107,7 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 		refresh.CommitSHA == nil || *refresh.CommitSHA != commitB ||
 		refresh.AttemptedAt == nil || !refresh.AttemptedAt.Equal(rejectedAt) ||
 		refresh.SucceededAt == nil || !refresh.SucceededAt.Equal(acceptedAt) ||
+		refresh.FailureStartedAt == nil || !refresh.FailureStartedAt.Equal(rejectedAt) ||
 		refresh.FailureReason == nil ||
 		*refresh.FailureReason != rejectionReason {
 		t.Errorf("refresh state after catalog rejection = %#v", refresh)
@@ -123,6 +124,13 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	recovered.Revision.Catalog = persistedCatalog("2")
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, recovered); err != nil {
 		t.Fatalf("record recovered catalog: %v", err)
+	}
+	repositories, err = database.ListRepositories(ctx)
+	if err != nil {
+		t.Fatalf("list repositories after recovery: %v", err)
+	}
+	if repositories[0].Refresh.FailureStartedAt != nil {
+		t.Errorf("refresh failure episode remained after recovery = %#v", repositories[0].Refresh)
 	}
 
 	assertActiveCatalog(t, database, repositoryID, revisionBID, commitB)

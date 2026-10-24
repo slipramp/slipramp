@@ -231,6 +231,7 @@ type Repository struct {
 	ActiveCatalogRevisionID pgtype.UUID
 	CommitUrlTemplate       *string
 	CommitIndexingMode      string
+	RefreshFailureStartedAt pgtype.Timestamptz
 }
 
 type RepositoryCommit struct {

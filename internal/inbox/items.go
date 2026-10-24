@@ -68,12 +68,15 @@ func repositoryRefreshItem(record repository.Repository) (Item, error) {
 	if record.Refresh.AttemptedAt == nil {
 		return Item{}, fmt.Errorf("failed Repository %s has no refresh attempt time", record.ID)
 	}
+	if record.Refresh.FailureStartedAt == nil {
+		return Item{}, fmt.Errorf("failed Repository %s has no failure start time", record.ID)
+	}
 	description := "The latest branch refresh failed. The last accepted catalog remains active."
 	if record.Refresh.FailureReason != nil {
 		description = *record.Refresh.FailureReason
 	}
 
-	return newProblem(
+	item := newProblem(
 		KindRepositoryRefresh,
 		record.ID.String(),
 		*record.Refresh.AttemptedAt,
@@ -81,7 +84,10 @@ func repositoryRefreshItem(record repository.Repository) (Item, error) {
 		description,
 		"View repository",
 		Destination{Type: DestinationRepository, ID: record.ID.String()},
-	), nil
+	)
+	item.ID = problemOccurrenceID(KindRepositoryRefresh, record.ID.String(), *record.Refresh.FailureStartedAt)
+
+	return item, nil
 }
 
 func clusterUnreachableItem(observation cluster.Observation, affectedRuns int) Item {

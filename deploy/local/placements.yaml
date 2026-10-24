@@ -3,7 +3,7 @@ kind: PlacementConfig
 placements:
   homelab-infrastructure:
     cluster: homelab
-    jobNamespace: slipramp-runs
+    jobNamespace: slipramp-dev-runs
     serviceAccountName: infrastructure-admin
     timeout: 45m
     resources:

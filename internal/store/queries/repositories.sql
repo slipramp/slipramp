@@ -34,7 +34,8 @@ RETURNING
     observed_commit_sha,
     last_refresh_attempted_at,
     last_refresh_succeeded_at,
-    last_refresh_error;
+    last_refresh_error,
+    refresh_failure_started_at;
 
 -- name: ListRepositories :many
 SELECT
@@ -52,6 +53,7 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
+    repositories.refresh_failure_started_at,
     catalog_revisions.commit_sha AS active_catalog_commit_sha,
     repository_commit_history_indexes.status AS commit_history_status,
     repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
@@ -84,6 +86,7 @@ SELECT
     repositories.last_refresh_attempted_at,
     repositories.last_refresh_succeeded_at,
     repositories.last_refresh_error,
+    repositories.refresh_failure_started_at,
     catalog_revisions.commit_sha AS active_catalog_commit_sha,
     repository_commit_history_indexes.status AS commit_history_status,
     repository_commit_history_indexes.desired_head_sha AS commit_history_desired_head_sha,
@@ -114,7 +117,11 @@ SET refresh_status = 'failed',
         observed_commit_sha
     ),
     last_refresh_attempted_at = sqlc.arg(attempted_at),
-    last_refresh_error = sqlc.arg(refresh_error)
+    last_refresh_error = sqlc.arg(refresh_error),
+    refresh_failure_started_at = CASE
+        WHEN refresh_status = 'failed' THEN refresh_failure_started_at
+        ELSE sqlc.arg(attempted_at)
+    END
 WHERE id = sqlc.arg(id)
   AND removed_at IS NULL;
 

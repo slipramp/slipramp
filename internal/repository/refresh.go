@@ -22,11 +22,12 @@ const (
 )
 
 type RefreshState struct {
-	Status        RefreshStatus
-	CommitSHA     *string
-	AttemptedAt   *time.Time
-	SucceededAt   *time.Time
-	FailureReason *string
+	Status           RefreshStatus
+	CommitSHA        *string
+	AttemptedAt      *time.Time
+	SucceededAt      *time.Time
+	FailureStartedAt *time.Time
+	FailureReason    *string
 }
 
 type RefreshResult struct {

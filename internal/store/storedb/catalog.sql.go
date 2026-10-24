@@ -18,6 +18,7 @@ SET refresh_status = 'succeeded',
     last_refresh_attempted_at = $2,
     last_refresh_succeeded_at = $2,
     last_refresh_error = NULL,
+    refresh_failure_started_at = NULL,
     active_catalog_revision_id = $3
 WHERE id = $4
   AND removed_at IS NULL

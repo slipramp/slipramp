@@ -542,9 +542,12 @@ domains rather than a second durable problem lifecycle table.
 Operators and administrators may acknowledge an exact batch of rendered problem
 occurrences. PostgreSQL stores the acknowledgement per Principal and occurrence,
 so it survives browser and Web restarts, remains visible to other Principals,
-and does not hide a later occurrence of the same condition. Decisions cannot be
-acknowledged, and newly concurrent problems are absent from the submitted batch.
-The capability comes from the complete role-and-scope authorization result.
+and does not hide a later occurrence of the same condition. Repeated refresh
+failures belong to one Repository failure episode, so periodic retries do not
+resurface an acknowledged problem; a successful refresh ends the episode and a
+later failure starts a new occurrence. Decisions cannot be acknowledged, and
+newly concurrent problems are absent from the submitted batch. The capability
+comes from the complete role-and-scope authorization result.
 
 The Web reads this projection without domain pagination or a fallback composition
 path. A required projection-read failure produces an unavailable state and cannot

@@ -100,6 +100,7 @@ func (d *Database) ListRepositories(ctx context.Context) ([]repository.Repositor
 				row.ObservedCommitSha,
 				row.LastRefreshAttemptedAt,
 				row.LastRefreshSucceededAt,
+				row.RefreshFailureStartedAt,
 				row.LastRefreshError,
 			),
 			CommitHistoryIndex: commitHistoryIndex(
@@ -142,6 +143,7 @@ func (d *Database) GetRepository(ctx context.Context, repositoryID uuid.UUID) (r
 			row.ObservedCommitSha,
 			row.LastRefreshAttemptedAt,
 			row.LastRefreshSucceededAt,
+			row.RefreshFailureStartedAt,
 			row.LastRefreshError,
 		),
 		CommitHistoryIndex: commitHistoryIndex(
@@ -237,6 +239,7 @@ func repositoryFromCreateRow(row storedb.CreateRepositoryRow) repository.Reposit
 			row.ObservedCommitSha,
 			row.LastRefreshAttemptedAt,
 			row.LastRefreshSucceededAt,
+			row.RefreshFailureStartedAt,
 			row.LastRefreshError,
 		),
 	}
@@ -247,14 +250,16 @@ func refreshState(
 	commitSHA *string,
 	attemptedAt pgtype.Timestamptz,
 	succeededAt pgtype.Timestamptz,
+	failureStartedAt pgtype.Timestamptz,
 	failureReason *string,
 ) repository.RefreshState {
 	return repository.RefreshState{
-		Status:        repository.RefreshStatus(status),
-		CommitSHA:     commitSHA,
-		AttemptedAt:   optionalTime(attemptedAt),
-		SucceededAt:   optionalTime(succeededAt),
-		FailureReason: failureReason,
+		Status:           repository.RefreshStatus(status),
+		CommitSHA:        commitSHA,
+		AttemptedAt:      optionalTime(attemptedAt),
+		SucceededAt:      optionalTime(succeededAt),
+		FailureStartedAt: optionalTime(failureStartedAt),
+		FailureReason:    failureReason,
 	}
 }
 

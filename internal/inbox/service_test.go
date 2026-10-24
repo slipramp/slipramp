@@ -117,6 +117,25 @@ func TestServiceAppliesVisibilityAndAcknowledgements(t *testing.T) {
 	if len(result.Decisions) != 0 || len(result.Problems) != 0 {
 		t.Errorf("filtered snapshot = %#v", result)
 	}
+
+	laterAttempt := at.Add(time.Minute)
+	store.repositories[0].Refresh.AttemptedAt = &laterAttempt
+	result, err = newTestService(store, laterAttempt).Load(t.Context(), Query{PrincipalID: principalID})
+	if err != nil {
+		t.Fatalf("Load() after repeated failure error = %v", err)
+	}
+	if len(result.Problems) != 0 {
+		t.Errorf("repeated failure escaped acknowledgement = %#v", result.Problems)
+	}
+
+	store.repositories[0].Refresh.FailureStartedAt = &laterAttempt
+	result, err = newTestService(store, laterAttempt).Load(t.Context(), Query{PrincipalID: principalID})
+	if err != nil {
+		t.Fatalf("Load() after recurrent failure error = %v", err)
+	}
+	if len(result.Problems) != 1 || result.Problems[0].ID == problemID {
+		t.Errorf("recurrent failure = %#v, previous ID %q", result.Problems, problemID)
+	}
 }
 
 func TestServiceAcknowledgesOnlyRequestedCurrentProblems(t *testing.T) {
@@ -273,9 +292,10 @@ func failedRepository(id uuid.UUID, name string, attemptedAt time.Time) reposito
 		ID:   id,
 		Name: name,
 		Refresh: repository.RefreshState{
-			Status:        repository.RefreshStatusFailed,
-			AttemptedAt:   &attemptedAt,
-			FailureReason: &failureReason,
+			Status:           repository.RefreshStatusFailed,
+			AttemptedAt:      &attemptedAt,
+			FailureStartedAt: &attemptedAt,
+			FailureReason:    &failureReason,
 		},
 	}
 }
