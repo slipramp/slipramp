@@ -32,7 +32,7 @@ import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, SectionHeader } from "~/components/page";
 import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { pageTitle } from "~/page-title";
-import { formValue } from "~/form-data";
+import { formValue, problemDetail } from "~/form-data";
 
 import type { Route } from "./+types/repository";
 
@@ -81,7 +81,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   if (result.data) return { updated: true };
 
   return {
-    error: result.error.detail ?? result.error.title ?? "The repository could not be updated.",
+    error: problemDetail(result.error, "The repository could not be updated."),
   };
 }
 

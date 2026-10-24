@@ -8,6 +8,12 @@ Notifications report durable domain transitions but never own or alter them.
 A failed notification must not change a Promotion, Run, repository, cluster,
 or other product resource.
 
+Outbound notifications complement the operational Inbox; they do not implement
+or replace it. The Inbox is a current, role-aware projection of decisions and
+problems, while notification events are durable snapshots used to push selected
+transitions to configured external destinations. Either surface remains useful
+when the other is disabled or unavailable.
+
 Delivery tracking and deferred choices live in the
 [roadmap](./ROADMAP.md#notifications). Update [DESIGN.md](./DESIGN.md) as behavior
 is implemented.
@@ -51,9 +57,58 @@ transition. Delivery workers do not reconstruct old messages from mutable
 current state. Each event has a stable deduplication key so concurrent or
 repeated transition handling cannot enqueue the same notification twice.
 
-The originating state change, event, and intended delivery records are written
-in one PostgreSQL transaction. A committed transition therefore cannot be
-silently lost between the domain service and the notification worker.
+When a transition is owned by a transactional domain service, the originating
+state change, event, and intended delivery records are written in one PostgreSQL
+transaction. This applies to the initial Promotion integration. A committed
+transition therefore cannot be silently lost between the domain service and the
+notification worker.
+
+Later events based on elapsed time or derived health, such as an unreachable
+Controller, need a durable detection and deduplication boundary before they are
+introduced. Reading or rendering the Inbox is never that boundary and must not
+have the side effect of creating notification events.
+
+### Inbox and notifications share semantics, not storage
+
+The Inbox derives what needs attention now from current domain state. It does
+not require a matching notification route, event, or successful delivery. A
+guarded Promotion therefore appears in **Needs a decision** while it is pending
+even when outbound notifications are not configured.
+
+When outbound delivery is enabled and routing selects a destination, the
+corresponding `review.requested` event is emitted once when that Promotion enters
+`pending`. With no matching route, no notification record is needed; the domain
+state remains the durable record. Resolving or expiring the Promotion removes
+the current Inbox decision but does not retract an already sent message or erase
+delivery history. Conversely, viewing the Inbox does not enqueue a notification.
+Decisions cannot be acknowledged, and acknowledging an Inbox problem only hides
+that exact problem occurrence for that Principal; it never suppresses a
+notification, changes delivery state, or retries delivery.
+
+Future operational events must use the same episode boundary as the source
+domain and the Inbox. For example, repeated failed Repository refresh attempts
+within one failure episode remain one Inbox occurrence and may produce at most
+one notification event. A successful refresh ends the episode; a later failure
+starts a new Inbox occurrence and may emit a new event. The identifiers remain
+purpose-specific: an Inbox problem ID is an opaque acknowledgement key, while a
+notification deduplication key identifies one outbound transition.
+
+The two taxonomies do not need to mirror each other. A point-in-time event such
+as a future `review.resolved` or `run.failed` may be useful to push externally
+without remaining a current Inbox item. An Inbox condition derived from elapsed
+time must not emit a notification until it has the durable transition and noise
+semantics described above. Each new event documents any corresponding Inbox
+condition explicitly; there is no automatic "notify for every Inbox item" rule.
+
+A terminal notification delivery failure is operational data, but the initial
+slice exposes it through a dedicated delivery surface rather than adding a
+notification-specific source or item kind to the Inbox. If operator experience
+later shows that terminal failures belong in the Inbox, they must be added as a
+server-side projection source with a stable failure-occurrence identity. An
+Inbox acknowledgement would then remain per Principal and would not reset the
+delivery. A future explicit retry would make the failure no longer current, and
+exhausting that new retry cycle would create a new occurrence that could surface
+again.
 
 ### Delivery is provider-neutral and at least once
 
@@ -162,15 +217,17 @@ destination. Its fields include:
 - attempt count;
 - next-attempt time;
 - last non-sensitive error summary;
-- first-attempt, last-attempt, and delivered timestamps.
+- first-attempt, last-attempt, and delivered timestamps;
+- terminal failure time.
 
 The uniqueness boundary is `(event_id, destination_name)`. Retry updates the
 same delivery instead of inserting another logical delivery.
 
 `failed` is terminal after the configured bounded attempt policy is exhausted
 or the payload cannot be rendered for that destination. A failed delivery does
-not change the event's subject. Operators can diagnose it from the product and
-may receive an explicit retry operation in a later milestone.
+not change the event's subject. The terminal failure time is stable for that
+failure occurrence. Operators can diagnose it from the product and may receive
+an explicit retry operation in a later milestone.
 
 ### Destination
 
@@ -193,6 +250,10 @@ Initial routing is installation-wide. Typed filters such as Kargo integration,
 Repository, Target, or Cluster may be added only when a concrete deployment
 requires them. Arbitrary expressions, labels, and user subscriptions remain
 out of scope.
+
+If no route selects a destination for a transition, no notification event or
+delivery is persisted. Notification records exist to operate outbound delivery,
+not to form a second general audit log of domain transitions.
 
 ## Event Contract
 
@@ -265,6 +326,7 @@ notification_deliveries
   first_attempted_at
   last_attempted_at
   delivered_at
+  failed_at
   created_at
   UNIQUE (event_id, destination_name)
 ```
@@ -298,9 +360,11 @@ deliveries to another destination.
 
 ## Kargo Promotion Integration
 
-When a guarded Kargo Promotion preparation succeeds and its artifacts validate,
-the same transaction that moves the Promotion to `pending` enqueues one
-`review.requested` event and its configured deliveries.
+When a guarded Kargo Promotion preparation succeeds, its artifacts validate,
+and configured routing selects at least one destination, the same transaction
+that moves the Promotion to `pending` enqueues one `review.requested` event and
+its configured deliveries. With no matching destination, only the Promotion
+transition is persisted.
 
 The deduplication key is derived from the stable Promotion ID and transition,
 for example `promotion:<id>:review-requested`. Repeated Kargo polls,
@@ -357,19 +421,29 @@ artifact, product-session, or Kargo submission credentials.
 
 ## API and Web Application
 
-OpenAPI remains the source of truth for any product endpoint. The initial
-operational surface should expose a filtered list of notification deliveries
-so the Inbox can show terminal delivery failures and operators can inspect
-attempt timing without reading Server logs.
+OpenAPI remains the source of truth for every product endpoint. The initial
+notification surface should expose bounded delivery history or detail so
+operators can inspect attempt timing without reading Server logs.
+
+The homepage continues to read one complete `/api/v1/inbox` projection. The Web
+must not join a notification-delivery endpoint into the Inbox or gain a fallback
+composition path. The initial notification work does not add a new Inbox source
+or item kind. If terminal failures are added to the Inbox later, the Server must
+extend the complete projection and treat failure data as required; a source
+error cannot be presented as **All clear**.
 
 The first UI slice does not require a template editor, routing editor, or
 destination-secret management. Configuration remains deployment-owned. The UI
-shows the event type, subject link, destination name, state, attempts, last
-attempt, and redacted failure summary.
+for delivery inspection shows the event type, subject link, destination name,
+state, attempts, last attempt, and redacted failure summary. Transient Web
+action toasts are local interaction feedback and are unrelated to this outbound
+delivery subsystem.
 
 An explicit operator retry endpoint may be added after automatic retry behavior
-is exercised. If added, it resets only the delivery schedule and never replays
-or changes the originating domain transition.
+is exercised. If added, it returns the same delivery to `pending` under an
+explicit retry policy; it never inserts a new event or delivery and never
+replays or changes the originating domain transition. A new `failed_at` value is
+recorded only if that retry cycle also terminates in failure.
 
 ## Required Tests
 
@@ -392,4 +466,12 @@ The implementation is not complete without focused coverage of:
 - one Kargo pending transition producing one event across repeated polls and
   reconciliation;
 - notification failure leaving Promotion state unchanged;
+- no matching route leaving no notification record while the pending
+  Promotion still appears in the Inbox;
+- Inbox reads and acknowledgements never enqueue, suppress, or retry delivery;
+- when a later operational event corresponds to an Inbox condition, one source
+  failure episode producing at most one notification event and one stable Inbox
+  problem occurrence;
+- terminal delivery failure remaining visible through the dedicated delivery
+  surface without changing the Inbox contract;
 - OpenAPI, SQL, Helm schema, and generated-output freshness.

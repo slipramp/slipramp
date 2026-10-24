@@ -6,7 +6,7 @@ import { createServerAPIClient } from "~/api/client.server";
 import { listRepositories, removeRepository } from "~/api/generated";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader } from "~/components/page";
-import { formValue } from "~/form-data";
+import { formValue, problemDetail } from "~/form-data";
 import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/repository-delete";
@@ -44,7 +44,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   if (result.error === undefined) return redirect("/repositories");
 
   return {
-    error: result.error.detail ?? result.error.title ?? "The repository could not be removed.",
+    error: problemDetail(result.error, "The repository could not be removed."),
   };
 }
 

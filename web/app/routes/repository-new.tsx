@@ -15,7 +15,7 @@ import { createServerAPIClient } from "~/api/client.server";
 import { createRepository } from "~/api/generated";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader } from "~/components/page";
-import { formValue, optionalFormValue } from "~/form-data";
+import { formValue, optionalFormValue, problemDetail } from "~/form-data";
 import { pageTitle } from "~/page-title";
 
 import type { Route } from "./+types/repository-new";
@@ -45,7 +45,7 @@ export async function action({ context, request }: Route.ActionArgs) {
   if (result.data) return redirect(`/repositories/${result.data.id}`);
 
   return {
-    error: result.error.detail ?? result.error.title ?? "The repository could not be registered.",
+    error: problemDetail(result.error, "The repository could not be registered."),
   };
 }
 

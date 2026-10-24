@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -101,6 +102,7 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 		body          string
 		repositories  *recordingRepositoryService
 		wantStatus    int
+		wantDetail    string
 		privateDetail string
 	}{
 		{
@@ -109,9 +111,15 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 			path:   "/api/v1/repositories",
 			body:   validBody,
 			repositories: &recordingRepositoryService{
-				createError: repository.ErrInvalidConfig,
+				createError: fmt.Errorf(
+					"%w: %w: %q",
+					repository.ErrInvalidConfig,
+					repository.ErrUnknownRefreshCredential,
+					"missing",
+				),
 			},
 			wantStatus: http.StatusBadRequest,
+			wantDetail: `invalid repository configuration: unknown refresh credential: "missing"`,
 		},
 		{
 			name:   "create name conflict",
@@ -170,6 +178,15 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 			).ServeHTTP(response, request)
 
 			assertProblem(t, response, test.wantStatus)
+			if test.wantDetail != "" {
+				var problem api.Problem
+				if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+					t.Fatalf("decode problem response: %v", err)
+				}
+				if problem.Detail == nil || *problem.Detail != test.wantDetail {
+					t.Errorf("problem detail = %v, want %q", problem.Detail, test.wantDetail)
+				}
+			}
 			if test.privateDetail != "" &&
 				strings.Contains(response.Body.String(), test.privateDetail) {
 				t.Error("internal error details were exposed in the problem response")

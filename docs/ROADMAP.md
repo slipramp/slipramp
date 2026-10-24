@@ -16,20 +16,33 @@ contains the accepted provider-neutral design with Slack as the first adapter.
       URL, bounded retry, retention, and secret-file mounts, including Helm
       validation. Keep credentials and destination secret URLs out of PostgreSQL.
 - [ ] Add versioned immutable events and per-destination deliveries, grouped
-      SQL/migrations, an enqueue boundary, and a generated delivery-status API.
+      SQL/migrations, an enqueue boundary, and a generated delivery-history API
+      for dedicated operator inspection.
 - [ ] Implement Slack rendering and delivery with restart-persistent attempts,
       exponential backoff with jitter, rate-limit handling, bounded errors, terminal
       failure, and independent progress for separate destinations.
 - [ ] Atomically enqueue one `review.requested` event and routed deliveries when
-      a guarded Promotion becomes `pending`. Repeated reconciliation or machine
-      polls must not enqueue duplicates.
-- [ ] Expose non-sensitive delivery status and exhausted failures in operator
-      views/Inbox. Add deterministic dispatcher tests and acceptance coverage for
-      message content, authenticated links, restart recovery, and provider outage.
+      a guarded Promotion becomes `pending` and at least one configured route
+      matches. Persist no notification record when no destination is selected.
+      Repeated reconciliation or machine polls must not enqueue duplicates.
+- [ ] Expose non-sensitive delivery history and exhausted failures in a dedicated
+      operator view. Keep the implemented Inbox contract separate and do not
+      compose notification endpoints into it in the browser. Add deterministic
+      dispatcher tests and acceptance coverage for message content, authenticated
+      links, restart recovery, provider outage, and Inbox independence.
 
 Delivery is at least once. Notification failure never changes a Promotion or
 Run outcome. Messages link to authenticated Slipramp; they contain no logs,
 sensitive diffs, artifact bodies, or credentials. Slack cannot approve or reject.
+
+Notifications and the Inbox are complementary rather than mutually dependent.
+The Inbox projects current, role-aware decisions and problems even without a
+notification route. Notification events preserve selected transition snapshots
+and delivery history after the current Inbox condition resolves. Inbox reads
+never emit notifications, and acknowledging a problem never suppresses or
+retries delivery. Operational event deduplication must follow the same source
+episode boundary used by the Inbox without reusing Inbox occurrence IDs as the
+notification contract.
 
 Introduce more events only with transition, deduplication, recovery, and noise
 semantics: review resolution, failed Runs/refreshes, unreachable Controllers,
