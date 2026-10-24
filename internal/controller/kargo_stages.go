@@ -185,6 +185,16 @@ func (o *kargoStageObserver) observe(ctx context.Context) (api.KargoStageSnapsho
 
 type kargoStage struct {
 	Spec struct {
+		RequestedFreight []struct {
+			Origin struct {
+				Kind string `json:"kind"`
+				Name string `json:"name"`
+			} `json:"origin"`
+			Sources struct {
+				Direct bool     `json:"direct"`
+				Stages []string `json:"stages"`
+			} `json:"sources"`
+		} `json:"requestedFreight"`
 		PromotionTemplate struct {
 			Spec struct {
 				Variables []struct {
@@ -245,17 +255,22 @@ func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObs
 	variables := kargoVariables(raw)
 	application := firstNonempty(variables["argoApp"], variables["app"], item.GetLabels()["app"], item.GetName())
 	repositoryURL, targetBranch, sourcePaths := kargoBranchDetails(item, variables)
+	requestedFreight, err := requestedKargoFreight(raw)
+	if err != nil {
+		return api.PromotionStageObservation{}, err
+	}
 	observed := api.PromotionStageObservation{
-		Project:         api.CatalogName(item.GetNamespace()),
-		Name:            item.GetName(),
-		KubernetesUID:   string(item.GetUID()),
-		ResourceVersion: item.GetResourceVersion(),
-		Application:     application,
-		Environment:     strings.TrimSpace(item.GetLabels()["env"]),
-		RepositoryURL:   repositoryURL,
-		TargetBranch:    targetBranch,
-		SourcePaths:     sourcePaths,
-		Freight:         currentKargoFreight(raw),
+		Project:          api.CatalogName(item.GetNamespace()),
+		Name:             item.GetName(),
+		KubernetesUID:    string(item.GetUID()),
+		ResourceVersion:  item.GetResourceVersion(),
+		Application:      application,
+		Environment:      strings.TrimSpace(item.GetLabels()["env"]),
+		RepositoryURL:    repositoryURL,
+		TargetBranch:     targetBranch,
+		SourcePaths:      sourcePaths,
+		RequestedFreight: requestedFreight,
+		Freight:          currentKargoFreight(raw),
 	}
 
 	acknowledgement := kargoSuccessfulRenderAcknowledgement(raw)
@@ -286,6 +301,32 @@ func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObs
 	}
 
 	return observed, nil
+}
+
+func requestedKargoFreight(stage kargoStage) ([]api.PromotionFreightRequest, error) {
+	requests := make([]api.PromotionFreightRequest, 0, len(stage.Spec.RequestedFreight))
+	for _, raw := range stage.Spec.RequestedFreight {
+		kind := strings.TrimSpace(raw.Origin.Kind)
+		name := strings.TrimSpace(raw.Origin.Name)
+		if kind == "" || name == "" {
+			return nil, errors.New("requested Freight origin kind and name are required")
+		}
+		sources := make([]string, 0, len(raw.Sources.Stages))
+		for _, source := range raw.Sources.Stages {
+			if source = strings.TrimSpace(source); source != "" {
+				sources = append(sources, source)
+			}
+		}
+		sort.Strings(sources)
+		requests = append(requests, api.PromotionFreightRequest{
+			Origin:       kind + "/" + name,
+			Direct:       raw.Sources.Direct,
+			SourceStages: uniqueStrings(sources),
+		})
+	}
+	sort.Slice(requests, func(i, j int) bool { return requests[i].Origin < requests[j].Origin })
+
+	return requests, nil
 }
 
 func kargoVariables(stage kargoStage) map[string]string {

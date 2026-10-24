@@ -180,9 +180,9 @@ type Promotion struct {
 	StageSnapshot                []byte
 	RepositoryID                 pgtype.UUID
 	RepositorySnapshot           []byte
-	BaseRevision                 string
-	CandidateRevision            string
-	CandidateBranch              string
+	BaseRevision                 *string
+	CandidateRevision            *string
+	CandidateBranch              *string
 	TargetBranch                 string
 	PolicySnapshot               []byte
 	ReviewRequired               bool
@@ -200,6 +200,14 @@ type Promotion struct {
 	DecidedAt                    pgtype.Timestamptz
 	ExpiresAt                    pgtype.Timestamptz
 	UpdatedAt                    pgtype.Timestamptz
+	Source                       string
+	SourceStageID                pgtype.UUID
+	SelectedFreightSnapshot      []byte
+	DispatchAttemptCount         int32
+	NextDispatchAt               pgtype.Timestamptz
+	LastDispatchAt               pgtype.Timestamptz
+	DispatchedAt                 pgtype.Timestamptz
+	KargoPromotionUid            *string
 }
 
 type PromotionDecision struct {
@@ -230,6 +238,7 @@ type PromotionStage struct {
 	FirstObservedAt                 pgtype.Timestamptz
 	LastObservedAt                  pgtype.Timestamptz
 	ArchivedAt                      pgtype.Timestamptz
+	RequestedFreightJson            []byte
 }
 
 type PromotionStagePolicy struct {

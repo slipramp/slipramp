@@ -461,6 +461,7 @@ func preparingPromotion() Promotion {
 	}
 
 	return Promotion{
+		Source:                 SourceKargo,
 		ID:                     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1924"),
 		Integration:            "prod",
 		ExternalPromotionID:    "external-dns-01jbe4q8",

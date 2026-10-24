@@ -24,6 +24,10 @@ type PromotionRequestService interface {
 	) (promotion.Promotion, error)
 }
 
+type PromotionCreationService interface {
+	Create(context.Context, promotion.OperatorPromotionRequest) (promotion.Promotion, error)
+}
+
 type PromotionStageService interface {
 	ReplaceStageSnapshot(
 		ctx context.Context,
@@ -130,6 +134,74 @@ func (h *Handler) SubmitKargoPromotion(
 		ReviewRequired:      record.ReviewRequired,
 		Message:             record.Message,
 		UpdatedAt:           record.UpdatedAt,
+	}, nil
+}
+
+func (h *Handler) CreatePromotion(
+	ctx context.Context,
+	request api.CreatePromotionRequestObject,
+) (api.CreatePromotionResponseObject, error) {
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "A Promotion creation request is required.")
+
+		return api.CreatePromotion400ApplicationProblemPlusJSONResponse{
+			BadRequestApplicationProblemPlusJSONResponse: api.BadRequestApplicationProblemPlusJSONResponse(problem),
+		}, nil
+	}
+	principal := currentProductPrincipal(ctx)
+	if principal == nil {
+		return nil, errors.New("authenticated Promotion creator is missing")
+	}
+
+	record, err := h.promotionCreations.Create(ctx, promotion.OperatorPromotionRequest{
+		TargetStageID: request.StageID,
+		SourceStageID: request.Body.SourceStageID,
+		FreightName:   request.Body.FreightName,
+		Principal:     *principal,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, promotion.ErrInvalid):
+			problem := NewProblem(http.StatusBadRequest, err.Error())
+
+			return api.CreatePromotion400ApplicationProblemPlusJSONResponse{
+				BadRequestApplicationProblemPlusJSONResponse: api.BadRequestApplicationProblemPlusJSONResponse(problem),
+			}, nil
+		case errors.Is(err, promotion.ErrStageNotFound), errors.Is(err, promotion.ErrIntegrationNotFound):
+			problem := NewProblem(http.StatusNotFound, "The observed Kargo Stage does not exist.")
+
+			return api.CreatePromotion404ApplicationProblemPlusJSONResponse{
+				NotFoundApplicationProblemPlusJSONResponse: api.NotFoundApplicationProblemPlusJSONResponse(problem),
+			}, nil
+		case errors.Is(err, promotion.ErrStageArchived), errors.Is(err, promotion.ErrStageStale),
+			errors.Is(err, promotion.ErrStageScope), errors.Is(err, promotion.ErrFreightNotFound),
+			errors.Is(err, promotion.ErrFreightSource), errors.Is(err, promotion.ErrRepositoryNotAllowed),
+			errors.Is(err, promotion.ErrRepositoryUnavailable):
+			problem := NewProblem(http.StatusConflict, err.Error())
+
+			return api.CreatePromotion409ApplicationProblemPlusJSONResponse{
+				ConflictApplicationProblemPlusJSONResponse: api.ConflictApplicationProblemPlusJSONResponse(problem),
+			}, nil
+		default:
+			return nil, err
+		}
+	}
+
+	body, err := promotionResponse(
+		promotion.PromotionReview{Promotion: record},
+		nil,
+		h.kargoIntegrations,
+	)
+	if err != nil {
+		return nil, err
+	}
+	location := fmt.Sprintf("/api/v1/promotions/%s", record.ID)
+
+	return api.CreatePromotion201JSONResponse{
+		Body: body,
+		Headers: api.CreatePromotion201ResponseHeaders{
+			Location: &location,
+		},
 	}, nil
 }
 
@@ -274,11 +346,12 @@ func (h *Handler) ListPromotions(
 	}
 	keys := make([]repository.CommitKey, 0, len(result.Items)*2)
 	for _, review := range result.Items {
-		keys = append(
-			keys,
-			commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision),
-			commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision),
-		)
+		if review.Promotion.BaseRevision != "" {
+			keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision))
+		}
+		if review.Promotion.CandidateRevision != "" {
+			keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision))
+		}
 	}
 	commits, commitErr := h.commitResponses(ctx, keys)
 	if commitErr != nil {
@@ -429,6 +502,7 @@ func (h *Handler) ReplaceKargoStageSnapshot(
 			RepositoryURL:                   observed.RepositoryURL,
 			TargetBranch:                    observed.TargetBranch,
 			SourcePaths:                     observed.SourcePaths,
+			RequestedFreight:                promotionFreightRequests(observed.RequestedFreight),
 			Freight:                         freight,
 			SuccessfulRenderAcknowledgement: acknowledgement,
 		})
@@ -516,6 +590,7 @@ func (h *Handler) promotionStageResponse(review promotion.StageReview) (api.Prom
 		RepositoryURL:                   review.Stage.RepositoryURL,
 		TargetBranch:                    review.Stage.TargetBranch,
 		SourcePaths:                     review.Stage.SourcePaths,
+		RequestedFreight:                promotionFreightRequestResponse(review.Stage.RequestedFreight),
 		Freight:                         freight,
 		SuccessfulRenderAcknowledgement: acknowledgement,
 		Policy:                          promotionPolicyResponse(review.Policy),
@@ -546,6 +621,35 @@ func promotionFreightResponse(contents []byte) (api.PromotionFreight, error) {
 	}
 
 	return freight, nil
+}
+
+func promotionFreightRequests(values []api.PromotionFreightRequest) []promotion.FreightRequest {
+	requests := make([]promotion.FreightRequest, 0, len(values))
+	for _, value := range values {
+		requests = append(requests, promotion.FreightRequest{
+			Origin:       value.Origin,
+			Direct:       value.Direct,
+			SourceStages: value.SourceStages,
+		})
+	}
+
+	return requests
+}
+
+func promotionFreightRequestResponse(values []promotion.FreightRequest) []api.PromotionFreightRequest {
+	if values == nil {
+		return []api.PromotionFreightRequest{}
+	}
+	requests := make([]api.PromotionFreightRequest, 0, len(values))
+	for _, value := range values {
+		requests = append(requests, api.PromotionFreightRequest{
+			Origin:       value.Origin,
+			Direct:       value.Direct,
+			SourceStages: value.SourceStages,
+		})
+	}
+
+	return requests
 }
 
 func promotionPolicyResponse(value promotion.PolicyView) api.PromotionStagePolicy {
@@ -582,23 +686,53 @@ func promotionResponse(
 		return api.Promotion{}, errors.New("promotion requesting actor is missing")
 	}
 	project, _ := stageSnapshot["project"].(string)
+	var selectedFreight *api.PromotionFreightItem
+	if len(record.SelectedFreightSnapshot) > 0 {
+		var value api.PromotionFreightItem
+		if err := json.Unmarshal(record.SelectedFreightSnapshot, &value); err != nil {
+			return api.Promotion{}, fmt.Errorf("decode selected Promotion Freight: %w", err)
+		}
+		selectedFreight = &value
+	}
+	var baseCommit *api.GitCommit
+	if record.BaseRevision != "" {
+		value := commits[commitKey(record.RepositoryID, record.BaseRevision)]
+		baseCommit = &value
+	}
+	var candidateCommit *api.GitCommit
+	if record.CandidateRevision != "" {
+		value := commits[commitKey(record.RepositoryID, record.CandidateRevision)]
+		candidateCommit = &value
+	}
+	var candidateBranch *string
+	if record.CandidateBranch != "" {
+		candidateBranch = &record.CandidateBranch
+	}
 
 	body := api.Promotion{
 		ID:                     record.ID,
+		Source:                 api.PromotionSource(record.Source),
 		Integration:            api.CatalogName(record.Integration),
 		ExternalPromotionID:    record.ExternalPromotionID,
 		StageID:                record.StageID,
+		SourceStageID:          record.SourceStageID,
 		StageSnapshot:          stageSnapshot,
 		RepositoryID:           record.RepositoryID,
 		RepositorySnapshot:     repositorySnapshot,
-		BaseCommit:             commits[commitKey(record.RepositoryID, record.BaseRevision)],
-		CandidateCommit:        commits[commitKey(record.RepositoryID, record.CandidateRevision)],
-		CandidateBranch:        record.CandidateBranch,
+		BaseCommit:             baseCommit,
+		CandidateCommit:        candidateCommit,
+		CandidateBranch:        candidateBranch,
 		TargetBranch:           record.TargetBranch,
 		PolicySnapshot:         policySnapshot,
+		SelectedFreight:        selectedFreight,
 		ReviewRequired:         record.ReviewRequired,
 		Status:                 api.PromotionStatus(record.Status),
 		Message:                record.Message,
+		DispatchAttemptCount:   record.DispatchAttemptCount,
+		NextDispatchAt:         record.NextDispatchAt,
+		LastDispatchAt:         record.LastDispatchAt,
+		DispatchedAt:           record.DispatchedAt,
+		KargoPromotionUID:      record.KargoPromotionUID,
 		PreparationRunID:       record.PreparationRunID,
 		GitDiffArtifactID:      record.GitDiffArtifactID,
 		ArgoDiffArtifactID:     record.ArgoDiffArtifactID,
@@ -608,11 +742,13 @@ func promotionResponse(
 		DecidedAt:              record.DecidedAt,
 		ExpiresAt:              record.ExpiresAt,
 		UpdatedAt:              record.UpdatedAt,
-		KargoURL: integrations.KargoPromotionURL(
+	}
+	if record.Source == promotion.SourceKargo || record.KargoPromotionUID != nil || record.Status != promotion.StatusCreating {
+		body.KargoURL = integrations.KargoPromotionURL(
 			record.Integration,
 			project,
 			record.ExternalPromotionID,
-		),
+		)
 	}
 	if review.Decision != nil {
 		decidedBy := apiRunActor(&review.Decision.DecidedBySnapshot)
@@ -634,9 +770,12 @@ func (h *Handler) promotionDetailResponse(
 	ctx context.Context,
 	review promotion.PromotionReview,
 ) (api.Promotion, error) {
-	keys := []repository.CommitKey{
-		commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision),
-		commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision),
+	keys := make([]repository.CommitKey, 0, 2)
+	if review.Promotion.BaseRevision != "" {
+		keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.BaseRevision))
+	}
+	if review.Promotion.CandidateRevision != "" {
+		keys = append(keys, commitKey(review.Promotion.RepositoryID, review.Promotion.CandidateRevision))
 	}
 	commits, commitErr := h.commitResponses(ctx, keys)
 	if commitErr != nil {

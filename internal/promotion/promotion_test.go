@@ -49,6 +49,41 @@ func TestPromotionValidateAutomaticApproval(t *testing.T) {
 	}
 }
 
+func TestPromotionValidateCreatingOperatorPromotion(t *testing.T) {
+	t.Parallel()
+
+	record := validPromotion()
+	sourceStageID := uuid.New()
+	nextDispatchAt := record.CreatedAt
+	record.Source = SourceSlipramp
+	record.SourceStageID = &sourceStageID
+	record.SelectedFreightSnapshot = json.RawMessage(
+		`{"origin":"Warehouse/app","name":"freight-42","artifacts":[]}`,
+	)
+	record.RequestDigest = RequestDigest{}
+	record.BaseRevision = ""
+	record.CandidateRevision = ""
+	record.CandidateBranch = ""
+	record.Status = StatusCreating
+	record.PreparationRepositoryID = nil
+	record.PreparationCatalogRevisionID = nil
+	record.PreparationRunID = nil
+	record.GitDiffArtifactID = nil
+	record.ArgoDiffArtifactID = nil
+	record.PreparationCompletedAt = nil
+	record.NextDispatchAt = &nextDispatchAt
+	record.UpdatedAt = record.CreatedAt
+
+	if err := record.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	record.SourceStageID = nil
+	if err := record.Validate(); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("missing source Stage error = %v, want ErrInvalid", err)
+	}
+}
+
 func TestStagePolicyRejectsExpiredUpdate(t *testing.T) {
 	t.Parallel()
 
@@ -83,6 +118,7 @@ func validPromotion() Promotion {
 
 	return Promotion{
 		ID:                           uuid.New(),
+		Source:                       SourceKargo,
 		Integration:                  "prod",
 		ExternalPromotionID:          "external-dns-01jbe4q8",
 		RequestDigest:                RequestDigest{1},

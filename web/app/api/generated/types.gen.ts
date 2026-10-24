@@ -611,9 +611,11 @@ export type LogEvent = {
 
 export type Promotion = {
   id: string;
+  source: PromotionSource;
   integration: CatalogName;
   externalPromotionId: string;
   stageId: string;
+  sourceStageId?: string;
   stageSnapshot: {
     [key: string]: unknown;
   };
@@ -621,16 +623,22 @@ export type Promotion = {
   repositorySnapshot: {
     [key: string]: unknown;
   };
-  baseCommit: GitCommit;
-  candidateCommit: GitCommit;
-  candidateBranch: string;
+  baseCommit?: GitCommit;
+  candidateCommit?: GitCommit;
+  candidateBranch?: string;
   targetBranch: string;
   policySnapshot: {
     [key: string]: unknown;
   };
+  selectedFreight?: PromotionFreightItem;
   reviewRequired: boolean;
   status: PromotionStatus;
   message?: string;
+  dispatchAttemptCount: number;
+  nextDispatchAt?: string;
+  lastDispatchAt?: string;
+  dispatchedAt?: string;
+  kargoPromotionUid?: string;
   preparationRunId?: string;
   preparationRun?: Run;
   gitDiffArtifactId?: string;
@@ -648,6 +656,11 @@ export type Promotion = {
    * Direct link to this Promotion in the configured Kargo UI.
    */
   kargoUrl?: string;
+};
+
+export type PromotionCreate = {
+  sourceStageId: string;
+  freightName: string;
 };
 
 export type PromotionList = {
@@ -691,6 +704,7 @@ export type PromotionStage = {
   repositoryUrl: string;
   targetBranch: string;
   sourcePaths: Array<string>;
+  requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
   successfulRenderAcknowledgement?: {
     [key: string]: unknown;
@@ -1134,6 +1148,7 @@ export type KargoPromotionRequest = {
 };
 
 export type PromotionStatus =
+  | "creating"
   | "preparing"
   | "pending"
   | "approved"
@@ -1150,6 +1165,20 @@ export type KargoPromotionResponse = {
   updatedAt: string;
 };
 
+export type PromotionSource = "kargo" | "slipramp";
+
+export type PromotionFreightArtifact = {
+  kind: "git" | "image" | "chart";
+  repository?: string;
+  version: string;
+};
+
+export type PromotionFreightItem = {
+  origin: string;
+  name: string;
+  artifacts: Array<PromotionFreightArtifact>;
+};
+
 export type PromotionDecision = {
   decision: "approved" | "rejected";
   comment?: string;
@@ -1162,16 +1191,10 @@ export type PromotionDecisionUpdate = {
   comment?: string;
 };
 
-export type PromotionFreightArtifact = {
-  kind: "git" | "image" | "chart";
-  repository?: string;
-  version: string;
-};
-
-export type PromotionFreightItem = {
+export type PromotionFreightRequest = {
   origin: string;
-  name: string;
-  artifacts: Array<PromotionFreightArtifact>;
+  direct: boolean;
+  sourceStages: Array<string>;
 };
 
 export type PromotionPolicyMode = "automatic" | "review-required";
@@ -1236,6 +1259,7 @@ export type PromotionStageObservation = {
   repositoryUrl: string;
   targetBranch: string;
   sourcePaths: Array<string>;
+  requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
   successfulRenderAcknowledgement?: {
     [key: string]: unknown;
@@ -3446,6 +3470,53 @@ export type ListPromotionStagesResponses = {
 
 export type ListPromotionStagesResponse =
   ListPromotionStagesResponses[keyof ListPromotionStagesResponses];
+
+export type CreatePromotionData = {
+  body: PromotionCreate;
+  path: {
+    stageId: string;
+  };
+  query?: never;
+  url: "/api/v1/promotion-stages/{stageId}/promotions";
+};
+
+export type CreatePromotionErrors = {
+  /**
+   * The request is malformed or invalid.
+   */
+  400: Problem;
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The request conflicts with durable Promotion state.
+   */
+  409: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type CreatePromotionError = CreatePromotionErrors[keyof CreatePromotionErrors];
+
+export type CreatePromotionResponses = {
+  /**
+   * The durable Promotion creation request.
+   */
+  201: Promotion;
+};
+
+export type CreatePromotionResponse = CreatePromotionResponses[keyof CreatePromotionResponses];
 
 export type UpdatePromotionStagePolicyData = {
   body: PromotionStagePolicyUpdate;

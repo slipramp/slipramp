@@ -56,14 +56,20 @@ func TestNormalizeKargoStage(t *testing.T) {
         "labels":{"app":"ignored","env":"prod"},
         "annotations":{"slipramp.com/promotion-source-paths":"k8s/shared\n../ignored"}
       },
-      "spec":{"promotionTemplate":{"spec":{"vars":[
-        {"name":"app","value":"external-dns"},
-        {"name":"argoApp","value":"external-dns-phi"},
-        {"name":"overlay","value":"prod"},
-        {"name":"kustomizePath","value":"network/external-dns"},
-        {"name":"stageBranchKustomization","value":"k8s/kargo/custom-stage.yaml"},
-        {"name":"gitopsRepo","value":"https://example.com/ops.git"}
-      ]}}},
+      "spec":{
+        "requestedFreight":[{
+          "origin":{"kind":"Warehouse","name":"external-dns"},
+          "sources":{"stages":["external-dns-qa"],"direct":false}
+        }],
+        "promotionTemplate":{"spec":{"vars":[
+          {"name":"app","value":"external-dns"},
+          {"name":"argoApp","value":"external-dns-phi"},
+          {"name":"overlay","value":"prod"},
+          {"name":"kustomizePath","value":"network/external-dns"},
+          {"name":"stageBranchKustomization","value":"k8s/kargo/custom-stage.yaml"},
+          {"name":"gitopsRepo","value":"https://example.com/ops.git"}
+        ]}}
+      },
       "status":{
         "freightHistory":[{"items":{
           "Warehouse/external-dns":{
@@ -104,6 +110,11 @@ func TestNormalizeKargoStage(t *testing.T) {
 	}
 	if !reflect.DeepEqual(observed.SourcePaths, wantPaths) {
 		t.Errorf("source paths = %#v, want %#v", observed.SourcePaths, wantPaths)
+	}
+	if len(observed.RequestedFreight) != 1 ||
+		observed.RequestedFreight[0].Origin != "Warehouse/external-dns" ||
+		!reflect.DeepEqual(observed.RequestedFreight[0].SourceStages, []string{"external-dns-qa"}) {
+		t.Errorf("requested Freight = %#v", observed.RequestedFreight)
 	}
 	if len(observed.Freight.Items) != 1 || observed.Freight.Items[0].Origin != "Warehouse/external-dns" ||
 		len(observed.Freight.Items[0].Artifacts) != 3 ||

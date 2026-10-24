@@ -37,6 +37,21 @@ type recordingPromotionReviewService struct {
 	err             error
 }
 
+type recordingPromotionCreationService struct {
+	request promotion.OperatorPromotionRequest
+	record  promotion.Promotion
+	err     error
+}
+
+func (s *recordingPromotionCreationService) Create(
+	_ context.Context,
+	request promotion.OperatorPromotionRequest,
+) (promotion.Promotion, error) {
+	s.request = request
+
+	return s.record, s.err
+}
+
 func (s *recordingPromotionReviewService) ExpirePending(context.Context) error {
 	return s.err
 }
@@ -141,6 +156,7 @@ func TestReplaceKargoStageSnapshotUsesAuthenticatedCluster(t *testing.T) {
             "repositoryUrl":"https://example.com/ops.git",
             "targetBranch":"stage/external-dns/prod",
             "sourcePaths":["k8s/external-dns/base"],
+            "requestedFreight":[],
             "freight":{"items":[]}
           }]
         }`),
@@ -161,6 +177,82 @@ func TestReplaceKargoStageSnapshotUsesAuthenticatedCluster(t *testing.T) {
 	stage := promotions.replacement.Stages[0]
 	if stage.RepositoryURL != "https://example.com/ops.git" || string(stage.Freight) != `{"items":[]}` {
 		t.Errorf("Stage observation = %#v", stage)
+	}
+}
+
+func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1930")
+	targetStageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1931")
+	sourceStageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1932")
+	authentication := productAuthentication(
+		productidentity.RoleOperator,
+		productidentity.AuthenticationMethodWebSession,
+		nil,
+	)
+	actor, err := authentication.Principal.ActorSnapshot()
+	if err != nil {
+		t.Fatalf("ActorSnapshot() error = %v", err)
+	}
+	nextDispatchAt := now
+	promotions := &recordingPromotionCreationService{
+		record: promotion.Promotion{
+			ID:                      promotionID,
+			Source:                  promotion.SourceSlipramp,
+			Integration:             "prod",
+			ExternalPromotionID:     "slipramp-" + promotionID.String(),
+			StageID:                 targetStageID,
+			SourceStageID:           &sourceStageID,
+			StageSnapshot:           []byte(`{"project":"kargo-core","name":"external-dns-prod"}`),
+			RepositoryID:            uuid.New(),
+			RepositorySnapshot:      []byte(`{"name":"ops"}`),
+			TargetBranch:            "stage/external-dns/prod",
+			PolicySnapshot:          []byte(`{"effectiveMode":"automatic"}`),
+			SelectedFreightSnapshot: []byte(`{"origin":"Warehouse/external-dns","name":"freight-42","artifacts":[]}`),
+			Status:                  promotion.StatusCreating,
+			NextDispatchAt:          &nextDispatchAt,
+			RequestedByPrincipalID:  authentication.Principal.ID,
+			RequestedBySnapshot:     actor,
+			CreatedAt:               now,
+			UpdatedAt:               now,
+		},
+	}
+	httpHandler := NewHTTP(
+		Dependencies{
+			PromotionCreations: promotions,
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authentication: authentication,
+			},
+		},
+		HTTPOptions{},
+	)
+	request := authenticatedProductRequest(
+		http.MethodPost,
+		"/api/v1/promotion-stages/"+targetStageID.String()+"/promotions",
+		`{"sourceStageId":"`+sourceStageID.String()+`","freightName":"freight-42"}`,
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusCreated, response.Body)
+	}
+	if response.Header().Get("Location") != "/api/v1/promotions/"+promotionID.String() {
+		t.Errorf("Location = %q", response.Header().Get("Location"))
+	}
+	if promotions.request.TargetStageID != targetStageID || promotions.request.SourceStageID != sourceStageID ||
+		promotions.request.FreightName != "freight-42" ||
+		promotions.request.Principal.ID != authentication.Principal.ID {
+		t.Errorf("creation request = %#v", promotions.request)
+	}
+	for _, expected := range []string{promotionID.String(), `"source":"slipramp"`, `"status":"creating"`} {
+		if !strings.Contains(response.Body.String(), expected) {
+			t.Errorf("response %q does not contain %q", response.Body.String(), expected)
+		}
 	}
 }
 

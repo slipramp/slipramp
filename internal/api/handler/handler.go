@@ -27,6 +27,7 @@ type Handler struct {
 	runs                 RunService
 	artifacts            ArtifactService
 	promotionRequests    PromotionRequestService
+	promotionCreations   PromotionCreationService
 	promotionStages      PromotionStageService
 	promotionReviews     PromotionReviewService
 	promotionProjects    PromotionProjectService
@@ -59,6 +60,7 @@ type Dependencies struct {
 	Runs                  RunService
 	Artifacts             ArtifactService
 	PromotionRequests     PromotionRequestService
+	PromotionCreations    PromotionCreationService
 	PromotionStages       PromotionStageService
 	PromotionReviews      PromotionReviewService
 	PromotionProjects     PromotionProjectService
@@ -84,6 +86,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		runs:                 dependencies.Runs,
 		artifacts:            dependencies.Artifacts,
 		promotionRequests:    dependencies.PromotionRequests,
+		promotionCreations:   dependencies.PromotionCreations,
 		promotionStages:      dependencies.PromotionStages,
 		promotionReviews:     dependencies.PromotionReviews,
 		promotionProjects:    dependencies.PromotionProjects,

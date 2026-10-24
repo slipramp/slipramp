@@ -123,6 +123,7 @@ func (d *Database) AcceptPromotionRequest(
 		RepositoryURL:                   stage.RepositoryURL,
 		TargetBranch:                    stage.TargetBranch,
 		SourcePaths:                     slices.Clone(stage.SourcePaths),
+		RequestedFreight:                slices.Clone(stage.RequestedFreight),
 		Freight:                         slices.Clone(stage.Freight),
 		SuccessfulRenderAcknowledgement: slices.Clone(stage.SuccessfulRenderAcknowledgement),
 		LastObservedAt:                  stage.LastObservedAt,
@@ -157,6 +158,7 @@ func (d *Database) AcceptPromotionRequest(
 	}
 	record := promotion.Promotion{
 		ID:                     acceptance.ID,
+		Source:                 promotion.SourceKargo,
 		Integration:            acceptance.Integration,
 		ExternalPromotionID:    acceptance.Request.ExternalPromotionID,
 		RequestDigest:          acceptance.RequestDigest,

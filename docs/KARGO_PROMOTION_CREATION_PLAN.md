@@ -1,6 +1,12 @@
 # Operator-started Kargo Promotions
 
-Status: proposed implementation plan
+Status: implementation in progress
+
+The first backend slice is implemented: the shared contract includes operator
+creation and `creating` state, Stage observations persist requested-Freight
+topology, and an authorized request atomically validates and snapshots exact
+Freight into a durable Promotion. Controller dispatch, callback hydration, and
+the two UI entry points remain unfinished.
 
 ## Outcome
 

@@ -1,12 +1,19 @@
 PromotionStatus:
   type: string
   enum:
+    - creating
     - preparing
     - pending
     - approved
     - rejected
     - expired
     - error
+
+PromotionSource:
+  type: string
+  enum:
+    - kargo
+    - slipramp
 
 PromotionPolicyMode:
   type: string
@@ -73,6 +80,29 @@ PromotionFreightArtifact:
       type: string
       minLength: 1
       maxLength: 512
+
+PromotionFreightRequest:
+  type: object
+  additionalProperties: false
+  required:
+    - origin
+    - direct
+    - sourceStages
+  properties:
+    origin:
+      type: string
+      minLength: 1
+      maxLength: 512
+    direct:
+      type: boolean
+    sourceStages:
+      type: array
+      uniqueItems: true
+      items:
+        type: string
+        minLength: 1
+        maxLength: 253
+        pattern: ^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$
 
 KargoPromotionRequest:
   type: object
@@ -148,6 +178,7 @@ PromotionStageObservation:
     - repositoryUrl
     - targetBranch
     - sourcePaths
+    - requestedFreight
     - freight
   properties:
     project:
@@ -189,6 +220,10 @@ PromotionStageObservation:
         type: string
         minLength: 1
         maxLength: 1024
+    requestedFreight:
+      type: array
+      items:
+        $ref: "#/PromotionFreightRequest"
     freight:
       $ref: "#/PromotionFreight"
     successfulRenderAcknowledgement:
@@ -285,6 +320,7 @@ PromotionStage:
     - repositoryUrl
     - targetBranch
     - sourcePaths
+    - requestedFreight
     - freight
     - policy
     - pendingPromotionCount
@@ -336,6 +372,10 @@ PromotionStage:
         type: string
         minLength: 1
         maxLength: 1024
+    requestedFreight:
+      type: array
+      items:
+        $ref: "#/PromotionFreightRequest"
     freight:
       $ref: "#/PromotionFreight"
     successfulRenderAcknowledgement:
@@ -703,19 +743,18 @@ Promotion:
   additionalProperties: false
   required:
     - id
+    - source
     - integration
     - externalPromotionId
     - stageId
     - stageSnapshot
     - repositoryId
     - repositorySnapshot
-    - baseCommit
-    - candidateCommit
-    - candidateBranch
     - targetBranch
     - policySnapshot
     - reviewRequired
     - status
+    - dispatchAttemptCount
     - requestedBy
     - createdAt
     - updatedAt
@@ -723,6 +762,8 @@ Promotion:
     id:
       type: string
       format: uuid
+    source:
+      $ref: "#/PromotionSource"
     integration:
       $ref: ./runs.yaml#/CatalogName
     externalPromotionId:
@@ -730,6 +771,9 @@ Promotion:
       minLength: 1
       maxLength: 200
     stageId:
+      type: string
+      format: uuid
+    sourceStageId:
       type: string
       format: uuid
     stageSnapshot:
@@ -756,6 +800,8 @@ Promotion:
     policySnapshot:
       type: object
       additionalProperties: true
+    selectedFreight:
+      $ref: "#/PromotionFreightItem"
     reviewRequired:
       type: boolean
     status:
@@ -764,6 +810,22 @@ Promotion:
       type: string
       minLength: 1
       maxLength: 4096
+    dispatchAttemptCount:
+      type: integer
+      minimum: 0
+    nextDispatchAt:
+      type: string
+      format: date-time
+    lastDispatchAt:
+      type: string
+      format: date-time
+    dispatchedAt:
+      type: string
+      format: date-time
+    kargoPromotionUid:
+      type: string
+      minLength: 1
+      maxLength: 200
     preparationRunId:
       type: string
       format: uuid
@@ -802,6 +864,21 @@ Promotion:
       type: string
       format: uri
       description: Direct link to this Promotion in the configured Kargo UI.
+
+PromotionCreate:
+  type: object
+  additionalProperties: false
+  required:
+    - sourceStageId
+    - freightName
+  properties:
+    sourceStageId:
+      type: string
+      format: uuid
+    freightName:
+      type: string
+      minLength: 1
+      maxLength: 253
 
 PromotionList:
   type: object

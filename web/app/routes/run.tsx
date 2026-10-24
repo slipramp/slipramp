@@ -345,7 +345,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
       <ParameterTable parameters={run.parameters} />
 
       <InputTable inputs={run.inputs} />
-      <LiveLog runId={run.id} />
+      <LiveLog key={run.id} runId={run.id} />
       <ArtifactTable
         artifacts={currentData.artifacts ?? []}
         consumers={run.artifactConsumers}

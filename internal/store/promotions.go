@@ -576,6 +576,15 @@ func finishExistingDecision(
 }
 
 func stageDatabaseParams(record promotion.Stage) storedb.UpsertPromotionStageParams {
+	requests := record.RequestedFreight
+	if requests == nil {
+		requests = []promotion.FreightRequest{}
+	}
+	requestedFreight, err := json.Marshal(requests)
+	if err != nil {
+		panic(fmt.Sprintf("encode validated requested Freight: %v", err))
+	}
+
 	return storedb.UpsertPromotionStageParams{
 		ID:                              databaseUUID(record.ID),
 		Integration:                     record.Integration,
@@ -590,6 +599,7 @@ func stageDatabaseParams(record promotion.Stage) storedb.UpsertPromotionStagePar
 		RepositoryUrl:                   record.RepositoryURL,
 		TargetBranch:                    record.TargetBranch,
 		SourcePaths:                     record.SourcePaths,
+		RequestedFreightJson:            requestedFreight,
 		FreightJson:                     record.Freight,
 		SuccessfulRenderAcknowledgement: nullableJSON(record.SuccessfulRenderAcknowledgement),
 		FirstObservedAt:                 databaseTime(record.FirstObservedAt),
@@ -604,21 +614,29 @@ func promotionDatabaseParams(
 ) storedb.CreatePromotionParams {
 	return storedb.CreatePromotionParams{
 		ID:                           databaseUUID(record.ID),
+		Source:                       string(record.Source),
 		Integration:                  record.Integration,
 		ExternalPromotionID:          record.ExternalPromotionID,
-		RequestDigest:                record.RequestDigest[:],
+		RequestDigest:                nullablePromotionRequestDigest(record.RequestDigest),
 		StageID:                      databaseUUID(record.StageID),
+		SourceStageID:                optionalDatabaseUUID(record.SourceStageID),
 		StageSnapshot:                record.StageSnapshot,
 		RepositoryID:                 databaseUUID(record.RepositoryID),
 		RepositorySnapshot:           record.RepositorySnapshot,
-		BaseRevision:                 record.BaseRevision,
-		CandidateRevision:            record.CandidateRevision,
-		CandidateBranch:              record.CandidateBranch,
+		BaseRevision:                 optionalString(record.BaseRevision),
+		CandidateRevision:            optionalString(record.CandidateRevision),
+		CandidateBranch:              optionalString(record.CandidateBranch),
 		TargetBranch:                 record.TargetBranch,
 		PolicySnapshot:               record.PolicySnapshot,
+		SelectedFreightSnapshot:      nullableJSON(record.SelectedFreightSnapshot),
 		ReviewRequired:               record.ReviewRequired,
 		Status:                       string(record.Status),
 		Message:                      record.Message,
+		DispatchAttemptCount:         int32(record.DispatchAttemptCount),
+		NextDispatchAt:               optionalDatabaseTime(record.NextDispatchAt),
+		LastDispatchAt:               optionalDatabaseTime(record.LastDispatchAt),
+		DispatchedAt:                 optionalDatabaseTime(record.DispatchedAt),
+		KargoPromotionUid:            record.KargoPromotionUID,
 		PreparationRepositoryID:      optionalDatabaseUUID(record.PreparationRepositoryID),
 		PreparationCatalogRevisionID: optionalDatabaseUUID(record.PreparationCatalogRevisionID),
 		PreparationRunID:             optionalDatabaseUUID(record.PreparationRunID),
@@ -635,6 +653,10 @@ func promotionDatabaseParams(
 }
 
 func promotionStageFromRow(row storedb.PromotionStage) (promotion.Stage, error) {
+	var requestedFreight []promotion.FreightRequest
+	if err := json.Unmarshal(row.RequestedFreightJson, &requestedFreight); err != nil {
+		return promotion.Stage{}, fmt.Errorf("decode requested Freight: %w", err)
+	}
 	record := promotion.Stage{
 		ID:                              uuid.UUID(row.ID.Bytes),
 		Integration:                     row.Integration,
@@ -649,6 +671,7 @@ func promotionStageFromRow(row storedb.PromotionStage) (promotion.Stage, error) 
 		RepositoryURL:                   row.RepositoryUrl,
 		TargetBranch:                    row.TargetBranch,
 		SourcePaths:                     row.SourcePaths,
+		RequestedFreight:                requestedFreight,
 		Freight:                         json.RawMessage(row.FreightJson),
 		SuccessfulRenderAcknowledgement: json.RawMessage(row.SuccessfulRenderAcknowledgement),
 		FirstObservedAt:                 row.FirstObservedAt.Time.UTC(),
@@ -698,21 +721,29 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 	}
 	record := promotion.Promotion{
 		ID:                           uuid.UUID(row.ID.Bytes),
+		Source:                       promotion.PromotionSource(row.Source),
 		Integration:                  row.Integration,
 		ExternalPromotionID:          row.ExternalPromotionID,
 		RequestDigest:                digest,
 		StageID:                      uuid.UUID(row.StageID.Bytes),
+		SourceStageID:                applicationUUID(row.SourceStageID),
 		StageSnapshot:                json.RawMessage(row.StageSnapshot),
 		RepositoryID:                 uuid.UUID(row.RepositoryID.Bytes),
 		RepositorySnapshot:           json.RawMessage(row.RepositorySnapshot),
-		BaseRevision:                 row.BaseRevision,
-		CandidateRevision:            row.CandidateRevision,
-		CandidateBranch:              row.CandidateBranch,
+		BaseRevision:                 stringValue(row.BaseRevision),
+		CandidateRevision:            stringValue(row.CandidateRevision),
+		CandidateBranch:              stringValue(row.CandidateBranch),
 		TargetBranch:                 row.TargetBranch,
 		PolicySnapshot:               json.RawMessage(row.PolicySnapshot),
+		SelectedFreightSnapshot:      json.RawMessage(row.SelectedFreightSnapshot),
 		ReviewRequired:               row.ReviewRequired,
 		Status:                       promotion.PromotionStatus(row.Status),
 		Message:                      row.Message,
+		DispatchAttemptCount:         int(row.DispatchAttemptCount),
+		NextDispatchAt:               applicationTime(row.NextDispatchAt),
+		LastDispatchAt:               applicationTime(row.LastDispatchAt),
+		DispatchedAt:                 applicationTime(row.DispatchedAt),
+		KargoPromotionUID:            row.KargoPromotionUid,
 		PreparationRepositoryID:      applicationUUID(row.PreparationRepositoryID),
 		PreparationCatalogRevisionID: applicationUUID(row.PreparationCatalogRevisionID),
 		PreparationRunID:             applicationUUID(row.PreparationRunID),
@@ -758,12 +789,39 @@ func decodeActor(encoded []byte) (productidentity.ActorSnapshot, error) {
 
 func promotionRequestDigest(value []byte) (promotion.RequestDigest, error) {
 	var digest promotion.RequestDigest
+	if len(value) == 0 {
+		return digest, nil
+	}
 	if len(value) != len(digest) {
 		return digest, fmt.Errorf("decode Promotion request digest: expected %d bytes, got %d", len(digest), len(value))
 	}
 	copy(digest[:], value)
 
 	return digest, nil
+}
+
+func nullablePromotionRequestDigest(value promotion.RequestDigest) []byte {
+	if value == (promotion.RequestDigest{}) {
+		return nil
+	}
+
+	return value[:]
+}
+
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+
+	return &value
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
 }
 
 func nullableJSON(value json.RawMessage) []byte {

@@ -26,6 +26,9 @@ import type {
   CreateApiKeyData,
   CreateApiKeyErrors,
   CreateApiKeyResponses,
+  CreatePromotionData,
+  CreatePromotionErrors,
+  CreatePromotionResponses,
   CreateRepositoryData,
   CreateRepositoryErrors,
   CreateRepositoryResponses,
@@ -1387,6 +1390,33 @@ export const listPromotionStages = <ThrowOnError extends boolean = false>(
     ],
     url: "/api/v1/promotion-stages",
     ...options,
+  });
+
+/**
+ * Create a Kargo Promotion for exact observed Freight
+ */
+export const createPromotion = <ThrowOnError extends boolean = false>(
+  options: Options<CreatePromotionData, ThrowOnError>,
+): RequestResult<CreatePromotionResponses, CreatePromotionErrors, ThrowOnError> =>
+  (options.client ?? client).post<CreatePromotionResponses, CreatePromotionErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-stages/{stageId}/promotions",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
   });
 
 /**

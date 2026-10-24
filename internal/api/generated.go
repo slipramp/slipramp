@@ -444,9 +444,28 @@ func (e PromotionPolicyMode) Valid() bool {
 	}
 }
 
+// Defines values for PromotionSource.
+const (
+	Kargo    PromotionSource = "kargo"
+	Slipramp PromotionSource = "slipramp"
+)
+
+// Valid indicates whether the value is a known member of the PromotionSource enum.
+func (e PromotionSource) Valid() bool {
+	switch e {
+	case Kargo:
+		return true
+	case Slipramp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromotionStatus.
 const (
 	PromotionStatusApproved  PromotionStatus = "approved"
+	PromotionStatusCreating  PromotionStatus = "creating"
 	PromotionStatusError     PromotionStatus = "error"
 	PromotionStatusExpired   PromotionStatus = "expired"
 	PromotionStatusPending   PromotionStatus = "pending"
@@ -458,6 +477,8 @@ const (
 func (e PromotionStatus) Valid() bool {
 	switch e {
 	case PromotionStatusApproved:
+		return true
+	case PromotionStatusCreating:
 		return true
 	case PromotionStatusError:
 		return true
@@ -1409,24 +1430,29 @@ type ProductPrincipal struct {
 
 // Promotion defines model for Promotion.
 type Promotion struct {
-	ArgoDiffArtifact    *Artifact           `json:"argoDiffArtifact,omitempty"`
-	ArgoDiffArtifactID  *openapi_types.UUID `json:"argoDiffArtifactId,omitempty"`
-	BaseCommit          GitCommit           `json:"baseCommit"`
-	CandidateBranch     string              `json:"candidateBranch"`
-	CandidateCommit     GitCommit           `json:"candidateCommit"`
-	CreatedAt           time.Time           `json:"createdAt"`
-	DecidedAt           *time.Time          `json:"decidedAt,omitempty"`
-	Decision            *PromotionDecision  `json:"decision,omitempty"`
-	ExpiresAt           *time.Time          `json:"expiresAt,omitempty"`
-	ExternalPromotionID string              `json:"externalPromotionId"`
-	GitDiffArtifact     *Artifact           `json:"gitDiffArtifact,omitempty"`
-	GitDiffArtifactID   *openapi_types.UUID `json:"gitDiffArtifactId,omitempty"`
-	ID                  openapi_types.UUID  `json:"id"`
-	Integration         CatalogName         `json:"integration"`
+	ArgoDiffArtifact     *Artifact           `json:"argoDiffArtifact,omitempty"`
+	ArgoDiffArtifactID   *openapi_types.UUID `json:"argoDiffArtifactId,omitempty"`
+	BaseCommit           *GitCommit          `json:"baseCommit,omitempty"`
+	CandidateBranch      *string             `json:"candidateBranch,omitempty"`
+	CandidateCommit      *GitCommit          `json:"candidateCommit,omitempty"`
+	CreatedAt            time.Time           `json:"createdAt"`
+	DecidedAt            *time.Time          `json:"decidedAt,omitempty"`
+	Decision             *PromotionDecision  `json:"decision,omitempty"`
+	DispatchAttemptCount int                 `json:"dispatchAttemptCount"`
+	DispatchedAt         *time.Time          `json:"dispatchedAt,omitempty"`
+	ExpiresAt            *time.Time          `json:"expiresAt,omitempty"`
+	ExternalPromotionID  string              `json:"externalPromotionId"`
+	GitDiffArtifact      *Artifact           `json:"gitDiffArtifact,omitempty"`
+	GitDiffArtifactID    *openapi_types.UUID `json:"gitDiffArtifactId,omitempty"`
+	ID                   openapi_types.UUID  `json:"id"`
+	Integration          CatalogName         `json:"integration"`
+	KargoPromotionUID    *string             `json:"kargoPromotionUid,omitempty"`
 
 	// KargoURL Direct link to this Promotion in the configured Kargo UI.
 	KargoURL               *string                `json:"kargoUrl,omitempty"`
+	LastDispatchAt         *time.Time             `json:"lastDispatchAt,omitempty"`
 	Message                *string                `json:"message,omitempty"`
+	NextDispatchAt         *time.Time             `json:"nextDispatchAt,omitempty"`
 	PolicySnapshot         map[string]interface{} `json:"policySnapshot"`
 	PreparationCompletedAt *time.Time             `json:"preparationCompletedAt,omitempty"`
 	PreparationRun         *Run                   `json:"preparationRun,omitempty"`
@@ -1435,6 +1461,9 @@ type Promotion struct {
 	RepositorySnapshot     map[string]interface{} `json:"repositorySnapshot"`
 	RequestedBy            RunActor               `json:"requestedBy"`
 	ReviewRequired         bool                   `json:"reviewRequired"`
+	SelectedFreight        *PromotionFreightItem  `json:"selectedFreight,omitempty"`
+	Source                 PromotionSource        `json:"source"`
+	SourceStageID          *openapi_types.UUID    `json:"sourceStageId,omitempty"`
 	StageID                openapi_types.UUID     `json:"stageId"`
 	StageSnapshot          map[string]interface{} `json:"stageSnapshot"`
 	Status                 PromotionStatus        `json:"status"`
@@ -1496,6 +1525,12 @@ type PromotionBranchDriftStage struct {
 // PromotionBranchDriftStatus defines model for PromotionBranchDriftStatus.
 type PromotionBranchDriftStatus string
 
+// PromotionCreate defines model for PromotionCreate.
+type PromotionCreate struct {
+	FreightName   string             `json:"freightName"`
+	SourceStageID openapi_types.UUID `json:"sourceStageId"`
+}
+
 // PromotionDecision defines model for PromotionDecision.
 type PromotionDecision struct {
 	Comment   *string                   `json:"comment,omitempty"`
@@ -1539,6 +1574,13 @@ type PromotionFreightItem struct {
 	Artifacts []PromotionFreightArtifact `json:"artifacts"`
 	Name      string                     `json:"name"`
 	Origin    string                     `json:"origin"`
+}
+
+// PromotionFreightRequest defines model for PromotionFreightRequest.
+type PromotionFreightRequest struct {
+	Direct       bool     `json:"direct"`
+	Origin       string   `json:"origin"`
+	SourceStages []string `json:"sourceStages"`
 }
 
 // PromotionList defines model for PromotionList.
@@ -1610,6 +1652,9 @@ type PromotionRunSource struct {
 	PromotionID openapi_types.UUID `json:"promotionId"`
 }
 
+// PromotionSource defines model for PromotionSource.
+type PromotionSource string
+
 // PromotionStage defines model for PromotionStage.
 type PromotionStage struct {
 	Application     string             `json:"application"`
@@ -1622,19 +1667,20 @@ type PromotionStage struct {
 	Integration     CatalogName        `json:"integration"`
 
 	// KargoURL Direct link to this Stage in the configured Kargo UI.
-	KargoURL                        *string                 `json:"kargoUrl,omitempty"`
-	KubernetesUID                   string                  `json:"kubernetesUid"`
-	LastObservedAt                  time.Time               `json:"lastObservedAt"`
-	Name                            string                  `json:"name"`
-	PendingPromotionCount           int                     `json:"pendingPromotionCount"`
-	Policy                          PromotionStagePolicy    `json:"policy"`
-	Project                         CatalogName             `json:"project"`
-	Repository                      CatalogName             `json:"repository"`
-	RepositoryURL                   string                  `json:"repositoryUrl"`
-	ResourceVersion                 string                  `json:"resourceVersion"`
-	SourcePaths                     []string                `json:"sourcePaths"`
-	SuccessfulRenderAcknowledgement *map[string]interface{} `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    string                  `json:"targetBranch"`
+	KargoURL                        *string                   `json:"kargoUrl,omitempty"`
+	KubernetesUID                   string                    `json:"kubernetesUid"`
+	LastObservedAt                  time.Time                 `json:"lastObservedAt"`
+	Name                            string                    `json:"name"`
+	PendingPromotionCount           int                       `json:"pendingPromotionCount"`
+	Policy                          PromotionStagePolicy      `json:"policy"`
+	Project                         CatalogName               `json:"project"`
+	Repository                      CatalogName               `json:"repository"`
+	RepositoryURL                   string                    `json:"repositoryUrl"`
+	RequestedFreight                []PromotionFreightRequest `json:"requestedFreight"`
+	ResourceVersion                 string                    `json:"resourceVersion"`
+	SourcePaths                     []string                  `json:"sourcePaths"`
+	SuccessfulRenderAcknowledgement *map[string]interface{}   `json:"successfulRenderAcknowledgement,omitempty"`
+	TargetBranch                    string                    `json:"targetBranch"`
 }
 
 // PromotionStageList defines model for PromotionStageList.
@@ -1647,17 +1693,18 @@ type PromotionStageList struct {
 
 // PromotionStageObservation defines model for PromotionStageObservation.
 type PromotionStageObservation struct {
-	Application                     string                  `json:"application"`
-	Environment                     string                  `json:"environment"`
-	Freight                         PromotionFreight        `json:"freight"`
-	KubernetesUID                   string                  `json:"kubernetesUid"`
-	Name                            string                  `json:"name"`
-	Project                         CatalogName             `json:"project"`
-	RepositoryURL                   string                  `json:"repositoryUrl"`
-	ResourceVersion                 string                  `json:"resourceVersion"`
-	SourcePaths                     []string                `json:"sourcePaths"`
-	SuccessfulRenderAcknowledgement *map[string]interface{} `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    string                  `json:"targetBranch"`
+	Application                     string                    `json:"application"`
+	Environment                     string                    `json:"environment"`
+	Freight                         PromotionFreight          `json:"freight"`
+	KubernetesUID                   string                    `json:"kubernetesUid"`
+	Name                            string                    `json:"name"`
+	Project                         CatalogName               `json:"project"`
+	RepositoryURL                   string                    `json:"repositoryUrl"`
+	RequestedFreight                []PromotionFreightRequest `json:"requestedFreight"`
+	ResourceVersion                 string                    `json:"resourceVersion"`
+	SourcePaths                     []string                  `json:"sourcePaths"`
+	SuccessfulRenderAcknowledgement *map[string]interface{}   `json:"successfulRenderAcknowledgement,omitempty"`
+	TargetBranch                    string                    `json:"targetBranch"`
 }
 
 // PromotionStagePolicy defines model for PromotionStagePolicy.
@@ -2467,6 +2514,9 @@ type SubmitKargoPromotionJSONRequestBody = KargoPromotionRequest
 // UpdatePromotionStagePolicyJSONRequestBody defines body for UpdatePromotionStagePolicy for application/json ContentType.
 type UpdatePromotionStagePolicyJSONRequestBody = PromotionStagePolicyUpdate
 
+// CreatePromotionJSONRequestBody defines body for CreatePromotion for application/json ContentType.
+type CreatePromotionJSONRequestBody = PromotionCreate
+
 // DecidePromotionJSONRequestBody defines body for DecidePromotion for application/json ContentType.
 type DecidePromotionJSONRequestBody = PromotionDecisionUpdate
 
@@ -2827,6 +2877,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /api/v1/promotion-stages/{stageId}/policy (the `UpdatePromotionStagePolicy` operationId).
 	UpdatePromotionStagePolicy(ctx context.Context, stageID openapi_types.UUID, body UpdatePromotionStagePolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePromotionWithBody Create a Kargo Promotion for exact observed Freight
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithBody(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePromotion Create a Kargo Promotion for exact observed Freight
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+	CreatePromotion(ctx context.Context, stageID openapi_types.UUID, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPromotions List Promotions
 	//
@@ -3538,6 +3602,40 @@ func (c *Client) UpdatePromotionStagePolicyWithBody(ctx context.Context, stageID
 // Corresponds with PUT /api/v1/promotion-stages/{stageId}/policy (the `UpdatePromotionStagePolicy` operationId).
 func (c *Client) UpdatePromotionStagePolicy(ctx context.Context, stageID openapi_types.UUID, body UpdatePromotionStagePolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdatePromotionStagePolicyRequest(c.Server, stageID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePromotionWithBody Create a Kargo Promotion for exact observed Freight
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+func (c *Client) CreatePromotionWithBody(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePromotionRequestWithBody(c.Server, stageID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePromotion Create a Kargo Promotion for exact observed Freight
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+func (c *Client) CreatePromotion(ctx context.Context, stageID openapi_types.UUID, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePromotionRequest(c.Server, stageID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5633,6 +5731,53 @@ func NewUpdatePromotionStagePolicyRequestWithBody(server string, stageID openapi
 	return req, nil
 }
 
+// NewCreatePromotionRequest calls the generic CreatePromotion builder with application/json body
+func NewCreatePromotionRequest(server string, stageID openapi_types.UUID, body CreatePromotionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreatePromotionRequestWithBody(server, stageID, "application/json", bodyReader)
+}
+
+// NewCreatePromotionRequestWithBody constructs an http.Request for the CreatePromotion method, with any body, and a specified content type
+func NewCreatePromotionRequestWithBody(server string, stageID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "stageId", stageID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/promotion-stages/%s/promotions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListPromotionsRequest constructs an http.Request for the ListPromotions method
 func NewListPromotionsRequest(server string, params *ListPromotionsParams) (*http.Request, error) {
 	var err error
@@ -7577,6 +7722,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /api/v1/promotion-stages/{stageId}/policy (the `UpdatePromotionStagePolicy` operationId).
 	UpdatePromotionStagePolicyWithResponse(ctx context.Context, stageID openapi_types.UUID, body UpdatePromotionStagePolicyJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePromotionStagePolicyResponse, error)
 
+	// CreatePromotionWithBodyWithResponse Create a Kargo Promotion for exact observed Freight
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithBodyWithResponse(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
+
+	// CreatePromotionWithResponse Create a Kargo Promotion for exact observed Freight
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+	CreatePromotionWithResponse(ctx context.Context, stageID openapi_types.UUID, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error)
+
 	// ListPromotionsWithResponse List Promotions
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -9414,6 +9573,96 @@ func (r UpdatePromotionStagePolicyResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UpdatePromotionStagePolicyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreatePromotionResponse201Headers the declared response headers of an HTTP 201 response for CreatePromotion
+type CreatePromotionResponse201Headers struct {
+	Location *string
+}
+
+type CreatePromotionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Promotion
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *BadRequest
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Unauthorized
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Forbidden
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *NotFound
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Conflict
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *InternalError
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreatePromotionResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreatePromotionResponse) GetJSON201() *Promotion {
+	return r.JSON201
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CreatePromotionResponse) GetApplicationProblemJSON400() *BadRequest {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CreatePromotionResponse) GetApplicationProblemJSON401() *Unauthorized {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreatePromotionResponse) GetApplicationProblemJSON403() *Forbidden {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CreatePromotionResponse) GetApplicationProblemJSON404() *NotFound {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CreatePromotionResponse) GetApplicationProblemJSON409() *Conflict {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CreatePromotionResponse) GetApplicationProblemJSON500() *InternalError {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CreatePromotionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePromotionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePromotionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreatePromotionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12194,6 +12443,32 @@ func (c *ClientWithResponses) UpdatePromotionStagePolicyWithResponse(ctx context
 	return ParseUpdatePromotionStagePolicyResponse(rsp)
 }
 
+// CreatePromotionWithBodyWithResponse Create a Kargo Promotion for exact observed Freight
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+func (c *ClientWithResponses) CreatePromotionWithBodyWithResponse(ctx context.Context, stageID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error) {
+	rsp, err := c.CreatePromotionWithBody(ctx, stageID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePromotionResponse(rsp)
+}
+
+// CreatePromotionWithResponse Create a Kargo Promotion for exact observed Freight
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/promotion-stages/{stageId}/promotions (the `CreatePromotion` operationId).
+func (c *ClientWithResponses) CreatePromotionWithResponse(ctx context.Context, stageID openapi_types.UUID, body CreatePromotionJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePromotionResponse, error) {
+	rsp, err := c.CreatePromotion(ctx, stageID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePromotionResponse(rsp)
+}
+
 // ListPromotionsWithResponse List Promotions
 //
 // Returns a wrapper object for the known response body format(s).
@@ -14076,6 +14351,87 @@ func ParseUpdatePromotionStagePolicyResponse(rsp *http.Response) (*UpdatePromoti
 		}
 		response.ApplicationProblemJSON500 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseCreatePromotionResponse parses an HTTP response from a CreatePromotionWithResponse call
+func ParseCreatePromotionResponse(rsp *http.Response) (*CreatePromotionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePromotionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Promotion
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Conflict
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreatePromotionResponse201Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers201 = &headers
 	}
 
 	return response, nil
@@ -16137,6 +16493,9 @@ type ServerInterface interface {
 	// UpdatePromotionStagePolicy Update review policy for an observed Kargo Stage
 	// (PUT /api/v1/promotion-stages/{stageId}/policy)
 	UpdatePromotionStagePolicy(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
+	// CreatePromotion Create a Kargo Promotion for exact observed Freight
+	// (POST /api/v1/promotion-stages/{stageId}/promotions)
+	CreatePromotion(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID)
 	// ListPromotions List Promotions
 	// (GET /api/v1/promotions)
 	ListPromotions(w http.ResponseWriter, r *http.Request, params ListPromotionsParams)
@@ -17264,6 +17623,32 @@ func (siw *ServerInterfaceWrapper) UpdatePromotionStagePolicy(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdatePromotionStagePolicy(w, r, stageID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePromotion operation middleware
+func (siw *ServerInterfaceWrapper) CreatePromotion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "stageId" -------------
+	var stageID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "stageId", r.PathValue("stageId"), &stageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "stageId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePromotion(w, r, stageID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18669,6 +19054,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/decision", wrapper.DecidePromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects", wrapper.ListPromotionProjects)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-stages", wrapper.ListPromotionStages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}/promotions", wrapper.CreatePromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}/policy", wrapper.UpdatePromotionStagePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-pipelines", wrapper.ListPromotionPipelines)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-branch-drift", wrapper.ListPromotionBranchDrift)
@@ -20568,6 +20954,135 @@ type UpdatePromotionStagePolicy500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdatePromotionStagePolicy500ApplicationProblemPlusJSONResponse) VisitUpdatePromotionStagePolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotionRequestObject struct {
+	StageID openapi_types.UUID `json:"stageId"`
+	Body    *CreatePromotionJSONRequestBody
+}
+
+type CreatePromotionResponseObject interface {
+	VisitCreatePromotionResponse(w http.ResponseWriter) error
+}
+
+type CreatePromotion201ResponseHeaders struct {
+	Location *string
+}
+
+type CreatePromotion201JSONResponse struct {
+	Body    Promotion
+	Headers CreatePromotion201ResponseHeaders
+}
+
+func (response CreatePromotion201JSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotion400ApplicationProblemPlusJSONResponse struct {
+	BadRequestApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePromotion400ApplicationProblemPlusJSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotion401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePromotion401ApplicationProblemPlusJSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotion403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePromotion403ApplicationProblemPlusJSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotion404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePromotion404ApplicationProblemPlusJSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotion409ApplicationProblemPlusJSONResponse struct {
+	ConflictApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePromotion409ApplicationProblemPlusJSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotion500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePromotion500ApplicationProblemPlusJSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -23751,6 +24266,9 @@ type StrictServerInterface interface {
 	// UpdatePromotionStagePolicy Update review policy for an observed Kargo Stage
 	// (PUT /api/v1/promotion-stages/{stageId}/policy)
 	UpdatePromotionStagePolicy(ctx context.Context, request UpdatePromotionStagePolicyRequestObject) (UpdatePromotionStagePolicyResponseObject, error)
+	// CreatePromotion Create a Kargo Promotion for exact observed Freight
+	// (POST /api/v1/promotion-stages/{stageId}/promotions)
+	CreatePromotion(ctx context.Context, request CreatePromotionRequestObject) (CreatePromotionResponseObject, error)
 	// ListPromotions List Promotions
 	// (GET /api/v1/promotions)
 	ListPromotions(ctx context.Context, request ListPromotionsRequestObject) (ListPromotionsResponseObject, error)
@@ -24421,6 +24939,39 @@ func (sh *strictHandler) UpdatePromotionStagePolicy(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdatePromotionStagePolicyResponseObject); ok {
 		if err := validResponse.VisitUpdatePromotionStagePolicyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePromotion operation middleware
+func (sh *strictHandler) CreatePromotion(w http.ResponseWriter, r *http.Request, stageID openapi_types.UUID) {
+	var request CreatePromotionRequestObject
+
+	request.StageID = stageID
+
+	var body CreatePromotionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePromotion(ctx, request.(CreatePromotionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePromotion")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePromotionResponseObject); ok {
+		if err := validResponse.VisitCreatePromotionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

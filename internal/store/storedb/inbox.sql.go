@@ -202,7 +202,7 @@ ORDER BY created_at DESC, id DESC
 type ListInboxPromotionsRow struct {
 	ID              pgtype.UUID
 	StageSnapshot   []byte
-	CandidateBranch string
+	CandidateBranch *string
 	TargetBranch    string
 	Status          string
 	Message         *string

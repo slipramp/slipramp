@@ -284,6 +284,52 @@ promotionStagePolicy:
       "500":
         $ref: "#/components/responses/InternalError"
 
+promotionStagePromotions:
+  post:
+    operationId: createPromotion
+    summary: Create a Kargo Promotion for exact observed Freight
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: stageId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/promotions.yaml#/PromotionCreate
+    responses:
+      "201":
+        description: The durable Promotion creation request.
+        headers:
+          Location:
+            description: URL of the Promotion.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/Promotion
+      "400":
+        $ref: "#/components/responses/BadRequest"
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "409":
+        $ref: "#/components/responses/Conflict"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
 promotionPipelines:
   get:
     operationId: listPromotionPipelines

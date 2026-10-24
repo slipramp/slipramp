@@ -28,6 +28,10 @@ unobserved `kargo-ivy` project retains its direct-push tasks.
 
 ### Remaining capabilities
 
+- [ ] Complete Controller dispatch, callback hydration, and pipeline/branch-drift
+      actions for [operator-started Promotions](./KARGO_PROMOTION_CREATION_PLAN.md).
+      Durable creation, source attribution, and requested-Freight topology are
+      implemented.
 - [ ] Add explicit, observable candidate-branch expiry and cleanup with protection
       for pending Promotions.
 - [ ] Document Stage freshness, preparation and diff failures, review expiry,

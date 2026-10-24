@@ -40,22 +40,23 @@ type KargoRequest struct {
 }
 
 type PromotionStageSnapshot struct {
-	ID                              uuid.UUID       `json:"id"`
-	Integration                     string          `json:"integration"`
-	ClusterName                     string          `json:"cluster"`
-	Project                         string          `json:"project"`
-	Name                            string          `json:"name"`
-	KubernetesUID                   string          `json:"kubernetesUid"`
-	ResourceVersion                 string          `json:"resourceVersion"`
-	Application                     string          `json:"application"`
-	Environment                     string          `json:"environment"`
-	RepositoryName                  string          `json:"repository"`
-	RepositoryURL                   string          `json:"repositoryUrl"`
-	TargetBranch                    string          `json:"targetBranch"`
-	SourcePaths                     []string        `json:"sourcePaths"`
-	Freight                         json.RawMessage `json:"freight"`
-	SuccessfulRenderAcknowledgement json.RawMessage `json:"successfulRenderAcknowledgement,omitempty"`
-	LastObservedAt                  time.Time       `json:"lastObservedAt"`
+	ID                              uuid.UUID        `json:"id"`
+	Integration                     string           `json:"integration"`
+	ClusterName                     string           `json:"cluster"`
+	Project                         string           `json:"project"`
+	Name                            string           `json:"name"`
+	KubernetesUID                   string           `json:"kubernetesUid"`
+	ResourceVersion                 string           `json:"resourceVersion"`
+	Application                     string           `json:"application"`
+	Environment                     string           `json:"environment"`
+	RepositoryName                  string           `json:"repository"`
+	RepositoryURL                   string           `json:"repositoryUrl"`
+	TargetBranch                    string           `json:"targetBranch"`
+	SourcePaths                     []string         `json:"sourcePaths"`
+	RequestedFreight                []FreightRequest `json:"requestedFreight"`
+	Freight                         json.RawMessage  `json:"freight"`
+	SuccessfulRenderAcknowledgement json.RawMessage  `json:"successfulRenderAcknowledgement,omitempty"`
+	LastObservedAt                  time.Time        `json:"lastObservedAt"`
 }
 
 type PromotionRepositorySnapshot struct {

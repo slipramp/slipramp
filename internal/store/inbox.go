@@ -95,7 +95,7 @@ func (d *Database) ListInboxPromotions(ctx context.Context) ([]inbox.PromotionSt
 		records = append(records, inbox.PromotionState{
 			ID:              uuid.UUID(row.ID.Bytes),
 			StageSnapshot:   row.StageSnapshot,
-			CandidateBranch: row.CandidateBranch,
+			CandidateBranch: stringValue(row.CandidateBranch),
 			TargetBranch:    row.TargetBranch,
 			Status:          promotion.PromotionStatus(row.Status),
 			Message:         row.Message,

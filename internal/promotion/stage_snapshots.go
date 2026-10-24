@@ -22,6 +22,7 @@ type StageObservation struct {
 	RepositoryURL                   string
 	TargetBranch                    string
 	SourcePaths                     []string
+	RequestedFreight                []FreightRequest
 	Freight                         json.RawMessage
 	SuccessfulRenderAcknowledgement json.RawMessage
 }
@@ -135,6 +136,7 @@ func (s *StageService) ReplaceStageSnapshot(
 			RepositoryURL:                   observed.RepositoryURL,
 			TargetBranch:                    observed.TargetBranch,
 			SourcePaths:                     slices.Clone(observed.SourcePaths),
+			RequestedFreight:                slices.Clone(observed.RequestedFreight),
 			Freight:                         slices.Clone(observed.Freight),
 			SuccessfulRenderAcknowledgement: slices.Clone(observed.SuccessfulRenderAcknowledgement),
 			FirstObservedAt:                 snapshot.ObservedAt,

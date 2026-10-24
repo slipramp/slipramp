@@ -128,6 +128,7 @@ function PromotionFilters({
           data: [
             { label: "All statuses", value: "" },
             { label: "Pending review", value: "pending" },
+            { label: "Creating", value: "creating" },
             { label: "Preparing", value: "preparing" },
             { label: "Approved", value: "approved" },
             { label: "Rejected", value: "rejected" },
@@ -216,18 +217,27 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
         </Stack>
       </Table.Td>
       <Table.Td>
-        <Stack gap={0}>
-          <Text size="sm">
-            <Text component="span" inherit title={promotion.candidateBranch}>
-              {abbreviateMiddle(promotion.candidateBranch, 30)}
-            </Text>{" "}
-            → {promotion.targetBranch}
-          </Text>
-          <Text c="dimmed" size="xs">
-            <CommitReference commit={promotion.baseCommit} length={10} /> →{" "}
-            <CommitReference commit={promotion.candidateCommit} length={10} />
-          </Text>
-        </Stack>
+        {promotion.candidateBranch && promotion.baseCommit && promotion.candidateCommit ? (
+          <Stack gap={0}>
+            <Text size="sm">
+              <Text component="span" inherit title={promotion.candidateBranch}>
+                {abbreviateMiddle(promotion.candidateBranch, 30)}
+              </Text>{" "}
+              → {promotion.targetBranch}
+            </Text>
+            <Text c="dimmed" size="xs">
+              <CommitReference commit={promotion.baseCommit} length={10} /> →{" "}
+              <CommitReference commit={promotion.candidateCommit} length={10} />
+            </Text>
+          </Stack>
+        ) : (
+          <Stack gap={0}>
+            <Text size="sm">→ {promotion.targetBranch}</Text>
+            <Text c="dimmed" size="xs">
+              Waiting for Kargo callback
+            </Text>
+          </Stack>
+        )}
       </Table.Td>
       <Table.Td>
         <Badge color={promotionStatusColor(promotion.status)} variant="light">
@@ -250,6 +260,8 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
 
 export function promotionStatusColor(status: PromotionStatus) {
   switch (status) {
+    case "creating":
+      return "cyan";
     case "pending":
       return "yellow";
     case "approved":
@@ -266,6 +278,8 @@ export function promotionStatusColor(status: PromotionStatus) {
 
 export function promotionStatusLabel(status: PromotionStatus) {
   switch (status) {
+    case "creating":
+      return "Creating in Kargo";
     case "pending":
       return "Pending review";
     case "preparing":
@@ -277,7 +291,7 @@ export function promotionStatusLabel(status: PromotionStatus) {
     case "expired":
       return "Expired";
     case "error":
-      return "Preparation failed";
+      return "Failed";
   }
 }
 
@@ -288,6 +302,7 @@ export function snapshotString(snapshot: Record<string, unknown>, key: string) {
 
 function optionalStatus(value: string | null): PromotionStatus | undefined {
   switch (value) {
+    case "creating":
     case "preparing":
     case "pending":
     case "approved":

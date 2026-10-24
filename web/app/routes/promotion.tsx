@@ -153,6 +153,11 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           {promotion.message}
         </Alert>
       ) : null}
+      {promotion.status === "creating" ? (
+        <Alert color="cyan" title="Creating Promotion in Kargo">
+          Slipramp is delivering this request or waiting for Kargo to submit its promotion data.
+        </Alert>
+      ) : null}
 
       <PromotionContext promotion={promotion} />
       <Preparation promotion={promotion} />
@@ -186,7 +191,7 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
           <Fact label="Environment" value={snapshotString(stage, "environment") ?? "Unknown"} />
           <Fact label="Repository" value={snapshotString(repository, "name") ?? "Unknown"} />
           <Fact label="Target branch" value={promotion.targetBranch} />
-          <Fact label="Candidate branch" value={promotion.candidateBranch} />
+          <Fact label="Candidate branch" value={promotion.candidateBranch ?? "Waiting for Kargo"} />
           <Fact
             label="Policy snapshot"
             value={snapshotString(policy, "effectiveMode") ?? "Unknown"}
@@ -460,13 +465,13 @@ function Fact({ label, value }: Readonly<{ label: string; value: string }>) {
   );
 }
 
-function Revision({ commit, label }: Readonly<{ commit: GitCommit; label: string }>) {
+function Revision({ commit, label }: Readonly<{ commit?: GitCommit; label: string }>) {
   return (
     <Stack gap={2}>
       <Text c="dimmed" size="xs">
         {label}
       </Text>
-      <CommitReference commit={commit} />
+      {commit ? <CommitReference commit={commit} /> : <Text>Waiting for Kargo</Text>}
     </Stack>
   );
 }

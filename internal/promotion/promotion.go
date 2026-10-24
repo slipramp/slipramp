@@ -22,6 +22,10 @@ const (
 	PolicyModeAutomatic      PolicyMode = "automatic"
 	PolicyModeReviewRequired PolicyMode = "review-required"
 
+	SourceKargo    PromotionSource = "kargo"
+	SourceSlipramp PromotionSource = "slipramp"
+
+	StatusCreating  PromotionStatus = "creating"
 	StatusPreparing PromotionStatus = "preparing"
 	StatusPending   PromotionStatus = "pending"
 	StatusApproved  PromotionStatus = "approved"
@@ -32,11 +36,12 @@ const (
 	DecisionApproved DecisionValue = "approved"
 	DecisionRejected DecisionValue = "rejected"
 
-	maximumTextLength       = 200
-	maximumURLLength        = 2048
-	maximumBranchLength     = 255
-	maximumSourcePathLength = 1024
-	maximumMessageLength    = 4096
+	maximumTextLength          = 200
+	maximumURLLength           = 2048
+	maximumBranchLength        = 255
+	maximumFreightOriginLength = 512
+	maximumSourcePathLength    = 1024
+	maximumMessageLength       = 4096
 )
 
 var (
@@ -58,9 +63,14 @@ var (
 	ErrDecisionConflict           = errors.New("promotion already has a different decision")
 	ErrDecisionNotFound           = errors.New("promotion decision not found")
 	ErrInvalidPreparationArtifact = errors.New("promotion preparation artifact is invalid")
+	ErrFreightNotFound            = errors.New("promotion Freight was not found on the source Stage")
+	ErrFreightSource              = errors.New("promotion Freight source is not accepted by the target Stage")
+	ErrStageScope                 = errors.New("promotion source and target Stages must share integration, cluster, and project")
 )
 
 type PolicyMode string
+
+type PromotionSource string
 
 type PromotionStatus string
 
@@ -82,11 +92,18 @@ type Stage struct {
 	RepositoryURL                   string
 	TargetBranch                    string
 	SourcePaths                     []string
+	RequestedFreight                []FreightRequest
 	Freight                         json.RawMessage
 	SuccessfulRenderAcknowledgement json.RawMessage
 	FirstObservedAt                 time.Time
 	LastObservedAt                  time.Time
 	ArchivedAt                      *time.Time
+}
+
+type FreightRequest struct {
+	Origin       string   `json:"origin"`
+	Direct       bool     `json:"direct"`
+	SourceStages []string `json:"sourceStages"`
 }
 
 type StagePolicy struct {
@@ -109,10 +126,12 @@ type StageSnapshot struct {
 
 type Promotion struct {
 	ID                           uuid.UUID
+	Source                       PromotionSource
 	Integration                  string
 	ExternalPromotionID          string
 	RequestDigest                RequestDigest
 	StageID                      uuid.UUID
+	SourceStageID                *uuid.UUID
 	StageSnapshot                json.RawMessage
 	RepositoryID                 uuid.UUID
 	RepositorySnapshot           json.RawMessage
@@ -121,9 +140,15 @@ type Promotion struct {
 	CandidateBranch              string
 	TargetBranch                 string
 	PolicySnapshot               json.RawMessage
+	SelectedFreightSnapshot      json.RawMessage
 	ReviewRequired               bool
 	Status                       PromotionStatus
 	Message                      *string
+	DispatchAttemptCount         int
+	NextDispatchAt               *time.Time
+	LastDispatchAt               *time.Time
+	DispatchedAt                 *time.Time
+	KargoPromotionUID            *string
 	PreparationRepositoryID      *uuid.UUID
 	PreparationCatalogRevisionID *uuid.UUID
 	PreparationRunID             *uuid.UUID
@@ -159,9 +184,13 @@ func (m PolicyMode) Effective(expiresAt *time.Time, at time.Time) PolicyMode {
 	return m
 }
 
+func (s PromotionSource) Valid() bool {
+	return s == SourceKargo || s == SourceSlipramp
+}
+
 func (s PromotionStatus) Valid() bool {
 	switch s {
-	case StatusPreparing, StatusPending, StatusApproved, StatusRejected, StatusExpired, StatusError:
+	case StatusCreating, StatusPreparing, StatusPending, StatusApproved, StatusRejected, StatusExpired, StatusError:
 		return true
 	default:
 		return false
@@ -216,6 +245,26 @@ func (s Stage) Validate() error {
 	}
 	if len(s.SourcePaths) == 0 {
 		return fmt.Errorf("%w: at least one source path is required", ErrInvalid)
+	}
+	seenFreightOrigins := make(map[string]struct{}, len(s.RequestedFreight))
+	for _, request := range s.RequestedFreight {
+		if err := validateText("requested Freight origin", request.Origin, maximumFreightOriginLength); err != nil {
+			return err
+		}
+		if _, ok := seenFreightOrigins[request.Origin]; ok {
+			return fmt.Errorf("%w: requested Freight origin %q is duplicated", ErrInvalid, request.Origin)
+		}
+		seenFreightOrigins[request.Origin] = struct{}{}
+		seenSources := make(map[string]struct{}, len(request.SourceStages))
+		for _, source := range request.SourceStages {
+			if err := kubevalidate.DNSSubdomain("requested Freight source Stage", source); err != nil {
+				return invalid(err)
+			}
+			if _, ok := seenSources[source]; ok {
+				return fmt.Errorf("%w: requested Freight source Stage %q is duplicated", ErrInvalid, source)
+			}
+			seenSources[source] = struct{}{}
+		}
 	}
 	seenPaths := make(map[string]struct{}, len(s.SourcePaths))
 	for _, path := range s.SourcePaths {
@@ -300,6 +349,9 @@ func (p Promotion) Validate() error {
 	if err := kubevalidate.DNSLabel("Kargo integration name", p.Integration); err != nil {
 		return invalid(err)
 	}
+	if !p.Source.Valid() {
+		return fmt.Errorf("%w: Promotion source is invalid", ErrInvalid)
+	}
 	if err := validateText("external Promotion ID", p.ExternalPromotionID, maximumTextLength); err != nil {
 		return err
 	}
@@ -307,17 +359,26 @@ func (p Promotion) Validate() error {
 		!validJSONObject(p.PolicySnapshot) {
 		return fmt.Errorf("%w: Promotion snapshots must be JSON objects", ErrInvalid)
 	}
-	if err := validateRevision("base revision", p.BaseRevision); err != nil {
-		return err
-	}
-	if err := validateRevision("candidate revision", p.CandidateRevision); err != nil {
-		return err
-	}
-	if err := validateText("candidate branch", p.CandidateBranch, maximumBranchLength); err != nil {
-		return err
-	}
-	if !strings.HasPrefix(p.CandidateBranch, "kargo/promotion/") {
-		return fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
+	hydrated := p.RequestDigest != (RequestDigest{}) || p.BaseRevision != "" ||
+		p.CandidateRevision != "" || p.CandidateBranch != ""
+	if hydrated {
+		if p.RequestDigest == (RequestDigest{}) {
+			return fmt.Errorf("%w: hydrated Promotion request digest is required", ErrInvalid)
+		}
+		if err := validateRevision("base revision", p.BaseRevision); err != nil {
+			return err
+		}
+		if err := validateRevision("candidate revision", p.CandidateRevision); err != nil {
+			return err
+		}
+		if err := validateText("candidate branch", p.CandidateBranch, maximumBranchLength); err != nil {
+			return err
+		}
+		if !strings.HasPrefix(p.CandidateBranch, "kargo/promotion/") {
+			return fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
+		}
+	} else if p.Source != SourceSlipramp || (p.Status != StatusCreating && p.Status != StatusError) {
+		return fmt.Errorf("%w: Promotion callback data is required", ErrInvalid)
 	}
 	if err := validateText("target branch", p.TargetBranch, maximumBranchLength); err != nil {
 		return err
@@ -325,13 +386,47 @@ func (p Promotion) Validate() error {
 	if !p.Status.Valid() {
 		return fmt.Errorf("%w: Promotion status is invalid", ErrInvalid)
 	}
-	if !p.ReviewRequired && p.Status != StatusApproved {
+	if !p.ReviewRequired && p.Status != StatusApproved && p.Status != StatusCreating && p.Status != StatusError {
 		return fmt.Errorf("%w: automatic Promotion must be approved", ErrInvalid)
 	}
-	if !p.ReviewRequired && (p.PreparationRepositoryID != nil || p.PreparationCatalogRevisionID != nil ||
-		p.PreparationRunID != nil || p.PreparationCompletedAt != nil ||
-		p.GitDiffArtifactID != nil || p.ArgoDiffArtifactID != nil || p.DecidedAt != nil) {
+	if !p.ReviewRequired && p.Status != StatusCreating && p.Status != StatusError &&
+		(p.PreparationRepositoryID != nil || p.PreparationCatalogRevisionID != nil ||
+			p.PreparationRunID != nil || p.PreparationCompletedAt != nil ||
+			p.GitDiffArtifactID != nil || p.ArgoDiffArtifactID != nil || p.DecidedAt != nil) {
 		return fmt.Errorf("%w: automatic Promotion cannot have preparation or decision state", ErrInvalid)
+	}
+	if p.Source == SourceKargo {
+		if p.SourceStageID != nil || len(p.SelectedFreightSnapshot) != 0 || p.DispatchAttemptCount != 0 ||
+			p.NextDispatchAt != nil || p.LastDispatchAt != nil || p.DispatchedAt != nil || p.KargoPromotionUID != nil {
+			return fmt.Errorf("%w: Kargo-originated Promotion cannot have creation dispatch state", ErrInvalid)
+		}
+	} else {
+		if p.SourceStageID == nil || !validJSONObject(p.SelectedFreightSnapshot) {
+			return fmt.Errorf("%w: Slipramp-originated Promotion requires source Stage and Freight snapshots", ErrInvalid)
+		}
+		if p.Status == StatusCreating && hydrated {
+			return fmt.Errorf("%w: creating Promotion cannot have callback data", ErrInvalid)
+		}
+		if p.Status == StatusCreating && p.NextDispatchAt == nil {
+			return fmt.Errorf("%w: creating Promotion requires its next dispatch time", ErrInvalid)
+		}
+	}
+	if p.DispatchAttemptCount < 0 {
+		return fmt.Errorf("%w: Promotion dispatch attempt count cannot be negative", ErrInvalid)
+	}
+	if p.KargoPromotionUID != nil {
+		if err := validateText("Kargo Promotion UID", *p.KargoPromotionUID, maximumTextLength); err != nil {
+			return err
+		}
+		if p.DispatchedAt == nil {
+			return fmt.Errorf("%w: Kargo Promotion UID requires successful dispatch time", ErrInvalid)
+		}
+	}
+	if p.Status == StatusCreating && (p.PreparationRepositoryID != nil ||
+		p.PreparationCatalogRevisionID != nil || p.PreparationRunID != nil ||
+		p.PreparationCompletedAt != nil || p.GitDiffArtifactID != nil ||
+		p.ArgoDiffArtifactID != nil || p.DecidedAt != nil) {
+		return fmt.Errorf("%w: creating Promotion cannot have preparation or decision state", ErrInvalid)
 	}
 	if p.Status == StatusPreparing && (p.PreparationCompletedAt != nil || p.GitDiffArtifactID != nil ||
 		p.ArgoDiffArtifactID != nil || p.DecidedAt != nil) {
@@ -370,6 +465,15 @@ func (p Promotion) Validate() error {
 	}
 	if p.CreatedAt.IsZero() || p.UpdatedAt.Before(p.CreatedAt) {
 		return fmt.Errorf("%w: Promotion timestamps are invalid", ErrInvalid)
+	}
+	for label, value := range map[string]*time.Time{
+		"next dispatch": p.NextDispatchAt,
+		"last dispatch": p.LastDispatchAt,
+		"dispatched":    p.DispatchedAt,
+	} {
+		if value != nil && value.Before(p.CreatedAt) {
+			return fmt.Errorf("%w: Promotion %s time precedes creation", ErrInvalid, label)
+		}
 	}
 	if p.ExpiresAt != nil && !p.ExpiresAt.After(p.CreatedAt) {
 		return fmt.Errorf("%w: Promotion expiry must follow creation", ErrInvalid)

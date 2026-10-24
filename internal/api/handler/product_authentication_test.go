@@ -167,6 +167,11 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 			operationID: "AcknowledgeInboxProblems",
 			scope:       productidentity.ScopeInboxWrite,
 		},
+		{
+			name:        "Promotion creation",
+			operationID: "CreatePromotion",
+			scope:       productidentity.ScopePromotionsWrite,
+		},
 	}
 
 	for _, test := range tests {

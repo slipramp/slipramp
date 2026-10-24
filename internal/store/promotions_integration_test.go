@@ -113,6 +113,89 @@ func TestAcceptPromotionRequestIntegration(t *testing.T) {
 	}
 }
 
+func TestCreateOperatorPromotionIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	fixture.stage.ResourceVersion = "2"
+	fixture.stage.FirstObservedAt = createdAt.Add(2 * time.Minute)
+	fixture.stage.LastObservedAt = createdAt.Add(2 * time.Minute)
+	fixture.stage.Freight = json.RawMessage(`{"items":[{
+      "origin":"Warehouse/external-dns",
+      "name":"freight-42",
+      "artifacts":[{"kind":"image","repository":"ghcr.io/example/external-dns","version":"1.2.3"}]
+    }]}`)
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), "prod", "colo", createdAt.Add(2*time.Minute)),
+		[]promotion.Stage{fixture.stage},
+	); err != nil {
+		t.Fatalf("update observed Stage Freight: %v", err)
+	}
+
+	acceptedAt := createdAt.Add(3 * time.Minute)
+	acceptance := promotion.OperatorPromotionAcceptance{
+		ID:                         uuid.New(),
+		Integration:                "prod",
+		TargetStageID:              fixture.stage.ID,
+		SourceStageID:              fixture.stage.ID,
+		FreightName:                "freight-42",
+		RequestedByPrincipalID:     fixture.principal.ID,
+		RequestedBySnapshot:        fixture.actor,
+		AcceptedAt:                 acceptedAt,
+		MaximumStageObservationAge: 5 * time.Minute,
+		PendingReviewRetention:     8 * 24 * time.Hour,
+	}
+	record, err := fixture.database.CreateOperatorPromotion(fixture.ctx, acceptance)
+	if err != nil {
+		t.Fatalf("CreateOperatorPromotion() error = %v", err)
+	}
+	if record.Source != promotion.SourceSlipramp || record.Status != promotion.StatusCreating ||
+		record.ExternalPromotionID != "slipramp-"+record.ID.String() || record.SourceStageID == nil ||
+		*record.SourceStageID != fixture.stage.ID || record.RequestDigest != (promotion.RequestDigest{}) ||
+		record.BaseRevision != "" || record.CandidateRevision != "" || record.CandidateBranch != "" ||
+		record.NextDispatchAt == nil || !record.NextDispatchAt.Equal(acceptedAt) {
+		t.Errorf("operator Promotion = %#v", record)
+	}
+	var selected promotion.FreightItem
+	if err := json.Unmarshal(record.SelectedFreightSnapshot, &selected); err != nil ||
+		selected.Name != "freight-42" || selected.Origin != "Warehouse/external-dns" {
+		t.Errorf("selected Freight = %#v, %v", selected, err)
+	}
+
+	loaded, err := fixture.database.GetPromotion(fixture.ctx, record.ID)
+	if err != nil || loaded.Source != promotion.SourceSlipramp || loaded.Status != promotion.StatusCreating {
+		t.Errorf("GetPromotion() = %#v, %v", loaded, err)
+	}
+
+	staleAcceptance := acceptance
+	staleAcceptance.ID = uuid.New()
+	staleAcceptance.AcceptedAt = createdAt.Add(10 * time.Minute)
+	if _, err := fixture.database.CreateOperatorPromotion(
+		fixture.ctx,
+		staleAcceptance,
+	); !errors.Is(err, promotion.ErrStageStale) {
+		t.Errorf("stale Stage creation error = %v", err)
+	}
+
+	archivedAt := createdAt.Add(4 * time.Minute)
+	if err := fixture.database.ReplacePromotionStageSnapshot(
+		fixture.ctx,
+		promotionTestSnapshot(uuid.New(), "prod", "colo", archivedAt),
+		nil,
+	); err != nil {
+		t.Fatalf("archive observed Stage: %v", err)
+	}
+	archivedAcceptance := acceptance
+	archivedAcceptance.ID = uuid.New()
+	archivedAcceptance.AcceptedAt = archivedAt.Add(time.Second)
+	if _, err := fixture.database.CreateOperatorPromotion(
+		fixture.ctx,
+		archivedAcceptance,
+	); !errors.Is(err, promotion.ErrStageArchived) {
+		t.Errorf("archived Stage creation error = %v", err)
+	}
+}
+
 func TestConcurrentPromotionRequestPollsRecoverOneRecordIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 21, 14, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)

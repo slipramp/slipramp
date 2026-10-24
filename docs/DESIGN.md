@@ -391,7 +391,7 @@ signs in through OIDC.
 | Create or cancel Runs                                                            | operator                 | `slipramp:runs:write`        |
 | Acknowledge Inbox problems                                                       | operator                 | `slipramp:inbox:write`       |
 | Submit or poll Kargo Promotions                                                  | operator service account | `slipramp:promotions:submit` |
-| Decide Promotions or change Stage policy                                         | operator                 | `slipramp:promotions:write`  |
+| Create or decide Promotions, or change Stage policy                              | operator                 | `slipramp:promotions:write`  |
 | Administer Repositories, service accounts, and their keys                        | admin                    | `slipramp:admin`             |
 
 Scope restrictions intersect with the Principal's role. `slipramp:admin` grants
@@ -452,6 +452,17 @@ makes identical repeated submissions/polls recover one Promotion; conflicting
 reuse returns `409`. Persisting the request, actor, and snapshots precedes Run
 creation. Domain states, including terminal errors, return the same machine
 response shape rather than masquerading as transport errors.
+
+`POST /api/v1/promotion-stages/{stageId}/promotions` accepts an exact observed
+source Stage and Freight name from an operator. In one transaction it requires
+fresh, active source and target Stages in the same integration, Cluster, and
+Kargo project; verifies the target's observed requested-Freight topology for a
+cross-Stage request; and snapshots the target, Repository, effective policy,
+selected Freight, and actor. The resulting Slipramp-originated Promotion has a
+deterministic external name and starts in `creating` with callback-derived Git
+fields absent. Controller delivery, callback hydration, and UI creation actions
+remain unfinished in the linked
+[implementation plan](./KARGO_PROMOTION_CREATION_PLAN.md).
 
 Automatic requests become `approved` without a Run. Guarded requests become
 `preparing` and dispatch exactly one restart-safe, revision-pinned ordinary Run.
