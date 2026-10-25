@@ -32,8 +32,7 @@ func (s *Service) RerunRun(ctx context.Context, request RerunRequest) (Run, erro
 
 	provenance := &rerunProvenance{runID: original.ID, mode: request.Mode}
 	createRequest := CreateRequest{
-		RepositoryID:   original.RepositoryID,
-		TargetName:     original.TargetName,
+		TargetID:       original.TargetID,
 		ActionName:     original.ActionName,
 		Parameters:     maps.Clone(original.Parameters),
 		Inputs:         map[string]uuid.UUID{},
@@ -73,6 +72,7 @@ func (s *Service) RerunRun(ctx context.Context, request RerunRequest) (Run, erro
 	record := Run{
 		ID:                s.newID(),
 		Phase:             PhaseQueued,
+		TargetID:          original.TargetID,
 		RepositoryID:      original.RepositoryID,
 		CatalogRevisionID: original.CatalogRevisionID,
 		CommitSHA:         original.CommitSHA,

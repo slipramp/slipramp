@@ -169,6 +169,7 @@ func upsertRepositoryCommit(
 }
 
 type targetStateChange struct {
+	id               uuid.UUID
 	name             string
 	desiredCommitSHA string
 	archived         bool
@@ -187,12 +188,14 @@ func updateTargetStates(
 	}
 
 	type existingTargetState struct {
+		id               uuid.UUID
 		desiredCommitSHA string
 		archived         bool
 	}
 	existing := make(map[string]existingTargetState, len(existingRows))
 	for _, row := range existingRows {
 		existing[row.Name] = existingTargetState{
+			id:               uuid.UUID(row.ID.Bytes),
 			desiredCommitSHA: row.DesiredCommitSha,
 			archived:         row.ArchivedAt.Valid,
 		}
@@ -210,6 +213,7 @@ func updateTargetStates(
 	for _, row := range existingRows {
 		if _, active := activeNameSet[row.Name]; !active && !row.ArchivedAt.Valid {
 			changes = append(changes, targetStateChange{
+				id:       uuid.UUID(row.ID.Bytes),
 				name:     row.Name,
 				archived: true,
 			})
@@ -231,6 +235,10 @@ func updateTargetStates(
 	for _, target := range revision.Catalog.Targets {
 		name := target.Metadata.Name
 		state, found := existing[name]
+		targetID := uuid.New()
+		if found {
+			targetID = state.id
+		}
 		desiredCommitSHA := revision.CommitSHA
 		if found && !state.archived &&
 			!catalog.TargetAffected(target, result.ChangedPaths) {
@@ -238,6 +246,7 @@ func updateTargetStates(
 		}
 		if !found || state.archived || state.desiredCommitSHA != desiredCommitSHA {
 			changes = append(changes, targetStateChange{
+				id:               targetID,
 				name:             name,
 				desiredCommitSHA: desiredCommitSHA,
 			})
@@ -246,6 +255,7 @@ func updateTargetStates(
 		err := queries.UpsertTargetState(
 			ctx,
 			storedb.UpsertTargetStateParams{
+				ID:                databaseUUID(targetID),
 				RepositoryID:      repositoryID,
 				Name:              name,
 				CatalogRevisionID: revisionID,

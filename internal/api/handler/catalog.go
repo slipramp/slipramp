@@ -18,37 +18,30 @@ import (
 )
 
 type CatalogService interface {
-	ExplainActiveAction(
+	ExplainAction(
 		context.Context,
 		uuid.UUID,
 		string,
-		string,
 	) (catalog.Explanation, error)
 	GetActive(ctx context.Context, repositoryID uuid.UUID) (catalog.ActiveCatalog, error)
+	GetTarget(context.Context, uuid.UUID) (catalog.TargetSummary, error)
 	ListTargets(context.Context, catalog.TargetListFilter) (catalog.TargetList, error)
 }
 
-func (h *Handler) ExplainActiveCatalogAction(
+func (h *Handler) ExplainTargetAction(
 	ctx context.Context,
-	request api.ExplainActiveCatalogActionRequestObject,
-) (api.ExplainActiveCatalogActionResponseObject, error) {
-	targetName := string(request.TargetName)
-	if err := kubevalidate.DNSLabel("target name", targetName); err != nil {
-		problem := NewProblem(http.StatusBadRequest, "targetName must be a valid catalog name")
-
-		return api.ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse(problem), nil
-	}
+	request api.ExplainTargetActionRequestObject,
+) (api.ExplainTargetActionResponseObject, error) {
 	actionName := string(request.ActionName)
 	if err := kubevalidate.DNSLabel("action name", actionName); err != nil {
 		problem := NewProblem(http.StatusBadRequest, "actionName must be a valid catalog name")
 
-		return api.ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse(problem), nil
+		return api.ExplainTargetAction400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 
-	explanation, err := h.catalogs.ExplainActiveAction(
+	explanation, err := h.catalogs.ExplainAction(
 		ctx,
-		request.RepositoryID,
-		targetName,
+		request.TargetID,
 		actionName,
 	)
 	if errors.Is(err, catalog.ErrNotFound) ||
@@ -59,13 +52,13 @@ func (h *Handler) ExplainActiveCatalogAction(
 			"The active repository catalog, Target, or Action does not exist.",
 		)
 
-		return api.ExplainActiveCatalogAction404ApplicationProblemPlusJSONResponse(problem), nil
+		return api.ExplainTargetAction404ApplicationProblemPlusJSONResponse(problem), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return api.ExplainActiveCatalogAction200JSONResponse(explanation), nil
+	return api.ExplainTargetAction200JSONResponse(explanation), nil
 }
 
 func (h *Handler) ListTargets(
@@ -149,6 +142,7 @@ func (h *Handler) ListTargets(
 			CatalogCommit:     commits[commitKey(item.RepositoryID, item.CatalogCommitSHA)],
 			CatalogRevisionID: item.CatalogRevisionID,
 			DesiredCommit:     commits[commitKey(item.RepositoryID, item.DesiredCommitSHA)],
+			ID:                item.ID,
 			Name:              item.Target.Metadata.Name,
 			Placement:         optionalString(item.Target.Spec.Placement),
 			RepositoryID:      item.RepositoryID,
@@ -163,6 +157,49 @@ func (h *Handler) ListTargets(
 		Limit:  limit,
 		Offset: int(offset),
 		Total:  targets.Total,
+	}, nil
+}
+
+func (h *Handler) GetTarget(
+	ctx context.Context,
+	request api.GetTargetRequestObject,
+) (api.GetTargetResponseObject, error) {
+	record, err := h.catalogs.GetTarget(ctx, request.TargetID)
+	if errors.Is(err, catalog.ErrTargetNotFound) {
+		problem := NewProblem(http.StatusNotFound, "The Target does not exist.")
+
+		return api.GetTarget404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	keys := []repository.CommitKey{
+		commitKey(record.RepositoryID, record.CatalogCommitSHA),
+		commitKey(record.RepositoryID, record.DesiredCommitSHA),
+	}
+	commits, err := h.commitResponses(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	definition, err := catalogTargetResponse(
+		record.Target,
+		catalog.TargetState{DesiredCommitSHA: record.DesiredCommitSHA},
+		commits,
+		record.RepositoryID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetTarget200JSONResponse{
+		ArchivedAt:        record.ArchivedAt,
+		CatalogCommit:     commits[commitKey(record.RepositoryID, record.CatalogCommitSHA)],
+		CatalogRevisionID: record.CatalogRevisionID,
+		Definition:        definition,
+		ID:                record.ID,
+		RepositoryID:      record.RepositoryID,
+		RepositoryName:    record.RepositoryName,
 	}, nil
 }
 
@@ -226,7 +263,7 @@ func activeCatalogResponse(
 		runtimes = append(runtimes, catalogRuntimeResponse(runtime))
 	}
 
-	targets := make([]api.Target, 0, len(revision.Catalog.Targets))
+	targets := make([]api.TargetDefinition, 0, len(revision.Catalog.Targets))
 	for _, target := range revision.Catalog.Targets {
 		converted, err := catalogTargetResponse(
 			target,
@@ -305,15 +342,15 @@ func catalogTargetResponse(
 	state catalog.TargetState,
 	commits map[repository.CommitKey]api.GitCommit,
 	repositoryID uuid.UUID,
-) (api.Target, error) {
+) (api.TargetDefinition, error) {
 	actions, err := catalogActionsResponse(target.Spec.Actions)
 	if err != nil {
-		return api.Target{}, err
+		return api.TargetDefinition{}, err
 	}
 
-	return api.Target{
-		APIVersion: api.TargetAPIVersion(target.APIVersion),
-		Kind:       api.TargetKind(target.Kind),
+	return api.TargetDefinition{
+		APIVersion: api.TargetDefinitionAPIVersion(target.APIVersion),
+		Kind:       api.TargetDefinitionKind(target.Kind),
 		Metadata:   catalogMetadataResponse(target.Metadata),
 		Spec: api.TargetSpec{
 			Path:        optionalString(target.Spec.Path),

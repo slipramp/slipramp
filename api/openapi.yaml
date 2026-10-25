@@ -28,10 +28,12 @@ paths:
     $ref: ./paths/repositories.yaml#/repositoryCommit
   /api/v1/repositories/{repositoryId}/catalog:
     $ref: ./paths/catalog.yaml#/repositoryCatalog
-  /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation:
+  /api/v1/targets/{targetId}/actions/{actionName}/explanation:
     $ref: ./paths/catalog.yaml#/actionExplanation
   /api/v1/targets:
     $ref: ./paths/catalog.yaml#/targets
+  /api/v1/targets/{targetId}:
+    $ref: ./paths/catalog.yaml#/target
   /api/v1/clusters:
     $ref: ./paths/controllers.yaml#/clusters
   /controller/v1/enroll:
@@ -195,6 +197,10 @@ components:
       $ref: ./components/catalog.yaml#/TargetSummary
     TargetSummaryList:
       $ref: ./components/catalog.yaml#/TargetSummaryList
+    Target:
+      $ref: ./components/catalog.yaml#/Target
+    TargetDefinition:
+      $ref: ./components/catalog.yaml#/TargetDefinition
     Cluster:
       $ref: ./components/controllers.yaml#/Cluster
     ClusterList:

@@ -32,14 +32,11 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	if filter.RepositoryID != nil && *filter.RepositoryID == uuid.Nil {
 		return RunList{}, fmt.Errorf("%w: repository ID must not be empty", ErrInvalidRequest)
 	}
+	if filter.TargetID != nil && *filter.TargetID == uuid.Nil {
+		return RunList{}, fmt.Errorf("%w: Target ID must not be empty", ErrInvalidRequest)
+	}
 	if filter.InputArtifactID != nil && *filter.InputArtifactID == uuid.Nil {
 		return RunList{}, fmt.Errorf("%w: input artifact ID must not be empty", ErrInvalidRequest)
-	}
-	if filter.TargetName != strings.TrimSpace(filter.TargetName) {
-		return RunList{}, fmt.Errorf("%w: target name must not have surrounding whitespace", ErrInvalidRequest)
-	}
-	if filter.TargetName != "" && filter.RepositoryID == nil {
-		return RunList{}, fmt.Errorf("%w: target filter requires a repository ID", ErrInvalidRequest)
 	}
 	if filter.CommitSHA != "" && !repository.ValidCommitSHA(filter.CommitSHA) {
 		return RunList{}, fmt.Errorf("%w: commit SHA must be a lowercase full Git object ID", ErrInvalidRequest)

@@ -39,17 +39,16 @@ func TestCreateRunPinsArtifactInputToProducerRevision(t *testing.T) {
 			ArtifactID: artifactID, ProducerRunID: producerRunID, Name: "plan",
 			MediaType: "application/octet-stream", SizeBytes: 12,
 			SHA256: strings.Repeat("a", 64), RetentionState: "retained",
-			RepositoryID: testRepositoryID, CatalogRevisionID: testRevisionID,
+			TargetID: testTargetID, RepositoryID: testRepositoryID, CatalogRevisionID: testRevisionID,
 			CommitSHA: testCommitSHA, TargetName: "network", ActionName: "preview",
 		},
 	}
 
 	created, err := service.CreateRun(context.Background(), CreateRequest{
-		RepositoryID: testRepositoryID,
-		TargetName:   "network",
-		ActionName:   "apply",
-		Inputs:       map[string]uuid.UUID{"plan": artifactID},
-		Source:       Source{Type: SourceTypeManual},
+		TargetID:   testTargetID,
+		ActionName: "apply",
+		Inputs:     map[string]uuid.UUID{"plan": artifactID},
+		Source:     Source{Type: SourceTypeManual},
 	})
 	if err != nil {
 		t.Fatalf("CreateRun() error = %v", err)
@@ -84,17 +83,16 @@ func TestCreateRunRejectsIncompatibleArtifactInput(t *testing.T) {
 		artifactID: {
 			ArtifactID: artifactID, ProducerRunID: uuid.New(), Name: "plan",
 			SHA256: strings.Repeat("a", 64), RetentionState: "retained",
-			RepositoryID: testRepositoryID, CatalogRevisionID: testRevisionID,
+			TargetID: testTargetID, RepositoryID: testRepositoryID, CatalogRevisionID: testRevisionID,
 			CommitSHA: testCommitSHA, TargetName: "network", ActionName: "destroy",
 		},
 	}
 
 	_, err := service.CreateRun(context.Background(), CreateRequest{
-		RepositoryID: testRepositoryID,
-		TargetName:   "network",
-		ActionName:   "apply",
-		Inputs:       map[string]uuid.UUID{"plan": artifactID},
-		Source:       Source{Type: SourceTypeAPI},
+		TargetID:   testTargetID,
+		ActionName: "apply",
+		Inputs:     map[string]uuid.UUID{"plan": artifactID},
+		Source:     Source{Type: SourceTypeAPI},
 	})
 	if !errors.Is(err, ErrInvalidInputs) {
 		t.Fatalf("CreateRun() error = %v, want invalid inputs", err)

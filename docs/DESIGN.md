@@ -45,7 +45,7 @@ such as a tailnet already protects the transport.
 | ---------------- | -------------------------------------------------------------------------------------------------------------- |
 | Repository       | A Git clone URL and one tracked branch supplying versioned definitions                                         |
 | Catalog revision | Immutable validated Runtime and Target definitions from one exact Git commit                                   |
-| Target           | A repository-scoped named operational unit containing user-defined Actions                                     |
+| Target           | A durable operational unit sourced from one repository definition and containing user-defined Actions          |
 | Action           | One explicit command with execution settings, parameters, optional triggers, and artifact declarations         |
 | Runtime          | Repository-defined portable container environment and credential/process conventions                           |
 | Placement        | Server configuration selecting a Cluster, namespace, service account, credentials, resources, and pod settings |
@@ -57,9 +57,12 @@ such as a tailnet already protects the transport.
 | Notification event | Immutable channel-neutral snapshot of one selected durable transition                                           |
 | Notification delivery | Per-destination operational state for delivering one notification event                                       |
 
-A Target's identity is its Repository plus `metadata.name`. Renaming creates a
-new identity and archives the old one. Removing a Target never destroys
-infrastructure. Historical Runs retain their catalog revision.
+A Target has a Server-assigned UUID that remains stable while its catalog key,
+Repository plus `metadata.name`, remains present or is later reactivated.
+Renaming changes that key, so it creates a new Target and archives the old one.
+Removing a Target archives it with its last accepted definition and never
+destroys infrastructure. Historical Runs retain the Target ID, frozen names,
+and catalog revision.
 
 `sync` is an optional recognized Action name. Targets without it remain useful
 collections of operations. The Target's desired commit is a relevance marker
@@ -227,11 +230,13 @@ so equal object IDs in different Repositories never merge their histories.
 ## Run creation and scheduling
 
 UI, API, Git delivery, and Promotion preparation use the same Run-creation
-service. It validates parameters and artifact bindings, accepts an optional
-idempotency key, and freezes the Repository, commit, catalog revision, Target,
-Action, Runtime, Placement, source, and actor. Authenticated request idempotency
-is scoped to the submitting Principal. Historical creator and cancellation
-attribution includes both a Principal reference and an immutable actor snapshot.
+service. Requests select the durable Target ID and Action name; the service
+resolves the Target's active repository catalog, validates parameters and
+artifact bindings, accepts an optional idempotency key, and freezes the
+Repository, commit, catalog revision, Target, Action, Runtime, Placement,
+source, and actor. Authenticated request idempotency is scoped to the submitting
+Principal. Historical creator and cancellation attribution includes both a
+Principal reference and an immutable actor snapshot.
 
 Promotion preparation Run insertion and linkage to its requesting Promotion
 commit in the same transaction, so an ambiguous creation response cannot leave
@@ -1013,7 +1018,12 @@ be presented as **All clear**. Dependency health remains outside the Inbox and i
 exposed through readiness for external monitoring and failure diagnosis.
 
 Targets have their own searchable, repository-, Runtime-, and Placement-filtered,
-paginated index.
+paginated index. Product navigation addresses Targets directly as
+`/targets/{targetId}`; repository pages provide filtered discovery rather than
+owning Target URLs. The API follows the same resource boundary with
+`/api/v1/targets/{targetId}`, Target-scoped Action explanation, Target-ID Run
+creation, and Target-ID Run history filtering. Repository catalog reads remain
+available as immutable definition collections.
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 

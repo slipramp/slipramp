@@ -1,6 +1,7 @@
 -- name: CreateGitTriggerDelivery :exec
 INSERT INTO git_trigger_deliveries (
     id,
+    target_id,
     repository_id,
     catalog_revision_id,
     target_name,
@@ -9,8 +10,9 @@ INSERT INTO git_trigger_deliveries (
     parameters,
     created_at,
     next_attempt_at
-) VALUES (
+) SELECT
     sqlc.arg(id),
+    targets.id,
     sqlc.arg(repository_id),
     sqlc.arg(catalog_revision_id),
     sqlc.arg(target_name),
@@ -19,7 +21,10 @@ INSERT INTO git_trigger_deliveries (
     sqlc.arg(parameters),
     sqlc.arg(created_at),
     sqlc.arg(created_at)
-);
+FROM targets
+WHERE targets.repository_id = sqlc.arg(repository_id)
+  AND targets.name = sqlc.arg(target_name)
+  AND targets.archived_at IS NULL;
 
 -- name: GetEligibleGitTriggerDelivery :one
 SELECT *
@@ -36,6 +41,7 @@ UPDATE git_trigger_deliveries
 SET run_id = sqlc.arg(run_id)
 WHERE id = sqlc.arg(id)
   AND repository_id = sqlc.arg(repository_id)
+  AND target_id = sqlc.arg(target_id)
   AND catalog_revision_id = sqlc.arg(catalog_revision_id)
   AND target_name = sqlc.arg(target_name)
   AND action_name = sqlc.arg(action_name)
@@ -82,8 +88,7 @@ WHERE id = sqlc.arg(id)
 -- name: SupersedePendingGitTriggerDeliveries :exec
 UPDATE git_trigger_deliveries AS delivery
 SET superseded_at = sqlc.arg(superseded_at)
-WHERE delivery.repository_id = sqlc.arg(repository_id)
-  AND delivery.target_name = sqlc.arg(target_name)
+WHERE delivery.target_id = sqlc.arg(target_id)
   AND delivery.run_id IS NULL
   AND delivery.superseded_at IS NULL
   AND delivery.failed_at IS NULL;
@@ -91,8 +96,7 @@ WHERE delivery.repository_id = sqlc.arg(repository_id)
 -- name: LockTargetStateForGitRun :one
 SELECT desired_commit_sha, archived_at
 FROM targets
-WHERE repository_id = sqlc.arg(repository_id)
-  AND name = sqlc.arg(target_name)
+WHERE id = sqlc.arg(target_id)
 FOR UPDATE;
 
 -- name: FinishSupersededQueuedGitRuns :many
@@ -101,8 +105,7 @@ SET phase = 'finished',
     outcome = 'canceled',
     finished_at = sqlc.arg(finished_at),
     outcome_reason = 'SupersededByGitChange'
-WHERE repository_id = sqlc.arg(repository_id)
-  AND target_name = sqlc.arg(target_name)
+WHERE target_id = sqlc.arg(target_id)
   AND phase = 'queued'
   AND source->>'type' = 'git'
   AND (

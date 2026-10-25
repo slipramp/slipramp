@@ -14,8 +14,7 @@ func TestCreateRunReturnsIdempotentRunBeforeCatalogResolution(t *testing.T) {
 	service, runs := testService(t)
 	idempotencyKey := "manual-network-preview"
 	request := CreateRequest{
-		RepositoryID:   testRepositoryID,
-		TargetName:     "network",
+		TargetID:       testTargetID,
 		ActionName:     "preview",
 		Parameters:     map[string]any{"mode": "safe"},
 		Source:         Source{Type: SourceTypeManual},

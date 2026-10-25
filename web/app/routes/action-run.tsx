@@ -31,9 +31,8 @@ import {
 import { createServerAPIClient } from "~/api/client.server";
 import {
   createRun,
-  explainActiveCatalogAction,
-  getRepositoryCatalog,
-  listRepositories,
+  explainTargetAction,
+  getTarget,
   type Action,
   type CatalogExplanation,
   type CredentialExplanation,
@@ -41,7 +40,7 @@ import {
   type InputExplanation,
   type OutputExplanation,
   type Parameter,
-  type Target,
+  type TargetDefinition,
 } from "~/api/generated";
 import { CommitReference } from "~/components/git-commit";
 import { PageBackLink } from "~/components/page-back-link";
@@ -67,37 +66,30 @@ export function meta({ loaderData, params }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [repositoriesResult, catalogResult, explanationResult] = await Promise.all([
-    listRepositories({ client, query: { limit: 200 } }),
-    getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
-    explainActiveCatalogAction({
+  const [targetResult, explanationResult] = await Promise.all([
+    getTarget({ client, path: { targetId: params.targetId } }),
+    explainTargetAction({
       client,
       path: {
         actionName: params.actionName,
-        repositoryId: params.repositoryId,
-        targetName: params.targetName,
+        targetId: params.targetId,
       },
     }),
   ]);
-  const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
-  const target = catalogResult.data?.targets.find(
-    (item) => item.metadata.name === params.targetName,
-  );
+  const target = targetResult.data?.definition;
 
   return {
     actionDefinition: target?.spec.actions[params.actionName],
-    apiAvailable:
-      repositoriesResult.data !== undefined ||
-      catalogResult.data !== undefined ||
-      explanationResult.data !== undefined,
-    catalog: catalogResult.data,
+    error:
+      targetResult.error?.detail ??
+      targetResult.error?.title ??
+      "The action definition could not be loaded.",
     explanation: explanationResult.data,
     explanationError:
       explanationResult.error?.detail ??
       explanationResult.error?.title ??
       "The effective execution context could not be loaded.",
-    repository,
-    repositoryId: params.repositoryId,
+    record: targetResult.data,
     target,
   };
 }
@@ -105,15 +97,13 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const client = createServerAPIClient(request, context);
-  const catalogResult = await getRepositoryCatalog({
+  const targetResult = await getTarget({
     client,
-    path: { repositoryId: params.repositoryId },
+    path: { targetId: params.targetId },
   });
-  const target = catalogResult.data?.targets.find(
-    (candidate) => candidate.metadata.name === params.targetName,
-  );
+  const target = targetResult.data?.definition;
   const actionDefinition = target?.spec.actions[params.actionName];
-  if (!target || !actionDefinition) {
+  if (!target || targetResult.data?.archivedAt || !actionDefinition) {
     return { error: "This action is no longer available.", values: {} };
   }
 
@@ -135,8 +125,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
       action: params.actionName,
       inputs: {},
       parameters: submission.parameters,
-      repositoryId: params.repositoryId,
-      target: params.targetName,
+      targetId: params.targetId,
     },
     client,
   });
@@ -149,20 +138,20 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 }
 
 export default function ActionRun({ actionData, loaderData, params }: Route.ComponentProps) {
-  const targetURL = targetPath(loaderData.repositoryId, params.targetName);
+  const targetURL = targetPath(params.targetId);
 
-  if (!loaderData.apiAvailable) {
+  if (!loaderData.record) {
     return (
       <Stack gap="md">
         <PageBackLink label="Back to target" to={targetURL} />
         <Alert color="red" title="API unavailable">
-          The action definition could not be loaded.
+          {loaderData.error}
         </Alert>
       </Stack>
     );
   }
 
-  if (!loaderData.catalog || !loaderData.target || !loaderData.actionDefinition) {
+  if (loaderData.record.archivedAt || !loaderData.target || !loaderData.actionDefinition) {
     return (
       <Stack gap="md">
         <PageBackLink label="Back to target" to={targetURL} />
@@ -212,8 +201,8 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
               </Anchor>
             </PageHeaderFact>
             <PageHeaderFact label="Repository">
-              <Anchor component={Link} to={`/repositories/${loaderData.repositoryId}`}>
-                {loaderData.repository?.name ?? "Repository"}
+              <Anchor component={Link} to={`/repositories/${loaderData.record.repositoryId}`}>
+                {loaderData.record.repositoryName}
               </Anchor>
             </PageHeaderFact>
             {actionDefinition.title ? (
@@ -223,8 +212,8 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
             ) : null}
             <PageHeaderFact label="Catalog">
               <CommitReference
-                commit={loaderData.catalog.commit}
-                repositoryId={params.repositoryId}
+                commit={loaderData.record.catalogCommit}
+                repositoryId={loaderData.record.repositoryId}
               />
             </PageHeaderFact>
           </PageHeaderFacts>
@@ -622,7 +611,7 @@ function RunForm({
   actionDefinition: Action;
   error?: string;
   submittedValues?: Record<string, string>;
-  target: Target;
+  target: TargetDefinition;
   targetURL: string;
 }>) {
   const navigation = useNavigation();
@@ -910,6 +899,6 @@ function selectOptions(required: boolean | undefined, values: string[]) {
   ];
 }
 
-function targetPath(repositoryId: string, targetName: string) {
-  return `/repositories/${repositoryId}/targets/${encodeURIComponent(targetName)}`;
+function targetPath(targetId: string) {
+  return `/targets/${targetId}`;
 }

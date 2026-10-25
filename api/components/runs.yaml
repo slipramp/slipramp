@@ -1,16 +1,13 @@
 RunCreate:
   type: object
   required:
-    - repositoryId
-    - target
+    - targetId
     - action
   properties:
-    repositoryId:
+    targetId:
       type: string
       format: uuid
-      description: Repository containing the target and action.
-    target:
-      $ref: "#/CatalogName"
+      description: Durable Target containing the Action.
     action:
       $ref: "#/CatalogName"
     parameters:
@@ -80,6 +77,7 @@ Run:
   required:
     - id
     - phase
+    - targetId
     - repositoryId
     - catalogRevisionId
     - commit
@@ -107,6 +105,10 @@ Run:
         - running
         - finished
       description: Durable lifecycle position of the Run.
+    targetId:
+      type: string
+      format: uuid
+      description: Stable identity of the durable Target selected for this Run.
     observationState:
       type: string
       enum:

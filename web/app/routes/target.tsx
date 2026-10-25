@@ -20,14 +20,13 @@ import { Link } from "react-router";
 import { actionRunPath, effectiveAction, parameterDelivery, sortedEntries } from "~/action-run";
 import { createServerAPIClient } from "~/api/client.server";
 import {
-  getRepositoryCatalog,
-  listRepositories,
+  getTarget,
   listRuns,
   type Action,
   type ArtifactDeclaration,
   type ArtifactInput,
   type Parameter,
-  type Target,
+  type TargetDefinition,
 } from "~/api/generated";
 import { pageTitle } from "~/page-title";
 import { targetFilterPath } from "~/target-filter";
@@ -48,114 +47,63 @@ import type { Route } from "./+types/target";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const targetName = loaderData?.target
-    ? (loaderData.target.metadata.title ?? loaderData.target.metadata.name)
+    ? (loaderData.target.definition.metadata.title ?? loaderData.target.definition.metadata.name)
     : "Target";
   return [{ title: pageTitle(targetName) }];
 }
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [repositoriesResult, catalogResult, runsResult] = await Promise.all([
-    listRepositories({ client, query: { limit: 200 } }),
-    getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
+  const [targetResult, runsResult] = await Promise.all([
+    getTarget({ client, path: { targetId: params.targetId } }),
     listRuns({
       client,
       query: {
         limit: recentRunLimit,
-        repositoryId: params.repositoryId,
-        target: params.targetName,
+        targetId: params.targetId,
       },
     }),
   ]);
-  const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
-  const target = catalogResult.data?.targets.find(
-    (item) => item.metadata.name === params.targetName,
-  );
 
   return {
-    apiAvailable: repositoriesResult.data !== undefined || catalogResult.data !== undefined,
-    catalog: catalogResult.data,
-    repository,
-    repositoryId: params.repositoryId,
-    repositoryListAvailable: repositoriesResult.data !== undefined,
+    error:
+      targetResult.error?.detail ??
+      targetResult.error?.title ??
+      "The target definition could not be loaded.",
     recentRuns: runsResult.data?.items ?? [],
     runsAvailable: runsResult.data !== undefined,
-    target,
+    target: targetResult.data,
   };
 }
 
 export default function TargetDetail({ loaderData }: Route.ComponentProps) {
-  if (!loaderData.apiAvailable) {
-    return (
-      <Stack gap="md">
-        <PageBackLink label="Back to targets" to="/targets" />
-        <Alert color="red" title="API unavailable">
-          The target definition could not be loaded.
-        </Alert>
-      </Stack>
-    );
-  }
-
-  if (loaderData.repositoryListAvailable && !loaderData.repository) {
-    return (
-      <Stack gap="md">
-        <PageBackLink label="Back to targets" to="/targets" />
-        <Alert color="red" title="Repository not found">
-          This repository is not in the active repository list.
-        </Alert>
-      </Stack>
-    );
-  }
-
-  if (!loaderData.catalog) {
-    return (
-      <Stack gap="md">
-        <RepositoryLink
-          repositoryId={loaderData.repositoryId}
-          repositoryName={loaderData.repository?.name}
-        />
-        <Alert color="yellow" title="No active catalog">
-          This repository does not have an accepted catalog revision.
-        </Alert>
-      </Stack>
-    );
-  }
-
   if (!loaderData.target) {
     return (
       <Stack gap="md">
-        <RepositoryLink
-          repositoryId={loaderData.repositoryId}
-          repositoryName={loaderData.repository?.name}
-        />
+        <PageBackLink label="Back to targets" to="/targets" />
         <Alert color="red" title="Target not found">
-          This target is not present in the active catalog revision.
+          {loaderData.error}
         </Alert>
       </Stack>
     );
   }
 
-  const target = loaderData.target;
+  const record = loaderData.target;
+  const target = record.definition;
   const actions = sortedEntries(target.spec.actions);
 
   return (
     <Stack gap="lg">
       <PageHeader
-        actions={
-          <RunHistoryButton
-            to={`/runs?repositoryId=${loaderData.repositoryId}&target=${encodeURIComponent(target.metadata.name)}`}
-          />
-        }
-        back={
-          <RepositoryLink
-            repositoryId={loaderData.repositoryId}
-            repositoryName={loaderData.repository?.name}
-          />
-        }
+        actions={<RunHistoryButton to={`/runs?targetId=${record.id}`} />}
+        back={<PageBackLink label="Back to targets" to="/targets" />}
         badges={
-          <Badge variant="outline">
-            {actions.length} action{actions.length === 1 ? "" : "s"}
-          </Badge>
+          <>
+            {record.archivedAt ? <Badge color="gray">Archived</Badge> : null}
+            <Badge variant="outline">
+              {actions.length} action{actions.length === 1 ? "" : "s"}
+            </Badge>
+          </>
         }
         description="Operational target"
         details={
@@ -165,22 +113,31 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
                 <Code>{target.metadata.name}</Code>
               </PageHeaderFact>
             ) : null}
+            <PageHeaderFact label="Repository">
+              <Anchor component={Link} to={`/repositories/${record.repositoryId}`}>
+                {record.repositoryName}
+              </Anchor>
+            </PageHeaderFact>
             <PageHeaderFact label="Last relevant change">
               <CommitReference
                 commit={target.status.desiredCommit}
-                repositoryId={loaderData.repositoryId}
+                repositoryId={record.repositoryId}
               />
             </PageHeaderFact>
             <PageHeaderFact label="Catalog">
-              <CommitReference
-                commit={loaderData.catalog.commit}
-                repositoryId={loaderData.repositoryId}
-              />
+              <CommitReference commit={record.catalogCommit} repositoryId={record.repositoryId} />
             </PageHeaderFact>
           </PageHeaderFacts>
         }
         title={target.metadata.title ?? target.metadata.name}
       />
+
+      {record.archivedAt ? (
+        <Alert color="gray" title="Archived target">
+          This definition is retained for Run history. It cannot start new Runs unless it becomes
+          active in its repository catalog again.
+        </Alert>
+      ) : null}
 
       <Stack gap="md">
         <SectionHeader
@@ -191,9 +148,10 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
           {actions.map(([name, actionDefinition]) => (
             <ActionAccordionItem
               actionDefinition={actionDefinition}
+              archived={record.archivedAt !== undefined}
               key={name}
               name={name}
-              repositoryId={loaderData.repositoryId}
+              targetId={record.id}
               target={target}
             />
           ))}
@@ -207,7 +165,7 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
         linkPlacement
         runs={loaderData.recentRuns}
         showTarget={false}
-        viewAllTo={`/runs?repositoryId=${loaderData.repositoryId}&target=${encodeURIComponent(target.metadata.name)}`}
+        viewAllTo={`/runs?targetId=${record.id}`}
       />
 
       <TargetDefaults target={target} />
@@ -215,19 +173,7 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   );
 }
 
-function RepositoryLink({
-  repositoryId,
-  repositoryName,
-}: Readonly<{ repositoryId: string; repositoryName?: string }>) {
-  return (
-    <PageBackLink
-      label={`Back to ${repositoryName ?? "repository"}`}
-      to={`/repositories/${repositoryId}`}
-    />
-  );
-}
-
-function TargetDefaults({ target }: Readonly<{ target: Target }>) {
+function TargetDefaults({ target }: Readonly<{ target: TargetDefinition }>) {
   const credentials = sortedEntries(target.spec.credentials);
 
   return (
@@ -286,14 +232,16 @@ function TargetDefaults({ target }: Readonly<{ target: Target }>) {
 
 function ActionAccordionItem({
   actionDefinition,
+  archived,
   name,
-  repositoryId,
+  targetId,
   target,
 }: Readonly<{
   actionDefinition: Action;
+  archived: boolean;
   name: string;
-  repositoryId: string;
-  target: Target;
+  targetId: string;
+  target: TargetDefinition;
 }>) {
   const parameterCount = Object.keys(actionDefinition.parameters ?? {}).length;
   const artifactCount = Object.keys(actionDefinition.artifacts ?? {}).length;
@@ -333,15 +281,17 @@ function ActionAccordionItem({
             </Text>
           </Stack>
         </Accordion.Control>
-        <Button
-          className="target-action-button"
-          component={Link}
-          leftSection={<IconPlayerPlay aria-hidden size={16} />}
-          style={{ flexShrink: 0 }}
-          to={actionRunPath(repositoryId, target.metadata.name, name)}
-        >
-          Run action
-        </Button>
+        {!archived ? (
+          <Button
+            className="target-action-button"
+            component={Link}
+            leftSection={<IconPlayerPlay aria-hidden size={16} />}
+            style={{ flexShrink: 0 }}
+            to={actionRunPath(targetId, name)}
+          >
+            Run action
+          </Button>
+        ) : null}
       </Group>
       <Accordion.Panel>
         <ActionDetail actionDefinition={actionDefinition} target={target} />
@@ -355,7 +305,7 @@ function ActionDetail({
   target,
 }: Readonly<{
   actionDefinition: Action;
-  target: Target;
+  target: TargetDefinition;
 }>) {
   const effective = effectiveAction(target, actionDefinition);
   const parameters = sortedEntries(actionDefinition.parameters);
@@ -534,7 +484,7 @@ function artifactRow(name: string, artifact: ArtifactDeclaration) {
   ];
 }
 
-function inputRow(name: string, input: ArtifactInput, target: Target) {
+function inputRow(name: string, input: ArtifactInput, target: TargetDefinition) {
   const description =
     target.spec.actions[input.artifact.fromAction]?.artifacts?.[name]?.description ?? "—";
 

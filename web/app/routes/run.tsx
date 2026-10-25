@@ -47,9 +47,8 @@ import { createServerAPIClient } from "~/api/client.server";
 import {
   cancelRun,
   createRun,
-  getRepositoryCatalog,
   getRun,
-  listRepositories,
+  getTarget,
   listRunArtifacts,
   listRuns,
   rerunRun,
@@ -92,35 +91,25 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [runResult, artifactResult, repositoriesResult] = await Promise.all([
+  const [runResult, artifactResult] = await Promise.all([
     getRun({ client, path: { runId: params.runId } }),
     listRunArtifacts({ client, path: { runId: params.runId } }),
-    listRepositories({ client, query: { limit: 200 } }),
   ]);
   const planArtifact = artifactResult.data?.items.find((artifact) => artifact.name === "plan");
-  const [planRunsResult, catalogResult] = await Promise.all([
+  const [planRunsResult, targetResult] = await Promise.all([
     planArtifact
       ? listRuns({ client, query: { inputArtifactId: planArtifact.id, limit: 100 } })
       : undefined,
-    runResult.data?.phase === "finished"
-      ? getRepositoryCatalog({
-          client,
-          path: { repositoryId: runResult.data.repositoryId },
-        })
-      : undefined,
+    runResult.data ? getTarget({ client, path: { targetId: runResult.data.targetId } }) : undefined,
   ]);
-  const activeTarget = catalogResult?.data?.targets.find(
-    (target) => target.metadata.name === runResult.data?.target,
-  );
+  const activeTarget = targetResult?.data?.archivedAt ? undefined : targetResult?.data?.definition;
 
   return {
     artifacts: artifactResult.data?.items,
     otherActions: otherTargetActions(activeTarget?.spec.actions, runResult.data?.action ?? ""),
     planRuns: planRunsResult?.data?.items ?? [],
     planRunsAvailable: planRunsResult === undefined || planRunsResult.data !== undefined,
-    repositoryName: repositoriesResult.data?.items.find(
-      (repository) => repository.id === runResult.data?.repositoryId,
-    )?.name,
+    repositoryName: targetResult?.data?.repositoryName,
     rerunKey: crypto.randomUUID(),
     run: runResult.data,
     runId: params.runId,
@@ -194,8 +183,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
       action: consumer.action,
       inputs: { [consumer.input]: artifactId },
       parameters: {},
-      repositoryId: producer.repositoryId,
-      target: producer.target,
+      targetId: producer.targetId,
     },
     client,
   });
@@ -262,11 +250,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                 />
               ) : null}
               {loaderData.otherActions.length > 0 ? (
-                <OtherActionMenu
-                  actions={loaderData.otherActions}
-                  repositoryId={run.repositoryId}
-                  targetName={run.target}
-                />
+                <OtherActionMenu actions={loaderData.otherActions} targetId={run.targetId} />
               ) : null}
               <Menu position="bottom-end" shadow="md" width={220}>
                 <Menu.Target>
@@ -373,11 +357,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         }
         title={
           <>
-            <Anchor
-              component={Link}
-              inherit
-              to={`/repositories/${run.repositoryId}/targets/${encodeURIComponent(run.target)}`}
-            >
+            <Anchor component={Link} inherit to={`/targets/${run.targetId}`}>
               {run.target}
             </Anchor>
             <Text c="dimmed" component="span" inherit>
@@ -482,12 +462,10 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
 function OtherActionMenu({
   actions,
-  repositoryId,
-  targetName,
+  targetId,
 }: Readonly<{
   actions: ReturnType<typeof otherTargetActions>;
-  repositoryId: string;
-  targetName: string;
+  targetId: string;
 }>) {
   return (
     <Menu position="bottom-end" shadow="md" width={260}>
@@ -508,7 +486,7 @@ function OtherActionMenu({
             component={Link}
             key={actionChoice.name}
             leftSection={<IconPlayerPlay aria-hidden size={16} />}
-            to={actionRunPath(repositoryId, targetName, actionChoice.name)}
+            to={actionRunPath(targetId, actionChoice.name)}
           >
             {actionChoice.title ? (
               <Stack gap={0}>

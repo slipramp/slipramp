@@ -67,8 +67,8 @@ repositoryCatalog:
 
 actionExplanation:
   get:
-    operationId: explainActiveCatalogAction
-    summary: Explain an Action from the active repository catalog
+    operationId: explainTargetAction
+    summary: Explain an Action from an active Target
     description: >-
       Returns the effective execution contract for one Action using the
       Slipramp Server's current Placement configuration. Required parameters
@@ -81,19 +81,13 @@ actionExplanation:
     tags:
       - Catalog
     parameters:
-      - name: repositoryId
+      - name: targetId
         in: path
         required: true
-        description: Stable identity of the repository registration.
+        description: Stable identity of the Target.
         schema:
           type: string
           format: uuid
-      - name: targetName
-        in: path
-        required: true
-        description: Stable technical name of the Target.
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
       - name: actionName
         in: path
         required: true
@@ -127,7 +121,7 @@ actionExplanation:
               $ref: ../components/common.yaml#/Problem
       "404":
         description: >-
-          The active repository catalog, Target, or Action does not exist.
+          The active Target or Action does not exist.
         content:
           application/problem+json:
             schema:
@@ -237,6 +231,64 @@ targets:
               $ref: ../components/common.yaml#/Problem
       "500":
         description: Active targets could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+target:
+  get:
+    operationId: getTarget
+    summary: Get a Target
+    description: >-
+      Returns a durable Target with its most recently accepted definition.
+      Archived Targets remain addressable for historical navigation.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Catalog
+    parameters:
+      - name: targetId
+        in: path
+        required: true
+        description: Stable identity of the Target.
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: The Target and its most recently accepted definition.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/catalog.yaml#/Target
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Target does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Target could not be loaded.
         content:
           application/problem+json:
             schema:

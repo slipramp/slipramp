@@ -104,6 +104,7 @@ type GitTriggerDelivery struct {
 	FailedAt          pgtype.Timestamptz
 	RunID             pgtype.UUID
 	SupersededAt      pgtype.Timestamptz
+	TargetID          pgtype.UUID
 }
 
 type InboxProblemAcknowledgement struct {
@@ -344,6 +345,7 @@ type Run struct {
 	CanceledBySnapshot      []byte
 	RerunOfRunID            pgtype.UUID
 	RerunMode               *string
+	TargetID                pgtype.UUID
 }
 
 type RunArtifactInput struct {
@@ -371,6 +373,7 @@ type Target struct {
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
 	ArchivedAt        pgtype.Timestamptz
+	ID                pgtype.UUID
 }
 
 type WebSession struct {

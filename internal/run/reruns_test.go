@@ -167,6 +167,7 @@ func finishedTestRun(t *testing.T) Run {
 		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1300"),
 		Phase:             PhaseFinished,
 		Outcome:           &outcome,
+		TargetID:          testTargetID,
 		RepositoryID:      testRepositoryID,
 		CatalogRevisionID: revision.ID,
 		CommitSHA:         revision.CommitSHA,

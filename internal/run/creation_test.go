@@ -34,9 +34,8 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	created, err := service.CreateRun(
 		context.Background(),
 		CreateRequest{
-			RepositoryID: testRepositoryID,
-			TargetName:   "network",
-			ActionName:   "preview",
+			TargetID:   testTargetID,
+			ActionName: "preview",
 			Parameters: map[string]any{
 				"mode":    "safe",
 				"refresh": true,
@@ -131,11 +130,10 @@ func TestCreateRunRejectsInvalidParametersBeforePersistence(t *testing.T) {
 			_, err := service.CreateRun(
 				context.Background(),
 				CreateRequest{
-					RepositoryID: testRepositoryID,
-					TargetName:   "network",
-					ActionName:   "preview",
-					Parameters:   test.parameters,
-					Source:       Source{Type: SourceTypeAPI},
+					TargetID:   testTargetID,
+					ActionName: "preview",
+					Parameters: test.parameters,
+					Source:     Source{Type: SourceTypeAPI},
 				},
 			)
 			if !errors.Is(err, ErrInvalidParameters) ||
@@ -173,9 +171,11 @@ func TestCreateRunMapsMissingResolutionInputs(t *testing.T) {
 			want: ErrCatalogNotFound,
 		},
 		{
-			name:    "target",
-			request: CreateRequest{TargetName: "missing"},
-			want:    ErrTargetNotFound,
+			name: "target",
+			configure: func(service *Service) {
+				service.catalogs = &recordingCatalogs{targetErr: catalog.ErrTargetNotFound}
+			},
+			want: ErrTargetNotFound,
 		},
 		{
 			name:    "action",
@@ -193,14 +193,10 @@ func TestCreateRunMapsMissingResolutionInputs(t *testing.T) {
 				test.configure(service)
 			}
 			request := CreateRequest{
-				RepositoryID: testRepositoryID,
-				TargetName:   "network",
-				ActionName:   "preview",
-				Parameters:   map[string]any{"mode": "safe"},
-				Source:       Source{Type: SourceTypeAPI},
-			}
-			if test.request.TargetName != "" {
-				request.TargetName = test.request.TargetName
+				TargetID:   testTargetID,
+				ActionName: "preview",
+				Parameters: map[string]any{"mode": "safe"},
+				Source:     Source{Type: SourceTypeAPI},
 			}
 			if test.request.ActionName != "" {
 				request.ActionName = test.request.ActionName
@@ -233,8 +229,7 @@ func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
 	idempotencyKey := deliveryID.String()
 
 	created, err := service.CreateRun(context.Background(), CreateRequest{
-		RepositoryID:      testRepositoryID,
-		TargetName:        "network",
+		TargetID:          testTargetID,
 		ActionName:        "sync",
 		CatalogRevisionID: &pinnedRevision.ID,
 		Source: Source{

@@ -1,6 +1,10 @@
 package catalog
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 const (
 	DefaultTargetListLimit    = 25
@@ -10,11 +14,13 @@ const (
 )
 
 type TargetSummary struct {
+	ID                uuid.UUID
 	RepositoryID      uuid.UUID
 	RepositoryName    string
 	CatalogRevisionID uuid.UUID
 	CatalogCommitSHA  string
 	DesiredCommitSHA  string
+	ArchivedAt        *time.Time
 	Target            Target
 }
 

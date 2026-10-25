@@ -53,6 +53,7 @@ type PreparationStore interface {
 
 type PreparationCatalogs interface {
 	GetActiveRevision(context.Context, uuid.UUID) (catalog.Revision, error)
+	GetActiveTargetByName(context.Context, uuid.UUID, string) (catalog.TargetSummary, error)
 }
 
 type PreparationRuns interface {
@@ -194,9 +195,19 @@ func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion)
 		Kind:        record.RequestedBySnapshot.Kind,
 		DisplayName: record.RequestedBySnapshot.DisplayName,
 	}
+	target, err := c.catalogs.GetActiveTargetByName(
+		ctx,
+		*record.PreparationRepositoryID,
+		integration.Preparation.Target,
+	)
+	if errors.Is(err, catalog.ErrTargetNotFound) {
+		return run.ErrTargetNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("get Promotion preparation Target: %w", err)
+	}
 	created, err := c.runs.CreateRun(ctx, run.CreateRequest{
-		RepositoryID:      *record.PreparationRepositoryID,
-		TargetName:        integration.Preparation.Target,
+		TargetID:          target.ID,
 		ActionName:        integration.Preparation.Action,
 		Parameters:        parameters,
 		Inputs:            map[string]uuid.UUID{},

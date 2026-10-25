@@ -41,6 +41,7 @@ func FailureDiagnostic(err error) string {
 
 type FailedDelivery struct {
 	ID                uuid.UUID
+	TargetID          uuid.UUID
 	RepositoryID      uuid.UUID
 	RepositoryName    string
 	CatalogRevisionID uuid.UUID

@@ -37,8 +37,7 @@ func (s *Service) resolveInputCandidates(
 			return nil, uuid.Nil, fmt.Errorf("get artifact input %q: %w", name, err)
 		}
 
-		if candidate.RepositoryID != request.RepositoryID ||
-			candidate.TargetName != request.TargetName ||
+		if candidate.TargetID != request.TargetID ||
 			candidate.SHA256 == "" ||
 			candidate.RetentionState != "retained" {
 			return nil, uuid.Nil, fmt.Errorf(

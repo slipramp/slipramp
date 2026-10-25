@@ -143,10 +143,10 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	}
 }
 
-func TestExplainActiveCatalogActionReturnsAuthoritativeExplanation(t *testing.T) {
+func TestExplainTargetActionReturnsAuthoritativeExplanation(t *testing.T) {
 	t.Parallel()
 
-	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	catalogs := &recordingCatalogService{
 		explanation: catalog.Explanation{
 			SchemaVersion: 1,
@@ -168,8 +168,7 @@ func TestExplainActiveCatalogActionReturnsAuthoritativeExplanation(t *testing.T)
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		"/api/v1/repositories/"+repositoryID.String()+
-			"/catalog/targets/network/actions/preview/explanation",
+		"/api/v1/targets/"+targetID.String()+"/actions/preview/explanation",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -180,13 +179,11 @@ func TestExplainActiveCatalogActionReturnsAuthoritativeExplanation(t *testing.T)
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
 	}
-	if catalogs.explainCalls != 1 || catalogs.repositoryID != repositoryID ||
-		catalogs.targetName != "network" || catalogs.actionName != "preview" {
+	if catalogs.explainCalls != 1 || catalogs.targetID != targetID || catalogs.actionName != "preview" {
 		t.Errorf(
-			"explanation request = (%d, %s, %q, %q)",
+			"explanation request = (%d, %s, %q)",
 			catalogs.explainCalls,
-			catalogs.repositoryID,
-			catalogs.targetName,
+			catalogs.targetID,
 			catalogs.actionName,
 		)
 	}
@@ -203,10 +200,10 @@ func TestExplainActiveCatalogActionReturnsAuthoritativeExplanation(t *testing.T)
 	}
 }
 
-func TestExplainActiveCatalogActionRequiresProductAuthentication(t *testing.T) {
+func TestExplainTargetActionRequiresProductAuthentication(t *testing.T) {
 	t.Parallel()
 
-	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	catalogs := &recordingCatalogService{}
 	httpHandler := NewHTTP(
 		Dependencies{
@@ -220,8 +217,7 @@ func TestExplainActiveCatalogActionRequiresProductAuthentication(t *testing.T) {
 	request := httptest.NewRequestWithContext(
 		context.Background(),
 		http.MethodGet,
-		"/api/v1/repositories/"+repositoryID.String()+
-			"/catalog/targets/network/actions/preview/explanation",
+		"/api/v1/targets/"+targetID.String()+"/actions/preview/explanation",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -234,10 +230,10 @@ func TestExplainActiveCatalogActionRequiresProductAuthentication(t *testing.T) {
 	}
 }
 
-func TestExplainActiveCatalogActionMapsExpectedFailures(t *testing.T) {
+func TestExplainTargetActionMapsExpectedFailures(t *testing.T) {
 	t.Parallel()
 
-	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	tests := []struct {
 		name       string
 		path       string
@@ -246,28 +242,25 @@ func TestExplainActiveCatalogActionMapsExpectedFailures(t *testing.T) {
 		wantCalls  int
 	}{
 		{
-			name:       "invalid repository identity",
-			path:       "/api/v1/repositories/not-a-uuid/catalog/targets/network/actions/preview/explanation",
+			name:       "invalid target identity",
+			path:       "/api/v1/targets/not-a-uuid/actions/preview/explanation",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "invalid target name",
-			path: "/api/v1/repositories/" + repositoryID.String() +
-				"/catalog/targets/INVALID/actions/preview/explanation",
+			name:       "invalid action name",
+			path:       "/api/v1/targets/" + targetID.String() + "/actions/INVALID/explanation",
 			wantStatus: http.StatusBadRequest,
 		},
 		{
-			name: "missing action",
-			path: "/api/v1/repositories/" + repositoryID.String() +
-				"/catalog/targets/network/actions/missing/explanation",
+			name:       "missing action",
+			path:       "/api/v1/targets/" + targetID.String() + "/actions/missing/explanation",
 			err:        catalog.ErrActionNotFound,
 			wantStatus: http.StatusNotFound,
 			wantCalls:  1,
 		},
 		{
-			name: "persistence failure",
-			path: "/api/v1/repositories/" + repositoryID.String() +
-				"/catalog/targets/network/actions/preview/explanation",
+			name:       "persistence failure",
+			path:       "/api/v1/targets/" + targetID.String() + "/actions/preview/explanation",
 			err:        errors.New("database unavailable"),
 			wantStatus: http.StatusInternalServerError,
 			wantCalls:  1,
@@ -298,11 +291,13 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	commitSHA := "0123456789abcdef0123456789abcdef01234567"
 	catalogs := &recordingCatalogService{
 		targets: catalog.TargetList{
 			Total: 3,
 			Items: []catalog.TargetSummary{{
+				ID:                targetID,
 				RepositoryID:      repositoryID,
 				RepositoryName:    "infrastructure",
 				CatalogRevisionID: revisionID,
@@ -355,11 +350,84 @@ func TestListTargetsReturnsPaginatedSummaries(t *testing.T) {
 		t.Fatalf("target list = %#v", body)
 	}
 	item := body.Items[0]
-	if item.Name != "network" || item.Title == nil || *item.Title != "Home network" ||
+	if item.ID != targetID || item.Name != "network" || item.Title == nil || *item.Title != "Home network" ||
 		item.RepositoryName != "infrastructure" ||
 		!slices.Equal(item.Actions, []string{"preview", "sync"}) {
 		t.Errorf("target summary = %#v", item)
 	}
+}
+
+func TestGetTargetReturnsArchivedDefinition(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	archivedAt := time.Date(2026, time.October, 24, 12, 0, 0, 0, time.UTC)
+	commitSHA := "0123456789abcdef0123456789abcdef01234567"
+	catalogs := &recordingCatalogService{target: catalog.TargetSummary{
+		ID:                targetID,
+		RepositoryID:      repositoryID,
+		RepositoryName:    "infrastructure",
+		CatalogRevisionID: revisionID,
+		CatalogCommitSHA:  commitSHA,
+		DesiredCommitSHA:  commitSHA,
+		ArchivedAt:        &archivedAt,
+		Target: catalog.Target{
+			APIVersion: catalog.APIVersion,
+			Kind:       catalog.TargetKind,
+			Metadata:   catalog.Metadata{Name: "network", Title: "Home network"},
+			Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
+				"preview": {Command: []string{"terraform", "plan"}},
+			}},
+		},
+	}}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/targets/"+targetID.String(),
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).
+		ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if catalogs.targetID != targetID {
+		t.Errorf("Target ID = %s, want %s", catalogs.targetID, targetID)
+	}
+	var body api.Target
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ID != targetID || body.RepositoryID != repositoryID ||
+		body.RepositoryName != "infrastructure" || body.CatalogRevisionID != revisionID ||
+		body.ArchivedAt == nil || !body.ArchivedAt.Equal(archivedAt) ||
+		body.Definition.Metadata.Name != "network" || body.CatalogCommit.Sha != commitSHA {
+		t.Errorf("Target response = %#v", body)
+	}
+}
+
+func TestGetTargetMapsMissingTarget(t *testing.T) {
+	t.Parallel()
+
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	catalogs := &recordingCatalogService{targetErr: catalog.ErrTargetNotFound}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/targets/"+targetID.String(),
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).
+		ServeHTTP(response, request)
+
+	assertProblem(t, response, http.StatusNotFound)
 }
 
 func TestListTargetsRejectsInvalidFilters(t *testing.T) {
@@ -455,7 +523,7 @@ type recordingCatalogService struct {
 	calls        int
 	explainCalls int
 	repositoryID uuid.UUID
-	targetName   string
+	targetID     uuid.UUID
 	actionName   string
 	revision     catalog.Revision
 	targetStates map[string]catalog.TargetState
@@ -465,20 +533,29 @@ type recordingCatalogService struct {
 	listCalls    int
 	filter       catalog.TargetListFilter
 	targets      catalog.TargetList
+	target       catalog.TargetSummary
+	targetErr    error
 }
 
-func (s *recordingCatalogService) ExplainActiveAction(
+func (s *recordingCatalogService) ExplainAction(
 	_ context.Context,
-	repositoryID uuid.UUID,
-	targetName string,
+	targetID uuid.UUID,
 	actionName string,
 ) (catalog.Explanation, error) {
 	s.explainCalls++
-	s.repositoryID = repositoryID
-	s.targetName = targetName
+	s.targetID = targetID
 	s.actionName = actionName
 
 	return s.explanation, s.explainErr
+}
+
+func (s *recordingCatalogService) GetTarget(
+	_ context.Context,
+	targetID uuid.UUID,
+) (catalog.TargetSummary, error) {
+	s.targetID = targetID
+
+	return s.target, s.targetErr
 }
 
 func (s *recordingCatalogService) GetActive(

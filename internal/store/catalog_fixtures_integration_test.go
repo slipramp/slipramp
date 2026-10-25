@@ -57,6 +57,22 @@ func persistedCatalog(imageVersion string) catalog.Catalog {
 	}
 }
 
+func activeTargetID(
+	t *testing.T,
+	database *Database,
+	repositoryID uuid.UUID,
+	targetName string,
+) uuid.UUID {
+	t.Helper()
+
+	target, err := database.GetActiveTargetByName(t.Context(), repositoryID, targetName)
+	if err != nil {
+		t.Fatalf("get active Target %q: %v", targetName, err)
+	}
+
+	return target.ID
+}
+
 func assertActiveCatalog(
 	t *testing.T,
 	database *Database,

@@ -5,8 +5,8 @@ import { actionRunPath, otherTargetActions } from "./action-run.ts";
 
 test("builds an encoded action Run path", () => {
   assert.equal(
-    actionRunPath("repository-id", "network edge", "canary/deploy"),
-    "/repositories/repository-id/targets/network%20edge/actions/canary%2Fdeploy/run",
+    actionRunPath("target-id", "canary/deploy"),
+    "/targets/target-id/actions/canary%2Fdeploy/run",
   );
 });
 

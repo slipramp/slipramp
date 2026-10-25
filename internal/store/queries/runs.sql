@@ -2,6 +2,7 @@
 INSERT INTO runs (
     id,
     phase,
+    target_id,
     repository_id,
     catalog_revision_id,
     commit_sha,
@@ -22,6 +23,7 @@ INSERT INTO runs (
 ) VALUES (
     sqlc.arg(id),
     sqlc.arg(phase),
+    sqlc.arg(target_id),
     sqlc.arg(repository_id),
     sqlc.arg(catalog_revision_id),
     sqlc.arg(commit_sha),
@@ -85,8 +87,8 @@ AND (
     )
 )
 AND (
-    sqlc.narg(target_name)::text IS NULL
-    OR target_name = sqlc.narg(target_name)
+    sqlc.narg(target_id)::uuid IS NULL
+    OR target_id = sqlc.narg(target_id)
 )
 AND (
     sqlc.narg(cluster_name)::text IS NULL
@@ -121,8 +123,8 @@ AND (
     )
 )
 AND (
-    sqlc.narg(target_name)::text IS NULL
-    OR target_name = sqlc.narg(target_name)
+    sqlc.narg(target_id)::uuid IS NULL
+    OR target_id = sqlc.narg(target_id)
 )
 AND (
     sqlc.narg(cluster_name)::text IS NULL
@@ -153,6 +155,7 @@ SELECT
     artifacts.sha256,
     artifacts.sensitive,
     artifacts.retention_state,
+    runs.target_id,
     runs.repository_id,
     runs.catalog_revision_id,
     runs.commit_sha,
@@ -277,8 +280,7 @@ WITH candidate AS (
       AND NOT EXISTS (
           SELECT 1
           FROM runs AS active
-          WHERE active.repository_id = queued.repository_id
-            AND active.target_name = queued.target_name
+          WHERE active.target_id = queued.target_id
             AND active.phase IN ('assigned', 'preparing', 'running')
       )
     ORDER BY queued.created_at, queued.id

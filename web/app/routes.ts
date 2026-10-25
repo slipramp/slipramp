@@ -19,11 +19,8 @@ export default [
   route("repositories/:repositoryId/delete", "routes/repository-delete.tsx"),
   route("repositories/:repositoryId/commits/:commitSha", "routes/commit.tsx"),
   route("repositories/:repositoryId", "routes/repository.tsx"),
-  route("repositories/:repositoryId/targets/:targetName", "routes/target.tsx"),
-  route(
-    "repositories/:repositoryId/targets/:targetName/actions/:actionName/run",
-    "routes/action-run.tsx",
-  ),
+  route("targets/:targetId", "routes/target.tsx"),
+  route("targets/:targetId/actions/:actionName/run", "routes/action-run.tsx"),
   route("runs", "routes/runs.tsx"),
   route("runs/:runId", "routes/run.tsx"),
   route("notification-deliveries", "routes/notification-deliveries.tsx"),

@@ -91,8 +91,7 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 	idempotencyKey := delivery.ID.String()
 	revisionID := delivery.CatalogRevisionID
 	created, err := d.runs.CreateRun(ctx, run.CreateRequest{
-		RepositoryID:      delivery.RepositoryID,
-		TargetName:        delivery.TargetName,
+		TargetID:          delivery.TargetID,
 		ActionName:        delivery.ActionName,
 		Parameters:        delivery.Parameters,
 		Inputs:            map[string]uuid.UUID{},

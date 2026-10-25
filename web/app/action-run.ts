@@ -3,11 +3,11 @@ import type {
   Parameter,
   ParameterValue,
   ResourceRequirements,
-  Target,
+  TargetDefinition,
 } from "~/api/generated";
 
-export function actionRunPath(repositoryId: string, targetName: string, actionName: string) {
-  return `/repositories/${repositoryId}/targets/${encodeURIComponent(targetName)}/actions/${encodeURIComponent(actionName)}/run`;
+export function actionRunPath(targetId: string, actionName: string) {
+  return `/targets/${targetId}/actions/${encodeURIComponent(actionName)}/run`;
 }
 
 export function otherTargetActions(
@@ -83,7 +83,7 @@ export function decodeActionParameters(
   return { error: undefined, parameters, values };
 }
 
-export function effectiveAction(target: Target, action: Action) {
+export function effectiveAction(target: TargetDefinition, action: Action) {
   return {
     credentials: {
       ...target.spec.credentials,

@@ -428,6 +428,7 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 
 	manual := queuedTestRun(
 		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1802"),
+		activeTargetID(t, database, repositoryID, "network"),
 		repositoryID,
 		revisionAID,
 		commitA,
@@ -437,6 +438,7 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 	)
 	apiRun := queuedTestRun(
 		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1803"),
+		activeTargetID(t, database, repositoryID, "network"),
 		repositoryID,
 		revisionAID,
 		commitA,
@@ -685,6 +687,7 @@ func newGitTriggerTestServices(
 
 func queuedTestRun(
 	id uuid.UUID,
+	targetID uuid.UUID,
 	repositoryID uuid.UUID,
 	revisionID uuid.UUID,
 	commitSHA string,
@@ -695,6 +698,7 @@ func queuedTestRun(
 	return run.Run{
 		ID:                id,
 		Phase:             run.PhaseQueued,
+		TargetID:          targetID,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
 		CommitSHA:         commitSHA,
@@ -721,6 +725,7 @@ func queuedGitTestRun(
 	return run.Run{
 		ID:                id,
 		Phase:             run.PhaseQueued,
+		TargetID:          delivery.TargetID,
 		RepositoryID:      delivery.RepositoryID,
 		CatalogRevisionID: delivery.CatalogRevisionID,
 		CommitSHA:         commitSHA,

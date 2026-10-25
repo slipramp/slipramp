@@ -110,15 +110,14 @@ WHERE catalog_revision_id = sqlc.arg(catalog_revision_id)
 ORDER BY name;
 
 -- name: ListRepositoryTargetStates :many
-SELECT name, desired_commit_sha, archived_at
+SELECT id, name, desired_commit_sha, archived_at
 FROM targets
 WHERE repository_id = sqlc.arg(repository_id)
 ORDER BY name;
 
 -- name: ArchiveMissingTargets :exec
 UPDATE targets
-SET catalog_revision_id = NULL,
-    updated_at = sqlc.arg(updated_at),
+SET updated_at = sqlc.arg(updated_at),
     archived_at = sqlc.arg(updated_at)
 WHERE repository_id = sqlc.arg(repository_id)
   AND archived_at IS NULL
@@ -126,6 +125,7 @@ WHERE repository_id = sqlc.arg(repository_id)
 
 -- name: UpsertTargetState :exec
 INSERT INTO targets (
+    id,
     repository_id,
     name,
     catalog_revision_id,
@@ -134,6 +134,7 @@ INSERT INTO targets (
     updated_at,
     archived_at
 ) VALUES (
+    sqlc.arg(id),
     sqlc.arg(repository_id),
     sqlc.arg(name),
     sqlc.arg(catalog_revision_id),
@@ -157,6 +158,7 @@ ORDER BY name;
 
 -- name: ListActiveTargets :many
 SELECT
+    targets.id,
     targets.repository_id,
     repositories.name AS repository_name,
     catalog_revisions.id AS catalog_revision_id,
@@ -210,6 +212,49 @@ ORDER BY
     targets.name
 LIMIT sqlc.arg(result_limit)
 OFFSET sqlc.arg(result_offset);
+
+-- name: GetTarget :one
+SELECT
+    targets.id,
+    targets.repository_id,
+    repositories.name AS repository_name,
+    catalog_revisions.id AS catalog_revision_id,
+    catalog_revisions.commit_sha AS catalog_commit_sha,
+    targets.desired_commit_sha,
+    targets.archived_at,
+    catalog_targets.definition
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.id = sqlc.arg(id);
+
+-- name: GetActiveTargetByName :one
+SELECT
+    targets.id,
+    targets.repository_id,
+    repositories.name AS repository_name,
+    catalog_revisions.id AS catalog_revision_id,
+    catalog_revisions.commit_sha AS catalog_commit_sha,
+    targets.desired_commit_sha,
+    targets.archived_at,
+    catalog_targets.definition
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.repository_id = sqlc.arg(repository_id)
+  AND targets.name = sqlc.arg(name)
+  AND targets.archived_at IS NULL
+  AND repositories.removed_at IS NULL;
 
 -- name: CountActiveTargets :one
 SELECT count(*)

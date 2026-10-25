@@ -114,9 +114,28 @@ func (s *recordingPreparationStore) FailPromotionPreparation(
 }
 
 type recordingPreparationCatalogs struct {
-	revision catalog.Revision
-	calls    int
-	err      error
+	revision    catalog.Revision
+	targetID    uuid.UUID
+	calls       int
+	targetCalls int
+	err         error
+	targetErr   error
+}
+
+func (c *recordingPreparationCatalogs) GetActiveTargetByName(
+	context.Context,
+	uuid.UUID,
+	string,
+) (catalog.TargetSummary, error) {
+	c.targetCalls++
+	if c.targetErr != nil {
+		return catalog.TargetSummary{}, c.targetErr
+	}
+	if c.targetID == uuid.Nil {
+		c.targetID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1210")
+	}
+
+	return catalog.TargetSummary{ID: c.targetID}, nil
 }
 
 func (c *recordingPreparationCatalogs) GetActiveRevision(
@@ -251,7 +270,7 @@ func TestPreparationDispatchReusesReservedRevisionAfterRestart(t *testing.T) {
 	if err != nil || !processed {
 		t.Fatalf("DispatchNext() = (%t, %v), want reserved retry success", processed, err)
 	}
-	if catalogs.calls != 0 || runs.request.CatalogRevisionID == nil ||
+	if catalogs.calls != 0 || catalogs.targetCalls != 1 || runs.request.CatalogRevisionID == nil ||
 		*runs.request.CatalogRevisionID != revisionID {
 		t.Errorf("active catalog calls = %d, Run request = %#v", catalogs.calls, runs.request)
 	}
@@ -309,7 +328,7 @@ func TestPreparationReconciliationIsolatesReadFailuresWithoutCreatingAnotherRun(
 		*store.failure.PreparationRunID != runID || strings.Contains(store.failure.Diagnostic, "sensitive") {
 		t.Fatalf("ReconcileNext() = (%t, %v), failure = %#v", processed, err, store.failure)
 	}
-	if runs.request.RepositoryID != uuid.Nil {
+	if runs.request.TargetID != uuid.Nil {
 		t.Fatal("reconciliation created another preparation Run")
 	}
 }
@@ -476,6 +495,9 @@ func testPreparationCoordinator(
 	store PreparationStore,
 ) *PreparationCoordinator {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	if catalogs == nil {
+		catalogs = &recordingPreparationCatalogs{}
+	}
 
 	return NewPreparationCoordinator(
 		IntegrationSet{

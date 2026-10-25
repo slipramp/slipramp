@@ -328,7 +328,7 @@ func TestCatalogRefreshTracksTargetDesiredCommitsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load archived target: %v", err)
 	}
-	if archivedRevision.Valid || !archivedAt.Valid || desiredCommit != commitC {
+	if !archivedRevision.Valid || !archivedAt.Valid || desiredCommit != commitC {
 		t.Errorf(
 			"archived target = (%#v, %#v, %q), want archived at %q",
 			archivedRevision,

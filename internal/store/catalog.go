@@ -134,6 +134,7 @@ func (d *Database) ListActiveTargets(
 		}
 
 		items = append(items, catalog.TargetSummary{
+			ID:                uuid.UUID(row.ID.Bytes),
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 			RepositoryName:    row.RepositoryName,
 			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
@@ -144,6 +145,82 @@ func (d *Database) ListActiveTargets(
 	}
 
 	return catalog.TargetList{Items: items, Total: total}, nil
+}
+
+func (d *Database) GetTarget(ctx context.Context, targetID uuid.UUID) (catalog.TargetSummary, error) {
+	row, err := d.queries.GetTarget(ctx, databaseUUID(targetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return catalog.TargetSummary{}, catalog.ErrTargetNotFound
+	}
+	if err != nil {
+		return catalog.TargetSummary{}, fmt.Errorf("get Target: %w", err)
+	}
+
+	return targetSummaryFromRow(
+		row.ID,
+		row.RepositoryID,
+		row.RepositoryName,
+		row.CatalogRevisionID,
+		row.CatalogCommitSha,
+		row.DesiredCommitSha,
+		row.ArchivedAt,
+		row.Definition,
+	)
+}
+
+func (d *Database) GetActiveTargetByName(
+	ctx context.Context,
+	repositoryID uuid.UUID,
+	targetName string,
+) (catalog.TargetSummary, error) {
+	row, err := d.queries.GetActiveTargetByName(ctx, storedb.GetActiveTargetByNameParams{
+		RepositoryID: databaseUUID(repositoryID),
+		Name:         targetName,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return catalog.TargetSummary{}, catalog.ErrTargetNotFound
+	}
+	if err != nil {
+		return catalog.TargetSummary{}, fmt.Errorf("get active Target by name: %w", err)
+	}
+
+	return targetSummaryFromRow(
+		row.ID,
+		row.RepositoryID,
+		row.RepositoryName,
+		row.CatalogRevisionID,
+		row.CatalogCommitSha,
+		row.DesiredCommitSha,
+		row.ArchivedAt,
+		row.Definition,
+	)
+}
+
+func targetSummaryFromRow(
+	id pgtype.UUID,
+	repositoryID pgtype.UUID,
+	repositoryName string,
+	catalogRevisionID pgtype.UUID,
+	catalogCommitSHA string,
+	desiredCommitSHA string,
+	archivedAt pgtype.Timestamptz,
+	definition []byte,
+) (catalog.TargetSummary, error) {
+	var target catalog.Target
+	if err := json.Unmarshal(definition, &target); err != nil {
+		return catalog.TargetSummary{}, fmt.Errorf("decode Target definition: %w", err)
+	}
+
+	return catalog.TargetSummary{
+		ID:                uuid.UUID(id.Bytes),
+		RepositoryID:      uuid.UUID(repositoryID.Bytes),
+		RepositoryName:    repositoryName,
+		CatalogRevisionID: uuid.UUID(catalogRevisionID.Bytes),
+		CatalogCommitSHA:  catalogCommitSHA,
+		DesiredCommitSHA:  desiredCommitSHA,
+		ArchivedAt:        applicationTime(archivedAt),
+		Target:            target,
+	}, nil
 }
 
 func loadActiveCatalogRevision(

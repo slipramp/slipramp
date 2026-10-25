@@ -14,6 +14,7 @@ func TestServiceExplainsActiveActionWithCurrentPlacementsAndOmittedParameters(t 
 	t.Parallel()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	placements, err := placement.NewSet(map[string]placement.Config{
 		"production": {
 			ClusterName:        "colo",
@@ -61,9 +62,15 @@ func TestServiceExplainsActiveActionWithCurrentPlacementsAndOmittedParameters(t 
 			}},
 		},
 	}}
+	store.target = TargetSummary{
+		ID:                targetID,
+		RepositoryID:      repositoryID,
+		CatalogRevisionID: store.revision.ID,
+		Target:            store.revision.Catalog.Targets[0],
+	}
 
 	explanation, err := NewService(store, placements).
-		ExplainActiveAction(t.Context(), repositoryID, "network", "plan")
+		ExplainAction(t.Context(), targetID, "plan")
 	if err != nil {
 		t.Fatalf("ExplainActiveAction() error = %v", err)
 	}
@@ -86,6 +93,7 @@ func TestServiceExplainsActiveActionWithCurrentPlacementsAndOmittedParameters(t 
 type explanationStore struct {
 	repositoryID uuid.UUID
 	revision     Revision
+	target       TargetSummary
 }
 
 func (s *explanationStore) GetActiveCatalog(context.Context, uuid.UUID) (ActiveCatalog, error) {
@@ -103,6 +111,22 @@ func (s *explanationStore) GetActiveCatalogRevision(
 
 func (s *explanationStore) GetCatalogRevision(context.Context, uuid.UUID, uuid.UUID) (Revision, error) {
 	return Revision{}, nil
+}
+
+func (s *explanationStore) GetTarget(_ context.Context, targetID uuid.UUID) (TargetSummary, error) {
+	if targetID != s.target.ID {
+		return TargetSummary{}, ErrTargetNotFound
+	}
+
+	return s.target, nil
+}
+
+func (s *explanationStore) GetActiveTargetByName(
+	context.Context,
+	uuid.UUID,
+	string,
+) (TargetSummary, error) {
+	return TargetSummary{}, nil
 }
 
 func (s *explanationStore) ListActiveTargets(context.Context, TargetListFilter) (TargetList, error) {

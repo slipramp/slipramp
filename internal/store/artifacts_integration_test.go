@@ -270,6 +270,7 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	consumerID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1406")
 	_, err = database.CreateRun(ctx, run.Run{
 		ID: consumerID, Phase: run.PhaseQueued,
+		TargetID:     candidate.TargetID,
 		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
 		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
 		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
@@ -470,6 +471,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	consumerRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1601")
 	_, err = database.CreateRun(ctx, run.Run{
 		ID: consumerRunID, Phase: run.PhaseQueued,
+		TargetID:     candidate.TargetID,
 		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
 		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
 		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
@@ -493,6 +495,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 
 	_, err = database.CreateRun(ctx, run.Run{
 		ID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1603"), Phase: run.PhaseQueued,
+		TargetID:     staleCandidate.TargetID,
 		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
 		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
 		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
@@ -567,6 +570,7 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 	_, err = database.CreateRun(ctx, run.Run{
 		ID:                runID,
 		Phase:             run.PhaseQueued,
+		TargetID:          activeTargetID(t, database, repositoryID, "network"),
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
 		CommitSHA:         refresh.Commit.SHA,

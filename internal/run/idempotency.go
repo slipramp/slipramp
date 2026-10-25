@@ -77,9 +77,8 @@ func requestDigest(
 		inputs = map[string]uuid.UUID{}
 	}
 	payload := struct {
-		RepositoryID      uuid.UUID            `json:"repositoryId"`
+		TargetID          uuid.UUID            `json:"targetId"`
 		CatalogRevisionID *uuid.UUID           `json:"catalogRevisionId,omitempty"`
-		Target            string               `json:"target"`
 		Action            string               `json:"action"`
 		Parameters        map[string]any       `json:"parameters"`
 		Inputs            map[string]uuid.UUID `json:"inputs"`
@@ -87,9 +86,8 @@ func requestDigest(
 		RerunOfRunID      *uuid.UUID           `json:"rerunOfRunId,omitempty"`
 		RerunMode         *RerunMode           `json:"rerunMode,omitempty"`
 	}{
-		RepositoryID:      request.RepositoryID,
+		TargetID:          request.TargetID,
 		CatalogRevisionID: request.CatalogRevisionID,
-		Target:            request.TargetName,
 		Action:            request.ActionName,
 		Parameters:        parameters,
 		Inputs:            inputs,

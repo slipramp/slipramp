@@ -27,7 +27,7 @@ SET cancellation_requested_at = $1,
         ELSE outcome_reason
     END
 WHERE id = $4
-RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 `
 
 type CancelRunParams struct {
@@ -78,6 +78,7 @@ func (q *Queries) CancelRun(ctx context.Context, arg CancelRunParams) (Run, erro
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
@@ -91,8 +92,7 @@ WITH candidate AS (
       AND NOT EXISTS (
           SELECT 1
           FROM runs AS active
-          WHERE active.repository_id = queued.repository_id
-            AND active.target_name = queued.target_name
+          WHERE active.target_id = queued.target_id
             AND active.phase IN ('assigned', 'preparing', 'running')
       )
     ORDER BY queued.created_at, queued.id
@@ -104,7 +104,7 @@ SET phase = 'assigned',
     assigned_at = $1
 FROM candidate
 WHERE runs.id = candidate.id
-RETURNING runs.id, runs.phase, runs.outcome, runs.repository_id, runs.catalog_revision_id, runs.commit_sha, runs.target_name, runs.action_name, runs.parameters, runs.placement_name, runs.cluster_name, runs.source, runs.idempotency_key, runs.request_digest, runs.snapshot, runs.created_at, runs.assigned_at, runs.preparing_at, runs.started_at, runs.finished_at, runs.last_observed_at, runs.cancellation_requested_at, runs.job_uid, runs.outcome_reason, runs.outcome_message, runs.exit_code, runs.created_by_principal_id, runs.created_by_snapshot, runs.canceled_by_principal_id, runs.canceled_by_snapshot, runs.rerun_of_run_id, runs.rerun_mode
+RETURNING runs.id, runs.phase, runs.outcome, runs.repository_id, runs.catalog_revision_id, runs.commit_sha, runs.target_name, runs.action_name, runs.parameters, runs.placement_name, runs.cluster_name, runs.source, runs.idempotency_key, runs.request_digest, runs.snapshot, runs.created_at, runs.assigned_at, runs.preparing_at, runs.started_at, runs.finished_at, runs.last_observed_at, runs.cancellation_requested_at, runs.job_uid, runs.outcome_reason, runs.outcome_message, runs.exit_code, runs.created_by_principal_id, runs.created_by_snapshot, runs.canceled_by_principal_id, runs.canceled_by_snapshot, runs.rerun_of_run_id, runs.rerun_mode, runs.target_id
 `
 
 type ClaimQueuedRunParams struct {
@@ -148,6 +148,7 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) 
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
@@ -173,8 +174,8 @@ AND (
     )
 )
 AND (
-    $4::text IS NULL
-    OR target_name = $4
+    $4::uuid IS NULL
+    OR target_id = $4
 )
 AND (
     $5::text IS NULL
@@ -190,7 +191,7 @@ type CountRunsParams struct {
 	RepositoryID    pgtype.UUID
 	CommitSha       *string
 	InputArtifactID pgtype.UUID
-	TargetName      *string
+	TargetID        pgtype.UUID
 	ClusterName     *string
 	Phase           *string
 }
@@ -200,7 +201,7 @@ func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, er
 		arg.RepositoryID,
 		arg.CommitSha,
 		arg.InputArtifactID,
-		arg.TargetName,
+		arg.TargetID,
 		arg.ClusterName,
 		arg.Phase,
 	)
@@ -213,6 +214,7 @@ const createRun = `-- name: CreateRun :one
 INSERT INTO runs (
     id,
     phase,
+    target_id,
     repository_id,
     catalog_revision_id,
     commit_sha,
@@ -249,15 +251,17 @@ INSERT INTO runs (
     $16,
     $17,
     $18,
-    $19
+    $19,
+    $20
 )
 ON CONFLICT DO NOTHING
-RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+RETURNING id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 `
 
 type CreateRunParams struct {
 	ID                   pgtype.UUID
 	Phase                string
+	TargetID             pgtype.UUID
 	RepositoryID         pgtype.UUID
 	CatalogRevisionID    pgtype.UUID
 	CommitSha            string
@@ -281,6 +285,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 	row := q.db.QueryRow(ctx, createRun,
 		arg.ID,
 		arg.Phase,
+		arg.TargetID,
 		arg.RepositoryID,
 		arg.CatalogRevisionID,
 		arg.CommitSha,
@@ -333,6 +338,7 @@ func (q *Queries) CreateRun(ctx context.Context, arg CreateRunParams) (Run, erro
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
@@ -415,6 +421,7 @@ SELECT
     artifacts.sha256,
     artifacts.sensitive,
     artifacts.retention_state,
+    runs.target_id,
     runs.repository_id,
     runs.catalog_revision_id,
     runs.commit_sha,
@@ -435,6 +442,7 @@ type GetArtifactInputCandidateRow struct {
 	Sha256            *string
 	Sensitive         bool
 	RetentionState    string
+	TargetID          pgtype.UUID
 	RepositoryID      pgtype.UUID
 	CatalogRevisionID pgtype.UUID
 	CommitSha         string
@@ -455,6 +463,7 @@ func (q *Queries) GetArtifactInputCandidate(ctx context.Context, artifactID pgty
 		&i.Sha256,
 		&i.Sensitive,
 		&i.RetentionState,
+		&i.TargetID,
 		&i.RepositoryID,
 		&i.CatalogRevisionID,
 		&i.CommitSha,
@@ -465,7 +474,7 @@ func (q *Queries) GetArtifactInputCandidate(ctx context.Context, artifactID pgty
 }
 
 const getAssignedRunForCluster = `-- name: GetAssignedRunForCluster :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 FROM runs
 WHERE cluster_name = $1
   AND phase = 'assigned'
@@ -509,12 +518,13 @@ func (q *Queries) GetAssignedRunForCluster(ctx context.Context, clusterName stri
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
 
 const getRun = `-- name: GetRun :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 FROM runs
 WHERE id = $1
 `
@@ -555,12 +565,13 @@ func (q *Queries) GetRun(ctx context.Context, id pgtype.UUID) (Run, error) {
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
 
 const getRunByIdempotencyKey = `-- name: GetRunByIdempotencyKey :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 FROM runs
 WHERE idempotency_key = $1
   AND (
@@ -618,12 +629,13 @@ func (q *Queries) GetRunByIdempotencyKey(ctx context.Context, arg GetRunByIdempo
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
 
 const getRunForCancel = `-- name: GetRunForCancel :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 FROM runs
 WHERE id = $1
 FOR UPDATE
@@ -665,6 +677,7 @@ func (q *Queries) GetRunForCancel(ctx context.Context, id pgtype.UUID) (Run, err
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
@@ -702,7 +715,7 @@ func (q *Queries) GetRunObservationStateForUpdate(ctx context.Context, arg GetRu
 }
 
 const getRunToCancelForCluster = `-- name: GetRunToCancelForCluster :one
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 FROM runs
 WHERE cluster_name = $1
   AND cancellation_requested_at IS NOT NULL
@@ -747,12 +760,13 @@ func (q *Queries) GetRunToCancelForCluster(ctx context.Context, clusterName stri
 		&i.CanceledBySnapshot,
 		&i.RerunOfRunID,
 		&i.RerunMode,
+		&i.TargetID,
 	)
 	return i, err
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode
+SELECT id, phase, outcome, repository_id, catalog_revision_id, commit_sha, target_name, action_name, parameters, placement_name, cluster_name, source, idempotency_key, request_digest, snapshot, created_at, assigned_at, preparing_at, started_at, finished_at, last_observed_at, cancellation_requested_at, job_uid, outcome_reason, outcome_message, exit_code, created_by_principal_id, created_by_snapshot, canceled_by_principal_id, canceled_by_snapshot, rerun_of_run_id, rerun_mode, target_id
 FROM runs
 WHERE (
     $1::uuid IS NULL
@@ -772,8 +786,8 @@ AND (
     )
 )
 AND (
-    $4::text IS NULL
-    OR target_name = $4
+    $4::uuid IS NULL
+    OR target_id = $4
 )
 AND (
     $5::text IS NULL
@@ -792,7 +806,7 @@ type ListRunsParams struct {
 	RepositoryID    pgtype.UUID
 	CommitSha       *string
 	InputArtifactID pgtype.UUID
-	TargetName      *string
+	TargetID        pgtype.UUID
 	ClusterName     *string
 	Phase           *string
 	ResultOffset    int32
@@ -804,7 +818,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		arg.RepositoryID,
 		arg.CommitSha,
 		arg.InputArtifactID,
-		arg.TargetName,
+		arg.TargetID,
 		arg.ClusterName,
 		arg.Phase,
 		arg.ResultOffset,
@@ -850,6 +864,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 			&i.CanceledBySnapshot,
 			&i.RerunOfRunID,
 			&i.RerunMode,
+			&i.TargetID,
 		); err != nil {
 			return nil, err
 		}

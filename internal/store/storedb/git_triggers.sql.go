@@ -25,6 +25,7 @@ func (q *Queries) CountFailedGitTriggerDeliveries(ctx context.Context) (int64, e
 const createGitTriggerDelivery = `-- name: CreateGitTriggerDelivery :exec
 INSERT INTO git_trigger_deliveries (
     id,
+    target_id,
     repository_id,
     catalog_revision_id,
     target_name,
@@ -33,8 +34,9 @@ INSERT INTO git_trigger_deliveries (
     parameters,
     created_at,
     next_attempt_at
-) VALUES (
+) SELECT
     $1,
+    targets.id,
     $2,
     $3,
     $4,
@@ -43,7 +45,10 @@ INSERT INTO git_trigger_deliveries (
     $7,
     $8,
     $8
-)
+FROM targets
+WHERE targets.repository_id = $2
+  AND targets.name = $4
+  AND targets.archived_at IS NULL
 `
 
 type CreateGitTriggerDeliveryParams struct {
@@ -77,21 +82,19 @@ SET phase = 'finished',
     outcome = 'canceled',
     finished_at = $1,
     outcome_reason = 'SupersededByGitChange'
-WHERE repository_id = $2
-  AND target_name = $3
+WHERE target_id = $2
   AND phase = 'queued'
   AND source->>'type' = 'git'
   AND (
-      $4::boolean
-      OR commit_sha <> $5
+      $3::boolean
+      OR commit_sha <> $4
   )
 RETURNING id
 `
 
 type FinishSupersededQueuedGitRunsParams struct {
 	FinishedAt       pgtype.Timestamptz
-	RepositoryID     pgtype.UUID
-	TargetName       string
+	TargetID         pgtype.UUID
 	CancelAll        bool
 	DesiredCommitSha string
 }
@@ -99,8 +102,7 @@ type FinishSupersededQueuedGitRunsParams struct {
 func (q *Queries) FinishSupersededQueuedGitRuns(ctx context.Context, arg FinishSupersededQueuedGitRunsParams) ([]pgtype.UUID, error) {
 	rows, err := q.db.Query(ctx, finishSupersededQueuedGitRuns,
 		arg.FinishedAt,
-		arg.RepositoryID,
-		arg.TargetName,
+		arg.TargetID,
 		arg.CancelAll,
 		arg.DesiredCommitSha,
 	)
@@ -123,7 +125,7 @@ func (q *Queries) FinishSupersededQueuedGitRuns(ctx context.Context, arg FinishS
 }
 
 const getEligibleGitTriggerDelivery = `-- name: GetEligibleGitTriggerDelivery :one
-SELECT id, repository_id, catalog_revision_id, target_name, action_name, trigger_name, parameters, created_at, failure_count, next_attempt_at, diagnostic, failed_at, run_id, superseded_at
+SELECT id, repository_id, catalog_revision_id, target_name, action_name, trigger_name, parameters, created_at, failure_count, next_attempt_at, diagnostic, failed_at, run_id, superseded_at, target_id
 FROM git_trigger_deliveries
 WHERE run_id IS NULL
   AND superseded_at IS NULL
@@ -151,6 +153,7 @@ func (q *Queries) GetEligibleGitTriggerDelivery(ctx context.Context, attemptedAt
 		&i.FailedAt,
 		&i.RunID,
 		&i.SupersededAt,
+		&i.TargetID,
 	)
 	return i, err
 }
@@ -160,14 +163,15 @@ UPDATE git_trigger_deliveries
 SET run_id = $1
 WHERE id = $2
   AND repository_id = $3
-  AND catalog_revision_id = $4
-  AND target_name = $5
-  AND action_name = $6
-  AND trigger_name = $7
+  AND target_id = $4
+  AND catalog_revision_id = $5
+  AND target_name = $6
+  AND action_name = $7
+  AND trigger_name = $8
   AND superseded_at IS NULL
   AND failed_at IS NULL
   AND (run_id = $1 OR (
-      run_id IS NULL AND next_attempt_at <= $8
+      run_id IS NULL AND next_attempt_at <= $9
   ))
 `
 
@@ -175,6 +179,7 @@ type LinkGitTriggerRunParams struct {
 	RunID             pgtype.UUID
 	ID                pgtype.UUID
 	RepositoryID      pgtype.UUID
+	TargetID          pgtype.UUID
 	CatalogRevisionID pgtype.UUID
 	TargetName        string
 	ActionName        string
@@ -187,6 +192,7 @@ func (q *Queries) LinkGitTriggerRun(ctx context.Context, arg LinkGitTriggerRunPa
 		arg.RunID,
 		arg.ID,
 		arg.RepositoryID,
+		arg.TargetID,
 		arg.CatalogRevisionID,
 		arg.TargetName,
 		arg.ActionName,
@@ -200,7 +206,7 @@ func (q *Queries) LinkGitTriggerRun(ctx context.Context, arg LinkGitTriggerRunPa
 }
 
 const listFailedGitTriggerDeliveries = `-- name: ListFailedGitTriggerDeliveries :many
-SELECT delivery.id, delivery.repository_id, delivery.catalog_revision_id, delivery.target_name, delivery.action_name, delivery.trigger_name, delivery.parameters, delivery.created_at, delivery.failure_count, delivery.next_attempt_at, delivery.diagnostic, delivery.failed_at, delivery.run_id, delivery.superseded_at, repositories.name AS repository_name, catalog_revisions.commit_sha
+SELECT delivery.id, delivery.repository_id, delivery.catalog_revision_id, delivery.target_name, delivery.action_name, delivery.trigger_name, delivery.parameters, delivery.created_at, delivery.failure_count, delivery.next_attempt_at, delivery.diagnostic, delivery.failed_at, delivery.run_id, delivery.superseded_at, delivery.target_id, repositories.name AS repository_name, catalog_revisions.commit_sha
 FROM git_trigger_deliveries AS delivery
 JOIN repositories ON repositories.id = delivery.repository_id
 JOIN catalog_revisions ON catalog_revisions.id = delivery.catalog_revision_id
@@ -229,6 +235,7 @@ type ListFailedGitTriggerDeliveriesRow struct {
 	FailedAt          pgtype.Timestamptz
 	RunID             pgtype.UUID
 	SupersededAt      pgtype.Timestamptz
+	TargetID          pgtype.UUID
 	RepositoryName    string
 	CommitSha         string
 }
@@ -257,6 +264,7 @@ func (q *Queries) ListFailedGitTriggerDeliveries(ctx context.Context, arg ListFa
 			&i.FailedAt,
 			&i.RunID,
 			&i.SupersededAt,
+			&i.TargetID,
 			&i.RepositoryName,
 			&i.CommitSha,
 		); err != nil {
@@ -273,23 +281,17 @@ func (q *Queries) ListFailedGitTriggerDeliveries(ctx context.Context, arg ListFa
 const lockTargetStateForGitRun = `-- name: LockTargetStateForGitRun :one
 SELECT desired_commit_sha, archived_at
 FROM targets
-WHERE repository_id = $1
-  AND name = $2
+WHERE id = $1
 FOR UPDATE
 `
-
-type LockTargetStateForGitRunParams struct {
-	RepositoryID pgtype.UUID
-	TargetName   string
-}
 
 type LockTargetStateForGitRunRow struct {
 	DesiredCommitSha string
 	ArchivedAt       pgtype.Timestamptz
 }
 
-func (q *Queries) LockTargetStateForGitRun(ctx context.Context, arg LockTargetStateForGitRunParams) (LockTargetStateForGitRunRow, error) {
-	row := q.db.QueryRow(ctx, lockTargetStateForGitRun, arg.RepositoryID, arg.TargetName)
+func (q *Queries) LockTargetStateForGitRun(ctx context.Context, targetID pgtype.UUID) (LockTargetStateForGitRunRow, error) {
+	row := q.db.QueryRow(ctx, lockTargetStateForGitRun, targetID)
 	var i LockTargetStateForGitRunRow
 	err := row.Scan(&i.DesiredCommitSha, &i.ArchivedAt)
 	return i, err
@@ -362,8 +364,7 @@ func (q *Queries) SupersedeGitTriggerDelivery(ctx context.Context, arg Supersede
 const supersedePendingGitTriggerDeliveries = `-- name: SupersedePendingGitTriggerDeliveries :exec
 UPDATE git_trigger_deliveries AS delivery
 SET superseded_at = $1
-WHERE delivery.repository_id = $2
-  AND delivery.target_name = $3
+WHERE delivery.target_id = $2
   AND delivery.run_id IS NULL
   AND delivery.superseded_at IS NULL
   AND delivery.failed_at IS NULL
@@ -371,11 +372,10 @@ WHERE delivery.repository_id = $2
 
 type SupersedePendingGitTriggerDeliveriesParams struct {
 	SupersededAt pgtype.Timestamptz
-	RepositoryID pgtype.UUID
-	TargetName   string
+	TargetID     pgtype.UUID
 }
 
 func (q *Queries) SupersedePendingGitTriggerDeliveries(ctx context.Context, arg SupersedePendingGitTriggerDeliveriesParams) error {
-	_, err := q.db.Exec(ctx, supersedePendingGitTriggerDeliveries, arg.SupersededAt, arg.RepositoryID, arg.TargetName)
+	_, err := q.db.Exec(ctx, supersedePendingGitTriggerDeliveries, arg.SupersededAt, arg.TargetID)
 	return err
 }

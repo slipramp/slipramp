@@ -195,13 +195,16 @@ check_guarded_promotion() {
   response=$(submit_kargo_promotion "$body")
   jq -e --arg id "$promotion_id" '.id == $id and .status == "pending"' \
     <<<"$response" >/dev/null
-  api_get "/api/v1/runs?repositoryId=$repository_id&target=kargo-promotions" |
+  api_get "/api/v1/runs?targetId=$kargo_target_id" |
     jq -e --arg id "$promotion_id" --arg run "$run_id" '
       [.items[] | select(.source.promotion.promotionId == $id) | .id] == [$run]
     ' >/dev/null
   assert_log_contains "$run_id" 'prepared Git and Argo CD review artifacts'
   log "Promotion $external_id reached pending with retained diff artifacts"
 }
+
+kargo_target_id=$(api_get "/api/v1/targets?repositoryId=$repository_id" |
+  jq -er '.items[] | select(.name == "kargo-promotions") | .id')
 
 log "configuring the Kargo acceptance service account"
 kargo_principal_id=$(curl --fail-with-body --silent --show-error \
@@ -287,7 +290,7 @@ jq -e '.status == "approved" and .reviewRequired == false' \
   <<<"$automatic_response" >/dev/null
 api_get "/api/v1/promotions/$automatic_id" |
   jq -e '.status == "approved" and (.preparationRunId == null)' >/dev/null
-api_get "/api/v1/runs?repositoryId=$repository_id&target=kargo-promotions" |
+api_get "/api/v1/runs?targetId=$kargo_target_id" |
   jq -e '.items == []' >/dev/null
 automatic_retry=$(submit_kargo_promotion "$automatic_request")
 jq -e --arg id "$automatic_id" '.id == $id and .status == "approved"' \
@@ -303,7 +306,7 @@ curl --fail-with-body --silent --show-error -X PUT \
 check_guarded_promotion acceptance-guarded "$candidate_commit" kargo/promotion/acceptance-guarded
 check_guarded_promotion acceptance-empty "$fixture_commit" kargo/promotion/acceptance-empty
 
-api_get "/api/v1/runs?repositoryId=$repository_id&target=kargo-promotions" |
+api_get "/api/v1/runs?targetId=$kargo_target_id" |
   jq -e --arg automatic "$automatic_id" '
     (.items | length) == 2 and
     all(.items[]; .source.promotion.promotionId != $automatic)

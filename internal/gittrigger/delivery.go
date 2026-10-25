@@ -12,6 +12,7 @@ var ErrNoEligibleDelivery = errors.New("no eligible Git-trigger delivery")
 
 type Delivery struct {
 	ID                uuid.UUID
+	TargetID          uuid.UUID
 	RepositoryID      uuid.UUID
 	CatalogRevisionID uuid.UUID
 	TargetName        string

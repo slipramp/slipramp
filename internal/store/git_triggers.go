@@ -93,8 +93,7 @@ func coalesceSupersededGitWork(
 			ctx,
 			storedb.SupersedePendingGitTriggerDeliveriesParams{
 				SupersededAt: databaseTime(finishedAt),
-				RepositoryID: repositoryID,
-				TargetName:   target.name,
+				TargetID:     databaseUUID(target.id),
 			},
 		); err != nil {
 			return fmt.Errorf("supersede pending Git-trigger deliveries for target %q: %w", target.name, err)
@@ -104,8 +103,7 @@ func coalesceSupersededGitWork(
 			ctx,
 			storedb.FinishSupersededQueuedGitRunsParams{
 				FinishedAt:       databaseTime(finishedAt),
-				RepositoryID:     repositoryID,
-				TargetName:       target.name,
+				TargetID:         databaseUUID(target.id),
 				DesiredCommitSha: target.desiredCommitSHA,
 				CancelAll:        target.archived,
 			},
@@ -152,13 +150,7 @@ func supersedeStaleGitRun(
 		return false, fmt.Errorf("lock Git-triggered Run repository: %w", err)
 	}
 
-	targetState, err := queries.LockTargetStateForGitRun(
-		ctx,
-		storedb.LockTargetStateForGitRunParams{
-			RepositoryID: databaseUUID(record.RepositoryID),
-			TargetName:   record.TargetName,
-		},
-	)
+	targetState, err := queries.LockTargetStateForGitRun(ctx, databaseUUID(record.TargetID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return markGitTriggerDeliverySuperseded(ctx, queries, record)
 	}
@@ -242,6 +234,7 @@ func linkGitTriggerRun(ctx context.Context, queries *storedb.Queries, record run
 		ID:                databaseUUID(record.Source.Git.DeliveryID),
 		RunID:             databaseUUID(record.ID),
 		RepositoryID:      databaseUUID(record.RepositoryID),
+		TargetID:          databaseUUID(record.TargetID),
 		CatalogRevisionID: databaseUUID(record.CatalogRevisionID),
 		TargetName:        record.TargetName,
 		ActionName:        record.ActionName,
@@ -285,6 +278,7 @@ func (d *Database) ListFailedGitTriggerDeliveries(
 		}
 		page.Items = append(page.Items, gittrigger.FailedDelivery{
 			ID:                uuid.UUID(row.ID.Bytes),
+			TargetID:          uuid.UUID(row.TargetID.Bytes),
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 			RepositoryName:    row.RepositoryName,
 			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
@@ -308,6 +302,7 @@ func gitTriggerDeliveryFromRow(row storedb.GitTriggerDelivery) (gittrigger.Deliv
 
 	return gittrigger.Delivery{
 		ID:                uuid.UUID(row.ID.Bytes),
+		TargetID:          uuid.UUID(row.TargetID.Bytes),
 		RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 		CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
 		TargetName:        row.TargetName,

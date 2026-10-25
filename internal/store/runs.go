@@ -48,10 +48,6 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		repositoryID = databaseUUID(*filter.RepositoryID)
 	}
 
-	var targetName *string
-	if filter.TargetName != "" {
-		targetName = &filter.TargetName
-	}
 	var commitSHA *string
 	if filter.CommitSHA != "" {
 		commitSHA = &filter.CommitSHA
@@ -68,9 +64,9 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 
 	query := storedb.ListRunsParams{
 		RepositoryID:    repositoryID,
+		TargetID:        optionalDatabaseUUID(filter.TargetID),
 		CommitSha:       commitSHA,
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
-		TargetName:      targetName,
 		ClusterName:     clusterName,
 		Phase:           phase,
 		ResultLimit:     filter.Limit,
@@ -85,9 +81,9 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 	}
 	total, err := d.queries.CountRuns(ctx, storedb.CountRunsParams{
 		RepositoryID:    repositoryID,
+		TargetID:        optionalDatabaseUUID(filter.TargetID),
 		CommitSha:       commitSHA,
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
-		TargetName:      targetName,
 		ClusterName:     clusterName,
 		Phase:           phase,
 	})
@@ -129,6 +125,7 @@ func (d *Database) GetArtifactInputCandidate(ctx context.Context, artifactID uui
 		SHA256:            *row.Sha256,
 		Sensitive:         row.Sensitive,
 		RetentionState:    row.RetentionState,
+		TargetID:          uuid.UUID(row.TargetID.Bytes),
 		RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 		CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
 		CommitSHA:         row.CommitSha,
@@ -214,6 +211,7 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 		storedb.CreateRunParams{
 			ID:                   databaseUUID(record.ID),
 			Phase:                string(record.Phase),
+			TargetID:             databaseUUID(record.TargetID),
 			RepositoryID:         databaseUUID(record.RepositoryID),
 			CatalogRevisionID:    databaseUUID(record.CatalogRevisionID),
 			CommitSha:            record.CommitSHA,
@@ -361,6 +359,7 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		ID:                      uuid.UUID(row.ID.Bytes),
 		Phase:                   run.Phase(row.Phase),
 		Outcome:                 runOutcome(row.Outcome),
+		TargetID:                uuid.UUID(row.TargetID.Bytes),
 		RepositoryID:            uuid.UUID(row.RepositoryID.Bytes),
 		CatalogRevisionID:       uuid.UUID(row.CatalogRevisionID.Bytes),
 		CommitSHA:               row.CommitSha,

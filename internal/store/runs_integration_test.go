@@ -48,6 +48,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	record := run.Run{
 		ID:                runID,
 		Phase:             run.PhaseQueued,
+		TargetID:          activeTargetID(t, database, repositoryID, "network"),
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
 		CommitSHA:         refresh.Commit.SHA,
@@ -135,11 +136,12 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 
 	repositoryFilter := repositoryID
+	targetFilter := record.TargetID
 	listed, err = database.ListRuns(
 		ctx,
 		run.RunListFilter{
 			RepositoryID: &repositoryFilter,
-			TargetName:   "network",
+			TargetID:     &targetFilter,
 			Phase:        run.PhaseQueued,
 			Limit:        1,
 			Offset:       1,
@@ -175,7 +177,8 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		t.Errorf("cluster-filtered ListRuns() = %#v, want no Runs", listed)
 	}
 
-	listed, err = database.ListRuns(ctx, run.RunListFilter{TargetName: "missing", Limit: 10})
+	missingTargetID := uuid.New()
+	listed, err = database.ListRuns(ctx, run.RunListFilter{TargetID: &missingTargetID, Limit: 10})
 	if err != nil {
 		t.Fatalf("empty ListRuns() error = %v", err)
 	}
@@ -487,6 +490,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 	first := run.Run{
 		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1520"),
 		Phase:             run.PhaseQueued,
+		TargetID:          activeTargetID(t, database, repositoryID, "network"),
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
 		CommitSHA:         refresh.Commit.SHA,

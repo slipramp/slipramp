@@ -26,12 +26,14 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
 	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500")
 	createdAt := time.Date(2026, time.October, 16, 12, 5, 0, 0, time.UTC)
 	runs := &recordingRunService{
 		created: run.Run{
 			ID:                runID,
 			Phase:             run.PhaseQueued,
+			TargetID:          targetID,
 			RepositoryID:      repositoryID,
 			CatalogRevisionID: revisionID,
 			CommitSHA:         "0123456789abcdef0123456789abcdef01234567",
@@ -58,8 +60,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		},
 	}
 	body := bytes.NewBufferString(`{
-		"repositoryId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
-		"target":"network",
+		"targetId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1203",
 		"action":"preview",
 		"parameters":{"mode":"safe","refresh":true}
 	}`)
@@ -73,8 +74,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusCreated, response.Body)
 	}
-	if runs.request.RepositoryID != repositoryID ||
-		runs.request.TargetName != "network" ||
+	if runs.request.TargetID != targetID ||
 		runs.request.ActionName != "preview" ||
 		runs.request.Source.Type != run.SourceTypeAPI ||
 		runs.request.IdempotencyKey == nil ||
@@ -88,7 +88,7 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if result.ID != runID || result.Phase != api.RunPhaseQueued ||
+	if result.ID != runID || result.Phase != api.RunPhaseQueued || result.TargetID != targetID ||
 		result.CatalogRevisionID != revisionID || result.Runtime != "terraform" ||
 		result.Placement != "infrastructure" || result.Cluster != "colo" ||
 		!result.CreatedAt.Equal(createdAt) || result.CreatedBy == nil ||
@@ -283,8 +283,7 @@ func TestCreateRunMapsExpectedFailures(t *testing.T) {
 			t.Parallel()
 
 			body := bytes.NewBufferString(`{
-				"repositoryId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1200",
-				"target":"network",
+				"targetId":"018f90ff-9fd8-7b5f-b7e1-f32ff54c1203",
 				"action":"preview"
 			}`)
 			request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", body)
@@ -313,6 +312,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	t.Parallel()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1204")
 	inputArtifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1210")
 	newestID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	olderID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
@@ -321,13 +321,13 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	runs := &recordingRunService{
 		listed: []run.Run{
 			{
-				ID: newestID, Phase: run.PhaseRunning, RepositoryID: repositoryID,
+				ID: newestID, Phase: run.PhaseRunning, TargetID: targetID, RepositoryID: repositoryID,
 				TargetName: "network", ActionName: "apply", ClusterName: "colo",
 				Parameters: map[string]any{}, LastObservedAt: &observedAt,
 			},
 			{
 				ID: olderID, Phase: run.PhaseFinished, Outcome: &succeeded,
-				RepositoryID: repositoryID, TargetName: "network", ActionName: "preview",
+				TargetID: targetID, RepositoryID: repositoryID, TargetName: "network", ActionName: "preview",
 				ClusterName: "colo", Parameters: map[string]any{},
 			},
 		},
@@ -343,7 +343,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		"/api/v1/runs?repositoryId="+repositoryID.String()+
 			"&commitSha=0123456789abcdef0123456789abcdef01234567"+
 			"&inputArtifactId="+inputArtifactID.String()+
-			"&target=network&cluster=colo&phase=running&limit=12&offset=4",
+			"&targetId="+targetID.String()+"&cluster=colo&phase=running&limit=12&offset=4",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -358,7 +358,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		runs.listFilter.CommitSHA != "0123456789abcdef0123456789abcdef01234567" ||
 		runs.listFilter.InputArtifactID == nil ||
 		*runs.listFilter.InputArtifactID != inputArtifactID ||
-		runs.listFilter.TargetName != "network" ||
+		runs.listFilter.TargetID == nil || *runs.listFilter.TargetID != targetID ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != run.PhaseRunning ||
 		runs.listFilter.Limit != 12 ||

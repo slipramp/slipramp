@@ -17,6 +17,7 @@ const testCommitSHA = "0123456789abcdef0123456789abcdef01234567"
 var (
 	testRepositoryID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	testRevisionID   = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
+	testTargetID     = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 )
 
 func testService(t *testing.T) (*Service, *recordingRuns) {
@@ -188,8 +189,9 @@ func (s *recordingRepositories) GetRepository(context.Context, uuid.UUID) (repos
 }
 
 type recordingCatalogs struct {
-	revision catalog.Revision
-	err      error
+	revision  catalog.Revision
+	err       error
+	targetErr error
 }
 
 type pinnedCatalogs struct {
@@ -205,6 +207,18 @@ func (s *pinnedCatalogs) GetActiveRevision(context.Context, uuid.UUID) (catalog.
 	return s.active, nil
 }
 
+func (s *pinnedCatalogs) GetTarget(
+	context.Context,
+	uuid.UUID,
+) (catalog.TargetSummary, error) {
+	return catalog.TargetSummary{
+		ID:                testTargetID,
+		RepositoryID:      testRepositoryID,
+		CatalogRevisionID: s.active.ID,
+		Target:            s.active.Catalog.Targets[0],
+	}, nil
+}
+
 func (s *pinnedCatalogs) GetRevision(_ context.Context, _ uuid.UUID, revisionID uuid.UUID) (catalog.Revision, error) {
 	s.pinnedCalls++
 	if revisionID != s.pinned.ID {
@@ -216,6 +230,26 @@ func (s *pinnedCatalogs) GetRevision(_ context.Context, _ uuid.UUID, revisionID 
 
 func (s *recordingCatalogs) GetActiveRevision(context.Context, uuid.UUID) (catalog.Revision, error) {
 	return s.revision, s.err
+}
+
+func (s *recordingCatalogs) GetTarget(
+	context.Context,
+	uuid.UUID,
+) (catalog.TargetSummary, error) {
+	if s.targetErr != nil {
+		return catalog.TargetSummary{}, s.targetErr
+	}
+	revision := s.revision
+	if len(revision.Catalog.Targets) == 0 {
+		revision = testRevision()
+	}
+
+	return catalog.TargetSummary{
+		ID:                testTargetID,
+		RepositoryID:      testRepositoryID,
+		CatalogRevisionID: revision.ID,
+		Target:            revision.Catalog.Targets[0],
+	}, nil
 }
 
 func (s *recordingCatalogs) GetRevision(context.Context, uuid.UUID, uuid.UUID) (catalog.Revision, error) {

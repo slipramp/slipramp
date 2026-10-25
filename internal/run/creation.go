@@ -30,6 +30,7 @@ type RepositoryService interface {
 }
 
 type CatalogService interface {
+	GetTarget(context.Context, uuid.UUID) (catalog.TargetSummary, error)
 	GetActiveRevision(ctx context.Context, repositoryID uuid.UUID) (catalog.Revision, error)
 	GetRevision(context.Context, uuid.UUID, uuid.UUID) (catalog.Revision, error)
 }
@@ -79,14 +80,21 @@ func (s *Service) createRun(
 		}
 	}
 
-	repositoryRecord, err := s.repositories.GetRepository(ctx, request.RepositoryID)
+	targetRecord, err := s.catalogs.GetTarget(ctx, request.TargetID)
+	if errors.Is(err, catalog.ErrTargetNotFound) || targetRecord.ArchivedAt != nil {
+		return Run{}, ErrTargetNotFound
+	}
+	if err != nil {
+		return Run{}, fmt.Errorf("get run Target: %w", err)
+	}
+
+	repositoryRecord, err := s.repositories.GetRepository(ctx, targetRecord.RepositoryID)
 	if errors.Is(err, repository.ErrNotFound) {
 		return Run{}, ErrRepositoryNotFound
 	}
 	if err != nil {
 		return Run{}, fmt.Errorf("get run repository: %w", err)
 	}
-
 	inputs, pinnedRevisionID, err := s.resolveInputCandidates(ctx, request)
 	if err != nil {
 		return Run{}, err
@@ -101,9 +109,9 @@ func (s *Service) createRun(
 
 	var revision catalog.Revision
 	if pinnedRevisionID == uuid.Nil {
-		revision, err = s.catalogs.GetActiveRevision(ctx, request.RepositoryID)
+		revision, err = s.catalogs.GetActiveRevision(ctx, targetRecord.RepositoryID)
 	} else {
-		revision, err = s.catalogs.GetRevision(ctx, request.RepositoryID, pinnedRevisionID)
+		revision, err = s.catalogs.GetRevision(ctx, targetRecord.RepositoryID, pinnedRevisionID)
 	}
 	if errors.Is(err, catalog.ErrNotFound) {
 		return Run{}, ErrCatalogNotFound
@@ -112,7 +120,7 @@ func (s *Service) createRun(
 		return Run{}, fmt.Errorf("get active run catalog: %w", err)
 	}
 
-	target, found := findTarget(revision.Catalog.Targets, request.TargetName)
+	target, found := findTarget(revision.Catalog.Targets, targetRecord.Target.Metadata.Name)
 	if !found {
 		return Run{}, ErrTargetNotFound
 	}
@@ -149,10 +157,11 @@ func (s *Service) createRun(
 	record := Run{
 		ID:                s.newID(),
 		Phase:             PhaseQueued,
-		RepositoryID:      request.RepositoryID,
+		TargetID:          targetRecord.ID,
+		RepositoryID:      targetRecord.RepositoryID,
 		CatalogRevisionID: revision.ID,
 		CommitSHA:         revision.CommitSHA,
-		TargetName:        request.TargetName,
+		TargetName:        targetRecord.Target.Metadata.Name,
 		ActionName:        request.ActionName,
 		Parameters:        parameters,
 		PlacementName:     action.Placement,
@@ -192,12 +201,8 @@ func (s *Service) createRun(
 }
 
 func validateRequest(request CreateRequest) error {
-	if request.RepositoryID == uuid.Nil {
-		return fmt.Errorf("%w: repository ID is required", ErrInvalidRequest)
-	}
-
-	if strings.TrimSpace(request.TargetName) == "" {
-		return fmt.Errorf("%w: target is required", ErrInvalidRequest)
+	if request.TargetID == uuid.Nil {
+		return fmt.Errorf("%w: Target ID is required", ErrInvalidRequest)
 	}
 
 	if strings.TrimSpace(request.ActionName) == "" {

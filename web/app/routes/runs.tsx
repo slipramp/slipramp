@@ -36,7 +36,7 @@ export function meta() {
 export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const repositoryId = optionalSearchValue(url, "repositoryId");
-  const target = repositoryId ? optionalSearchValue(url, "target") : undefined;
+  const targetId = optionalSearchValue(url, "targetId");
   const cluster = optionalSearchValue(url, "cluster");
   const phase = optionalRunPhase(url.searchParams.get("phase"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
@@ -51,7 +51,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         offset,
         phase,
         repositoryId,
-        target,
+        targetId,
       },
     }),
     listRepositories({ client, query: { limit: 200 } }),
@@ -72,7 +72,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       repositoryId,
       repositories: repositoriesResult.data?.items ?? [],
       runs: [],
-      target,
+      targetId,
       total: 0,
     };
   }
@@ -98,7 +98,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     repositoryId,
     repositories: repositoriesResult.data?.items ?? [],
     runs: initialRunsResult.data.items,
-    target,
+    targetId,
     total: initialRunsResult.data.total,
   };
 }
@@ -118,7 +118,7 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
         phase={loaderData.phase}
         repositoryId={loaderData.repositoryId}
         repositories={loaderData.repositories}
-        target={loaderData.target}
+        targetId={loaderData.targetId}
       />
 
       {!loaderData.available ? (
@@ -149,14 +149,14 @@ function HistoryFilters({
   phase,
   repositoryId,
   repositories,
-  target,
+  targetId,
 }: Readonly<{
   cluster?: string;
   clusters: Cluster[];
   phase?: Run["phase"];
   repositoryId?: string;
   repositories: Repository[];
-  target?: string;
+  targetId?: string;
 }>) {
   return (
     <SearchParamFilters
@@ -164,7 +164,6 @@ function HistoryFilters({
       filters={[
         {
           active: Boolean(repositoryId),
-          clearWhenEmpty: ["target"],
           data: [
             { label: "All repositories", value: "" },
             ...repositories.map((repository) => ({
@@ -178,13 +177,12 @@ function HistoryFilters({
           value: repositoryId,
         },
         {
-          active: Boolean(target),
-          disabled: !repositoryId,
+          active: Boolean(targetId),
           kind: "text",
-          label: "Target",
-          name: "target",
-          placeholder: "Target name",
-          value: target,
+          label: "Target ID",
+          name: "targetId",
+          placeholder: "Target UUID",
+          value: targetId,
         },
         {
           active: Boolean(cluster),
@@ -251,12 +249,7 @@ function HistoryTable({
                     {run.target} · {run.action}
                   </Anchor>
                   <Group gap="xs">
-                    <Anchor
-                      c="dimmed"
-                      component={Link}
-                      size="xs"
-                      to={`/repositories/${run.repositoryId}/targets/${encodeURIComponent(run.target)}`}
-                    >
+                    <Anchor c="dimmed" component={Link} size="xs" to={`/targets/${run.targetId}`}>
                       {repositoryNames.get(run.repositoryId) ?? shortIdentifier(run.repositoryId)}
                     </Anchor>
                     <Text c="dimmed" size="xs">

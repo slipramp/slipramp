@@ -190,9 +190,9 @@ func TestFailedGitDeliveryPaginationOrderIntegration(t *testing.T) {
 	for index, id := range ids {
 		if index > 0 {
 			_, err := database.pool.Exec(ctx, `INSERT INTO git_trigger_deliveries
-                (id, repository_id, catalog_revision_id, target_name, action_name, trigger_name,
+				(id, target_id, repository_id, catalog_revision_id, target_name, action_name, trigger_name,
                  parameters, created_at, next_attempt_at)
-                SELECT $1, repository_id, catalog_revision_id, target_name, action_name, trigger_name,
+				SELECT $1, target_id, repository_id, catalog_revision_id, target_name, action_name, trigger_name,
                        parameters, created_at, next_attempt_at FROM git_trigger_deliveries WHERE id = $2`, id, delivery.ID)
 			if err != nil {
 				t.Fatal(err)

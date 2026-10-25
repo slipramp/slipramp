@@ -25,7 +25,7 @@ CatalogRevision:
     targets:
       type: array
       items:
-        $ref: "#/Target"
+        $ref: "#/TargetDefinition"
 
 CatalogExplanation:
   type: object
@@ -670,6 +670,7 @@ TargetSummaryList:
 TargetSummary:
   type: object
   required:
+    - id
     - repositoryId
     - repositoryName
     - catalogRevisionId
@@ -678,6 +679,10 @@ TargetSummary:
     - actions
     - desiredCommit
   properties:
+    id:
+      type: string
+      format: uuid
+      description: Stable identity of the durable Target.
     repositoryId:
       type: string
       format: uuid
@@ -748,6 +753,38 @@ Runtime:
       $ref: "#/CatalogSource"
 
 Target:
+  type: object
+  required:
+    - id
+    - repositoryId
+    - repositoryName
+    - catalogRevisionId
+    - catalogCommit
+    - definition
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Stable identity of the durable Target.
+    repositoryId:
+      type: string
+      format: uuid
+    repositoryName:
+      type: string
+      minLength: 1
+    catalogRevisionId:
+      type: string
+      format: uuid
+    catalogCommit:
+      $ref: ./common.yaml#/GitCommit
+    archivedAt:
+      type: string
+      format: date-time
+      description: Present when the Target is absent from the active repository catalog.
+    definition:
+      $ref: "#/TargetDefinition"
+
+TargetDefinition:
   type: object
   required:
     - apiVersion

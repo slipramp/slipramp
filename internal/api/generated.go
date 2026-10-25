@@ -874,13 +874,13 @@ func (e RuntimeKind) Valid() bool {
 	}
 }
 
-// Defines values for TargetAPIVersion.
+// Defines values for TargetDefinitionAPIVersion.
 const (
-	TargetAPIVersionV1Alpha1 TargetAPIVersion = "slipramp.com/v1alpha1"
+	TargetAPIVersionV1Alpha1 TargetDefinitionAPIVersion = "slipramp.com/v1alpha1"
 )
 
-// Valid indicates whether the value is a known member of the TargetAPIVersion enum.
-func (e TargetAPIVersion) Valid() bool {
+// Valid indicates whether the value is a known member of the TargetDefinitionAPIVersion enum.
+func (e TargetDefinitionAPIVersion) Valid() bool {
 	switch e {
 	case TargetAPIVersionV1Alpha1:
 		return true
@@ -889,13 +889,13 @@ func (e TargetAPIVersion) Valid() bool {
 	}
 }
 
-// Defines values for TargetKind.
+// Defines values for TargetDefinitionKind.
 const (
-	TargetKindTarget TargetKind = "Target"
+	TargetKindTarget TargetDefinitionKind = "Target"
 )
 
-// Valid indicates whether the value is a known member of the TargetKind enum.
-func (e TargetKind) Valid() bool {
+// Valid indicates whether the value is a known member of the TargetDefinitionKind enum.
+func (e TargetDefinitionKind) Valid() bool {
 	switch e {
 	case TargetKindTarget:
 		return true
@@ -1184,7 +1184,7 @@ type CatalogRevision struct {
 	// ID Stable identity of the immutable catalog revision.
 	ID       openapi_types.UUID `json:"id"`
 	Runtimes []Runtime          `json:"runtimes"`
-	Targets  []Target           `json:"targets"`
+	Targets  []TargetDefinition `json:"targets"`
 }
 
 // CatalogSource defines model for CatalogSource.
@@ -2373,6 +2373,9 @@ type Run struct {
 	Source       RunSource           `json:"source"`
 	StartedAt    *time.Time          `json:"startedAt,omitempty"`
 	Target       CatalogName         `json:"target"`
+
+	// TargetID Stable identity of the durable Target selected for this Run.
+	TargetID openapi_types.UUID `json:"targetId"`
 }
 
 // RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
@@ -2520,9 +2523,8 @@ type RunCreate struct {
 	// Parameters Values for parameters declared by the selected action.
 	Parameters *map[string]ParameterValue `json:"parameters,omitempty"`
 
-	// RepositoryID Repository containing the target and action.
-	RepositoryID openapi_types.UUID `json:"repositoryId"`
-	Target       CatalogName        `json:"target"`
+	// TargetID Durable Target containing the Action.
+	TargetID openapi_types.UUID `json:"targetId"`
 }
 
 // RunList defines model for RunList.
@@ -2649,19 +2651,33 @@ type SuccessfulRenderAcknowledgement struct {
 
 // Target defines model for Target.
 type Target struct {
-	APIVersion TargetAPIVersion `json:"apiVersion"`
-	Kind       TargetKind       `json:"kind"`
-	Metadata   ResourceMetadata `json:"metadata"`
-	Source     CatalogSource    `json:"source"`
-	Spec       TargetSpec       `json:"spec"`
-	Status     TargetStatus     `json:"status"`
+	// ArchivedAt Present when the Target is absent from the active repository catalog.
+	ArchivedAt        *time.Time         `json:"archivedAt,omitempty"`
+	CatalogCommit     GitCommit          `json:"catalogCommit"`
+	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
+	Definition        TargetDefinition   `json:"definition"`
+
+	// ID Stable identity of the durable Target.
+	ID             openapi_types.UUID `json:"id"`
+	RepositoryID   openapi_types.UUID `json:"repositoryId"`
+	RepositoryName string             `json:"repositoryName"`
 }
 
-// TargetAPIVersion defines model for Target.APIVersion.
-type TargetAPIVersion string
+// TargetDefinition defines model for TargetDefinition.
+type TargetDefinition struct {
+	APIVersion TargetDefinitionAPIVersion `json:"apiVersion"`
+	Kind       TargetDefinitionKind       `json:"kind"`
+	Metadata   ResourceMetadata           `json:"metadata"`
+	Source     CatalogSource              `json:"source"`
+	Spec       TargetSpec                 `json:"spec"`
+	Status     TargetStatus               `json:"status"`
+}
 
-// TargetKind defines model for Target.Kind.
-type TargetKind string
+// TargetDefinitionAPIVersion defines model for TargetDefinition.APIVersion.
+type TargetDefinitionAPIVersion string
+
+// TargetDefinitionKind defines model for TargetDefinition.Kind.
+type TargetDefinitionKind string
 
 // TargetSpec defines model for TargetSpec.
 type TargetSpec struct {
@@ -2688,7 +2704,10 @@ type TargetSummary struct {
 	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
 
 	// DesiredCommit Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
-	DesiredCommit  GitCommit          `json:"desiredCommit"`
+	DesiredCommit GitCommit `json:"desiredCommit"`
+
+	// ID Stable identity of the durable Target.
+	ID             openapi_types.UUID `json:"id"`
 	Name           string             `json:"name"`
 	Placement      *string            `json:"placement,omitempty"`
 	RepositoryID   openapi_types.UUID `json:"repositoryId"`
@@ -2893,8 +2912,8 @@ type ListRunsParams struct {
 	// RepositoryID Limit results to one repository.
 	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
 
-	// Target Limit results to a target name within the selected repository. Requires repositoryId.
-	Target *CatalogName `form:"target,omitempty" json:"target,omitempty"`
+	// TargetID Limit results to one durable Target.
+	TargetID *openapi_types.UUID `form:"targetId,omitempty" json:"targetId,omitempty"`
 
 	// CommitSha Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
 	CommitSha *string `form:"commitSha,omitempty" json:"commitSha,omitempty"`
@@ -3465,13 +3484,6 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ExplainActiveCatalogAction Explain an Action from the active repository catalog
-	//
-	// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
-	//
-	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
-	ExplainActiveCatalogAction(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// GetCommit Get a known commit
 	//
 	// Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
@@ -3599,6 +3611,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/targets (the `ListTargets` operationId).
 	ListTargets(ctx context.Context, params *ListTargetsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTarget Get a Target
+	//
+	// Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+	//
+	// Corresponds with GET /api/v1/targets/{targetId} (the `GetTarget` operationId).
+	GetTarget(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExplainTargetAction Explain an Action from an active Target
+	//
+	// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+	//
+	// Corresponds with GET /api/v1/targets/{targetId}/actions/{actionName}/explanation (the `ExplainTargetAction` operationId).
+	ExplainTargetAction(ctx context.Context, targetID openapi_types.UUID, actionName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// EnrollControllerWithBody Enroll a cluster controller
 	//
@@ -4388,23 +4414,6 @@ func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_
 	return c.Client.Do(req)
 }
 
-// ExplainActiveCatalogAction Explain an Action from the active repository catalog
-//
-// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
-//
-// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
-func (c *Client) ExplainActiveCatalogAction(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewExplainActiveCatalogActionRequest(c.Server, repositoryID, targetName, actionName)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // GetCommit Get a known commit
 //
 // Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
@@ -4703,6 +4712,40 @@ func (c *Client) CreateServiceAccountAPIKey(ctx context.Context, principalID ope
 // Corresponds with GET /api/v1/targets (the `ListTargets` operationId).
 func (c *Client) ListTargets(ctx context.Context, params *ListTargetsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListTargetsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetTarget Get a Target
+//
+// Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+//
+// Corresponds with GET /api/v1/targets/{targetId} (the `GetTarget` operationId).
+func (c *Client) GetTarget(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTargetRequest(c.Server, targetID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExplainTargetAction Explain an Action from an active Target
+//
+// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+//
+// Corresponds with GET /api/v1/targets/{targetId}/actions/{actionName}/explanation (the `ExplainTargetAction` operationId).
+func (c *Client) ExplainTargetAction(ctx context.Context, targetID openapi_types.UUID, actionName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExplainTargetActionRequest(c.Server, targetID, actionName)
 	if err != nil {
 		return nil, err
 	}
@@ -6944,54 +6987,6 @@ func NewGetRepositoryCatalogRequest(server string, repositoryID openapi_types.UU
 	return req, nil
 }
 
-// NewExplainActiveCatalogActionRequest constructs an http.Request for the ExplainActiveCatalogAction method
-func NewExplainActiveCatalogActionRequest(server string, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "repositoryId", repositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "targetName", targetName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam2 string
-
-	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "actionName", actionName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/repositories/%s/catalog/targets/%s/actions/%s/explanation", pathParam0, pathParam1, pathParam2)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewGetCommitRequest constructs an http.Request for the GetCommit method
 func NewGetCommitRequest(server string, repositoryID openapi_types.UUID, commitSha string) (*http.Request, error) {
 	var err error
@@ -7073,9 +7068,9 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
-		if params.Target != nil {
+		if params.TargetID != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "target", *params.Target, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "targetId", *params.TargetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: "uuid"}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -7830,6 +7825,81 @@ func NewListTargetsRequest(server string, params *ListTargetsParams) (*http.Requ
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetTargetRequest constructs an http.Request for the GetTarget method
+func NewGetTargetRequest(server string, targetID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "targetId", targetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/targets/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewExplainTargetActionRequest constructs an http.Request for the ExplainTargetAction method
+func NewExplainTargetActionRequest(server string, targetID openapi_types.UUID, actionName CatalogName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "targetId", targetID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "actionName", actionName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/targets/%s/actions/%s/explanation", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -8796,15 +8866,6 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalogWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRepositoryCatalogResponse, error)
 
-	// ExplainActiveCatalogActionWithResponse Explain an Action from the active repository catalog
-	//
-	// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
-	ExplainActiveCatalogActionWithResponse(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*ExplainActiveCatalogActionResponse, error)
-
 	// GetCommitWithResponse Get a known commit
 	//
 	// Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
@@ -8952,6 +9013,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/targets (the `ListTargets` operationId).
 	ListTargetsWithResponse(ctx context.Context, params *ListTargetsParams, reqEditors ...RequestEditorFn) (*ListTargetsResponse, error)
+
+	// GetTargetWithResponse Get a Target
+	//
+	// Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/targets/{targetId} (the `GetTarget` operationId).
+	GetTargetWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetTargetResponse, error)
+
+	// ExplainTargetActionWithResponse Explain an Action from an active Target
+	//
+	// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/targets/{targetId}/actions/{actionName}/explanation (the `ExplainTargetAction` operationId).
+	ExplainTargetActionWithResponse(ctx context.Context, targetID openapi_types.UUID, actionName CatalogName, reqEditors ...RequestEditorFn) (*ExplainTargetActionResponse, error)
 
 	// EnrollControllerWithBodyWithResponse Enroll a cluster controller
 	//
@@ -11330,89 +11409,6 @@ func (r GetRepositoryCatalogResponse) ContentType() string {
 	return ""
 }
 
-type ExplainActiveCatalogActionResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *CatalogExplanation
-	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationProblemJSON400 *Problem
-	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationProblemJSON401 *Problem
-	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationProblemJSON403 *Problem
-	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
-	ApplicationProblemJSON404 *Problem
-	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
-	ApplicationProblemJSON405 *Problem
-	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationProblemJSON500 *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ExplainActiveCatalogActionResponse) GetJSON200() *CatalogExplanation {
-	return r.JSON200
-}
-
-// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON400() *Problem {
-	return r.ApplicationProblemJSON400
-}
-
-// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON401() *Problem {
-	return r.ApplicationProblemJSON401
-}
-
-// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON403() *Problem {
-	return r.ApplicationProblemJSON403
-}
-
-// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON404() *Problem {
-	return r.ApplicationProblemJSON404
-}
-
-// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
-func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON405() *Problem {
-	return r.ApplicationProblemJSON405
-}
-
-// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON500() *Problem {
-	return r.ApplicationProblemJSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r ExplainActiveCatalogActionResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ExplainActiveCatalogActionResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ExplainActiveCatalogActionResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ExplainActiveCatalogActionResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type GetCommitResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12527,6 +12523,165 @@ func (r ListTargetsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListTargetsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetTargetResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Target
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTargetResponse) GetJSON200() *Target {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetTargetResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetTargetResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetTargetResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetTargetResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetTargetResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTargetResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTargetResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTargetResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTargetResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ExplainTargetActionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *CatalogExplanation
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ExplainTargetActionResponse) GetJSON200() *CatalogExplanation {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ExplainTargetActionResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ExplainTargetActionResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ExplainTargetActionResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ExplainTargetActionResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ExplainTargetActionResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ExplainTargetActionResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ExplainTargetActionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExplainTargetActionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExplainTargetActionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExplainTargetActionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14054,21 +14209,6 @@ func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Conte
 	return ParseGetRepositoryCatalogResponse(rsp)
 }
 
-// ExplainActiveCatalogActionWithResponse Explain an Action from the active repository catalog
-//
-// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
-func (c *ClientWithResponses) ExplainActiveCatalogActionWithResponse(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*ExplainActiveCatalogActionResponse, error) {
-	rsp, err := c.ExplainActiveCatalogAction(ctx, repositoryID, targetName, actionName, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseExplainActiveCatalogActionResponse(rsp)
-}
-
 // GetCommitWithResponse Get a known commit
 //
 // Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
@@ -14323,6 +14463,36 @@ func (c *ClientWithResponses) ListTargetsWithResponse(ctx context.Context, param
 		return nil, err
 	}
 	return ParseListTargetsResponse(rsp)
+}
+
+// GetTargetWithResponse Get a Target
+//
+// Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/targets/{targetId} (the `GetTarget` operationId).
+func (c *ClientWithResponses) GetTargetWithResponse(ctx context.Context, targetID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetTargetResponse, error) {
+	rsp, err := c.GetTarget(ctx, targetID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTargetResponse(rsp)
+}
+
+// ExplainTargetActionWithResponse Explain an Action from an active Target
+//
+// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/targets/{targetId}/actions/{actionName}/explanation (the `ExplainTargetAction` operationId).
+func (c *ClientWithResponses) ExplainTargetActionWithResponse(ctx context.Context, targetID openapi_types.UUID, actionName CatalogName, reqEditors ...RequestEditorFn) (*ExplainTargetActionResponse, error) {
+	rsp, err := c.ExplainTargetAction(ctx, targetID, actionName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExplainTargetActionResponse(rsp)
 }
 
 // EnrollControllerWithBodyWithResponse Enroll a cluster controller
@@ -16488,74 +16658,6 @@ func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalo
 	return response, nil
 }
 
-// ParseExplainActiveCatalogActionResponse parses an HTTP response from a ExplainActiveCatalogActionWithResponse call
-func ParseExplainActiveCatalogActionResponse(rsp *http.Response) (*ExplainActiveCatalogActionResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ExplainActiveCatalogActionResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest CatalogExplanation
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON405 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseGetCommitResponse parses an HTTP response from a GetCommitWithResponse call
 func ParseGetCommitResponse(rsp *http.Response) (*GetCommitResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17452,6 +17554,135 @@ func ParseListTargetsResponse(rsp *http.Response) (*ListTargetsResponse, error) 
 			return nil, err
 		}
 		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetTargetResponse parses an HTTP response from a GetTargetWithResponse call
+func ParseGetTargetResponse(rsp *http.Response) (*GetTargetResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTargetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Target
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseExplainTargetActionResponse parses an HTTP response from a ExplainTargetActionWithResponse call
+func ParseExplainTargetActionResponse(rsp *http.Response) (*ExplainTargetActionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExplainTargetActionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CatalogExplanation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -18381,9 +18612,6 @@ type ServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
-	// ExplainActiveCatalogAction Explain an Action from the active repository catalog
-	// (GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation)
-	ExplainActiveCatalogAction(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName)
 	// GetCommit Get a known commit
 	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
 	GetCommit(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, commitSha string)
@@ -18426,6 +18654,12 @@ type ServerInterface interface {
 	// ListTargets List active targets
 	// (GET /api/v1/targets)
 	ListTargets(w http.ResponseWriter, r *http.Request, params ListTargetsParams)
+	// GetTarget Get a Target
+	// (GET /api/v1/targets/{targetId})
+	GetTarget(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID)
+	// ExplainTargetAction Explain an Action from an active Target
+	// (GET /api/v1/targets/{targetId}/actions/{actionName}/explanation)
+	ExplainTargetAction(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID, actionName CatalogName)
 	// EnrollController Enroll a cluster controller
 	// (POST /controller/v1/enroll)
 	EnrollController(w http.ResponseWriter, r *http.Request)
@@ -19900,50 +20134,6 @@ func (siw *ServerInterfaceWrapper) GetRepositoryCatalog(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
-// ExplainActiveCatalogAction operation middleware
-func (siw *ServerInterfaceWrapper) ExplainActiveCatalogAction(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "repositoryId" -------------
-	var repositoryID openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "targetName" -------------
-	var targetName CatalogName
-
-	err = runtime.BindStyledParameterWithOptions("simple", "targetName", r.PathValue("targetName"), &targetName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetName", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "actionName" -------------
-	var actionName CatalogName
-
-	err = runtime.BindStyledParameterWithOptions("simple", "actionName", r.PathValue("actionName"), &actionName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actionName", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ExplainActiveCatalogAction(w, r, repositoryID, targetName, actionName)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // GetCommit operation middleware
 func (siw *ServerInterfaceWrapper) GetCommit(w http.ResponseWriter, r *http.Request) {
 
@@ -20001,15 +20191,15 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// ------------- Optional query parameter "target" -------------
+	// ------------- Optional query parameter "targetId" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "target", r.URL.Query(), &params.Target, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "targetId", r.URL.Query(), &params.TargetID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "target"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "targetId"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "target", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
 		}
 		return
 	}
@@ -20600,6 +20790,67 @@ func (siw *ServerInterfaceWrapper) ListTargets(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetTarget operation middleware
+func (siw *ServerInterfaceWrapper) GetTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTarget(w, r, targetID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExplainTargetAction operation middleware
+func (siw *ServerInterfaceWrapper) ExplainTargetAction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", r.PathValue("targetId"), &targetID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "actionName" -------------
+	var actionName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "actionName", r.PathValue("actionName"), &actionName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actionName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExplainTargetAction(w, r, targetID, actionName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // EnrollController operation middleware
 func (siw *ServerInterfaceWrapper) EnrollController(w http.ResponseWriter, r *http.Request) {
 
@@ -21130,8 +21381,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/commits/{commitSha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation", wrapper.ExplainActiveCatalogAction)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets/{targetId}/actions/{actionName}/explanation", wrapper.ExplainTargetAction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets/{targetId}", wrapper.GetTarget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
@@ -24022,114 +24274,6 @@ func (response GetRepositoryCatalog500ApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
-type ExplainActiveCatalogActionRequestObject struct {
-	RepositoryID openapi_types.UUID `json:"repositoryId"`
-	TargetName   CatalogName        `json:"targetName"`
-	ActionName   CatalogName        `json:"actionName"`
-}
-
-type ExplainActiveCatalogActionResponseObject interface {
-	VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error
-}
-
-type ExplainActiveCatalogAction200JSONResponse CatalogExplanation
-
-func (response ExplainActiveCatalogAction200JSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse Problem
-
-func (response ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ExplainActiveCatalogAction401ApplicationProblemPlusJSONResponse Problem
-
-func (response ExplainActiveCatalogAction401ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ExplainActiveCatalogAction403ApplicationProblemPlusJSONResponse Problem
-
-func (response ExplainActiveCatalogAction403ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ExplainActiveCatalogAction404ApplicationProblemPlusJSONResponse Problem
-
-func (response ExplainActiveCatalogAction404ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ExplainActiveCatalogAction405ApplicationProblemPlusJSONResponse Problem
-
-func (response ExplainActiveCatalogAction405ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(405)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ExplainActiveCatalogAction500ApplicationProblemPlusJSONResponse Problem
-
-func (response ExplainActiveCatalogAction500ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type GetCommitRequestObject struct {
 	RepositoryID openapi_types.UUID `json:"repositoryId"`
 	CommitSha    string             `json:"commitSha"`
@@ -25574,6 +25718,205 @@ func (response ListTargets500ApplicationProblemPlusJSONResponse) VisitListTarget
 	return err
 }
 
+type GetTargetRequestObject struct {
+	TargetID openapi_types.UUID `json:"targetId"`
+}
+
+type GetTargetResponseObject interface {
+	VisitGetTargetResponse(w http.ResponseWriter) error
+}
+
+type GetTarget200JSONResponse Target
+
+func (response GetTarget200JSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTarget401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTarget401ApplicationProblemPlusJSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTarget403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTarget403ApplicationProblemPlusJSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTarget404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTarget404ApplicationProblemPlusJSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTarget405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTarget405ApplicationProblemPlusJSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTarget500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTarget500ApplicationProblemPlusJSONResponse) VisitGetTargetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetActionRequestObject struct {
+	TargetID   openapi_types.UUID `json:"targetId"`
+	ActionName CatalogName        `json:"actionName"`
+}
+
+type ExplainTargetActionResponseObject interface {
+	VisitExplainTargetActionResponse(w http.ResponseWriter) error
+}
+
+type ExplainTargetAction200JSONResponse CatalogExplanation
+
+func (response ExplainTargetAction200JSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetAction400ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainTargetAction400ApplicationProblemPlusJSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetAction401ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainTargetAction401ApplicationProblemPlusJSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetAction403ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainTargetAction403ApplicationProblemPlusJSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetAction404ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainTargetAction404ApplicationProblemPlusJSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetAction405ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainTargetAction405ApplicationProblemPlusJSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainTargetAction500ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainTargetAction500ApplicationProblemPlusJSONResponse) VisitExplainTargetActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type EnrollControllerRequestObject struct {
 	Body *EnrollControllerJSONRequestBody
 }
@@ -26926,9 +27269,6 @@ type StrictServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(ctx context.Context, request GetRepositoryCatalogRequestObject) (GetRepositoryCatalogResponseObject, error)
-	// ExplainActiveCatalogAction Explain an Action from the active repository catalog
-	// (GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation)
-	ExplainActiveCatalogAction(ctx context.Context, request ExplainActiveCatalogActionRequestObject) (ExplainActiveCatalogActionResponseObject, error)
 	// GetCommit Get a known commit
 	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
 	GetCommit(ctx context.Context, request GetCommitRequestObject) (GetCommitResponseObject, error)
@@ -26971,6 +27311,12 @@ type StrictServerInterface interface {
 	// ListTargets List active targets
 	// (GET /api/v1/targets)
 	ListTargets(ctx context.Context, request ListTargetsRequestObject) (ListTargetsResponseObject, error)
+	// GetTarget Get a Target
+	// (GET /api/v1/targets/{targetId})
+	GetTarget(ctx context.Context, request GetTargetRequestObject) (GetTargetResponseObject, error)
+	// ExplainTargetAction Explain an Action from an active Target
+	// (GET /api/v1/targets/{targetId}/actions/{actionName}/explanation)
+	ExplainTargetAction(ctx context.Context, request ExplainTargetActionRequestObject) (ExplainTargetActionResponseObject, error)
 	// EnrollController Enroll a cluster controller
 	// (POST /controller/v1/enroll)
 	EnrollController(ctx context.Context, request EnrollControllerRequestObject) (EnrollControllerResponseObject, error)
@@ -27854,34 +28200,6 @@ func (sh *strictHandler) GetRepositoryCatalog(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// ExplainActiveCatalogAction operation middleware
-func (sh *strictHandler) ExplainActiveCatalogAction(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName) {
-	var request ExplainActiveCatalogActionRequestObject
-
-	request.RepositoryID = repositoryID
-	request.TargetName = targetName
-	request.ActionName = actionName
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ExplainActiveCatalogAction(ctx, request.(ExplainActiveCatalogActionRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ExplainActiveCatalogAction")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ExplainActiveCatalogActionResponseObject); ok {
-		if err := validResponse.VisitExplainActiveCatalogActionResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // GetCommit operation middleware
 func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, commitSha string) {
 	var request GetCommitRequestObject
@@ -28269,6 +28587,59 @@ func (sh *strictHandler) ListTargets(w http.ResponseWriter, r *http.Request, par
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListTargetsResponseObject); ok {
 		if err := validResponse.VisitListTargetsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTarget operation middleware
+func (sh *strictHandler) GetTarget(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID) {
+	var request GetTargetRequestObject
+
+	request.TargetID = targetID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTarget(ctx, request.(GetTargetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTarget")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTargetResponseObject); ok {
+		if err := validResponse.VisitGetTargetResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExplainTargetAction operation middleware
+func (sh *strictHandler) ExplainTargetAction(w http.ResponseWriter, r *http.Request, targetID openapi_types.UUID, actionName CatalogName) {
+	var request ExplainTargetActionRequestObject
+
+	request.TargetID = targetID
+	request.ActionName = actionName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExplainTargetAction(ctx, request.(ExplainTargetActionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExplainTargetAction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExplainTargetActionResponseObject); ok {
+		if err := validResponse.VisitExplainTargetActionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

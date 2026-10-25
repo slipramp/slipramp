@@ -321,7 +321,7 @@ export type CatalogRevision = {
    */
   createdAt: string;
   runtimes: Array<Runtime>;
-  targets: Array<Target>;
+  targets: Array<TargetDefinition>;
 };
 
 export type CatalogExplanation = {
@@ -348,6 +348,10 @@ export type CatalogExplanation = {
 };
 
 export type TargetSummary = {
+  /**
+   * Stable identity of the durable Target.
+   */
+  id: string;
   repositoryId: string;
   repositoryName: string;
   catalogRevisionId: string;
@@ -371,6 +375,31 @@ export type TargetSummaryList = {
   total: number;
   limit: number;
   offset: number;
+};
+
+export type Target = {
+  /**
+   * Stable identity of the durable Target.
+   */
+  id: string;
+  repositoryId: string;
+  repositoryName: string;
+  catalogRevisionId: string;
+  catalogCommit: GitCommit;
+  /**
+   * Present when the Target is absent from the active repository catalog.
+   */
+  archivedAt?: string;
+  definition: TargetDefinition;
+};
+
+export type TargetDefinition = {
+  apiVersion: "slipramp.com/v1alpha1";
+  kind: "Target";
+  metadata: ResourceMetadata;
+  spec: TargetSpec;
+  source: CatalogSource;
+  status: TargetStatus;
 };
 
 export type Cluster = {
@@ -497,6 +526,10 @@ export type Run = {
    */
   phase: "queued" | "assigned" | "preparing" | "running" | "finished";
   /**
+   * Stable identity of the durable Target selected for this Run.
+   */
+  targetId: string;
+  /**
    * Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
    */
   observationState?: "current" | "pending" | "unknown";
@@ -584,10 +617,9 @@ export type RunList = {
 
 export type RunCreate = {
   /**
-   * Repository containing the target and action.
+   * Durable Target containing the Action.
    */
-  repositoryId: string;
-  target: CatalogName;
+  targetId: string;
   action: CatalogName;
   /**
    * Values for parameters declared by the selected action.
@@ -1047,15 +1079,6 @@ export type TargetStatus = {
    * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
    */
   desiredCommit: GitCommit;
-};
-
-export type Target = {
-  apiVersion: "slipramp.com/v1alpha1";
-  kind: "Target";
-  metadata: ResourceMetadata;
-  spec: TargetSpec;
-  source: CatalogSource;
-  status: TargetStatus;
 };
 
 export type CatalogName = string;
@@ -2253,27 +2276,23 @@ export type GetRepositoryCatalogResponses = {
 export type GetRepositoryCatalogResponse =
   GetRepositoryCatalogResponses[keyof GetRepositoryCatalogResponses];
 
-export type ExplainActiveCatalogActionData = {
+export type ExplainTargetActionData = {
   body?: never;
   path: {
     /**
-     * Stable identity of the repository registration.
+     * Stable identity of the Target.
      */
-    repositoryId: string;
-    /**
-     * Stable technical name of the Target.
-     */
-    targetName: CatalogName;
+    targetId: string;
     /**
      * Stable technical name of the Action.
      */
     actionName: CatalogName;
   };
   query?: never;
-  url: "/api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation";
+  url: "/api/v1/targets/{targetId}/actions/{actionName}/explanation";
 };
 
-export type ExplainActiveCatalogActionErrors = {
+export type ExplainTargetActionErrors = {
   /**
    * A path parameter is invalid.
    */
@@ -2287,7 +2306,7 @@ export type ExplainActiveCatalogActionErrors = {
    */
   403: Problem;
   /**
-   * The active repository catalog, Target, or Action does not exist.
+   * The active Target or Action does not exist.
    */
   404: Problem;
   /**
@@ -2300,18 +2319,17 @@ export type ExplainActiveCatalogActionErrors = {
   500: Problem;
 };
 
-export type ExplainActiveCatalogActionError =
-  ExplainActiveCatalogActionErrors[keyof ExplainActiveCatalogActionErrors];
+export type ExplainTargetActionError = ExplainTargetActionErrors[keyof ExplainTargetActionErrors];
 
-export type ExplainActiveCatalogActionResponses = {
+export type ExplainTargetActionResponses = {
   /**
    * The effective Action execution contract and provenance.
    */
   200: CatalogExplanation;
 };
 
-export type ExplainActiveCatalogActionResponse =
-  ExplainActiveCatalogActionResponses[keyof ExplainActiveCatalogActionResponses];
+export type ExplainTargetActionResponse =
+  ExplainTargetActionResponses[keyof ExplainTargetActionResponses];
 
 export type ListTargetsData = {
   body?: never;
@@ -2378,6 +2396,52 @@ export type ListTargetsResponses = {
 };
 
 export type ListTargetsResponse = ListTargetsResponses[keyof ListTargetsResponses];
+
+export type GetTargetData = {
+  body?: never;
+  path: {
+    /**
+     * Stable identity of the Target.
+     */
+    targetId: string;
+  };
+  query?: never;
+  url: "/api/v1/targets/{targetId}";
+};
+
+export type GetTargetErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The Target does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The Target could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetTargetError = GetTargetErrors[keyof GetTargetErrors];
+
+export type GetTargetResponses = {
+  /**
+   * The Target and its most recently accepted definition.
+   */
+  200: Target;
+};
+
+export type GetTargetResponse = GetTargetResponses[keyof GetTargetResponses];
 
 export type ListClustersData = {
   body?: never;
@@ -2964,9 +3028,9 @@ export type ListRunsData = {
      */
     repositoryId?: string;
     /**
-     * Limit results to a target name within the selected repository. Requires repositoryId.
+     * Limit results to one durable Target.
      */
-    target?: CatalogName;
+    targetId?: string;
     /**
      * Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
      */
@@ -3056,7 +3120,7 @@ export type CreateRunErrors = {
    */
   403: Problem;
   /**
-   * The repository, active catalog, target, action, runtime, or placement required by the request does not exist.
+   * The active Target, catalog, action, runtime, or placement required by the request does not exist.
    */
   404: Problem;
   /**

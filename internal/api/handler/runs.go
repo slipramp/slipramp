@@ -121,10 +121,6 @@ func (h *Handler) ListRuns(
 		}
 		limit = int32(*request.Params.Limit)
 	}
-	targetName := ""
-	if request.Params.Target != nil {
-		targetName = string(*request.Params.Target)
-	}
 	clusterName := ""
 	if request.Params.Cluster != nil {
 		clusterName = string(*request.Params.Cluster)
@@ -151,9 +147,9 @@ func (h *Handler) ListRuns(
 		ctx,
 		run.RunListFilter{
 			RepositoryID:    request.Params.RepositoryID,
+			TargetID:        request.Params.TargetID,
 			CommitSHA:       commitSHA,
 			InputArtifactID: request.Params.InputArtifactID,
-			TargetName:      targetName,
 			ClusterName:     clusterName,
 			Phase:           phase,
 			Limit:           limit,
@@ -196,8 +192,7 @@ func (h *Handler) CreateRun(
 	created, err := h.runs.CreateRun(
 		ctx,
 		run.CreateRequest{
-			RepositoryID:   request.Body.RepositoryID,
-			TargetName:     string(request.Body.Target),
+			TargetID:       request.Body.TargetID,
 			ActionName:     string(request.Body.Action),
 			Parameters:     parameters,
 			Inputs:         runInputs(request.Body.Inputs),
@@ -356,6 +351,7 @@ func runResponse(
 		ID:                      record.ID,
 		Phase:                   api.RunPhase(record.Phase),
 		Outcome:                 apiRunOutcome(record.Outcome),
+		TargetID:                record.TargetID,
 		RepositoryID:            record.RepositoryID,
 		CatalogRevisionID:       record.CatalogRevisionID,
 		Commit:                  commits[commitKey(record.RepositoryID, record.CommitSHA)],

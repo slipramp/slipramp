@@ -19,14 +19,13 @@ runs:
         schema:
           type: string
           format: uuid
-      - name: target
+      - name: targetId
         in: query
         required: false
-        description: >-
-          Limit results to a target name within the selected repository.
-          Requires repositoryId.
+        description: Limit results to one durable Target.
         schema:
-          $ref: ../components/runs.yaml#/CatalogName
+          type: string
+          format: uuid
       - name: commitSha
         in: query
         required: false
@@ -169,7 +168,7 @@ runs:
               $ref: ../components/common.yaml#/Problem
       "404":
         description: >-
-          The repository, active catalog, target, action, runtime, or placement
+          The active Target, catalog, action, runtime, or placement
           required by the request does not exist.
         content:
           application/problem+json:

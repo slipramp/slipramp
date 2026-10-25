@@ -175,14 +175,10 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                     </Table.Thead>
                     <Table.Tbody>
                       {loaderData.targets.map((target) => (
-                        <Table.Tr key={`${target.repositoryId}:${target.name}`}>
+                        <Table.Tr key={target.id}>
                           <Table.Td>
                             <Stack gap={0}>
-                              <Anchor
-                                component={Link}
-                                fw={600}
-                                to={`/repositories/${target.repositoryId}/targets/${encodeURIComponent(target.name)}`}
-                              >
+                              <Anchor component={Link} fw={600} to={`/targets/${target.id}`}>
                                 {target.title ?? target.name}
                               </Anchor>
                               {target.title ? (
@@ -253,7 +249,7 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                                     component={Link}
                                     key={action}
                                     leftSection={<IconPlayerPlay aria-hidden size={14} />}
-                                    to={actionRunPath(target.repositoryId, target.name, action)}
+                                    to={actionRunPath(target.id, action)}
                                   >
                                     {action}
                                   </Menu.Item>

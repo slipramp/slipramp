@@ -31,8 +31,7 @@ func TestCreateRunUsesPromotionSourceAndRequestingActor(t *testing.T) {
 	}
 
 	created, err := service.CreateRun(context.Background(), CreateRequest{
-		RepositoryID:      testRepositoryID,
-		TargetName:        "network",
+		TargetID:          testTargetID,
 		ActionName:        "sync",
 		CatalogRevisionID: &revision.ID,
 		Source: Source{
@@ -59,8 +58,7 @@ func TestCreateRunRejectsInvalidSourceMetadata(t *testing.T) {
 	revisionID := testRevisionID
 	deliveryKey := deliveryID.String()
 	base := CreateRequest{
-		RepositoryID:      testRepositoryID,
-		TargetName:        "network",
+		TargetID:          testTargetID,
 		ActionName:        "preview",
 		Parameters:        map[string]any{"mode": "safe"},
 		CatalogRevisionID: &revisionID,

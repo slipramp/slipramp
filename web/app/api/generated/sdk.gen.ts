@@ -53,9 +53,9 @@ import type {
   EnrollControllerData,
   EnrollControllerErrors,
   EnrollControllerResponses,
-  ExplainActiveCatalogActionData,
-  ExplainActiveCatalogActionErrors,
-  ExplainActiveCatalogActionResponses,
+  ExplainTargetActionData,
+  ExplainTargetActionErrors,
+  ExplainTargetActionResponses,
   FailRunLogData,
   FailRunLogErrors,
   FailRunLogResponses,
@@ -89,6 +89,9 @@ import type {
   GetServiceAccountData,
   GetServiceAccountErrors,
   GetServiceAccountResponses,
+  GetTargetData,
+  GetTargetErrors,
+  GetTargetResponses,
   ListApiKeysData,
   ListApiKeysErrors,
   ListApiKeysResponses,
@@ -547,20 +550,16 @@ export const getRepositoryCatalog = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Explain an Action from the active repository catalog
+ * Explain an Action from an active Target
  *
  * Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
  */
-export const explainActiveCatalogAction = <ThrowOnError extends boolean = false>(
-  options: Options<ExplainActiveCatalogActionData, ThrowOnError>,
-): RequestResult<
-  ExplainActiveCatalogActionResponses,
-  ExplainActiveCatalogActionErrors,
-  ThrowOnError
-> =>
+export const explainTargetAction = <ThrowOnError extends boolean = false>(
+  options: Options<ExplainTargetActionData, ThrowOnError>,
+): RequestResult<ExplainTargetActionResponses, ExplainTargetActionErrors, ThrowOnError> =>
   (options.client ?? client).get<
-    ExplainActiveCatalogActionResponses,
-    ExplainActiveCatalogActionErrors,
+    ExplainTargetActionResponses,
+    ExplainTargetActionErrors,
     ThrowOnError
   >({
     security: [
@@ -575,7 +574,7 @@ export const explainActiveCatalogAction = <ThrowOnError extends boolean = false>
         type: "http",
       },
     ],
-    url: "/api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation",
+    url: "/api/v1/targets/{targetId}/actions/{actionName}/explanation",
     ...options,
   });
 
@@ -601,6 +600,31 @@ export const listTargets = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/targets",
+    ...options,
+  });
+
+/**
+ * Get a Target
+ *
+ * Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+ */
+export const getTarget = <ThrowOnError extends boolean = false>(
+  options: Options<GetTargetData, ThrowOnError>,
+): RequestResult<GetTargetResponses, GetTargetErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetTargetResponses, GetTargetErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/targets/{targetId}",
     ...options,
   });
 

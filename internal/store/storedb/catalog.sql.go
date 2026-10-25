@@ -43,8 +43,7 @@ func (q *Queries) ActivateCatalogRevision(ctx context.Context, arg ActivateCatal
 
 const archiveMissingTargets = `-- name: ArchiveMissingTargets :exec
 UPDATE targets
-SET catalog_revision_id = NULL,
-    updated_at = $1,
+SET updated_at = $1,
     archived_at = $1
 WHERE repository_id = $2
   AND archived_at IS NULL
@@ -266,6 +265,62 @@ func (q *Queries) GetActiveCatalogRevision(ctx context.Context, repositoryID pgt
 	return i, err
 }
 
+const getActiveTargetByName = `-- name: GetActiveTargetByName :one
+SELECT
+    targets.id,
+    targets.repository_id,
+    repositories.name AS repository_name,
+    catalog_revisions.id AS catalog_revision_id,
+    catalog_revisions.commit_sha AS catalog_commit_sha,
+    targets.desired_commit_sha,
+    targets.archived_at,
+    catalog_targets.definition
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.repository_id = $1
+  AND targets.name = $2
+  AND targets.archived_at IS NULL
+  AND repositories.removed_at IS NULL
+`
+
+type GetActiveTargetByNameParams struct {
+	RepositoryID pgtype.UUID
+	Name         string
+}
+
+type GetActiveTargetByNameRow struct {
+	ID                pgtype.UUID
+	RepositoryID      pgtype.UUID
+	RepositoryName    string
+	CatalogRevisionID pgtype.UUID
+	CatalogCommitSha  string
+	DesiredCommitSha  string
+	ArchivedAt        pgtype.Timestamptz
+	Definition        []byte
+}
+
+func (q *Queries) GetActiveTargetByName(ctx context.Context, arg GetActiveTargetByNameParams) (GetActiveTargetByNameRow, error) {
+	row := q.db.QueryRow(ctx, getActiveTargetByName, arg.RepositoryID, arg.Name)
+	var i GetActiveTargetByNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.RepositoryID,
+		&i.RepositoryName,
+		&i.CatalogRevisionID,
+		&i.CatalogCommitSha,
+		&i.DesiredCommitSha,
+		&i.ArchivedAt,
+		&i.Definition,
+	)
+	return i, err
+}
+
 const getCatalogRevision = `-- name: GetCatalogRevision :one
 SELECT id, commit_sha, created_at
 FROM catalog_revisions
@@ -291,8 +346,57 @@ func (q *Queries) GetCatalogRevision(ctx context.Context, arg GetCatalogRevision
 	return i, err
 }
 
+const getTarget = `-- name: GetTarget :one
+SELECT
+    targets.id,
+    targets.repository_id,
+    repositories.name AS repository_name,
+    catalog_revisions.id AS catalog_revision_id,
+    catalog_revisions.commit_sha AS catalog_commit_sha,
+    targets.desired_commit_sha,
+    targets.archived_at,
+    catalog_targets.definition
+FROM targets
+JOIN repositories
+  ON repositories.id = targets.repository_id
+JOIN catalog_revisions
+  ON catalog_revisions.id = targets.catalog_revision_id
+JOIN catalog_targets
+  ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+ AND catalog_targets.name = targets.name
+WHERE targets.id = $1
+`
+
+type GetTargetRow struct {
+	ID                pgtype.UUID
+	RepositoryID      pgtype.UUID
+	RepositoryName    string
+	CatalogRevisionID pgtype.UUID
+	CatalogCommitSha  string
+	DesiredCommitSha  string
+	ArchivedAt        pgtype.Timestamptz
+	Definition        []byte
+}
+
+func (q *Queries) GetTarget(ctx context.Context, id pgtype.UUID) (GetTargetRow, error) {
+	row := q.db.QueryRow(ctx, getTarget, id)
+	var i GetTargetRow
+	err := row.Scan(
+		&i.ID,
+		&i.RepositoryID,
+		&i.RepositoryName,
+		&i.CatalogRevisionID,
+		&i.CatalogCommitSha,
+		&i.DesiredCommitSha,
+		&i.ArchivedAt,
+		&i.Definition,
+	)
+	return i, err
+}
+
 const listActiveTargets = `-- name: ListActiveTargets :many
 SELECT
+    targets.id,
     targets.repository_id,
     repositories.name AS repository_name,
     catalog_revisions.id AS catalog_revision_id,
@@ -358,6 +462,7 @@ type ListActiveTargetsParams struct {
 }
 
 type ListActiveTargetsRow struct {
+	ID                pgtype.UUID
 	RepositoryID      pgtype.UUID
 	RepositoryName    string
 	CatalogRevisionID pgtype.UUID
@@ -383,6 +488,7 @@ func (q *Queries) ListActiveTargets(ctx context.Context, arg ListActiveTargetsPa
 	for rows.Next() {
 		var i ListActiveTargetsRow
 		if err := rows.Scan(
+			&i.ID,
 			&i.RepositoryID,
 			&i.RepositoryName,
 			&i.CatalogRevisionID,
@@ -488,13 +594,14 @@ func (q *Queries) ListCatalogTargets(ctx context.Context, catalogRevisionID pgty
 }
 
 const listRepositoryTargetStates = `-- name: ListRepositoryTargetStates :many
-SELECT name, desired_commit_sha, archived_at
+SELECT id, name, desired_commit_sha, archived_at
 FROM targets
 WHERE repository_id = $1
 ORDER BY name
 `
 
 type ListRepositoryTargetStatesRow struct {
+	ID               pgtype.UUID
 	Name             string
 	DesiredCommitSha string
 	ArchivedAt       pgtype.Timestamptz
@@ -509,7 +616,12 @@ func (q *Queries) ListRepositoryTargetStates(ctx context.Context, repositoryID p
 	var items []ListRepositoryTargetStatesRow
 	for rows.Next() {
 		var i ListRepositoryTargetStatesRow
-		if err := rows.Scan(&i.Name, &i.DesiredCommitSha, &i.ArchivedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.DesiredCommitSha,
+			&i.ArchivedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -575,6 +687,7 @@ func (q *Queries) RecordCatalogValidationFailure(ctx context.Context, arg Record
 
 const upsertTargetState = `-- name: UpsertTargetState :exec
 INSERT INTO targets (
+    id,
     repository_id,
     name,
     catalog_revision_id,
@@ -588,7 +701,8 @@ INSERT INTO targets (
     $3,
     $4,
     $5,
-    $5,
+    $6,
+    $6,
     NULL
 )
 ON CONFLICT (repository_id, name) DO UPDATE
@@ -599,6 +713,7 @@ SET catalog_revision_id = EXCLUDED.catalog_revision_id,
 `
 
 type UpsertTargetStateParams struct {
+	ID                pgtype.UUID
 	RepositoryID      pgtype.UUID
 	Name              string
 	CatalogRevisionID pgtype.UUID
@@ -608,6 +723,7 @@ type UpsertTargetStateParams struct {
 
 func (q *Queries) UpsertTargetState(ctx context.Context, arg UpsertTargetStateParams) error {
 	_, err := q.db.Exec(ctx, upsertTargetState,
+		arg.ID,
 		arg.RepositoryID,
 		arg.Name,
 		arg.CatalogRevisionID,

@@ -96,11 +96,10 @@ type PromotionRunSource struct {
 }
 
 type CreateRequest struct {
-	RepositoryID uuid.UUID
-	TargetName   string
-	ActionName   string
-	Parameters   map[string]any
-	Inputs       map[string]uuid.UUID
+	TargetID   uuid.UUID
+	ActionName string
+	Parameters map[string]any
+	Inputs     map[string]uuid.UUID
 	// CatalogRevisionID pins internal automated requests to an immutable
 	// accepted catalog revision. HTTP-created Runs leave it unset.
 	CatalogRevisionID *uuid.UUID
@@ -124,9 +123,9 @@ type RerunRequest struct {
 
 type RunListFilter struct {
 	RepositoryID    *uuid.UUID
+	TargetID        *uuid.UUID
 	CommitSHA       string
 	InputArtifactID *uuid.UUID
-	TargetName      string
 	ClusterName     string
 	Phase           Phase
 	Limit           int32
@@ -154,6 +153,7 @@ type Run struct {
 	ID                      uuid.UUID
 	Phase                   Phase
 	Outcome                 *Outcome
+	TargetID                uuid.UUID
 	RepositoryID            uuid.UUID
 	CatalogRevisionID       uuid.UUID
 	CommitSHA               string
@@ -201,6 +201,7 @@ type ArtifactInput struct {
 	SHA256            string    `json:"sha256"`
 	Sensitive         bool      `json:"sensitive"`
 	RetentionState    string    `json:"retentionState"`
+	TargetID          uuid.UUID `json:"targetId"`
 	RepositoryID      uuid.UUID `json:"repositoryId"`
 	CatalogRevisionID uuid.UUID `json:"catalogRevisionId"`
 	CommitSHA         string    `json:"commitSha"`

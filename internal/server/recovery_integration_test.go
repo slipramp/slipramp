@@ -368,9 +368,14 @@ func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Datab
 		},
 		Inputs: map[string]run.ArtifactInput{},
 	}
+	targetRecord, err := database.GetActiveTargetByName(ctx, repositoryID, "network")
+	if err != nil {
+		t.Fatalf("get recovery Target: %v", err)
+	}
 	first := run.Run{
 		ID:                firstRunID,
 		Phase:             run.PhaseQueued,
+		TargetID:          targetRecord.ID,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
 		CommitSHA:         commitSHA,

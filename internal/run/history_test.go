@@ -21,9 +21,9 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 		context.Background(),
 		RunListFilter{
 			RepositoryID:    &repositoryID,
+			TargetID:        &testTargetID,
 			CommitSHA:       testCommitSHA,
 			InputArtifactID: &inputArtifactID,
-			TargetName:      "network",
 			ClusterName:     "colo",
 			Phase:           PhaseRunning,
 		},
@@ -39,7 +39,8 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 		runs.listFilter.CommitSHA != testCommitSHA ||
 		runs.listFilter.InputArtifactID == nil ||
 		*runs.listFilter.InputArtifactID != inputArtifactID ||
-		runs.listFilter.TargetName != "network" ||
+		runs.listFilter.TargetID == nil ||
+		*runs.listFilter.TargetID != testTargetID ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != PhaseRunning ||
 		runs.listFilter.Limit != DefaultRunListLimit {
@@ -88,11 +89,12 @@ func TestListRunsRejectsNegativeOffset(t *testing.T) {
 	}
 }
 
-func TestListRunsRejectsTargetWithoutRepository(t *testing.T) {
+func TestListRunsRejectsEmptyTargetID(t *testing.T) {
 	t.Parallel()
 
 	service, _ := testService(t)
-	_, err := service.ListRuns(context.Background(), RunListFilter{TargetName: "network"})
+	emptyID := uuid.Nil
+	_, err := service.ListRuns(context.Background(), RunListFilter{TargetID: &emptyID})
 	if !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
