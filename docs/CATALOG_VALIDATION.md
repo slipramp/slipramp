@@ -49,6 +49,11 @@ reports which referenced Placements were not checked. Deployment validation is
 offline too: the supplied `PlacementConfig` contains references and static pod
 settings, not Secret values, and the CLI never contacts Kubernetes.
 
+Operator-facing Action and Parameter titles and descriptions and Artifact
+descriptions are bounded catalog values. Action `documentationUrl` must be an
+absolute `http` or `https` URL. These fields never replace Action, Parameter,
+or Artifact map keys as technical identities.
+
 Slipramp Server always performs portable and deployment validation with its
 configured Placements. For the same checkout and `PlacementConfig`, a passing
 deployment-aware CLI result has the same acceptance result as repository

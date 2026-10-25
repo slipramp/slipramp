@@ -18,6 +18,9 @@ func renderExplanationText(output io.Writer, explanation catalog.Explanation) er
 	}
 	addExplanationValue(&lines, "Target", explanation.Target)
 	addExplanationValue(&lines, "Action", explanation.Action)
+	addExplanationValue(&lines, "Action title", explanation.ActionTitle)
+	addExplanationValue(&lines, "Action description", explanation.ActionDescription)
+	addExplanationValue(&lines, "Action documentation URL", explanation.ActionDocumentationURL)
 	addExplanationValue(&lines, "Intent", explanation.Intent)
 	addExplanationValue(&lines, "Repository mount", explanation.Process.RepositoryMount)
 	addExplanationValue(&lines, "Target path", explanation.Process.TargetPath)
@@ -60,6 +63,12 @@ func renderExplanationText(output io.Writer, explanation catalog.Explanation) er
 			state = "supplied: " + explanationJSON(parameter.Value)
 		}
 		lines = append(lines, fmt.Sprintf("Parameter %s: %s", parameter.Name, state))
+		if parameter.Declaration.Value.Title != "" {
+			lines = append(lines, "  Title: "+parameter.Declaration.Value.Title)
+		}
+		if parameter.Declaration.Value.Description != "" {
+			lines = append(lines, "  Description: "+parameter.Declaration.Value.Description)
+		}
 		addExplanationValue(&lines, "  Declaration", parameter.Declaration)
 		addExplanationValue(&lines, "  Delivery", parameter.Delivery)
 	}
@@ -74,6 +83,9 @@ func renderExplanationText(output io.Writer, explanation catalog.Explanation) er
 	}
 	for _, item := range explanation.Outputs {
 		lines = append(lines, fmt.Sprintf("Artifact output %s: producer Action %s", item.Name, item.ProducerAction))
+		if item.Artifact.Value.Description != "" {
+			lines = append(lines, "  Description: "+item.Artifact.Value.Description)
+		}
 		addExplanationValue(&lines, "  Artifact", item.Artifact)
 		for _, consumer := range item.Consumers {
 			lines = append(lines, fmt.Sprintf("  Consumer Action %s: %s", consumer.Action, consumer.MountPath))
@@ -84,6 +96,9 @@ func renderExplanationText(output io.Writer, explanation catalog.Explanation) er
 		lines = append(lines, fmt.Sprintf(
 			"Artifact input %s: producer Action %s", item.Name, item.Input.Value.Artifact.FromAction,
 		))
+		if item.Producer.Value.Description != "" {
+			lines = append(lines, "  Description: "+item.Producer.Value.Description)
+		}
 		addExplanationValue(&lines, "  Input (artifact selection required at Run creation)", item.Input)
 		addExplanationValue(&lines, "  Compatibility (pins Target, commit, and catalog revision)", item.Compatibility)
 		addExplanationValue(&lines, "  Producer output", item.Producer)

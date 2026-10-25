@@ -22,6 +22,14 @@ type ResolvedParameters struct {
 // ParseParameterValues converts CLI strings according to the Action's declared
 // types. Strings and enums remain literal, including values resembling JSON.
 func ParseParameterValues(declarations map[string]Parameter, supplied map[string]string) (map[string]any, error) {
+	return parseParameterValues(declarations, supplied, true)
+}
+
+func parseParameterValues(
+	declarations map[string]Parameter,
+	supplied map[string]string,
+	requireAll bool,
+) (map[string]any, error) {
 	values := make(map[string]any, len(supplied))
 	for _, name := range slices.Sorted(maps.Keys(supplied)) {
 		declaration, found := declarations[name]
@@ -48,14 +56,31 @@ func ParseParameterValues(declarations map[string]Parameter, supplied map[string
 		}
 	}
 
-	return NormalizeAndValidateParameterValues(declarations, values)
+	normalized, err := NormalizeParameterValues(values)
+	if err != nil {
+		return nil, err
+	}
+
+	return validateParameterValues(declarations, normalized, requireAll)
 }
 
 // ResolveParameters is shared by static explanation and Controller execution.
 // It validates the same normalized values accepted at Run creation and emits
 // arguments in lexical parameter-name order, omitting unset optional values.
 func ResolveParameters(declarations map[string]Parameter, values map[string]any) (ResolvedParameters, error) {
-	validated, err := NormalizeAndValidateParameterValues(declarations, values)
+	return resolveParameters(declarations, values, true)
+}
+
+func resolveParameters(
+	declarations map[string]Parameter,
+	values map[string]any,
+	requireAll bool,
+) (ResolvedParameters, error) {
+	normalized, err := NormalizeParameterValues(values)
+	if err != nil {
+		return ResolvedParameters{}, err
+	}
+	validated, err := validateParameterValues(declarations, normalized, requireAll)
 	if err != nil {
 		return ResolvedParameters{}, err
 	}

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	catalog "github.com/slipramp/slipramp/internal/catalog"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
@@ -90,6 +91,24 @@ const (
 func (e ArtifactInputSourceCompatibility) Valid() bool {
 	switch e {
 	case ArtifactCompatibilityExactCatalogRevision:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CatalogDiagnosticSeverity.
+const (
+	CatalogDiagnosticSeverityError   CatalogDiagnosticSeverity = "error"
+	CatalogDiagnosticSeverityWarning CatalogDiagnosticSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the CatalogDiagnosticSeverity enum.
+func (e CatalogDiagnosticSeverity) Valid() bool {
+	switch e {
+	case CatalogDiagnosticSeverityError:
+		return true
+	case CatalogDiagnosticSeverityWarning:
 		return true
 	default:
 		return false
@@ -1019,17 +1038,22 @@ type APIKeyScope = string
 
 // Action defines model for Action.
 type Action struct {
-	Artifacts   *map[string]ArtifactDeclaration `json:"artifacts,omitempty"`
-	Command     []string                        `json:"command"`
-	Credentials *map[string]string              `json:"credentials,omitempty"`
-	Inputs      *map[string]ArtifactInput       `json:"inputs,omitempty"`
-	Intent      *string                         `json:"intent,omitempty"`
-	Parameters  *map[string]Parameter           `json:"parameters,omitempty"`
-	Placement   *string                         `json:"placement,omitempty"`
-	Resources   *ResourceRequirements           `json:"resources,omitempty"`
-	Runtime     *string                         `json:"runtime,omitempty"`
-	Timeout     *string                         `json:"timeout,omitempty"`
-	Triggers    *[]ActionTrigger                `json:"triggers,omitempty"`
+	Artifacts        *map[string]ArtifactDeclaration `json:"artifacts,omitempty"`
+	Command          []string                        `json:"command"`
+	Credentials      *map[string]string              `json:"credentials,omitempty"`
+	Description      *string                         `json:"description,omitempty"`
+	DocumentationURL *string                         `json:"documentationUrl,omitempty"`
+	Inputs           *map[string]ArtifactInput       `json:"inputs,omitempty"`
+	Intent           *string                         `json:"intent,omitempty"`
+	Parameters       *map[string]Parameter           `json:"parameters,omitempty"`
+	Placement        *string                         `json:"placement,omitempty"`
+	Resources        *ResourceRequirements           `json:"resources,omitempty"`
+	Runtime          *string                         `json:"runtime,omitempty"`
+	Timeout          *string                         `json:"timeout,omitempty"`
+
+	// Title Operator-facing display title. The action map key remains its stable identity.
+	Title    *string          `json:"title,omitempty"`
+	Triggers *[]ActionTrigger `json:"triggers,omitempty"`
 }
 
 // ActionTrigger defines model for ActionTrigger.
@@ -1042,7 +1066,10 @@ type ActionTrigger struct {
 
 // Artifact defines model for Artifact.
 type Artifact struct {
-	CreatedAt      time.Time              `json:"createdAt"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Description Frozen description from the producing Action's artifact declaration.
+	Description    *string                `json:"description,omitempty"`
 	ID             openapi_types.UUID     `json:"id"`
 	Kind           ArtifactKind           `json:"kind"`
 	MediaType      string                 `json:"mediaType"`
@@ -1066,11 +1093,19 @@ type ArtifactRetentionState string
 // ArtifactState defines model for Artifact.State.
 type ArtifactState string
 
+// ArtifactConsumerExplanation defines model for ArtifactConsumerExplanation.
+type ArtifactConsumerExplanation struct {
+	Action        string          `json:"action"`
+	Compatibility ExplainedString `json:"compatibility"`
+	MountPath     string          `json:"mountPath"`
+}
+
 // ArtifactDeclaration defines model for ArtifactDeclaration.
 type ArtifactDeclaration struct {
-	MediaType *string `json:"mediaType,omitempty"`
-	Path      string  `json:"path"`
-	Sensitive *bool   `json:"sensitive,omitempty"`
+	Description *string `json:"description,omitempty"`
+	MediaType   *string `json:"mediaType,omitempty"`
+	Path        string  `json:"path"`
+	Sensitive   *bool   `json:"sensitive,omitempty"`
 }
 
 // ArtifactInput defines model for ArtifactInput.
@@ -1113,8 +1148,30 @@ type CancelRunCommand struct {
 	JobUID *string `json:"jobUid,omitempty"`
 }
 
+// CatalogDiagnostic defines model for CatalogDiagnostic.
+type CatalogDiagnostic struct {
+	Code     string                    `json:"code"`
+	Hint     *string                   `json:"hint,omitempty"`
+	Location CatalogSourceRange        `json:"location"`
+	Message  string                    `json:"message"`
+	Related  *[]CatalogRelatedLocation `json:"related,omitempty"`
+	Severity CatalogDiagnosticSeverity `json:"severity"`
+}
+
+// CatalogDiagnosticSeverity defines model for CatalogDiagnostic.Severity.
+type CatalogDiagnosticSeverity string
+
+// CatalogExplanation defines model for CatalogExplanation.
+type CatalogExplanation = catalog.Explanation
+
 // CatalogName defines model for CatalogName.
 type CatalogName = string
+
+// CatalogRelatedLocation defines model for CatalogRelatedLocation.
+type CatalogRelatedLocation struct {
+	Location CatalogSourceRange `json:"location"`
+	Message  string             `json:"message"`
+}
 
 // CatalogRevision defines model for CatalogRevision.
 type CatalogRevision struct {
@@ -1134,6 +1191,17 @@ type CatalogRevision struct {
 type CatalogSource struct {
 	Document int    `json:"document"`
 	Path     string `json:"path"`
+}
+
+// CatalogSourceRange defines model for CatalogSourceRange.
+type CatalogSourceRange struct {
+	Column    *int    `json:"column,omitempty"`
+	Document  int     `json:"document"`
+	EndColumn *int    `json:"endColumn,omitempty"`
+	EndLine   *int    `json:"endLine,omitempty"`
+	FieldPath *string `json:"fieldPath,omitempty"`
+	Line      *int    `json:"line,omitempty"`
+	Path      string  `json:"path"`
 }
 
 // Cluster defines model for Cluster.
@@ -1201,6 +1269,14 @@ type CredentialEnvironmentVariable struct {
 	Key string `json:"key"`
 }
 
+// CredentialExplanation defines model for CredentialExplanation.
+type CredentialExplanation struct {
+	Binding     ExplainedString              `json:"binding"`
+	Injection   ExplainedCredentialInjection `json:"injection"`
+	Requirement string                       `json:"requirement"`
+	Source      ExplainedCredentialSource    `json:"source"`
+}
+
 // CredentialFile defines model for CredentialFile.
 type CredentialFile struct {
 	Key  string  `json:"key"`
@@ -1216,8 +1292,117 @@ type CredentialInjection struct {
 	Files           *[]CredentialFile                         `json:"files,omitempty"`
 }
 
+// CredentialSourceExplanation defines model for CredentialSourceExplanation.
+type CredentialSourceExplanation struct {
+	SecretName string `json:"secretName"`
+}
+
 // DependencyStatus defines model for DependencyStatus.
 type DependencyStatus string
+
+// ExplainedActionTrigger defines model for ExplainedActionTrigger.
+type ExplainedActionTrigger struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            ActionTrigger       `json:"value"`
+}
+
+// ExplainedArtifact defines model for ExplainedArtifact.
+type ExplainedArtifact struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            ArtifactDeclaration `json:"value"`
+}
+
+// ExplainedArtifactInput defines model for ExplainedArtifactInput.
+type ExplainedArtifactInput struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            ArtifactInput       `json:"value"`
+}
+
+// ExplainedBoolean defines model for ExplainedBoolean.
+type ExplainedBoolean struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            bool                `json:"value"`
+}
+
+// ExplainedCredentialInjection defines model for ExplainedCredentialInjection.
+type ExplainedCredentialInjection struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            CredentialInjection `json:"value"`
+}
+
+// ExplainedCredentialSource defines model for ExplainedCredentialSource.
+type ExplainedCredentialSource struct {
+	Provenance       []ExplanationOrigin         `json:"provenance"`
+	Resolved         bool                        `json:"resolved"`
+	UnresolvedReason *string                     `json:"unresolvedReason,omitempty"`
+	Value            CredentialSourceExplanation `json:"value"`
+}
+
+// ExplainedParameter defines model for ExplainedParameter.
+type ExplainedParameter struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            Parameter           `json:"value"`
+}
+
+// ExplainedParameterDelivery defines model for ExplainedParameterDelivery.
+type ExplainedParameterDelivery struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            ParameterDelivery   `json:"value"`
+}
+
+// ExplainedResourceMetadata defines model for ExplainedResourceMetadata.
+type ExplainedResourceMetadata struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            ResourceMetadata    `json:"value"`
+}
+
+// ExplainedString defines model for ExplainedString.
+type ExplainedString struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            string              `json:"value"`
+}
+
+// ExplainedStringList defines model for ExplainedStringList.
+type ExplainedStringList struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            []string            `json:"value"`
+}
+
+// ExplainedStringMap defines model for ExplainedStringMap.
+type ExplainedStringMap struct {
+	Provenance       []ExplanationOrigin `json:"provenance"`
+	Resolved         bool                `json:"resolved"`
+	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
+	Value            *map[string]string  `json:"value"`
+}
+
+// ExplanationOrigin defines model for ExplanationOrigin.
+type ExplanationOrigin struct {
+	FieldPath string              `json:"fieldPath"`
+	Kind      string              `json:"kind"`
+	Location  *CatalogSourceRange `json:"location,omitempty"`
+	Name      string              `json:"name"`
+}
 
 // FailedGitTriggerDelivery defines model for FailedGitTriggerDelivery.
 type FailedGitTriggerDelivery struct {
@@ -1340,6 +1525,14 @@ type InboxItemKind string
 type InboxProblemAcknowledgements struct {
 	// ProblemIds Exact current problem-occurrence IDs to acknowledge.
 	ProblemIds []string `json:"problemIds"`
+}
+
+// InputExplanation defines model for InputExplanation.
+type InputExplanation struct {
+	Compatibility ExplainedString        `json:"compatibility"`
+	Input         ExplainedArtifactInput `json:"input"`
+	Name          string                 `json:"name"`
+	Producer      ExplainedArtifact      `json:"producer"`
 }
 
 // KargoPromotionCreationCommand defines model for KargoPromotionCreationCommand.
@@ -1513,13 +1706,25 @@ type NotificationDeliveryList struct {
 	Total  int                    `json:"total"`
 }
 
+// OutputExplanation defines model for OutputExplanation.
+type OutputExplanation struct {
+	Artifact       ExplainedArtifact             `json:"artifact"`
+	Consumers      []ArtifactConsumerExplanation `json:"consumers"`
+	Name           string                        `json:"name"`
+	ProducerAction string                        `json:"producerAction"`
+}
+
 // Parameter defines model for Parameter.
 type Parameter struct {
 	Argument    *ParameterArgument `json:"argument,omitempty"`
+	Description *string            `json:"description,omitempty"`
 	Environment *string            `json:"environment,omitempty"`
 	Required    *bool              `json:"required,omitempty"`
-	Type        ParameterType      `json:"type"`
-	Values      *[]string          `json:"values,omitempty"`
+
+	// Title Operator-facing form label. The parameter map key remains its stable identity.
+	Title  *string       `json:"title,omitempty"`
+	Type   ParameterType `json:"type"`
+	Values *[]string     `json:"values,omitempty"`
 }
 
 // ParameterType defines model for Parameter.Type.
@@ -1528,6 +1733,21 @@ type ParameterType string
 // ParameterArgument defines model for ParameterArgument.
 type ParameterArgument struct {
 	Name *string `json:"name,omitempty"`
+}
+
+// ParameterDelivery defines model for ParameterDelivery.
+type ParameterDelivery struct {
+	Arguments   []string          `json:"arguments"`
+	Environment map[string]string `json:"environment"`
+}
+
+// ParameterExplanation defines model for ParameterExplanation.
+type ParameterExplanation struct {
+	Declaration ExplainedParameter         `json:"declaration"`
+	Delivery    ExplainedParameterDelivery `json:"delivery"`
+	Name        string                     `json:"name"`
+	Supplied    bool                       `json:"supplied"`
+	Value       *ParameterValue            `json:"value"`
 }
 
 // ParameterValue defines model for ParameterValue.
@@ -1543,6 +1763,17 @@ type ParameterValue1 = bool
 
 // ParameterValue2 defines model for ParameterValue.2.
 type ParameterValue2 = float64
+
+// PlacementExplanation defines model for PlacementExplanation.
+type PlacementExplanation struct {
+	Cluster                ExplainedString    `json:"cluster"`
+	ConfigurationAvailable bool               `json:"configurationAvailable"`
+	Name                   ExplainedString    `json:"name"`
+	Namespace              ExplainedString    `json:"namespace"`
+	NodeSelector           ExplainedStringMap `json:"nodeSelector"`
+	PodExtensions          ExplainedBoolean   `json:"podExtensions"`
+	ServiceAccount         ExplainedString    `json:"serviceAccount"`
+}
 
 // Problem An RFC 9457 problem detail.
 type Problem struct {
@@ -1560,6 +1791,16 @@ type Problem struct {
 
 	// Type URI reference identifying the problem type.
 	Type string `json:"type"`
+}
+
+// ProcessExplanation defines model for ProcessExplanation.
+type ProcessExplanation struct {
+	Argv             ExplainedStringList        `json:"argv"`
+	Command          ExplainedStringList        `json:"command"`
+	Environment      map[string]ExplainedString `json:"environment"`
+	RepositoryMount  ExplainedString            `json:"repositoryMount"`
+	TargetPath       ExplainedString            `json:"targetPath"`
+	WorkingDirectory ExplainedString            `json:"workingDirectory"`
 }
 
 // ProductPrincipal defines model for ProductPrincipal.
@@ -2064,9 +2305,26 @@ type ResourceRequirements struct {
 	Requests *map[string]string `json:"requests,omitempty"`
 }
 
+// ResourcesExplanation defines model for ResourcesExplanation.
+type ResourcesExplanation struct {
+	Limits                    map[string]ExplainedString `json:"limits"`
+	PlacementDefaultsResolved bool                       `json:"placementDefaultsResolved"`
+	Requests                  map[string]ExplainedString `json:"requests"`
+	UnresolvedReason          *string                    `json:"unresolvedReason,omitempty"`
+}
+
 // Run defines model for Run.
 type Run struct {
 	Action CatalogName `json:"action"`
+
+	// ActionDescription Frozen operator-facing description from the selected Action.
+	ActionDescription *string `json:"actionDescription,omitempty"`
+
+	// ActionDocumentationURL Frozen documentation link from the selected Action.
+	ActionDocumentationURL *string `json:"actionDocumentationUrl,omitempty"`
+
+	// ActionTitle Frozen operator-facing title from the selected Action.
+	ActionTitle *string `json:"actionTitle,omitempty"`
 
 	// ArtifactConsumers Directly runnable actions, grouped by produced artifact name, that can consume that one artifact without other required inputs or parameters.
 	ArtifactConsumers       map[string][]RunArtifactConsumer `json:"artifactConsumers"`
@@ -2147,22 +2405,26 @@ type RunArtifactAccess struct {
 
 // RunArtifactConsumer defines model for RunArtifactConsumer.
 type RunArtifactConsumer struct {
-	Action CatalogName `json:"action"`
-	Input  CatalogName `json:"input"`
+	Action      CatalogName `json:"action"`
+	ActionTitle *string     `json:"actionTitle,omitempty"`
+	Input       CatalogName `json:"input"`
 }
 
 // RunArtifactInput defines model for RunArtifactInput.
 type RunArtifactInput struct {
-	ArtifactID        openapi_types.UUID             `json:"artifactId"`
-	CatalogRevisionID openapi_types.UUID             `json:"catalogRevisionId"`
-	Commit            GitCommit                      `json:"commit"`
-	MediaType         string                         `json:"mediaType"`
-	Name              CatalogName                    `json:"name"`
-	ProducerRunID     openapi_types.UUID             `json:"producerRunId"`
-	RetentionState    RunArtifactInputRetentionState `json:"retentionState"`
-	Sensitive         bool                           `json:"sensitive"`
-	Sha256            string                         `json:"sha256"`
-	SizeBytes         int64                          `json:"sizeBytes"`
+	ArtifactID        openapi_types.UUID `json:"artifactId"`
+	CatalogRevisionID openapi_types.UUID `json:"catalogRevisionId"`
+	Commit            GitCommit          `json:"commit"`
+
+	// Description Frozen description of the producer's artifact declaration.
+	Description    *string                        `json:"description,omitempty"`
+	MediaType      string                         `json:"mediaType"`
+	Name           CatalogName                    `json:"name"`
+	ProducerRunID  openapi_types.UUID             `json:"producerRunId"`
+	RetentionState RunArtifactInputRetentionState `json:"retentionState"`
+	Sensitive      bool                           `json:"sensitive"`
+	Sha256         string                         `json:"sha256"`
+	SizeBytes      int64                          `json:"sizeBytes"`
 }
 
 // RunArtifactInputRetentionState defines model for RunArtifactInput.RetentionState.
@@ -2338,6 +2600,14 @@ type RuntimeKind string
 // RuntimeCredential defines model for RuntimeCredential.
 type RuntimeCredential struct {
 	Inject CredentialInjection `json:"inject"`
+}
+
+// RuntimeExplanation defines model for RuntimeExplanation.
+type RuntimeExplanation struct {
+	Environment      map[string]ExplainedString `json:"environment"`
+	Image            ExplainedString            `json:"image"`
+	Name             ExplainedString            `json:"name"`
+	WorkingDirectory ExplainedString            `json:"workingDirectory"`
 }
 
 // RuntimeSpec defines model for RuntimeSpec.
@@ -3194,6 +3464,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExplainActiveCatalogAction Explain an Action from the active repository catalog
+	//
+	// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
+	ExplainActiveCatalogAction(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetCommit Get a known commit
 	//
@@ -4101,6 +4378,23 @@ func (c *Client) UpdateRepository(ctx context.Context, repositoryID openapi_type
 // Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 func (c *Client) GetRepositoryCatalog(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetRepositoryCatalogRequest(c.Server, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExplainActiveCatalogAction Explain an Action from the active repository catalog
+//
+// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
+func (c *Client) ExplainActiveCatalogAction(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExplainActiveCatalogActionRequest(c.Server, repositoryID, targetName, actionName)
 	if err != nil {
 		return nil, err
 	}
@@ -6650,6 +6944,54 @@ func NewGetRepositoryCatalogRequest(server string, repositoryID openapi_types.UU
 	return req, nil
 }
 
+// NewExplainActiveCatalogActionRequest constructs an http.Request for the ExplainActiveCatalogAction method
+func NewExplainActiveCatalogActionRequest(server string, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "repositoryId", repositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "targetName", targetName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "actionName", actionName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories/%s/catalog/targets/%s/actions/%s/explanation", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetCommitRequest constructs an http.Request for the GetCommit method
 func NewGetCommitRequest(server string, repositoryID openapi_types.UUID, commitSha string) (*http.Request, error) {
 	var err error
@@ -8453,6 +8795,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog (the `GetRepositoryCatalog` operationId).
 	GetRepositoryCatalogWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetRepositoryCatalogResponse, error)
+
+	// ExplainActiveCatalogActionWithResponse Explain an Action from the active repository catalog
+	//
+	// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
+	ExplainActiveCatalogActionWithResponse(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*ExplainActiveCatalogActionResponse, error)
 
 	// GetCommitWithResponse Get a known commit
 	//
@@ -10973,6 +11324,89 @@ func (r GetRepositoryCatalogResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetRepositoryCatalogResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ExplainActiveCatalogActionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *CatalogExplanation
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ExplainActiveCatalogActionResponse) GetJSON200() *CatalogExplanation {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ExplainActiveCatalogActionResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ExplainActiveCatalogActionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExplainActiveCatalogActionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExplainActiveCatalogActionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExplainActiveCatalogActionResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -13620,6 +14054,21 @@ func (c *ClientWithResponses) GetRepositoryCatalogWithResponse(ctx context.Conte
 	return ParseGetRepositoryCatalogResponse(rsp)
 }
 
+// ExplainActiveCatalogActionWithResponse Explain an Action from the active repository catalog
+//
+// Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation (the `ExplainActiveCatalogAction` operationId).
+func (c *ClientWithResponses) ExplainActiveCatalogActionWithResponse(ctx context.Context, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName, reqEditors ...RequestEditorFn) (*ExplainActiveCatalogActionResponse, error) {
+	rsp, err := c.ExplainActiveCatalogAction(ctx, repositoryID, targetName, actionName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExplainActiveCatalogActionResponse(rsp)
+}
+
 // GetCommitWithResponse Get a known commit
 //
 // Gets a commit known to Slipramp for an active repository. Known commits include indexed branch history and commits referenced by product state.
@@ -16039,6 +16488,74 @@ func ParseGetRepositoryCatalogResponse(rsp *http.Response) (*GetRepositoryCatalo
 	return response, nil
 }
 
+// ParseExplainActiveCatalogActionResponse parses an HTTP response from a ExplainActiveCatalogActionWithResponse call
+func ParseExplainActiveCatalogActionResponse(rsp *http.Response) (*ExplainActiveCatalogActionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExplainActiveCatalogActionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CatalogExplanation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetCommitResponse parses an HTTP response from a GetCommitWithResponse call
 func ParseGetCommitResponse(rsp *http.Response) (*GetCommitResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17864,6 +18381,9 @@ type ServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
+	// ExplainActiveCatalogAction Explain an Action from the active repository catalog
+	// (GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation)
+	ExplainActiveCatalogAction(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName)
 	// GetCommit Get a known commit
 	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
 	GetCommit(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, commitSha string)
@@ -19380,6 +19900,50 @@ func (siw *ServerInterfaceWrapper) GetRepositoryCatalog(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ExplainActiveCatalogAction operation middleware
+func (siw *ServerInterfaceWrapper) ExplainActiveCatalogAction(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "targetName" -------------
+	var targetName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetName", r.PathValue("targetName"), &targetName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetName", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "actionName" -------------
+	var actionName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "actionName", r.PathValue("actionName"), &actionName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "actionName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExplainActiveCatalogAction(w, r, repositoryID, targetName, actionName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetCommit operation middleware
 func (siw *ServerInterfaceWrapper) GetCommit(w http.ResponseWriter, r *http.Request) {
 
@@ -20566,6 +21130,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/commits/{commitSha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog", wrapper.GetRepositoryCatalog)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation", wrapper.ExplainActiveCatalogAction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
@@ -23457,6 +24022,114 @@ func (response GetRepositoryCatalog500ApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type ExplainActiveCatalogActionRequestObject struct {
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+	TargetName   CatalogName        `json:"targetName"`
+	ActionName   CatalogName        `json:"actionName"`
+}
+
+type ExplainActiveCatalogActionResponseObject interface {
+	VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error
+}
+
+type ExplainActiveCatalogAction200JSONResponse CatalogExplanation
+
+func (response ExplainActiveCatalogAction200JSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainActiveCatalogAction401ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainActiveCatalogAction401ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainActiveCatalogAction403ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainActiveCatalogAction403ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainActiveCatalogAction404ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainActiveCatalogAction404ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainActiveCatalogAction405ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainActiveCatalogAction405ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExplainActiveCatalogAction500ApplicationProblemPlusJSONResponse Problem
+
+func (response ExplainActiveCatalogAction500ApplicationProblemPlusJSONResponse) VisitExplainActiveCatalogActionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetCommitRequestObject struct {
 	RepositoryID openapi_types.UUID `json:"repositoryId"`
 	CommitSha    string             `json:"commitSha"`
@@ -26253,6 +26926,9 @@ type StrictServerInterface interface {
 	// GetRepositoryCatalog Get the active repository catalog
 	// (GET /api/v1/repositories/{repositoryId}/catalog)
 	GetRepositoryCatalog(ctx context.Context, request GetRepositoryCatalogRequestObject) (GetRepositoryCatalogResponseObject, error)
+	// ExplainActiveCatalogAction Explain an Action from the active repository catalog
+	// (GET /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation)
+	ExplainActiveCatalogAction(ctx context.Context, request ExplainActiveCatalogActionRequestObject) (ExplainActiveCatalogActionResponseObject, error)
 	// GetCommit Get a known commit
 	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
 	GetCommit(ctx context.Context, request GetCommitRequestObject) (GetCommitResponseObject, error)
@@ -27171,6 +27847,34 @@ func (sh *strictHandler) GetRepositoryCatalog(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRepositoryCatalogResponseObject); ok {
 		if err := validResponse.VisitGetRepositoryCatalogResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ExplainActiveCatalogAction operation middleware
+func (sh *strictHandler) ExplainActiveCatalogAction(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, targetName CatalogName, actionName CatalogName) {
+	var request ExplainActiveCatalogActionRequestObject
+
+	request.RepositoryID = repositoryID
+	request.TargetName = targetName
+	request.ActionName = actionName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExplainActiveCatalogAction(ctx, request.(ExplainActiveCatalogActionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExplainActiveCatalogAction")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExplainActiveCatalogActionResponseObject); ok {
+		if err := validResponse.VisitExplainActiveCatalogActionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

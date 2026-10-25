@@ -28,6 +28,8 @@ paths:
     $ref: ./paths/repositories.yaml#/repositoryCommit
   /api/v1/repositories/{repositoryId}/catalog:
     $ref: ./paths/catalog.yaml#/repositoryCatalog
+  /api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation:
+    $ref: ./paths/catalog.yaml#/actionExplanation
   /api/v1/targets:
     $ref: ./paths/catalog.yaml#/targets
   /api/v1/clusters:
@@ -187,6 +189,8 @@ components:
       $ref: ./components/repositories.yaml#/RepositoryUpdate
     CatalogRevision:
       $ref: ./components/catalog.yaml#/CatalogRevision
+    CatalogExplanation:
+      $ref: ./components/catalog.yaml#/CatalogExplanation
     TargetSummary:
       $ref: ./components/catalog.yaml#/TargetSummary
     TargetSummaryList:

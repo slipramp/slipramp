@@ -27,6 +27,622 @@ CatalogRevision:
       items:
         $ref: "#/Target"
 
+CatalogExplanation:
+  type: object
+  additionalProperties: false
+  x-go-type: catalog.Explanation
+  x-go-type-import:
+    name: catalog
+    path: github.com/slipramp/slipramp/internal/catalog
+  required:
+    - schemaVersion
+    - validationLevel
+    - target
+    - action
+    - actionTitle
+    - actionDescription
+    - actionDocumentationUrl
+    - intent
+    - process
+    - parameters
+    - runtime
+    - placement
+    - timeout
+    - resources
+    - credentials
+    - outputs
+    - inputs
+    - watch
+    - triggers
+    - diagnostics
+  properties:
+    schemaVersion:
+      type: integer
+      const: 1
+    validationLevel:
+      type: string
+      enum:
+        - portable
+        - deployment
+    target:
+      $ref: "#/ExplainedResourceMetadata"
+    action:
+      $ref: "#/ExplainedString"
+    actionTitle:
+      $ref: "#/ExplainedString"
+    actionDescription:
+      $ref: "#/ExplainedString"
+    actionDocumentationUrl:
+      $ref: "#/ExplainedString"
+    intent:
+      $ref: "#/ExplainedString"
+    process:
+      $ref: "#/ProcessExplanation"
+    parameters:
+      type: array
+      items:
+        $ref: "#/ParameterExplanation"
+    runtime:
+      $ref: "#/RuntimeExplanation"
+    placement:
+      $ref: "#/PlacementExplanation"
+    timeout:
+      $ref: "#/ExplainedString"
+    resources:
+      $ref: "#/ResourcesExplanation"
+    credentials:
+      type: array
+      items:
+        $ref: "#/CredentialExplanation"
+    outputs:
+      type: array
+      items:
+        $ref: "#/OutputExplanation"
+    inputs:
+      type: array
+      items:
+        $ref: "#/InputExplanation"
+    watch:
+      $ref: "#/ExplainedStringList"
+    triggers:
+      type: array
+      items:
+        $ref: "#/ExplainedActionTrigger"
+    diagnostics:
+      type: array
+      items:
+        $ref: "#/CatalogDiagnostic"
+
+ExplanationOrigin:
+  type: object
+  additionalProperties: false
+  required:
+    - kind
+    - name
+    - fieldPath
+  properties:
+    kind:
+      type: string
+    name:
+      type: string
+    fieldPath:
+      type: string
+    location:
+      $ref: "#/CatalogSourceRange"
+
+CatalogSourceRange:
+  type: object
+  additionalProperties: false
+  required:
+    - path
+    - document
+  properties:
+    path:
+      type: string
+    document:
+      type: integer
+      minimum: 1
+    line:
+      type: integer
+      minimum: 1
+    column:
+      type: integer
+      minimum: 1
+    endLine:
+      type: integer
+      minimum: 1
+    endColumn:
+      type: integer
+      minimum: 1
+    fieldPath:
+      type: string
+
+ExplainedString:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      type: string
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ExplainedBoolean:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      type: boolean
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ExplainedStringList:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      type: array
+      items:
+        type: string
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ExplainedStringMap:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      type:
+        - object
+        - "null"
+      additionalProperties:
+        type: string
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ExplainedResourceMetadata:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/ResourceMetadata"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ProcessExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - repositoryMount
+    - targetPath
+    - workingDirectory
+    - command
+    - argv
+    - environment
+  properties:
+    repositoryMount:
+      $ref: "#/ExplainedString"
+    targetPath:
+      $ref: "#/ExplainedString"
+    workingDirectory:
+      $ref: "#/ExplainedString"
+    command:
+      $ref: "#/ExplainedStringList"
+    argv:
+      $ref: "#/ExplainedStringList"
+    environment:
+      type: object
+      additionalProperties:
+        $ref: "#/ExplainedString"
+
+ParameterExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - declaration
+    - supplied
+    - value
+    - delivery
+  properties:
+    name:
+      type: string
+    declaration:
+      $ref: "#/ExplainedParameter"
+    supplied:
+      type: boolean
+    value:
+      oneOf:
+        - $ref: ./runs.yaml#/ParameterValue
+        - type: "null"
+    delivery:
+      $ref: "#/ExplainedParameterDelivery"
+
+ExplainedParameter:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/Parameter"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ParameterDelivery:
+  type: object
+  additionalProperties: false
+  required:
+    - arguments
+    - environment
+  properties:
+    arguments:
+      type: array
+      items:
+        type: string
+    environment:
+      type: object
+      additionalProperties:
+        type: string
+
+ExplainedParameterDelivery:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/ParameterDelivery"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+RuntimeExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - image
+    - workingDirectory
+    - environment
+  properties:
+    name:
+      $ref: "#/ExplainedString"
+    image:
+      $ref: "#/ExplainedString"
+    workingDirectory:
+      $ref: "#/ExplainedString"
+    environment:
+      type: object
+      additionalProperties:
+        $ref: "#/ExplainedString"
+
+PlacementExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - configurationAvailable
+    - cluster
+    - namespace
+    - serviceAccount
+    - nodeSelector
+    - podExtensions
+  properties:
+    name:
+      $ref: "#/ExplainedString"
+    configurationAvailable:
+      type: boolean
+    cluster:
+      $ref: "#/ExplainedString"
+    namespace:
+      $ref: "#/ExplainedString"
+    serviceAccount:
+      $ref: "#/ExplainedString"
+    nodeSelector:
+      $ref: "#/ExplainedStringMap"
+    podExtensions:
+      $ref: "#/ExplainedBoolean"
+
+ResourcesExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - requests
+    - limits
+    - placementDefaultsResolved
+  properties:
+    requests:
+      type: object
+      additionalProperties:
+        $ref: "#/ExplainedString"
+    limits:
+      type: object
+      additionalProperties:
+        $ref: "#/ExplainedString"
+    placementDefaultsResolved:
+      type: boolean
+    unresolvedReason:
+      type: string
+
+CredentialSourceExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - secretName
+  properties:
+    secretName:
+      type: string
+
+ExplainedCredentialSource:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/CredentialSourceExplanation"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ExplainedCredentialInjection:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/CredentialInjection"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+CredentialExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - requirement
+    - binding
+    - source
+    - injection
+  properties:
+    requirement:
+      type: string
+    binding:
+      $ref: "#/ExplainedString"
+    source:
+      $ref: "#/ExplainedCredentialSource"
+    injection:
+      $ref: "#/ExplainedCredentialInjection"
+
+ExplainedArtifact:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/ArtifactDeclaration"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+ArtifactConsumerExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - action
+    - mountPath
+    - compatibility
+  properties:
+    action:
+      type: string
+    mountPath:
+      type: string
+    compatibility:
+      $ref: "#/ExplainedString"
+
+OutputExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - producerAction
+    - artifact
+    - consumers
+  properties:
+    name:
+      type: string
+    producerAction:
+      type: string
+    artifact:
+      $ref: "#/ExplainedArtifact"
+    consumers:
+      type: array
+      items:
+        $ref: "#/ArtifactConsumerExplanation"
+
+ExplainedArtifactInput:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/ArtifactInput"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+InputExplanation:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - input
+    - compatibility
+    - producer
+  properties:
+    name:
+      type: string
+    input:
+      $ref: "#/ExplainedArtifactInput"
+    compatibility:
+      $ref: "#/ExplainedString"
+    producer:
+      $ref: "#/ExplainedArtifact"
+
+ExplainedActionTrigger:
+  type: object
+  additionalProperties: false
+  required:
+    - value
+    - resolved
+    - provenance
+  properties:
+    value:
+      $ref: "#/ActionTrigger"
+    resolved:
+      type: boolean
+    provenance:
+      type: array
+      items:
+        $ref: "#/ExplanationOrigin"
+    unresolvedReason:
+      type: string
+
+CatalogDiagnostic:
+  type: object
+  additionalProperties: false
+  required:
+    - code
+    - severity
+    - message
+    - location
+  properties:
+    code:
+      type: string
+    severity:
+      type: string
+      enum:
+        - error
+        - warning
+    message:
+      type: string
+    hint:
+      type: string
+    location:
+      $ref: "#/CatalogSourceRange"
+    related:
+      type: array
+      items:
+        $ref: "#/CatalogRelatedLocation"
+
+CatalogRelatedLocation:
+  type: object
+  additionalProperties: false
+  required:
+    - message
+    - location
+  properties:
+    message:
+      type: string
+    location:
+      $ref: "#/CatalogSourceRange"
+
 TargetSummaryList:
   type: object
   required:
@@ -325,6 +941,21 @@ Action:
   required:
     - command
   properties:
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Operator-facing display title. The action map key remains its stable identity.
+    description:
+      type: string
+      minLength: 1
+      maxLength: 2000
+    documentationUrl:
+      type: string
+      format: uri
+      pattern: ^https?://
+      minLength: 1
+      maxLength: 2048
     intent:
       type: string
       minLength: 1
@@ -410,6 +1041,15 @@ Parameter:
   required:
     - type
   properties:
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Operator-facing form label. The parameter map key remains its stable identity.
+    description:
+      type: string
+      minLength: 1
+      maxLength: 2000
     type:
       type: string
       enum:
@@ -446,6 +1086,10 @@ ArtifactDeclaration:
   required:
     - path
   properties:
+    description:
+      type: string
+      minLength: 1
+      maxLength: 2000
     path:
       type: string
       minLength: 1

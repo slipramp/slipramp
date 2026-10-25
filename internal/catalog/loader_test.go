@@ -43,10 +43,15 @@ spec:
     backend: terraform-backend
   actions:
     preview:
+      title: Preview network changes
+      description: Creates a Terraform plan for operator review.
+      documentationUrl: https://developer.hashicorp.com/terraform/cli/commands/plan
       intent: preview
       command: [terraform, plan]
       parameters:
         environment:
+          title: Environment
+          description: Deployment environment to preview.
           type: enum
           values: [staging, production]
           required: true
@@ -74,6 +79,7 @@ spec:
             message: reconcile
       artifacts:
         plan:
+          description: Binary Terraform execution plan.
           path: /slipramp/artifacts/plan.tfplan
           sensitive: true
 `)},
@@ -109,10 +115,17 @@ spec:
 
 	target := loaded.Targets[0]
 	preview := target.Spec.Actions["preview"]
+	environment := preview.Parameters["environment"]
 	plan := preview.Artifacts["plan"]
 	if target.Metadata.Title != "Home network" ||
 		target.Spec.Runtime != "terraform" ||
+		preview.Title != "Preview network changes" ||
+		preview.Description != "Creates a Terraform plan for operator review." ||
+		preview.DocumentationURL != "https://developer.hashicorp.com/terraform/cli/commands/plan" ||
+		environment.Title != "Environment" ||
+		environment.Description != "Deployment environment to preview." ||
 		len(preview.Command) != 2 ||
+		plan.Description != "Binary Terraform execution plan." ||
 		plan.Path != "/slipramp/artifacts/plan.tfplan" ||
 		!plan.Sensitive {
 		t.Errorf("Target = %#v", target)

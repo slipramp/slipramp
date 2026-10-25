@@ -168,6 +168,27 @@ func newTestService(metadata *serviceMetadataStore, contents *serviceContentStor
 	})
 }
 
+func TestServiceListsArtifactDescriptionsFromFrozenDeclarations(t *testing.T) {
+	t.Parallel()
+
+	metadata := &serviceMetadataStore{
+		runCluster: "colo",
+		context: RunContext{Artifacts: map[string]Declaration{
+			"plan": {Description: "Binary execution plan."},
+		}},
+		record: &Artifact{Name: "plan", Kind: KindOutput},
+	}
+	service := newTestService(metadata, &serviceContentStore{})
+
+	records, err := service.List(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 1 || records[0].Description != "Binary execution plan." {
+		t.Errorf("List() = %#v", records)
+	}
+}
+
 func (s *serviceContentStore) Put(
 	_ context.Context,
 	key string,

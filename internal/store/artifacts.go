@@ -165,8 +165,9 @@ func (d *Database) GetRunArtifactContext(ctx context.Context, runID uuid.UUID) (
 	declarations := make(map[string]artifact.Declaration, len(snapshot.Action.Artifacts))
 	for name, declaration := range snapshot.Action.Artifacts {
 		declarations[name] = artifact.Declaration{
-			MediaType: declaration.MediaType,
-			Sensitive: declaration.Sensitive,
+			Description: declaration.Description,
+			MediaType:   declaration.MediaType,
+			Sensitive:   declaration.Sensitive,
 		}
 	}
 

@@ -18,8 +18,54 @@ import (
 )
 
 type CatalogService interface {
+	ExplainActiveAction(
+		context.Context,
+		uuid.UUID,
+		string,
+		string,
+	) (catalog.Explanation, error)
 	GetActive(ctx context.Context, repositoryID uuid.UUID) (catalog.ActiveCatalog, error)
 	ListTargets(context.Context, catalog.TargetListFilter) (catalog.TargetList, error)
+}
+
+func (h *Handler) ExplainActiveCatalogAction(
+	ctx context.Context,
+	request api.ExplainActiveCatalogActionRequestObject,
+) (api.ExplainActiveCatalogActionResponseObject, error) {
+	targetName := string(request.TargetName)
+	if err := kubevalidate.DNSLabel("target name", targetName); err != nil {
+		problem := NewProblem(http.StatusBadRequest, "targetName must be a valid catalog name")
+
+		return api.ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	actionName := string(request.ActionName)
+	if err := kubevalidate.DNSLabel("action name", actionName); err != nil {
+		problem := NewProblem(http.StatusBadRequest, "actionName must be a valid catalog name")
+
+		return api.ExplainActiveCatalogAction400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+
+	explanation, err := h.catalogs.ExplainActiveAction(
+		ctx,
+		request.RepositoryID,
+		targetName,
+		actionName,
+	)
+	if errors.Is(err, catalog.ErrNotFound) ||
+		errors.Is(err, catalog.ErrTargetNotFound) ||
+		errors.Is(err, catalog.ErrActionNotFound) {
+		problem := NewProblem(
+			http.StatusNotFound,
+			"The active repository catalog, Target, or Action does not exist.",
+		)
+
+		return api.ExplainActiveCatalogAction404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.ExplainActiveCatalogAction200JSONResponse(explanation), nil
 }
 
 func (h *Handler) ListTargets(
@@ -295,17 +341,20 @@ func catalogActionsResponse(actions map[string]catalog.Action) (map[string]api.A
 		}
 
 		result[name] = api.Action{
-			Intent:      optionalString(action.Intent),
-			Command:     append([]string(nil), action.Command...),
-			Runtime:     optionalString(action.Runtime),
-			Placement:   optionalString(action.Placement),
-			Credentials: optionalStringMap(action.Credentials),
-			Timeout:     optionalString(action.Timeout),
-			Resources:   catalogResourceRequirementsResponse(action.Resources),
-			Parameters:  catalogParametersResponse(action.Parameters),
-			Artifacts:   catalogArtifactsResponse(action.Artifacts),
-			Inputs:      catalogInputsResponse(action.Inputs),
-			Triggers:    triggers,
+			Title:            optionalString(action.Title),
+			Description:      optionalString(action.Description),
+			DocumentationURL: optionalString(action.DocumentationURL),
+			Intent:           optionalString(action.Intent),
+			Command:          append([]string(nil), action.Command...),
+			Runtime:          optionalString(action.Runtime),
+			Placement:        optionalString(action.Placement),
+			Credentials:      optionalStringMap(action.Credentials),
+			Timeout:          optionalString(action.Timeout),
+			Resources:        catalogResourceRequirementsResponse(action.Resources),
+			Parameters:       catalogParametersResponse(action.Parameters),
+			Artifacts:        catalogArtifactsResponse(action.Artifacts),
+			Inputs:           catalogInputsResponse(action.Inputs),
+			Triggers:         triggers,
 		}
 	}
 
@@ -366,6 +415,8 @@ func catalogParametersResponse(parameters map[string]catalog.Parameter) *map[str
 		}
 
 		result[name] = api.Parameter{
+			Title:       optionalString(parameter.Title),
+			Description: optionalString(parameter.Description),
 			Type:        api.ParameterType(parameter.Type),
 			Required:    optionalBool(parameter.Required),
 			Values:      optionalSlice(parameter.Values),
@@ -385,9 +436,10 @@ func catalogArtifactsResponse(artifacts map[string]catalog.Artifact) *map[string
 	result := make(map[string]api.ArtifactDeclaration, len(artifacts))
 	for name, artifact := range artifacts {
 		result[name] = api.ArtifactDeclaration{
-			Path:      artifact.Path,
-			MediaType: optionalString(artifact.MediaType),
-			Sensitive: optionalBool(artifact.Sensitive),
+			Description: optionalString(artifact.Description),
+			Path:        artifact.Path,
+			MediaType:   optionalString(artifact.MediaType),
+			Sensitive:   optionalBool(artifact.Sensitive),
 		}
 	}
 

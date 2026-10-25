@@ -75,12 +75,14 @@ type Provenance struct {
 
 type Record struct {
 	Artifact
-	Provenance Provenance
+	Description string
+	Provenance  Provenance
 }
 
 type Declaration struct {
-	MediaType string
-	Sensitive bool
+	Description string
+	MediaType   string
+	Sensitive   bool
 }
 
 type RunContext struct {

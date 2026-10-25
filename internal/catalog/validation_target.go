@@ -181,6 +181,21 @@ func validateActionPortable(
 	}
 
 	add("", "catalog.action.name-invalid", kubevalidate.DNSLabel("action name", actionName))
+	add(
+		".title",
+		"catalog.action.title-invalid",
+		validatePresentationTitle(fmt.Sprintf("action %q title", actionName), action.Title),
+	)
+	add(
+		".description",
+		"catalog.action.description-invalid",
+		validatePresentationDescription(fmt.Sprintf("action %q description", actionName), action.Description),
+	)
+	add(
+		".documentationUrl",
+		"catalog.action.documentation-url-invalid",
+		validateDocumentationURL(fmt.Sprintf("action %q documentationUrl", actionName), action.DocumentationURL),
+	)
 	addFindings(validateTriggers(target, actionName, action))
 	add(".intent", "catalog.intent.invalid", validateIntent(actionName, action.Intent))
 	add(".command", "catalog.command.invalid", validateCommand(actionName, action.Command))

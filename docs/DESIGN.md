@@ -71,6 +71,11 @@ sync.
 Actions are independent executions. Multi-step procedures belong inside the
 invoked script, task runner, or container rather than a Slipramp workflow graph.
 A Run records its run source; there is no separate invocation domain resource.
+Action, Parameter, and Artifact map keys remain their stable technical identities.
+Optional Action titles, descriptions, and absolute HTTP(S) documentation links,
+Parameter titles and descriptions, and Artifact descriptions are bounded
+operator-facing presentation metadata. Runs freeze this metadata with the
+selected catalog revision so historical views do not drift.
 
 ## Repository and catalog lifecycle
 
@@ -153,13 +158,21 @@ environment, credentials by reference, artifact producer/consumer compatibility,
 watch patterns, triggers, and checkout diagnostics. Arbitrary Placement pod
 configuration and credential contents are excluded.
 
+An authenticated Server endpoint exposes that same model for an Action in an
+active repository catalog, resolved against the Server's current Placement
+configuration. The Web Action Run page uses the endpoint for its effective
+command, process, Runtime, Placement, resource, credential, artifact, and
+provenance display instead of resolving Target defaults in TypeScript. This
+read-only form-loading explanation may retain required parameters as omitted;
+it does not simulate live form values or weaken Run creation validation.
+
 CLI parameter strings are parsed against declarations, then use the Run-creation
 normalization and validation rules. Argument/environment delivery, repository
 mount/process directory resolution, and resource-map merging are shared with
-Controller execution. Explanation requires supplied values for required parameters
-but does not select artifact contents or create a Run. Both catalog commands
-remain offline: no Server/Kubernetes access, image inspection, Secret lookup,
-Job rendering, or local Action execution.
+Controller execution. CLI explanation requires supplied values for required
+parameters but does not select artifact contents or create a Run. Both catalog
+commands remain offline: no Server/Kubernetes access, image inspection, Secret
+lookup, Job rendering, or local Action execution.
 
 A valid commit creates or reuses an immutable catalog revision. An invalid
 commit records its SHA and a bounded safe diagnostic summary while the last
@@ -187,6 +200,10 @@ emit a flag only when true. Positional and environment booleans use `true` or
 `false`. Arguments append in lexical parameter-name order. Unset optional
 parameters emit nothing. Commands are explicit argument arrays; shell behavior
 must be requested explicitly.
+
+The Web uses an optional Parameter title as its form label while continuing to
+show the technical parameter name, its optional description, required state,
+and delivery convention.
 
 ### Commit browsing
 
@@ -464,6 +481,9 @@ derived from a Server HMAC key. The Harness may download only explicit input
 bindings and upload only frozen Action output names. The Server streams bytes
 to/from S3; PostgreSQL stores producing Run, name, media type, lifecycle, size,
 digest, sensitivity, object key, retention, and provenance.
+Artifact declaration descriptions are presentation metadata read from the
+frozen Run snapshot for output and input views; they do not alter artifact
+identity, compatibility, retention, or transfer behavior.
 
 Inputs explicitly select a particular retained Artifact. `fromAction` must
 name an Action that declares the input's name as an output. The supported

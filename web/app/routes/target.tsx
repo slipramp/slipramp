@@ -4,6 +4,7 @@ import {
   Anchor,
   Badge,
   Button,
+  Code,
   Group,
   Paper,
   SimpleGrid,
@@ -12,7 +13,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconPlayerPlay } from "@tabler/icons-react";
+import { IconExternalLink, IconPlayerPlay } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -303,8 +304,9 @@ function ActionAccordionItem({
           <Stack gap="xs">
             <Group gap="sm" wrap="wrap">
               <Text fw={700} size="lg">
-                {name}
+                {actionDefinition.title ?? name}
               </Text>
+              {actionDefinition.title ? <Code>{name}</Code> : null}
               {actionDefinition.intent ? (
                 <Badge variant="outline">{actionDefinition.intent}</Badge>
               ) : null}
@@ -314,6 +316,11 @@ function ActionAccordionItem({
                 </Text>
               ) : null}
             </Group>
+            {actionDefinition.description ? (
+              <Text c="dimmed" size="sm">
+                {actionDefinition.description}
+              </Text>
+            ) : null}
             <Text c="dimmed" ff="monospace" lineClamp={1} size="sm">
               {actionDefinition.command.join(" ")}
             </Text>
@@ -351,6 +358,14 @@ function ActionDetail({
 
   return (
     <Stack gap="lg">
+      {actionDefinition.documentationUrl ? (
+        <Anchor href={actionDefinition.documentationUrl} rel="noreferrer" target="_blank">
+          <Group gap={4} wrap="nowrap">
+            <span>Action documentation</span>
+            <IconExternalLink aria-hidden size={14} />
+          </Group>
+        </Anchor>
+      ) : null}
       <CommandBlock command={actionDefinition.command} />
 
       <SimpleGrid cols={{ base: 1, sm: 3 }}>
@@ -407,7 +422,7 @@ function ActionDetail({
 
       {parameters.length > 0 ? (
         <DefinitionTable
-          columns={["Parameter", "Type", "Required", "Delivery", "Allowed values"]}
+          columns={["Parameter", "Description", "Type", "Required", "Delivery", "Allowed values"]}
           rows={parameters.map(([parameterName, parameter]) =>
             parameterRow(parameterName, parameter),
           )}
@@ -416,15 +431,15 @@ function ActionDetail({
       ) : null}
       {artifacts.length > 0 ? (
         <DefinitionTable
-          columns={["Artifact", "Path", "Media type", "Sensitive"]}
+          columns={["Artifact", "Description", "Path", "Media type", "Sensitive"]}
           rows={artifacts.map(([artifactName, artifact]) => artifactRow(artifactName, artifact))}
           title="Artifacts"
         />
       ) : null}
       {inputs.length > 0 ? (
         <DefinitionTable
-          columns={["Input", "Source action", "Mount path", "Compatibility"]}
-          rows={inputs.map(([inputName, input]) => inputRow(inputName, input))}
+          columns={["Input", "Description", "Source action", "Mount path", "Compatibility"]}
+          rows={inputs.map(([inputName, input]) => inputRow(inputName, input, target))}
           title="Inputs"
         />
       ) : null}
@@ -493,7 +508,8 @@ function DefinitionTable({
 
 function parameterRow(name: string, parameter: Parameter) {
   return [
-    name,
+    parameter.title ? `${parameter.title} (${name})` : name,
+    parameter.description ?? "—",
     parameter.type,
     parameter.required ? "Yes" : "No",
     parameterDelivery(parameter),
@@ -504,15 +520,20 @@ function parameterRow(name: string, parameter: Parameter) {
 function artifactRow(name: string, artifact: ArtifactDeclaration) {
   return [
     name,
+    artifact.description ?? "—",
     artifact.path,
     artifact.mediaType ?? "Unspecified",
     artifact.sensitive ? "Yes" : "No",
   ];
 }
 
-function inputRow(name: string, input: ArtifactInput) {
+function inputRow(name: string, input: ArtifactInput, target: Target) {
+  const description =
+    target.spec.actions[input.artifact.fromAction]?.artifacts?.[name]?.description ?? "—";
+
   return [
     name,
+    description,
     input.artifact.fromAction,
     input.mountPath,
     input.artifact.compatibility ?? "exact-catalog-revision",

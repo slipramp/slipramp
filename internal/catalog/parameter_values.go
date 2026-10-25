@@ -34,6 +34,14 @@ func NormalizeParameterValues(values map[string]any) (map[string]any, error) {
 // ValidateParameterValues verifies normalized parameter values against an
 // action's declarations and returns a detached copy for durable use.
 func ValidateParameterValues(declarations map[string]Parameter, values map[string]any) (map[string]any, error) {
+	return validateParameterValues(declarations, values, true)
+}
+
+func validateParameterValues(
+	declarations map[string]Parameter,
+	values map[string]any,
+	requireAll bool,
+) (map[string]any, error) {
 	validated := make(map[string]any, len(values))
 
 	for _, name := range slices.Sorted(maps.Keys(values)) {
@@ -50,10 +58,12 @@ func ValidateParameterValues(declarations map[string]Parameter, values map[strin
 		validated[name] = value
 	}
 
-	for _, name := range slices.Sorted(maps.Keys(declarations)) {
-		if declarations[name].Required {
-			if _, supplied := validated[name]; !supplied {
-				return nil, fmt.Errorf("required parameter %q was not supplied", name)
+	if requireAll {
+		for _, name := range slices.Sorted(maps.Keys(declarations)) {
+			if declarations[name].Required {
+				if _, supplied := validated[name]; !supplied {
+					return nil, fmt.Errorf("required parameter %q was not supplied", name)
+				}
 			}
 		}
 	}

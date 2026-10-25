@@ -60,7 +60,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
-	catalogs := catalog.NewService(persistence.database)
+	catalogs := catalog.NewService(persistence.database, cfg.Placements)
 	repositories := repository.NewService(persistence.database, cfg.RepositoryRefreshCredentials)
 	runs := run.NewService(run.Dependencies{
 		Creation:      persistence.database,

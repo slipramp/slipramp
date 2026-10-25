@@ -65,6 +65,86 @@ repositoryCatalog:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+actionExplanation:
+  get:
+    operationId: explainActiveCatalogAction
+    summary: Explain an Action from the active repository catalog
+    description: >-
+      Returns the effective execution contract for one Action using the
+      Slipramp Server's current Placement configuration. Required parameters
+      may be omitted for this read-only explanation; Run creation remains
+      strict. Credential values and arbitrary Placement pod configuration are
+      never returned.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Catalog
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        description: Stable identity of the repository registration.
+        schema:
+          type: string
+          format: uuid
+      - name: targetName
+        in: path
+        required: true
+        description: Stable technical name of the Target.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: actionName
+        in: path
+        required: true
+        description: Stable technical name of the Action.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    responses:
+      "200":
+        description: The effective Action execution contract and provenance.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/catalog.yaml#/CatalogExplanation
+      "400":
+        description: A path parameter is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: >-
+          The active repository catalog, Target, or Action does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Action explanation could not be resolved.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 targets:
   get:
     operationId: listTargets

@@ -38,6 +38,7 @@ func TestRunArtifactConsumersUsesFrozenDirectlyRunnableActions(t *testing.T) {
 		},
 		Target: catalog.Target{Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
 			"apply": {
+				Title: "Apply approved plan",
 				Inputs: map[string]catalog.Input{
 					"plan": {Artifact: catalog.ArtifactReference{FromAction: "preview"}},
 				},
@@ -72,7 +73,38 @@ func TestRunArtifactConsumersUsesFrozenDirectlyRunnableActions(t *testing.T) {
 		t.Fatalf("runArtifactConsumers() = %#v", consumers)
 	}
 	if string(consumers["plan"][0].Action) != "apply" ||
+		consumers["plan"][0].ActionTitle == nil ||
+		*consumers["plan"][0].ActionTitle != "Apply approved plan" ||
 		string(consumers["plan"][1].Action) != "deploy" {
 		t.Errorf("plan consumers = %#v", consumers["plan"])
+	}
+}
+
+func TestRunInputResponseUsesFrozenProducerDescription(t *testing.T) {
+	t.Parallel()
+
+	artifactID := uuid.New()
+	snapshot := run.Snapshot{
+		Action: catalog.EffectiveAction{
+			Inputs: map[string]catalog.Input{
+				"plan": {Artifact: catalog.ArtifactReference{FromAction: "preview"}},
+			},
+		},
+		Target: catalog.Target{Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
+			"preview": {
+				Artifacts: map[string]catalog.Artifact{
+					"plan": {Description: "Binary execution plan."},
+				},
+			},
+		}}},
+		Inputs: map[string]run.ArtifactInput{
+			"plan": {ArtifactID: artifactID, Name: "plan"},
+		},
+	}
+
+	inputs := runInputResponse(snapshot, nil)
+	if inputs["plan"].ArtifactID != artifactID || inputs["plan"].Description == nil ||
+		*inputs["plan"].Description != "Binary execution plan." {
+		t.Errorf("runInputResponse() = %#v", inputs)
 	}
 }

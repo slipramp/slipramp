@@ -331,6 +331,7 @@ func artifactResponse(record artifact.Record, commit api.GitCommit) api.Artifact
 		ID:             record.ID,
 		RunID:          record.RunID,
 		Name:           api.CatalogName(record.Name),
+		Description:    optionalString(record.Description),
 		Kind:           api.ArtifactKind(record.Kind),
 		State:          api.ArtifactState(record.State),
 		MediaType:      record.MediaType,

@@ -23,6 +23,9 @@ spec:
       memory: 512Mi
   actions:
     preview:
+      title: Preview RustFS changes
+      description: Creates a Terraform plan for the RustFS bucket configuration.
+      documentationUrl: https://developer.hashicorp.com/terraform/cli/commands/plan
       intent: preview
       command: [./slipramp/node-exporter.sh, plan, exporter_nodes]
     canary:
@@ -63,10 +66,14 @@ spec:
       command: [./slipramp.sh, preview]
       artifacts:
         plan:
+          description: Binary Terraform plan consumed by the apply action.
           path: /slipramp/artifacts/plan.tfplan
           mediaType: application/vnd.hashicorp.terraform.plan
           sensitive: true
     apply:
+      title: Apply reviewed RustFS plan
+      description: Applies one explicitly selected plan from a preview Run.
+      documentationUrl: https://developer.hashicorp.com/terraform/cli/commands/apply
       intent: reconcile
       command: [./slipramp.sh, apply]
       inputs:
@@ -127,10 +134,15 @@ spec:
           argument:
             name: --to
     upgrade-node:
+      title: Upgrade one Kubernetes node
+      description: Runs the guarded upgrade procedure against one selected node.
+      documentationUrl: https://kubernetes.io/docs/tasks/administer-cluster/kubeadm/kubeadm-upgrade/
       intent: operation
       command: [./slipramp/upgrade-k8s.sh, node]
       parameters:
         host:
+          title: Node
+          description: Inventory hostname of the node to upgrade.
           type: enum
           required: true
           values:
@@ -143,10 +155,14 @@ spec:
           argument:
             name: --host
         apt-upgrade:
+          title: Upgrade operating-system packages
+          description: Includes a full apt package upgrade before rebooting.
           type: boolean
           argument:
             name: --apt-upgrade
         reboot:
+          title: Reboot node
+          description: Reboots the node as part of the guarded upgrade procedure.
           type: boolean
           argument:
             name: --reboot

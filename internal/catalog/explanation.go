@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -25,23 +26,26 @@ type ExplainedValue[T any] struct {
 }
 
 type Explanation struct {
-	SchemaVersion int                       `json:"schemaVersion"`
-	Level         ValidationLevel           `json:"validationLevel"`
-	Target        ExplainedValue[Metadata]  `json:"target"`
-	Action        ExplainedValue[string]    `json:"action"`
-	Intent        ExplainedValue[string]    `json:"intent"`
-	Process       ProcessExplanation        `json:"process"`
-	Parameters    []ParameterExplanation    `json:"parameters"`
-	Runtime       RuntimeExplanation        `json:"runtime"`
-	Placement     PlacementExplanation      `json:"placement"`
-	Timeout       ExplainedValue[string]    `json:"timeout"`
-	Resources     ResourcesExplanation      `json:"resources"`
-	Credentials   []CredentialExplanation   `json:"credentials"`
-	Outputs       []OutputExplanation       `json:"outputs"`
-	Inputs        []InputExplanation        `json:"inputs"`
-	Watch         ExplainedValue[[]string]  `json:"watch"`
-	Triggers      []ExplainedValue[Trigger] `json:"triggers"`
-	Diagnostics   Diagnostics               `json:"diagnostics"`
+	SchemaVersion          int                       `json:"schemaVersion"`
+	Level                  ValidationLevel           `json:"validationLevel"`
+	Target                 ExplainedValue[Metadata]  `json:"target"`
+	Action                 ExplainedValue[string]    `json:"action"`
+	ActionTitle            ExplainedValue[string]    `json:"actionTitle"`
+	ActionDescription      ExplainedValue[string]    `json:"actionDescription"`
+	ActionDocumentationURL ExplainedValue[string]    `json:"actionDocumentationUrl"`
+	Intent                 ExplainedValue[string]    `json:"intent"`
+	Process                ProcessExplanation        `json:"process"`
+	Parameters             []ParameterExplanation    `json:"parameters"`
+	Runtime                RuntimeExplanation        `json:"runtime"`
+	Placement              PlacementExplanation      `json:"placement"`
+	Timeout                ExplainedValue[string]    `json:"timeout"`
+	Resources              ResourcesExplanation      `json:"resources"`
+	Credentials            []CredentialExplanation   `json:"credentials"`
+	Outputs                []OutputExplanation       `json:"outputs"`
+	Inputs                 []InputExplanation        `json:"inputs"`
+	Watch                  ExplainedValue[[]string]  `json:"watch"`
+	Triggers               []ExplainedValue[Trigger] `json:"triggers"`
+	Diagnostics            Diagnostics               `json:"diagnostics"`
 }
 
 type ProcessExplanation struct {
@@ -118,11 +122,34 @@ type InputExplanation struct {
 
 const missingPlacementReason = "installation configuration not supplied; deployment checks skipped"
 
+var (
+	ErrTargetNotFound = errors.New("target not found")
+	ErrActionNotFound = errors.New("action not found")
+)
+
+type ExplanationOptions struct {
+	// AllowOmittedRequiredParameters permits an inspection response before a
+	// caller has completed a parameter form. Supplied values remain fully
+	// validated. Run creation and the default Explain method remain strict.
+	AllowOmittedRequiredParameters bool
+}
+
 // Explain resolves a single Action from a successfully processed catalog. It
 // never reads credential contents or includes arbitrary Placement pod values.
 func (r Result) Explain(
 	targetName, actionName string,
 	supplied map[string]string,
+) (Explanation, error) {
+	return r.ExplainWithOptions(targetName, actionName, supplied, ExplanationOptions{})
+}
+
+// ExplainWithOptions resolves a single Action from a successfully processed
+// catalog. It never reads credential contents or includes arbitrary Placement
+// pod values.
+func (r Result) ExplainWithOptions(
+	targetName, actionName string,
+	supplied map[string]string,
+	options ExplanationOptions,
 ) (Explanation, error) {
 	if r.Diagnostics.HasErrors() {
 		return Explanation{}, fmt.Errorf("catalog is invalid: %s", r.Diagnostics.ErrorSummary())
@@ -136,11 +163,16 @@ func (r Result) Explain(
 		}
 	}
 	if !found {
-		return Explanation{}, fmt.Errorf("unknown Target %q", targetName)
+		return Explanation{}, fmt.Errorf("unknown Target %q: %w", targetName, ErrTargetNotFound)
 	}
 	action, found := target.EffectiveAction(actionName)
 	if !found {
-		return Explanation{}, fmt.Errorf("unknown Action %q on Target %q", actionName, targetName)
+		return Explanation{}, fmt.Errorf(
+			"unknown Action %q on Target %q: %w",
+			actionName,
+			targetName,
+			ErrActionNotFound,
+		)
 	}
 	var runtime Runtime
 	for _, candidate := range r.Catalog.Runtimes {
@@ -150,11 +182,12 @@ func (r Result) Explain(
 		}
 	}
 
-	values, err := ParseParameterValues(action.Parameters, supplied)
+	requireAll := !options.AllowOmittedRequiredParameters
+	values, err := parseParameterValues(action.Parameters, supplied, requireAll)
 	if err != nil {
 		return Explanation{}, err
 	}
-	parameters, err := ResolveParameters(action.Parameters, values)
+	parameters, err := resolveParameters(action.Parameters, values, requireAll)
 	if err != nil {
 		return Explanation{}, err
 	}
@@ -251,11 +284,14 @@ func (b explanationBuilder) explain(r Result, parameters ResolvedParameters, cfg
 		environment[name] = explained(value, b.runtimeOrigin("environment."+name))
 	}
 	result := Explanation{
-		SchemaVersion: 1,
-		Level:         r.Level,
-		Target:        explained(b.target.Metadata, b.targetOrigin("metadata")),
-		Action:        explained(b.action.Name, b.actionOrigin("")),
-		Intent:        explained(b.action.Intent, b.actionOrigin(".intent")),
+		SchemaVersion:          1,
+		Level:                  r.Level,
+		Target:                 explained(b.target.Metadata, b.targetOrigin("metadata")),
+		Action:                 explained(b.action.Name, b.actionOrigin("")),
+		ActionTitle:            explained(b.action.Title, b.actionOrigin(".title")),
+		ActionDescription:      explained(b.action.Description, b.actionOrigin(".description")),
+		ActionDocumentationURL: explained(b.action.DocumentationURL, b.actionOrigin(".documentationUrl")),
+		Intent:                 explained(b.action.Intent, b.actionOrigin(".intent")),
 		Runtime: RuntimeExplanation{
 			Name: runtimeName, Image: explained(b.runtime.Spec.Image, b.runtimeOrigin("image")),
 			WorkingDirectory: explained(mount, mountOrigin), Environment: environment,

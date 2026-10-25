@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
@@ -130,6 +131,89 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 				input.Targets[0].Spec.Actions["apply"] = action
 			},
 			wantError: "mountPath conflicts with artifact",
+		},
+	}
+
+	runValidationTests(t, tests)
+}
+
+func TestValidateOperatorFacingMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []validationTest{
+		{
+			name: "complete",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Title = "Preview infrastructure"
+				action.Description = "Shows the proposed infrastructure changes."
+				action.DocumentationURL = "https://docs.example.com/actions/preview"
+				action.Parameters = map[string]catalog.Parameter{
+					"environment": {
+						Title:       "Environment",
+						Description: "Environment to inspect.",
+						Type:        catalog.ParameterTypeString,
+						Argument:    &catalog.ParameterArgument{},
+					},
+				}
+				action.Artifacts = map[string]catalog.Artifact{
+					"plan": {Description: "Portable execution plan.", Path: "/artifacts/plan"},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+		},
+		{
+			name: "multiline action title",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Title = "Preview\nchanges"
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: "must be a single line",
+		},
+		{
+			name: "action description too long",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Description = strings.Repeat("x", catalog.PresentationDescriptionMaxLength+1)
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: "must not exceed 2000 characters",
+		},
+		{
+			name: "relative documentation URL",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.DocumentationURL = "/docs/preview"
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: "must be an absolute HTTP or HTTPS URL",
+		},
+		{
+			name: "parameter title too long",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Parameters = map[string]catalog.Parameter{
+					"environment": {
+						Title:    strings.Repeat("x", catalog.PresentationTitleMaxLength+1),
+						Type:     catalog.ParameterTypeString,
+						Argument: &catalog.ParameterArgument{},
+					},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: "must not exceed 200 characters",
+		},
+		{
+			name: "artifact description whitespace",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Artifacts = map[string]catalog.Artifact{
+					"plan": {Description: " plan output", Path: "/artifacts/plan"},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: "must not have leading or trailing whitespace",
 		},
 	}
 

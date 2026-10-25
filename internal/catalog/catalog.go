@@ -94,17 +94,20 @@ type TargetSpec struct {
 }
 
 type Action struct {
-	Intent      string               `json:"intent,omitempty"      yaml:"intent,omitempty"`
-	Command     []string             `json:"command"               yaml:"command"`
-	Runtime     string               `json:"runtime,omitempty"     yaml:"runtime,omitempty"`
-	Placement   string               `json:"placement,omitempty"   yaml:"placement,omitempty"`
-	Credentials map[string]string    `json:"credentials,omitempty" yaml:"credentials,omitempty"`
-	Timeout     string               `json:"timeout,omitempty"     yaml:"timeout,omitempty"`
-	Resources   ResourceRequirements `json:"resources,omitzero"    yaml:"resources,omitempty"`
-	Parameters  map[string]Parameter `json:"parameters,omitempty"  yaml:"parameters,omitempty"`
-	Artifacts   map[string]Artifact  `json:"artifacts,omitempty"   yaml:"artifacts,omitempty"`
-	Inputs      map[string]Input     `json:"inputs,omitempty"      yaml:"inputs,omitempty"`
-	Triggers    []Trigger            `json:"triggers,omitempty"    yaml:"triggers,omitempty"`
+	Title            string               `json:"title,omitempty"            yaml:"title,omitempty"`
+	Description      string               `json:"description,omitempty"      yaml:"description,omitempty"`
+	DocumentationURL string               `json:"documentationUrl,omitempty" yaml:"documentationUrl,omitempty"`
+	Intent           string               `json:"intent,omitempty"           yaml:"intent,omitempty"`
+	Command          []string             `json:"command"                    yaml:"command"`
+	Runtime          string               `json:"runtime,omitempty"          yaml:"runtime,omitempty"`
+	Placement        string               `json:"placement,omitempty"        yaml:"placement,omitempty"`
+	Credentials      map[string]string    `json:"credentials,omitempty"      yaml:"credentials,omitempty"`
+	Timeout          string               `json:"timeout,omitempty"          yaml:"timeout,omitempty"`
+	Resources        ResourceRequirements `json:"resources,omitzero"         yaml:"resources,omitempty"`
+	Parameters       map[string]Parameter `json:"parameters,omitempty"       yaml:"parameters,omitempty"`
+	Artifacts        map[string]Artifact  `json:"artifacts,omitempty"        yaml:"artifacts,omitempty"`
+	Inputs           map[string]Input     `json:"inputs,omitempty"           yaml:"inputs,omitempty"`
+	Triggers         []Trigger            `json:"triggers,omitempty"         yaml:"triggers,omitempty"`
 }
 
 // Trigger declares one named source of automatic action Runs.
@@ -124,6 +127,8 @@ type ResourceRequirements struct {
 }
 
 type Parameter struct {
+	Title       string             `json:"title,omitempty"       yaml:"title,omitempty"`
+	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
 	Type        string             `json:"type"                  yaml:"type"`
 	Required    bool               `json:"required,omitempty"    yaml:"required,omitempty"`
 	Values      []string           `json:"values,omitempty"      yaml:"values,omitempty"`
@@ -136,9 +141,10 @@ type ParameterArgument struct {
 }
 
 type Artifact struct {
-	Path      string `json:"path"                yaml:"path"`
-	MediaType string `json:"mediaType,omitempty" yaml:"mediaType,omitempty"`
-	Sensitive bool   `json:"sensitive,omitempty" yaml:"sensitive,omitempty"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	Path        string `json:"path"                  yaml:"path"`
+	MediaType   string `json:"mediaType,omitempty"   yaml:"mediaType,omitempty"`
+	Sensitive   bool   `json:"sensitive,omitempty"   yaml:"sensitive,omitempty"`
 }
 
 type Input struct {

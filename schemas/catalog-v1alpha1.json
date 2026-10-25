@@ -223,6 +223,26 @@
               "additionalProperties": {
                 "type": "object",
                 "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "Operator-facing display title; the action map key remains the stable identity.",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Operator-facing description of the action.",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "documentationUrl": {
+                    "type": "string",
+                    "description": "Absolute HTTP or HTTPS operator documentation URL.",
+                    "minLength": 1,
+                    "maxLength": 2048,
+                    "pattern": "^https?://",
+                    "format": "uri"
+                  },
                   "intent": {
                     "type": "string"
                   },
@@ -273,6 +293,18 @@
                     "additionalProperties": {
                       "type": "object",
                       "properties": {
+                        "title": {
+                          "type": "string",
+                          "description": "Operator-facing form label; the parameter map key remains the stable identity.",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "description": {
+                          "type": "string",
+                          "description": "Operator-facing parameter guidance.",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
                         "type": {
                           "type": "string"
                         },
@@ -315,6 +347,12 @@
                     "additionalProperties": {
                       "type": "object",
                       "properties": {
+                        "description": {
+                          "type": "string",
+                          "description": "Operator-facing description of the artifact contents.",
+                          "minLength": 1,
+                          "maxLength": 2000
+                        },
                         "path": {
                           "type": "string"
                         },

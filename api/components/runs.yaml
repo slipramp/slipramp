@@ -143,6 +143,23 @@ Run:
       $ref: "#/CatalogName"
     action:
       $ref: "#/CatalogName"
+    actionTitle:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Frozen operator-facing title from the selected Action.
+    actionDescription:
+      type: string
+      minLength: 1
+      maxLength: 2000
+      description: Frozen operator-facing description from the selected Action.
+    actionDocumentationUrl:
+      type: string
+      format: uri
+      pattern: ^https?://
+      minLength: 1
+      maxLength: 2048
+      description: Frozen documentation link from the selected Action.
     parameters:
       type: object
       additionalProperties:
@@ -238,6 +255,11 @@ RunArtifactInput:
       format: uuid
     name:
       $ref: "#/CatalogName"
+    description:
+      type: string
+      minLength: 1
+      maxLength: 2000
+      description: Frozen description of the producer's artifact declaration.
     mediaType:
       type: string
       minLength: 1
@@ -270,6 +292,10 @@ RunArtifactConsumer:
   properties:
     action:
       $ref: "#/CatalogName"
+    actionTitle:
+      type: string
+      minLength: 1
+      maxLength: 200
     input:
       $ref: "#/CatalogName"
 

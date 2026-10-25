@@ -15,6 +15,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
 func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
@@ -61,11 +62,23 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 						Placement: "infrastructure",
 						Actions: map[string]catalog.Action{
 							"preview": {
-								Intent:  "preview",
-								Command: []string{"terraform", "plan"},
+								Title:            "Preview changes",
+								Description:      "Creates a Terraform plan.",
+								DocumentationURL: "https://docs.example.com/actions/preview",
+								Intent:           "preview",
+								Command:          []string{"terraform", "plan"},
+								Parameters: map[string]catalog.Parameter{
+									"workspace": {
+										Title:       "Workspace",
+										Description: "Terraform workspace to preview.",
+										Type:        catalog.ParameterTypeString,
+										Argument:    &catalog.ParameterArgument{},
+									},
+								},
 								Artifacts: map[string]catalog.Artifact{
 									"plan": {
-										Path: "plan.tfplan",
+										Description: "Binary Terraform execution plan.",
+										Path:        "plan.tfplan",
 									},
 								},
 							},
@@ -116,6 +129,167 @@ func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 		len(body.Targets[0].Spec.Actions["preview"].Command) != 2 ||
 		body.Targets[0].Spec.Actions["preview"].Artifacts == nil {
 		t.Errorf("catalog targets = %#v", body.Targets)
+	}
+	preview := body.Targets[0].Spec.Actions["preview"]
+	if preview.Title == nil || *preview.Title != "Preview changes" ||
+		preview.Description == nil || *preview.Description != "Creates a Terraform plan." ||
+		preview.DocumentationURL == nil ||
+		*preview.DocumentationURL != "https://docs.example.com/actions/preview" ||
+		preview.Parameters == nil || (*preview.Parameters)["workspace"].Title == nil ||
+		*(*preview.Parameters)["workspace"].Title != "Workspace" ||
+		preview.Artifacts == nil || (*preview.Artifacts)["plan"].Description == nil ||
+		*(*preview.Artifacts)["plan"].Description != "Binary Terraform execution plan." {
+		t.Errorf("catalog operator metadata = %#v", preview)
+	}
+}
+
+func TestExplainActiveCatalogActionReturnsAuthoritativeExplanation(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	catalogs := &recordingCatalogService{
+		explanation: catalog.Explanation{
+			SchemaVersion: 1,
+			Level:         catalog.ValidationLevelDeployment,
+			Process: catalog.ProcessExplanation{
+				WorkingDirectory: catalog.ExplainedValue[string]{
+					Value:    "/workspace/infrastructure/network",
+					Resolved: true,
+				},
+			},
+			Runtime: catalog.RuntimeExplanation{
+				Image: catalog.ExplainedValue[string]{Value: "example.com/tools:1", Resolved: true},
+			},
+			Placement: catalog.PlacementExplanation{
+				Cluster: catalog.ExplainedValue[string]{Value: "colo", Resolved: true},
+			},
+		},
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/repositories/"+repositoryID.String()+
+			"/catalog/targets/network/actions/preview/explanation",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).
+		ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if catalogs.explainCalls != 1 || catalogs.repositoryID != repositoryID ||
+		catalogs.targetName != "network" || catalogs.actionName != "preview" {
+		t.Errorf(
+			"explanation request = (%d, %s, %q, %q)",
+			catalogs.explainCalls,
+			catalogs.repositoryID,
+			catalogs.targetName,
+			catalogs.actionName,
+		)
+	}
+
+	var body catalog.Explanation
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.Level != catalog.ValidationLevelDeployment ||
+		body.Process.WorkingDirectory.Value != "/workspace/infrastructure/network" ||
+		body.Runtime.Image.Value != "example.com/tools:1" ||
+		body.Placement.Cluster.Value != "colo" {
+		t.Errorf("explanation = %#v", body)
+	}
+}
+
+func TestExplainActiveCatalogActionRequiresProductAuthentication(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	catalogs := &recordingCatalogService{}
+	httpHandler := NewHTTP(
+		Dependencies{
+			Catalogs: catalogs,
+			ProductAuthentication: &recordingProductAuthenticationService{
+				authenticationErr: productidentity.ErrUnauthenticated,
+			},
+		},
+		HTTPOptions{},
+	)
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/repositories/"+repositoryID.String()+
+			"/catalog/targets/network/actions/preview/explanation",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	httpHandler.ServeHTTP(response, request)
+
+	assertProblem(t, response, http.StatusUnauthorized)
+	if catalogs.explainCalls != 0 {
+		t.Errorf("explanation calls = %d, want 0", catalogs.explainCalls)
+	}
+}
+
+func TestExplainActiveCatalogActionMapsExpectedFailures(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	tests := []struct {
+		name       string
+		path       string
+		err        error
+		wantStatus int
+		wantCalls  int
+	}{
+		{
+			name:       "invalid repository identity",
+			path:       "/api/v1/repositories/not-a-uuid/catalog/targets/network/actions/preview/explanation",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "invalid target name",
+			path: "/api/v1/repositories/" + repositoryID.String() +
+				"/catalog/targets/INVALID/actions/preview/explanation",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "missing action",
+			path: "/api/v1/repositories/" + repositoryID.String() +
+				"/catalog/targets/network/actions/missing/explanation",
+			err:        catalog.ErrActionNotFound,
+			wantStatus: http.StatusNotFound,
+			wantCalls:  1,
+		},
+		{
+			name: "persistence failure",
+			path: "/api/v1/repositories/" + repositoryID.String() +
+				"/catalog/targets/network/actions/preview/explanation",
+			err:        errors.New("database unavailable"),
+			wantStatus: http.StatusInternalServerError,
+			wantCalls:  1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			catalogs := &recordingCatalogService{explainErr: test.err}
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, test.path, nil)
+			response := httptest.NewRecorder()
+
+			newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).
+				ServeHTTP(response, request)
+
+			assertProblem(t, response, test.wantStatus)
+			if catalogs.explainCalls != test.wantCalls {
+				t.Errorf("explanation calls = %d, want %d", catalogs.explainCalls, test.wantCalls)
+			}
+		})
 	}
 }
 
@@ -279,13 +453,32 @@ func TestGetRepositoryCatalogMapsExpectedFailures(t *testing.T) {
 
 type recordingCatalogService struct {
 	calls        int
+	explainCalls int
 	repositoryID uuid.UUID
+	targetName   string
+	actionName   string
 	revision     catalog.Revision
 	targetStates map[string]catalog.TargetState
 	err          error
+	explanation  catalog.Explanation
+	explainErr   error
 	listCalls    int
 	filter       catalog.TargetListFilter
 	targets      catalog.TargetList
+}
+
+func (s *recordingCatalogService) ExplainActiveAction(
+	_ context.Context,
+	repositoryID uuid.UUID,
+	targetName string,
+	actionName string,
+) (catalog.Explanation, error) {
+	s.explainCalls++
+	s.repositoryID = repositoryID
+	s.targetName = targetName
+	s.actionName = actionName
+
+	return s.explanation, s.explainErr
 }
 
 func (s *recordingCatalogService) GetActive(

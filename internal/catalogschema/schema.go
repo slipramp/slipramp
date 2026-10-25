@@ -58,8 +58,43 @@ func resourceSchema[T any](kind string) (*jsonschema.Schema, error) {
 	resource.Title = kind
 	resource.Properties["apiVersion"].Const = constant(catalog.APIVersion)
 	resource.Properties["kind"].Const = constant(kind)
+	if kind == catalog.TargetKind {
+		configurePresentationMetadata(resource)
+	}
 
 	return resource, nil
+}
+
+func configurePresentationMetadata(resource *jsonschema.Schema) {
+	action := resource.Properties["spec"].Properties["actions"].AdditionalProperties
+	action.Properties["title"].Description =
+		"Operator-facing display title; the action map key remains the stable identity."
+	action.Properties["description"].Description = "Operator-facing description of the action."
+	action.Properties["documentationUrl"].Description =
+		"Absolute HTTP or HTTPS operator documentation URL."
+	boundedString(action.Properties["title"], catalog.PresentationTitleMaxLength)
+	boundedString(action.Properties["description"], catalog.PresentationDescriptionMaxLength)
+	documentationURL := action.Properties["documentationUrl"]
+	boundedString(documentationURL, catalog.DocumentationURLMaxLength)
+	documentationURL.Format = "uri"
+	documentationURL.Pattern = `^https?://`
+
+	parameter := action.Properties["parameters"].AdditionalProperties
+	parameter.Properties["title"].Description =
+		"Operator-facing form label; the parameter map key remains the stable identity."
+	parameter.Properties["description"].Description = "Operator-facing parameter guidance."
+	boundedString(parameter.Properties["title"], catalog.PresentationTitleMaxLength)
+	boundedString(parameter.Properties["description"], catalog.PresentationDescriptionMaxLength)
+
+	artifact := action.Properties["artifacts"].AdditionalProperties
+	artifact.Properties["description"].Description = "Operator-facing description of the artifact contents."
+	boundedString(artifact.Properties["description"], catalog.PresentationDescriptionMaxLength)
+}
+
+func boundedString(schema *jsonschema.Schema, maximum int) {
+	minimum := 1
+	schema.MinLength = &minimum
+	schema.MaxLength = &maximum
 }
 
 func constant(value string) *any {

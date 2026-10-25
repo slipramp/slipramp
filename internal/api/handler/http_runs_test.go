@@ -41,6 +41,11 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 			PlacementName:     "infrastructure",
 			ClusterName:       "colo",
 			Snapshot: run.Snapshot{
+				Action: catalog.EffectiveAction{
+					Title:            "Preview changes",
+					Description:      "Creates a Terraform plan.",
+					DocumentationURL: "https://docs.example.com/actions/preview",
+				},
 				Runtime: catalog.Runtime{Metadata: catalog.Metadata{Name: "terraform"}},
 			},
 			Source: run.Source{Type: run.SourceTypeAPI},
@@ -88,7 +93,11 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		result.Placement != "infrastructure" || result.Cluster != "colo" ||
 		!result.CreatedAt.Equal(createdAt) || result.CreatedBy == nil ||
 		result.CreatedBy.PrincipalID != principalID ||
-		result.CreatedBy.DisplayName != "Ada Lovelace" {
+		result.CreatedBy.DisplayName != "Ada Lovelace" ||
+		result.ActionTitle == nil || *result.ActionTitle != "Preview changes" ||
+		result.ActionDescription == nil || *result.ActionDescription != "Creates a Terraform plan." ||
+		result.ActionDocumentationURL == nil ||
+		*result.ActionDocumentationURL != "https://docs.example.com/actions/preview" {
 		t.Errorf("Run response = %#v", result)
 	}
 	mode, err := result.Parameters["mode"].AsParameterValue0()

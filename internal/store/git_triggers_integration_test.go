@@ -133,7 +133,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 		t.Fatalf("placement.NewSet() error = %v", err)
 	}
 	repositories := repository.NewService(database, repository.RefreshCredentials{})
-	catalogs := catalog.NewService(database)
+	catalogs := catalog.NewService(database, placement.Set{})
 	runs := run.NewService(run.Dependencies{
 		Creation:      database,
 		History:       database,
@@ -667,7 +667,7 @@ func newGitTriggerTestServices(
 		t.Fatalf("placement.NewSet() error = %v", err)
 	}
 	repositories := repository.NewService(database, repository.RefreshCredentials{})
-	catalogs := catalog.NewService(database)
+	catalogs := catalog.NewService(database, placement.Set{})
 	runs := run.NewService(run.Dependencies{
 		Creation:      database,
 		History:       database,

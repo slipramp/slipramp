@@ -21,6 +21,11 @@ Artifact:
       format: uuid
     name:
       $ref: ./runs.yaml#/CatalogName
+    description:
+      type: string
+      minLength: 1
+      maxLength: 2000
+      description: Frozen description from the producing Action's artifact declaration.
     kind:
       type: string
       enum:

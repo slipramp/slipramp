@@ -6,18 +6,21 @@ import "maps"
 // applied. Maps and slices are copied so callers can safely freeze or modify a
 // resolved action without changing the loaded catalog.
 type EffectiveAction struct {
-	Name        string
-	Intent      string
-	Command     []string
-	Runtime     string
-	Placement   string
-	Credentials map[string]string
-	Timeout     string
-	Resources   ResourceRequirements
-	Parameters  map[string]Parameter
-	Artifacts   map[string]Artifact
-	Inputs      map[string]Input
-	Triggers    []Trigger
+	Name             string
+	Title            string
+	Description      string
+	DocumentationURL string
+	Intent           string
+	Command          []string
+	Runtime          string
+	Placement        string
+	Credentials      map[string]string
+	Timeout          string
+	Resources        ResourceRequirements
+	Parameters       map[string]Parameter
+	Artifacts        map[string]Artifact
+	Inputs           map[string]Input
+	Triggers         []Trigger
 }
 
 func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
@@ -48,18 +51,21 @@ func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
 	maps.Copy(credentials, action.Credentials)
 
 	return EffectiveAction{
-		Name:        name,
-		Intent:      action.Intent,
-		Command:     append([]string(nil), action.Command...),
-		Runtime:     runtimeName,
-		Placement:   placementName,
-		Credentials: credentials,
-		Timeout:     timeout,
-		Resources:   MergeResources(t.Spec.Resources, action.Resources),
-		Parameters:  cloneParameters(action.Parameters),
-		Artifacts:   maps.Clone(action.Artifacts),
-		Inputs:      cloneInputs(action.Inputs),
-		Triggers:    cloneTriggers(action.Triggers),
+		Name:             name,
+		Title:            action.Title,
+		Description:      action.Description,
+		DocumentationURL: action.DocumentationURL,
+		Intent:           action.Intent,
+		Command:          append([]string(nil), action.Command...),
+		Runtime:          runtimeName,
+		Placement:        placementName,
+		Credentials:      credentials,
+		Timeout:          timeout,
+		Resources:        MergeResources(t.Spec.Resources, action.Resources),
+		Parameters:       cloneParameters(action.Parameters),
+		Artifacts:        maps.Clone(action.Artifacts),
+		Inputs:           cloneInputs(action.Inputs),
+		Triggers:         cloneTriggers(action.Triggers),
 	}, true
 }
 

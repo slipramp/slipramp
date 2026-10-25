@@ -3,6 +3,7 @@ package catalog_test
 import (
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -22,6 +23,19 @@ func TestExplainPortableDefaultsAndParameters(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertExplained(t, explanation.Runtime.Name, "tools", "target-default")
+	assertExplained(t, explanation.ActionTitle, "Preview changes", "action-declaration")
+	assertExplained(
+		t,
+		explanation.ActionDescription,
+		"Creates an execution plan for review.",
+		"action-declaration",
+	)
+	assertExplained(
+		t,
+		explanation.ActionDocumentationURL,
+		"https://docs.example.com/actions/plan",
+		"action-declaration",
+	)
 	assertExplained(t, explanation.Timeout, "45m", "target-default")
 	assertExplained(t, explanation.Runtime.Image, "example.com/tools:1", "runtime-declaration")
 	assertExplained(t, explanation.Process.RepositoryMount, "/repository", "runtime-declaration")
@@ -43,6 +57,10 @@ func TestExplainPortableDefaultsAndParameters(t *testing.T) {
 	}
 	if explanation.Parameters[0].Delivery.Provenance[1].Kind != "cli-parameter" {
 		t.Errorf("parameter provenance = %#v", explanation.Parameters[0])
+	}
+	if explanation.Parameters[0].Declaration.Value.Title != "Force refresh" ||
+		explanation.Parameters[0].Declaration.Value.Description != "Replace cached provider data." {
+		t.Errorf("parameter metadata = %#v", explanation.Parameters[0].Declaration.Value)
 	}
 	if explanation.Placement.ConfigurationAvailable || explanation.Placement.Cluster.Resolved ||
 		explanation.Placement.Namespace.Resolved || explanation.Placement.ServiceAccount.Resolved ||
@@ -68,6 +86,7 @@ func TestExplainPortableDefaultsAndParameters(t *testing.T) {
 		t.Errorf("watch/triggers = %#v, %#v", explanation.Watch, explanation.Triggers)
 	}
 	if len(explanation.Outputs) != 1 || explanation.Outputs[0].ProducerAction != "plan" ||
+		explanation.Outputs[0].Artifact.Value.Description != "Serialized execution plan." ||
 		len(explanation.Outputs[0].Consumers) != 1 || explanation.Outputs[0].Consumers[0].Action != "apply" {
 		t.Fatalf("outputs = %#v", explanation.Outputs)
 	}
@@ -192,6 +211,50 @@ func TestExplainRejectsInvalidSelectionAndParameters(t *testing.T) {
 	}
 }
 
+func TestExplainWithOptionsAllowsOmittedRequiredParameters(t *testing.T) {
+	t.Parallel()
+
+	result := processExplanationCatalog(t, nil)
+	explanation, err := result.ExplainWithOptions(
+		"network",
+		"plan",
+		nil,
+		catalog.ExplanationOptions{AllowOmittedRequiredParameters: true},
+	)
+	if err != nil {
+		t.Fatalf("ExplainWithOptions() error = %v", err)
+	}
+	if len(explanation.Parameters) == 0 {
+		t.Fatal("explanation parameters are empty")
+	}
+
+	requiredFound := false
+	for _, parameter := range explanation.Parameters {
+		if parameter.Name != "z-version" {
+			continue
+		}
+		requiredFound = true
+		if parameter.Supplied || parameter.Value != nil {
+			t.Errorf("required omitted parameter = %#v", parameter)
+		}
+	}
+	if !requiredFound {
+		t.Fatal("required omitted parameter was not explained")
+	}
+	if !slices.Equal(explanation.Process.Argv.Value, explanation.Process.Command.Value) {
+		t.Errorf(
+			"argv = %#v, want base command %#v",
+			explanation.Process.Argv.Value,
+			explanation.Process.Command.Value,
+		)
+	}
+
+	_, err = result.Explain("network", "plan", nil)
+	if err == nil || !strings.Contains(err.Error(), "was not supplied") {
+		t.Fatalf("strict Explain() error = %v", err)
+	}
+}
+
 func assertExplained(t *testing.T, value catalog.ExplainedValue[string], expected, originKind string) {
 	t.Helper()
 	if !value.Resolved || value.Value != expected || len(value.Provenance) != 1 || value.Provenance[0].Kind != originKind {
@@ -249,17 +312,28 @@ spec:
     limits: {cpu: "2"}
   actions:
     plan:
+      title: Preview changes
+      description: Creates an execution plan for review.
+      documentationUrl: https://docs.example.com/actions/plan
       intent: preview
       command: [terraform, plan]
       parameters:
-        a-force: {type: boolean, argument: {name: --force}}
+        a-force:
+          title: Force refresh
+          description: Replace cached provider data.
+          type: boolean
+          argument: {name: --force}
         b-positional: {type: boolean, argument: {}}
         c-count: {type: number, argument: {name: --count}}
         d-mode: {type: enum, values: [safe, fast], argument: {name: --mode}}
         e-optional: {type: string, argument: {}}
         z-version: {type: string, required: true, environment: VERSION}
       artifacts:
-        plan: {path: /outputs/plan, mediaType: application/octet-stream, sensitive: true}
+        plan:
+          description: Serialized execution plan.
+          path: /outputs/plan
+          mediaType: application/octet-stream
+          sensitive: true
       triggers:
         - name: changed
           git: {}

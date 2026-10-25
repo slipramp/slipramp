@@ -72,6 +72,9 @@ text, JSON, and SARIF output, and a generated versioned catalog JSON Schema with
 freshness check are implemented. `slipramp catalog explain` provides offline
 effective Action inspection with provenance in text and JSON, portable unresolved
 Placement values, optional deployment validation, and shared parameter simulation.
+The authenticated Server API and Web Action Run page reuse the same explanation
+model against current Placement configuration while allowing required form
+parameters to remain omitted during initial display.
 Source-pinned local, pre-commit, CI, and YAML
 language-server workflows are documented. Remaining distribution work is
 intentionally deferred until Slipramp begins versioning releases:

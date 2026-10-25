@@ -102,7 +102,8 @@ resolve from the current directory. Both formats use one structured model of
 effective values with field-level provenance and repository source file/document
 locations. It includes commands, final argv, directories, Runtime environment,
 Placement defaults, resources, credential references and injection mappings,
-artifact producers/consumers and compatibility, watch patterns, and triggers.
+Action/Parameter/Artifact presentation metadata, artifact producers/consumers
+and compatibility, watch patterns, and triggers.
 
 The whole catalog must validate before an Action can be explained. Without
 `--placements`, repository-owned contracts are validated and Placement-dependent

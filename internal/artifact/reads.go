@@ -14,7 +14,8 @@ type Content struct {
 }
 
 func (s *Service) List(ctx context.Context, runID uuid.UUID) ([]Record, error) {
-	if _, err := s.runs.GetRunClusterName(ctx, runID); err != nil {
+	runContext, err := s.runs.GetRunArtifactContext(ctx, runID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -29,7 +30,12 @@ func (s *Service) List(ctx context.Context, runID uuid.UUID) ([]Record, error) {
 
 	result := make([]Record, 0, len(artifacts))
 	for _, record := range artifacts {
-		result = append(result, Record{Artifact: record, Provenance: provenance})
+		declaration := runContext.Artifacts[record.Name]
+		result = append(result, Record{
+			Artifact:    record,
+			Description: declaration.Description,
+			Provenance:  provenance,
+		})
 	}
 
 	return result, nil

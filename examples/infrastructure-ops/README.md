@@ -34,6 +34,14 @@ The RustFS target offers:
 The direct `sync` actions are deliberate. Slipramp's safety policy is opt-in;
 previews and canaries are useful operations rather than mandatory gates.
 
+Action map keys such as `preview` and `apply` remain the stable names used by
+the CLI, API, triggers, and artifact references. Optional `title`, `description`,
+and `documentationUrl` fields add operator-facing context without changing
+those identities. Parameter `title` and `description` fields provide form
+guidance while names such as `host` remain visible, and artifact descriptions
+explain what an output contains wherever that output is produced or selected
+as a later input.
+
 The Kubernetes upgrade target offers a read-only `preview` for a selected
 node, a single-node action, and separate ordered control-plane and compute
 rolls. Its independent `apt-upgrade` and `reboot` boolean parameters can be

@@ -37,8 +37,11 @@ func TestCatalogExplainTextAndJSON(t *testing.T) {
 			if format == "text" {
 				for _, fragment := range []string{
 					"operations", "inspect", "Base command", "Final argv: [\"inspect\"]", "a=b",
-					"Runtime", "Timeout", "Parameter force: supplied: false", "Parameter optional: omitted",
-					"Target operations default", ".slipramp/catalog.yaml document 2", "Target watch patterns",
+					"Action title: Inspect infrastructure", "Action description: Shows current state.",
+					"Action documentation URL: https://docs.example.com/actions/inspect",
+					"Runtime", "Timeout", "Parameter force: supplied: false", "Force execution",
+					"Parameter optional: omitted", "Inspection report", "Target operations default",
+					".slipramp/catalog.yaml document 2", "Target watch patterns",
 				} {
 					if !strings.Contains(output, fragment) {
 						t.Errorf("text missing %q: %s", fragment, output)
@@ -55,6 +58,11 @@ func TestCatalogExplainTextAndJSON(t *testing.T) {
 			}
 			if document.SchemaVersion != 1 || document.Target.Value.Name != "operations" ||
 				document.Action.Value != "inspect" || document.Placement.ConfigurationAvailable != deployment ||
+				document.ActionTitle.Value != "Inspect infrastructure" ||
+				document.ActionDescription.Value != "Shows current state." ||
+				document.ActionDocumentationURL.Value != "https://docs.example.com/actions/inspect" ||
+				document.Parameters[0].Declaration.Value.Title != "Force execution" ||
+				document.Outputs[0].Artifact.Value.Description != "Inspection report." ||
 				document.Process.Environment["VERSION"].Value != "a=b" ||
 				!reflect.DeepEqual(document.Process.Argv.Value, []string{"inspect"}) ||
 				document.Runtime.Name.Provenance[0].Kind != "target-default" {
@@ -180,9 +188,20 @@ spec:
   placement: test
   actions:
     inspect:
+      title: Inspect infrastructure
+      description: Shows current state.
+      documentationUrl: https://docs.example.com/actions/inspect
       command: [inspect]
       parameters:
-        force: {type: boolean, argument: {name: --force}}
+        force:
+          title: Force execution
+          description: Run the inspection even when cached state is available.
+          type: boolean
+          argument: {name: --force}
         optional: {type: string, argument: {}}
         version: {type: string, required: true, environment: VERSION}
+      artifacts:
+        report:
+          description: Inspection report.
+          path: /artifacts/report.json
 `

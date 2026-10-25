@@ -355,6 +355,20 @@ function Diffs({
             ) : null}
           </Group>
         </Group>
+        {promotion.gitDiffArtifact?.description || promotion.argoDiffArtifact?.description ? (
+          <Stack gap={2}>
+            {promotion.gitDiffArtifact?.description ? (
+              <Text c="dimmed" size="sm">
+                <Code>git-diff</Code> — {promotion.gitDiffArtifact.description}
+              </Text>
+            ) : null}
+            {promotion.argoDiffArtifact?.description ? (
+              <Text c="dimmed" size="sm">
+                <Code>argo-diff</Code> — {promotion.argoDiffArtifact.description}
+              </Text>
+            ) : null}
+          </Stack>
+        ) : null}
         <Tabs defaultValue="git">
           <Tabs.List>
             <Tabs.Tab value="git">Git</Tabs.Tab>

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -68,6 +69,32 @@ kind: Placement
 metadata:
   name: test
 spec: {}
+`,
+		"relative action documentation URL": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  actions:
+    inspect:
+      documentationUrl: /docs/inspect
+      command: [inspect]
+`,
+		"oversized parameter title": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  actions:
+    inspect:
+      command: [inspect]
+      parameters:
+        environment:
+          title: ` + strings.Repeat("x", 201) + `
+          type: string
+          argument: {}
 `,
 	}
 

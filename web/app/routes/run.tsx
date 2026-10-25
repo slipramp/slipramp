@@ -22,6 +22,7 @@ import {
   IconChevronDown,
   IconClock,
   IconClockExclamation,
+  IconExternalLink,
   IconLoader2,
   IconMaximize,
   IconOctagon,
@@ -327,6 +328,14 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         }
         description={
           <Group gap="xs">
+            {run.actionTitle ? (
+              <>
+                <Text c="dimmed">
+                  Action <Code>{run.action}</Code>
+                </Text>
+                <Text c="dimmed">·</Text>
+              </>
+            ) : null}
             <Text c="dimmed">Run {run.id.slice(0, 8)}</Text>
             <Text c="dimmed">·</Text>
             <Timestamp c="dimmed" value={run.createdAt} />
@@ -358,11 +367,27 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
               {" / "}
             </Text>
             <Text component="span" inherit>
-              {run.action}
+              {run.actionTitle ?? run.action}
             </Text>
           </>
         }
       />
+
+      {run.actionDescription || run.actionDocumentationUrl ? (
+        <Paper p="md" withBorder>
+          <Stack align="flex-start" gap="xs">
+            {run.actionDescription ? <Text>{run.actionDescription}</Text> : null}
+            {run.actionDocumentationUrl ? (
+              <Anchor href={run.actionDocumentationUrl} rel="noreferrer" target="_blank">
+                <Group gap={4} wrap="nowrap">
+                  <span>Action documentation</span>
+                  <IconExternalLink aria-hidden size={14} />
+                </Group>
+              </Anchor>
+            ) : null}
+          </Stack>
+        </Paper>
+      ) : null}
 
       <KawaiiActivity activity={activity} animationKey={run.id} />
 
@@ -459,7 +484,11 @@ function PlanLineage({
               ) : null}
             </Group>
           }
-          description="Apply runs stay linked to the exact retained plan they consume."
+          description={
+            plan.description
+              ? `${plan.description} Apply runs stay linked to the exact retained plan they consume.`
+              : "Apply runs stay linked to the exact retained plan they consume."
+          }
           title="Plan"
         />
         {!available ? (
@@ -909,6 +938,11 @@ function InputTable({
                     <Text c="dimmed" size="xs">
                       {input.mediaType} · {input.retentionState}
                     </Text>
+                    {input.description ? (
+                      <Text c="dimmed" size="xs">
+                        {input.description}
+                      </Text>
+                    ) : null}
                   </Table.Td>
                   <Table.Td>
                     <Anchor component={Link} to={`/runs/${input.producerRunId}`}>
@@ -1174,6 +1208,11 @@ function ArtifactTable({
                       <Text c="dimmed" size="xs">
                         {artifact.mediaType}
                       </Text>
+                      {artifact.description ? (
+                        <Text c="dimmed" size="xs">
+                          {artifact.description}
+                        </Text>
+                      ) : null}
                     </Table.Td>
                     <Table.Td>
                       <Stack gap={0}>
@@ -1253,7 +1292,7 @@ function ArtifactAction({
   const label =
     artifact.name === "plan" && consumer.action === "apply"
       ? "Apply this plan"
-      : `Run ${consumer.action}`;
+      : `Run ${consumer.actionTitle ?? consumer.action}`;
 
   return (
     <Form method="post">
@@ -1266,6 +1305,7 @@ function ArtifactAction({
         leftSection={prominent ? <IconPlayerPlay aria-hidden size={16} /> : undefined}
         loading={submitting}
         size={prominent ? "compact-md" : "compact-sm"}
+        title={consumer.actionTitle ? `Action ${consumer.action}` : undefined}
         type="submit"
         variant={prominent ? "filled" : "light"}
       >

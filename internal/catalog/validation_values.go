@@ -39,6 +39,20 @@ func validateParameters(actionName string, parameters map[string]Parameter, runt
 	for _, name := range slices.Sorted(maps.Keys(parameters)) {
 		parameter := parameters[name]
 		subject := fmt.Sprintf("action %q parameter %q", actionName, name)
+		if err := validatePresentationTitle(subject+" title", parameter.Title); err != nil {
+			findings = append(findings, validationFinding{
+				fieldPath: ".parameters." + name + ".title",
+				code:      "catalog.parameter.title-invalid",
+				err:       err,
+			})
+		}
+		if err := validatePresentationDescription(subject+" description", parameter.Description); err != nil {
+			findings = append(findings, validationFinding{
+				fieldPath: ".parameters." + name + ".description",
+				code:      "catalog.parameter.description-invalid",
+				err:       err,
+			})
+		}
 		if err := kubevalidate.DNSLabel("parameter name", name); err != nil {
 			findings = append(findings, validationFinding{
 				fieldPath: ".parameters." + name,
@@ -145,6 +159,13 @@ func validateArtifacts(actionName string, artifacts map[string]Artifact) []valid
 	for _, name := range slices.Sorted(maps.Keys(artifacts)) {
 		artifact := artifacts[name]
 		subject := fmt.Sprintf("action %q artifact %q", actionName, name)
+		if err := validatePresentationDescription(subject+" description", artifact.Description); err != nil {
+			findings = append(findings, validationFinding{
+				fieldPath: ".artifacts." + name + ".description",
+				code:      "catalog.artifact.description-invalid",
+				err:       err,
+			})
+		}
 		if err := kubevalidate.DNSLabel("artifact name", name); err != nil {
 			findings = append(findings, validationFinding{
 				fieldPath: ".artifacts." + name,

@@ -324,6 +324,29 @@ export type CatalogRevision = {
   targets: Array<Target>;
 };
 
+export type CatalogExplanation = {
+  schemaVersion: 1;
+  validationLevel: "portable" | "deployment";
+  target: ExplainedResourceMetadata;
+  action: ExplainedString;
+  actionTitle: ExplainedString;
+  actionDescription: ExplainedString;
+  actionDocumentationUrl: ExplainedString;
+  intent: ExplainedString;
+  process: ProcessExplanation;
+  parameters: Array<ParameterExplanation>;
+  runtime: RuntimeExplanation;
+  placement: PlacementExplanation;
+  timeout: ExplainedString;
+  resources: ResourcesExplanation;
+  credentials: Array<CredentialExplanation>;
+  outputs: Array<OutputExplanation>;
+  inputs: Array<InputExplanation>;
+  watch: ExplainedStringList;
+  triggers: Array<ExplainedActionTrigger>;
+  diagnostics: Array<CatalogDiagnostic>;
+};
+
 export type TargetSummary = {
   repositoryId: string;
   repositoryName: string;
@@ -486,6 +509,18 @@ export type Run = {
   commit: GitCommit;
   target: CatalogName;
   action: CatalogName;
+  /**
+   * Frozen operator-facing title from the selected Action.
+   */
+  actionTitle?: string;
+  /**
+   * Frozen operator-facing description from the selected Action.
+   */
+  actionDescription?: string;
+  /**
+   * Frozen documentation link from the selected Action.
+   */
+  actionDocumentationUrl?: string;
   parameters: {
     [key: string]: ParameterValue;
   };
@@ -593,6 +628,10 @@ export type Artifact = {
   id: string;
   runId: string;
   name: CatalogName;
+  /**
+   * Frozen description from the producing Action's artifact declaration.
+   */
+  description?: string;
   kind: "log" | "output";
   state: "open" | "sealed" | "failed";
   mediaType: string;
@@ -914,6 +953,11 @@ export type ParameterArgument = {
 };
 
 export type Parameter = {
+  /**
+   * Operator-facing form label. The parameter map key remains its stable identity.
+   */
+  title?: string;
+  description?: string;
   type: "string" | "boolean" | "number" | "enum";
   required?: boolean;
   values?: Array<string>;
@@ -922,6 +966,7 @@ export type Parameter = {
 };
 
 export type ArtifactDeclaration = {
+  description?: string;
   path: string;
   mediaType?: string;
   sensitive?: boolean;
@@ -955,6 +1000,12 @@ export type ActionTrigger = {
 };
 
 export type Action = {
+  /**
+   * Operator-facing display title. The action map key remains its stable identity.
+   */
+  title?: string;
+  description?: string;
+  documentationUrl?: string;
   intent?: string;
   command: Array<string>;
   runtime?: string;
@@ -1008,6 +1059,210 @@ export type Target = {
 };
 
 export type CatalogName = string;
+
+export type CatalogSourceRange = {
+  path: string;
+  document: number;
+  line?: number;
+  column?: number;
+  endLine?: number;
+  endColumn?: number;
+  fieldPath?: string;
+};
+
+export type ExplanationOrigin = {
+  kind: string;
+  name: string;
+  fieldPath: string;
+  location?: CatalogSourceRange;
+};
+
+export type ExplainedResourceMetadata = {
+  value: ResourceMetadata;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ExplainedString = {
+  value: string;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ExplainedStringList = {
+  value: Array<string>;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ProcessExplanation = {
+  repositoryMount: ExplainedString;
+  targetPath: ExplainedString;
+  workingDirectory: ExplainedString;
+  command: ExplainedStringList;
+  argv: ExplainedStringList;
+  environment: {
+    [key: string]: ExplainedString;
+  };
+};
+
+export type ExplainedParameter = {
+  value: Parameter;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ParameterDelivery = {
+  arguments: Array<string>;
+  environment: {
+    [key: string]: string;
+  };
+};
+
+export type ExplainedParameterDelivery = {
+  value: ParameterDelivery;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ParameterExplanation = {
+  name: string;
+  declaration: ExplainedParameter;
+  supplied: boolean;
+  value: ParameterValue | null;
+  delivery: ExplainedParameterDelivery;
+};
+
+export type RuntimeExplanation = {
+  name: ExplainedString;
+  image: ExplainedString;
+  workingDirectory: ExplainedString;
+  environment: {
+    [key: string]: ExplainedString;
+  };
+};
+
+export type ExplainedStringMap = {
+  value: {
+    [key: string]: string;
+  } | null;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ExplainedBoolean = {
+  value: boolean;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type PlacementExplanation = {
+  name: ExplainedString;
+  configurationAvailable: boolean;
+  cluster: ExplainedString;
+  namespace: ExplainedString;
+  serviceAccount: ExplainedString;
+  nodeSelector: ExplainedStringMap;
+  podExtensions: ExplainedBoolean;
+};
+
+export type ResourcesExplanation = {
+  requests: {
+    [key: string]: ExplainedString;
+  };
+  limits: {
+    [key: string]: ExplainedString;
+  };
+  placementDefaultsResolved: boolean;
+  unresolvedReason?: string;
+};
+
+export type CredentialSourceExplanation = {
+  secretName: string;
+};
+
+export type ExplainedCredentialSource = {
+  value: CredentialSourceExplanation;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ExplainedCredentialInjection = {
+  value: CredentialInjection;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type CredentialExplanation = {
+  requirement: string;
+  binding: ExplainedString;
+  source: ExplainedCredentialSource;
+  injection: ExplainedCredentialInjection;
+};
+
+export type ExplainedArtifact = {
+  value: ArtifactDeclaration;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type ArtifactConsumerExplanation = {
+  action: string;
+  mountPath: string;
+  compatibility: ExplainedString;
+};
+
+export type OutputExplanation = {
+  name: string;
+  producerAction: string;
+  artifact: ExplainedArtifact;
+  consumers: Array<ArtifactConsumerExplanation>;
+};
+
+export type ExplainedArtifactInput = {
+  value: ArtifactInput;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type InputExplanation = {
+  name: string;
+  input: ExplainedArtifactInput;
+  compatibility: ExplainedString;
+  producer: ExplainedArtifact;
+};
+
+export type ExplainedActionTrigger = {
+  value: ActionTrigger;
+  resolved: boolean;
+  provenance: Array<ExplanationOrigin>;
+  unresolvedReason?: string;
+};
+
+export type CatalogRelatedLocation = {
+  message: string;
+  location: CatalogSourceRange;
+};
+
+export type CatalogDiagnostic = {
+  code: string;
+  severity: "error" | "warning";
+  message: string;
+  hint?: string;
+  location: CatalogSourceRange;
+  related?: Array<CatalogRelatedLocation>;
+};
 
 export type RunAssignmentRepository = {
   name: CatalogName;
@@ -1208,6 +1463,10 @@ export type RunArtifactInput = {
   artifactId: string;
   producerRunId: string;
   name: CatalogName;
+  /**
+   * Frozen description of the producer's artifact declaration.
+   */
+  description?: string;
   mediaType: string;
   sizeBytes: number;
   sha256: string;
@@ -1219,6 +1478,7 @@ export type RunArtifactInput = {
 
 export type RunArtifactConsumer = {
   action: CatalogName;
+  actionTitle?: string;
   input: CatalogName;
 };
 
@@ -1992,6 +2252,66 @@ export type GetRepositoryCatalogResponses = {
 
 export type GetRepositoryCatalogResponse =
   GetRepositoryCatalogResponses[keyof GetRepositoryCatalogResponses];
+
+export type ExplainActiveCatalogActionData = {
+  body?: never;
+  path: {
+    /**
+     * Stable identity of the repository registration.
+     */
+    repositoryId: string;
+    /**
+     * Stable technical name of the Target.
+     */
+    targetName: CatalogName;
+    /**
+     * Stable technical name of the Action.
+     */
+    actionName: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation";
+};
+
+export type ExplainActiveCatalogActionErrors = {
+  /**
+   * A path parameter is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The active repository catalog, Target, or Action does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The Action explanation could not be resolved.
+   */
+  500: Problem;
+};
+
+export type ExplainActiveCatalogActionError =
+  ExplainActiveCatalogActionErrors[keyof ExplainActiveCatalogActionErrors];
+
+export type ExplainActiveCatalogActionResponses = {
+  /**
+   * The effective Action execution contract and provenance.
+   */
+  200: CatalogExplanation;
+};
+
+export type ExplainActiveCatalogActionResponse =
+  ExplainActiveCatalogActionResponses[keyof ExplainActiveCatalogActionResponses];
 
 export type ListTargetsData = {
   body?: never;

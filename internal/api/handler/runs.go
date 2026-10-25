@@ -361,6 +361,9 @@ func runResponse(
 		Commit:                  commits[commitKey(record.RepositoryID, record.CommitSHA)],
 		Target:                  api.CatalogName(record.TargetName),
 		Action:                  api.CatalogName(record.ActionName),
+		ActionTitle:             optionalString(record.Snapshot.Action.Title),
+		ActionDescription:       optionalString(record.Snapshot.Action.Description),
+		ActionDocumentationURL:  optionalString(record.Snapshot.Action.DocumentationURL),
 		Parameters:              parameters,
 		Runtime:                 api.CatalogName(record.Snapshot.Runtime.Metadata.Name),
 		Placement:               api.CatalogName(record.PlacementName),
@@ -370,7 +373,7 @@ func runResponse(
 		RerunMode:               apiRerunMode(record.RerunMode),
 		CreatedBy:               apiRunActor(record.CreatedBy),
 		CanceledBy:              apiRunActor(record.CanceledBy),
-		Inputs:                  runInputResponse(record.Snapshot.Inputs, commits),
+		Inputs:                  runInputResponse(record.Snapshot, commits),
 		ArtifactConsumers:       runArtifactConsumers(record.Snapshot),
 		CreatedAt:               record.CreatedAt,
 		AssignedAt:              record.AssignedAt,
@@ -508,8 +511,9 @@ func runArtifactConsumers(snapshot run.Snapshot) map[string][]api.RunArtifactCon
 			}
 
 			result[inputName] = append(result[inputName], api.RunArtifactConsumer{
-				Action: api.CatalogName(actionName),
-				Input:  api.CatalogName(inputName),
+				Action:      api.CatalogName(actionName),
+				ActionTitle: optionalString(action.Title),
+				Input:       api.CatalogName(inputName),
 			})
 		}
 	}
@@ -528,15 +532,22 @@ func hasRequiredParameters(action catalog.Action) bool {
 }
 
 func runInputResponse(
-	values map[string]run.ArtifactInput,
+	snapshot run.Snapshot,
 	commits map[repository.CommitKey]api.GitCommit,
 ) map[string]api.RunArtifactInput {
+	values := snapshot.Inputs
 	result := make(map[string]api.RunArtifactInput, len(values))
 	for name, value := range values {
+		description := ""
+		declaration := snapshot.Action.Inputs[name]
+		if producer, found := snapshot.Target.Spec.Actions[declaration.Artifact.FromAction]; found {
+			description = producer.Artifacts[name].Description
+		}
 		result[name] = api.RunArtifactInput{
 			ArtifactID:        value.ArtifactID,
 			ProducerRunID:     value.ProducerRunID,
 			Name:              api.CatalogName(value.Name),
+			Description:       optionalString(description),
 			MediaType:         value.MediaType,
 			SizeBytes:         value.SizeBytes,
 			Sha256:            value.SHA256,

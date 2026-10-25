@@ -53,6 +53,9 @@ import type {
   EnrollControllerData,
   EnrollControllerErrors,
   EnrollControllerResponses,
+  ExplainActiveCatalogActionData,
+  ExplainActiveCatalogActionErrors,
+  ExplainActiveCatalogActionResponses,
   FailRunLogData,
   FailRunLogErrors,
   FailRunLogResponses,
@@ -540,6 +543,39 @@ export const getRepositoryCatalog = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/repositories/{repositoryId}/catalog",
+    ...options,
+  });
+
+/**
+ * Explain an Action from the active repository catalog
+ *
+ * Returns the effective execution contract for one Action using the Slipramp Server's current Placement configuration. Required parameters may be omitted for this read-only explanation; Run creation remains strict. Credential values and arbitrary Placement pod configuration are never returned.
+ */
+export const explainActiveCatalogAction = <ThrowOnError extends boolean = false>(
+  options: Options<ExplainActiveCatalogActionData, ThrowOnError>,
+): RequestResult<
+  ExplainActiveCatalogActionResponses,
+  ExplainActiveCatalogActionErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ExplainActiveCatalogActionResponses,
+    ExplainActiveCatalogActionErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/repositories/{repositoryId}/catalog/targets/{targetName}/actions/{actionName}/explanation",
     ...options,
   });
 
