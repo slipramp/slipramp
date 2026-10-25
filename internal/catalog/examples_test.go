@@ -32,10 +32,14 @@ func TestInfrastructureOpsExample(t *testing.T) {
 		t.Fatalf("placement.NewSet() error = %v", err)
 	}
 
-	loaded, err := catalog.Load(os.DirFS(exampleRoot), placements)
+	result, err := catalog.Process(os.DirFS(exampleRoot), catalog.Options{Placements: &placements})
 	if err != nil {
-		t.Fatalf("catalog.Load() error = %v", err)
+		t.Fatalf("catalog.Process() error = %v", err)
 	}
+	if result.Diagnostics.HasErrors() {
+		t.Fatalf("catalog.Process() diagnostics = %s", result.Diagnostics.ErrorSummary())
+	}
+	loaded := result.Catalog
 
 	var rustfs *catalog.Target
 	for _, target := range loaded.Targets {

@@ -215,6 +215,11 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="cowbell-clang"] {
+  background-image: url("../assets/slipramp-axolotl-cowbell-clang.webp");
+  animation-duration: 1.6s;
+}
+
 .sprite[data-pose="laptop-slump"] {
   background-image: url("../assets/slipramp-axolotl-laptop-slump.webp");
   animation-duration: 2.8s;

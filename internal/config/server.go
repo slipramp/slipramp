@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/slipramp/slipramp/internal/notification"
+	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/server"
@@ -25,6 +26,7 @@ const (
 	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
 	serverRepositoryRefreshIntervalEnvironment    = "SLIPRAMP_REPOSITORY_REFRESH_INTERVAL"
 	serverRepositoryFetchTimeoutEnvironment       = "SLIPRAMP_REPOSITORY_FETCH_TIMEOUT"
+	serverPlacementsFileEnvironment               = "SLIPRAMP_PLACEMENTS_FILE"
 	serverDatabaseURLEnvironment                  = "SLIPRAMP_DATABASE_URL"
 	serverDatabaseConnectTimeoutEnvironment       = "SLIPRAMP_DATABASE_CONNECT_TIMEOUT"
 	serverS3EndpointEnvironment                   = "SLIPRAMP_S3_ENDPOINT"
@@ -147,7 +149,7 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 	}
 
 	if value, ok := lookupEnvironment(serverPlacementsFileEnvironment); ok {
-		placements, err := loadPlacementsFile(value)
+		placements, err := placement.LoadFile(value)
 		if err != nil {
 			return server.Config{}, fmt.Errorf("load %s from %q: %w", serverPlacementsFileEnvironment, value, err)
 		}

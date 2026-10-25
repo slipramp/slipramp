@@ -19,6 +19,8 @@ const (
 type Catalog struct {
 	Runtimes []Runtime `json:"runtimes"`
 	Targets  []Target  `json:"targets"`
+
+	locations sourceLocations
 }
 
 type Source struct {

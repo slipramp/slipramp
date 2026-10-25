@@ -10,31 +10,60 @@ import (
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 )
 
-func validateRuntime(runtime Runtime) error {
-	if err := kubevalidate.DNSLabel("runtime metadata.name", runtime.Metadata.Name); err != nil {
-		return validationError(runtime.Source, err)
+func validateRuntimePortable(input Catalog, runtime Runtime) Diagnostics {
+	diagnostics := Diagnostics{}
+	add := func(fieldPath, code string, err error) {
+		if err != nil {
+			diagnostics = append(diagnostics, errorDiagnostic(
+				input,
+				RuntimeKind,
+				runtime.Metadata.Name,
+				runtime.Source,
+				fieldPath,
+				code,
+				err,
+			))
+		}
 	}
 
+	add(
+		"metadata.name",
+		"catalog.runtime.name-invalid",
+		kubevalidate.DNSLabel("runtime metadata.name", runtime.Metadata.Name),
+	)
+
 	if strings.TrimSpace(runtime.Spec.Image) == "" {
-		return validationError(runtime.Source, errors.New("runtime spec.image is required"))
-	}
-	if strings.ContainsAny(runtime.Spec.Image, "\x00\t\r\n ") {
-		return validationError(runtime.Source, errors.New("runtime spec.image must not contain whitespace"))
+		add("spec.image", "catalog.runtime.image-invalid", errors.New("runtime spec.image is required"))
+	} else if strings.ContainsAny(runtime.Spec.Image, "\x00\t\r\n ") {
+		add(
+			"spec.image",
+			"catalog.runtime.image-invalid",
+			errors.New("runtime spec.image must not contain whitespace"),
+		)
 	}
 
 	if runtime.Spec.WorkingDirectory != "" {
-		if err := validateContainerPath("runtime workingDirectory", runtime.Spec.WorkingDirectory); err != nil {
-			return validationError(runtime.Source, err)
-		}
+		add(
+			"spec.workingDirectory",
+			"catalog.runtime.working-directory-invalid",
+			validateContainerPath("runtime workingDirectory", runtime.Spec.WorkingDirectory),
+		)
 	}
 
 	claimedEnvironment := make(map[string]string, len(runtime.Spec.Environment))
 	for _, name := range slices.Sorted(maps.Keys(runtime.Spec.Environment)) {
+		fieldPath := "spec.environment." + name
 		if err := validateEnvironmentName("runtime environment name", name); err != nil {
-			return validationError(runtime.Source, err)
+			add(fieldPath, "catalog.environment.name-invalid", err)
+			continue
 		}
 		if strings.ContainsRune(runtime.Spec.Environment[name], '\x00') {
-			return validationError(runtime.Source, fmt.Errorf("runtime environment %q contains a null byte", name))
+			add(
+				fieldPath,
+				"catalog.environment.value-invalid",
+				fmt.Errorf("runtime environment %q contains a null byte", name),
+			)
+			continue
 		}
 
 		claimedEnvironment[name] = "runtime environment"
@@ -42,17 +71,21 @@ func validateRuntime(runtime Runtime) error {
 
 	claimedMounts := map[string]mountClaim{}
 	for _, name := range slices.Sorted(maps.Keys(runtime.Spec.Credentials)) {
+		fieldPath := "spec.credentials." + name
 		credential := runtime.Spec.Credentials[name]
 		if err := kubevalidate.DNSLabel("runtime credential name", name); err != nil {
-			return validationError(runtime.Source, err)
+			add(fieldPath, "catalog.credential.name-invalid", err)
+			continue
 		}
 
-		if err := validateCredentialInjection(name, credential.Inject, claimedEnvironment, claimedMounts); err != nil {
-			return validationError(runtime.Source, err)
-		}
+		add(
+			fieldPath+".inject",
+			"catalog.credential.injection-invalid",
+			validateCredentialInjection(name, credential.Inject, claimedEnvironment, claimedMounts),
+		)
 	}
 
-	return nil
+	return diagnostics
 }
 
 func validateCredentialInjection(

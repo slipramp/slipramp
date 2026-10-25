@@ -80,10 +80,15 @@ spec:
 		"deployment/values.yaml": {Data: []byte("not: a catalog resource\n")},
 	}
 
-	loaded, err := catalog.Load(files, testPlacements(t))
+	placements := testPlacements(t)
+	result, err := catalog.Process(files, catalog.Options{Placements: &placements})
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("Process() error = %v", err)
 	}
+	if result.Diagnostics.HasErrors() {
+		t.Fatalf("Process() diagnostics = %s", result.Diagnostics.ErrorSummary())
+	}
+	loaded := result.Catalog
 
 	if len(loaded.Runtimes) != 1 {
 		t.Fatalf("len(Runtimes) = %d, want 1", len(loaded.Runtimes))
@@ -257,8 +262,12 @@ spec:
 				},
 			}
 
-			_, err := catalog.Load(files, testPlacements(t))
-			testcheck.ErrorContains(t, err, test.wantError)
+			placements := testPlacements(t)
+			result, err := catalog.Process(files, catalog.Options{Placements: &placements})
+			if err != nil {
+				t.Fatalf("Process() error = %v", err)
+			}
+			testcheck.ErrorContains(t, diagnosticsAsError(result.Diagnostics), test.wantError)
 		})
 	}
 }

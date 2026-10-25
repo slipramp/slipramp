@@ -64,6 +64,21 @@ advance a reconciliation checkpoint.
       a convergence comparison. Do not infer this state from arbitrary
       `reconcile` intents or label it continuously in sync.
 
+## Catalog tooling
+
+The shared diagnostic pipeline, portable and deployment validation levels,
+checkout-aware warnings, `slipramp catalog validate`, and deterministic text,
+JSON, and SARIF output are implemented. Remaining distribution and editor work
+is intentionally separate from the validator contract:
+
+- [ ] Generate the versioned catalog JSON Schema from one maintained source,
+      check generated output for freshness, and document common YAML language
+      server configuration.
+- [ ] Publish pinned release binaries, checksums, the schema, and a small CLI
+      OCI image with provider-neutral pre-commit and CI examples.
+- [ ] Reassess `catalog explain`, `catalog affected`, and semantic
+      `catalog diff` on top of the shared resolution and diagnostic model.
+
 ## Reliability and operator guidance
 
 - [ ] Broaden acceptance for multiple execution Clusters, Pod loss, network

@@ -122,7 +122,7 @@ func TestValidateParameters(t *testing.T) {
 			action.Parameters = map[string]catalog.Parameter{"value": test.parameter}
 			input.Targets[0].Spec.Actions["preview"] = action
 
-			testcheck.ErrorContains(t, catalog.Validate(input, testPlacements(t)), test.wantError)
+			testcheck.ErrorContains(t, catalogValidationError(input, testPlacements(t)), test.wantError)
 		})
 	}
 }

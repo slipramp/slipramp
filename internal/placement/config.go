@@ -9,11 +9,11 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
+	"github.com/slipramp/slipramp/internal/resourcevalidate"
 )
 
 type Config struct {
@@ -94,48 +94,7 @@ func (c Config) Validate() error {
 }
 
 func validateResources(resources ResourceRequirements) error {
-	requests, err := validateResourceList("request", resources.Requests)
-	if err != nil {
-		return err
-	}
-
-	limits, err := validateResourceList("limit", resources.Limits)
-	if err != nil {
-		return err
-	}
-
-	for _, resourceName := range slices.Sorted(maps.Keys(requests)) {
-		request := requests[resourceName]
-		limit, limited := limits[resourceName]
-		if limited && request.Cmp(limit) > 0 {
-			return fmt.Errorf("resource request %q must not exceed its limit", resourceName)
-		}
-	}
-
-	return nil
-}
-
-func validateResourceList(kind string, resources map[string]string) (map[string]resource.Quantity, error) {
-	quantities := make(map[string]resource.Quantity, len(resources))
-	for _, resourceName := range slices.Sorted(maps.Keys(resources)) {
-		if err := kubevalidate.LabelKey(fmt.Sprintf("resource %s name", kind), resourceName); err != nil {
-			return nil, err
-		}
-
-		quantityText := resources[resourceName]
-		quantity, err := resource.ParseQuantity(quantityText)
-		if err != nil {
-			return nil, fmt.Errorf("resource %s %q has invalid quantity %q: %w", kind, resourceName, quantityText, err)
-		}
-
-		if quantity.Sign() < 0 {
-			return nil, fmt.Errorf("resource %s %q must not be negative", kind, resourceName)
-		}
-
-		quantities[resourceName] = quantity
-	}
-
-	return quantities, nil
+	return resourcevalidate.Requirements("", resources.Requests, resources.Limits)
 }
 
 func validateNodeSelector(selector map[string]string) error {

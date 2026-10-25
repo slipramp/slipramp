@@ -70,6 +70,7 @@ const mascotPoseLabels = {
   "championship-belt": "Championship belt",
   "confetti-cannon": "Confetti cannon",
   "trophy-hoist": "Trophy hoist",
+  "cowbell-clang": "Cowbell clang",
   "laptop-slump": "Laptop slump",
   "wrench-fumble": "Wrench fumble",
   "button-panic": "Button panic",

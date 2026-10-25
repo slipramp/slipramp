@@ -43,6 +43,45 @@ failures first (`limit` 1–200). There is no manual delivery retry action.
 Contracts are pre-stable. Development favors clean breaking changes with all
 callers and documentation updated together.
 
+## Catalog validation CLI
+
+The `slipramp` CLI validates the complete `.slipramp` catalog in a local
+checkout with the same decoder and validation stages used by Server repository
+refresh. Portable validation does not require a running installation and makes
+omitted Placement checks explicit:
+
+```console
+go run ./cmd/slipramp catalog validate
+go run ./cmd/slipramp catalog validate ../infrastructure
+```
+
+Supply the Server's non-secret `PlacementConfig` file to include static
+deployment checks such as Placement existence, offered credential sources, and
+effective resource requests and limits. This does not contact Kubernetes:
+
+```console
+go run ./cmd/slipramp catalog validate --placements ./placements.yaml
+```
+
+Text is the default output. JSON has a versioned top-level schema for custom
+automation, and SARIF 2.1.0 uses repository-relative locations for code-scanning
+systems. Warnings describe checkout-aware issues such as unmatched watch
+patterns and missing relative command files; `--strict` makes them fail the
+command without changing their severity.
+
+```console
+go run ./cmd/slipramp catalog validate --format json
+go run ./cmd/slipramp catalog validate --format sarif > slipramp.sarif
+go run ./cmd/slipramp catalog validate --strict
+go run ./cmd/slipramp version
+```
+
+Exit code `0` means validation passed, `1` means catalog errors or strict
+warnings were found, `2` means the invocation, root, or Placement file was
+invalid, and `3` reports an unexpected internal/output failure. Diagnostics are
+always written to standard output; invocation and internal failures use
+standard error.
+
 ## Server configuration
 
 The Server accepts these environment variables:

@@ -9,7 +9,6 @@ import (
 	"path"
 	"slices"
 	"strconv"
-	"time"
 
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
@@ -17,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/durationvalidate"
 	"github.com/slipramp/slipramp/internal/harness"
 )
 
@@ -583,14 +583,11 @@ func assignmentDeadline(assignment api.RunAssignment) (*int64, error) {
 		return nil, nil
 	}
 
-	duration, err := time.ParseDuration(*timeout)
+	duration, err := durationvalidate.Positive("run timeout", *timeout)
 	if err != nil {
-		return nil, fmt.Errorf("parse run timeout: %w", err)
+		return nil, err
 	}
 	seconds := int64(math.Ceil(duration.Seconds()))
-	if seconds < 1 {
-		return nil, fmt.Errorf("run timeout must be positive")
-	}
 
 	return &seconds, nil
 }

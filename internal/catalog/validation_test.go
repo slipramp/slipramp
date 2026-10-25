@@ -1,6 +1,8 @@
 package catalog_test
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/slipramp/slipramp/internal/catalog"
@@ -62,9 +64,31 @@ func runValidationTests(t *testing.T, tests []validationTest) {
 
 			input := validCatalog()
 			test.configure(&input)
-			testcheck.ErrorContains(t, catalog.Validate(input, testPlacements(t)), test.wantError)
+			testcheck.ErrorContains(t, catalogValidationError(input, testPlacements(t)), test.wantError)
 		})
 	}
+}
+
+func catalogValidationError(input catalog.Catalog, placements placement.Set) error {
+	diagnostics := append(catalog.ValidatePortable(input), catalog.ValidateDeployment(input, placements)...)
+
+	return diagnosticsAsError(diagnostics)
+}
+
+func diagnosticsAsError(diagnostics catalog.Diagnostics) error {
+	items := make([]error, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Severity == catalog.SeverityError {
+			items = append(items, fmt.Errorf(
+				"%s document %d: %s",
+				diagnostic.Location.Path,
+				diagnostic.Location.Document,
+				diagnostic.Message,
+			))
+		}
+	}
+
+	return errors.Join(items...)
 }
 
 func testPlacements(t *testing.T) placement.Set {

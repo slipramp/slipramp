@@ -8,11 +8,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
-	"k8s.io/apimachinery/pkg/api/resource"
-
+	"github.com/slipramp/slipramp/internal/durationvalidate"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
+	"github.com/slipramp/slipramp/internal/resourcevalidate"
 )
 
 var (
@@ -153,22 +152,16 @@ func validateTimeout(subject, value string) error {
 		return nil
 	}
 
-	duration, err := time.ParseDuration(value)
-	if err != nil {
-		return fmt.Errorf("%s: %w", subject, err)
-	}
-	if duration <= 0 {
-		return fmt.Errorf("%s must be positive", subject)
-	}
+	_, err := durationvalidate.Positive(subject, value)
 
-	return nil
+	return err
 }
 
 func validateResourceValues(subject string, resources ResourceRequirements) error {
-	if _, err := validateResourceList(subject+" resource request", resources.Requests); err != nil {
+	if _, err := resourcevalidate.Values(subject+" resource request", resources.Requests); err != nil {
 		return err
 	}
-	if _, err := validateResourceList(subject+" resource limit", resources.Limits); err != nil {
+	if _, err := resourcevalidate.Values(subject+" resource limit", resources.Limits); err != nil {
 		return err
 	}
 
@@ -176,45 +169,7 @@ func validateResourceValues(subject string, resources ResourceRequirements) erro
 }
 
 func validateResources(subject string, resources ResourceRequirements) error {
-	requests, err := validateResourceList(subject+" resource request", resources.Requests)
-	if err != nil {
-		return err
-	}
-	limits, err := validateResourceList(subject+" resource limit", resources.Limits)
-	if err != nil {
-		return err
-	}
-
-	for _, name := range slices.Sorted(maps.Keys(requests)) {
-		request := requests[name]
-		limit, found := limits[name]
-		if found && request.Cmp(limit) > 0 {
-			return fmt.Errorf("%s resource request %q must not exceed its limit", subject, name)
-		}
-	}
-
-	return nil
-}
-
-func validateResourceList(subject string, values map[string]string) (map[string]resource.Quantity, error) {
-	quantities := make(map[string]resource.Quantity, len(values))
-	for _, name := range slices.Sorted(maps.Keys(values)) {
-		if err := kubevalidate.LabelKey(subject+" name", name); err != nil {
-			return nil, err
-		}
-
-		quantity, err := resource.ParseQuantity(values[name])
-		if err != nil {
-			return nil, fmt.Errorf("%s %q has invalid quantity %q: %w", subject, name, values[name], err)
-		}
-		if quantity.Sign() < 0 {
-			return nil, fmt.Errorf("%s %q must not be negative", subject, name)
-		}
-
-		quantities[name] = quantity
-	}
-
-	return quantities, nil
+	return resourcevalidate.Requirements(subject, resources.Requests, resources.Limits)
 }
 
 func validateEnvironmentName(subject, value string) error {

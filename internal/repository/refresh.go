@@ -138,17 +138,22 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	if fetchErr == nil {
 		result.Commit = &fetched.Commit
 
-		loaded, loadErr := catalog.Load(fetched.Files, r.placements)
-		if loadErr == nil {
+		validation, loadErr := catalog.Process(fetched.Files, catalog.Options{Placements: &r.placements})
+		if loadErr == nil && !validation.Diagnostics.HasErrors() {
 			result.ChangedPaths = append([]string(nil), fetched.ChangedPaths...)
 			result.Revision = &catalog.Revision{
 				ID:        r.newID(),
 				CommitSHA: fetched.Commit.SHA,
 				CreatedAt: attemptedAt,
-				Catalog:   loaded,
+				Catalog:   validation.Catalog,
 			}
 		} else {
-			failureReason := loadErr.Error()
+			failureReason := ""
+			if loadErr != nil {
+				failureReason = loadErr.Error()
+			} else {
+				failureReason = validation.Diagnostics.ErrorSummary()
+			}
 			result.FailureReason = &failureReason
 		}
 	} else {

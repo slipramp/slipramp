@@ -37,6 +37,7 @@ export type ExecutionAnimationPose =
   | "championship-belt"
   | "confetti-cannon"
   | "trophy-hoist"
+  | "cowbell-clang"
   | "laptop-slump"
   | "wrench-fumble"
   | "button-panic"
@@ -82,7 +83,6 @@ export const executionAnimationPosePools = {
     "antenna-tune",
     "drill-drive",
     "weld-spark-pipe",
-    "too-many-arms",
     "jackhammer-ride",
     "bubble-level-check",
     "paint-roller-swipe",
@@ -97,6 +97,7 @@ export const executionAnimationPosePools = {
     "championship-belt",
     "confetti-cannon",
     "trophy-hoist",
+    "cowbell-clang",
   ],
   frustrated: [
     "laptop-slump",
@@ -109,6 +110,7 @@ export const executionAnimationPosePools = {
     "anvil-bonk",
     "cable-cocoon",
     "nuclear-vaporize",
+    "too-many-arms",
     "trapdoor-deploy",
     "steamroller-flat",
     "under-desk-drag",

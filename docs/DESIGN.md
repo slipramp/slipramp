@@ -97,20 +97,40 @@ container working directories, mounts, and artifact paths are clean, non-root
 absolute paths. The `SLIPRAMP_` environment namespace is reserved for the
 internal execution contract and rejected in catalog-defined environment names.
 
+Catalog processing is one staged implementation shared by Server refresh and
+the `slipramp catalog validate` CLI. Discovery and strict YAML decoding retain a
+field-path-to-source index and aggregate stable, source-addressed diagnostics
+across independent files and documents. Portable validation covers
+repository-owned contracts while accepting unknown, well-formed Placement
+names. Explicit deployment validation additionally requires a validated
+`PlacementConfig` set and checks Placement existence, credential offerings, and
+effective resource constraints. An empty Placement set never selects portable
+behavior implicitly. Server refresh always runs both stages and rejects errors;
+warnings do not prevent acceptance.
+
+The CLI can render the same sorted diagnostics as compiler-style text,
+schema-versioned JSON, or SARIF 2.1.0 without absolute checkout paths. Its
+repository-aware warnings cover currently missing Target paths, watch patterns
+with no matches, missing relative command files, command files outside the
+Target watch scope, and duplicate or completely subsumed watch patterns. Strict
+mode changes only the CLI exit result for warnings. Validation remains static:
+neither the Server nor CLI contacts Kubernetes, resolves Secret values, or
+inspects Runtime images.
+
 Target defaults supply runtime, placement, timeout, credentials, and resources.
 Action scalar overrides replace defaults; credential and resource maps merge
 by key. Resolution copies definitions rather than mutating the catalog.
 Runtimes and Targets always resolve from the same revision.
 
 A valid commit creates or reuses an immutable catalog revision. An invalid
-commit records its SHA and diagnostics while the last valid revision stays
-active; it does not advance Target state or create Runs. Changed paths between
-accepted heads match Target `watch` patterns, including recursive `**`, to
-advance each affected Target's durable desired commit. The Web presents this as
-the Target's last relevant change rather than a convergence status. New and
-reactivated Targets begin at the commit where they become active; removed
-Targets archive. Repository refresh indexes Git; target reconciliation executes
-optional `sync`. Watch patterns alone never start execution.
+commit records its SHA and a bounded safe diagnostic summary while the last
+valid revision stays active; it does not advance Target state or create Runs.
+Changed paths between accepted heads match Target `watch` patterns, including
+recursive `**`, to advance each affected Target's durable desired commit. The
+Web presents this as the Target's last relevant change rather than a convergence
+status. New and reactivated Targets begin at the commit where they become active;
+removed Targets archive. Repository refresh indexes Git; target reconciliation
+executes optional `sync`. Watch patterns alone never start execution.
 
 Catalog revision reads contain only immutable definitions and revision metadata.
 The active catalog view pairs that revision with mutable Target state, read from

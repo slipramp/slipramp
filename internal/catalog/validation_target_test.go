@@ -250,7 +250,7 @@ func TestValidateRejectsActionRequestAbovePlacementLimit(t *testing.T) {
 
 	testcheck.ErrorContains(
 		t,
-		catalog.Validate(input, placements),
+		catalogValidationError(input, placements),
 		"action \"preview\" execution resource request \"memory\" must not exceed its limit",
 	)
 }

@@ -72,7 +72,6 @@ test("working animation variants are stable and spread across IDs", () => {
       "antenna-tune",
       "drill-drive",
       "weld-spark-pipe",
-      "too-many-arms",
       "jackhammer-ride",
       "bubble-level-check",
       "paint-roller-swipe",
@@ -100,6 +99,7 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "championship-belt",
       "confetti-cannon",
       "trophy-hoist",
+      "cowbell-clang",
     ]),
   );
 });
@@ -125,6 +125,7 @@ test("frustrated animation variants are stable and spread across IDs", () => {
       "anvil-bonk",
       "cable-cocoon",
       "nuclear-vaporize",
+      "too-many-arms",
       "trapdoor-deploy",
       "steamroller-flat",
       "under-desk-drag",
