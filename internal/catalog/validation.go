@@ -26,6 +26,12 @@ type Result struct {
 	Level       ValidationLevel
 }
 
+type validationFinding struct {
+	fieldPath string
+	code      string
+	err       error
+}
+
 // Process runs the shared catalog decoding and validation pipeline used by the
 // Server and CLI.
 func Process(files fs.FS, options Options) (Result, error) {

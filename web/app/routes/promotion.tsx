@@ -15,7 +15,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { proxyArtifactDownload } from "~/api/artifact-download.server";
@@ -28,10 +28,11 @@ import {
   type ProductPrincipal,
   type Promotion,
 } from "~/api/generated";
-import { Timestamp } from "~/components/display";
+import { RelativeTime, Timestamp } from "~/components/display";
 import { useActionSuccessToast } from "~/components/action-notifications";
 import { useActivityRefresh } from "~/components/activity-refresh";
 import { CommitReference } from "~/components/git-commit";
+import { ContextValue } from "~/components/context-value";
 import { Identity } from "~/components/identity";
 import { KargoButton } from "~/components/kargo-link";
 import { KawaiiActivity } from "~/components/kawaii-activity";
@@ -147,7 +148,30 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
             {promotionStatusLabel(promotion.status)}
           </Badge>
         }
-        description={`Promotion ${promotion.id}`}
+        description={
+          <Group gap="xs">
+            <Text c="dimmed">Promotion {promotion.id.slice(0, 8)}</Text>
+            <Text c="dimmed">·</Text>
+            <Timestamp c="dimmed" value={promotion.createdAt} />
+            <Text c="dimmed">·</Text>
+            <RelativeTime c="dimmed" value={promotion.createdAt} />
+          </Group>
+        }
+        details={
+          <Group gap="xs" wrap="wrap">
+            <Text c="dimmed" size="sm">
+              Source: {promotion.source === "kargo" ? "Kargo" : "Slipramp"}
+            </Text>
+            <Text c="dimmed" size="sm">
+              ·
+            </Text>
+            <Identity
+              avatarSize={22}
+              name={promotion.requestedBy.displayName}
+              nameProps={{ fw: 500, size: "sm" }}
+            />
+          </Group>
+        }
         title={promotion.externalPromotionId}
       />
 
@@ -195,17 +219,57 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
     <Paper p="md" withBorder>
       <Stack gap="md">
         <Title order={2}>Promotion context</Title>
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }}>
-          <Fact label="Integration" value={promotion.integration} />
-          <Fact label="Stage" value={`${stage.project}/${stage.name}`} />
-          <Fact label="Application" value={stage.application} />
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
+          <Fact
+            label="Integration"
+            value={
+              <Anchor
+                component={Link}
+                to={`/promotions?integration=${encodeURIComponent(promotion.integration)}`}
+              >
+                {promotion.integration}
+              </Anchor>
+            }
+          />
+          <Fact
+            label="Stage"
+            value={
+              <Anchor
+                component={Link}
+                to={`/promotions?stageId=${encodeURIComponent(promotion.stageId)}`}
+              >
+                {stage.project}/{stage.name}
+              </Anchor>
+            }
+          />
+          <Fact
+            label="Application"
+            value={
+              <Anchor
+                component={Link}
+                to={`/promotions?application=${encodeURIComponent(stage.application)}`}
+              >
+                {stage.application}
+              </Anchor>
+            }
+          />
           <Fact label="Environment" value={stage.environment} />
-          <Fact label="Repository" value={repository.name} />
+          <Fact
+            label="Repository"
+            value={
+              <Anchor component={Link} to={`/repositories/${promotion.repositoryId}`}>
+                {repository.name}
+              </Anchor>
+            }
+          />
+          <Fact label="Policy snapshot" value={policy.effectiveMode} />
           <Fact label="Target branch" value={promotion.targetBranch} />
           <Fact label="Candidate branch" value={promotion.candidateBranch ?? "Waiting for Kargo"} />
-          <Fact label="Policy snapshot" value={policy.effectiveMode} />
+          {promotion.expiresAt ? (
+            <Fact label="Review expires" value={<Timestamp value={promotion.expiresAt} />} />
+          ) : null}
         </SimpleGrid>
-        <SimpleGrid cols={{ base: 1, md: 2 }}>
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
           <Revision
             commit={promotion.baseCommit}
             label="Base revision"
@@ -217,21 +281,6 @@ function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {
             repositoryId={promotion.repositoryId}
           />
         </SimpleGrid>
-        <Group gap="xl" wrap="wrap">
-          <Group gap="xs">
-            <Text size="sm">Requested by</Text>
-            <Identity avatarSize={24} name={promotion.requestedBy.displayName} />
-          </Group>
-          <Timestamp c="dimmed" size="sm" value={promotion.createdAt} />
-          {promotion.expiresAt ? (
-            <Group gap={4}>
-              <Text c="dimmed" size="sm">
-                Review expires
-              </Text>
-              <Timestamp c="dimmed" size="sm" value={promotion.expiresAt} />
-            </Group>
-          ) : null}
-        </Group>
       </Stack>
     </Paper>
   );
@@ -470,13 +519,13 @@ function DecisionPanel({
   );
 }
 
-function Fact({ label, value }: Readonly<{ label: string; value: string }>) {
+function Fact({ label, value }: Readonly<{ label: string; value: ReactNode }>) {
   return (
     <Stack gap={0}>
       <Text c="dimmed" size="xs">
         {label}
       </Text>
-      <Text style={{ overflowWrap: "anywhere" }}>{value}</Text>
+      <ContextValue>{value}</ContextValue>
     </Stack>
   );
 }
@@ -491,11 +540,13 @@ function Revision({
       <Text c="dimmed" size="xs">
         {label}
       </Text>
-      {commit ? (
-        <CommitReference commit={commit} repositoryId={repositoryId} />
-      ) : (
-        <Text>Waiting for Kargo</Text>
-      )}
+      <ContextValue>
+        {commit ? (
+          <CommitReference commit={commit} repositoryId={repositoryId} />
+        ) : (
+          "Waiting for Kargo"
+        )}
+      </ContextValue>
     </Stack>
   );
 }

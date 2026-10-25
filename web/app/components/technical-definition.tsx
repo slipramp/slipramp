@@ -1,6 +1,8 @@
 import { Code, Paper, Stack, Table, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 
+import { ContextValue } from "~/components/context-value";
+
 type Entries = ReadonlyArray<readonly [string, string]>;
 
 export function CommandBlock({ command }: Readonly<{ command: string[] }>) {
@@ -130,9 +132,9 @@ export function TechnicalValue({
   return (
     <Stack gap={4}>
       <TechnicalLabel>{label}</TechnicalLabel>
-      <div>
+      <ContextValue size="sm">
         <Code className="technical-inline-value">{value}</Code>
-      </div>
+      </ContextValue>
       {description ? (
         <Text c="dimmed" size="xs">
           {description}

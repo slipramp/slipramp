@@ -56,6 +56,7 @@ import {
   type RunArtifactInput,
 } from "~/api/generated";
 import { useActivityRefresh } from "~/components/activity-refresh";
+import { ContextValue } from "~/components/context-value";
 import { RelativeTime, Timestamp } from "~/components/display";
 import { CommitDetails, CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
@@ -581,7 +582,7 @@ function Fact({ children, label }: Readonly<{ children: ReactNode; label: string
       <Text c="dimmed" fw={700} size="xs" tt="uppercase">
         {label}
       </Text>
-      {children}
+      <ContextValue size="sm">{children}</ContextValue>
     </Stack>
   );
 }

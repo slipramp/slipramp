@@ -174,11 +174,14 @@ func validateActionPortable(
 			))
 		}
 	}
+	addFindings := func(findings []validationFinding) {
+		for _, finding := range findings {
+			add(finding.fieldPath, finding.code, finding.err)
+		}
+	}
 
 	add("", "catalog.action.name-invalid", kubevalidate.DNSLabel("action name", actionName))
-	if err := validateTriggers(target, actionName, action); err != nil {
-		add(".triggers", triggerDiagnosticCode(err), err)
-	}
+	addFindings(validateTriggers(target, actionName, action))
 	add(".intent", "catalog.intent.invalid", validateIntent(actionName, action.Intent))
 	add(".command", "catalog.command.invalid", validateCommand(actionName, action.Command))
 
@@ -259,15 +262,17 @@ func validateActionPortable(
 	)
 
 	if runtimeFound {
-		add(".parameters", "catalog.parameter.invalid", validateParameters(actionName, action.Parameters, runtime))
+		addFindings(validateParameters(actionName, action.Parameters, runtime))
 	}
-	add(".artifacts", "catalog.artifact.invalid", validateArtifacts(actionName, action.Artifacts))
-	add(".inputs", "catalog.input.invalid", validateInputs(actionName, action.Inputs))
+	addFindings(validateArtifacts(actionName, action.Artifacts))
+	addFindings(validateInputs(actionName, action.Inputs))
 	for _, inputName := range slices.Sorted(maps.Keys(action.Inputs)) {
 		item := action.Inputs[inputName]
 		for _, artifactName := range slices.Sorted(maps.Keys(action.Artifacts)) {
 			artifact := action.Artifacts[artifactName]
-			if item.MountPath == artifact.Path {
+			if item.MountPath == artifact.Path &&
+				validateContainerPath("input mountPath", item.MountPath) == nil &&
+				validateContainerPath("artifact path", artifact.Path) == nil {
 				add(
 					".inputs."+inputName+".mountPath",
 					"catalog.artifact.mount-conflict",
@@ -383,45 +388,76 @@ func effectiveCredentialFieldPath(target Target, actionName, credentialName stri
 	return "spec.credentials." + credentialName
 }
 
-func validateTriggers(target Target, actionName string, action Action) error {
-	seen := make(map[string]struct{}, len(action.Triggers))
-	for _, trigger := range action.Triggers {
+func validateTriggers(target Target, actionName string, action Action) []validationFinding {
+	findings := []validationFinding{}
+	seen := make(map[string]int, len(action.Triggers))
+	for index, trigger := range action.Triggers {
+		basePath := fmt.Sprintf(".triggers.%d", index)
 		if err := kubevalidate.DNSLabel(fmt.Sprintf("action %q trigger name", actionName), trigger.Name); err != nil {
-			return err
+			findings = append(findings, validationFinding{
+				fieldPath: basePath + ".name",
+				code:      "catalog.trigger.name-invalid",
+				err:       err,
+			})
 		}
 		if _, found := seen[trigger.Name]; found {
-			return fmt.Errorf("action %q trigger name %q is duplicated", actionName, trigger.Name)
+			findings = append(findings, validationFinding{
+				fieldPath: basePath + ".name",
+				code:      "catalog.trigger.name-duplicate",
+				err:       fmt.Errorf("action %q trigger name %q is duplicated", actionName, trigger.Name),
+			})
+		} else {
+			seen[trigger.Name] = index
 		}
-		seen[trigger.Name] = struct{}{}
 
 		if trigger.Git == nil {
-			return fmt.Errorf("action %q trigger %q must declare git", actionName, trigger.Name)
+			findings = append(findings, validationFinding{
+				fieldPath: basePath,
+				code:      "catalog.trigger.source-required",
+				err:       fmt.Errorf("action %q trigger %q must declare git", actionName, trigger.Name),
+			})
 		}
-		if len(target.Spec.Watch) == 0 {
-			return fmt.Errorf("action %q Git trigger %q requires target watch patterns", actionName, trigger.Name)
+		if trigger.Git != nil && len(target.Spec.Watch) == 0 {
+			findings = append(findings, validationFinding{
+				fieldPath: basePath + ".git",
+				code:      "catalog.trigger.watch-required",
+				err: fmt.Errorf(
+					"action %q Git trigger %q requires target watch patterns",
+					actionName,
+					trigger.Name,
+				),
+			})
 		}
 		if _, err := NormalizeAndValidateParameterValues(action.Parameters, trigger.Parameters); err != nil {
-			return fmt.Errorf(
-				"action %q Git trigger %q has invalid parameters: %w",
-				actionName,
-				trigger.Name,
-				err,
-			)
+			code := "catalog.trigger.parameters-invalid"
+			if strings.Contains(err.Error(), "required parameter") {
+				code = "catalog.parameter.required"
+			}
+			findings = append(findings, validationFinding{
+				fieldPath: basePath + ".parameters",
+				code:      code,
+				err: fmt.Errorf(
+					"action %q Git trigger %q has invalid parameters: %w",
+					actionName,
+					trigger.Name,
+					err,
+				),
+			})
 		}
-		if len(action.Inputs) > 0 {
-			return fmt.Errorf("action %q Git trigger %q cannot invoke an action with artifact inputs", actionName, trigger.Name)
+		if trigger.Git != nil && len(action.Inputs) > 0 {
+			findings = append(findings, validationFinding{
+				fieldPath: basePath + ".git",
+				code:      "catalog.trigger.artifact-inputs-unsupported",
+				err: fmt.Errorf(
+					"action %q Git trigger %q cannot invoke an action with artifact inputs",
+					actionName,
+					trigger.Name,
+				),
+			})
 		}
 	}
 
-	return nil
-}
-
-func triggerDiagnosticCode(err error) string {
-	if strings.Contains(err.Error(), "required parameter") {
-		return "catalog.parameter.required"
-	}
-
-	return "catalog.trigger.invalid"
+	return findings
 }
 
 func recursivePatternSubsumes(broader, narrower string) bool {
@@ -526,6 +562,9 @@ func validateInputReferences(input Catalog, target Target) Diagnostics {
 		for _, inputName := range slices.Sorted(maps.Keys(action.Inputs)) {
 			item := action.Inputs[inputName]
 			fieldPath := "spec.actions." + actionName + ".inputs." + inputName + ".artifact.fromAction"
+			if kubevalidate.DNSLabel("source action", item.Artifact.FromAction) != nil {
+				continue
+			}
 			sourceAction, found := target.Spec.Actions[item.Artifact.FromAction]
 			if !found {
 				diagnostics = append(diagnostics, errorDiagnostic(
