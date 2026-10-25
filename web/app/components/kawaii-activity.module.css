@@ -143,6 +143,36 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="cable-cocoon"] {
+  background-image: url("../assets/slipramp-axolotl-cable-cocoon.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="too-many-arms"] {
+  background-image: url("../assets/slipramp-axolotl-too-many-arms.webp");
+  animation-duration: 2s;
+}
+
+.sprite[data-pose="trapdoor-deploy"] {
+  background-image: url("../assets/slipramp-axolotl-trapdoor-deploy.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="steamroller-flat"] {
+  background-image: url("../assets/slipramp-axolotl-steamroller-flat.webp");
+  animation-duration: 2s;
+}
+
+.sprite[data-pose="under-desk-drag"] {
+  background-image: url("../assets/slipramp-axolotl-under-desk-drag.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="explosion-walkaway"] {
+  background-image: url("../assets/slipramp-axolotl-explosion-walkaway.webp");
+  animation-duration: 2.4s;
+}
+
 .copy {
   min-width: 0;
   overflow-wrap: anywhere;

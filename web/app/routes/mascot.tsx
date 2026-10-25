@@ -42,6 +42,12 @@ const mascotPoseLabels = {
   "trash-can-hide": "Trash-can hide",
   "lever-regret": "Lever regret",
   "anvil-bonk": "Anvil bonk",
+  "cable-cocoon": "Cable cocoon",
+  "too-many-arms": "Too many arms",
+  "trapdoor-deploy": "Trapdoor deploy",
+  "steamroller-flat": "Steamroller flat",
+  "under-desk-drag": "Under-desk drag",
+  "explosion-walkaway": "Explosion walkaway",
 } as const satisfies Record<ExecutionAnimationPose, string>;
 
 function mascotPoses(poses: readonly ExecutionAnimationPose[]): readonly MascotPose[] {

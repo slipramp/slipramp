@@ -43,7 +43,7 @@ test("waiting animation variants are stable and spread across IDs", () => {
 });
 
 test("working animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 20 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 40 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("working", id));
 
   assert.deepEqual(
@@ -52,12 +52,18 @@ test("working animation variants are stable and spread across IDs", () => {
   );
   assert.deepEqual(
     new Set(variants),
-    new Set(["laptop-typing", "blueprint-review", "clipboard-check", "walkie-talkie"]),
+    new Set([
+      "laptop-typing",
+      "blueprint-review",
+      "clipboard-check",
+      "walkie-talkie",
+      "too-many-arms",
+    ]),
   );
 });
 
 test("celebrating animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 20 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 40 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("celebrating", id));
 
   assert.deepEqual(
@@ -66,12 +72,12 @@ test("celebrating animation variants are stable and spread across IDs", () => {
   );
   assert.deepEqual(
     new Set(variants),
-    new Set(["beer-sip", "pennant-wave", "check-badge", "beer-toast"]),
+    new Set(["beer-sip", "pennant-wave", "check-badge", "beer-toast", "explosion-walkaway"]),
   );
 });
 
 test("frustrated animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 40 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 120 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("frustrated", id));
 
   assert.deepEqual(
@@ -88,6 +94,10 @@ test("frustrated animation variants are stable and spread across IDs", () => {
       "trash-can-hide",
       "lever-regret",
       "anvil-bonk",
+      "cable-cocoon",
+      "trapdoor-deploy",
+      "steamroller-flat",
+      "under-desk-drag",
     ]),
   );
 });

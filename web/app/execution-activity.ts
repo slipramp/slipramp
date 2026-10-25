@@ -22,7 +22,13 @@ export type ExecutionAnimationPose =
   | "play-dead"
   | "trash-can-hide"
   | "lever-regret"
-  | "anvil-bonk";
+  | "anvil-bonk"
+  | "cable-cocoon"
+  | "too-many-arms"
+  | "trapdoor-deploy"
+  | "steamroller-flat"
+  | "under-desk-drag"
+  | "explosion-walkaway";
 
 export const executionAnimationPosePools = {
   waiting: [
@@ -33,8 +39,14 @@ export const executionAnimationPosePools = {
     "headphone-headbang",
   ],
   phone: ["phone-scroll"],
-  working: ["laptop-typing", "blueprint-review", "clipboard-check", "walkie-talkie"],
-  celebrating: ["beer-sip", "pennant-wave", "check-badge", "beer-toast"],
+  working: [
+    "laptop-typing",
+    "blueprint-review",
+    "clipboard-check",
+    "walkie-talkie",
+    "too-many-arms",
+  ],
+  celebrating: ["beer-sip", "pennant-wave", "check-badge", "beer-toast", "explosion-walkaway"],
   frustrated: [
     "laptop-slump",
     "wrench-fumble",
@@ -43,6 +55,10 @@ export const executionAnimationPosePools = {
     "trash-can-hide",
     "lever-regret",
     "anvil-bonk",
+    "cable-cocoon",
+    "trapdoor-deploy",
+    "steamroller-flat",
+    "under-desk-drag",
   ],
 } as const satisfies Record<ExecutionAnimation, readonly ExecutionAnimationPose[]>;
 
