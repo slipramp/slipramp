@@ -2,6 +2,7 @@ import {
   Alert,
   Badge,
   Button,
+  Code,
   Divider,
   Group,
   NativeSelect,
@@ -29,7 +30,7 @@ import {
 import { Timestamp } from "~/components/display";
 import { CommitReference } from "~/components/git-commit";
 import { PageBackLink } from "~/components/page-back-link";
-import { PageHeader, SectionHeader } from "~/components/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
 import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { pageTitle } from "~/page-title";
 import { formValue, problemDetail } from "~/form-data";
@@ -130,7 +131,18 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         }
         back={<PageBackLink label="Back to repositories" to="/repositories" />}
         badges={repository ? <RefreshBadge repository={repository} /> : null}
-        description={repository ? `${repository.cloneUrl} · ${repository.branch}` : "Repository"}
+        details={
+          repository ? (
+            <PageHeaderFacts>
+              <PageHeaderFact label="URL">
+                <Code>{repository.cloneUrl}</Code>
+              </PageHeaderFact>
+              <PageHeaderFact label="Branch">
+                <Code>{repository.branch}</Code>
+              </PageHeaderFact>
+            </PageHeaderFacts>
+          ) : undefined
+        }
         title={repository?.name ?? "Repository"}
       />
 

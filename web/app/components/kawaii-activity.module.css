@@ -283,6 +283,18 @@
   animation-duration: 2.8s;
 }
 
+.sprite[data-pose="server-hug"] {
+  background-image: url("../assets/slipramp-axolotl-server-hug.webp");
+  animation-name: server-hug;
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="guitar-power-chord"] {
+  background-image: url("../assets/slipramp-axolotl-guitar-power-chord.webp");
+  animation-name: guitar-power-chord;
+  animation-duration: 2.2s;
+}
+
 .sprite[data-pose="laptop-slump"] {
   background-image: url("../assets/slipramp-axolotl-laptop-slump.webp");
   animation-duration: 2.8s;
@@ -560,6 +572,44 @@
   }
 
   75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes server-hug {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  26.785714% {
+    background-position-x: calc(100% / 3);
+  }
+
+  46.428571% {
+    background-position-x: calc(200% / 3);
+  }
+
+  76.785714% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes guitar-power-chord {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  22.727273% {
+    background-position-x: calc(100% / 3);
+  }
+
+  29.545455% {
+    background-position-x: calc(200% / 3);
+  }
+
+  70.454545% {
     background-position-x: 100%;
   }
 }

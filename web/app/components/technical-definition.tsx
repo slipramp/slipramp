@@ -8,9 +8,24 @@ type Entries = ReadonlyArray<readonly [string, string]>;
 export function CommandBlock({ command }: Readonly<{ command: string[] }>) {
   return (
     <TechnicalBlock label="Argument array">
-      <Code block className="technical-code-block">
-        {JSON.stringify(command, null, 2)}
-      </Code>
+      <Paper className="technical-data-table" withBorder>
+        <Table horizontalSpacing="sm" verticalSpacing="xs">
+          <Table.Tbody>
+            {command.map((argument, index) => (
+              <Table.Tr key={index}>
+                <Table.Td w="1%">
+                  <Text c="dimmed" ff="monospace" size="xs" style={{ whiteSpace: "nowrap" }}>
+                    argv[{index}]
+                  </Text>
+                </Table.Td>
+                <Table.Td>
+                  <Code className="technical-inline-value">{argument}</Code>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Paper>
     </TechnicalBlock>
   );
 }

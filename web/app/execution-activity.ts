@@ -50,6 +50,8 @@ export type ExecutionAnimationPose =
   | "trophy-hoist"
   | "cowbell-clang"
   | "chart-rise"
+  | "server-hug"
+  | "guitar-power-chord"
   | "laptop-slump"
   | "server-bite"
   | "rocket-boot-misfire"
@@ -126,6 +128,8 @@ export const executionAnimationPosePools = {
     "trophy-hoist",
     "cowbell-clang",
     "chart-rise",
+    "server-hug",
+    "guitar-power-chord",
   ],
   frustrated: [
     "laptop-slump",

@@ -11,6 +11,7 @@ import {
   Paper,
   SimpleGrid,
   Stack,
+  Switch,
   Table,
   Text,
   Timeline,
@@ -41,10 +42,12 @@ import {
   parseAnsi,
   type AnsiTextSegment,
 } from "~/ansi";
+import { actionRunPath, otherTargetActions } from "~/action-run";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   cancelRun,
   createRun,
+  getRepositoryCatalog,
   getRun,
   listRepositories,
   listRunArtifacts,
@@ -63,7 +66,7 @@ import { CommitDetails, CommitReference } from "~/components/git-commit";
 import { Identity } from "~/components/identity";
 import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
-import { PageHeader, SectionHeader } from "~/components/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
 import {
   formatBinarySize,
   formatDuration,
@@ -95,12 +98,24 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     listRepositories({ client, query: { limit: 200 } }),
   ]);
   const planArtifact = artifactResult.data?.items.find((artifact) => artifact.name === "plan");
-  const planRunsResult = planArtifact
-    ? await listRuns({ client, query: { inputArtifactId: planArtifact.id, limit: 100 } })
-    : undefined;
+  const [planRunsResult, catalogResult] = await Promise.all([
+    planArtifact
+      ? listRuns({ client, query: { inputArtifactId: planArtifact.id, limit: 100 } })
+      : undefined,
+    runResult.data?.phase === "finished"
+      ? getRepositoryCatalog({
+          client,
+          path: { repositoryId: runResult.data.repositoryId },
+        })
+      : undefined,
+  ]);
+  const activeTarget = catalogResult?.data?.targets.find(
+    (target) => target.metadata.name === runResult.data?.target,
+  );
 
   return {
     artifacts: artifactResult.data?.items,
+    otherActions: otherTargetActions(activeTarget?.spec.actions, runResult.data?.action ?? ""),
     planRuns: planRunsResult?.data?.items ?? [],
     planRunsAvailable: planRunsResult === undefined || planRunsResult.data !== undefined,
     repositoryName: repositoriesResult.data?.items.find(
@@ -246,6 +261,13 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                   }
                 />
               ) : null}
+              {loaderData.otherActions.length > 0 ? (
+                <OtherActionMenu
+                  actions={loaderData.otherActions}
+                  repositoryId={run.repositoryId}
+                  targetName={run.target}
+                />
+              ) : null}
               <Menu position="bottom-end" shadow="md" width={220}>
                 <Menu.Target>
                   <Button
@@ -326,33 +348,28 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
             ) : null}
           </>
         }
-        description={
-          <Group gap="xs">
-            {run.actionTitle ? (
-              <>
-                <Text c="dimmed">
-                  Action <Code>{run.action}</Code>
-                </Text>
-                <Text c="dimmed">·</Text>
-              </>
-            ) : null}
-            <Text c="dimmed">Run {run.id.slice(0, 8)}</Text>
-            <Text c="dimmed">·</Text>
-            <Timestamp c="dimmed" value={run.createdAt} />
-            <Text c="dimmed">·</Text>
-            <RelativeTime c="dimmed" value={run.createdAt} />
-          </Group>
-        }
         details={
-          <Group gap="xs" wrap="wrap">
-            <Text c="dimmed" size="sm">
-              Source: {runSourceLabel(run.source)}
-            </Text>
-            <Text c="dimmed" size="sm">
-              ·
-            </Text>
-            <Identity avatarSize={22} name={actor} nameProps={{ fw: 500, size: "sm" }} />
-          </Group>
+          <PageHeaderFacts>
+            {run.actionTitle ? (
+              <PageHeaderFact label="Action">
+                <Code>{run.action}</Code>
+              </PageHeaderFact>
+            ) : null}
+            <PageHeaderFact label="Run">
+              <Code>{run.id.slice(0, 8)}</Code>
+            </PageHeaderFact>
+            <PageHeaderFact label="Created">
+              <Group gap="xs" wrap="wrap">
+                <Timestamp value={run.createdAt} />
+                <Text c="dimmed">·</Text>
+                <RelativeTime c="dimmed" value={run.createdAt} />
+              </Group>
+            </PageHeaderFact>
+            <PageHeaderFact label="Source">{runSourceLabel(run.source)}</PageHeaderFact>
+            <PageHeaderFact label="Created by">
+              <Identity avatarSize={22} name={actor} nameProps={{ fw: 500, size: "sm" }} />
+            </PageHeaderFact>
+          </PageHeaderFacts>
         }
         title={
           <>
@@ -463,6 +480,53 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
   );
 }
 
+function OtherActionMenu({
+  actions,
+  repositoryId,
+  targetName,
+}: Readonly<{
+  actions: ReturnType<typeof otherTargetActions>;
+  repositoryId: string;
+  targetName: string;
+}>) {
+  return (
+    <Menu position="bottom-end" shadow="md" width={260}>
+      <Menu.Target>
+        <Button
+          leftSection={<IconPlayerPlay aria-hidden size={16} />}
+          rightSection={<IconChevronDown aria-hidden size={14} />}
+          size="compact-md"
+          variant="light"
+        >
+          Run another action
+        </Button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>Choose an action</Menu.Label>
+        {actions.map((actionChoice) => (
+          <Menu.Item
+            component={Link}
+            key={actionChoice.name}
+            leftSection={<IconPlayerPlay aria-hidden size={16} />}
+            to={actionRunPath(repositoryId, targetName, actionChoice.name)}
+          >
+            {actionChoice.title ? (
+              <Stack gap={0}>
+                <Text size="sm">{actionChoice.title}</Text>
+                <Text c="dimmed" ff="monospace" size="xs">
+                  {actionChoice.name}
+                </Text>
+              </Stack>
+            ) : (
+              actionChoice.name
+            )}
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 function PlanLineage({
   available,
   plan,
@@ -542,7 +606,7 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
       <Paper p="lg" withBorder>
         <Stack gap="lg">
           <Title order={2}>Execution context</Title>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+          <SimpleGrid cols={1} spacing="lg">
             <Fact label="Repository">
               <Anchor component={Link} to={`/repositories/${run.repositoryId}`}>
                 {repositoryName ?? shortIdentifier(run.repositoryId)}
@@ -976,6 +1040,7 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
   const [fullscreenOpened, setFullscreenOpened] = useState(false);
   const [receivedBytes, setReceivedBytes] = useState(0);
   const [status, setStatus] = useState("Connecting");
+  const [wrapLines, setWrapLines] = useState(true);
   const fullscreenOutputRef = useRef<HTMLElement>(null);
   const outputRef = useRef<HTMLElement>(null);
   const logSegments = useMemo(() => parseAnsi(contents), [contents]);
@@ -1091,6 +1156,12 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
                 {formatBinarySize(receivedBytes)} received
               </Text>
               <Badge variant="light">{status}</Badge>
+              <Switch
+                checked={wrapLines}
+                label="Wrap lines"
+                onChange={(event) => setWrapLines(event.currentTarget.checked)}
+                size="sm"
+              />
               <Button
                 leftSection={<IconMaximize aria-hidden size={15} />}
                 onClick={() => setFullscreenOpened(true)}
@@ -1101,7 +1172,12 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
               </Button>
             </Group>
           </Group>
-          <LogOutput contents={contents} logSegments={logSegments} outputRef={outputRef} />
+          <LogOutput
+            contents={contents}
+            logSegments={logSegments}
+            outputRef={outputRef}
+            wrapLines={wrapLines}
+          />
         </Stack>
       </Paper>
 
@@ -1113,17 +1189,26 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
         title="Run logs"
       >
         <Stack className="run-log-fullscreen-layout" gap="sm">
-          <Group gap="xs">
-            <Text c="dimmed" size="xs">
-              {formatBinarySize(receivedBytes)} received
-            </Text>
-            <Badge variant="light">{status}</Badge>
+          <Group justify="space-between" wrap="wrap">
+            <Group gap="xs">
+              <Text c="dimmed" size="xs">
+                {formatBinarySize(receivedBytes)} received
+              </Text>
+              <Badge variant="light">{status}</Badge>
+            </Group>
+            <Switch
+              checked={wrapLines}
+              label="Wrap lines"
+              onChange={(event) => setWrapLines(event.currentTarget.checked)}
+              size="sm"
+            />
           </Group>
           <LogOutput
             contents={contents}
             fullscreen
             logSegments={logSegments}
             outputRef={fullscreenOutputRef}
+            wrapLines={wrapLines}
           />
         </Stack>
       </Modal>
@@ -1136,11 +1221,13 @@ function LogOutput({
   fullscreen = false,
   logSegments,
   outputRef,
+  wrapLines,
 }: Readonly<{
   contents: string;
   fullscreen?: boolean;
   logSegments: AnsiTextSegment[];
   outputRef: RefObject<HTMLElement | null>;
+  wrapLines: boolean;
 }>) {
   return (
     <Code
@@ -1152,8 +1239,9 @@ function LogOutput({
         backgroundColor: ANSI_DEFAULT_BACKGROUND,
         color: ANSI_DEFAULT_FOREGROUND,
         overflow: "auto",
+        overflowWrap: wrapLines ? "anywhere" : "normal",
         tabSize: 4,
-        whiteSpace: "pre-wrap",
+        whiteSpace: wrapLines ? "pre-wrap" : "pre",
       }}
     >
       {contents.length === 0

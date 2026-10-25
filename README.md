@@ -379,11 +379,11 @@ integration, because the centralized Kargo Stage objects live in that cluster.
 
 The local `homelab-infrastructure` and `prod-infrastructure` Placements expose
 their cluster-local `ops-ci`, host-known-hosts, and `kcloud-ops-git` Secret
-sources in `slipramp-dev-runs`; the homelab Placement also exposes
-`kargo-argocd`. The Controller bootstrap remains responsible for materializing
-those Secrets and the private-GHCR pull credential in each cluster. The
-configured Kargo integration is named `homelab`; configure the Controller's
-Stage observer and Kargo PromotionTask to use that same name.
+sources in `slipramp-dev-runs`; both Placements also expose `kargo-argocd` for
+promotion preparation Runs. The Controller bootstrap remains responsible for
+materializing those Secrets and the private-GHCR pull credential in each
+cluster. The configured Kargo integration is named `homelab`; configure the
+Controller's Stage observer and Kargo PromotionTask to use that same name.
 After signing in,
 create an operator service account and API key with
 `slipramp:promotions:submit` for the PromotionTask; there is intentionally no

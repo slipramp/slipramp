@@ -5,7 +5,7 @@ type PageHeaderProps = {
   actions?: ReactNode;
   badges?: ReactNode;
   back?: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
   details?: ReactNode;
   title: ReactNode;
 };
@@ -38,6 +38,30 @@ export function PageHeader({
           </Group>
         ) : null}
       </Group>
+    </Stack>
+  );
+}
+
+export function PageHeaderFacts({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <Group align="flex-start" gap="xl" mt="xs" wrap="wrap">
+      {children}
+    </Group>
+  );
+}
+
+export function PageHeaderFact({
+  children,
+  label,
+}: Readonly<{ children: ReactNode; label: string }>) {
+  return (
+    <Stack gap={0}>
+      <Text c="dimmed" size="xs" tt="uppercase">
+        {label}
+      </Text>
+      <Text component="div" size="sm">
+        {children}
+      </Text>
     </Stack>
   );
 }

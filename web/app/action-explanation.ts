@@ -55,7 +55,7 @@ function originSummary(origin: ExplanationOrigin) {
     ? `:${origin.location.line}${origin.location.column ? `:${origin.location.column}` : ""}`
     : "";
   const field = origin.fieldPath || origin.location.fieldPath;
-  const location = `${origin.location.path}${position} · document ${origin.location.document}`;
+  const location = `${origin.location.path}${position}`;
 
   return field ? `${label} · ${location} · ${field}` : `${label} · ${location}`;
 }

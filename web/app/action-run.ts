@@ -10,6 +10,15 @@ export function actionRunPath(repositoryId: string, targetName: string, actionNa
   return `/repositories/${repositoryId}/targets/${encodeURIComponent(targetName)}/actions/${encodeURIComponent(actionName)}/run`;
 }
 
+export function otherTargetActions(
+  actions: Record<string, Action> | undefined,
+  currentAction: string,
+) {
+  return sortedEntries(actions)
+    .filter(([name]) => name !== currentAction)
+    .map(([name, action]) => ({ name, title: action.title }));
+}
+
 export function decodeActionParameters(
   formData: FormData,
   declarations: Record<string, Parameter> | undefined,

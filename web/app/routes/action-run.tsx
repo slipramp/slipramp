@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Code,
+  Divider,
   Group,
   NativeSelect,
   NumberInput,
@@ -20,12 +21,7 @@ import { IconExternalLink, IconPlayerPlay } from "@tabler/icons-react";
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Form, Link, redirect, useNavigation } from "react-router";
 
-import {
-  decodeActionParameters,
-  parameterDelivery,
-  parameterFieldName,
-  sortedEntries,
-} from "~/action-run";
+import { decodeActionParameters, parameterFieldName, sortedEntries } from "~/action-run";
 import {
   credentialInjectionLines,
   explainedEntries,
@@ -49,7 +45,7 @@ import {
 } from "~/api/generated";
 import { CommitReference } from "~/components/git-commit";
 import { PageBackLink } from "~/components/page-back-link";
-import { PageHeader } from "~/components/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/components/page";
 import {
   CodeList,
   CommandBlock,
@@ -184,6 +180,21 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
   return (
     <Stack gap="lg">
       <PageHeader
+        actions={
+          actionDefinition.documentationUrl ? (
+            <Button
+              component="a"
+              href={actionDefinition.documentationUrl}
+              rel="noreferrer"
+              rightSection={<IconExternalLink aria-hidden size={14} />}
+              size="compact-md"
+              target="_blank"
+              variant="default"
+            >
+              Documentation
+            </Button>
+          ) : null
+        }
         back={<PageBackLink label={`Back to ${targetLabel}`} to={targetURL} />}
         badges={
           actionDefinition.intent ? (
@@ -191,48 +202,32 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
           ) : null
         }
         description={
-          <Stack gap={2}>
-            <Text c="dimmed">
-              {targetLabel} · {loaderData.repository?.name ?? "Repository"}
-            </Text>
-            {actionDefinition.title ? (
-              <Text c="dimmed" size="sm">
-                Technical name <Code>{params.actionName}</Code>
-              </Text>
-            ) : null}
-            {actionDefinition.description ? (
-              <Text c="dimmed" size="sm">
-                {actionDefinition.description}
-              </Text>
-            ) : null}
-            {actionDefinition.documentationUrl ? (
-              <Anchor
-                href={actionDefinition.documentationUrl}
-                rel="noreferrer"
-                size="sm"
-                target="_blank"
-              >
-                <Group gap={4} wrap="nowrap">
-                  <span>Action documentation</span>
-                  <IconExternalLink aria-hidden size={14} />
-                </Group>
-              </Anchor>
-            ) : null}
-          </Stack>
+          actionDefinition.description ?? "Create an immutable execution of this action."
         }
         details={
-          <Text c="dimmed" size="sm">
-            Runs at catalog{" "}
-            <CommitReference
-              commit={loaderData.catalog.commit}
-              repositoryId={params.repositoryId}
-            />{" "}
-            · last relevant change{" "}
-            <CommitReference
-              commit={target.status.desiredCommit}
-              repositoryId={params.repositoryId}
-            />
-          </Text>
+          <PageHeaderFacts>
+            <PageHeaderFact label="Target">
+              <Anchor component={Link} to={targetURL}>
+                {targetLabel}
+              </Anchor>
+            </PageHeaderFact>
+            <PageHeaderFact label="Repository">
+              <Anchor component={Link} to={`/repositories/${loaderData.repositoryId}`}>
+                {loaderData.repository?.name ?? "Repository"}
+              </Anchor>
+            </PageHeaderFact>
+            {actionDefinition.title ? (
+              <PageHeaderFact label="Action">
+                <Code>{params.actionName}</Code>
+              </PageHeaderFact>
+            ) : null}
+            <PageHeaderFact label="Catalog">
+              <CommitReference
+                commit={loaderData.catalog.commit}
+                repositoryId={params.repositoryId}
+              />
+            </PageHeaderFact>
+          </PageHeaderFacts>
         }
         title={`Run ${actionDefinition.title ?? params.actionName}`}
       />
@@ -247,6 +242,7 @@ export default function ActionRun({ actionData, loaderData, params }: Route.Comp
             target={target}
             targetURL={targetURL}
           />
+          <ArtifactSection explanation={loaderData.explanation} />
         </>
       ) : (
         <Alert color="red" title="Execution context unavailable">
@@ -281,31 +277,13 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
         <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="lg">
           <Paper p="lg" withBorder>
             <Stack gap="lg">
-              <Stack gap={2}>
-                <Title order={2}>What will run</Title>
-                <Text c="dimmed" size="sm">
-                  The Server resolved this context from the active catalog and current Placement
-                  configuration. Parameter-derived arguments and environment values are added only
-                  when the Run is created.
-                </Text>
-              </Stack>
+              <Title order={2}>What will run</Title>
               <Stack gap={4}>
                 <CommandBlock command={explanation.process.command.value} />
                 <SourceLabel value={explanation.process.command} />
               </Stack>
-              <SimpleGrid cols={{ base: 1, sm: 2 }}>
-                <ExplainedTechnicalValue
-                  explained={explanation.process.workingDirectory}
-                  label="Process directory"
-                />
-                <ExplainedTechnicalValue
-                  explained={explanation.process.repositoryMount}
-                  label="Repository mount"
-                />
-                <ExplainedTechnicalValue
-                  explained={explanation.process.targetPath}
-                  label="Target path"
-                />
+              <SimpleGrid cols={1}>
+                <ExplainedTechnicalValue explained={explanation.runtime.image} label="Image" />
                 <TechnicalValue
                   description={
                     showProvenance ? provenanceSummary(explanation.runtime.name) : undefined
@@ -320,31 +298,52 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
                     </Anchor>
                   }
                 />
-                <ExplainedTechnicalValue explained={explanation.runtime.image} label="Image" />
-                <ExplainedTechnicalValue
-                  explained={explanation.timeout}
-                  label="Timeout"
-                  render={(value) => value || "No timeout"}
-                />
               </SimpleGrid>
-              <MappingTable
-                empty="No runtime environment values"
-                entries={environment.map(([name, value]) => [name, String(explainedValue(value))])}
-                label="Command environment before parameters"
-              />
-              <MappingSourceLabels entries={environment} />
+              <Accordion defaultValue={null} variant="contained">
+                <Accordion.Item value="execution-details">
+                  <Accordion.Control>
+                    <Text fw={600}>Execution details</Text>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <Stack gap="lg">
+                      <SimpleGrid cols={1}>
+                        <ExplainedTechnicalValue
+                          explained={explanation.process.workingDirectory}
+                          label="Process directory"
+                        />
+                        <ExplainedTechnicalValue
+                          explained={explanation.process.repositoryMount}
+                          label="Repository mount"
+                        />
+                        <ExplainedTechnicalValue
+                          explained={explanation.process.targetPath}
+                          label="Target path"
+                        />
+                        <ExplainedTechnicalValue
+                          explained={explanation.timeout}
+                          label="Timeout"
+                          render={(value) => value || "No timeout"}
+                        />
+                      </SimpleGrid>
+                      <MappingTable
+                        empty="No runtime environment values"
+                        entries={environment.map(([name, value]) => [
+                          name,
+                          String(explainedValue(value)),
+                        ])}
+                        label="Command environment before parameters"
+                      />
+                      <MappingSourceLabels entries={environment} />
+                    </Stack>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
             </Stack>
           </Paper>
 
           <Paper p="lg" withBorder>
             <Stack gap="lg">
-              <Stack gap={2}>
-                <Title order={2}>Placement and access</Title>
-                <Text c="dimmed" size="sm">
-                  Placement references and credential injection are shown without secret values or
-                  arbitrary pod configuration.
-                </Text>
-              </Stack>
+              <Title order={2}>Placement and access</Title>
               <SimpleGrid cols={{ base: 1, sm: 2 }}>
                 <TechnicalValue
                   description={
@@ -372,14 +371,30 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
                   explained={explanation.placement.serviceAccount}
                   label="Service account"
                 />
-                <ExplainedTechnicalValue
-                  explained={explanation.placement.podExtensions}
-                  label="Pod extensions configured"
-                  render={(value) => (value ? "Yes" : "No")}
-                />
+                {!explanation.placement.podExtensions.resolved ||
+                explanation.placement.podExtensions.value ? (
+                  <ExplainedTechnicalValue
+                    explained={explanation.placement.podExtensions}
+                    label="Pod extensions configured"
+                    render={(value) => (value ? "Yes" : "No")}
+                  />
+                ) : null}
               </SimpleGrid>
-              <MappingTable empty="No node selector" entries={nodeSelector} label="Node selector" />
-              <SourceLabel value={explanation.placement.nodeSelector} />
+              {!explanation.placement.nodeSelector.resolved ? (
+                <ExplainedTechnicalValue
+                  explained={explanation.placement.nodeSelector}
+                  label="Node selector"
+                />
+              ) : nodeSelector.length > 0 ? (
+                <>
+                  <MappingTable
+                    empty="No node selector"
+                    entries={nodeSelector}
+                    label="Node selector"
+                  />
+                  <SourceLabel value={explanation.placement.nodeSelector} />
+                </>
+              ) : null}
               <Accordion defaultValue={[]} multiple variant="contained">
                 <Accordion.Item value="resources">
                   <Accordion.Control>
@@ -408,20 +423,24 @@ function ActionContext({ explanation }: Readonly<{ explanation: CatalogExplanati
             </Stack>
           </Paper>
         </SimpleGrid>
-
-        <Paper p="lg" withBorder>
-          <Stack gap="lg">
-            <Stack gap={2}>
-              <Title order={2}>Artifacts</Title>
-              <Text c="dimmed" size="sm">
-                Declared outputs and compatible inputs are pinned by the catalog explanation.
-              </Text>
-            </Stack>
-            <ArtifactContext inputs={explanation.inputs} outputs={explanation.outputs} />
-          </Stack>
-        </Paper>
       </Stack>
     </ProvenanceVisibilityContext.Provider>
+  );
+}
+
+function ArtifactSection({ explanation }: Readonly<{ explanation: CatalogExplanation }>) {
+  return (
+    <Paper p="lg" withBorder>
+      <Stack gap="lg">
+        <Stack gap={2}>
+          <Title order={2}>Artifacts</Title>
+          <Text c="dimmed" size="sm">
+            Declared outputs and compatible inputs are pinned by the catalog explanation.
+          </Text>
+        </Stack>
+        <ArtifactContext inputs={explanation.inputs} outputs={explanation.outputs} />
+      </Stack>
+    </Paper>
   );
 }
 
@@ -516,53 +535,73 @@ function ResourceSourceLabels({ explanation }: Readonly<{ explanation: CatalogEx
 function Credentials({ credentials }: Readonly<{ credentials: CredentialExplanation[] }>) {
   const showProvenance = useContext(ProvenanceVisibilityContext);
 
+  if (credentials.length === 0) {
+    return (
+      <Text c="dimmed" size="sm">
+        No credential requirements
+      </Text>
+    );
+  }
+
   return (
-    <Stack gap="xs">
-      {credentials.length === 0 ? (
+    <Stack gap="md">
+      {credentials.map((credential, index) => (
+        <Stack gap="md" key={credential.requirement}>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+            <TechnicalValue label="Requirement" value={credential.requirement} />
+            <TechnicalValue
+              description={showProvenance ? provenanceSummary(credential.binding) : undefined}
+              label="Binding"
+              value={String(explainedValue(credential.binding))}
+            />
+            <TechnicalValue
+              description={showProvenance ? provenanceSummary(credential.source) : undefined}
+              label="Secret reference"
+              value={
+                credential.source.resolved
+                  ? credential.source.value.secretName
+                  : (credential.source.unresolvedReason ?? "Unresolved")
+              }
+            />
+            <CredentialInjection
+              description={showProvenance ? provenanceSummary(credential.injection) : undefined}
+              values={credentialInjectionLines(credential.injection.value)}
+            />
+          </SimpleGrid>
+          {index < credentials.length - 1 ? <Divider /> : null}
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+function CredentialInjection({
+  description,
+  values,
+}: Readonly<{ description?: string; values: string[] }>) {
+  return (
+    <Stack gap={4}>
+      <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+        Runtime injection
+      </Text>
+      {values.length === 0 ? (
         <Text c="dimmed" size="sm">
-          No credential requirements
+          No injection convention
         </Text>
       ) : (
-        <Stack gap="xs">
-          {credentials.map((credential) => {
-            const injection = credentialInjectionLines(credential.injection.value);
-            return (
-              <Paper
-                className="technical-data-table"
-                key={credential.requirement}
-                p="sm"
-                withBorder
-              >
-                <Stack gap="sm">
-                  <Group gap="xs" wrap="wrap">
-                    <Code>{credential.requirement}</Code>
-                    <Text c="dimmed" size="sm">
-                      uses binding
-                    </Text>
-                    <Code>{String(explainedValue(credential.binding))}</Code>
-                  </Group>
-                  <TechnicalValue
-                    description={showProvenance ? provenanceSummary(credential.source) : undefined}
-                    label="Placement Secret reference"
-                    value={
-                      credential.source.resolved
-                        ? credential.source.value.secretName
-                        : (credential.source.unresolvedReason ?? "Unresolved")
-                    }
-                  />
-                  <CodeList
-                    empty="No injection convention"
-                    label="Runtime injection"
-                    values={injection}
-                  />
-                  <SourceLabel value={credential.binding} />
-                  <SourceLabel value={credential.injection} />
-                </Stack>
-              </Paper>
-            );
-          })}
+        <Stack gap={2}>
+          {values.map((value) => (
+            <Text key={value} size="sm">
+              <Code className="technical-inline-value">{value}</Code>
+            </Text>
+          ))}
         </Stack>
       )}
+      {description ? (
+        <Text c="dimmed" size="xs">
+          {description}
+        </Text>
+      ) : null}
     </Stack>
   );
 }
@@ -587,6 +626,7 @@ function RunForm({
   targetURL: string;
 }>) {
   const navigation = useNavigation();
+  const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);
   const inputs = sortedEntries(actionDefinition.inputs);
   const parameters = sortedEntries(actionDefinition.parameters);
 
@@ -617,12 +657,23 @@ function RunForm({
     <Paper p="lg" withBorder>
       <Form method="post">
         <Stack gap="lg">
-          <Stack gap={2}>
-            <Title order={2}>Parameters</Title>
-            <Text c="dimmed" size="sm">
-              Review the effective context above, then provide values for this immutable execution.
-            </Text>
-          </Stack>
+          <Group align="flex-end" justify="space-between" wrap="wrap">
+            <Stack gap={2}>
+              <Title order={2}>Parameters</Title>
+              <Text c="dimmed" size="sm">
+                Review the effective context above, then provide values for this immutable
+                execution.
+              </Text>
+            </Stack>
+            {parameters.length > 0 ? (
+              <Switch
+                checked={showTechnicalDetails}
+                label="Show technical details"
+                onChange={(event) => setShowTechnicalDetails(event.currentTarget.checked)}
+                size="sm"
+              />
+            ) : null}
+          </Group>
           {error ? (
             <Alert color="red" title="Run not created">
               {error}
@@ -637,6 +688,7 @@ function RunForm({
                   key={name}
                   name={name}
                   parameter={parameter}
+                  showTechnicalDetails={showTechnicalDetails}
                   submittedValue={submittedValues?.[name]}
                 />
               ))}
@@ -663,26 +715,35 @@ function RunForm({
 function ParameterControl({
   name,
   parameter,
+  showTechnicalDetails,
   submittedValue,
-}: Readonly<{ name: string; parameter: Parameter; submittedValue?: string }>) {
+}: Readonly<{
+  name: string;
+  parameter: Parameter;
+  showTechnicalDetails: boolean;
+  submittedValue?: string;
+}>) {
   const common = {
-    description: (
-      <Stack gap={2}>
-        {parameter.title ? (
-          <Text c="dimmed" size="xs">
-            Technical name <Code>{name}</Code>
-          </Text>
-        ) : null}
-        {parameter.description ? (
-          <Text c="dimmed" size="xs">
-            {parameter.description}
-          </Text>
-        ) : null}
-        <Text c="dimmed" size="xs">
-          {parameter.required ? "Required" : "Optional"} · {parameterDelivery(parameter)}
-        </Text>
-      </Stack>
-    ),
+    description:
+      parameter.description || showTechnicalDetails ? (
+        <Stack gap={2}>
+          {showTechnicalDetails && parameter.title ? (
+            <Text c="dimmed" ff="monospace" size="xs">
+              {name}
+            </Text>
+          ) : null}
+          {parameter.description ? (
+            <Text c="dimmed" size="xs">
+              {parameter.description}
+            </Text>
+          ) : null}
+          {showTechnicalDetails ? (
+            <Text c="dimmed" size="xs">
+              <ParameterDelivery parameter={parameter} />
+            </Text>
+          ) : null}
+        </Stack>
+      ) : undefined,
     label: parameter.title ?? name,
     name: parameterFieldName(name),
     required: parameter.required,
@@ -710,6 +771,25 @@ function ParameterControl({
     case "string":
       return <TextInput {...common} defaultValue={submittedValue ?? ""} />;
   }
+}
+
+function ParameterDelivery({ parameter }: Readonly<{ parameter: Parameter }>) {
+  if (parameter.environment) {
+    return (
+      <>
+        Environment <Code>{parameter.environment}</Code>
+      </>
+    );
+  }
+  if (parameter.argument?.name) {
+    return (
+      <>
+        Argument <Code>{parameter.argument.name}</Code>
+      </>
+    );
+  }
+  if (parameter.argument) return "Positional argument";
+  return "Not mapped";
 }
 
 function ArtifactContext({

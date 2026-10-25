@@ -112,6 +112,8 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "trophy-hoist",
       "cowbell-clang",
       "chart-rise",
+      "server-hug",
+      "guitar-power-chord",
     ]),
   );
 });

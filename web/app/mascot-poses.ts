@@ -78,6 +78,8 @@ const mascotPoseMetadata = {
   "trophy-hoist": { label: "Trophy hoist", tags: ["leisure"] },
   "cowbell-clang": { label: "Cowbell clang", tags: ["leisure"] },
   "chart-rise": { label: "Chart rise", tags: ["slapstick"] },
+  "server-hug": { label: "Server hug", tags: ["construction"] },
+  "guitar-power-chord": { label: "Guitar power chord", tags: ["leisure"] },
   "laptop-slump": { label: "Laptop slump", tags: ["slapstick"] },
   "server-bite": { label: "Server bite", tags: ["construction", "slapstick"] },
   "rocket-boot-misfire": { label: "Rocket-boot misfire", tags: ["science-fiction", "slapstick"] },

@@ -13,7 +13,7 @@ import {
 import { APIKeyForm, APIKeyTable, CreatedToken } from "~/components/access";
 import { useActionSuccessToast } from "~/components/action-notifications";
 import { ListPagination } from "~/components/list-controls";
-import { PageHeader, SectionHeader } from "~/components/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
 import { PageBackLink } from "~/components/page-back-link";
 import { formValue, problemDetail } from "~/form-data";
 import { pageTitle } from "~/page-title";
@@ -124,7 +124,11 @@ export default function ServiceAccount({ actionData, loaderData }: Route.Compone
       <PageHeader
         back={<PageBackLink label="Back to service accounts" to="/service-accounts" />}
         badges={<Badge variant="light">{account.role}</Badge>}
-        description={account.principalId}
+        details={
+          <PageHeaderFacts>
+            <PageHeaderFact label="Principal ID">{account.principalId}</PageHeaderFact>
+          </PageHeaderFacts>
+        }
         title={account.displayName}
       />
       {actionData?.error ? (

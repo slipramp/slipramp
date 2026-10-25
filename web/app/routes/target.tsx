@@ -33,7 +33,7 @@ import { pageTitle } from "~/page-title";
 import { targetFilterPath } from "~/target-filter";
 import { CommitReference } from "~/components/git-commit";
 import { PageBackLink } from "~/components/page-back-link";
-import { PageHeader, SectionHeader } from "~/components/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
 import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { RunHistoryButton } from "~/components/run-history-button";
 import {
@@ -157,20 +157,27 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
             {actions.length} action{actions.length === 1 ? "" : "s"}
           </Badge>
         }
-        description={target.metadata.title ? target.metadata.name : "Operational target"}
+        description="Operational target"
         details={
-          <Text c="dimmed" size="xs">
-            Last relevant change{" "}
-            <CommitReference
-              commit={target.status.desiredCommit}
-              repositoryId={loaderData.repositoryId}
-            />{" "}
-            · Catalog{" "}
-            <CommitReference
-              commit={loaderData.catalog.commit}
-              repositoryId={loaderData.repositoryId}
-            />
-          </Text>
+          <PageHeaderFacts>
+            {target.metadata.title ? (
+              <PageHeaderFact label="Target">
+                <Code>{target.metadata.name}</Code>
+              </PageHeaderFact>
+            ) : null}
+            <PageHeaderFact label="Last relevant change">
+              <CommitReference
+                commit={target.status.desiredCommit}
+                repositoryId={loaderData.repositoryId}
+              />
+            </PageHeaderFact>
+            <PageHeaderFact label="Catalog">
+              <CommitReference
+                commit={loaderData.catalog.commit}
+                repositoryId={loaderData.repositoryId}
+              />
+            </PageHeaderFact>
+          </PageHeaderFacts>
         }
         title={target.metadata.title ?? target.metadata.name}
       />

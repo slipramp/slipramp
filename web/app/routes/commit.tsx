@@ -10,7 +10,7 @@ import { Identity } from "~/components/identity";
 import { KawaiiActivity } from "~/components/kawaii-activity";
 import { ListPagination } from "~/components/list-controls";
 import { PageBackLink } from "~/components/page-back-link";
-import { PageHeader, SectionHeader } from "~/components/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
 import { abbreviateMiddle, shortIdentifier } from "~/display";
 import { promotionActivity, runActivity } from "~/execution-activity";
 import { pageTitle } from "~/page-title";
@@ -114,10 +114,14 @@ export default function Commit({ loaderData }: Route.ComponentProps) {
     <Stack gap="lg">
       <PageHeader
         back={<PageBackLink label="Back to commits" to="/commits" />}
-        description={
-          <Anchor component={Link} to={`/repositories/${commit.repositoryId}`}>
-            {commit.repositoryName}
-          </Anchor>
+        details={
+          <PageHeaderFacts>
+            <PageHeaderFact label="Repository">
+              <Anchor component={Link} to={`/repositories/${commit.repositoryId}`}>
+                {commit.repositoryName}
+              </Anchor>
+            </PageHeaderFact>
+          </PageHeaderFacts>
         }
         title={`Commit ${shortIdentifier(commit.commit.sha, 12)}`}
       />

@@ -37,7 +37,7 @@ import { Identity } from "~/components/identity";
 import { KargoButton } from "~/components/kargo-link";
 import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
-import { PageHeader } from "~/components/page";
+import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/components/page";
 import { formValue, optionalFormValue } from "~/form-data";
 import { promotionActivity, promotionDetailActivity } from "~/execution-activity";
 import { filterArgoDiffResources, parseArgoDiff, type ArgoDiffResource } from "~/promotion-diff";
@@ -148,29 +148,29 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
             {promotionStatusLabel(promotion.status)}
           </Badge>
         }
-        description={
-          <Group gap="xs">
-            <Text c="dimmed">Promotion {promotion.id.slice(0, 8)}</Text>
-            <Text c="dimmed">·</Text>
-            <Timestamp c="dimmed" value={promotion.createdAt} />
-            <Text c="dimmed">·</Text>
-            <RelativeTime c="dimmed" value={promotion.createdAt} />
-          </Group>
-        }
         details={
-          <Group gap="xs" wrap="wrap">
-            <Text c="dimmed" size="sm">
-              Source: {promotion.source === "kargo" ? "Kargo" : "Slipramp"}
-            </Text>
-            <Text c="dimmed" size="sm">
-              ·
-            </Text>
-            <Identity
-              avatarSize={22}
-              name={promotion.requestedBy.displayName}
-              nameProps={{ fw: 500, size: "sm" }}
-            />
-          </Group>
+          <PageHeaderFacts>
+            <PageHeaderFact label="Promotion">
+              <Code>{promotion.id.slice(0, 8)}</Code>
+            </PageHeaderFact>
+            <PageHeaderFact label="Created">
+              <Group gap="xs" wrap="wrap">
+                <Timestamp value={promotion.createdAt} />
+                <Text c="dimmed">·</Text>
+                <RelativeTime c="dimmed" value={promotion.createdAt} />
+              </Group>
+            </PageHeaderFact>
+            <PageHeaderFact label="Source">
+              {promotion.source === "kargo" ? "Kargo" : "Slipramp"}
+            </PageHeaderFact>
+            <PageHeaderFact label="Requested by">
+              <Identity
+                avatarSize={22}
+                name={promotion.requestedBy.displayName}
+                nameProps={{ fw: 500, size: "sm" }}
+              />
+            </PageHeaderFact>
+          </PageHeaderFacts>
         }
         title={promotion.externalPromotionId}
       />

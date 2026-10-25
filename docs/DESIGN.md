@@ -1024,7 +1024,9 @@ on her phone, or touching the lawn beneath her. After assignment, she uses a
 deterministic working pose throughout preparation and execution. Creating or preparing Promotions use the same
 working-pose selection; Promotions awaiting review use the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
-deterministic celebration pose; failed or timed-out Runs choose a deterministic
+deterministic celebration pose, including an affectionate server hug or a guitar
+power chord with a broad strum, joyful singing expression, and golden sound
+bursts; failed or timed-out Runs choose a deterministic
 failure pose ranging from a laptop slump to server biting, tool fumbles,
 rocket-boot misfires, server stomping, emergency controls, and harmless slapstick
 retreats; canceled Runs use a neutral phone animation.
@@ -1046,7 +1048,8 @@ Animation timing varies by Run or Promotion identity and stays stable across
 refreshes. Compact standing variations include a determined working bounce and a
 rising-chart celebration. Pose-specific frame holds retain reviewed jumps and
 emotional reactions, including the rocket misfire's hopeful start and disappointed
-ending, while sprite geometry and reduced-motion behavior remain shared.
+ending, the server hug's squeeze, and the guitar's brief strum and sustained chord,
+while sprite geometry and reduced-motion behavior remain shared.
 Waiting, working, celebration, and failure mascot poses also vary
 deterministically by that identity, so the same Run or Promotion keeps its
 selected pose across refreshes. The unlinked, authenticated `/mascot` route

@@ -44,7 +44,7 @@ test("formats repository and placement provenance as secondary source text", () 
         },
       ],
     }),
-    "Action override · .slipramp/catalog.yaml:38:14 · document 2 · spec.actions.plan.runtime",
+    "Action override · .slipramp/catalog.yaml:38:14 · spec.actions.plan.runtime",
   );
   assert.equal(
     provenanceSummary({

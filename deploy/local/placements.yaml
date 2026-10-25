@@ -48,3 +48,6 @@ placements:
       kcloud-ops-git:
         secretRef:
           name: kcloud-ops-git
+      kargo-argocd:
+        secretRef:
+          name: kargo-argocd
