@@ -935,21 +935,25 @@ detail pages. While a Run is queued, she uses a deterministic waiting pose such
 as reading, sipping iced coffee, eating popcorn, listening to music, or playing
 on her phone. After assignment, she uses a deterministic working pose throughout
 preparation and execution. Creating or preparing Promotions use the same
-working-pose selection.
-Terminal mascots appear only on Run detail pages: successful Runs choose a
+working-pose selection; Promotions awaiting review use the waiting selection.
+Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose; failed or timed-out Runs choose a deterministic
 failure pose ranging from a laptop slump to tool fumbles, emergency controls,
 and harmless slapstick retreats; canceled Runs use a neutral phone animation.
-These outcome cards replace the terminal result alert. Successful cards show only the mascot and
-the `Run succeeded` title. Failed, timed-out, and canceled cards retain the
-original outcome message, reason, and process exit code, including zero. The
-standard theme keeps the result alert, which also remains as a diagnostic
-fallback when no terminal outcome is available. Unknown observations suppress
-activity only for unfinished Runs; Promotions awaiting review or already
-decided do not show activity. Cancellation intent retains the corresponding
-live animation with stopping text until the Run finishes. Promotion details
-refresh throughout creation and preparation. In the kawaii theme, visible lists
-refresh while Runs are unfinished or Promotions are creating or preparing.
+Approved Promotions celebrate, rejected or failed Promotions use the failure
+selection, and expired Promotions use the neutral phone animation. These outcome
+cards replace the terminal result alert. Successful Run cards show only the
+mascot and the `Run succeeded` title. Failed, timed-out, and canceled Run cards
+retain the original outcome message, reason, and process exit code, including
+zero; failed or expired Promotion cards retain their original diagnostic. The
+standard theme keeps result alerts, which also remain as a diagnostic fallback
+when no terminal outcome is available. Unknown observations suppress activity
+only for unfinished Runs. Promotion list rows show activity only while creating
+or preparing; waiting and terminal Promotion mascots stay on the detail page.
+Cancellation intent retains the corresponding live animation with stopping text
+until the Run finishes. Promotion details refresh throughout creation and
+preparation. In the kawaii theme, visible lists refresh while Runs are unfinished
+or Promotions are creating or preparing.
 Animation timing varies by Run or Promotion identity and stays stable across
 refreshes. Waiting, working, celebration, and failure mascot poses also vary
 deterministically by that identity, so the same Run or Promotion keeps its

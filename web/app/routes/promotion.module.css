@@ -1,3 +1,7 @@
 :global(:root[data-slipramp-theme="kawaii"]) .creationNotice {
   display: none;
 }
+
+:global(:root[data-slipramp-theme="kawaii"]) .resultNotice {
+  display: none;
+}

@@ -5,6 +5,7 @@ import {
   activityAnimationDelay,
   activityAnimationPose,
   promotionActivity,
+  promotionDetailActivity,
   runActivity,
   runResultActivity,
 } from "./execution-activity.ts";
@@ -23,7 +24,7 @@ test("animation offsets are stable and spread out similar Run IDs", () => {
 });
 
 test("waiting animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 30 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 60 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("waiting", id));
 
   assert.deepEqual(
@@ -38,6 +39,15 @@ test("waiting animation variants are stable and spread across IDs", () => {
       "iced-coffee-sip",
       "popcorn-munch",
       "headphone-headbang",
+      "toaster-vigil",
+      "suspended-animation",
+      "bubblegum-blow",
+      "binocular-scan",
+      "hourglass-turn",
+      "duck-float",
+      "lava-lamp-gaze",
+      "snail-coach",
+      "beach-ball-roll",
     ]),
   );
 });
@@ -57,7 +67,11 @@ test("working animation variants are stable and spread across IDs", () => {
       "blueprint-review",
       "clipboard-check",
       "walkie-talkie",
+      "antenna-tune",
+      "drill-drive",
+      "weld-spark-pipe",
       "too-many-arms",
+      "jackhammer-ride",
     ]),
   );
 });
@@ -72,7 +86,16 @@ test("celebrating animation variants are stable and spread across IDs", () => {
   );
   assert.deepEqual(
     new Set(variants),
-    new Set(["beer-sip", "pennant-wave", "check-badge", "beer-toast", "explosion-walkaway"]),
+    new Set([
+      "beer-sip",
+      "pennant-wave",
+      "check-badge",
+      "beer-toast",
+      "explosion-walkaway",
+      "flower-offer",
+      "championship-belt",
+      "confetti-cannon",
+    ]),
   );
 });
 
@@ -90,11 +113,13 @@ test("frustrated animation variants are stable and spread across IDs", () => {
       "laptop-slump",
       "wrench-fumble",
       "button-panic",
+      "chart-plunge",
       "play-dead",
       "trash-can-hide",
       "lever-regret",
       "anvil-bonk",
       "cable-cocoon",
+      "nuclear-vaporize",
       "trapdoor-deploy",
       "steamroller-flat",
       "under-desk-drag",
@@ -282,5 +307,39 @@ test("only creating and preparing Promotions show activity", () => {
 
   for (const status of ["pending", "approved", "rejected", "expired", "error"]) {
     assert.equal(promotionActivity({ status }), undefined, status);
+  }
+});
+
+test("Promotion details give every lifecycle status a fitting mascot", () => {
+  const expected = {
+    creating: { animation: "working", title: "Making a little momentum" },
+    preparing: { animation: "working", title: "Good things are in motion" },
+    pending: { animation: "waiting", title: "Ready when you are" },
+    approved: { animation: "celebrating", tone: "success", title: "Promotion approved" },
+    rejected: { animation: "frustrated", tone: "error", title: "Promotion rejected" },
+    expired: { animation: "phone", tone: "neutral", title: "Review window expired" },
+    error: { animation: "frustrated", tone: "error", title: "Promotion failed" },
+  };
+
+  for (const [status, activity] of Object.entries(expected)) {
+    assert.deepEqual(
+      {
+        animation: promotionDetailActivity({ status }).animation,
+        tone: promotionDetailActivity({ status }).tone,
+        title: promotionDetailActivity({ status }).title,
+      },
+      { tone: undefined, ...activity },
+      status,
+    );
+  }
+});
+
+test("Promotion failure and expiry mascots preserve terminal diagnostics", () => {
+  for (const status of ["expired", "error"]) {
+    assert.equal(
+      promotionDetailActivity({ message: "Original Promotion diagnostic.", status }).description,
+      "Original Promotion diagnostic.",
+      status,
+    );
   }
 });

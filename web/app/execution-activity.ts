@@ -8,22 +8,40 @@ export type ExecutionAnimationPose =
   | "iced-coffee-sip"
   | "popcorn-munch"
   | "headphone-headbang"
+  | "toaster-vigil"
+  | "suspended-animation"
+  | "bubblegum-blow"
+  | "binocular-scan"
+  | "hourglass-turn"
+  | "duck-float"
+  | "lava-lamp-gaze"
+  | "snail-coach"
+  | "beach-ball-roll"
   | "laptop-typing"
   | "blueprint-review"
   | "clipboard-check"
   | "walkie-talkie"
+  | "antenna-tune"
+  | "drill-drive"
+  | "weld-spark-pipe"
+  | "jackhammer-ride"
   | "beer-sip"
   | "pennant-wave"
   | "check-badge"
   | "beer-toast"
+  | "flower-offer"
+  | "championship-belt"
+  | "confetti-cannon"
   | "laptop-slump"
   | "wrench-fumble"
   | "button-panic"
+  | "chart-plunge"
   | "play-dead"
   | "trash-can-hide"
   | "lever-regret"
   | "anvil-bonk"
   | "cable-cocoon"
+  | "nuclear-vaporize"
   | "too-many-arms"
   | "trapdoor-deploy"
   | "steamroller-flat"
@@ -37,6 +55,15 @@ export const executionAnimationPosePools = {
     "iced-coffee-sip",
     "popcorn-munch",
     "headphone-headbang",
+    "toaster-vigil",
+    "suspended-animation",
+    "bubblegum-blow",
+    "binocular-scan",
+    "hourglass-turn",
+    "duck-float",
+    "lava-lamp-gaze",
+    "snail-coach",
+    "beach-ball-roll",
   ],
   phone: ["phone-scroll"],
   working: [
@@ -44,18 +71,33 @@ export const executionAnimationPosePools = {
     "blueprint-review",
     "clipboard-check",
     "walkie-talkie",
+    "antenna-tune",
+    "drill-drive",
+    "weld-spark-pipe",
     "too-many-arms",
+    "jackhammer-ride",
   ],
-  celebrating: ["beer-sip", "pennant-wave", "check-badge", "beer-toast", "explosion-walkaway"],
+  celebrating: [
+    "beer-sip",
+    "pennant-wave",
+    "check-badge",
+    "beer-toast",
+    "explosion-walkaway",
+    "flower-offer",
+    "championship-belt",
+    "confetti-cannon",
+  ],
   frustrated: [
     "laptop-slump",
     "wrench-fumble",
     "button-panic",
+    "chart-plunge",
     "play-dead",
     "trash-can-hide",
     "lever-regret",
     "anvil-bonk",
     "cable-cocoon",
+    "nuclear-vaporize",
     "trapdoor-deploy",
     "steamroller-flat",
     "under-desk-drag",
@@ -216,5 +258,50 @@ export function promotionActivity(
       };
     default:
       return undefined;
+  }
+}
+
+export function promotionDetailActivity(
+  promotion: Pick<Promotion, "status" | "message">,
+): ExecutionActivity | undefined {
+  const activity = promotionActivity(promotion);
+  if (activity) return activity;
+
+  switch (promotion.status) {
+    case "pending":
+      return {
+        animation: "waiting",
+        title: "Ready when you are",
+        description: "Review the prepared changes, then approve or reject this Promotion.",
+      };
+    case "approved":
+      return {
+        animation: "celebrating",
+        tone: "success",
+        title: "Promotion approved",
+        description: "Kargo can continue with the approved candidate.",
+      };
+    case "rejected":
+      return {
+        animation: "frustrated",
+        tone: "error",
+        title: "Promotion rejected",
+        description: "The candidate was not approved for this Stage.",
+      };
+    case "expired":
+      return {
+        animation: "phone",
+        tone: "neutral",
+        title: "Review window expired",
+        description:
+          promotion.message ?? "No decision was recorded before the review window closed.",
+      };
+    case "error":
+      return {
+        animation: "frustrated",
+        tone: "error",
+        title: "Promotion failed",
+        description: promotion.message ?? "The Promotion could not be created or prepared.",
+      };
   }
 }

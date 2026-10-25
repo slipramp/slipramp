@@ -74,6 +74,51 @@
   animation-duration: 1.6s;
 }
 
+.sprite[data-pose="toaster-vigil"] {
+  background-image: url("../assets/slipramp-axolotl-toaster-vigil.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="suspended-animation"] {
+  background-image: url("../assets/slipramp-axolotl-suspended-animation.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="bubblegum-blow"] {
+  background-image: url("../assets/slipramp-axolotl-bubblegum-blow.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="binocular-scan"] {
+  background-image: url("../assets/slipramp-axolotl-binocular-scan.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="hourglass-turn"] {
+  background-image: url("../assets/slipramp-axolotl-hourglass-turn.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="duck-float"] {
+  background-image: url("../assets/slipramp-axolotl-duck-float.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="lava-lamp-gaze"] {
+  background-image: url("../assets/slipramp-axolotl-lava-lamp-gaze.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="snail-coach"] {
+  background-image: url("../assets/slipramp-axolotl-snail-coach.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="beach-ball-roll"] {
+  background-image: url("../assets/slipramp-axolotl-beach-ball-roll.webp");
+  animation-duration: 2.4s;
+}
+
 .sprite[data-pose="blueprint-review"] {
   background-image: url("../assets/slipramp-axolotl-blueprint-review.webp");
 }
@@ -86,6 +131,26 @@
 .sprite[data-pose="walkie-talkie"] {
   background-image: url("../assets/slipramp-axolotl-walkie-talkie.webp");
   animation-duration: 2.4s;
+}
+
+.sprite[data-pose="antenna-tune"] {
+  background-image: url("../assets/slipramp-axolotl-antenna-tune.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="drill-drive"] {
+  background-image: url("../assets/slipramp-axolotl-drill-drive.webp");
+  animation-duration: 1.6s;
+}
+
+.sprite[data-pose="weld-spark-pipe"] {
+  background-image: url("../assets/slipramp-axolotl-weld-spark-pipe.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="jackhammer-ride"] {
+  background-image: url("../assets/slipramp-axolotl-jackhammer-ride.webp");
+  animation-duration: 1.6s;
 }
 
 .sprite[data-pose="beer-sip"] {
@@ -108,6 +173,21 @@
   animation-duration: 2.8s;
 }
 
+.sprite[data-pose="flower-offer"] {
+  background-image: url("../assets/slipramp-axolotl-flower-offer.webp");
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="championship-belt"] {
+  background-image: url("../assets/slipramp-axolotl-championship-belt.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="confetti-cannon"] {
+  background-image: url("../assets/slipramp-axolotl-confetti-cannon.webp");
+  animation-duration: 2.4s;
+}
+
 .sprite[data-pose="laptop-slump"] {
   background-image: url("../assets/slipramp-axolotl-laptop-slump.webp");
   animation-duration: 2.8s;
@@ -121,6 +201,11 @@
 .sprite[data-pose="button-panic"] {
   background-image: url("../assets/slipramp-axolotl-button-panic.webp");
   animation-duration: 2.4s;
+}
+
+.sprite[data-pose="chart-plunge"] {
+  background-image: url("../assets/slipramp-axolotl-chart-plunge.webp");
+  animation-duration: 2.8s;
 }
 
 .sprite[data-pose="play-dead"] {
@@ -146,6 +231,11 @@
 .sprite[data-pose="cable-cocoon"] {
   background-image: url("../assets/slipramp-axolotl-cable-cocoon.webp");
   animation-duration: 2.4s;
+}
+
+.sprite[data-pose="nuclear-vaporize"] {
+  background-image: url("../assets/slipramp-axolotl-nuclear-vaporize.webp");
+  animation-duration: 2.8s;
 }
 
 .sprite[data-pose="too-many-arms"] {

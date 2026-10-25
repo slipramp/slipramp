@@ -1,4 +1,16 @@
-import { Badge, Box, Code, Group, Paper, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import {
+  Badge,
+  Box,
+  Code,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Switch,
+  Text,
+  Title,
+} from "@mantine/core";
+import { useState } from "react";
 
 import activityStyles from "~/components/kawaii-activity.module.css";
 import { PageHeader } from "~/components/page";
@@ -27,22 +39,40 @@ const mascotPoseLabels = {
   "iced-coffee-sip": "Iced coffee sip",
   "popcorn-munch": "Popcorn munch",
   "headphone-headbang": "Headphone headbang",
+  "toaster-vigil": "Toaster vigil",
+  "suspended-animation": "Suspended animation",
+  "bubblegum-blow": "Bubblegum blow",
+  "binocular-scan": "Binocular scan",
+  "hourglass-turn": "Hourglass turn",
+  "duck-float": "Duck float",
+  "lava-lamp-gaze": "Lava-lamp gaze",
+  "snail-coach": "Snail coach",
+  "beach-ball-roll": "Beach-ball roll",
   "laptop-typing": "Laptop typing",
   "blueprint-review": "Blueprint review",
   "clipboard-check": "Clipboard check",
   "walkie-talkie": "Walkie-talkie",
+  "antenna-tune": "Antenna tune",
+  "drill-drive": "Drill drive",
+  "weld-spark-pipe": "Weld spark pipe",
+  "jackhammer-ride": "Jackhammer ride",
   "beer-sip": "Beer sip",
   "pennant-wave": "Pennant wave",
   "check-badge": "Check badge",
   "beer-toast": "Beer toast",
+  "flower-offer": "Flower offer",
+  "championship-belt": "Championship belt",
+  "confetti-cannon": "Confetti cannon",
   "laptop-slump": "Laptop slump",
   "wrench-fumble": "Wrench fumble",
   "button-panic": "Button panic",
+  "chart-plunge": "Chart plunge",
   "play-dead": "Play dead",
   "trash-can-hide": "Trash-can hide",
   "lever-regret": "Lever regret",
   "anvil-bonk": "Anvil bonk",
   "cable-cocoon": "Cable cocoon",
+  "nuclear-vaporize": "Nuclear vaporize",
   "too-many-arms": "Too many arms",
   "trapdoor-deploy": "Trapdoor deploy",
   "steamroller-flat": "Steamroller flat",
@@ -57,33 +87,33 @@ function mascotPoses(poses: readonly ExecutionAnimationPose[]): readonly MascotP
 const mascotGroups = [
   {
     color: "violet",
-    description: "Runs waiting to be picked up by a Controller.",
+    description: "Runs waiting for a Controller and Promotions waiting for operator review.",
     poses: mascotPoses(executionAnimationPosePools.waiting),
-    title: "Queued",
+    title: "Waiting",
   },
   {
     color: "blue",
-    description: "Runs that are assigned, preparing, or running.",
+    description: "Runs in progress and Promotions being created or prepared.",
     poses: mascotPoses(executionAnimationPosePools.working),
     title: "Working",
   },
   {
     color: "green",
-    description: "Runs that finished successfully.",
+    description: "Runs that succeeded and Promotions that were approved.",
     poses: mascotPoses(executionAnimationPosePools.celebrating),
-    title: "Succeeded",
+    title: "Successful",
   },
   {
     color: "red",
-    description: "Runs that failed or timed out.",
+    description: "Runs that failed or timed out and Promotions that were rejected or failed.",
     poses: mascotPoses(executionAnimationPosePools.frustrated),
-    title: "Failed or timed out",
+    title: "Unsuccessful",
   },
   {
     color: "gray",
-    description: "Canceled Runs intentionally keep the neutral phone pose.",
+    description: "Canceled Runs and expired Promotions intentionally keep the neutral phone pose.",
     poses: mascotPoses(executionAnimationPosePools.phone),
-    title: "Canceled",
+    title: "Stopped or expired",
   },
 ] as const satisfies readonly MascotGroup[];
 
@@ -92,10 +122,19 @@ export function meta() {
 }
 
 export default function MascotGallery() {
+  const [hideSmallVariants, setHideSmallVariants] = useState(false);
+
   return (
     <Stack gap="xl">
       <PageHeader
-        description="All production mascot loops grouped by the Run state that uses them."
+        actions={
+          <Switch
+            checked={hideSmallVariants}
+            label="Hide small variants"
+            onChange={(event) => setHideSmallVariants(event.currentTarget.checked)}
+          />
+        }
+        description="All production mascot loops grouped by the Run and Promotion states that use them."
         title="Mascot gallery"
       />
 
@@ -110,7 +149,11 @@ export default function MascotGallery() {
           <Text c="dimmed">{group.description}</Text>
           <SimpleGrid cols={{ base: 1, sm: 2, xl: 3 }}>
             {group.poses.map((pose) => (
-              <MascotCard key={`${group.title}:${pose.pose}`} {...pose} />
+              <MascotCard
+                hideSmallVariants={hideSmallVariants}
+                key={`${group.title}:${pose.pose}`}
+                {...pose}
+              />
             ))}
           </SimpleGrid>
         </Stack>
@@ -119,19 +162,25 @@ export default function MascotGallery() {
   );
 }
 
-function MascotCard({ label, pose }: Readonly<MascotPose>) {
+function MascotCard({
+  hideSmallVariants,
+  label,
+  pose,
+}: Readonly<MascotPose & { hideSmallVariants: boolean }>) {
   return (
     <Paper p="lg" withBorder>
       <Stack align="center" gap="md">
         <SpritePreview label={label} pose={pose} size={140} />
         <Stack align="center" gap={2}>
           <Text fw={650}>{label}</Text>
-          <Code>{pose}</Code>
+          {hideSmallVariants ? null : <Code>{pose}</Code>}
         </Stack>
-        <Group align="flex-end" gap="xl">
-          <PreviewSize label="Mobile" pose={pose} size={104} />
-          <PreviewSize label="Compact" pose={pose} size={48} />
-        </Group>
+        {hideSmallVariants ? null : (
+          <Group align="flex-end" gap="xl">
+            <PreviewSize label="Mobile" pose={pose} size={104} />
+            <PreviewSize label="Compact" pose={pose} size={48} />
+          </Group>
+        )}
       </Stack>
     </Paper>
   );

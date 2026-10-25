@@ -38,7 +38,7 @@ import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader } from "~/components/page";
 import { formValue, optionalFormValue } from "~/form-data";
-import { promotionActivity } from "~/execution-activity";
+import { promotionActivity, promotionDetailActivity } from "~/execution-activity";
 import { filterArgoDiffResources, parseArgoDiff, type ArgoDiffResource } from "~/promotion-diff";
 import { pageTitle } from "~/page-title";
 
@@ -135,6 +135,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
 
   const promotion = loaderData.promotion;
   const canWrite = canWritePromotions(loaderData.principal);
+  const detailActivity = promotionDetailActivity(promotion);
 
   return (
     <Stack gap="lg">
@@ -150,7 +151,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         title={promotion.externalPromotionId}
       />
 
-      <KawaiiActivity activity={promotionActivity(promotion)} animationKey={promotion.id} />
+      <KawaiiActivity activity={detailActivity} animationKey={promotion.id} />
 
       {actionData?.error ? (
         <Alert color="red" title="Decision failed">
@@ -158,7 +159,11 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
         </Alert>
       ) : null}
       {promotion.message ? (
-        <Alert color={promotion.status === "expired" ? "gray" : "red"} title="Promotion result">
+        <Alert
+          className={detailActivity ? styles.resultNotice : undefined}
+          color={promotion.status === "expired" ? "gray" : "red"}
+          title="Promotion result"
+        >
           {promotion.message}
         </Alert>
       ) : null}
