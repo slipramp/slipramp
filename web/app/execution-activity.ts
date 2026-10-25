@@ -17,6 +17,8 @@ export type ExecutionAnimationPose =
   | "lava-lamp-gaze"
   | "snail-coach"
   | "beach-ball-roll"
+  | "cat-petting"
+  | "pinwheel-spin"
   | "laptop-typing"
   | "blueprint-review"
   | "clipboard-check"
@@ -25,6 +27,8 @@ export type ExecutionAnimationPose =
   | "drill-drive"
   | "weld-spark-pipe"
   | "jackhammer-ride"
+  | "bubble-level-check"
+  | "paint-roller-swipe"
   | "beer-sip"
   | "pennant-wave"
   | "check-badge"
@@ -32,6 +36,7 @@ export type ExecutionAnimationPose =
   | "flower-offer"
   | "championship-belt"
   | "confetti-cannon"
+  | "trophy-hoist"
   | "laptop-slump"
   | "wrench-fumble"
   | "button-panic"
@@ -46,6 +51,7 @@ export type ExecutionAnimationPose =
   | "trapdoor-deploy"
   | "steamroller-flat"
   | "under-desk-drag"
+  | "fire-extinguisher-blast"
   | "explosion-walkaway";
 
 export const executionAnimationPosePools = {
@@ -64,6 +70,8 @@ export const executionAnimationPosePools = {
     "lava-lamp-gaze",
     "snail-coach",
     "beach-ball-roll",
+    "cat-petting",
+    "pinwheel-spin",
   ],
   phone: ["phone-scroll"],
   working: [
@@ -76,6 +84,8 @@ export const executionAnimationPosePools = {
     "weld-spark-pipe",
     "too-many-arms",
     "jackhammer-ride",
+    "bubble-level-check",
+    "paint-roller-swipe",
   ],
   celebrating: [
     "beer-sip",
@@ -86,6 +96,7 @@ export const executionAnimationPosePools = {
     "flower-offer",
     "championship-belt",
     "confetti-cannon",
+    "trophy-hoist",
   ],
   frustrated: [
     "laptop-slump",
@@ -101,6 +112,7 @@ export const executionAnimationPosePools = {
     "trapdoor-deploy",
     "steamroller-flat",
     "under-desk-drag",
+    "fire-extinguisher-blast",
   ],
 } as const satisfies Record<ExecutionAnimation, readonly ExecutionAnimationPose[]>;
 

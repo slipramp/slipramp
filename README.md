@@ -37,6 +37,8 @@ failures first (`limit` 1–200). There is no manual delivery retry action.
   installation and deployment configuration.
 - [End-to-end acceptance](deploy/e2e/README.md): disposable kind coverage and
   diagnostics.
+- [Mascot gallery](https://mascot.slipramp.com): the production axolotl
+  animations, published independently from the private control plane.
 
 Contracts are pre-stable. Development favors clean breaking changes with all
 callers and documentation updated together.
@@ -243,6 +245,9 @@ web process in separate terminals:
 task deps
 task local:server
 task web:dev
+task mascot:dev
+task mascot:build
+task mascot:deploy
 task generate
 task charts:check
 task charts:package CHART_VERSION=0.1.0

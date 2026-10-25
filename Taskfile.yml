@@ -92,6 +92,24 @@ tasks:
     cmds:
       - '"{{.PNPM}}" --filter @slipramp/web run dev'
 
+  mascot:dev:
+    desc: Run the public mascot gallery development server
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/web run dev:mascot'
+
+  mascot:build:
+    desc: Build the public mascot gallery static site
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/web run build:mascot'
+
+  mascot:deploy:
+    desc: Build and deploy the public mascot gallery to Cloudflare
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/web run deploy:mascot'
+
   local:up:
     desc: Start local PostgreSQL, RustFS, and Dex dependencies
     cmds:
@@ -234,6 +252,7 @@ tasks:
     cmds:
       - go build ./...
       - '"{{.PNPM}}" --filter @slipramp/web run build'
+      - '"{{.PNPM}}" --filter @slipramp/web run build:mascot'
 
   check:
     desc: Run all local quality checks
@@ -251,3 +270,4 @@ tasks:
       - '"{{.PNPM}}" --filter @slipramp/web run format:check'
       - '"{{.PNPM}}" --filter @slipramp/web run typecheck'
       - '"{{.PNPM}}" --filter @slipramp/web run build'
+      - '"{{.PNPM}}" --filter @slipramp/web run build:mascot'

@@ -4,7 +4,10 @@
   "type": "module",
   "scripts": {
     "build": "react-router build",
+    "build:mascot": "vite build --config vite.mascot.config.ts",
     "dev": "react-router dev",
+    "dev:mascot": "vite --config vite.mascot.config.ts",
+    "deploy:mascot": "pnpm run build:mascot && wrangler deploy --config wrangler.mascot.jsonc",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
@@ -36,6 +39,7 @@
     "oxfmt": "0.73.0",
     "oxlint": "1.88.0",
     "typescript": "7.0.2",
-    "vite": "8.3.4"
+    "vite": "8.3.4",
+    "wrangler": "4.152.0"
   }
 }

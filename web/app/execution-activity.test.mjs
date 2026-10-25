@@ -24,7 +24,7 @@ test("animation offsets are stable and spread out similar Run IDs", () => {
 });
 
 test("waiting animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 60 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 75 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("waiting", id));
 
   assert.deepEqual(
@@ -48,6 +48,8 @@ test("waiting animation variants are stable and spread across IDs", () => {
       "lava-lamp-gaze",
       "snail-coach",
       "beach-ball-roll",
+      "cat-petting",
+      "pinwheel-spin",
     ]),
   );
 });
@@ -72,6 +74,8 @@ test("working animation variants are stable and spread across IDs", () => {
       "weld-spark-pipe",
       "too-many-arms",
       "jackhammer-ride",
+      "bubble-level-check",
+      "paint-roller-swipe",
     ]),
   );
 });
@@ -95,6 +99,7 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "flower-offer",
       "championship-belt",
       "confetti-cannon",
+      "trophy-hoist",
     ]),
   );
 });
@@ -123,6 +128,7 @@ test("frustrated animation variants are stable and spread across IDs", () => {
       "trapdoor-deploy",
       "steamroller-flat",
       "under-desk-drag",
+      "fire-extinguisher-blast",
     ]),
   );
 });

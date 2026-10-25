@@ -1,0 +1,76 @@
+.mascot-site {
+  min-height: 100vh;
+}
+
+.mascot-site-nav {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  border-bottom: 1px solid var(--slipramp-border);
+  background: var(--slipramp-header);
+  backdrop-filter: blur(16px);
+}
+
+.mascot-site-brand {
+  letter-spacing: -0.025em;
+}
+
+.mascot-site-github {
+  color: var(--mantine-color-text);
+}
+
+.mascot-site-content {
+  padding-block: clamp(0.5rem, 1.5vw, 1rem) 4rem;
+}
+
+.mascot-site-hero {
+  margin-bottom: clamp(1rem, 2vw, 1.5rem);
+  overflow: hidden;
+  border-color: var(--slipramp-border);
+  background:
+    radial-gradient(circle at 86% 18%, rgb(186 240 223 / 60%), transparent 18rem),
+    radial-gradient(circle at 8% 90%, rgb(255 232 138 / 34%), transparent 20rem),
+    rgb(255 253 253 / 86%);
+  box-shadow: 0 22px 70px rgb(181 50 104 / 10%);
+}
+
+.mascot-site-hero-copy {
+  flex: 1 1 34rem;
+  align-items: flex-start;
+}
+
+.mascot-site-hero-copy h1 {
+  max-width: 15ch;
+  font-size: clamp(2.25rem, 6vw, 4.75rem);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+.mascot-site-hero-image {
+  flex: 0 1 23rem;
+  width: min(100%, 23rem);
+  filter: drop-shadow(0 18px 24px rgb(181 50 104 / 16%));
+}
+
+.mascot-site-footer {
+  padding-block: 1.5rem;
+  border-top: 1px solid var(--slipramp-border);
+  background: rgb(255 250 253 / 70%);
+}
+
+@media (width < 48em) {
+  .mascot-site-hero-copy h1 {
+    max-width: none;
+  }
+
+  .mascot-site-hero-image {
+    width: min(100%, 19rem);
+    margin-inline: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-site-nav {
+    backdrop-filter: none;
+  }
+}

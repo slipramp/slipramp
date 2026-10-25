@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "slipramp-mascot",
+  "compatibility_date": "2026-10-24",
+  "workers_dev": false,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./dist/mascot",
+  },
+  "routes": [
+    {
+      "pattern": "mascot.slipramp.com",
+      "custom_domain": true,
+    },
+  ],
+}

@@ -41,7 +41,7 @@
   left: 50%;
   width: 8.75rem;
   aspect-ratio: 1;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--sprite-scale, 1));
   background-image: url("../assets/slipramp-axolotl-laptop-typing.webp");
   background-repeat: no-repeat;
   background-position: 0;
@@ -119,6 +119,16 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="cat-petting"] {
+  background-image: url("../assets/slipramp-axolotl-cat-petting.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="pinwheel-spin"] {
+  background-image: url("../assets/slipramp-axolotl-pinwheel-spin.webp");
+  animation-duration: 1.6s;
+}
+
 .sprite[data-pose="blueprint-review"] {
   background-image: url("../assets/slipramp-axolotl-blueprint-review.webp");
 }
@@ -150,6 +160,18 @@
 
 .sprite[data-pose="jackhammer-ride"] {
   background-image: url("../assets/slipramp-axolotl-jackhammer-ride.webp");
+  animation-duration: 1.6s;
+}
+
+.sprite[data-pose="bubble-level-check"] {
+  background-image: url("../assets/slipramp-axolotl-bubble-level-check.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="paint-roller-swipe"] {
+  --sprite-scale: 0.9;
+
+  background-image: url("../assets/slipramp-axolotl-paint-roller-swipe.webp");
   animation-duration: 1.6s;
 }
 
@@ -185,6 +207,11 @@
 
 .sprite[data-pose="confetti-cannon"] {
   background-image: url("../assets/slipramp-axolotl-confetti-cannon.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="trophy-hoist"] {
+  background-image: url("../assets/slipramp-axolotl-trophy-hoist.webp");
   animation-duration: 2.4s;
 }
 
@@ -256,6 +283,13 @@
 .sprite[data-pose="under-desk-drag"] {
   background-image: url("../assets/slipramp-axolotl-under-desk-drag.webp");
   animation-duration: 2.4s;
+}
+
+.sprite[data-pose="fire-extinguisher-blast"] {
+  --sprite-scale: 1.07;
+
+  background-image: url("../assets/slipramp-axolotl-fire-extinguisher-blast.webp");
+  animation-duration: 2s;
 }
 
 .sprite[data-pose="explosion-walkaway"] {

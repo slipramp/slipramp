@@ -957,10 +957,15 @@ or Promotions are creating or preparing.
 Animation timing varies by Run or Promotion identity and stays stable across
 refreshes. Waiting, working, celebration, and failure mascot poses also vary
 deterministically by that identity, so the same Run or Promotion keeps its
-selected pose across refreshes. The unlinked `/mascot` route groups every
-production animation by state at its detail, mobile, and compact display sizes
-for visual review. Activity respects reduced motion preferences and leaves
-textual status indicators available.
+selected pose across refreshes. The unlinked, authenticated `/mascot` route
+groups every production animation by state at its detail, mobile, and compact
+display sizes for visual review. A separate static build reuses that gallery at
+`https://mascot.slipramp.com` without authentication, product navigation, API
+access, or a connection to the Slipramp deployment. Cloudflare Workers Static
+Assets serves the public build from its own custom domain; the central Ingress
+remains private. Gallery cards load their sprite sheets as they approach the
+viewport. Activity respects reduced motion preferences and leaves textual
+status indicators available.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

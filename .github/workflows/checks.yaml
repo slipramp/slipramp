@@ -35,6 +35,15 @@ jobs:
 
       - run: task check
 
+      - name: Upload mascot gallery
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mascot-site
+          path: web/dist/mascot
+          if-no-files-found: error
+          retention-days: 1
+
   integration:
     name: Integration
     runs-on: ubuntu-latest
@@ -51,3 +60,30 @@ jobs:
         run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
 
       - run: task integration
+
+  deploy-mascot:
+    name: Deploy mascot gallery
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - check
+      - integration
+    runs-on: ubuntu-latest
+    environment:
+      name: mascot-production
+      url: https://mascot.slipramp.com
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mascot-site
+          path: web/dist/mascot
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.152.0
+          workingDirectory: web
+          command: deploy --config wrangler.mascot.jsonc
