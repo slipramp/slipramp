@@ -16,7 +16,6 @@ const (
 	serverFailureConflict        serverFailureKind = "conflict"
 	serverFailureInvalidRequest  serverFailureKind = "invalid-request"
 	serverFailureInvalidResponse serverFailureKind = "invalid-response"
-	serverFailureLogFailed       serverFailureKind = "log-failed"
 )
 
 var errInvalidServerResponse = errors.New("invalid Server response")

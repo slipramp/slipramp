@@ -62,6 +62,7 @@ type memoryLogReporter struct {
 	mutex                   sync.Mutex
 	contents                []byte
 	sealed                  bool
+	failed                  bool
 	sha256                  string
 	cursorErrors            []error
 	sealErrors              []error
@@ -85,6 +86,7 @@ func (r *memoryLogReporter) GetLogCursor(context.Context, uuid.UUID) (logCursor,
 	return logCursor{
 		nextOffsetBytes: int64(len(r.contents)),
 		sealed:          r.sealed,
+		failed:          r.failed,
 		sha256:          r.sha256,
 	}, nil
 }
@@ -142,6 +144,18 @@ func (r *memoryLogReporter) SealLog(_ context.Context, _ uuid.UUID, sizeBytes in
 	return nil
 }
 
+func (r *memoryLogReporter) FailLog(context.Context, uuid.UUID) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.sealed {
+		return errors.New("sealed log cannot fail")
+	}
+	r.failed = true
+
+	return nil
+}
+
 func (r *memoryLogReporter) bytes() []byte {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -154,4 +168,11 @@ func (r *memoryLogReporter) isSealed() bool {
 	defer r.mutex.Unlock()
 
 	return r.sealed
+}
+
+func (r *memoryLogReporter) isFailed() bool {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	return r.failed
 }

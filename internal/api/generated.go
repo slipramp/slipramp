@@ -3246,7 +3246,7 @@ type ClientInterface interface {
 
 	// StreamRunLog Stream retained and live Run log bytes
 	//
-	// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
+	// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset. A sealed event means the complete log was retained, while a failed event means only an incomplete durable prefix remains.
 	//
 	// Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 	StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3425,6 +3425,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /controller/v1/runs/{runId}/log-chunks (the `AppendRunLogChunk` operationId).
 	AppendRunLogChunkWithBody(ctx context.Context, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// FailRunLog Mark the durable Run log as failed
+	//
+	// Closes an incomplete log for a Run managed by the authenticated controller when its Kubernetes source has disappeared. Durable chunks remain available for partial viewing. Repeating the failure is idempotent.
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log/failure (the `FailRunLog` operationId).
+	FailRunLog(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ReportRunObservationWithBody Report a Run observation
 	//
@@ -4225,7 +4232,7 @@ func (c *Client) CancelRun(ctx context.Context, runID openapi_types.UUID, reqEdi
 
 // StreamRunLog Stream retained and live Run log bytes
 //
-// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
+// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset. A sealed event means the complete log was retained, while a failed event means only an incomplete durable prefix remains.
 //
 // Corresponds with GET /api/v1/runs/{runId}/logs (the `StreamRunLog` operationId).
 func (c *Client) StreamRunLog(ctx context.Context, runID openapi_types.UUID, params *StreamRunLogParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4635,6 +4642,23 @@ func (c *Client) SealRunLog(ctx context.Context, runID openapi_types.UUID, body 
 // Corresponds with POST /controller/v1/runs/{runId}/log-chunks (the `AppendRunLogChunk` operationId).
 func (c *Client) AppendRunLogChunkWithBody(ctx context.Context, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAppendRunLogChunkRequestWithBody(c.Server, runID, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// FailRunLog Mark the durable Run log as failed
+//
+// Closes an incomplete log for a Run managed by the authenticated controller when its Kubernetes source has disappeared. Durable chunks remain available for partial viewing. Repeating the failure is idempotent.
+//
+// Corresponds with POST /controller/v1/runs/{runId}/log/failure (the `FailRunLog` operationId).
+func (c *Client) FailRunLog(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFailRunLogRequest(c.Server, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -7849,6 +7873,40 @@ func NewAppendRunLogChunkRequestWithBody(server string, runID openapi_types.UUID
 	return req, nil
 }
 
+// NewFailRunLogRequest constructs an http.Request for the FailRunLog method
+func NewFailRunLogRequest(server string, runID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/runs/%s/log/failure", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewReportRunObservationRequest calls the generic ReportRunObservation builder with application/json body
 func NewReportRunObservationRequest(server string, runID openapi_types.UUID, body ReportRunObservationJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -8457,7 +8515,7 @@ type ClientWithResponsesInterface interface {
 
 	// StreamRunLogWithResponse Stream retained and live Run log bytes
 	//
-	// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
+	// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset. A sealed event means the complete log was retained, while a failed event means only an incomplete durable prefix remains.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8650,6 +8708,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /controller/v1/runs/{runId}/log-chunks (the `AppendRunLogChunk` operationId).
 	AppendRunLogChunkWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, params *AppendRunLogChunkParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AppendRunLogChunkResponse, error)
+
+	// FailRunLogWithResponse Mark the durable Run log as failed
+	//
+	// Closes an incomplete log for a Run managed by the authenticated controller when its Kubernetes source has disappeared. Durable chunks remain available for partial viewing. Repeating the failure is idempotent.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/runs/{runId}/log/failure (the `FailRunLog` operationId).
+	FailRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*FailRunLogResponse, error)
 
 	// ReportRunObservationWithBodyWithResponse Report a Run observation
 	//
@@ -12626,6 +12693,82 @@ func (r AppendRunLogChunkResponse) ContentType() string {
 	return ""
 }
 
+type FailRunLogResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r FailRunLogResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r FailRunLogResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r FailRunLogResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r FailRunLogResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r FailRunLogResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r FailRunLogResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r FailRunLogResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r FailRunLogResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r FailRunLogResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r FailRunLogResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ReportRunObservationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13580,7 +13723,7 @@ func (c *ClientWithResponses) CancelRunWithResponse(ctx context.Context, runID o
 
 // StreamRunLogWithResponse Stream retained and live Run log bytes
 //
-// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
+// Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset. A sealed event means the complete log was retained, while a failed event means only an incomplete durable prefix remains.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -13916,6 +14059,21 @@ func (c *ClientWithResponses) AppendRunLogChunkWithBodyWithResponse(ctx context.
 		return nil, err
 	}
 	return ParseAppendRunLogChunkResponse(rsp)
+}
+
+// FailRunLogWithResponse Mark the durable Run log as failed
+//
+// Closes an incomplete log for a Run managed by the authenticated controller when its Kubernetes source has disappeared. Durable chunks remain available for partial viewing. Repeating the failure is idempotent.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/runs/{runId}/log/failure (the `FailRunLog` operationId).
+func (c *ClientWithResponses) FailRunLogWithResponse(ctx context.Context, runID openapi_types.UUID, reqEditors ...RequestEditorFn) (*FailRunLogResponse, error) {
+	rsp, err := c.FailRunLog(ctx, runID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseFailRunLogResponse(rsp)
 }
 
 // ReportRunObservationWithBodyWithResponse Report a Run observation
@@ -17292,6 +17450,70 @@ func ParseAppendRunLogChunkResponse(rsp *http.Response) (*AppendRunLogChunkRespo
 	return response, nil
 }
 
+// ParseFailRunLogResponse parses an HTTP response from a FailRunLogWithResponse call
+func ParseFailRunLogResponse(rsp *http.Response) (*FailRunLogResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &FailRunLogResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseReportRunObservationResponse parses an HTTP response from a ReportRunObservationWithResponse call
 func ParseReportRunObservationResponse(rsp *http.Response) (*ReportRunObservationResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -17708,6 +17930,9 @@ type ServerInterface interface {
 	// AppendRunLogChunk Append a Run log chunk
 	// (POST /controller/v1/runs/{runId}/log-chunks)
 	AppendRunLogChunk(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params AppendRunLogChunkParams)
+	// FailRunLog Mark the durable Run log as failed
+	// (POST /controller/v1/runs/{runId}/log/failure)
+	FailRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
 	// ReportRunObservation Report a Run observation
 	// (POST /controller/v1/runs/{runId}/observations)
 	ReportRunObservation(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
@@ -20030,6 +20255,32 @@ func (siw *ServerInterfaceWrapper) AppendRunLogChunk(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// FailRunLog operation middleware
+func (siw *ServerInterfaceWrapper) FailRunLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FailRunLog(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReportRunObservation operation middleware
 func (siw *ServerInterfaceWrapper) ReportRunObservation(w http.ResponseWriter, r *http.Request) {
 
@@ -20325,6 +20576,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log-chunks", wrapper.AppendRunLogChunk)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.GetRunLogCursor)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.SealRunLog)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log/failure", wrapper.FailRunLog)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/execution/v1/runs/{runId}/artifacts/{artifactName}", wrapper.UploadRunArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/execution/v1/runs/{runId}/inputs/{inputName}", wrapper.DownloadRunInput)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs", wrapper.ListRuns)
@@ -25431,6 +25683,106 @@ func (response AppendRunLogChunk500ApplicationProblemPlusJSONResponse) VisitAppe
 	return err
 }
 
+type FailRunLogRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+}
+
+type FailRunLogResponseObject interface {
+	VisitFailRunLogResponse(w http.ResponseWriter) error
+}
+
+type FailRunLog204Response struct {
+}
+
+func (response FailRunLog204Response) VisitFailRunLogResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type FailRunLog400ApplicationProblemPlusJSONResponse Problem
+
+func (response FailRunLog400ApplicationProblemPlusJSONResponse) VisitFailRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FailRunLog401ApplicationProblemPlusJSONResponse Problem
+
+func (response FailRunLog401ApplicationProblemPlusJSONResponse) VisitFailRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FailRunLog404ApplicationProblemPlusJSONResponse Problem
+
+func (response FailRunLog404ApplicationProblemPlusJSONResponse) VisitFailRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FailRunLog405ApplicationProblemPlusJSONResponse Problem
+
+func (response FailRunLog405ApplicationProblemPlusJSONResponse) VisitFailRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FailRunLog409ApplicationProblemPlusJSONResponse Problem
+
+func (response FailRunLog409ApplicationProblemPlusJSONResponse) VisitFailRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type FailRunLog500ApplicationProblemPlusJSONResponse Problem
+
+func (response FailRunLog500ApplicationProblemPlusJSONResponse) VisitFailRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReportRunObservationRequestObject struct {
 	RunID openapi_types.UUID `json:"runId"`
 	Body  *ReportRunObservationJSONRequestBody
@@ -25967,6 +26319,9 @@ type StrictServerInterface interface {
 	// AppendRunLogChunk Append a Run log chunk
 	// (POST /controller/v1/runs/{runId}/log-chunks)
 	AppendRunLogChunk(ctx context.Context, request AppendRunLogChunkRequestObject) (AppendRunLogChunkResponseObject, error)
+	// FailRunLog Mark the durable Run log as failed
+	// (POST /controller/v1/runs/{runId}/log/failure)
+	FailRunLog(ctx context.Context, request FailRunLogRequestObject) (FailRunLogResponseObject, error)
 	// ReportRunObservation Report a Run observation
 	// (POST /controller/v1/runs/{runId}/observations)
 	ReportRunObservation(ctx context.Context, request ReportRunObservationRequestObject) (ReportRunObservationResponseObject, error)
@@ -27454,6 +27809,32 @@ func (sh *strictHandler) AppendRunLogChunk(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(AppendRunLogChunkResponseObject); ok {
 		if err := validResponse.VisitAppendRunLogChunkResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// FailRunLog operation middleware
+func (sh *strictHandler) FailRunLog(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request FailRunLogRequestObject
+
+	request.RunID = runID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.FailRunLog(ctx, request.(FailRunLogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "FailRunLog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(FailRunLogResponseObject); ok {
+		if err := validResponse.VisitFailRunLogResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

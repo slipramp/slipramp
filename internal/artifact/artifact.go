@@ -35,6 +35,7 @@ var (
 	ErrChunkConflict = errors.New("log chunk conflicts with stored contents")
 	ErrChunkTooLarge = errors.New("log chunk exceeds the maximum size")
 	ErrLogClosed     = errors.New("log artifact is closed")
+	ErrLogFailed     = errors.New("log artifact failed before completion")
 	ErrNotSealed     = errors.New("artifact is not sealed")
 	ErrSealConflict  = errors.New("log seal conflicts with durable contents")
 

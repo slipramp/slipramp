@@ -116,7 +116,9 @@ runLogs:
     summary: Stream retained and live Run log bytes
     description: >-
       Sends JSON log events over SSE. Reconnect with offsetBytes or the last
-      event ID; event IDs are the next durable byte offset.
+      event ID; event IDs are the next durable byte offset. A sealed event
+      means the complete log was retained, while a failed event means only an
+      incomplete durable prefix remains.
     security:
       - ProductSession: []
       - ProductBearer: []

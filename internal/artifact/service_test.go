@@ -136,6 +136,19 @@ func (s *serviceMetadataStore) SealArtifact(
 	return *s.record, nil
 }
 
+func (s *serviceMetadataStore) FailArtifact(_ context.Context, _ uuid.UUID) (Artifact, error) {
+	if s.record == nil {
+		return Artifact{}, ErrNotFound
+	}
+	if s.record.State == StateSealed {
+		return Artifact{}, ErrSealConflict
+	}
+
+	s.record.State = StateFailed
+
+	return *s.record, nil
+}
+
 type serviceContentStore struct {
 	puts      int
 	key       string
@@ -355,6 +368,11 @@ func TestServiceSealsAndReconnectsToDurableLog(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("repeated SealLog() error = %v", err)
 	}
+	if err := service.FailLog(context.Background(), FailLogRequest{
+		RunID: runID, ClusterName: "colo",
+	}); !errors.Is(err, ErrSealConflict) {
+		t.Fatalf("FailLog() after seal error = %v, want conflict", err)
+	}
 
 	for _, test := range []struct {
 		name      string
@@ -399,6 +417,54 @@ func TestServiceSealsAndReconnectsToDurableLog(t *testing.T) {
 				t.Errorf("drained Next() error = %v, want EOF", err)
 			}
 		})
+	}
+}
+
+func TestServiceFailsIncompleteLogIdempotently(t *testing.T) {
+	t.Parallel()
+
+	metadata := &serviceMetadataStore{runCluster: "colo", chunks: map[int64]LogChunk{}}
+	contents := &serviceContentStore{}
+	service := newTestService(metadata, contents)
+	runID := uuid.New()
+	prefix := []byte("durable prefix\n")
+	if err := service.AppendLogChunk(context.Background(), AppendLogChunkRequest{
+		RunID: runID, ClusterName: "colo", Contents: prefix,
+	}); err != nil {
+		t.Fatalf("AppendLogChunk() error = %v", err)
+	}
+
+	request := FailLogRequest{RunID: runID, ClusterName: "colo"}
+	if err := service.FailLog(context.Background(), request); err != nil {
+		t.Fatalf("FailLog() error = %v", err)
+	}
+	if err := service.FailLog(context.Background(), request); err != nil {
+		t.Fatalf("repeated FailLog() error = %v", err)
+	}
+	cursor, err := service.GetLogCursor(context.Background(), runID, "colo")
+	if err != nil {
+		t.Fatalf("GetLogCursor() error = %v", err)
+	}
+	if cursor.State != StateFailed || cursor.NextOffsetBytes != int64(len(prefix)) || cursor.SHA256 != nil {
+		t.Errorf("failed cursor = %#v", cursor)
+	}
+	if err := service.AppendLogChunk(context.Background(), AppendLogChunkRequest{
+		RunID: runID, ClusterName: "colo", OffsetBytes: int64(len(prefix)), Contents: []byte("late"),
+	}); !errors.Is(err, ErrLogClosed) {
+		t.Errorf("AppendLogChunk() error = %v, want closed log", err)
+	}
+
+	stream, err := service.StreamLog(context.Background(), runID, 0)
+	if err != nil {
+		t.Fatalf("StreamLog() error = %v", err)
+	}
+	defer func() { _ = stream.Close() }()
+	chunk, err := stream.Next()
+	if err != nil || !slices.Equal(chunk.Contents, prefix) {
+		t.Fatalf("partial log chunk = %#v, %v", chunk, err)
+	}
+	if _, err := stream.Next(); !errors.Is(err, ErrLogFailed) {
+		t.Errorf("drained failed log error = %v, want log failed", err)
 	}
 }
 

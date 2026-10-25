@@ -41,6 +41,11 @@ type controllerAPI interface {
 		runID uuid.UUID,
 		reqEditors ...api.RequestEditorFn,
 	) (*api.GetRunLogCursorResponse, error)
+	FailRunLogWithResponse(
+		ctx context.Context,
+		runID uuid.UUID,
+		reqEditors ...api.RequestEditorFn,
+	) (*api.FailRunLogResponse, error)
 	SealRunLogWithResponse(
 		ctx context.Context,
 		runID uuid.UUID,
@@ -93,24 +98,30 @@ func (c *serverClient) GetLogCursor(ctx context.Context, runID uuid.UUID) (logCu
 		}
 		cursor := response.JSON200
 		if cursor.NextOffsetBytes < 0 || !cursor.State.Valid() ||
-			(cursor.State == api.LogCursorStateSealed && valueOrEmpty(cursor.Sha256) == "") {
+			(cursor.State == api.LogCursorStateSealed) != (valueOrEmpty(cursor.Sha256) != "") {
 			return logCursor{}, invalidServerResponse("get Run log cursor", "cursor state is invalid")
-		}
-		if cursor.State == api.LogCursorStateFailed {
-			return logCursor{}, &serverResponseError{
-				operation:  "get Run log cursor",
-				statusCode: response.StatusCode(),
-				kind:       serverFailureLogFailed,
-			}
 		}
 		return logCursor{
 			nextOffsetBytes: response.JSON200.NextOffsetBytes,
 			sealed:          response.JSON200.State == api.LogCursorStateSealed,
+			failed:          response.JSON200.State == api.LogCursorStateFailed,
 			sha256:          valueOrEmpty(response.JSON200.Sha256),
 		}, nil
 	default:
 		return logCursor{}, newServerResponseError("get Run log cursor", response.StatusCode())
 	}
+}
+
+func (c *serverClient) FailLog(ctx context.Context, runID uuid.UUID) error {
+	response, err := c.api.FailRunLogWithResponse(ctx, runID, controllerAuthorization(c.bearerToken))
+	if err != nil {
+		return serverRequestError("fail Run log", err)
+	}
+	if response.StatusCode() != http.StatusNoContent {
+		return newServerResponseError("fail Run log", response.StatusCode())
+	}
+
+	return nil
 }
 
 func (c *serverClient) SealLog(ctx context.Context, runID uuid.UUID, sizeBytes int64, digest string) error {

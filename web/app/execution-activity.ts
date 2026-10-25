@@ -6,6 +6,7 @@ export type ExecutionAnimationPose =
   | "phone-scroll"
   | "book-browse"
   | "iced-coffee-sip"
+  | "magazine-load"
   | "popcorn-munch"
   | "headphone-headbang"
   | "toaster-vigil"
@@ -26,6 +27,7 @@ export type ExecutionAnimationPose =
   | "antenna-tune"
   | "drill-drive"
   | "weld-spark-pipe"
+  | "grenade-throw"
   | "jackhammer-ride"
   | "bubble-level-check"
   | "paint-roller-swipe"
@@ -36,6 +38,7 @@ export type ExecutionAnimationPose =
   | "flower-offer"
   | "championship-belt"
   | "confetti-cannon"
+  | "rifle-salute"
   | "trophy-hoist"
   | "cowbell-clang"
   | "laptop-slump"
@@ -60,6 +63,7 @@ export const executionAnimationPosePools = {
     "phone-scroll",
     "book-browse",
     "iced-coffee-sip",
+    "magazine-load",
     "popcorn-munch",
     "headphone-headbang",
     "toaster-vigil",
@@ -83,6 +87,7 @@ export const executionAnimationPosePools = {
     "antenna-tune",
     "drill-drive",
     "weld-spark-pipe",
+    "grenade-throw",
     "jackhammer-ride",
     "bubble-level-check",
     "paint-roller-swipe",
@@ -96,6 +101,7 @@ export const executionAnimationPosePools = {
     "flower-offer",
     "championship-belt",
     "confetti-cannon",
+    "rifle-salute",
     "trophy-hoist",
     "cowbell-clang",
   ],

@@ -567,3 +567,59 @@ runLog:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+runLogFailure:
+  post:
+    operationId: failRunLog
+    summary: Mark the durable Run log as failed
+    description: >-
+      Closes an incomplete log for a Run managed by the authenticated
+      controller when its Kubernetes source has disappeared. Durable chunks
+      remain available for partial viewing. Repeating the failure is
+      idempotent.
+    security:
+      - ControllerBearer: []
+    tags: [Controllers]
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "204": { description: The log was failed or was already failed. }
+      "400":
+        description: The failure request is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run does not belong to this controller.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The log is already sealed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The log could not be failed.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

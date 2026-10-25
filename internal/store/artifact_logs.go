@@ -147,6 +147,47 @@ func (d *Database) SealArtifact(
 	return artifactFromRow(sealed), nil
 }
 
+func (d *Database) FailArtifact(ctx context.Context, artifactID uuid.UUID) (artifact.Artifact, error) {
+	transaction, err := d.pool.Begin(ctx)
+	if err != nil {
+		return artifact.Artifact{}, fmt.Errorf("begin artifact failure transaction: %w", err)
+	}
+	defer func() {
+		_ = transaction.Rollback(context.WithoutCancel(ctx))
+	}()
+	queries := d.queries.WithTx(transaction)
+	record, err := queries.LockArtifactForLogAppend(ctx, databaseUUID(artifactID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return artifact.Artifact{}, artifact.ErrNotFound
+	}
+	if err != nil {
+		return artifact.Artifact{}, fmt.Errorf("lock artifact to fail: %w", err)
+	}
+	if record.State == string(artifact.StateSealed) {
+		return artifact.Artifact{}, artifact.ErrSealConflict
+	}
+	if record.State == string(artifact.StateFailed) {
+		if err := transaction.Commit(ctx); err != nil {
+			return artifact.Artifact{}, fmt.Errorf("commit repeated artifact failure: %w", err)
+		}
+
+		return artifactFromRow(record), nil
+	}
+	if record.State != string(artifact.StateOpen) {
+		return artifact.Artifact{}, artifact.ErrSealConflict
+	}
+
+	failed, err := queries.FailArtifact(ctx, databaseUUID(artifactID))
+	if err != nil {
+		return artifact.Artifact{}, fmt.Errorf("fail artifact: %w", err)
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return artifact.Artifact{}, fmt.Errorf("commit artifact failure: %w", err)
+	}
+
+	return artifactFromRow(failed), nil
+}
+
 func (d *Database) GetLogChunk(
 	ctx context.Context,
 	artifactID uuid.UUID,

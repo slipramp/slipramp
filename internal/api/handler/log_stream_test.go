@@ -30,6 +30,7 @@ func TestRunLogSSEFramesAndReconnectCursors(t *testing.T) {
 		lastID     string
 		wantOffset int64
 		drained    bool
+		failed     bool
 		badHeader  bool
 		largeChunk bool
 	}{
@@ -37,6 +38,7 @@ func TestRunLogSSEFramesAndReconnectCursors(t *testing.T) {
 		{name: "last event ID", lastID: "11", wantOffset: 11},
 		{name: "explicit offset takes precedence", offset: new(int64(3)), lastID: "11", wantOffset: 3},
 		{name: "drained cursor", offset: new(int64(23)), wantOffset: 23, drained: true},
+		{name: "failed log", failed: true},
 		{name: "malformed last event ID", lastID: "invalid", badHeader: true},
 		{name: "malformed header with explicit offset", offset: new(int64(3)), lastID: "invalid", badHeader: true},
 	} {
@@ -58,6 +60,9 @@ func TestRunLogSSEFramesAndReconnectCursors(t *testing.T) {
 			stream := &handlerLogStream{
 				next: func() (artifact.LogStreamChunk, error) {
 					if sent || test.drained {
+						if test.failed {
+							return artifact.LogStreamChunk{}, artifact.ErrLogFailed
+						}
 						return artifact.LogStreamChunk{}, io.EOF
 					}
 					sent = true
@@ -112,8 +117,13 @@ func TestRunLogSSEFramesAndReconnectCursors(t *testing.T) {
 				}
 				frames = frames[1:]
 			}
-			if len(frames) != 1 || frames[0] != fmt.Sprintf("id: %d\nevent: sealed\ndata: {}", nextOffset) {
-				t.Errorf("sealed frame = %q", frames)
+			terminalEvent := "sealed"
+			if test.failed {
+				terminalEvent = "failed"
+			}
+			if len(frames) != 1 ||
+				frames[0] != fmt.Sprintf("id: %d\nevent: %s\ndata: {}", nextOffset, terminalEvent) {
+				t.Errorf("terminal frame = %q", frames)
 			}
 			select {
 			case <-closed:

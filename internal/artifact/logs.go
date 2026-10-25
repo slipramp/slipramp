@@ -67,6 +67,11 @@ type SealLogRequest struct {
 	SHA256      string
 }
 
+type FailLogRequest struct {
+	RunID       uuid.UUID
+	ClusterName string
+}
+
 func (s *Service) AppendLogChunk(ctx context.Context, request AppendLogChunkRequest) error {
 	if err := request.Validate(); err != nil {
 		return err
@@ -207,6 +212,39 @@ func (s *Service) SealLog(ctx context.Context, request SealLogRequest) error {
 	_, err = s.artifacts.SealArtifact(ctx, record.ID, request.SizeBytes, request.SHA256, s.now().UTC())
 	if err != nil {
 		return fmt.Errorf("seal log artifact: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) FailLog(ctx context.Context, request FailLogRequest) error {
+	if request.RunID == uuid.Nil {
+		return invalid("Run ID is required")
+	}
+	if err := cluster.ValidateName(request.ClusterName); err != nil {
+		return invalid("%s", err)
+	}
+	if err := s.authorizeClusterRun(ctx, request.RunID, request.ClusterName); err != nil {
+		return err
+	}
+
+	record, err := s.ensureLogArtifact(ctx, request.RunID)
+	if err != nil {
+		return err
+	}
+	if record.State == StateSealed {
+		return ErrSealConflict
+	}
+	if record.State == StateFailed {
+		return nil
+	}
+	if record.State != StateOpen {
+		return ErrSealConflict
+	}
+
+	_, err = s.artifacts.FailArtifact(ctx, record.ID)
+	if err != nil {
+		return fmt.Errorf("fail log artifact: %w", err)
 	}
 
 	return nil

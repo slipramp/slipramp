@@ -778,6 +778,96 @@ func TestControllerRunLogChunkMapsFailures(t *testing.T) {
 	}
 }
 
+func TestControllerFailsIncompleteRunLog(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		token      string
+		failure    error
+		wantStatus int
+		wantCalls  int
+	}{
+		{name: "accepted", token: "controller-token", wantStatus: http.StatusNoContent, wantCalls: 1},
+		{name: "missing credential", wantStatus: http.StatusUnauthorized},
+		{
+			name:       "invalid request",
+			token:      "controller-token",
+			failure:    artifact.ErrInvalid,
+			wantStatus: http.StatusBadRequest,
+			wantCalls:  1,
+		},
+		{
+			name:       "wrong cluster",
+			token:      "controller-token",
+			failure:    artifact.ErrNotFound,
+			wantStatus: http.StatusNotFound,
+			wantCalls:  1,
+		},
+		{
+			name:       "sealed log",
+			token:      "controller-token",
+			failure:    artifact.ErrSealConflict,
+			wantStatus: http.StatusConflict,
+			wantCalls:  1,
+		},
+		{
+			name:       "service failure",
+			token:      "controller-token",
+			failure:    errors.New("PostgreSQL unavailable"),
+			wantStatus: http.StatusInternalServerError,
+			wantCalls:  1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+			artifacts := &recordingArtifactService{failErr: test.failure}
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/controller/v1/runs/"+runID.String()+"/log/failure",
+				nil,
+			)
+			if test.token != "" {
+				request.Header.Set("Authorization", "Bearer "+test.token)
+			}
+			response := httptest.NewRecorder()
+
+			newAdminTestHandler(
+				&recordingClusterService{},
+				controllerIdentityFor("controller-token", "colo"),
+				nil,
+				nil,
+				nil,
+				artifacts,
+				nil,
+			).ServeHTTP(response, request)
+
+			if test.wantStatus == http.StatusNoContent {
+				if response.Code != test.wantStatus {
+					t.Fatalf("status = %d, want %d: %s", response.Code, test.wantStatus, response.Body)
+				}
+			} else {
+				assertProblem(t, response, test.wantStatus)
+			}
+			if artifacts.failCalls != test.wantCalls {
+				t.Errorf("failure calls = %d, want %d", artifacts.failCalls, test.wantCalls)
+			}
+			if test.wantCalls == 1 &&
+				(artifacts.failRequest.RunID != runID || artifacts.failRequest.ClusterName != "colo") {
+				t.Errorf("failure request = %#v", artifacts.failRequest)
+			}
+			if strings.Contains(response.Body.String(), "PostgreSQL unavailable") {
+				t.Error("internal error details were exposed in the problem response")
+			}
+		})
+	}
+}
+
 func TestControllerReportsRunObservation(t *testing.T) {
 	t.Parallel()
 
@@ -922,6 +1012,9 @@ type recordingArtifactService struct {
 	streamCalls  int
 	streamRunID  uuid.UUID
 	streamOffset int64
+	failCalls    int
+	failRequest  artifact.FailLogRequest
+	failErr      error
 }
 
 type recordingPromotionDispatchService struct {
@@ -1025,6 +1118,13 @@ func (r *recordingArtifactService) AppendLogChunk(_ context.Context, request art
 
 func (*recordingArtifactService) GetLogCursor(context.Context, uuid.UUID, string) (artifact.LogCursor, error) {
 	return artifact.LogCursor{}, artifact.ErrNotFound
+}
+
+func (r *recordingArtifactService) FailLog(_ context.Context, request artifact.FailLogRequest) error {
+	r.failCalls++
+	r.failRequest = request
+
+	return r.failErr
 }
 
 func (*recordingArtifactService) SealLog(context.Context, artifact.SealLogRequest) error {

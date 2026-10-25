@@ -985,6 +985,12 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
         setStatus("Retained");
         source?.close();
       });
+      source.addEventListener("failed", () => {
+        stopped = true;
+        setContents((current) => current + decoder.decode());
+        setStatus("Incomplete");
+        source?.close();
+      });
       source.addEventListener("error", () => {
         source?.close();
         if (stopped || reconnectTimer !== undefined) return;

@@ -115,6 +115,12 @@ SET state = 'sealed',
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
+-- name: FailArtifact :one
+UPDATE artifacts
+SET state = 'failed'
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
 -- name: GetArtifactLogChunk :one
 SELECT *
 FROM artifact_log_chunks

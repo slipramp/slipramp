@@ -273,6 +273,34 @@ func (q *Queries) ExpireArtifacts(ctx context.Context, arg ExpireArtifactsParams
 	return items, nil
 }
 
+const failArtifact = `-- name: FailArtifact :one
+UPDATE artifacts
+SET state = 'failed'
+WHERE id = $1
+RETURNING id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
+`
+
+func (q *Queries) FailArtifact(ctx context.Context, id pgtype.UUID) (Artifact, error) {
+	row := q.db.QueryRow(ctx, failArtifact, id)
+	var i Artifact
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Name,
+		&i.Kind,
+		&i.State,
+		&i.MediaType,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.Sensitive,
+		&i.ContentObjectKey,
+		&i.RetentionState,
+		&i.CreatedAt,
+		&i.SealedAt,
+	)
+	return i, err
+}
+
 const getArtifact = `-- name: GetArtifact :one
 SELECT id, run_id, name, kind, state, media_type, size_bytes, sha256, sensitive, content_object_key, retention_state, created_at, sealed_at
 FROM artifacts

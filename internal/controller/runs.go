@@ -213,7 +213,7 @@ func (c *Controller) requestJobCancellation(
 }
 
 func (c *Controller) finishUnstartedCancellation(ctx context.Context, handle jobHandle) {
-	summary, err := c.emptyOrSealedLog(ctx, handle.runID)
+	summary, err := c.closeMissingRunLog(ctx, handle.runID)
 	if err != nil {
 		if ctx.Err() == nil {
 			c.runWorkerError(handle.runID, "finish unstarted cancellation", err)
@@ -331,7 +331,7 @@ func (c *Controller) completeRunLog(
 		var err error
 		logStream, err = c.startLogSession(ctx, handle, false)
 		if errors.Is(err, errLogNotReady) {
-			return c.emptyOrSealedLog(ctx, handle.runID)
+			return c.closeMissingRunLog(ctx, handle.runID)
 		}
 		if err != nil {
 			return logSummary{}, err
@@ -341,7 +341,7 @@ func (c *Controller) completeRunLog(
 	return waitForLog(ctx, logStream)
 }
 
-func (c *Controller) emptyOrSealedLog(ctx context.Context, runID uuid.UUID) (logSummary, error) {
+func (c *Controller) closeMissingRunLog(ctx context.Context, runID uuid.UUID) (logSummary, error) {
 	cursor, err := c.getLogCursor(ctx, runID)
 	if err != nil {
 		return logSummary{}, err
@@ -353,8 +353,20 @@ func (c *Controller) emptyOrSealedLog(ctx context.Context, runID uuid.UUID) (log
 			sealed:    true,
 		}, nil
 	}
+	if cursor.failed {
+		return logSummary{sizeBytes: cursor.nextOffsetBytes, failed: true}, nil
+	}
 	if cursor.nextOffsetBytes != 0 {
-		return logSummary{}, errors.New("cannot finalize a nonempty Run log after its Kubernetes source disappeared")
+		if err := c.failLog(ctx, runID); err != nil {
+			return logSummary{}, err
+		}
+		c.logger.Warn(
+			"Run log source disappeared; retained durable prefix as failed",
+			"run_id", runID,
+			"size_bytes", cursor.nextOffsetBytes,
+		)
+
+		return logSummary{sizeBytes: cursor.nextOffsetBytes, failed: true}, nil
 	}
 
 	return emptyLogSummary(), nil

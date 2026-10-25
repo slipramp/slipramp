@@ -17,6 +17,7 @@ type logSummary struct {
 	sizeBytes int64
 	sha256    string
 	sealed    bool
+	failed    bool
 }
 
 type logStreamResult struct {
@@ -143,12 +144,27 @@ func (c *Controller) appendLogChunk(ctx context.Context, runID uuid.UUID, offset
 }
 
 func (c *Controller) sealLog(ctx context.Context, runID uuid.UUID, summary logSummary) error {
-	if summary.sealed {
+	if summary.sealed || summary.failed {
 		return nil
 	}
 
 	for {
 		err := c.logs.SealLog(ctx, runID, summary.sizeBytes, summary.sha256)
+		if err == nil {
+			return nil
+		}
+		if permanentServerError(err) {
+			return err
+		}
+		if !waitForRetry(ctx, c.retryDelay) {
+			return ctx.Err()
+		}
+	}
+}
+
+func (c *Controller) failLog(ctx context.Context, runID uuid.UUID) error {
+	for {
+		err := c.logs.FailLog(ctx, runID)
 		if err == nil {
 			return nil
 		}

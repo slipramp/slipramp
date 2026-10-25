@@ -73,6 +73,9 @@ func (r *logEventReader) Read(destination []byte) (int, error) {
 		case err == io.EOF: //nolint:errorlint // Wrapped EOF is a source failure, not stream completion.
 			r.pending = fmt.Appendf(nil, "id: %d\nevent: sealed\ndata: {}\n\n", r.cursor)
 			r.finished = true
+		case errors.Is(err, artifact.ErrLogFailed):
+			r.pending = fmt.Appendf(nil, "id: %d\nevent: failed\ndata: {}\n\n", r.cursor)
+			r.finished = true
 		case err != nil:
 			return 0, err
 		default:

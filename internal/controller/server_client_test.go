@@ -374,10 +374,13 @@ func TestServerClientReturnsTerminalLogCursor(t *testing.T) {
 			client, err := newServerClientWithHTTPClient(
 				validConfig(),
 				httpDoerFunc(func(*http.Request) (*http.Response, error) {
-					body := fmt.Sprintf(
-						`{"nextOffsetBytes":12,"state":%q,"sha256":%q}`,
-						state, digest,
-					)
+					body := fmt.Sprintf(`{"nextOffsetBytes":12,"state":%q}`, state)
+					if state == "sealed" {
+						body = fmt.Sprintf(
+							`{"nextOffsetBytes":12,"state":%q,"sha256":%q}`,
+							state, digest,
+						)
+					}
 
 					return &http.Response{
 						StatusCode: http.StatusOK,
@@ -391,19 +394,50 @@ func TestServerClientReturnsTerminalLogCursor(t *testing.T) {
 			}
 
 			cursor, err := client.GetLogCursor(context.Background(), uuid.New())
-			if state == "failed" {
-				if !permanentServerError(err) {
-					t.Fatalf("GetLogCursor() error = %v, want permanent failed-log result", err)
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("GetLogCursor() error = %v", err)
 			}
-			if cursor.nextOffsetBytes != 12 || !cursor.sealed || cursor.sha256 != digest {
+			expectedDigest := ""
+			if state == "sealed" {
+				expectedDigest = digest
+			}
+			if cursor.nextOffsetBytes != 12 || cursor.sealed != (state == "sealed") ||
+				cursor.failed != (state == "failed") || cursor.sha256 != expectedDigest {
 				t.Errorf("log cursor = %#v", cursor)
 			}
 		})
+	}
+}
+
+func TestServerClientFailsRunLog(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	var request *http.Request
+	cfg := validConfig()
+	cfg.ServerURL = "https://slipramp.example.com/slipramp"
+	client, err := newServerClientWithHTTPClient(
+		cfg,
+		httpDoerFunc(func(received *http.Request) (*http.Response, error) {
+			request = received
+
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClientWithHTTPClient() error = %v", err)
+	}
+
+	if err := client.FailLog(context.Background(), runID); err != nil {
+		t.Fatalf("FailLog() error = %v", err)
+	}
+	if request.Method != http.MethodPost ||
+		request.URL.Path != "/slipramp/controller/v1/runs/"+runID.String()+"/log/failure" ||
+		request.Header.Get("Authorization") != "Bearer controller-token" {
+		t.Errorf("failure request = %s %s, headers %v", request.Method, request.URL.Path, request.Header)
 	}
 }
 

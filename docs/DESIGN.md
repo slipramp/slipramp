@@ -361,16 +361,21 @@ Queued cancellation finishes immediately. Controllers receive cancellation
 before new assignments. For a started Pod, a Controller-owned annotation is
 projected into checkout and Action containers. The Harness sends `SIGTERM` to
 the active child and force-stops it after a grace period. Ordinary terminal
-observation then drains and seals logs, reports the outcome, and deletes the
+observation then drains and closes logs, reports the outcome, and deletes the
 Job with its observed UID as a precondition. Unstarted Jobs are deleted before
 reporting an empty canceled Run.
 
-For every terminal Job, log sealing and accepted terminal reporting precede
-UID-checked deletion and stopping observation. Each step is idempotent and
-resumes after restart. Transient storage, reporting, or deletion failures keep
-the Job available for recovery. Kubernetes TTL cleanup is disabled so outages
-cannot delete the only remaining log source. A `404` for the Run or log violates
-namespace ownership: warn once, stop observing, and leave the Job for diagnosis.
+For every terminal Job, log closure and accepted terminal reporting precede
+UID-checked deletion and stopping observation. Complete logs seal with their
+size and digest. If a terminal Job remains after its Pod and log source have
+disappeared, the Controller marks a nonempty durable prefix failed, reports the
+Job's terminal outcome, and then deletes the Job. Failed prefixes remain
+streamable as explicitly incomplete logs but are not downloadable artifacts.
+Both sealed and failed closure are idempotent and resume after restart.
+Transient storage, reporting, or deletion failures keep the Job available for
+recovery. Kubernetes TTL cleanup is disabled so outages cannot delete the only
+remaining log source. A `404` for the Run or log violates namespace ownership:
+warn once, stop observing, and leave the Job for diagnosis.
 
 ## Credentials and trust
 
@@ -410,8 +415,9 @@ The Controller follows Pod output once and posts chunks of at most 256 KiB with
 monotonically increasing byte offsets. The Server writes S3 objects before
 committing their digest and offset metadata in PostgreSQL. Retrying the same
 bytes at the same offset is idempotent. Recovery reads the durable cursor and
-replays only to verify and skip the accepted prefix. The Controller seals logs
-with final byte size and SHA-256 before terminal observation.
+replays only to verify and skip the accepted prefix. The Controller closes logs
+before terminal observation: complete logs seal with final byte size and
+SHA-256, while an irrecoverable prefix enters the failed state without a digest.
 
 Live logs use reconnectable SSE whose event ID is the next durable byte offset.
 Live viewing and retained capture share the same ingestion path. Pod logs are
@@ -419,7 +425,8 @@ the source during execution, never the durable record.
 
 The artifact service exposes a cancellable pull stream of raw log chunks and
 byte offsets, owning durable polling and cursor validation. The HTTP adapter
-encodes the generated log-event payload and SSE framing, including completion.
+encodes the generated log-event payload and SSE framing, distinguishing sealed
+completion from a failed partial log.
 Chunks are read as the response consumes them; the generated response writer
 flushes output and closes the stream on completion or disconnection.
 

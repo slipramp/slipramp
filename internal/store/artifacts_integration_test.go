@@ -371,6 +371,49 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	}
 }
 
+func TestArtifactFailurePersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 17, 12, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          runID,
+		Name:           "log",
+		Kind:           artifact.KindLog,
+		State:          artifact.StateOpen,
+		MediaType:      "text/plain; charset=utf-8",
+		SizeBytes:      21,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      createdAt.Add(time.Minute),
+	}
+	if _, err := database.CreateArtifact(ctx, record); err != nil {
+		t.Fatalf("CreateArtifact() error = %v", err)
+	}
+
+	failed, err := database.FailArtifact(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("FailArtifact() error = %v", err)
+	}
+	if failed.State != artifact.StateFailed || failed.SizeBytes != record.SizeBytes ||
+		failed.SHA256 != nil || failed.SealedAt != nil {
+		t.Errorf("failed artifact = %#v", failed)
+	}
+	if _, err := database.FailArtifact(ctx, record.ID); err != nil {
+		t.Fatalf("repeated FailArtifact() error = %v", err)
+	}
+	if _, err := database.SealArtifact(
+		ctx,
+		record.ID,
+		record.SizeBytes,
+		strings.Repeat("a", 64),
+		createdAt.Add(2*time.Minute),
+	); !errors.Is(err, artifact.ErrSealConflict) {
+		t.Errorf("SealArtifact() error = %v, want conflict", err)
+	}
+}
+
 func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()

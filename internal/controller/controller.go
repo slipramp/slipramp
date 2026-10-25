@@ -59,12 +59,14 @@ type kargoPromotionReconciliationReporter interface {
 type runLogReporter interface {
 	GetLogCursor(context.Context, uuid.UUID) (logCursor, error)
 	AppendLogChunk(context.Context, uuid.UUID, int64, []byte) error
+	FailLog(context.Context, uuid.UUID) error
 	SealLog(context.Context, uuid.UUID, int64, string) error
 }
 
 type logCursor struct {
 	nextOffsetBytes int64
 	sealed          bool
+	failed          bool
 	sha256          string
 }
 

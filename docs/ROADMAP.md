@@ -84,13 +84,13 @@ intentionally deferred until Slipramp begins versioning releases:
 
 ## Reliability and operator guidance
 
-- [ ] Broaden acceptance for multiple execution Clusters, Pod loss, network
-      interruptions, Controller/Server restarts, and PostgreSQL/S3 outages, including
-      retained log recovery, SSE reconnection, and cancellation under failure.
-      Unit coverage includes responsive command polling during blocked Run work,
-      coalesced cancellation, and bounded Kargo command attempts; exercise these
-      paths against real dependencies as part of acceptance, along
-      with Promotion preparation retry recovery and terminal diagnostics.
+- [ ] Broaden acceptance for multiple execution Clusters, network interruptions,
+      Controller/Server restarts, and PostgreSQL/S3 outages, including retained
+      log recovery, SSE reconnection, and cancellation under failure. Terminal
+      Pod loss with a partial durable log has unit and persistence coverage;
+      exercise it against real dependencies with responsive command polling
+      during blocked Run work, coalesced cancellation, bounded Kargo command
+      attempts, Promotion preparation retry recovery, and terminal diagnostics.
 - [ ] Expand operational diagnostics beyond current readiness and observation
       freshness, guided by those failure cases.
 - [ ] Document upgrades, coordinated PostgreSQL/object-storage backups, restore,

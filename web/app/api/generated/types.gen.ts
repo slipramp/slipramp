@@ -2496,6 +2496,53 @@ export type SealRunLogResponses = {
 
 export type SealRunLogResponse = SealRunLogResponses[keyof SealRunLogResponses];
 
+export type FailRunLogData = {
+  body?: never;
+  path: {
+    runId: string;
+  };
+  query?: never;
+  url: "/controller/v1/runs/{runId}/log/failure";
+};
+
+export type FailRunLogErrors = {
+  /**
+   * The failure request is invalid.
+   */
+  400: Problem;
+  /**
+   * The controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The Run does not belong to this controller.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The log is already sealed.
+   */
+  409: Problem;
+  /**
+   * The log could not be failed.
+   */
+  500: Problem;
+};
+
+export type FailRunLogError = FailRunLogErrors[keyof FailRunLogErrors];
+
+export type FailRunLogResponses = {
+  /**
+   * The log was failed or was already failed.
+   */
+  204: void;
+};
+
+export type FailRunLogResponse = FailRunLogResponses[keyof FailRunLogResponses];
+
 export type UploadRunArtifactData = {
   body: Blob | File;
   headers: {

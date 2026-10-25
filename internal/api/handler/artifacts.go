@@ -18,6 +18,7 @@ import (
 type ArtifactService interface {
 	AppendLogChunk(context.Context, artifact.AppendLogChunkRequest) error
 	GetLogCursor(context.Context, uuid.UUID, string) (artifact.LogCursor, error)
+	FailLog(context.Context, artifact.FailLogRequest) error
 	SealLog(context.Context, artifact.SealLogRequest) error
 	RunToken(uuid.UUID) string
 	AuthenticateRunToken(uuid.UUID, string) bool
@@ -140,6 +141,36 @@ func (h *Handler) SealRunLog(
 	case errors.Is(err, artifact.ErrSealConflict):
 		problem := NewProblem(http.StatusConflict, "The log seal conflicts with durable bytes.")
 		return api.SealRunLog409ApplicationProblemPlusJSONResponse(problem), nil
+	default:
+		return nil, err
+	}
+}
+
+func (h *Handler) FailRunLog(
+	ctx context.Context,
+	request api.FailRunLogRequestObject,
+) (api.FailRunLogResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	err = h.artifacts.FailLog(ctx, artifact.FailLogRequest{
+		RunID:       request.RunID,
+		ClusterName: principal.ClusterName,
+	})
+	switch {
+	case err == nil:
+		return api.FailRunLog204Response{}, nil
+	case errors.Is(err, artifact.ErrInvalid):
+		problem := NewProblem(http.StatusBadRequest, err.Error())
+		return api.FailRunLog400ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrNotFound):
+		problem := NewProblem(http.StatusNotFound, "The Run does not exist for this controller.")
+		return api.FailRunLog404ApplicationProblemPlusJSONResponse(problem), nil
+	case errors.Is(err, artifact.ErrSealConflict):
+		problem := NewProblem(http.StatusConflict, "The Run log is already sealed.")
+		return api.FailRunLog409ApplicationProblemPlusJSONResponse(problem), nil
 	default:
 		return nil, err
 	}

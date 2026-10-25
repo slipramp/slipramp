@@ -82,6 +82,13 @@ func ControllerAuthentication(authenticator ControllerAuthenticator) api.StrictM
 						return api.SealRunLog401ApplicationProblemPlusJSONResponse(controllerUnauthorizedProblem())
 					},
 				)
+			case api.FailRunLogRequestObject:
+				return authenticateControllerRequest(
+					ctx, writer, request, value, authenticator, next,
+					func() any {
+						return api.FailRunLog401ApplicationProblemPlusJSONResponse(controllerUnauthorizedProblem())
+					},
+				)
 			case api.ReportRunObservationRequestObject:
 				return authenticateControllerRequest(
 					ctx,

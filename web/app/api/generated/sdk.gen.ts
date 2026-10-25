@@ -53,6 +53,9 @@ import type {
   EnrollControllerData,
   EnrollControllerErrors,
   EnrollControllerResponses,
+  FailRunLogData,
+  FailRunLogErrors,
+  FailRunLogResponses,
   GetCommitData,
   GetCommitErrors,
   GetCommitResponses,
@@ -800,6 +803,26 @@ export const sealRunLog = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Mark the durable Run log as failed
+ *
+ * Closes an incomplete log for a Run managed by the authenticated controller when its Kubernetes source has disappeared. Durable chunks remain available for partial viewing. Repeating the failure is idempotent.
+ */
+export const failRunLog = <ThrowOnError extends boolean = false>(
+  options: Options<FailRunLogData, ThrowOnError>,
+): RequestResult<FailRunLogResponses, FailRunLogErrors, ThrowOnError> =>
+  (options.client ?? client).post<FailRunLogResponses, FailRunLogErrors, ThrowOnError>({
+    security: [
+      {
+        key: "ControllerBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/controller/v1/runs/{runId}/log/failure",
+    ...options,
+  });
+
+/**
  * Upload one declared artifact from the Run harness
  */
 export const uploadRunArtifact = <ThrowOnError extends boolean = false>(
@@ -999,7 +1022,7 @@ export const listRunArtifacts = <ThrowOnError extends boolean = false>(
 /**
  * Stream retained and live Run log bytes
  *
- * Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset.
+ * Sends JSON log events over SSE. Reconnect with offsetBytes or the last event ID; event IDs are the next durable byte offset. A sealed event means the complete log was retained, while a failed event means only an incomplete durable prefix remains.
  */
 export const streamRunLog = <ThrowOnError extends boolean = false>(
   options: Options<StreamRunLogData, ThrowOnError, StreamRunLogResponse>,

@@ -46,6 +46,8 @@ paths:
     $ref: ./paths/controllers.yaml#/runLogChunks
   /controller/v1/runs/{runId}/log:
     $ref: ./paths/controllers.yaml#/runLog
+  /controller/v1/runs/{runId}/log/failure:
+    $ref: ./paths/controllers.yaml#/runLogFailure
   /execution/v1/runs/{runId}/artifacts/{artifactName}:
     $ref: ./paths/artifacts.yaml#/executionArtifact
   /execution/v1/runs/{runId}/inputs/{inputName}:

@@ -64,6 +64,11 @@
   animation-duration: 2.8s;
 }
 
+.sprite[data-pose="magazine-load"] {
+  background-image: url("../assets/slipramp-axolotl-magazine-load.webp");
+  animation-duration: 2.4s;
+}
+
 .sprite[data-pose="popcorn-munch"] {
   background-image: url("../assets/slipramp-axolotl-popcorn-munch.webp");
   animation-duration: 2.4s;
@@ -158,6 +163,11 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="grenade-throw"] {
+  background-image: url("../assets/slipramp-axolotl-grenade-throw.webp");
+  animation-duration: 2.4s;
+}
+
 .sprite[data-pose="jackhammer-ride"] {
   background-image: url("../assets/slipramp-axolotl-jackhammer-ride.webp");
   animation-duration: 1.6s;
@@ -208,6 +218,11 @@
 .sprite[data-pose="confetti-cannon"] {
   background-image: url("../assets/slipramp-axolotl-confetti-cannon.webp");
   animation-duration: 2.4s;
+}
+
+.sprite[data-pose="rifle-salute"] {
+  background-image: url("../assets/slipramp-axolotl-rifle-salute.webp");
+  animation-duration: 1.6s;
 }
 
 .sprite[data-pose="trophy-hoist"] {

@@ -102,8 +102,13 @@ func (s *durableLogStream) next() (LogStreamChunk, error) {
 		if err := s.ctx.Err(); err != nil {
 			return LogStreamChunk{}, err
 		}
-		if record.State != StateOpen && s.cursor >= record.SizeBytes {
-			return LogStreamChunk{}, io.EOF
+		if s.cursor >= record.SizeBytes {
+			switch record.State {
+			case StateSealed:
+				return LogStreamChunk{}, io.EOF
+			case StateFailed:
+				return LogStreamChunk{}, ErrLogFailed
+			}
 		}
 
 		timer := time.NewTimer(logStreamPollPeriod)

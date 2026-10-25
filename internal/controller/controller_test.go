@@ -425,6 +425,71 @@ func TestControllerCompletesRunWhoseActionNeverStarted(t *testing.T) {
 	}
 }
 
+func TestControllerCompletesTerminalRunAfterLogSourceDisappears(t *testing.T) {
+	t.Parallel()
+
+	for _, alreadyFailed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("alreadyFailed=%t", alreadyFailed), func(t *testing.T) {
+			t.Parallel()
+
+			runID := uuid.New()
+			handle := jobHandle{
+				runID:     runID,
+				namespace: "slipramp-runs",
+				name:      runJobName(runID),
+				uid:       "job-uid",
+			}
+			failed := api.RunObservationOutcomeFailed
+			reason := "BackoffLimitExceeded"
+			deleted := false
+			jobs := &stubRunJobs{
+				observe: func(context.Context, jobHandle) (runObservation, error) {
+					return runObservation{
+						phase:   api.RunObservationPhaseFinished,
+						outcome: &failed,
+						jobUID:  &handle.uid,
+						reason:  &reason,
+					}, nil
+				},
+				delete: func(context.Context, jobHandle) error {
+					deleted = true
+
+					return nil
+				},
+			}
+			logs := &memoryLogReporter{contents: []byte("durable prefix\n"), failed: alreadyFailed}
+			var reported *api.RunObservation
+			app := newTestController(jobs, logs)
+			app.reports = runObservationReporterFunc(func(
+				_ context.Context,
+				_ uuid.UUID,
+				observation api.RunObservation,
+			) error {
+				if !logs.isFailed() {
+					t.Error("terminal observation reported before incomplete log was failed")
+				}
+				reported = &observation
+
+				return nil
+			})
+
+			app.startRunWorker(context.Background(), handle, nil, nil)
+			app.runWorkers.Wait()
+
+			if reported == nil || reported.Outcome == nil || *reported.Outcome != failed ||
+				reported.Reason == nil || *reported.Reason != reason {
+				t.Fatalf("terminal observation = %#v", reported)
+			}
+			if !logs.isFailed() || logs.isSealed() {
+				t.Error("incomplete log was not retained as failed")
+			}
+			if !deleted {
+				t.Error("terminal Job was not deleted after failed-log recovery")
+			}
+		})
+	}
+}
+
 func TestControllerCancellationDrainsLogBeforeReporting(t *testing.T) {
 	t.Parallel()
 
