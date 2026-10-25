@@ -300,6 +300,10 @@ task acceptance:kind
 go run ./cmd/slipramp-harness command argument
 ```
 
+The `mascot.slipramp.com` custom domain is attached to the `slipramp-mascot`
+Worker once in Cloudflare. Routine `mascot:deploy` and CI deployments update the
+Worker and its static assets without rewriting that zone binding.
+
 Open `http://localhost:5173` and sign in with
 `admin@slipramp.local` / `slipramp`. These credentials and the static OIDC
 client secret are only for local development. Dex stores its state in memory.

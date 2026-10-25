@@ -7,6 +7,7 @@ export type ExecutionAnimationPose =
   | "book-browse"
   | "iced-coffee-sip"
   | "magazine-load"
+  | "rifle-clean"
   | "popcorn-munch"
   | "headphone-headbang"
   | "toaster-vigil"
@@ -28,6 +29,7 @@ export type ExecutionAnimationPose =
   | "drill-drive"
   | "weld-spark-pipe"
   | "grenade-throw"
+  | "mortar-drop"
   | "jackhammer-ride"
   | "bubble-level-check"
   | "paint-roller-swipe"
@@ -64,6 +66,7 @@ export const executionAnimationPosePools = {
     "book-browse",
     "iced-coffee-sip",
     "magazine-load",
+    "rifle-clean",
     "popcorn-munch",
     "headphone-headbang",
     "toaster-vigil",
@@ -88,6 +91,7 @@ export const executionAnimationPosePools = {
     "drill-drive",
     "weld-spark-pipe",
     "grenade-throw",
+    "mortar-drop",
     "jackhammer-ride",
     "bubble-level-check",
     "paint-roller-swipe",

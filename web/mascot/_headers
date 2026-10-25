@@ -11,3 +11,6 @@
 
 /
   Cache-Control: public, max-age=300, must-revalidate
+
+/poses/*
+  Cache-Control: public, max-age=300, must-revalidate

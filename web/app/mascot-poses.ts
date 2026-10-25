@@ -1,0 +1,190 @@
+import { executionAnimationPosePools, type ExecutionAnimationPose } from "./execution-activity.ts";
+
+export const mascotTagLabels = {
+  animals: "Animals",
+  construction: "Construction",
+  "food-and-drink": "Food & drink",
+  leisure: "Leisure",
+  military: "Military",
+  "science-fiction": "Science fiction",
+  slapstick: "Slapstick",
+} as const;
+
+export type MascotTag = keyof typeof mascotTagLabels;
+
+export type MascotPose = {
+  label: string;
+  pose: ExecutionAnimationPose;
+  tags: readonly MascotTag[];
+};
+
+export type MascotGroup = {
+  color: string;
+  description: string;
+  id: string;
+  poses: readonly MascotPose[];
+  title: string;
+};
+
+const mascotPoseMetadata = {
+  "phone-scroll": { label: "Phone scroll", tags: ["leisure"] },
+  "book-browse": { label: "Book browse", tags: ["leisure"] },
+  "iced-coffee-sip": { label: "Iced coffee sip", tags: ["food-and-drink", "leisure"] },
+  "magazine-load": { label: "Magazine load", tags: ["military"] },
+  "rifle-clean": { label: "Rifle clean", tags: ["military"] },
+  "popcorn-munch": { label: "Popcorn munch", tags: ["food-and-drink", "leisure"] },
+  "headphone-headbang": { label: "Headphone headbang", tags: ["leisure"] },
+  "toaster-vigil": { label: "Toaster vigil", tags: ["food-and-drink", "leisure"] },
+  "suspended-animation": {
+    label: "Suspended animation",
+    tags: ["science-fiction", "leisure"],
+  },
+  "bubblegum-blow": { label: "Bubblegum blow", tags: ["food-and-drink", "leisure"] },
+  "binocular-scan": { label: "Binocular scan", tags: ["military", "leisure"] },
+  "hourglass-turn": { label: "Hourglass turn", tags: ["leisure"] },
+  "duck-float": { label: "Duck float", tags: ["animals", "leisure"] },
+  "lava-lamp-gaze": { label: "Lava-lamp gaze", tags: ["leisure", "science-fiction"] },
+  "snail-coach": { label: "Snail coach", tags: ["animals", "leisure"] },
+  "beach-ball-roll": { label: "Beach-ball roll", tags: ["leisure"] },
+  "cat-petting": { label: "Cat petting", tags: ["animals", "leisure"] },
+  "pinwheel-spin": { label: "Pinwheel spin", tags: ["leisure"] },
+  "laptop-typing": { label: "Laptop typing", tags: ["construction"] },
+  "blueprint-review": { label: "Blueprint review", tags: ["construction"] },
+  "clipboard-check": { label: "Clipboard check", tags: ["construction"] },
+  "walkie-talkie": { label: "Walkie-talkie", tags: ["military"] },
+  "antenna-tune": { label: "Antenna tune", tags: ["military"] },
+  "drill-drive": { label: "Drill drive", tags: ["construction"] },
+  "weld-spark-pipe": { label: "Weld spark pipe", tags: ["construction"] },
+  "grenade-throw": { label: "Grenade throw", tags: ["military"] },
+  "mortar-drop": { label: "Mortar drop", tags: ["military"] },
+  "jackhammer-ride": { label: "Jackhammer ride", tags: ["construction", "slapstick"] },
+  "bubble-level-check": { label: "Bubble-level check", tags: ["construction"] },
+  "paint-roller-swipe": { label: "Paint-roller swipe", tags: ["construction"] },
+  "beer-sip": { label: "Beer sip", tags: ["food-and-drink"] },
+  "pennant-wave": { label: "Pennant wave", tags: ["leisure"] },
+  "check-badge": { label: "Check badge", tags: ["construction"] },
+  "beer-toast": { label: "Beer toast", tags: ["food-and-drink"] },
+  "flower-offer": { label: "Flower offer", tags: ["leisure"] },
+  "championship-belt": { label: "Championship belt", tags: ["leisure"] },
+  "confetti-cannon": { label: "Confetti cannon", tags: ["leisure"] },
+  "rifle-salute": { label: "Rifle salute", tags: ["military"] },
+  "trophy-hoist": { label: "Trophy hoist", tags: ["leisure"] },
+  "cowbell-clang": { label: "Cowbell clang", tags: ["leisure"] },
+  "laptop-slump": { label: "Laptop slump", tags: ["slapstick"] },
+  "wrench-fumble": { label: "Wrench fumble", tags: ["construction", "slapstick"] },
+  "button-panic": { label: "Button panic", tags: ["slapstick"] },
+  "chart-plunge": { label: "Chart plunge", tags: ["slapstick"] },
+  "play-dead": { label: "Play dead", tags: ["slapstick"] },
+  "trash-can-hide": { label: "Trash-can hide", tags: ["slapstick"] },
+  "lever-regret": { label: "Lever regret", tags: ["slapstick"] },
+  "anvil-bonk": { label: "Anvil bonk", tags: ["construction", "slapstick"] },
+  "cable-cocoon": { label: "Cable cocoon", tags: ["slapstick"] },
+  "nuclear-vaporize": {
+    label: "Nuclear vaporize",
+    tags: ["science-fiction", "slapstick"],
+  },
+  "too-many-arms": { label: "Too many arms", tags: ["science-fiction", "slapstick"] },
+  "trapdoor-deploy": { label: "Trapdoor deploy", tags: ["slapstick"] },
+  "steamroller-flat": { label: "Steamroller flat", tags: ["construction", "slapstick"] },
+  "under-desk-drag": { label: "Under-desk drag", tags: ["slapstick"] },
+  "fire-extinguisher-blast": {
+    label: "Fire-extinguisher blast",
+    tags: ["construction", "slapstick"],
+  },
+  "explosion-walkaway": {
+    label: "Explosion walkaway",
+    tags: ["military", "slapstick"],
+  },
+} as const satisfies Record<ExecutionAnimationPose, { label: string; tags: readonly MascotTag[] }>;
+
+function mascotPoses(poses: readonly ExecutionAnimationPose[]): readonly MascotPose[] {
+  return poses
+    .map((pose) => ({ pose, ...mascotPoseMetadata[pose] }))
+    .toSorted((left, right) => left.label.localeCompare(right.label));
+}
+
+export const mascotGroups = [
+  {
+    color: "violet",
+    description: "Runs waiting for a Controller and Promotions waiting for operator review.",
+    id: "waiting",
+    poses: mascotPoses(executionAnimationPosePools.waiting),
+    title: "Waiting",
+  },
+  {
+    color: "blue",
+    description: "Runs in progress and Promotions being created or prepared.",
+    id: "working",
+    poses: mascotPoses(executionAnimationPosePools.working),
+    title: "Working",
+  },
+  {
+    color: "green",
+    description: "Runs that succeeded and Promotions that were approved.",
+    id: "successful",
+    poses: mascotPoses(executionAnimationPosePools.celebrating),
+    title: "Successful",
+  },
+  {
+    color: "red",
+    description: "Runs that failed or timed out and Promotions that were rejected or failed.",
+    id: "unsuccessful",
+    poses: mascotPoses(executionAnimationPosePools.frustrated),
+    title: "Unsuccessful",
+  },
+  {
+    color: "gray",
+    description: "Canceled Runs and expired Promotions intentionally keep the neutral phone pose.",
+    id: "stopped-or-expired",
+    poses: mascotPoses(executionAnimationPosePools.phone),
+    title: "Stopped or expired",
+  },
+] as const satisfies readonly MascotGroup[];
+
+const catalogPoseNames = [
+  ...executionAnimationPosePools.waiting,
+  ...executionAnimationPosePools.working,
+  ...executionAnimationPosePools.celebrating,
+  ...executionAnimationPosePools.frustrated,
+] as const;
+
+export const mascotPoseCatalog = mascotPoses(catalogPoseNames);
+export const mascotPoseCount = mascotPoseCatalog.length;
+
+export const mascotTags = Object.entries(mascotTagLabels).map(([tag, label]) => ({
+  label,
+  tag: tag as MascotTag,
+}));
+
+export function findMascotPose(pose: string | undefined): MascotPose | undefined {
+  return mascotPoseCatalog.find((candidate) => candidate.pose === pose);
+}
+
+export function mascotGroupsForTags(tags: readonly MascotTag[]): readonly MascotGroup[] {
+  if (tags.length === 0) return mascotGroups;
+
+  return mascotGroups
+    .map((group) => ({
+      ...group,
+      poses: group.poses.filter((pose) => pose.tags.some((tag) => tags.includes(tag))),
+    }))
+    .filter((group) => group.poses.length > 0);
+}
+
+export function mascotTagsFromSearchParams(searchParams: URLSearchParams): readonly MascotTag[] {
+  const tags = searchParams.getAll("tag").filter((tag): tag is MascotTag => tag in mascotTagLabels);
+
+  return [...new Set(tags)];
+}
+
+export function mascotGalleryURL(path: string, tags: readonly MascotTag[]): string {
+  const searchParams = new URLSearchParams();
+  for (const tag of tags) searchParams.append("tag", tag);
+  const query = searchParams.toString();
+
+  return query ? `${path}?${query}` : path;
+}
+
+export function mascotPoseGroups(pose: ExecutionAnimationPose): readonly MascotGroup[] {
+  return mascotGroups.filter((group) => group.poses.some((candidate) => candidate.pose === pose));
+}

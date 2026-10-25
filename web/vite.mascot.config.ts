@@ -10,7 +10,8 @@ function buildLogger(): Logger {
   logger.warn = (message, options) => {
     const ignoredClientDirective =
       message.includes("[MODULE_LEVEL_DIRECTIVE]") &&
-      message.includes("node_modules/.pnpm/@mantine+");
+      (message.includes("node_modules/.pnpm/@mantine+") ||
+        message.includes("node_modules/.pnpm/react-router@"));
     if (!ignoredClientDirective) warn(message, options);
   };
 

@@ -997,13 +997,18 @@ refreshes. Waiting, working, celebration, and failure mascot poses also vary
 deterministically by that identity, so the same Run or Promotion keeps its
 selected pose across refreshes. The unlinked, authenticated `/mascot` route
 groups every production animation by state at its detail, mobile, and compact
-display sizes for visual review. A separate static build reuses that gallery at
-`https://mascot.slipramp.com` without authentication, product navigation, API
-access, or a connection to the Slipramp deployment. Cloudflare Workers Static
-Assets serves the public build from its own custom domain; the central Ingress
-remains private. Gallery cards load their sprite sheets as they approach the
-viewport. Activity respects reduced motion preferences and leaves textual
-status indicators available.
+display sizes for visual review. Every pose has descriptive tags and a dedicated
+`/mascot/:pose` page, and the gallery's tag filter is encoded in its URL. A
+separate static build reuses that gallery at `https://mascot.slipramp.com`
+without authentication, product navigation, API access, or a connection to the
+Slipramp deployment. Its public pose pages use `/poses/:pose`. Cloudflare Workers
+Static Assets serves the public build from its own custom domain with a
+single-page application fallback for direct pose links; the central Ingress
+remains private. The custom-domain binding is provisioned once in Cloudflare;
+routine CI deployments update only the Worker and its static assets, so the
+deployment token does not need zone-route write access. Gallery cards load their
+sprite sheets as they approach the viewport. Activity respects reduced motion
+preferences and leaves textual status indicators available.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

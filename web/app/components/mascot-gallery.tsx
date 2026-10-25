@@ -1,8 +1,10 @@
 import {
+  Alert,
   Badge,
   Box,
   Button,
   Code,
+  Divider,
   Group,
   Paper,
   SimpleGrid,
@@ -13,155 +15,104 @@ import {
 } from "@mantine/core";
 import { useIntersection } from "@mantine/hooks";
 import { useState } from "react";
+import { Link, useSearchParams } from "react-router";
 
+import galleryStyles from "~/components/mascot-gallery.module.css";
 import activityStyles from "~/components/kawaii-activity.module.css";
 import { PageHeader } from "~/components/page";
+import { PageBackLink } from "~/components/page-back-link";
+import { activityAnimationDelay, type ExecutionAnimationPose } from "~/execution-activity";
 import {
-  activityAnimationDelay,
-  executionAnimationPosePools,
-  type ExecutionAnimationPose,
-} from "~/execution-activity";
+  findMascotPose,
+  mascotGalleryURL,
+  mascotGroupsForTags,
+  mascotPoseCatalog,
+  mascotPoseCount,
+  mascotPoseGroups,
+  mascotTagLabels,
+  mascotTags,
+  mascotTagsFromSearchParams,
+  type MascotPose,
+  type MascotTag,
+} from "~/mascot-poses";
 
-type MascotPose = {
-  label: string;
-  pose: ExecutionAnimationPose;
-};
+export { mascotPoseCount } from "~/mascot-poses";
 
-type MascotGroup = {
-  color: string;
-  description: string;
-  id: string;
-  poses: readonly MascotPose[];
-  title: string;
-};
-
-const mascotPoseLabels = {
-  "phone-scroll": "Phone scroll",
-  "book-browse": "Book browse",
-  "iced-coffee-sip": "Iced coffee sip",
-  "magazine-load": "Magazine load",
-  "popcorn-munch": "Popcorn munch",
-  "headphone-headbang": "Headphone headbang",
-  "toaster-vigil": "Toaster vigil",
-  "suspended-animation": "Suspended animation",
-  "bubblegum-blow": "Bubblegum blow",
-  "binocular-scan": "Binocular scan",
-  "hourglass-turn": "Hourglass turn",
-  "duck-float": "Duck float",
-  "lava-lamp-gaze": "Lava-lamp gaze",
-  "snail-coach": "Snail coach",
-  "beach-ball-roll": "Beach-ball roll",
-  "cat-petting": "Cat petting",
-  "pinwheel-spin": "Pinwheel spin",
-  "laptop-typing": "Laptop typing",
-  "blueprint-review": "Blueprint review",
-  "clipboard-check": "Clipboard check",
-  "walkie-talkie": "Walkie-talkie",
-  "antenna-tune": "Antenna tune",
-  "drill-drive": "Drill drive",
-  "weld-spark-pipe": "Weld spark pipe",
-  "grenade-throw": "Grenade throw",
-  "jackhammer-ride": "Jackhammer ride",
-  "bubble-level-check": "Bubble-level check",
-  "paint-roller-swipe": "Paint-roller swipe",
-  "beer-sip": "Beer sip",
-  "pennant-wave": "Pennant wave",
-  "check-badge": "Check badge",
-  "beer-toast": "Beer toast",
-  "flower-offer": "Flower offer",
-  "championship-belt": "Championship belt",
-  "confetti-cannon": "Confetti cannon",
-  "rifle-salute": "Rifle salute",
-  "trophy-hoist": "Trophy hoist",
-  "cowbell-clang": "Cowbell clang",
-  "laptop-slump": "Laptop slump",
-  "wrench-fumble": "Wrench fumble",
-  "button-panic": "Button panic",
-  "chart-plunge": "Chart plunge",
-  "play-dead": "Play dead",
-  "trash-can-hide": "Trash-can hide",
-  "lever-regret": "Lever regret",
-  "anvil-bonk": "Anvil bonk",
-  "cable-cocoon": "Cable cocoon",
-  "nuclear-vaporize": "Nuclear vaporize",
-  "too-many-arms": "Too many arms",
-  "trapdoor-deploy": "Trapdoor deploy",
-  "steamroller-flat": "Steamroller flat",
-  "under-desk-drag": "Under-desk drag",
-  "fire-extinguisher-blast": "Fire-extinguisher blast",
-  "explosion-walkaway": "Explosion walkaway",
-} as const satisfies Record<ExecutionAnimationPose, string>;
-
-function mascotPoses(poses: readonly ExecutionAnimationPose[]): readonly MascotPose[] {
-  return poses.map((pose) => ({ label: mascotPoseLabels[pose], pose }));
-}
-
-const mascotGroups = [
-  {
-    color: "violet",
-    description: "Runs waiting for a Controller and Promotions waiting for operator review.",
-    id: "waiting",
-    poses: mascotPoses(executionAnimationPosePools.waiting),
-    title: "Waiting",
-  },
-  {
-    color: "blue",
-    description: "Runs in progress and Promotions being created or prepared.",
-    id: "working",
-    poses: mascotPoses(executionAnimationPosePools.working),
-    title: "Working",
-  },
-  {
-    color: "green",
-    description: "Runs that succeeded and Promotions that were approved.",
-    id: "successful",
-    poses: mascotPoses(executionAnimationPosePools.celebrating),
-    title: "Successful",
-  },
-  {
-    color: "red",
-    description: "Runs that failed or timed out and Promotions that were rejected or failed.",
-    id: "unsuccessful",
-    poses: mascotPoses(executionAnimationPosePools.frustrated),
-    title: "Unsuccessful",
-  },
-  {
-    color: "gray",
-    description: "Canceled Runs and expired Promotions intentionally keep the neutral phone pose.",
-    id: "stopped-or-expired",
-    poses: mascotPoses(executionAnimationPosePools.phone),
-    title: "Stopped or expired",
-  },
-] as const satisfies readonly MascotGroup[];
-
-export const mascotPoseCount = Object.keys(mascotPoseLabels).length;
-
-export function MascotGallery() {
+export function MascotGallery({
+  detailPathPrefix = "/mascot",
+  galleryPath = "/mascot",
+}: Readonly<{ detailPathPrefix?: string; galleryPath?: string }>) {
   const [hideSmallVariants, setHideSmallVariants] = useState(false);
+  const [searchParams] = useSearchParams();
+  const selectedTags = mascotTagsFromSearchParams(searchParams);
+  const visibleGroups = mascotGroupsForTags(selectedTags);
+  const visiblePoseCount = mascotPoseCatalog.filter(
+    (pose) => selectedTags.length === 0 || pose.tags.some((tag) => selectedTags.includes(tag)),
+  ).length;
 
   return (
     <Stack gap="xl">
       <Stack gap="md">
-        <Paper aria-label="Mascot phases" component="nav" p="md" withBorder>
-          <Stack gap="sm">
-            <Text fw={700} size="sm">
-              Jump to a phase
-            </Text>
-            <Group gap="xs">
-              {mascotGroups.map((group) => (
-                <Button
-                  color={group.color}
-                  component="a"
-                  href={`#${group.id}`}
-                  key={group.id}
-                  radius="xl"
-                  size="compact-sm"
-                  variant="light"
-                >
-                  {group.title}
-                </Button>
-              ))}
-            </Group>
+        <Paper aria-label="Mascot gallery filters" component="nav" p="md" withBorder>
+          <Stack gap="md">
+            <Stack gap="sm">
+              <Group justify="space-between">
+                <Text fw={700} size="sm">
+                  Filter by tag
+                </Text>
+                {selectedTags.length > 0 ? (
+                  <Button component={Link} size="compact-sm" to={galleryPath} variant="subtle">
+                    Clear filters
+                  </Button>
+                ) : null}
+              </Group>
+              <Group gap="xs">
+                {mascotTags.map(({ label, tag }) => {
+                  const selected = selectedTags.includes(tag);
+                  const nextTags = selected
+                    ? selectedTags.filter((candidate) => candidate !== tag)
+                    : [...selectedTags, tag];
+
+                  return (
+                    <Button
+                      aria-pressed={selected}
+                      color="pink"
+                      component={Link}
+                      key={tag}
+                      radius="xl"
+                      size="compact-sm"
+                      to={mascotGalleryURL(galleryPath, nextTags)}
+                      variant={selected ? "filled" : "light"}
+                    >
+                      {label}
+                    </Button>
+                  );
+                })}
+              </Group>
+            </Stack>
+
+            <Divider />
+
+            <Stack gap="sm">
+              <Text fw={700} size="sm">
+                Jump to a phase
+              </Text>
+              <Group gap="xs">
+                {visibleGroups.map((group) => (
+                  <Button
+                    color={group.color}
+                    component="a"
+                    href={`#${group.id}`}
+                    key={group.id}
+                    radius="xl"
+                    size="compact-sm"
+                    variant="light"
+                  >
+                    {group.title}
+                  </Button>
+                ))}
+              </Group>
+            </Stack>
           </Stack>
         </Paper>
 
@@ -173,12 +124,16 @@ export function MascotGallery() {
               onChange={(event) => setHideSmallVariants(event.currentTarget.checked)}
             />
           }
-          description="All production mascot loops grouped by the Run and Promotion states that use them."
+          description={
+            selectedTags.length === 0
+              ? "All production mascot loops grouped by the Run and Promotion states that use them."
+              : `Showing ${visiblePoseCount} of ${mascotPoseCount} poses tagged ${formatTagList(selectedTags)}.`
+          }
           title="Mascot gallery"
         />
       </Stack>
 
-      {mascotGroups.map((group) => (
+      {visibleGroups.map((group) => (
         <Stack
           component="section"
           gap="md"
@@ -196,6 +151,7 @@ export function MascotGallery() {
           <SimpleGrid cols={{ base: 1, sm: 2, xl: 3 }}>
             {group.poses.map((pose) => (
               <MascotCard
+                detailPathPrefix={detailPathPrefix}
                 hideSmallVariants={hideSmallVariants}
                 key={`${group.title}:${pose.pose}`}
                 {...pose}
@@ -209,30 +165,140 @@ export function MascotGallery() {
 }
 
 function MascotCard({
+  detailPathPrefix,
   hideSmallVariants,
   label,
   pose,
-}: Readonly<MascotPose & { hideSmallVariants: boolean }>) {
+  tags,
+}: Readonly<MascotPose & { detailPathPrefix: string; hideSmallVariants: boolean }>) {
   const { entry, ref } = useIntersection<HTMLDivElement>({ rootMargin: "320px 0px" });
   const loaded = entry?.isIntersecting ?? false;
 
   return (
-    <Paper p="lg" ref={ref} withBorder>
-      <Stack align="center" gap="md">
-        <SpritePreview label={label} loaded={loaded} pose={pose} size={140} />
-        <Stack align="center" gap={2}>
-          <Text fw={650}>{label}</Text>
-          {hideSmallVariants ? null : <Code>{pose}</Code>}
+    <Box ref={ref}>
+      <Paper
+        aria-label={`View ${label}`}
+        className={galleryStyles.card}
+        component={Link}
+        p="lg"
+        to={`${detailPathPrefix}/${encodeURIComponent(pose)}`}
+        withBorder
+      >
+        <Stack align="center" gap="md">
+          <SpritePreview label={label} loaded={loaded} pose={pose} size={140} />
+          <Stack align="center" gap="xs">
+            <Stack align="center" gap={2}>
+              <Text fw={650}>{label}</Text>
+              {hideSmallVariants ? null : <Code>{pose}</Code>}
+            </Stack>
+            <Group gap={5} justify="center">
+              {tags.map((tag) => (
+                <Badge color="pink" key={tag} size="sm" variant="light">
+                  {mascotTagLabels[tag]}
+                </Badge>
+              ))}
+            </Group>
+          </Stack>
+          {hideSmallVariants ? null : (
+            <Group align="flex-end" gap="xl">
+              <PreviewSize label="Mobile" loaded={loaded} pose={pose} size={104} />
+              <PreviewSize label="Compact" loaded={loaded} pose={pose} size={48} />
+            </Group>
+          )}
         </Stack>
-        {hideSmallVariants ? null : (
-          <Group align="flex-end" gap="xl">
-            <PreviewSize label="Mobile" loaded={loaded} pose={pose} size={104} />
-            <PreviewSize label="Compact" loaded={loaded} pose={pose} size={48} />
-          </Group>
-        )}
-      </Stack>
-    </Paper>
+      </Paper>
+    </Box>
   );
+}
+
+export function MascotPoseDetail({
+  galleryPath = "/mascot",
+  pose: poseName,
+}: Readonly<{ galleryPath?: string; pose: string | undefined }>) {
+  const pose = findMascotPose(poseName);
+  if (!pose) {
+    return (
+      <Stack gap="md">
+        <PageBackLink label="Back to mascot gallery" to={galleryPath} />
+        <Alert color="red" title="Mascot pose not found">
+          No production mascot pose matches this URL.
+        </Alert>
+      </Stack>
+    );
+  }
+
+  const groups = mascotPoseGroups(pose.pose);
+
+  return (
+    <Stack gap="xl">
+      <PageHeader
+        back={<PageBackLink label="Back to mascot gallery" to={galleryPath} />}
+        badges={groups.map((group) => (
+          <Badge color={group.color} key={group.id} variant="light">
+            {group.title}
+          </Badge>
+        ))}
+        description="A production Slipramp mascot loop with a large showcase and every supported interface size."
+        title={pose.label}
+      />
+
+      <Paper className={galleryStyles.detail} p={{ base: "lg", sm: "xl" }} withBorder>
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl" verticalSpacing="xl">
+          <Stack align="center" gap="sm" justify="center">
+            <SpritePreview label={pose.label} loaded pose={pose.pose} size={240} />
+            <Text c="dimmed" size="sm">
+              Showcase · 240px
+            </Text>
+          </Stack>
+
+          <Stack gap="lg" justify="center">
+            <Stack gap={4}>
+              <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+                Pose slug
+              </Text>
+              <Code>{pose.pose}</Code>
+            </Stack>
+
+            <Stack gap="xs">
+              <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+                Tags
+              </Text>
+              <Group gap="xs">
+                {pose.tags.map((tag) => (
+                  <Button
+                    color="pink"
+                    component={Link}
+                    key={tag}
+                    radius="xl"
+                    size="compact-sm"
+                    to={mascotGalleryURL(galleryPath, [tag])}
+                    variant="light"
+                  >
+                    {mascotTagLabels[tag]}
+                  </Button>
+                ))}
+              </Group>
+            </Stack>
+
+            <Stack gap="xs">
+              <Text c="dimmed" fw={700} size="xs" tt="uppercase">
+                Interface sizes
+              </Text>
+              <Group align="flex-end" gap="xl">
+                <PreviewSize label="Detail" loaded pose={pose.pose} size={140} />
+                <PreviewSize label="Mobile" loaded pose={pose.pose} size={104} />
+                <PreviewSize label="Compact" loaded pose={pose.pose} size={48} />
+              </Group>
+            </Stack>
+          </Stack>
+        </SimpleGrid>
+      </Paper>
+    </Stack>
+  );
+}
+
+function formatTagList(tags: readonly MascotTag[]): string {
+  return tags.map((tag) => mascotTagLabels[tag].toLocaleLowerCase()).join(" or ");
 }
 
 function PreviewSize({

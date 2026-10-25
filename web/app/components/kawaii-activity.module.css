@@ -69,6 +69,11 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="rifle-clean"] {
+  background-image: url("../assets/slipramp-axolotl-rifle-clean.webp");
+  animation-duration: 2.4s;
+}
+
 .sprite[data-pose="popcorn-munch"] {
   background-image: url("../assets/slipramp-axolotl-popcorn-munch.webp");
   animation-duration: 2.4s;
@@ -165,6 +170,11 @@
 
 .sprite[data-pose="grenade-throw"] {
   background-image: url("../assets/slipramp-axolotl-grenade-throw.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="mortar-drop"] {
+  background-image: url("../assets/slipramp-axolotl-mortar-drop.webp");
   animation-duration: 2.4s;
 }
 
