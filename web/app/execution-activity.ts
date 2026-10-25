@@ -20,6 +20,7 @@ export type ExecutionAnimationPose =
   | "snail-coach"
   | "beach-ball-roll"
   | "cat-petting"
+  | "grass-touch"
   | "pinwheel-spin"
   | "skull-consult"
   | "candle-vigil"
@@ -37,6 +38,7 @@ export type ExecutionAnimationPose =
   | "bubble-level-check"
   | "paint-roller-swipe"
   | "pumpkin-autopsy"
+  | "breaker-bar-bounce"
   | "beer-sip"
   | "pennant-wave"
   | "check-badge"
@@ -47,7 +49,11 @@ export type ExecutionAnimationPose =
   | "rifle-salute"
   | "trophy-hoist"
   | "cowbell-clang"
+  | "chart-rise"
   | "laptop-slump"
+  | "server-bite"
+  | "rocket-boot-misfire"
+  | "kaiju-server-stomp"
   | "wrench-fumble"
   | "button-panic"
   | "chart-plunge"
@@ -84,6 +90,7 @@ export const executionAnimationPosePools = {
     "snail-coach",
     "beach-ball-roll",
     "cat-petting",
+    "grass-touch",
     "pinwheel-spin",
     "skull-consult",
     "candle-vigil",
@@ -104,6 +111,7 @@ export const executionAnimationPosePools = {
     "bubble-level-check",
     "paint-roller-swipe",
     "pumpkin-autopsy",
+    "breaker-bar-bounce",
   ],
   celebrating: [
     "beer-sip",
@@ -117,9 +125,13 @@ export const executionAnimationPosePools = {
     "rifle-salute",
     "trophy-hoist",
     "cowbell-clang",
+    "chart-rise",
   ],
   frustrated: [
     "laptop-slump",
+    "server-bite",
+    "rocket-boot-misfire",
+    "kaiju-server-stomp",
     "wrench-fumble",
     "button-panic",
     "chart-plunge",

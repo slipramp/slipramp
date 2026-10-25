@@ -67,11 +67,18 @@ func (a App) runVersion(arguments []string) int {
 }
 
 func (a App) runCatalog(arguments []string) int {
-	if len(arguments) == 0 || arguments[0] != "validate" {
-		return a.invocationError("catalog requires the validate command")
+	if len(arguments) == 0 {
+		return a.invocationError("catalog requires the validate or explain command")
 	}
 
-	return a.runCatalogValidate(arguments[1:])
+	switch arguments[0] {
+	case "validate":
+		return a.runCatalogValidate(arguments[1:])
+	case "explain":
+		return a.runCatalogExplain(arguments[1:])
+	default:
+		return a.invocationError(fmt.Sprintf("unknown catalog command %q", arguments[0]))
+	}
 }
 
 func (a App) runCatalogValidate(arguments []string) int {
@@ -204,7 +211,7 @@ func (a App) printUsage(output io.Writer) error {
 	if _, err := fmt.Fprintln(output, "usage: slipramp <command>"); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintln(output, "commands: catalog validate, version")
+	_, err := fmt.Fprintln(output, "commands: catalog validate, catalog explain, version")
 
 	return err
 }

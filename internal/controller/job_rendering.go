@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"path"
 	"slices"
 	"strconv"
 
@@ -16,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/durationvalidate"
 	"github.com/slipramp/slipramp/internal/harness"
 )
@@ -37,7 +37,6 @@ const (
 	cancellationFileName        = "cancellation-requested"
 	cancellationFilePath        = runStateMountPath + "/" + cancellationFileName
 	gitCredentialMountPath      = "/slipramp/git-credential"
-	defaultRuntimeWorkspacePath = "/workspace"
 	managedByLabel              = "app.kubernetes.io/managed-by"
 	managedByLabelValue         = "slipramp-controller"
 	runIDLabel                  = "slipramp.com/run-id"
@@ -283,14 +282,10 @@ func actionContainer(config Config, assignment api.RunAssignment) (corev1.Contai
 	}
 	environment = append(environment, credentials.environment...)
 
-	workspacePath := defaultRuntimeWorkspacePath
-	if assignment.Runtime.WorkingDirectory != nil {
-		workspacePath = *assignment.Runtime.WorkingDirectory
-	}
-	workingDirectory := workspacePath
-	if assignment.Target.Path != nil {
-		workingDirectory = path.Join(workspacePath, *assignment.Target.Path)
-	}
+	workspacePath, workingDirectory := catalog.ProcessDirectories(
+		valueOrEmpty(assignment.Runtime.WorkingDirectory),
+		valueOrEmpty(assignment.Target.Path),
+	)
 
 	resources, err := assignmentResources(assignment)
 	if err != nil {
@@ -337,68 +332,6 @@ func assignmentArtifactEnvironment(config Config, assignment api.RunAssignment) 
 		{Name: harness.ArtifactsEnvironment, Value: string(artifacts)},
 		{Name: harness.ArtifactInputsEnvironment, Value: string(inputs)},
 	}, nil
-}
-
-func assignmentParameters(assignment api.RunAssignment) ([]corev1.EnvVar, []string, error) {
-	environment := []corev1.EnvVar{}
-	arguments := []string{}
-
-	for _, name := range slices.Sorted(maps.Keys(assignment.Parameters)) {
-		if assignment.Action.ParameterDefinitions == nil {
-			return nil, nil, fmt.Errorf("run parameter %q has no definition", name)
-		}
-
-		definition, found := (*assignment.Action.ParameterDefinitions)[name]
-		if !found {
-			return nil, nil, fmt.Errorf("run parameter %q has no definition", name)
-		}
-
-		value, boolean, err := parameterValue(definition.Type, assignment.Parameters[name])
-		if err != nil {
-			return nil, nil, fmt.Errorf("render run parameter %q: %w", name, err)
-		}
-
-		if definition.Environment != nil {
-			environment = append(environment, corev1.EnvVar{Name: *definition.Environment, Value: value})
-			continue
-		}
-
-		if definition.Argument == nil {
-			return nil, nil, fmt.Errorf("run parameter %q has no execution mapping", name)
-		}
-
-		if definition.Argument.Name == nil {
-			arguments = append(arguments, value)
-			continue
-		}
-
-		if definition.Type == api.ParameterTypeBoolean {
-			if boolean {
-				arguments = append(arguments, *definition.Argument.Name)
-			}
-			continue
-		}
-
-		arguments = append(arguments, *definition.Argument.Name, value)
-	}
-
-	return environment, arguments, nil
-}
-
-func parameterValue(parameterType api.ParameterType, value api.ParameterValue) (string, bool, error) {
-	switch parameterType {
-	case api.ParameterTypeString, api.ParameterTypeEnum:
-		text, err := value.AsParameterValue0()
-		return text, false, err
-	case api.ParameterTypeBoolean:
-		boolean, err := value.AsParameterValue1()
-		return strconv.FormatBool(boolean), boolean, err
-	case api.ParameterTypeNumber:
-		number, err := value.AsParameterValue2()
-		return strconv.FormatFloat(number, 'f', -1, 64), false, err
-	default:
-		return "", false, fmt.Errorf("unsupported parameter type %q", parameterType)
-	}
 }
 
 type renderedCredentials struct {
@@ -525,16 +458,16 @@ func boundCredential(
 }
 
 func assignmentResources(assignment api.RunAssignment) (corev1.ResourceRequirements, error) {
-	requests := map[string]string{}
-	limits := map[string]string{}
-	mergeResources(requests, limits, assignment.Placement.Resources)
-	mergeResources(requests, limits, assignment.Action.Resources)
+	resources := catalog.MergeResources(
+		assignmentResourceValues(assignment.Placement.Resources),
+		assignmentResourceValues(assignment.Action.Resources),
+	)
 
-	parsedRequests, err := parseResourceList("request", requests)
+	parsedRequests, err := parseResourceList("request", resources.Requests)
 	if err != nil {
 		return corev1.ResourceRequirements{}, err
 	}
-	parsedLimits, err := parseResourceList("limit", limits)
+	parsedLimits, err := parseResourceList("limit", resources.Limits)
 	if err != nil {
 		return corev1.ResourceRequirements{}, err
 	}
@@ -545,15 +478,14 @@ func assignmentResources(assignment api.RunAssignment) (corev1.ResourceRequireme
 	}, nil
 }
 
-func mergeResources(requests map[string]string, limits map[string]string, resources *api.ResourceRequirements) {
+func assignmentResourceValues(resources *api.ResourceRequirements) catalog.ResourceRequirements {
 	if resources == nil {
-		return
+		return catalog.ResourceRequirements{}
 	}
-	if resources.Requests != nil {
-		maps.Copy(requests, *resources.Requests)
-	}
-	if resources.Limits != nil {
-		maps.Copy(limits, *resources.Limits)
+
+	return catalog.ResourceRequirements{
+		Requests: cloneOptionalMap(resources.Requests),
+		Limits:   cloneOptionalMap(resources.Limits),
 	}
 }
 

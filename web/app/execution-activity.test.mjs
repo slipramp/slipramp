@@ -51,6 +51,7 @@ test("waiting animation variants are stable and spread across IDs", () => {
       "snail-coach",
       "beach-ball-roll",
       "cat-petting",
+      "grass-touch",
       "pinwheel-spin",
       "skull-consult",
       "candle-vigil",
@@ -83,6 +84,7 @@ test("working animation variants are stable and spread across IDs", () => {
       "bubble-level-check",
       "paint-roller-swipe",
       "pumpkin-autopsy",
+      "breaker-bar-bounce",
     ]),
   );
 });
@@ -109,6 +111,7 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "rifle-salute",
       "trophy-hoist",
       "cowbell-clang",
+      "chart-rise",
     ]),
   );
 });
@@ -125,6 +128,9 @@ test("frustrated animation variants are stable and spread across IDs", () => {
     new Set(variants),
     new Set([
       "laptop-slump",
+      "server-bite",
+      "rocket-boot-misfire",
+      "kaiju-server-stomp",
       "wrench-fumble",
       "button-panic",
       "chart-plunge",

@@ -67,16 +67,17 @@ advance a reconciliation checkpoint.
 ## Catalog tooling
 
 The shared diagnostic pipeline, portable and deployment validation levels,
-checkout-aware warnings, `slipramp catalog validate`, deterministic text,
-JSON, and SARIF output, and a generated versioned catalog JSON Schema with a
-freshness check are implemented. Source-pinned local, pre-commit, CI, and YAML
+checkout-aware warnings, `slipramp catalog validate`, deterministic diagnostic
+text, JSON, and SARIF output, and a generated versioned catalog JSON Schema with a
+freshness check are implemented. `slipramp catalog explain` provides offline
+effective Action inspection with provenance in text and JSON, portable unresolved
+Placement values, optional deployment validation, and shared parameter simulation.
+Source-pinned local, pre-commit, CI, and YAML
 language-server workflows are documented. Remaining distribution work is
 intentionally deferred until Slipramp begins versioning releases:
 
 - [ ] Publish versioned binaries, checksums, the schema, and a small CLI OCI
       image when Slipramp begins versioning releases.
-- [ ] Reassess `catalog explain` for inspecting one fully resolved Action
-      without exposing credential values.
 - [ ] Reassess `catalog affected` for explaining which Targets and Git triggers
       match changed paths or two Git revisions.
 - [ ] Reassess semantic `catalog diff` for comparing complete resolved catalogs

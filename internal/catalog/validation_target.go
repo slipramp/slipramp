@@ -483,19 +483,10 @@ func mergePlacementResources(
 	placementResources placement.ResourceRequirements,
 	actionResources ResourceRequirements,
 ) ResourceRequirements {
-	requests := maps.Clone(placementResources.Requests)
-	if requests == nil && actionResources.Requests != nil {
-		requests = make(map[string]string, len(actionResources.Requests))
-	}
-	maps.Copy(requests, actionResources.Requests)
-
-	limits := maps.Clone(placementResources.Limits)
-	if limits == nil && actionResources.Limits != nil {
-		limits = make(map[string]string, len(actionResources.Limits))
-	}
-	maps.Copy(limits, actionResources.Limits)
-
-	return ResourceRequirements{Requests: requests, Limits: limits}
+	return MergeResources(ResourceRequirements{
+		Requests: placementResources.Requests,
+		Limits:   placementResources.Limits,
+	}, actionResources)
 }
 
 func validateIntent(actionName, intent string) error {

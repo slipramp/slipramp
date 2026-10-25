@@ -45,7 +45,7 @@ failures first (`limit` 1–200). There is no manual delivery retry action.
 Contracts are pre-stable. Development favors clean breaking changes with all
 callers and documentation updated together.
 
-## Catalog validation CLI
+## Catalog CLI
 
 The `slipramp` CLI validates the complete `.slipramp` catalog in a local
 checkout with the same decoder and validation stages used by Server repository
@@ -85,6 +85,48 @@ always written to standard output; invocation and internal failures use
 standard error. See [Catalog validation](docs/CATALOG_VALIDATION.md) for
 source-pinned installation, pre-commit and CI integration, validation scopes,
 and YAML editor configuration. Versioned CLI artifacts are not published yet.
+
+Inspect the effective execution contract for one Target Action in a working
+tree before committing or registering it with a Server:
+
+```console
+go run ./cmd/slipramp catalog explain rustfs-buckets preview --root examples/infrastructure-ops
+go run ./cmd/slipramp catalog explain rustfs-buckets apply --root examples/infrastructure-ops --format json
+go run ./cmd/slipramp catalog explain kubernetes-upgrade upgrade-node --root examples/infrastructure-ops --set host=compute-01 --set reboot=false
+```
+
+`slipramp catalog explain TARGET ACTION [flags]` accepts `--root PATH` (current
+directory by default), optional `--placements PATH`, repeatable `--set
+NAME=VALUE`, and `--format text|json` (text by default). Relative file paths
+resolve from the current directory. Both formats use one structured model of
+effective values with field-level provenance and repository source file/document
+locations. It includes commands, final argv, directories, Runtime environment,
+Placement defaults, resources, credential references and injection mappings,
+artifact producers/consumers and compatibility, watch patterns, and triggers.
+
+The whole catalog must validate before an Action can be explained. Without
+`--placements`, repository-owned contracts are validated and Placement-dependent
+values and remaining resource defaults are explicitly unresolved. With the
+Server's `PlacementConfig` file, the command performs full static deployment
+validation and resolves those defaults and credential sources. Secret contents
+and arbitrary Placement pod configuration are never printed. The command does
+not contact the Server or Kubernetes, inspect images, or execute the Action.
+
+Required parameters must be supplied; optional parameters stay omitted. Names
+must be unique across `--set` flags. String and enum values are literal, booleans
+use Go's `strconv.ParseBool` syntax (normally `true` or `false`), and numbers must
+be finite. The same normalization and validation used for Run creation applies.
+Controller execution shares argument/environment delivery: arguments append in
+lexical parameter-name order, named booleans emit a flag only when true, and
+positional/environment booleans emit `true` or `false`.
+
+Explanation uses the same exit codes as validation. Unknown Targets/Actions and
+invalid parameter values return `1` with an error on standard error; invalid
+catalogs return `1` with the usual validation diagnostics on standard output.
+Successful JSON explanations include `schemaVersion: 1`, `validationLevel`, and
+effective fields carrying `value`, `resolved`, and `provenance`; unresolved
+fields also carry `unresolvedReason`. Checkout warnings remain in the explanation
+and do not prevent success.
 
 ## Server configuration
 

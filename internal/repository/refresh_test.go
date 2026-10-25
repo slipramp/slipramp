@@ -217,6 +217,15 @@ func TestRefresherMatchesDeploymentCLIValidation(t *testing.T) {
 					stdout.String(),
 				)
 			}
+
+			stdout.Reset()
+			stderr.Reset()
+			explainCode := cli.App{
+				Stdout: &stdout, Stderr: &stderr, WorkDir: root,
+			}.Run([]string{"catalog", "explain", "infrastructure", "inspect", "--placements", placementsPath})
+			if stderr.Len() != 0 || (explainCode == cli.ExitValid) != serverAccepted {
+				t.Errorf("explain exit = %d, stderr = %q; Server accepted = %t", explainCode, stderr.String(), serverAccepted)
+			}
 		})
 	}
 }

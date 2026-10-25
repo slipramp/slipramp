@@ -47,18 +47,6 @@ func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
 	}
 	maps.Copy(credentials, action.Credentials)
 
-	requests := maps.Clone(t.Spec.Resources.Requests)
-	if requests == nil && action.Resources.Requests != nil {
-		requests = make(map[string]string, len(action.Resources.Requests))
-	}
-	maps.Copy(requests, action.Resources.Requests)
-
-	limits := maps.Clone(t.Spec.Resources.Limits)
-	if limits == nil && action.Resources.Limits != nil {
-		limits = make(map[string]string, len(action.Resources.Limits))
-	}
-	maps.Copy(limits, action.Resources.Limits)
-
 	return EffectiveAction{
 		Name:        name,
 		Intent:      action.Intent,
@@ -67,14 +55,11 @@ func (t Target) EffectiveAction(name string) (EffectiveAction, bool) {
 		Placement:   placementName,
 		Credentials: credentials,
 		Timeout:     timeout,
-		Resources: ResourceRequirements{
-			Requests: requests,
-			Limits:   limits,
-		},
-		Parameters: cloneParameters(action.Parameters),
-		Artifacts:  maps.Clone(action.Artifacts),
-		Inputs:     cloneInputs(action.Inputs),
-		Triggers:   cloneTriggers(action.Triggers),
+		Resources:   MergeResources(t.Spec.Resources, action.Resources),
+		Parameters:  cloneParameters(action.Parameters),
+		Artifacts:   maps.Clone(action.Artifacts),
+		Inputs:      cloneInputs(action.Inputs),
+		Triggers:    cloneTriggers(action.Triggers),
 	}, true
 }
 

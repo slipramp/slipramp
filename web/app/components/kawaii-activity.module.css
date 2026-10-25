@@ -134,6 +134,12 @@
   animation-duration: 3.2s;
 }
 
+.sprite[data-pose="grass-touch"] {
+  background-image: url("../assets/slipramp-axolotl-grass-touch.webp");
+  animation-name: grass-touch;
+  animation-duration: 3.2s;
+}
+
 .sprite[data-pose="pinwheel-spin"] {
   background-image: url("../assets/slipramp-axolotl-pinwheel-spin.webp");
   animation-duration: 1.6s;
@@ -215,6 +221,12 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="breaker-bar-bounce"] {
+  background-image: url("../assets/slipramp-axolotl-breaker-bar-bounce.webp");
+  animation-name: breaker-bar-bounce;
+  animation-duration: 1.6s;
+}
+
 .sprite[data-pose="beer-sip"] {
   background-image: url("../assets/slipramp-axolotl-beer-sip.webp");
   animation-duration: 2.8s;
@@ -265,9 +277,32 @@
   animation-duration: 1.6s;
 }
 
+.sprite[data-pose="chart-rise"] {
+  background-image: url("../assets/slipramp-axolotl-chart-rise.webp");
+  animation-name: chart-rise;
+  animation-duration: 2.8s;
+}
+
 .sprite[data-pose="laptop-slump"] {
   background-image: url("../assets/slipramp-axolotl-laptop-slump.webp");
   animation-duration: 2.8s;
+}
+
+.sprite[data-pose="server-bite"] {
+  background-image: url("../assets/slipramp-axolotl-server-bite.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="rocket-boot-misfire"] {
+  background-image: url("../assets/slipramp-axolotl-rocket-boot-misfire.webp");
+  animation-name: rocket-boot-misfire;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="kaiju-server-stomp"] {
+  background-image: url("../assets/slipramp-axolotl-kaiju-server-stomp.webp");
+  animation-name: kaiju-server-stomp;
+  animation-duration: 1.8s;
 }
 
 .sprite[data-pose="wrench-fumble"] {
@@ -429,6 +464,102 @@
   }
 
   70% {
+    background-position-x: 100%;
+  }
+}
+
+/* These poses retain their reviewed anticipation, action, and reaction holds. */
+@keyframes grass-touch {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  28.125% {
+    background-position-x: calc(100% / 3);
+  }
+
+  50% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes breaker-bar-bounce {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  31.25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  46.875% {
+    background-position-x: calc(200% / 3);
+  }
+
+  62.5% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes rocket-boot-misfire {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  45.833333% {
+    background-position-x: calc(200% / 3);
+  }
+
+  60.416667% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes kaiju-server-stomp {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.777778% {
+    background-position-x: calc(100% / 3);
+  }
+
+  50% {
+    background-position-x: calc(200% / 3);
+  }
+
+  63.888889% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes chart-rise {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  32.142857% {
+    background-position-x: calc(100% / 3);
+  }
+
+  55.357143% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
     background-position-x: 100%;
   }
 }

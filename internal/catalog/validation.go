@@ -24,6 +24,8 @@ type Result struct {
 	Catalog     Catalog
 	Diagnostics Diagnostics
 	Level       ValidationLevel
+
+	placements *placement.Set
 }
 
 type validationFinding struct {
@@ -47,9 +49,14 @@ func Process(files fs.FS, options Options) (Result, error) {
 	}
 	diagnostics = append(diagnostics, repositoryDiagnostics...)
 	level := ValidationLevelPortable
+	var validatedPlacements *placement.Set
 	if options.Placements != nil {
 		level = ValidationLevelDeployment
 		diagnostics = append(diagnostics, ValidateDeployment(loaded, *options.Placements)...)
+		// Set is immutable. Retain the exact configuration used for validation so
+		// explanation cannot accidentally resolve against a different installation.
+		copied := *options.Placements
+		validatedPlacements = &copied
 	}
 	sortDiagnostics(diagnostics)
 
@@ -57,6 +64,7 @@ func Process(files fs.FS, options Options) (Result, error) {
 		Catalog:     loaded,
 		Diagnostics: diagnostics,
 		Level:       level,
+		placements:  validatedPlacements,
 	}, nil
 }
 

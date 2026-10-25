@@ -133,6 +133,34 @@ Action scalar overrides replace defaults; credential and resource maps merge
 by key. Resolution copies definitions rather than mutating the catalog.
 Runtimes and Targets always resolve from the same revision.
 
+The general `cmd/slipramp` binary also provides `catalog explain TARGET ACTION`
+for inspecting one effective execution contract in a repository working tree.
+It runs the same complete catalog pipeline before resolving the selected Action.
+The processed result retains the immutable Placement set used for deployment
+validation, so explanation cannot silently resolve against different installation
+configuration. Portable explanation resolves repository-owned values and marks
+Placement-dependent values, credential sources, and remaining resource defaults
+as unresolved. Deployment explanation applies the production Placement parser
+and the full validation stage used by Server refresh.
+
+One structured explanation model owns effective values and their provenance:
+Action overrides/declarations, Target defaults/declarations, Runtime declarations,
+Placement defaults, supplied CLI parameters, and built-in defaults. Repository
+origins include source file, YAML document, and field locations. Text and
+schema-versioned JSON render this same model, including process directories,
+base command and final argv, supplied/omitted parameter delivery, non-secret
+environment, credentials by reference, artifact producer/consumer compatibility,
+watch patterns, triggers, and checkout diagnostics. Arbitrary Placement pod
+configuration and credential contents are excluded.
+
+CLI parameter strings are parsed against declarations, then use the Run-creation
+normalization and validation rules. Argument/environment delivery, repository
+mount/process directory resolution, and resource-map merging are shared with
+Controller execution. Explanation requires supplied values for required parameters
+but does not select artifact contents or create a Run. Both catalog commands
+remain offline: no Server/Kubernetes access, image inspection, Secret lookup,
+Job rendering, or local Action execution.
+
 A valid commit creates or reuses an immutable catalog revision. An invalid
 commit records its SHA and a bounded safe diagnostic summary while the last
 valid revision stays active; it does not advance Target state or create Runs.
@@ -971,14 +999,15 @@ the same authenticated contract.
 
 The optional kawaii theme adds an animated axolotl beside status badges and on
 detail pages. While a Run is queued, she uses a deterministic waiting pose such
-as reading, sipping iced coffee, eating popcorn, listening to music, or playing
-on her phone. After assignment, she uses a deterministic working pose throughout
-preparation and execution. Creating or preparing Promotions use the same
+as reading, sipping iced coffee, eating popcorn, listening to music, playing
+on her phone, or touching the lawn beneath her. After assignment, she uses a
+deterministic working pose throughout preparation and execution. Creating or preparing Promotions use the same
 working-pose selection; Promotions awaiting review use the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose; failed or timed-out Runs choose a deterministic
-failure pose ranging from a laptop slump to tool fumbles, emergency controls,
-and harmless slapstick retreats; canceled Runs use a neutral phone animation.
+failure pose ranging from a laptop slump to server biting, tool fumbles,
+rocket-boot misfires, server stomping, emergency controls, and harmless slapstick
+retreats; canceled Runs use a neutral phone animation.
 Approved Promotions celebrate, rejected or failed Promotions use the failure
 selection, and expired Promotions use the neutral phone animation. These outcome
 cards replace the terminal result alert. Successful Run cards show only the
@@ -994,7 +1023,11 @@ until the Run finishes. Promotion details refresh throughout creation and
 preparation. In the kawaii theme, visible lists refresh while Runs are unfinished
 or Promotions are creating or preparing.
 Animation timing varies by Run or Promotion identity and stays stable across
-refreshes. Waiting, working, celebration, and failure mascot poses also vary
+refreshes. Compact standing variations include a determined working bounce and a
+rising-chart celebration. Pose-specific frame holds retain reviewed jumps and
+emotional reactions, including the rocket misfire's hopeful start and disappointed
+ending, while sprite geometry and reduced-motion behavior remain shared.
+Waiting, working, celebration, and failure mascot poses also vary
 deterministically by that identity, so the same Run or Promotion keeps its
 selected pose across refreshes. The unlinked, authenticated `/mascot` route
 groups every production animation by state at its detail, mobile, and compact
