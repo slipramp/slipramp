@@ -108,6 +108,12 @@ effective resource constraints. An empty Placement set never selects portable
 behavior implicitly. Server refresh always runs both stages and rejects errors;
 warnings do not prevent acceptance.
 
+Diagnostic codes are the stable machine interface; messages and hints may
+improve without requiring callers to parse prose. Related locations identify
+both sides of duplicate or reference errors. Diagnostics sort by repository
+path, YAML document, source position, severity, and code so text, JSON, and
+SARIF output remain reproducible.
+
 The CLI can render the same sorted diagnostics as compiler-style text,
 schema-versioned JSON, or SARIF 2.1.0 without absolute checkout paths. Its
 repository-aware warnings cover currently missing Target paths, watch patterns
@@ -116,6 +122,11 @@ Target watch scope, and duplicate or completely subsumed watch patterns. Strict
 mode changes only the CLI exit result for warnings. Validation remains static:
 neither the Server nor CLI contacts Kubernetes, resolves Secret values, or
 inspects Runtime images.
+
+A checked-in Draft 2020-12 JSON Schema is generated from the Go Runtime and
+Target definitions and checked for freshness. It supports per-document editor
+completion and structural feedback while leaving cross-document, resolved, and
+deployment rules to the shared catalog validator.
 
 Target defaults supply runtime, placement, timeout, credentials, and resources.
 Action scalar overrides replace defaults; credential and resource maps merge

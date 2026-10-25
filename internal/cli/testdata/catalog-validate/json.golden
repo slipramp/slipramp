@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "validationLevel": "portable",
+  "valid": false,
+  "strict": true,
+  "summary": {
+    "runtimes": 1,
+    "targets": 1,
+    "actions": 1,
+    "placements": [
+      "test"
+    ],
+    "errors": 0,
+    "warnings": 1
+  },
+  "diagnostics": [
+    {
+      "code": "catalog.target.path-not-found",
+      "severity": "warning",
+      "message": "target path \"missing\" does not exist in the checkout",
+      "hint": "The path may be generated later; create it or ignore this warning when that is intentional.",
+      "location": {
+        "path": ".slipramp/catalog.yaml",
+        "document": 2,
+        "line": 13,
+        "column": 9,
+        "endLine": 13,
+        "endColumn": 16,
+        "fieldPath": "spec.path"
+      }
+    }
+  ]
+}

@@ -56,6 +56,20 @@ execution cluster:
 Secret values stay in the execution cluster. The catalog contains only the
 logical bindings and injection conventions.
 
+From the Slipramp source root, run both validation levels against the example:
+
+```console
+go run ./cmd/slipramp catalog validate examples/infrastructure-ops
+go run ./cmd/slipramp catalog validate \
+  --placements examples/infrastructure-ops/placements.yaml \
+  examples/infrastructure-ops
+```
+
+The omitted workload source is intentional, so the validator reports its
+missing paths as warnings while accepting the catalog. Deployment validation
+also checks the example's Placement and credential bindings without reading
+Secret values or contacting Kubernetes.
+
 The upgrade launcher derives a temporary kubeconfig from the Run Pod's
 projected ServiceAccount token. The deployment must grant that ServiceAccount
 cluster-admin access because the example's infrastructure actions intentionally

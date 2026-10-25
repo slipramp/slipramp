@@ -1,10 +1,13 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -13,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/cli"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
@@ -132,6 +136,88 @@ func TestRefresherRecordsCatalogValidationFailure(t *testing.T) {
 		result.Revision != nil || result.FailureReason == nil ||
 		!strings.Contains(*result.FailureReason, ".slipramp/catalog.yaml") {
 		t.Errorf("invalid catalog refresh = %#v", result)
+	}
+}
+
+func TestRefresherMatchesDeploymentCLIValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		placement string
+		accepted  bool
+	}{
+		"accepted":          {placement: "test", accepted: true},
+		"missing placement": {placement: "missing", accepted: false},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			root := t.TempDir()
+			catalogDirectory := filepath.Join(root, catalog.Directory)
+			if err := os.Mkdir(catalogDirectory, 0o755); err != nil {
+				t.Fatalf("os.Mkdir() error = %v", err)
+			}
+			catalogContents := strings.ReplaceAll(parityCatalog, "PLACEMENT", test.placement)
+			if err := os.WriteFile(
+				filepath.Join(catalogDirectory, "catalog.yaml"),
+				[]byte(catalogContents),
+				0o600,
+			); err != nil {
+				t.Fatalf("write catalog: %v", err)
+			}
+			placementsPath := filepath.Join(root, "placements.yaml")
+			if err := os.WriteFile(placementsPath, []byte(parityPlacements), 0o600); err != nil {
+				t.Fatalf("write placements: %v", err)
+			}
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			cliCode := cli.App{
+				Stdout:  &stdout,
+				Stderr:  &stderr,
+				WorkDir: root,
+				Version: "test",
+			}.Run([]string{"catalog", "validate", "--placements", placementsPath})
+			if stderr.Len() != 0 {
+				t.Fatalf("CLI stderr = %q", stderr.String())
+			}
+
+			repositoryID := uuid.New()
+			repositories := &recordingRefreshStore{items: []Repository{{ID: repositoryID, Name: "test"}}}
+			fetcher := &recordingFetcher{commits: map[RepositoryID]FetchedCommit{
+				repositoryID: {
+					Commit: Commit{
+						RepositoryID: repositoryID,
+						SHA:          "0123456789abcdef0123456789abcdef01234567",
+					},
+					Files: os.DirFS(root),
+				},
+			}}
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			refresher := NewRefresher(
+				repositories,
+				fetcher,
+				testRepositoryPlacements(t),
+				time.Minute,
+				10*time.Second,
+				logger,
+			)
+			refresher.refreshAll(context.Background())
+
+			serverAccepted := repositories.results[repositoryID].Revision != nil
+			cliAccepted := cliCode == cli.ExitValid
+			if serverAccepted != test.accepted || cliAccepted != test.accepted {
+				t.Errorf(
+					"acceptance = (Server %t, CLI %t), want %t; CLI output = %q",
+					serverAccepted,
+					cliAccepted,
+					test.accepted,
+					stdout.String(),
+				)
+			}
+		})
 	}
 }
 
@@ -322,3 +408,32 @@ func testRepositoryPlacements(t *testing.T) placement.Set {
 
 	return configured
 }
+
+const parityCatalog = `
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
+  name: tools
+spec:
+  image: example.com/tools:1
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: infrastructure
+spec:
+  runtime: tools
+  placement: PLACEMENT
+  actions:
+    inspect:
+      command: [inspect]
+`
+
+const parityPlacements = `
+apiVersion: slipramp.com/v1alpha1
+kind: PlacementConfig
+placements:
+  test:
+    cluster: test
+    jobNamespace: test
+`

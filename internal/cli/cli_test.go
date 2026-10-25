@@ -99,6 +99,39 @@ func TestCatalogValidateStructuredOutputAndStrictWarnings(t *testing.T) {
 	}
 }
 
+func TestCatalogValidateGoldenOutput(t *testing.T) {
+	t.Parallel()
+
+	workDir := filepath.Join("testdata", "catalog-validate")
+	for _, format := range []string{"text", "json", "sarif"} {
+		t.Run(format, func(t *testing.T) {
+			t.Parallel()
+
+			code, output, stderr := runApp(
+				t,
+				workDir,
+				"catalog",
+				"validate",
+				"--format",
+				format,
+				"--strict",
+			)
+			if code != cli.ExitInvalid || stderr != "" {
+				t.Fatalf("exit = %d, stderr = %q", code, stderr)
+			}
+
+			goldenPath := filepath.Join(workDir, format+".golden")
+			expected, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("os.ReadFile(%q) error = %v", goldenPath, err)
+			}
+			if output != string(expected) {
+				t.Errorf("output differs from %s\n--- got ---\n%s--- want ---\n%s", goldenPath, output, expected)
+			}
+		})
+	}
+}
+
 func TestCatalogValidateInvocationFailures(t *testing.T) {
 	t.Parallel()
 

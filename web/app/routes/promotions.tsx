@@ -216,7 +216,12 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
       </Table.Td>
       <Table.Td>
         <Stack gap={0}>
-          <Text>{application}</Text>
+          <Anchor
+            component={Link}
+            to={`/promotions?application=${encodeURIComponent(application)}`}
+          >
+            {application}
+          </Anchor>
           <Text c="dimmed" size="xs">
             {promotion.integration}
           </Text>

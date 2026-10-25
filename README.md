@@ -32,6 +32,8 @@ failures first (`limit` 1–200). There is no manual delivery retry action.
   acceptance, and deferred choices.
 - [Catalog example](examples/infrastructure-ops/README.md): Runtime and Target
   definitions, typed parameters, credentials, triggers, and artifact flows.
+- [Catalog validation](docs/CATALOG_VALIDATION.md): source-pinned CLI setup,
+  portable and deployment checks, hooks, CI, and editor schema configuration.
 - [Server/web chart](deploy/charts/slipramp/README.md) and
   [Controller chart](deploy/charts/slipramp-controller/README.md): Kubernetes
   installation and deployment configuration.
@@ -80,7 +82,9 @@ Exit code `0` means validation passed, `1` means catalog errors or strict
 warnings were found, `2` means the invocation, root, or Placement file was
 invalid, and `3` reports an unexpected internal/output failure. Diagnostics are
 always written to standard output; invocation and internal failures use
-standard error.
+standard error. See [Catalog validation](docs/CATALOG_VALIDATION.md) for
+source-pinned installation, pre-commit and CI integration, validation scopes,
+and YAML editor configuration. Versioned CLI artifacts are not published yet.
 
 ## Server configuration
 
