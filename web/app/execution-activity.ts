@@ -21,6 +21,9 @@ export type ExecutionAnimationPose =
   | "beach-ball-roll"
   | "cat-petting"
   | "pinwheel-spin"
+  | "skull-consult"
+  | "candle-vigil"
+  | "ghost-jar"
   | "laptop-typing"
   | "blueprint-review"
   | "clipboard-check"
@@ -33,6 +36,7 @@ export type ExecutionAnimationPose =
   | "jackhammer-ride"
   | "bubble-level-check"
   | "paint-roller-swipe"
+  | "pumpkin-autopsy"
   | "beer-sip"
   | "pennant-wave"
   | "check-badge"
@@ -48,6 +52,7 @@ export type ExecutionAnimationPose =
   | "button-panic"
   | "chart-plunge"
   | "play-dead"
+  | "tombstone-peek"
   | "trash-can-hide"
   | "lever-regret"
   | "anvil-bonk"
@@ -80,6 +85,9 @@ export const executionAnimationPosePools = {
     "beach-ball-roll",
     "cat-petting",
     "pinwheel-spin",
+    "skull-consult",
+    "candle-vigil",
+    "ghost-jar",
   ],
   phone: ["phone-scroll"],
   working: [
@@ -95,6 +103,7 @@ export const executionAnimationPosePools = {
     "jackhammer-ride",
     "bubble-level-check",
     "paint-roller-swipe",
+    "pumpkin-autopsy",
   ],
   celebrating: [
     "beer-sip",
@@ -115,6 +124,7 @@ export const executionAnimationPosePools = {
     "button-panic",
     "chart-plunge",
     "play-dead",
+    "tombstone-peek",
     "trash-can-hide",
     "lever-regret",
     "anvil-bonk",

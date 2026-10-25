@@ -962,9 +962,35 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
   useEffect(() => {
     const decoder = new TextDecoder();
     let nextOffsetBytes = 0;
+    let pendingContents = "";
+    let pendingOffsetBytes = 0;
+    let renderFrame: number | undefined;
     let reconnectTimer: number | undefined;
     let source: EventSource | undefined;
     let stopped = false;
+
+    const flushPendingContents = () => {
+      renderFrame = undefined;
+      if (pendingContents.length === 0) return;
+
+      const appendedContents = pendingContents;
+      pendingContents = "";
+      setContents((current) => current + appendedContents);
+      setReceivedBytes(pendingOffsetBytes);
+    };
+
+    const scheduleRender = () => {
+      if (renderFrame === undefined) {
+        renderFrame = window.requestAnimationFrame(flushPendingContents);
+      }
+    };
+
+    const finishRendering = () => {
+      if (renderFrame !== undefined) {
+        window.cancelAnimationFrame(renderFrame);
+      }
+      flushPendingContents();
+    };
 
     const connect = () => {
       const streamURL = new URL(`/api/v1/runs/${runId}/logs`, window.location.origin);
@@ -976,18 +1002,21 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
         const binary = atob(payload.contentsBase64);
         const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
         nextOffsetBytes = payload.nextOffsetBytes;
-        setReceivedBytes(nextOffsetBytes);
-        setContents((current) => current + decoder.decode(bytes, { stream: true }));
+        pendingOffsetBytes = nextOffsetBytes;
+        pendingContents += decoder.decode(bytes, { stream: true });
+        scheduleRender();
       });
       source.addEventListener("sealed", () => {
         stopped = true;
-        setContents((current) => current + decoder.decode());
+        pendingContents += decoder.decode();
+        finishRendering();
         setStatus("Retained");
         source?.close();
       });
       source.addEventListener("failed", () => {
         stopped = true;
-        setContents((current) => current + decoder.decode());
+        pendingContents += decoder.decode();
+        finishRendering();
         setStatus("Incomplete");
         source?.close();
       });
@@ -1010,6 +1039,9 @@ function LiveLog({ runId }: Readonly<{ runId: string }>) {
       source?.close();
       if (reconnectTimer !== undefined) {
         window.clearTimeout(reconnectTimer);
+      }
+      if (renderFrame !== undefined) {
+        window.cancelAnimationFrame(renderFrame);
       }
     };
   }, [runId]);

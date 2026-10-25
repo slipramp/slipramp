@@ -5,6 +5,7 @@ export const mascotTagLabels = {
   construction: "Construction",
   "food-and-drink": "Food & drink",
   leisure: "Leisure",
+  macabre: "Macabre",
   military: "Military",
   "science-fiction": "Science fiction",
   slapstick: "Slapstick",
@@ -48,6 +49,9 @@ const mascotPoseMetadata = {
   "beach-ball-roll": { label: "Beach-ball roll", tags: ["leisure"] },
   "cat-petting": { label: "Cat petting", tags: ["animals", "leisure"] },
   "pinwheel-spin": { label: "Pinwheel spin", tags: ["leisure"] },
+  "skull-consult": { label: "Skull consult", tags: ["macabre", "leisure"] },
+  "candle-vigil": { label: "Candle vigil", tags: ["macabre", "leisure"] },
+  "ghost-jar": { label: "Ghost jar", tags: ["macabre"] },
   "laptop-typing": { label: "Laptop typing", tags: ["construction"] },
   "blueprint-review": { label: "Blueprint review", tags: ["construction"] },
   "clipboard-check": { label: "Clipboard check", tags: ["construction"] },
@@ -60,6 +64,7 @@ const mascotPoseMetadata = {
   "jackhammer-ride": { label: "Jackhammer ride", tags: ["construction", "slapstick"] },
   "bubble-level-check": { label: "Bubble-level check", tags: ["construction"] },
   "paint-roller-swipe": { label: "Paint-roller swipe", tags: ["construction"] },
+  "pumpkin-autopsy": { label: "Pumpkin autopsy", tags: ["construction", "macabre"] },
   "beer-sip": { label: "Beer sip", tags: ["food-and-drink"] },
   "pennant-wave": { label: "Pennant wave", tags: ["leisure"] },
   "check-badge": { label: "Check badge", tags: ["construction"] },
@@ -74,7 +79,8 @@ const mascotPoseMetadata = {
   "wrench-fumble": { label: "Wrench fumble", tags: ["construction", "slapstick"] },
   "button-panic": { label: "Button panic", tags: ["slapstick"] },
   "chart-plunge": { label: "Chart plunge", tags: ["slapstick"] },
-  "play-dead": { label: "Play dead", tags: ["slapstick"] },
+  "play-dead": { label: "Play dead", tags: ["macabre", "slapstick"] },
+  "tombstone-peek": { label: "Tombstone peek", tags: ["macabre", "slapstick"] },
   "trash-can-hide": { label: "Trash-can hide", tags: ["slapstick"] },
   "lever-regret": { label: "Lever regret", tags: ["slapstick"] },
   "anvil-bonk": { label: "Anvil bonk", tags: ["construction", "slapstick"] },
@@ -83,10 +89,13 @@ const mascotPoseMetadata = {
     label: "Nuclear vaporize",
     tags: ["science-fiction", "slapstick"],
   },
-  "too-many-arms": { label: "Too many arms", tags: ["science-fiction", "slapstick"] },
+  "too-many-arms": {
+    label: "Too many arms",
+    tags: ["macabre", "science-fiction", "slapstick"],
+  },
   "trapdoor-deploy": { label: "Trapdoor deploy", tags: ["slapstick"] },
   "steamroller-flat": { label: "Steamroller flat", tags: ["construction", "slapstick"] },
-  "under-desk-drag": { label: "Under-desk drag", tags: ["slapstick"] },
+  "under-desk-drag": { label: "Under-desk drag", tags: ["macabre", "slapstick"] },
   "fire-extinguisher-blast": {
     label: "Fire-extinguisher blast",
     tags: ["construction", "slapstick"],
@@ -160,29 +169,30 @@ export function findMascotPose(pose: string | undefined): MascotPose | undefined
   return mascotPoseCatalog.find((candidate) => candidate.pose === pose);
 }
 
-export function mascotGroupsForTags(tags: readonly MascotTag[]): readonly MascotGroup[] {
-  if (tags.length === 0) return mascotGroups;
+export function mascotGroupsForTag(tag: MascotTag | undefined): readonly MascotGroup[] {
+  if (!tag) return mascotGroups;
 
   return mascotGroups
     .map((group) => ({
       ...group,
-      poses: group.poses.filter((pose) => pose.tags.some((tag) => tags.includes(tag))),
+      poses: group.poses.filter((pose) => pose.tags.includes(tag)),
     }))
     .filter((group) => group.poses.length > 0);
 }
 
-export function mascotTagsFromSearchParams(searchParams: URLSearchParams): readonly MascotTag[] {
-  const tags = searchParams.getAll("tag").filter((tag): tag is MascotTag => tag in mascotTagLabels);
+export function mascotTagFromSearchParams(searchParams: URLSearchParams): MascotTag | undefined {
+  const tag = searchParams.get("tag");
 
-  return [...new Set(tags)];
+  return tag && tag in mascotTagLabels ? (tag as MascotTag) : undefined;
 }
 
-export function mascotGalleryURL(path: string, tags: readonly MascotTag[]): string {
-  const searchParams = new URLSearchParams();
-  for (const tag of tags) searchParams.append("tag", tag);
-  const query = searchParams.toString();
+export function mascotGalleryURL(path: string, tag: MascotTag | undefined): string {
+  if (!tag) return path;
 
-  return query ? `${path}?${query}` : path;
+  const searchParams = new URLSearchParams();
+  searchParams.set("tag", tag);
+
+  return `${path}?${searchParams.toString()}`;
 }
 
 export function mascotPoseGroups(pose: ExecutionAnimationPose): readonly MascotGroup[] {

@@ -25,15 +25,14 @@ import { activityAnimationDelay, type ExecutionAnimationPose } from "~/execution
 import {
   findMascotPose,
   mascotGalleryURL,
-  mascotGroupsForTags,
+  mascotGroupsForTag,
   mascotPoseCatalog,
   mascotPoseCount,
   mascotPoseGroups,
+  mascotTagFromSearchParams,
   mascotTagLabels,
   mascotTags,
-  mascotTagsFromSearchParams,
   type MascotPose,
-  type MascotTag,
 } from "~/mascot-poses";
 
 export { mascotPoseCount } from "~/mascot-poses";
@@ -44,10 +43,10 @@ export function MascotGallery({
 }: Readonly<{ detailPathPrefix?: string; galleryPath?: string }>) {
   const [hideSmallVariants, setHideSmallVariants] = useState(false);
   const [searchParams] = useSearchParams();
-  const selectedTags = mascotTagsFromSearchParams(searchParams);
-  const visibleGroups = mascotGroupsForTags(selectedTags);
+  const selectedTag = mascotTagFromSearchParams(searchParams);
+  const visibleGroups = mascotGroupsForTag(selectedTag);
   const visiblePoseCount = mascotPoseCatalog.filter(
-    (pose) => selectedTags.length === 0 || pose.tags.some((tag) => selectedTags.includes(tag)),
+    (pose) => !selectedTag || pose.tags.includes(selectedTag),
   ).length;
 
   return (
@@ -60,7 +59,7 @@ export function MascotGallery({
                 <Text fw={700} size="sm">
                   Filter by tag
                 </Text>
-                {selectedTags.length > 0 ? (
+                {selectedTag ? (
                   <Button component={Link} size="compact-sm" to={galleryPath} variant="subtle">
                     Clear filters
                   </Button>
@@ -68,10 +67,7 @@ export function MascotGallery({
               </Group>
               <Group gap="xs">
                 {mascotTags.map(({ label, tag }) => {
-                  const selected = selectedTags.includes(tag);
-                  const nextTags = selected
-                    ? selectedTags.filter((candidate) => candidate !== tag)
-                    : [...selectedTags, tag];
+                  const selected = selectedTag === tag;
 
                   return (
                     <Button
@@ -81,7 +77,7 @@ export function MascotGallery({
                       key={tag}
                       radius="xl"
                       size="compact-sm"
-                      to={mascotGalleryURL(galleryPath, nextTags)}
+                      to={mascotGalleryURL(galleryPath, selected ? undefined : tag)}
                       variant={selected ? "filled" : "light"}
                     >
                       {label}
@@ -125,9 +121,9 @@ export function MascotGallery({
             />
           }
           description={
-            selectedTags.length === 0
+            !selectedTag
               ? "All production mascot loops grouped by the Run and Promotion states that use them."
-              : `Showing ${visiblePoseCount} of ${mascotPoseCount} poses tagged ${formatTagList(selectedTags)}.`
+              : `Showing ${visiblePoseCount} of ${mascotPoseCount} poses tagged ${mascotTagLabels[selectedTag].toLocaleLowerCase()}.`
           }
           title="Mascot gallery"
         />
@@ -271,7 +267,7 @@ export function MascotPoseDetail({
                     key={tag}
                     radius="xl"
                     size="compact-sm"
-                    to={mascotGalleryURL(galleryPath, [tag])}
+                    to={mascotGalleryURL(galleryPath, tag)}
                     variant="light"
                   >
                     {mascotTagLabels[tag]}
@@ -295,10 +291,6 @@ export function MascotPoseDetail({
       </Paper>
     </Stack>
   );
-}
-
-function formatTagList(tags: readonly MascotTag[]): string {
-  return tags.map((tag) => mascotTagLabels[tag].toLocaleLowerCase()).join(" or ");
 }
 
 function PreviewSize({

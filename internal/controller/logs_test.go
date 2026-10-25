@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -56,6 +57,73 @@ func TestForwardLogRetriesLostAppendResponseIdempotently(t *testing.T) {
 	if reporter.appendAttempts != 2 || reporter.acceptedAppends != 1 {
 		t.Errorf("append attempts = %d, accepted = %d; want 2, 1", reporter.appendAttempts, reporter.acceptedAppends)
 	}
+}
+
+func TestForwardLogCoalescesSmallSourceReads(t *testing.T) {
+	t.Parallel()
+
+	lines := make([][]byte, 1000)
+	var payload []byte
+	for index := range lines {
+		lines[index] = fmt.Appendf(nil, "log line %d\n", index)
+		payload = append(payload, lines[index]...)
+	}
+	reporter := &memoryLogReporter{}
+	controller := &Controller{logs: reporter, retryDelay: time.Millisecond}
+
+	_, err := controller.forwardLog(context.Background(), uuid.New(), &lineLogReader{lines: lines})
+	if err != nil {
+		t.Fatalf("forwardLog() error = %v", err)
+	}
+	if !bytes.Equal(reporter.bytes(), payload) {
+		t.Fatal("durable log does not match the streamed source")
+	}
+	if reporter.acceptedAppends != 1 {
+		t.Errorf("accepted appends = %d, want 1 coalesced chunk", reporter.acceptedAppends)
+	}
+}
+
+func TestBatchingLogReaderFlushesLiveOutput(t *testing.T) {
+	t.Parallel()
+
+	source, writer := io.Pipe()
+	reader := newBatchingLogReader(t.Context(), source, time.Millisecond)
+	defer reader.Close()
+	t.Cleanup(func() { _ = source.Close() })
+	t.Cleanup(func() { _ = writer.Close() })
+
+	written := make(chan error, 1)
+	go func() {
+		_, err := writer.Write([]byte("live line\n"))
+		written <- err
+	}()
+
+	buffer := make([]byte, maximumLogChunkBytes)
+	count, err := reader.Read(buffer)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if string(buffer[:count]) != "live line\n" {
+		t.Errorf("Read() = %q", buffer[:count])
+	}
+	if err := <-written; err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+}
+
+type lineLogReader struct {
+	lines [][]byte
+}
+
+func (r *lineLogReader) Read(destination []byte) (int, error) {
+	if len(r.lines) == 0 {
+		return 0, io.EOF
+	}
+
+	written := copy(destination, r.lines[0])
+	r.lines = r.lines[1:]
+
+	return written, nil
 }
 
 type memoryLogReporter struct {

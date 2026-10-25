@@ -139,6 +139,21 @@
   animation-duration: 1.6s;
 }
 
+.sprite[data-pose="skull-consult"] {
+  background-image: url("../assets/slipramp-axolotl-skull-consult.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="candle-vigil"] {
+  background-image: url("../assets/slipramp-axolotl-candle-vigil.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="ghost-jar"] {
+  background-image: url("../assets/slipramp-axolotl-ghost-jar.webp");
+  animation-duration: 3.2s;
+}
+
 .sprite[data-pose="blueprint-review"] {
   background-image: url("../assets/slipramp-axolotl-blueprint-review.webp");
 }
@@ -193,6 +208,11 @@
 
   background-image: url("../assets/slipramp-axolotl-paint-roller-swipe.webp");
   animation-duration: 1.6s;
+}
+
+.sprite[data-pose="pumpkin-autopsy"] {
+  background-image: url("../assets/slipramp-axolotl-pumpkin-autopsy.webp");
+  animation-duration: 2.4s;
 }
 
 .sprite[data-pose="beer-sip"] {
@@ -268,6 +288,11 @@
 .sprite[data-pose="play-dead"] {
   background-image: url("../assets/slipramp-axolotl-play-dead.webp");
   animation-duration: 3.2s;
+}
+
+.sprite[data-pose="tombstone-peek"] {
+  background-image: url("../assets/slipramp-axolotl-tombstone-peek.webp");
+  animation-duration: 2.8s;
 }
 
 .sprite[data-pose="trash-can-hide"] {

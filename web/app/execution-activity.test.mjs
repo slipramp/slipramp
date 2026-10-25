@@ -52,6 +52,9 @@ test("waiting animation variants are stable and spread across IDs", () => {
       "beach-ball-roll",
       "cat-petting",
       "pinwheel-spin",
+      "skull-consult",
+      "candle-vigil",
+      "ghost-jar",
     ]),
   );
 });
@@ -79,6 +82,7 @@ test("working animation variants are stable and spread across IDs", () => {
       "jackhammer-ride",
       "bubble-level-check",
       "paint-roller-swipe",
+      "pumpkin-autopsy",
     ]),
   );
 });
@@ -125,6 +129,7 @@ test("frustrated animation variants are stable and spread across IDs", () => {
       "button-panic",
       "chart-plunge",
       "play-dead",
+      "tombstone-peek",
       "trash-can-hide",
       "lever-regret",
       "anvil-bonk",

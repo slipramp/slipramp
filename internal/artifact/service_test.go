@@ -380,6 +380,9 @@ func TestServiceSealsAndReconnectsToDurableLog(t *testing.T) {
 		chunks    []LogStreamChunk
 		sourceErr error
 	}{
+		{name: "coalesced history", chunks: []LogStreamChunk{
+			{OffsetBytes: 0, NextOffsetBytes: 11, Contents: []byte("hello logs\n")},
+		}},
 		{name: "chunk boundary", offset: 6, chunks: []LogStreamChunk{
 			{OffsetBytes: 6, NextOffsetBytes: 11, Contents: []byte("logs\n")},
 		}},
@@ -417,6 +420,40 @@ func TestServiceSealsAndReconnectsToDurableLog(t *testing.T) {
 				t.Errorf("drained Next() error = %v, want EOF", err)
 			}
 		})
+	}
+}
+
+func TestServiceBoundsCoalescedHistoricalLogChunks(t *testing.T) {
+	t.Parallel()
+
+	metadata := &serviceMetadataStore{runCluster: "colo", chunks: map[int64]LogChunk{}}
+	contents := &serviceContentStore{}
+	service := newTestService(metadata, contents)
+	runID := uuid.New()
+	for offset := range int64(maximumLogStreamSourceReads + 2) {
+		if err := service.AppendLogChunk(context.Background(), AppendLogChunkRequest{
+			RunID: runID, ClusterName: "colo", OffsetBytes: offset, Contents: []byte("x"),
+		}); err != nil {
+			t.Fatalf("AppendLogChunk(%d) error = %v", offset, err)
+		}
+	}
+
+	stream, err := service.StreamLog(context.Background(), runID, 0)
+	if err != nil {
+		t.Fatalf("StreamLog() error = %v", err)
+	}
+	defer func() { _ = stream.Close() }()
+
+	first, err := stream.Next()
+	if err != nil || len(first.Contents) != maximumLogStreamSourceReads ||
+		first.NextOffsetBytes != maximumLogStreamSourceReads {
+		t.Fatalf("first Next() = (%#v, %v)", first, err)
+	}
+	second, err := stream.Next()
+	if err != nil || len(second.Contents) != 2 ||
+		second.OffsetBytes != maximumLogStreamSourceReads ||
+		second.NextOffsetBytes != maximumLogStreamSourceReads+2 {
+		t.Fatalf("second Next() = (%#v, %v)", second, err)
 	}
 }
 

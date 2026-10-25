@@ -411,22 +411,23 @@ Preview artifacts and Kargo review policy add optional controls to this model.
 
 ## Logs and artifacts
 
-The Controller follows Pod output once and posts chunks of at most 256 KiB with
-monotonically increasing byte offsets. The Server writes S3 objects before
-committing their digest and offset metadata in PostgreSQL. Retrying the same
-bytes at the same offset is idempotent. Recovery reads the durable cursor and
-replays only to verify and skip the accepted prefix. The Controller closes logs
-before terminal observation: complete logs seal with final byte size and
-SHA-256, while an irrecoverable prefix enters the failed state without a digest.
+The Controller follows Pod output once, briefly coalesces small source reads,
+and posts chunks of at most 256 KiB with monotonically increasing byte offsets.
+The Server writes S3 objects before committing their digest and offset metadata
+in PostgreSQL. Retrying the same bytes at the same offset is idempotent.
+Recovery reads the durable cursor and replays only to verify and skip the
+accepted prefix. The Controller closes logs before terminal observation:
+complete logs seal with final byte size and SHA-256, while an irrecoverable
+prefix enters the failed state without a digest.
 
 Live logs use reconnectable SSE whose event ID is the next durable byte offset.
 Live viewing and retained capture share the same ingestion path. Pod logs are
 the source during execution, never the durable record.
 
-The artifact service exposes a cancellable pull stream of raw log chunks and
-byte offsets, owning durable polling and cursor validation. The HTTP adapter
-encodes the generated log-event payload and SSE framing, distinguishing sealed
-completion from a failed partial log.
+The artifact service exposes a cancellable pull stream of bounded log-byte
+batches and offsets, coalescing available durable chunks while owning polling
+and cursor validation. The HTTP adapter encodes the generated log-event payload
+and SSE framing, distinguishing sealed completion from a failed partial log.
 Chunks are read as the response consumes them; the generated response writer
 flushes output and closes the stream on completion or disconnection.
 

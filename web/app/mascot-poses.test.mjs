@@ -6,10 +6,10 @@ import {
   findMascotPose,
   mascotGalleryURL,
   mascotGroups,
-  mascotGroupsForTags,
+  mascotGroupsForTag,
   mascotPoseCatalog,
+  mascotTagFromSearchParams,
   mascotTags,
-  mascotTagsFromSearchParams,
 } from "./mascot-poses.ts";
 
 test("the mascot catalog and phase groups are sorted by display name", () => {
@@ -46,24 +46,27 @@ test("every gallery tag is assigned to at least one pose", () => {
 
   assert.deepEqual(findMascotPose("rifle-clean")?.tags, ["military"]);
   assert.ok(findMascotPose("blueprint-review")?.tags.includes("construction"));
+  assert.ok(findMascotPose("ghost-jar")?.tags.includes("macabre"));
+  assert.ok(findMascotPose("play-dead")?.tags.includes("macabre"));
+  assert.ok(findMascotPose("too-many-arms")?.tags.includes("macabre"));
+  assert.ok(findMascotPose("under-desk-drag")?.tags.includes("macabre"));
 });
 
-test("tag filtering matches any selected tag while preserving phase groups", () => {
-  const filteredGroups = mascotGroupsForTags(["animals", "military"]);
+test("tag filtering matches one selected tag while preserving phase groups", () => {
+  const filteredGroups = mascotGroupsForTag("animals");
   const poses = filteredGroups.flatMap((group) => group.poses);
 
   assert.ok(poses.length > 0);
-  assert.ok(poses.every((pose) => pose.tags.includes("animals") || pose.tags.includes("military")));
+  assert.ok(poses.every((pose) => pose.tags.includes("animals")));
   assert.ok(poses.some((pose) => pose.pose === "cat-petting"));
-  assert.ok(poses.some((pose) => pose.pose === "rifle-clean"));
 });
 
-test("gallery tag URLs round trip valid filters and ignore unknown tags", () => {
-  const url = mascotGalleryURL("/mascot", ["military", "construction"]);
+test("gallery tag URLs round trip one valid filter and ignore unknown tags", () => {
+  const url = mascotGalleryURL("/mascot", "military");
   const searchParams = new URL(url, "https://example.test").searchParams;
-  searchParams.append("tag", "military");
-  searchParams.append("tag", "unknown");
 
-  assert.equal(url, "/mascot?tag=military&tag=construction");
-  assert.deepEqual(mascotTagsFromSearchParams(searchParams), ["military", "construction"]);
+  assert.equal(url, "/mascot?tag=military");
+  assert.equal(mascotGalleryURL("/mascot", undefined), "/mascot");
+  assert.equal(mascotTagFromSearchParams(searchParams), "military");
+  assert.equal(mascotTagFromSearchParams(new URLSearchParams("tag=unknown")), undefined);
 });

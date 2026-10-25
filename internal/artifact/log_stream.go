@@ -11,7 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
-const logStreamPollPeriod = 250 * time.Millisecond
+const (
+	logStreamPollPeriod         = 250 * time.Millisecond
+	maximumLogStreamReadWorkers = 16
+	maximumLogStreamSourceReads = 128
+)
 
 type LogStreamChunk struct {
 	OffsetBytes     int64
@@ -19,8 +23,9 @@ type LogStreamChunk struct {
 	Contents        []byte
 }
 
-// LogStream reads durable chunks on demand. Next calls must be serial; Close
-// may run concurrently to cancel a pending read. EOF means the log is drained.
+// LogStream reads bounded batches of durable log bytes on demand. Next calls
+// must be serial; Close may run concurrently to cancel a pending read. EOF
+// means the log is drained.
 type LogStream interface {
 	Next() (LogStreamChunk, error)
 	Close() error
@@ -87,12 +92,35 @@ func (s *durableLogStream) next() (LogStreamChunk, error) {
 			}
 			s.pending = chunks
 		}
-		for len(s.pending) > 0 {
+		result := LogStreamChunk{OffsetBytes: s.cursor, NextOffsetBytes: s.cursor}
+		selected := make([]LogChunk, 0, min(len(s.pending), maximumLogStreamSourceReads))
+		selectionCursor := s.cursor
+		var resultSize int64
+		for sourceReads := 0; len(s.pending) > 0 && sourceReads < maximumLogStreamSourceReads; {
 			chunk := s.pending[0]
-			s.pending = s.pending[1:]
-			if chunk.EndOffset() > s.cursor {
-				return s.readChunk(chunk)
+			if chunk.EndOffset() <= selectionCursor {
+				s.pending = s.pending[1:]
+				continue
 			}
+			if chunk.OffsetBytes > selectionCursor {
+				return LogStreamChunk{}, fmt.Errorf("log chunk gap at byte %d", selectionCursor)
+			}
+
+			remainingBytes := chunk.EndOffset() - selectionCursor
+			if resultSize > 0 && resultSize+remainingBytes > MaxLogChunkSizeBytes {
+				break
+			}
+
+			s.pending = s.pending[1:]
+			selected = append(selected, chunk)
+			resultSize += remainingBytes
+			result.NextOffsetBytes = chunk.EndOffset()
+			selectionCursor = chunk.EndOffset()
+			sourceReads++
+		}
+		if len(selected) > 0 {
+			result.Contents = make([]byte, 0, resultSize)
+			return s.readChunks(result, selected)
 		}
 
 		record, err := s.service.artifacts.GetArtifact(s.ctx, s.artifactID)
@@ -121,24 +149,80 @@ func (s *durableLogStream) next() (LogStreamChunk, error) {
 	}
 }
 
-func (s *durableLogStream) readChunk(chunk LogChunk) (LogStreamChunk, error) {
-	object, err := s.service.contents.Open(s.ctx, chunk.ObjectKey)
+func (s *durableLogStream) readChunks(
+	result LogStreamChunk,
+	chunks []LogChunk,
+) (LogStreamChunk, error) {
+	ctx, cancel := context.WithCancel(s.ctx)
+	defer cancel()
+
+	results := make([][]byte, len(chunks))
+	failures := make(chan error, 1)
+	workers := make(chan struct{}, maximumLogStreamReadWorkers)
+	recordFailure := func(err error) {
+		select {
+		case failures <- err:
+		default:
+		}
+		cancel()
+	}
+	var wait sync.WaitGroup
+	for index, chunk := range chunks {
+		cursor := chunk.OffsetBytes
+		if index == 0 {
+			cursor = result.OffsetBytes
+		}
+		wait.Go(func() {
+			select {
+			case workers <- struct{}{}:
+				defer func() { <-workers }()
+			case <-ctx.Done():
+				recordFailure(ctx.Err())
+				return
+			}
+
+			contents, err := s.readChunk(ctx, chunk, cursor)
+			if err != nil {
+				recordFailure(err)
+				return
+			}
+			results[index] = contents
+		})
+	}
+	wait.Wait()
+
+	select {
+	case err := <-failures:
+		return LogStreamChunk{}, err
+	default:
+	}
+
+	for _, contents := range results {
+		result.Contents = append(result.Contents, contents...)
+	}
+	s.cursor = result.NextOffsetBytes
+
+	return result, nil
+}
+
+func (s *durableLogStream) readChunk(ctx context.Context, chunk LogChunk, cursor int64) ([]byte, error) {
+	object, err := s.service.contents.Open(ctx, chunk.ObjectKey)
 	if err != nil {
-		return LogStreamChunk{}, logStreamSourceError("open log chunk", err)
+		return nil, logStreamSourceError("open log chunk", err)
 	}
 	closeBody := sync.OnceValue(object.Body.Close)
-	stopClose := context.AfterFunc(s.ctx, func() { _ = closeBody() })
+	stopClose := context.AfterFunc(ctx, func() { _ = closeBody() })
 	contents, readErr := io.ReadAll(object.Body)
 	stopClose()
 	closeErr := closeBody()
-	if err := s.ctx.Err(); err != nil {
-		return LogStreamChunk{}, err
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if readErr != nil || closeErr != nil {
-		return LogStreamChunk{}, logStreamSourceError("read log chunk", errors.Join(readErr, closeErr))
+		return nil, logStreamSourceError("read log chunk", errors.Join(readErr, closeErr))
 	}
 	if int64(len(contents)) != chunk.SizeBytes {
-		return LogStreamChunk{}, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"log chunk at byte %d has size %d, expected %d",
 			chunk.OffsetBytes,
 			len(contents),
@@ -146,14 +230,12 @@ func (s *durableLogStream) readChunk(chunk LogChunk) (LogStreamChunk, error) {
 		)
 	}
 
-	start := max(s.cursor-chunk.OffsetBytes, 0)
+	start := max(cursor-chunk.OffsetBytes, 0)
 	if start > int64(len(contents)) {
-		return LogStreamChunk{}, errors.New("log cursor exceeds chunk contents")
+		return nil, errors.New("log cursor exceeds chunk contents")
 	}
-	result := LogStreamChunk{OffsetBytes: s.cursor, NextOffsetBytes: chunk.EndOffset(), Contents: contents[start:]}
-	s.cursor = result.NextOffsetBytes
 
-	return result, nil
+	return contents[start:], nil
 }
 
 func (s *durableLogStream) Close() error {
