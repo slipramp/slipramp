@@ -89,6 +89,11 @@ func configurePresentationMetadata(resource *jsonschema.Schema) {
 	artifact := action.Properties["artifacts"].AdditionalProperties
 	artifact.Properties["description"].Description = "Operator-facing description of the artifact contents."
 	boundedString(artifact.Properties["description"], catalog.PresentationDescriptionMaxLength)
+
+	trigger := action.Properties["triggers"].Items
+	trigger.Properties["review"].Description =
+		"Requires an operator decision before a Git-triggered Run becomes eligible for assignment."
+	trigger.Properties["review"].Enum = []any{catalog.TriggerReviewRequired}
 }
 
 func boundedString(schema *jsonschema.Schema, maximum int) {

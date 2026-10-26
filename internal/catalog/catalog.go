@@ -14,6 +14,7 @@ const (
 	ParameterTypeEnum    = "enum"
 
 	ArtifactCompatibilityExactCatalogRevision = "exact-catalog-revision"
+	TriggerReviewRequired                     = "required"
 )
 
 type Catalog struct {
@@ -114,6 +115,7 @@ type Action struct {
 type Trigger struct {
 	Name       string         `json:"name"                 yaml:"name"`
 	Git        *GitTrigger    `json:"git,omitempty"        yaml:"git,omitempty"`
+	Review     string         `json:"review,omitempty"     yaml:"review,omitempty"`
 	Parameters map[string]any `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 }
 

@@ -418,6 +418,13 @@
                           ],
                           "additionalProperties": false
                         },
+                        "review": {
+                          "type": "string",
+                          "description": "Requires an operator decision before a Git-triggered Run becomes eligible for assignment.",
+                          "enum": [
+                            "required"
+                          ]
+                        },
                         "parameters": {
                           "type": "object",
                           "additionalProperties": true

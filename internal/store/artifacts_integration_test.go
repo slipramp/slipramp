@@ -273,7 +273,7 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	}
 	consumerID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1406")
 	_, err = database.CreateRun(ctx, run.Run{
-		ID: consumerID, Phase: run.PhaseQueued,
+		ID: consumerID, Phase: run.PhaseQueued, Review: run.Review{State: run.ReviewStateNotRequired},
 		TargetID:     candidate.TargetID,
 		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
 		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
@@ -475,7 +475,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	}
 	consumerRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1601")
 	_, err = database.CreateRun(ctx, run.Run{
-		ID: consumerRunID, Phase: run.PhaseQueued,
+		ID: consumerRunID, Phase: run.PhaseQueued, Review: run.Review{State: run.ReviewStateNotRequired},
 		TargetID:     candidate.TargetID,
 		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
 		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
@@ -500,6 +500,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 
 	_, err = database.CreateRun(ctx, run.Run{
 		ID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1603"), Phase: run.PhaseQueued,
+		Review:       run.Review{State: run.ReviewStateNotRequired},
 		TargetID:     staleCandidate.TargetID,
 		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
 		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
@@ -575,6 +576,7 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 	_, err = database.CreateRun(ctx, run.Run{
 		ID:                       runID,
 		Phase:                    run.PhaseQueued,
+		Review:                   run.Review{State: run.ReviewStateNotRequired},
 		TargetID:                 activeTargetID(t, database, repositoryID, "network"),
 		RepositoryID:             repositoryID,
 		CatalogRevisionID:        revisionID,

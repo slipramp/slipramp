@@ -47,6 +47,41 @@ RunRerunMode:
     - RunRerunModeExact
     - RunRerunModeLatest
 
+RunReviewDecisionRequest:
+  type: object
+  required:
+    - decision
+  properties:
+    decision:
+      $ref: "#/RunReviewDecision"
+
+RunReview:
+  type: object
+  required:
+    - state
+  properties:
+    state:
+      $ref: "#/RunReviewState"
+    decidedBy:
+      $ref: "#/RunActor"
+    decidedAt:
+      type: string
+      format: date-time
+
+RunReviewState:
+  type: string
+  enum:
+    - not-required
+    - pending
+    - approved
+    - rejected
+
+RunReviewDecision:
+  type: string
+  enum:
+    - approved
+    - rejected
+
 RunList:
   type: object
   required:
@@ -90,6 +125,7 @@ Run:
     - source
     - inputs
     - artifactConsumers
+    - review
     - createdAt
   properties:
     id:
@@ -180,6 +216,8 @@ Run:
       $ref: "#/RunActor"
     canceledBy:
       $ref: "#/RunActor"
+    review:
+      $ref: "#/RunReview"
     inputs:
       type: object
       additionalProperties:

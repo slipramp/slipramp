@@ -576,6 +576,7 @@ export type Run = {
   rerunMode?: RunRerunMode;
   createdBy?: RunActor;
   canceledBy?: RunActor;
+  review: RunReview;
   inputs: {
     [key: string]: RunArtifactInput;
   };
@@ -1031,6 +1032,10 @@ export type ParameterValue = string | boolean | number;
 export type ActionTrigger = {
   name: string;
   git: GitTrigger;
+  /**
+   * Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
+   */
+  review?: "required";
   parameters?: {
     [key: string]: ParameterValue;
   };
@@ -1523,6 +1528,14 @@ export type RunSource = {
   promotion?: PromotionRunSource;
 };
 
+export type RunReviewState = "not-required" | "pending" | "approved" | "rejected";
+
+export type RunReview = {
+  state: RunReviewState;
+  decidedBy?: RunActor;
+  decidedAt?: string;
+};
+
 export type RunArtifactInput = {
   artifactId: string;
   producerRunId: string;
@@ -1544,6 +1557,12 @@ export type RunArtifactConsumer = {
   action: CatalogName;
   actionTitle?: string;
   input: CatalogName;
+};
+
+export type RunReviewDecision = "approved" | "rejected";
+
+export type RunReviewDecisionRequest = {
+  decision: RunReviewDecision;
 };
 
 export type ArtifactProvenance = {
@@ -3341,6 +3360,60 @@ export type RerunRunResponses = {
 };
 
 export type RerunRunResponse = RerunRunResponses[keyof RerunRunResponses];
+
+export type DecideRunReviewData = {
+  body: RunReviewDecisionRequest;
+  path: {
+    /**
+     * Queued Run awaiting review.
+     */
+    runId: string;
+  };
+  query?: never;
+  url: "/api/v1/runs/{runId}/review";
+};
+
+export type DecideRunReviewErrors = {
+  /**
+   * The decision is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Operator permission and runs-write scope are required.
+   */
+  403: Problem;
+  /**
+   * The Run does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The Run is no longer queued and pending review, or already has a different decision or deciding Principal.
+   */
+  409: Problem;
+  /**
+   * The Run review could not be decided.
+   */
+  500: Problem;
+};
+
+export type DecideRunReviewError = DecideRunReviewErrors[keyof DecideRunReviewErrors];
+
+export type DecideRunReviewResponses = {
+  /**
+   * The decision was recorded or an identical decision was repeated.
+   */
+  200: Run;
+};
+
+export type DecideRunReviewResponse = DecideRunReviewResponses[keyof DecideRunReviewResponses];
 
 export type ListRunArtifactsData = {
   body?: never;

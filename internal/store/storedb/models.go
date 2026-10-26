@@ -105,6 +105,7 @@ type GitTriggerDelivery struct {
 	RunID             pgtype.UUID
 	SupersededAt      pgtype.Timestamptz
 	TargetID          pgtype.UUID
+	ReviewRequired    bool
 }
 
 type InboxProblemAcknowledgement struct {
@@ -313,40 +314,44 @@ type RepositoryTrackedBranchCommit struct {
 }
 
 type Run struct {
-	ID                       pgtype.UUID
-	Phase                    string
-	Outcome                  *string
-	RepositoryID             pgtype.UUID
-	CatalogRevisionID        pgtype.UUID
-	CommitSha                string
-	TargetName               string
-	ActionName               string
-	Parameters               []byte
-	PlacementName            string
-	ClusterName              string
-	Source                   []byte
-	IdempotencyKey           *string
-	RequestDigest            string
-	Snapshot                 []byte
-	CreatedAt                pgtype.Timestamptz
-	AssignedAt               pgtype.Timestamptz
-	PreparingAt              pgtype.Timestamptz
-	StartedAt                pgtype.Timestamptz
-	FinishedAt               pgtype.Timestamptz
-	LastObservedAt           pgtype.Timestamptz
-	CancellationRequestedAt  pgtype.Timestamptz
-	JobUid                   *string
-	OutcomeReason            *string
-	OutcomeMessage           *string
-	ExitCode                 *int32
-	CreatedByPrincipalID     pgtype.UUID
-	CreatedBySnapshot        []byte
-	CanceledByPrincipalID    pgtype.UUID
-	CanceledBySnapshot       []byte
-	RerunOfRunID             pgtype.UUID
-	RerunMode                *string
-	TargetID                 pgtype.UUID
-	TargetRelevanceCommitSha *string
+	ID                         pgtype.UUID
+	Phase                      string
+	Outcome                    *string
+	RepositoryID               pgtype.UUID
+	CatalogRevisionID          pgtype.UUID
+	CommitSha                  string
+	TargetName                 string
+	ActionName                 string
+	Parameters                 []byte
+	PlacementName              string
+	ClusterName                string
+	Source                     []byte
+	IdempotencyKey             *string
+	RequestDigest              string
+	Snapshot                   []byte
+	CreatedAt                  pgtype.Timestamptz
+	AssignedAt                 pgtype.Timestamptz
+	PreparingAt                pgtype.Timestamptz
+	StartedAt                  pgtype.Timestamptz
+	FinishedAt                 pgtype.Timestamptz
+	LastObservedAt             pgtype.Timestamptz
+	CancellationRequestedAt    pgtype.Timestamptz
+	JobUid                     *string
+	OutcomeReason              *string
+	OutcomeMessage             *string
+	ExitCode                   *int32
+	CreatedByPrincipalID       pgtype.UUID
+	CreatedBySnapshot          []byte
+	CanceledByPrincipalID      pgtype.UUID
+	CanceledBySnapshot         []byte
+	RerunOfRunID               pgtype.UUID
+	RerunMode                  *string
+	TargetID                   pgtype.UUID
+	TargetRelevanceCommitSha   *string
+	ReviewState                string
+	ReviewDecidedByPrincipalID pgtype.UUID
+	ReviewDecidedBySnapshot    []byte
+	ReviewDecidedAt            pgtype.Timestamptz
 }
 
 type RunArtifactInput struct {

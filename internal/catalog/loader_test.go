@@ -72,6 +72,7 @@ spec:
       triggers:
         - name: reconcile-on-change
           git: {}
+          review: required
           parameters:
             environment: production
             auto-approve: true
@@ -132,7 +133,8 @@ spec:
 	}
 	if len(preview.Triggers) != 1 ||
 		preview.Triggers[0].Name != "reconcile-on-change" ||
-		preview.Triggers[0].Git == nil {
+		preview.Triggers[0].Git == nil ||
+		preview.Triggers[0].Review != catalog.TriggerReviewRequired {
 		t.Errorf("Action triggers = %#v", preview.Triggers)
 	}
 	triggerParameters := preview.Triggers[0].Parameters

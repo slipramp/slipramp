@@ -42,6 +42,7 @@ func testService(t *testing.T) (*Service, *recordingRuns) {
 	service := NewService(Dependencies{
 		Creation: runs,
 		History:  runs,
+		Reviews:  runs,
 		Repositories: &recordingRepositories{
 			record: repository.Repository{
 				Config: repository.Config{
@@ -124,6 +125,15 @@ type recordingRuns struct {
 	listError              error
 	loaded                 Run
 	historyError           error
+	reviewed               Run
+	reviewError            error
+	reviewTransition       ReviewTransition
+}
+
+func (s *recordingRuns) DecideRunReview(_ context.Context, transition ReviewTransition) (Run, error) {
+	s.reviewTransition = transition
+
+	return s.reviewed, s.reviewError
 }
 
 func (s *recordingRuns) GetRun(context.Context, uuid.UUID) (Run, error) {

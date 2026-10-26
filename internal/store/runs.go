@@ -22,6 +22,7 @@ var (
 	_ run.HistoryStore      = (*Database)(nil)
 	_ run.AssignmentStore   = (*Database)(nil)
 	_ run.CancellationStore = (*Database)(nil)
+	_ run.ReviewStore       = (*Database)(nil)
 	_ run.ObservationStore  = (*Database)(nil)
 )
 
@@ -184,6 +185,12 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 	if err != nil {
 		return run.Run{}, fmt.Errorf("encode Run creator: %w", err)
 	}
+	if record.Review.State != run.ReviewStateNotRequired && record.Review.State != run.ReviewStatePending {
+		return run.Run{}, fmt.Errorf("%w: new Run must have an initial review state", run.ErrInvalidRequest)
+	}
+	if record.Review.DecidedBy != nil || record.Review.DecidedAt != nil {
+		return run.Run{}, fmt.Errorf("%w: new Run must not have a review decision", run.ErrInvalidRequest)
+	}
 
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
@@ -230,6 +237,7 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 			Snapshot:                 snapshot,
 			CreatedByPrincipalID:     createdByPrincipalID,
 			CreatedBySnapshot:        createdBySnapshot,
+			ReviewState:              string(record.Review.State),
 			CreatedAt: pgtype.Timestamptz{
 				Time:  record.CreatedAt,
 				Valid: true,
@@ -356,6 +364,10 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 	if err != nil {
 		return run.Run{}, fmt.Errorf("decode Run canceler: %w", err)
 	}
+	reviewDecidedBy, err := actorFromDatabase(row.ReviewDecidedByPrincipalID, row.ReviewDecidedBySnapshot)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("decode Run review actor: %w", err)
+	}
 
 	return run.Run{
 		ID:                       uuid.UUID(row.ID.Bytes),
@@ -379,17 +391,22 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		Snapshot:                 snapshot,
 		CreatedBy:                createdBy,
 		CanceledBy:               canceledBy,
-		CreatedAt:                row.CreatedAt.Time.UTC(),
-		AssignedAt:               applicationTime(row.AssignedAt),
-		PreparingAt:              applicationTime(row.PreparingAt),
-		StartedAt:                applicationTime(row.StartedAt),
-		FinishedAt:               applicationTime(row.FinishedAt),
-		LastObservedAt:           applicationTime(row.LastObservedAt),
-		CancellationRequestedAt:  applicationTime(row.CancellationRequestedAt),
-		JobUID:                   row.JobUid,
-		OutcomeReason:            row.OutcomeReason,
-		OutcomeMessage:           row.OutcomeMessage,
-		ExitCode:                 row.ExitCode,
+		Review: run.Review{
+			State:     run.ReviewState(row.ReviewState),
+			DecidedBy: reviewDecidedBy,
+			DecidedAt: applicationTime(row.ReviewDecidedAt),
+		},
+		CreatedAt:               row.CreatedAt.Time.UTC(),
+		AssignedAt:              applicationTime(row.AssignedAt),
+		PreparingAt:             applicationTime(row.PreparingAt),
+		StartedAt:               applicationTime(row.StartedAt),
+		FinishedAt:              applicationTime(row.FinishedAt),
+		LastObservedAt:          applicationTime(row.LastObservedAt),
+		CancellationRequestedAt: applicationTime(row.CancellationRequestedAt),
+		JobUID:                  row.JobUid,
+		OutcomeReason:           row.OutcomeReason,
+		OutcomeMessage:          row.OutcomeMessage,
+		ExitCode:                row.ExitCode,
 	}, nil
 }
 

@@ -25,7 +25,47 @@ type RunService interface {
 	GetRun(context.Context, uuid.UUID) (run.Run, error)
 	ListRuns(context.Context, run.RunListFilter) (run.RunList, error)
 	CancelRun(ctx context.Context, request run.CancelRequest) (run.Run, error)
+	DecideRunReview(ctx context.Context, request run.ReviewDecisionRequest) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
+}
+
+func (h *Handler) DecideRunReview(
+	ctx context.Context,
+	request api.DecideRunReviewRequestObject,
+) (api.DecideRunReviewResponseObject, error) {
+	record, err := h.runs.DecideRunReview(ctx, run.ReviewDecisionRequest{
+		RunID:    request.RunID,
+		Decision: run.ReviewDecision(request.Body.Decision),
+		Actor:    currentProductPrincipal(ctx),
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, run.ErrInvalidRequest):
+			problem := NewProblem(http.StatusBadRequest, err.Error())
+
+			return api.DecideRunReview400ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrRunNotFound):
+			problem := NewProblem(http.StatusNotFound, "The Run does not exist.")
+
+			return api.DecideRunReview404ApplicationProblemPlusJSONResponse(problem), nil
+		case errors.Is(err, run.ErrReviewConflict):
+			problem := NewProblem(
+				http.StatusConflict,
+				"The Run is no longer awaiting this review decision.",
+			)
+
+			return api.DecideRunReview409ApplicationProblemPlusJSONResponse(problem), nil
+		default:
+			return nil, err
+		}
+	}
+
+	body, err := h.runResponse(ctx, record)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.DecideRunReview200JSONResponse(body), nil
 }
 
 func (h *Handler) RerunRun(
@@ -348,28 +388,33 @@ func runResponse(
 	}
 
 	return api.Run{
-		ID:                      record.ID,
-		Phase:                   api.RunPhase(record.Phase),
-		Outcome:                 apiRunOutcome(record.Outcome),
-		TargetID:                record.TargetID,
-		RepositoryID:            record.RepositoryID,
-		CatalogRevisionID:       record.CatalogRevisionID,
-		Commit:                  commits[commitKey(record.RepositoryID, record.CommitSHA)],
-		TargetRelevanceCommit:   optionalCommit(record.RepositoryID, record.TargetRelevanceCommitSHA, commits),
-		Target:                  api.CatalogName(record.TargetName),
-		Action:                  api.CatalogName(record.ActionName),
-		ActionTitle:             optionalString(record.Snapshot.Action.Title),
-		ActionDescription:       optionalString(record.Snapshot.Action.Description),
-		ActionDocumentationURL:  optionalString(record.Snapshot.Action.DocumentationURL),
-		Parameters:              parameters,
-		Runtime:                 api.CatalogName(record.Snapshot.Runtime.Metadata.Name),
-		Placement:               api.CatalogName(record.PlacementName),
-		Cluster:                 api.CatalogName(record.ClusterName),
-		Source:                  apiRunSource(record.Source),
-		RerunOfRunID:            record.RerunOfRunID,
-		RerunMode:               apiRerunMode(record.RerunMode),
-		CreatedBy:               apiRunActor(record.CreatedBy),
-		CanceledBy:              apiRunActor(record.CanceledBy),
+		ID:                     record.ID,
+		Phase:                  api.RunPhase(record.Phase),
+		Outcome:                apiRunOutcome(record.Outcome),
+		TargetID:               record.TargetID,
+		RepositoryID:           record.RepositoryID,
+		CatalogRevisionID:      record.CatalogRevisionID,
+		Commit:                 commits[commitKey(record.RepositoryID, record.CommitSHA)],
+		TargetRelevanceCommit:  optionalCommit(record.RepositoryID, record.TargetRelevanceCommitSHA, commits),
+		Target:                 api.CatalogName(record.TargetName),
+		Action:                 api.CatalogName(record.ActionName),
+		ActionTitle:            optionalString(record.Snapshot.Action.Title),
+		ActionDescription:      optionalString(record.Snapshot.Action.Description),
+		ActionDocumentationURL: optionalString(record.Snapshot.Action.DocumentationURL),
+		Parameters:             parameters,
+		Runtime:                api.CatalogName(record.Snapshot.Runtime.Metadata.Name),
+		Placement:              api.CatalogName(record.PlacementName),
+		Cluster:                api.CatalogName(record.ClusterName),
+		Source:                 apiRunSource(record.Source),
+		RerunOfRunID:           record.RerunOfRunID,
+		RerunMode:              apiRerunMode(record.RerunMode),
+		CreatedBy:              apiRunActor(record.CreatedBy),
+		CanceledBy:             apiRunActor(record.CanceledBy),
+		Review: api.RunReview{
+			State:     api.RunReviewState(record.Review.State),
+			DecidedBy: apiRunActor(record.Review.DecidedBy),
+			DecidedAt: record.Review.DecidedAt,
+		},
 		Inputs:                  runInputResponse(record.Snapshot, commits),
 		ArtifactConsumers:       runArtifactConsumers(record.Snapshot),
 		CreatedAt:               record.CreatedAt,

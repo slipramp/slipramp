@@ -110,6 +110,16 @@ func TestCreateRunRejectsInvalidSourceMetadata(t *testing.T) {
 			want: "manual and API Runs cannot pin",
 		},
 		{
+			name: "manual review requirement",
+			configure: func(request *CreateRequest) {
+				request.Source = Source{Type: SourceTypeManual}
+				request.CatalogRevisionID = nil
+				request.IdempotencyKey = nil
+				request.ReviewRequired = true
+			},
+			want: "cannot require Git-trigger review",
+		},
+		{
 			name: "Promotion missing actor",
 			configure: func(request *CreateRequest) {
 				request.Source = Source{

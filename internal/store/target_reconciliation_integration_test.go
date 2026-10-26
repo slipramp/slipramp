@@ -211,6 +211,7 @@ func createReconciliationRun(
 	record := run.Run{
 		ID:                       uuid.New(),
 		Phase:                    run.PhaseQueued,
+		Review:                   run.Review{State: run.ReviewStateNotRequired},
 		TargetID:                 targetID,
 		RepositoryID:             repositoryID,
 		CatalogRevisionID:        revisionID,

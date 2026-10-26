@@ -35,6 +35,9 @@ func validateSource(source Source) error {
 func validateSourceRequest(request CreateRequest) error {
 	switch request.Source.Type {
 	case SourceTypeManual, SourceTypeAPI:
+		if request.ReviewRequired {
+			return errors.New("manual and API Runs cannot require Git-trigger review")
+		}
 		if request.CatalogRevisionID != nil {
 			return errors.New("manual and API Runs cannot pin a catalog revision")
 		}
@@ -53,6 +56,9 @@ func validateSourceRequest(request CreateRequest) error {
 			return errors.New("git-triggered Runs must use the delivery ID as their idempotency key")
 		}
 	case SourceTypePromotion:
+		if request.ReviewRequired {
+			return errors.New("promotion Runs cannot require Git-trigger review")
+		}
 		if request.Actor == nil {
 			return errors.New("promotion preparation Runs require the requesting actor")
 		}

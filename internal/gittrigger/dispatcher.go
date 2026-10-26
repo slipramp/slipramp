@@ -96,6 +96,7 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 		Parameters:        delivery.Parameters,
 		Inputs:            map[string]uuid.UUID{},
 		CatalogRevisionID: &revisionID,
+		ReviewRequired:    delivery.ReviewRequired,
 		Source: run.Source{
 			Type: run.SourceTypeGit,
 			Git: &run.GitRunSource{

@@ -238,6 +238,27 @@ func TestValidateGitTriggers(t *testing.T) {
 			},
 		},
 		{
+			name: "review required",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:   "reconcile-on-change",
+					Git:    &catalog.GitTrigger{},
+					Review: catalog.TriggerReviewRequired,
+				})
+			},
+		},
+		{
+			name: "invalid review",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:   "reconcile-on-change",
+					Git:    &catalog.GitTrigger{},
+					Review: "optional",
+				})
+			},
+			wantError: `review must be "required" when set`,
+		},
+		{
 			name: "invalid name",
 			configure: func(input *catalog.Catalog) {
 				addTrigger(input, catalog.Trigger{Name: "Not Valid", Git: &catalog.GitTrigger{}})

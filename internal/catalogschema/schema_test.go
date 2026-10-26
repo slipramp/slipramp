@@ -39,6 +39,32 @@ func TestPublishedSchemaAcceptsCatalogExamples(t *testing.T) {
 	}
 }
 
+func TestPublishedSchemaAcceptsRequiredGitTriggerReview(t *testing.T) {
+	t.Parallel()
+
+	var document any
+	if err := yaml.Unmarshal([]byte(`
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  watch: [operations/**]
+  actions:
+    inspect:
+      command: [inspect]
+      triggers:
+        - name: inspect-on-change
+          git: {}
+          review: required
+`), &document); err != nil {
+		t.Fatalf("yaml.Unmarshal() error = %v", err)
+	}
+	if err := loadPublishedSchema(t).Validate(document); err != nil {
+		t.Fatalf("required Git-trigger review does not match published schema: %v", err)
+	}
+}
+
 func TestPublishedSchemaRejectsStructuralErrors(t *testing.T) {
 	t.Parallel()
 
@@ -95,6 +121,21 @@ spec:
           title: ` + strings.Repeat("x", 201) + `
           type: string
           argument: {}
+`,
+		"unsupported trigger review": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  watch: [operations/**]
+  actions:
+    inspect:
+      command: [inspect]
+      triggers:
+        - name: inspect-on-change
+          git: {}
+          review: optional
 `,
 	}
 

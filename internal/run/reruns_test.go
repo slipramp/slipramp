@@ -49,6 +49,7 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 	}
 
 	if created.ID != newID || created.Phase != PhaseQueued || created.Outcome != nil ||
+		created.Review.State != ReviewStateNotRequired ||
 		created.CatalogRevisionID != original.CatalogRevisionID || created.CommitSHA != original.CommitSHA ||
 		created.ClusterName != original.ClusterName || created.PlacementName != original.PlacementName ||
 		!created.CreatedAt.Equal(createdAt) {

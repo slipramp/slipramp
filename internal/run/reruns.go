@@ -89,6 +89,7 @@ func (s *Service) RerunRun(ctx context.Context, request RerunRequest) (Run, erro
 		RerunMode:                &mode,
 		Snapshot:                 original.Snapshot,
 		CreatedBy:                createdBy,
+		Review:                   initialReview(false),
 		CreatedAt:                s.now().UTC(),
 	}
 	record.Snapshot.Inputs = maps.Clone(original.Snapshot.Inputs)

@@ -46,6 +46,9 @@ func TestProcessNextCreatesPinnedGitRun(t *testing.T) {
 	if !reflect.DeepEqual(request.Parameters, delivery.Parameters) {
 		t.Errorf("parameters = %#v, want %#v", request.Parameters, delivery.Parameters)
 	}
+	if request.ReviewRequired != delivery.ReviewRequired {
+		t.Errorf("review requirement = %t, want %t", request.ReviewRequired, delivery.ReviewRequired)
+	}
 	if request.Source.Git == nil ||
 		request.Source.Git.TriggerName != delivery.TriggerName ||
 		request.Source.Git.DeliveryID != delivery.ID {
@@ -131,6 +134,7 @@ func testDelivery() Delivery {
 		TargetName:        "network",
 		ActionName:        "sync",
 		TriggerName:       "reconcile-on-change",
+		ReviewRequired:    true,
 		Parameters: map[string]any{
 			"environment":  "production",
 			"auto-approve": true,

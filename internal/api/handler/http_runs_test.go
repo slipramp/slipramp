@@ -514,6 +514,98 @@ func TestRerunRun(t *testing.T) {
 	}
 }
 
+func TestDecideRunReview(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500")
+	decidedAt := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
+	runs := &recordingRunService{
+		reviewed: run.Run{
+			ID:         runID,
+			Phase:      run.PhaseQueued,
+			Parameters: map[string]any{},
+			Review: run.Review{
+				State: run.ReviewStateApproved,
+				DecidedBy: &productidentity.ActorSnapshot{
+					PrincipalID: principalID,
+					Kind:        productidentity.KindUser,
+					DisplayName: "Test administrator",
+				},
+				DecidedAt: &decidedAt,
+			},
+		},
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/api/v1/runs/"+runID.String()+"/review",
+		bytes.NewBufferString(`{"decision":"approved"}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, runs, nil, nil).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+	if runs.reviewRequest.RunID != runID ||
+		runs.reviewRequest.Decision != run.ReviewDecisionApproved ||
+		runs.reviewRequest.Actor == nil {
+		t.Errorf("review request = %#v", runs.reviewRequest)
+	}
+
+	var result api.Run
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.Review.State != api.RunReviewStateApproved ||
+		result.Review.DecidedBy == nil || result.Review.DecidedBy.PrincipalID != principalID ||
+		result.Review.DecidedAt == nil || !result.Review.DecidedAt.Equal(decidedAt) {
+		t.Errorf("review response = %#v", result.Review)
+	}
+}
+
+func TestDecideRunReviewMapsExpectedFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "invalid decision", err: run.ErrInvalidRequest, wantStatus: http.StatusBadRequest},
+		{name: "missing Run", err: run.ErrRunNotFound, wantStatus: http.StatusNotFound},
+		{name: "transition conflict", err: run.ErrReviewConflict, wantStatus: http.StatusConflict},
+		{name: "persistence failure", err: errors.New("database unavailable"), wantStatus: http.StatusInternalServerError},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			request := httptest.NewRequestWithContext(
+				context.Background(),
+				http.MethodPost,
+				"/api/v1/runs/018f90ff-9fd8-7b5f-b7e1-f32ff54c1202/review",
+				bytes.NewBufferString(`{"decision":"rejected"}`),
+			)
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			newAdminTestHandler(
+				&recordingClusterService{}, nil, nil, nil,
+				&recordingRunService{reviewError: test.err}, nil, nil,
+			).ServeHTTP(response, request)
+
+			assertProblem(t, response, test.wantStatus)
+			if strings.Contains(response.Body.String(), "database unavailable") {
+				t.Error("internal error details were exposed in the problem response")
+			}
+		})
+	}
+}
+
 func TestRerunRunMapsExpectedFailures(t *testing.T) {
 	t.Parallel()
 
@@ -669,6 +761,18 @@ type recordingRunService struct {
 	listFilter    run.RunListFilter
 	listed        []run.Run
 	listError     error
+	reviewRequest run.ReviewDecisionRequest
+	reviewed      run.Run
+	reviewError   error
+}
+
+func (s *recordingRunService) DecideRunReview(
+	_ context.Context,
+	request run.ReviewDecisionRequest,
+) (run.Run, error) {
+	s.reviewRequest = request
+
+	return s.reviewed, s.reviewError
 }
 
 func (s *recordingRunService) ListRuns(_ context.Context, filter run.RunListFilter) (run.RunList, error) {

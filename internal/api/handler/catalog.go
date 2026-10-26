@@ -507,6 +507,7 @@ func catalogTriggersResponse(triggers []catalog.Trigger) (*[]api.ActionTrigger, 
 	result := make([]api.ActionTrigger, 0, len(triggers))
 	for _, trigger := range triggers {
 		var parameters *map[string]api.ParameterValue
+		var review *api.ActionTriggerReview
 		if len(trigger.Parameters) > 0 {
 			converted, err := runParameterResponse(trigger.Parameters)
 			if err != nil {
@@ -514,10 +515,15 @@ func catalogTriggersResponse(triggers []catalog.Trigger) (*[]api.ActionTrigger, 
 			}
 			parameters = &converted
 		}
+		if trigger.Review != "" {
+			converted := api.ActionTriggerReview(trigger.Review)
+			review = &converted
+		}
 
 		result = append(result, api.ActionTrigger{
 			Name:       api.CatalogName(trigger.Name),
 			Git:        api.GitTrigger{},
+			Review:     review,
 			Parameters: parameters,
 		})
 	}

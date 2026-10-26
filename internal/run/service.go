@@ -13,6 +13,7 @@ type Service struct {
 	history       HistoryStore
 	assignments   AssignmentStore
 	cancellations CancellationStore
+	reviews       ReviewStore
 	observations  ObservationStore
 	repositories  RepositoryService
 	catalogs      CatalogService
@@ -26,6 +27,7 @@ type Dependencies struct {
 	History       HistoryStore
 	Assignments   AssignmentStore
 	Cancellations CancellationStore
+	Reviews       ReviewStore
 	Observations  ObservationStore
 	Repositories  RepositoryService
 	Catalogs      CatalogService
@@ -38,6 +40,7 @@ func NewService(dependencies Dependencies) *Service {
 		history:       dependencies.History,
 		assignments:   dependencies.Assignments,
 		cancellations: dependencies.Cancellations,
+		reviews:       dependencies.Reviews,
 		observations:  dependencies.Observations,
 		repositories:  dependencies.Repositories,
 		catalogs:      dependencies.Catalogs,

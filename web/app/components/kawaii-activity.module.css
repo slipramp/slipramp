@@ -181,6 +181,18 @@
   animation-duration: 3.2s;
 }
 
+.sprite[data-pose="egg-basket-check"] {
+  background-image: url("../assets/slipramp-axolotl-egg-basket-check.webp");
+  animation-name: even-frames;
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="mainframe-reel-watch"] {
+  background-image: url("../assets/slipramp-axolotl-mainframe-reel-watch.webp");
+  animation-name: even-frames;
+  animation-duration: 2.4s;
+}
+
 .sprite[data-pose="inflight-laptop-typing"] {
   background-image: url("../assets/slipramp-axolotl-inflight-laptop-typing.webp");
   animation-duration: 1.6s;
@@ -285,6 +297,24 @@
   background-image: url("../assets/slipramp-axolotl-breaker-bar-bounce.webp");
   animation-name: breaker-bar-bounce;
   animation-duration: 1.6s;
+}
+
+.sprite[data-pose="hay-bale-roll"] {
+  background-image: url("../assets/slipramp-axolotl-hay-bale-roll.webp");
+  animation-name: even-frames;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="watering-can-pour"] {
+  background-image: url("../assets/slipramp-axolotl-watering-can-pour.webp");
+  animation-name: even-frames;
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="wheelbarrow-push"] {
+  background-image: url("../assets/slipramp-axolotl-wheelbarrow-push.webp");
+  animation-name: even-frames;
+  animation-duration: 2.4s;
 }
 
 .sprite[data-pose="dough-flip"] {
@@ -585,6 +615,25 @@
   }
 
   70% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes even-frames {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  50% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
     background-position-x: 100%;
   }
 }

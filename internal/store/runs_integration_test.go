@@ -48,6 +48,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	record := run.Run{
 		ID:                runID,
 		Phase:             run.PhaseQueued,
+		Review:            run.Review{State: run.ReviewStateNotRequired},
 		TargetID:          activeTargetID(t, database, repositoryID, "network"),
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
@@ -490,6 +491,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 	first := run.Run{
 		ID:                uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1520"),
 		Phase:             run.PhaseQueued,
+		Review:            run.Review{State: run.ReviewStateNotRequired},
 		TargetID:          activeTargetID(t, database, repositoryID, "network"),
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,

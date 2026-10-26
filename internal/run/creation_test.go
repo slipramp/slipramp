@@ -52,6 +52,7 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	}
 
 	if created.ID != runID || created.Phase != PhaseQueued ||
+		created.Review.State != ReviewStateNotRequired ||
 		created.RepositoryID != testRepositoryID ||
 		created.CatalogRevisionID != testRevisionID ||
 		created.CommitSHA != testCommitSHA ||
@@ -261,6 +262,7 @@ func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
 		TargetID:          testTargetID,
 		ActionName:        "sync",
 		CatalogRevisionID: &pinnedRevision.ID,
+		ReviewRequired:    true,
 		Source: Source{
 			Type: SourceTypeGit,
 			Git:  &GitRunSource{TriggerName: "reconcile", DeliveryID: deliveryID},
@@ -273,7 +275,8 @@ func TestCreateRunUsesExplicitCatalogRevisionPin(t *testing.T) {
 	if catalogs.activeCalls != 0 || catalogs.pinnedCalls != 1 {
 		t.Errorf("catalog calls = active %d, pinned %d", catalogs.activeCalls, catalogs.pinnedCalls)
 	}
-	if created.CatalogRevisionID != pinnedRevision.ID || created.CommitSHA != pinnedRevision.CommitSHA {
+	if created.CatalogRevisionID != pinnedRevision.ID || created.CommitSHA != pinnedRevision.CommitSHA ||
+		created.Review.State != ReviewStatePending {
 		t.Errorf("created Run pin = (%s, %s)", created.CatalogRevisionID, created.CommitSHA)
 	}
 }

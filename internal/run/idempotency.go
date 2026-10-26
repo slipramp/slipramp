@@ -83,6 +83,7 @@ func requestDigest(
 		Parameters        map[string]any       `json:"parameters"`
 		Inputs            map[string]uuid.UUID `json:"inputs"`
 		Source            Source               `json:"source"`
+		ReviewRequired    bool                 `json:"reviewRequired"`
 		RerunOfRunID      *uuid.UUID           `json:"rerunOfRunId,omitempty"`
 		RerunMode         *RerunMode           `json:"rerunMode,omitempty"`
 	}{
@@ -92,6 +93,7 @@ func requestDigest(
 		Parameters:        parameters,
 		Inputs:            inputs,
 		Source:            request.Source,
+		ReviewRequired:    request.ReviewRequired,
 	}
 	if provenance != nil {
 		payload.RerunOfRunID = &provenance.runID

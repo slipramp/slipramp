@@ -18,5 +18,6 @@ type Delivery struct {
 	TargetName        string
 	ActionName        string
 	TriggerName       string
+	ReviewRequired    bool
 	Parameters        map[string]any
 }

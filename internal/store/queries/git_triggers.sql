@@ -7,6 +7,7 @@ INSERT INTO git_trigger_deliveries (
     target_name,
     action_name,
     trigger_name,
+    review_required,
     parameters,
     created_at,
     next_attempt_at
@@ -18,6 +19,7 @@ INSERT INTO git_trigger_deliveries (
     sqlc.arg(target_name),
     sqlc.arg(action_name),
     sqlc.arg(trigger_name),
+    sqlc.arg(review_required),
     sqlc.arg(parameters),
     sqlc.arg(created_at),
     sqlc.arg(created_at)
@@ -46,6 +48,7 @@ WHERE id = sqlc.arg(id)
   AND target_name = sqlc.arg(target_name)
   AND action_name = sqlc.arg(action_name)
   AND trigger_name = sqlc.arg(trigger_name)
+  AND review_required = sqlc.arg(review_required)
   AND superseded_at IS NULL
   AND failed_at IS NULL
   AND (run_id = sqlc.arg(run_id) OR (

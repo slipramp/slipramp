@@ -402,3 +402,82 @@ rerunRun:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+decideRunReview:
+  post:
+    operationId: decideRunReview
+    summary: Decide a Run review
+    description: >-
+      Approves or rejects a queued Git-triggered Run awaiting review. Approval
+      makes the existing Run eligible for ordinary FIFO assignment. Rejection
+      finishes it as canceled.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Runs
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        description: Queued Run awaiting review.
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/runs.yaml#/RunReviewDecisionRequest
+    responses:
+      "200":
+        description: The decision was recorded or an identical decision was repeated.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/runs.yaml#/Run
+      "400":
+        description: The decision is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Operator permission and runs-write scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Run does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: >-
+          The Run is no longer queued and pending review, or already has a
+          different decision or deciding Principal.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The Run review could not be decided.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

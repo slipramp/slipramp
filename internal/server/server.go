@@ -67,6 +67,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		History:       persistence.database,
 		Assignments:   persistence.database,
 		Cancellations: persistence.database,
+		Reviews:       persistence.database,
 		Observations:  persistence.database,
 		Repositories:  repositories,
 		Catalogs:      catalogs,

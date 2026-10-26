@@ -29,6 +29,8 @@ export type ExecutionAnimationPose =
   | "window-seat-dreamer"
   | "tray-table-snack"
   | "red-eye-passenger"
+  | "egg-basket-check"
+  | "mainframe-reel-watch"
   | "laptop-typing"
   | "inflight-laptop-typing"
   | "runway-marshal"
@@ -50,6 +52,9 @@ export type ExecutionAnimationPose =
   | "paint-roller-swipe"
   | "pumpkin-autopsy"
   | "breaker-bar-bounce"
+  | "hay-bale-roll"
+  | "watering-can-pour"
+  | "wheelbarrow-push"
   | "dough-flip"
   | "dough-knead"
   | "cake-piping"
@@ -120,6 +125,7 @@ export const executionAnimationPosePools = {
     "window-seat-dreamer",
     "tray-table-snack",
     "red-eye-passenger",
+    "egg-basket-check",
   ],
   phone: ["phone-scroll"],
   working: [
@@ -127,6 +133,7 @@ export const executionAnimationPosePools = {
     "inflight-laptop-typing",
     "runway-marshal",
     "flight-controller",
+    "mainframe-reel-watch",
     "blueprint-review",
     "clipboard-check",
     "walkie-talkie",
@@ -144,6 +151,9 @@ export const executionAnimationPosePools = {
     "paint-roller-swipe",
     "pumpkin-autopsy",
     "breaker-bar-bounce",
+    "hay-bale-roll",
+    "watering-can-pour",
+    "wheelbarrow-push",
     "dough-flip",
     "dough-knead",
     "cake-piping",

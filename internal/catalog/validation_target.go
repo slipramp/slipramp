@@ -432,6 +432,18 @@ func validateTriggers(target Target, actionName string, action Action) []validat
 				err:       fmt.Errorf("action %q trigger %q must declare git", actionName, trigger.Name),
 			})
 		}
+		if trigger.Review != "" && trigger.Review != TriggerReviewRequired {
+			findings = append(findings, validationFinding{
+				fieldPath: basePath + ".review",
+				code:      "catalog.trigger.review-invalid",
+				err: fmt.Errorf(
+					"action %q trigger %q review must be %q when set",
+					actionName,
+					trigger.Name,
+					TriggerReviewRequired,
+				),
+			})
+		}
 		if trigger.Git != nil && len(target.Spec.Watch) == 0 {
 			findings = append(findings, validationFinding{
 				fieldPath: basePath + ".git",

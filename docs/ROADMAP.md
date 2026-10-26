@@ -118,20 +118,25 @@ resource ACL frameworks, or an identity platform without a product requirement.
 
 ## Optional Run review
 
-Ordinary Runs remain directly executable by default. Required previews and Run
-approval need their own explicit opt-in policy design, separate from Kargo.
+Repository-controlled `review: required` on named Git triggers is implemented.
+The delivery and immutable Run snapshot the requirement; pending Runs remain
+queued but ineligible for assignment, approval restores ordinary FIFO
+eligibility, rejection cancels with stable attribution, and latest-wins
+coalescing continues before and after approval. Direct execution remains the
+default. This is a voluntary repository-owned operational guard, separate from
+Kargo review and not a Server-enforced security policy.
 
-- [ ] Define policy selection, snapshotted approval state, expiry/rejection,
-      attribution, and races with cancellation, reruns, and Git coalescing.
-      Extend the Run-owned transition rules under the existing PostgreSQL
-      transaction boundary.
-- [ ] Keep a waiting Run `queued` and exclude it from assignment until review is
-      satisfied. Approval is orthogonal to phase and outcome, not a new execution
-      phase or invocation resource. Rejection/expiry should cancel the undispatched
-      Run with a stable reason.
-- [ ] Reuse `review.requested` notifications with a Run subject once the state
-      design is accepted. Extract shared review persistence only if two implemented
-      flows demonstrate the need.
+- [ ] Design Server-owned policies, source-wide enforcement, separation of
+      duties, dedicated review authorization, and required preview or artifact
+      rules only when operators need a security boundary stronger than
+      repository-controlled configuration.
+- [ ] Add expiry, notifications, review queues or pending-review filters, and
+      comments only with explicit product semantics for recovery, noise, and
+      operator ownership. Reuse `review.requested` notifications with a Run
+      subject if notifications land.
+- [ ] Extract shared review persistence only if another implemented flow beyond
+      Kargo demonstrates a genuinely common lifecycle rather than merely common
+      vocabulary.
 
 ## Deferred product directions
 

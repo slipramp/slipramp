@@ -20,6 +20,7 @@ INSERT INTO runs (
     snapshot,
     created_by_principal_id,
     created_by_snapshot,
+    review_state,
     created_at
 ) VALUES (
     sqlc.arg(id),
@@ -42,6 +43,7 @@ INSERT INTO runs (
     sqlc.arg(snapshot),
     sqlc.narg(created_by_principal_id),
     sqlc.narg(created_by_snapshot),
+    sqlc.arg(review_state),
     sqlc.arg(created_at)
 )
 ON CONFLICT DO NOTHING
@@ -174,6 +176,37 @@ FROM runs
 WHERE id = sqlc.arg(id)
 FOR UPDATE;
 
+-- name: GetRunForReview :one
+SELECT *
+FROM runs
+WHERE id = sqlc.arg(id)
+FOR UPDATE;
+
+-- name: DecideRunReview :one
+UPDATE runs
+SET review_state = sqlc.arg(review_state),
+    review_decided_by_principal_id = sqlc.arg(review_decided_by_principal_id),
+    review_decided_by_snapshot = sqlc.arg(review_decided_by_snapshot),
+    review_decided_at = sqlc.arg(review_decided_at),
+    phase = CASE
+        WHEN sqlc.arg(review_state)::text = 'rejected' THEN 'finished'
+        ELSE phase
+    END,
+    outcome = CASE
+        WHEN sqlc.arg(review_state)::text = 'rejected' THEN 'canceled'
+        ELSE outcome
+    END,
+    finished_at = CASE
+        WHEN sqlc.arg(review_state)::text = 'rejected' THEN sqlc.arg(review_decided_at)
+        ELSE finished_at
+    END,
+    outcome_reason = CASE
+        WHEN sqlc.arg(review_state)::text = 'rejected' THEN 'ReviewRejected'
+        ELSE outcome_reason
+    END
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
 -- name: CancelRun :one
 UPDATE runs
 SET cancellation_requested_at = sqlc.arg(requested_at),
@@ -290,6 +323,7 @@ WITH candidate AS (
     FROM runs AS queued
     WHERE queued.cluster_name = sqlc.arg(cluster_name)
       AND queued.phase = 'queued'
+      AND queued.review_state IN ('not-required', 'approved')
       AND NOT EXISTS (
           SELECT 1
           FROM runs AS active

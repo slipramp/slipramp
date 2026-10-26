@@ -61,6 +61,7 @@ func createGitTriggerDeliveries(
 						TargetName:        target.Metadata.Name,
 						ActionName:        actionName,
 						TriggerName:       trigger.Name,
+						ReviewRequired:    trigger.Review == catalog.TriggerReviewRequired,
 						Parameters:        parameters,
 						CreatedAt:         databaseTime(result.AttemptedAt),
 					},
@@ -239,6 +240,7 @@ func linkGitTriggerRun(ctx context.Context, queries *storedb.Queries, record run
 		TargetName:        record.TargetName,
 		ActionName:        record.ActionName,
 		TriggerName:       record.Source.Git.TriggerName,
+		ReviewRequired:    record.Review.State == run.ReviewStatePending,
 		AttemptedAt:       databaseTime(record.CreatedAt),
 	})
 	if err != nil {
@@ -308,6 +310,7 @@ func gitTriggerDeliveryFromRow(row storedb.GitTriggerDelivery) (gittrigger.Deliv
 		TargetName:        row.TargetName,
 		ActionName:        row.ActionName,
 		TriggerName:       row.TriggerName,
+		ReviewRequired:    row.ReviewRequired,
 		Parameters:        parameters,
 	}, nil
 }

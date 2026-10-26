@@ -31,6 +31,7 @@ INSERT INTO git_trigger_deliveries (
     target_name,
     action_name,
     trigger_name,
+    review_required,
     parameters,
     created_at,
     next_attempt_at
@@ -44,7 +45,8 @@ INSERT INTO git_trigger_deliveries (
     $6,
     $7,
     $8,
-    $8
+    $9,
+    $9
 FROM targets
 WHERE targets.repository_id = $2
   AND targets.name = $4
@@ -58,6 +60,7 @@ type CreateGitTriggerDeliveryParams struct {
 	TargetName        string
 	ActionName        string
 	TriggerName       string
+	ReviewRequired    bool
 	Parameters        []byte
 	CreatedAt         pgtype.Timestamptz
 }
@@ -70,6 +73,7 @@ func (q *Queries) CreateGitTriggerDelivery(ctx context.Context, arg CreateGitTri
 		arg.TargetName,
 		arg.ActionName,
 		arg.TriggerName,
+		arg.ReviewRequired,
 		arg.Parameters,
 		arg.CreatedAt,
 	)
@@ -125,7 +129,7 @@ func (q *Queries) FinishSupersededQueuedGitRuns(ctx context.Context, arg FinishS
 }
 
 const getEligibleGitTriggerDelivery = `-- name: GetEligibleGitTriggerDelivery :one
-SELECT id, repository_id, catalog_revision_id, target_name, action_name, trigger_name, parameters, created_at, failure_count, next_attempt_at, diagnostic, failed_at, run_id, superseded_at, target_id
+SELECT id, repository_id, catalog_revision_id, target_name, action_name, trigger_name, parameters, created_at, failure_count, next_attempt_at, diagnostic, failed_at, run_id, superseded_at, target_id, review_required
 FROM git_trigger_deliveries
 WHERE run_id IS NULL
   AND superseded_at IS NULL
@@ -154,6 +158,7 @@ func (q *Queries) GetEligibleGitTriggerDelivery(ctx context.Context, attemptedAt
 		&i.RunID,
 		&i.SupersededAt,
 		&i.TargetID,
+		&i.ReviewRequired,
 	)
 	return i, err
 }
@@ -168,10 +173,11 @@ WHERE id = $2
   AND target_name = $6
   AND action_name = $7
   AND trigger_name = $8
+  AND review_required = $9
   AND superseded_at IS NULL
   AND failed_at IS NULL
   AND (run_id = $1 OR (
-      run_id IS NULL AND next_attempt_at <= $9
+      run_id IS NULL AND next_attempt_at <= $10
   ))
 `
 
@@ -184,6 +190,7 @@ type LinkGitTriggerRunParams struct {
 	TargetName        string
 	ActionName        string
 	TriggerName       string
+	ReviewRequired    bool
 	AttemptedAt       pgtype.Timestamptz
 }
 
@@ -197,6 +204,7 @@ func (q *Queries) LinkGitTriggerRun(ctx context.Context, arg LinkGitTriggerRunPa
 		arg.TargetName,
 		arg.ActionName,
 		arg.TriggerName,
+		arg.ReviewRequired,
 		arg.AttemptedAt,
 	)
 	if err != nil {
@@ -206,7 +214,7 @@ func (q *Queries) LinkGitTriggerRun(ctx context.Context, arg LinkGitTriggerRunPa
 }
 
 const listFailedGitTriggerDeliveries = `-- name: ListFailedGitTriggerDeliveries :many
-SELECT delivery.id, delivery.repository_id, delivery.catalog_revision_id, delivery.target_name, delivery.action_name, delivery.trigger_name, delivery.parameters, delivery.created_at, delivery.failure_count, delivery.next_attempt_at, delivery.diagnostic, delivery.failed_at, delivery.run_id, delivery.superseded_at, delivery.target_id, repositories.name AS repository_name, catalog_revisions.commit_sha
+SELECT delivery.id, delivery.repository_id, delivery.catalog_revision_id, delivery.target_name, delivery.action_name, delivery.trigger_name, delivery.parameters, delivery.created_at, delivery.failure_count, delivery.next_attempt_at, delivery.diagnostic, delivery.failed_at, delivery.run_id, delivery.superseded_at, delivery.target_id, delivery.review_required, repositories.name AS repository_name, catalog_revisions.commit_sha
 FROM git_trigger_deliveries AS delivery
 JOIN repositories ON repositories.id = delivery.repository_id
 JOIN catalog_revisions ON catalog_revisions.id = delivery.catalog_revision_id
@@ -236,6 +244,7 @@ type ListFailedGitTriggerDeliveriesRow struct {
 	RunID             pgtype.UUID
 	SupersededAt      pgtype.Timestamptz
 	TargetID          pgtype.UUID
+	ReviewRequired    bool
 	RepositoryName    string
 	CommitSha         string
 }
@@ -265,6 +274,7 @@ func (q *Queries) ListFailedGitTriggerDeliveries(ctx context.Context, arg ListFa
 			&i.RunID,
 			&i.SupersededAt,
 			&i.TargetID,
+			&i.ReviewRequired,
 			&i.RepositoryName,
 			&i.CommitSha,
 		); err != nil {

@@ -44,6 +44,9 @@ import type {
   DecidePromotionData,
   DecidePromotionErrors,
   DecidePromotionResponses,
+  DecideRunReviewData,
+  DecideRunReviewErrors,
+  DecideRunReviewResponses,
   DownloadArtifactData,
   DownloadArtifactErrors,
   DownloadArtifactResponses,
@@ -1049,6 +1052,35 @@ export const rerunRun = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/runs/{runId}/rerun",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Decide a Run review
+ *
+ * Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+ */
+export const decideRunReview = <ThrowOnError extends boolean = false>(
+  options: Options<DecideRunReviewData, ThrowOnError>,
+): RequestResult<DecideRunReviewResponses, DecideRunReviewErrors, ThrowOnError> =>
+  (options.client ?? client).post<DecideRunReviewResponses, DecideRunReviewErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/runs/{runId}/review",
     ...options,
     headers: {
       "Content-Type": "application/json",

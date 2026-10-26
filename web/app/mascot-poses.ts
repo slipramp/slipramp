@@ -1,6 +1,7 @@
 import { executionAnimationPosePools, type ExecutionAnimationPose } from "./execution-activity.ts";
 
 export const mascotTagLabels = {
+  agriculture: "Agriculture",
   animals: "Animals",
   aviation: "Aviation",
   construction: "Construction",
@@ -67,6 +68,8 @@ const mascotPoseMetadata = {
     label: "Red-eye passenger",
     tags: ["aviation", "leisure"],
   },
+  "egg-basket-check": { label: "Egg-basket check", tags: ["agriculture"] },
+  "mainframe-reel-watch": { label: "Mainframe-reel watch", tags: ["construction"] },
   "laptop-typing": { label: "Laptop typing", tags: ["construction"] },
   "inflight-laptop-typing": {
     label: "Inflight laptop typing",
@@ -91,6 +94,9 @@ const mascotPoseMetadata = {
   "paint-roller-swipe": { label: "Paint-roller swipe", tags: ["construction"] },
   "pumpkin-autopsy": { label: "Pumpkin autopsy", tags: ["construction", "macabre"] },
   "breaker-bar-bounce": { label: "Breaker-bar bounce", tags: ["construction", "slapstick"] },
+  "hay-bale-roll": { label: "Hay-bale roll", tags: ["agriculture"] },
+  "watering-can-pour": { label: "Watering-can pour", tags: ["agriculture"] },
+  "wheelbarrow-push": { label: "Wheelbarrow push", tags: ["agriculture"] },
   "dough-flip": { label: "Dough flip", tags: ["food-and-drink"] },
   "dough-knead": { label: "Dough knead", tags: ["food-and-drink"] },
   "cake-piping": { label: "Cake piping", tags: ["food-and-drink"] },

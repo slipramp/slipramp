@@ -97,6 +97,9 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	if !reflect.DeepEqual(oldest.Parameters, wantOldestParameters) {
 		t.Errorf("stored delivery parameters = %#v, want %#v", oldest.Parameters, wantOldestParameters)
 	}
+	if oldest.ReviewRequired {
+		t.Error("Git trigger without review unexpectedly requires review")
+	}
 
 	// Accept another matching head before dispatching the first delivery. The
 	// older pending delivery is retained as superseded and only the latest
@@ -139,6 +142,7 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 		History:       database,
 		Assignments:   database,
 		Cancellations: database,
+		Reviews:       database,
 		Observations:  database,
 		Repositories:  repositories,
 		Catalogs:      catalogs,
@@ -174,8 +178,15 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 	if !reflect.DeepEqual(createdRun.Parameters, wantLaterParameters) {
 		t.Errorf("Git-triggered Run parameters = %#v, want %#v", createdRun.Parameters, wantLaterParameters)
 	}
+	if createdRun.Review.State != run.ReviewStateNotRequired {
+		t.Errorf("Git-triggered Run review = %#v, want not required", createdRun.Review)
+	}
 	if _, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now()); !errors.Is(err, gittrigger.ErrNoEligibleDelivery) {
 		t.Fatalf("get pending delivery after dispatch error = %v, want no pending delivery", err)
+	}
+	claimed, err := database.ClaimQueuedRun(ctx, "colo", createdAt.Add(8*time.Minute))
+	if err != nil || claimed.ID != createdRun.ID {
+		t.Fatalf("claim direct Git-triggered Run = (%#v, %v)", claimed, err)
 	}
 }
 
@@ -675,6 +686,7 @@ func newGitTriggerTestServices(
 		History:       database,
 		Assignments:   database,
 		Cancellations: database,
+		Reviews:       database,
 		Observations:  database,
 		Repositories:  repositories,
 		Catalogs:      catalogs,
@@ -698,6 +710,7 @@ func queuedTestRun(
 	return run.Run{
 		ID:                id,
 		Phase:             run.PhaseQueued,
+		Review:            run.Review{State: run.ReviewStateNotRequired},
 		TargetID:          targetID,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,
@@ -721,10 +734,15 @@ func queuedGitTestRun(
 	createdAt time.Time,
 ) run.Run {
 	idempotencyKey := delivery.ID.String()
+	reviewState := run.ReviewStateNotRequired
+	if delivery.ReviewRequired {
+		reviewState = run.ReviewStatePending
+	}
 
 	return run.Run{
 		ID:                id,
 		Phase:             run.PhaseQueued,
+		Review:            run.Review{State: reviewState},
 		TargetID:          delivery.TargetID,
 		RepositoryID:      delivery.RepositoryID,
 		CatalogRevisionID: delivery.CatalogRevisionID,

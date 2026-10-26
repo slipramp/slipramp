@@ -175,6 +175,7 @@ func (s *Service) createRun(
 		IdempotencyKey:           cloneString(request.IdempotencyKey),
 		RequestDigest:            digest,
 		CreatedBy:                createdBy,
+		Review:                   initialReview(request.ReviewRequired),
 		Snapshot: Snapshot{
 			Repository: RepositorySnapshot{
 				Name:                   repositoryRecord.Name,
@@ -233,6 +234,14 @@ func validateRequest(request CreateRequest) error {
 	}
 
 	return nil
+}
+
+func initialReview(required bool) Review {
+	if required {
+		return Review{State: ReviewStatePending}
+	}
+
+	return Review{State: ReviewStateNotRequired}
 }
 
 func invalidParameters(err error) error {

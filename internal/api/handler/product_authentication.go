@@ -46,6 +46,7 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"CreateRun":                      productidentity.PermissionRunsWrite,
 	"RerunRun":                       productidentity.PermissionRunsWrite,
 	"CancelRun":                      productidentity.PermissionRunsWrite,
+	"DecideRunReview":                productidentity.PermissionRunsWrite,
 	"CreateRepository":               productidentity.PermissionAdmin,
 	"UpdateRepository":               productidentity.PermissionAdmin,
 	"RemoveRepository":               productidentity.PermissionAdmin,

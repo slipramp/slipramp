@@ -22,6 +22,21 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ActionTriggerReview.
+const (
+	Required ActionTriggerReview = "required"
+)
+
+// Valid indicates whether the value is a known member of the ActionTriggerReview enum.
+func (e ActionTriggerReview) Valid() bool {
+	switch e {
+	case Required:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactKind.
 const (
 	Log    ArtifactKind = "log"
@@ -820,6 +835,48 @@ func (e RunRerunMode) Valid() bool {
 	}
 }
 
+// Defines values for RunReviewDecision.
+const (
+	RunReviewDecisionApproved RunReviewDecision = "approved"
+	RunReviewDecisionRejected RunReviewDecision = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the RunReviewDecision enum.
+func (e RunReviewDecision) Valid() bool {
+	switch e {
+	case RunReviewDecisionApproved:
+		return true
+	case RunReviewDecisionRejected:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunReviewState.
+const (
+	RunReviewStateApproved    RunReviewState = "approved"
+	RunReviewStateNotRequired RunReviewState = "not-required"
+	RunReviewStatePending     RunReviewState = "pending"
+	RunReviewStateRejected    RunReviewState = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the RunReviewState enum.
+func (e RunReviewState) Valid() bool {
+	switch e {
+	case RunReviewStateApproved:
+		return true
+	case RunReviewStateNotRequired:
+		return true
+	case RunReviewStatePending:
+		return true
+	case RunReviewStateRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunSourceType.
 const (
 	RunSourceTypeAPI       RunSourceType = "api"
@@ -1083,7 +1140,13 @@ type ActionTrigger struct {
 	Git        GitTrigger                 `json:"git"`
 	Name       string                     `json:"name"`
 	Parameters *map[string]ParameterValue `json:"parameters,omitempty"`
+
+	// Review Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
+	Review *ActionTriggerReview `json:"review,omitempty"`
 }
+
+// ActionTriggerReview Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
+type ActionTriggerReview string
 
 // Artifact defines model for Artifact.
 type Artifact struct {
@@ -2390,6 +2453,7 @@ type Run struct {
 
 	// RerunOfRunID Immediate parent Run when this Run was created by a rerun operation.
 	RerunOfRunID *openapi_types.UUID `json:"rerunOfRunId,omitempty"`
+	Review       RunReview           `json:"review"`
 	Runtime      CatalogName         `json:"runtime"`
 	Source       RunSource           `json:"source"`
 	StartedAt    *time.Time          `json:"startedAt,omitempty"`
@@ -2595,6 +2659,24 @@ type RunRerun struct {
 
 // RunRerunMode defines model for RunRerunMode.
 type RunRerunMode string
+
+// RunReview defines model for RunReview.
+type RunReview struct {
+	DecidedAt *time.Time     `json:"decidedAt,omitempty"`
+	DecidedBy *RunActor      `json:"decidedBy,omitempty"`
+	State     RunReviewState `json:"state"`
+}
+
+// RunReviewDecision defines model for RunReviewDecision.
+type RunReviewDecision string
+
+// RunReviewDecisionRequest defines model for RunReviewDecisionRequest.
+type RunReviewDecisionRequest struct {
+	Decision RunReviewDecision `json:"decision"`
+}
+
+// RunReviewState defines model for RunReviewState.
+type RunReviewState string
 
 // RunSource defines model for RunSource.
 type RunSource struct {
@@ -3091,6 +3173,9 @@ type CreateRunJSONRequestBody = RunCreate
 
 // RerunRunJSONRequestBody defines body for RerunRun for application/json ContentType.
 type RerunRunJSONRequestBody = RunRerun
+
+// DecideRunReviewJSONRequestBody defines body for DecideRunReview for application/json ContentType.
+type DecideRunReviewJSONRequestBody = RunReviewDecisionRequest
 
 // CreateServiceAccountJSONRequestBody defines body for CreateServiceAccount for application/json ContentType.
 type CreateServiceAccountJSONRequestBody = ServiceAccountCreate
@@ -3614,6 +3699,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
 	RerunRun(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DecideRunReviewWithBody Decide a Run review
+	//
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+	DecideRunReviewWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DecideRunReview Decide a Run review
+	//
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+	DecideRunReview(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListServiceAccounts List service accounts
 	//
@@ -4635,6 +4738,44 @@ func (c *Client) RerunRunWithBody(ctx context.Context, runID openapi_types.UUID,
 // Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
 func (c *Client) RerunRun(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRerunRunRequest(c.Server, runID, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DecideRunReviewWithBody Decide a Run review
+//
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+func (c *Client) DecideRunReviewWithBody(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecideRunReviewRequestWithBody(c.Server, runID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DecideRunReview Decide a Run review
+//
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+func (c *Client) DecideRunReview(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDecideRunReviewRequest(c.Server, runID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7518,6 +7659,53 @@ func NewRerunRunRequestWithBody(server string, runID openapi_types.UUID, params 
 	return req, nil
 }
 
+// NewDecideRunReviewRequest calls the generic DecideRunReview builder with application/json body
+func NewDecideRunReviewRequest(server string, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDecideRunReviewRequestWithBody(server, runID, "application/json", bodyReader)
+}
+
+// NewDecideRunReviewRequestWithBody constructs an http.Request for the DecideRunReview method, with any body, and a specified content type
+func NewDecideRunReviewRequestWithBody(server string, runID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "runId", runID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/runs/%s/review", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListServiceAccountsRequest constructs an http.Request for the ListServiceAccounts method
 func NewListServiceAccountsRequest(server string, params *ListServiceAccountsParams) (*http.Request, error) {
 	var err error
@@ -9008,6 +9196,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/runs/{runId}/rerun (the `RerunRun` operationId).
 	RerunRunWithResponse(ctx context.Context, runID openapi_types.UUID, params *RerunRunParams, body RerunRunJSONRequestBody, reqEditors ...RequestEditorFn) (*RerunRunResponse, error)
+
+	// DecideRunReviewWithBodyWithResponse Decide a Run review
+	//
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+	DecideRunReviewWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideRunReviewResponse, error)
+
+	// DecideRunReviewWithResponse Decide a Run review
+	//
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+	DecideRunReviewWithResponse(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideRunReviewResponse, error)
 
 	// ListServiceAccountsWithResponse List service accounts
 	//
@@ -12116,6 +12322,96 @@ func (r RerunRunResponse) ContentType() string {
 	return ""
 }
 
+type DecideRunReviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Run
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DecideRunReviewResponse) GetJSON200() *Run {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DecideRunReviewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DecideRunReviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DecideRunReviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DecideRunReviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListServiceAccountsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14410,6 +14706,36 @@ func (c *ClientWithResponses) RerunRunWithResponse(ctx context.Context, runID op
 		return nil, err
 	}
 	return ParseRerunRunResponse(rsp)
+}
+
+// DecideRunReviewWithBodyWithResponse Decide a Run review
+//
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+func (c *ClientWithResponses) DecideRunReviewWithBodyWithResponse(ctx context.Context, runID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DecideRunReviewResponse, error) {
+	rsp, err := c.DecideRunReviewWithBody(ctx, runID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecideRunReviewResponse(rsp)
+}
+
+// DecideRunReviewWithResponse Decide a Run review
+//
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
+func (c *ClientWithResponses) DecideRunReviewWithResponse(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideRunReviewResponse, error) {
+	rsp, err := c.DecideRunReview(ctx, runID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDecideRunReviewResponse(rsp)
 }
 
 // ListServiceAccountsWithResponse List service accounts
@@ -17245,6 +17571,81 @@ func ParseRerunRunResponse(rsp *http.Response) (*RerunRunResponse, error) {
 	return response, nil
 }
 
+// ParseDecideRunReviewResponse parses an HTTP response from a DecideRunReviewWithResponse call
+func ParseDecideRunReviewResponse(rsp *http.Response) (*DecideRunReviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DecideRunReviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Run
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListServiceAccountsResponse parses an HTTP response from a ListServiceAccountsWithResponse call
 func ParseListServiceAccountsResponse(rsp *http.Response) (*ListServiceAccountsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18693,6 +19094,9 @@ type ServerInterface interface {
 	// RerunRun Rerun a finished Run
 	// (POST /api/v1/runs/{runId}/rerun)
 	RerunRun(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID, params RerunRunParams)
+	// DecideRunReview Decide a Run review
+	// (POST /api/v1/runs/{runId}/review)
+	DecideRunReview(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
 	// ListServiceAccounts List service accounts
 	// (GET /api/v1/service-accounts)
 	ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams)
@@ -20582,6 +20986,32 @@ func (siw *ServerInterfaceWrapper) RerunRun(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// DecideRunReview operation middleware
+func (siw *ServerInterfaceWrapper) DecideRunReview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "runId" -------------
+	var runID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "runId", r.PathValue("runId"), &runID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "runId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideRunReview(w, r, runID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListServiceAccounts operation middleware
 func (siw *ServerInterfaceWrapper) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
 
@@ -21458,6 +21888,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}", wrapper.GetRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/cancel", wrapper.CancelRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/rerun", wrapper.RerunRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/review", wrapper.DecideRunReview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/artifacts", wrapper.ListRunArtifacts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/logs", wrapper.StreamRunLog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/download", wrapper.DownloadArtifact)
@@ -25199,6 +25630,127 @@ func (response RerunRun500ApplicationProblemPlusJSONResponse) VisitRerunRunRespo
 	return err
 }
 
+type DecideRunReviewRequestObject struct {
+	RunID openapi_types.UUID `json:"runId"`
+	Body  *DecideRunReviewJSONRequestBody
+}
+
+type DecideRunReviewResponseObject interface {
+	VisitDecideRunReviewResponse(w http.ResponseWriter) error
+}
+
+type DecideRunReview200JSONResponse Run
+
+func (response DecideRunReview200JSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideRunReview400ApplicationProblemPlusJSONResponse Problem
+
+func (response DecideRunReview400ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideRunReview401ApplicationProblemPlusJSONResponse Problem
+
+func (response DecideRunReview401ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideRunReview403ApplicationProblemPlusJSONResponse Problem
+
+func (response DecideRunReview403ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideRunReview404ApplicationProblemPlusJSONResponse Problem
+
+func (response DecideRunReview404ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideRunReview405ApplicationProblemPlusJSONResponse Problem
+
+func (response DecideRunReview405ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideRunReview409ApplicationProblemPlusJSONResponse Problem
+
+func (response DecideRunReview409ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DecideRunReview500ApplicationProblemPlusJSONResponse Problem
+
+func (response DecideRunReview500ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListServiceAccountsRequestObject struct {
 	Params ListServiceAccountsParams
 }
@@ -27350,6 +27902,9 @@ type StrictServerInterface interface {
 	// RerunRun Rerun a finished Run
 	// (POST /api/v1/runs/{runId}/rerun)
 	RerunRun(ctx context.Context, request RerunRunRequestObject) (RerunRunResponseObject, error)
+	// DecideRunReview Decide a Run review
+	// (POST /api/v1/runs/{runId}/review)
+	DecideRunReview(ctx context.Context, request DecideRunReviewRequestObject) (DecideRunReviewResponseObject, error)
 	// ListServiceAccounts List service accounts
 	// (GET /api/v1/service-accounts)
 	ListServiceAccounts(ctx context.Context, request ListServiceAccountsRequestObject) (ListServiceAccountsResponseObject, error)
@@ -28475,6 +29030,39 @@ func (sh *strictHandler) RerunRun(w http.ResponseWriter, r *http.Request, runID 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RerunRunResponseObject); ok {
 		if err := validResponse.VisitRerunRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DecideRunReview operation middleware
+func (sh *strictHandler) DecideRunReview(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID) {
+	var request DecideRunReviewRequestObject
+
+	request.RunID = runID
+
+	var body DecideRunReviewJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DecideRunReview(ctx, request.(DecideRunReviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DecideRunReview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DecideRunReviewResponseObject); ok {
+		if err := validResponse.VisitDecideRunReviewResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

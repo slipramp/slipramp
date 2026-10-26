@@ -161,6 +161,7 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 	}{
 		{name: "Run cancellation", operationID: "CancelRun", scope: productidentity.ScopeRunsWrite},
 		{name: "Run rerun", operationID: "RerunRun", scope: productidentity.ScopeRunsWrite},
+		{name: "Run review decision", operationID: "DecideRunReview", scope: productidentity.ScopeRunsWrite},
 		{name: "API key revocation", operationID: "RevokeAPIKey", scope: productidentity.ScopeRunsWrite},
 		{
 			name:        "Inbox acknowledgement",

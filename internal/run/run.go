@@ -37,8 +37,17 @@ const (
 	RerunModeExact  RerunMode = "exact"
 	RerunModeLatest RerunMode = "latest"
 
+	ReviewStateNotRequired ReviewState = "not-required"
+	ReviewStatePending     ReviewState = "pending"
+	ReviewStateApproved    ReviewState = "approved"
+	ReviewStateRejected    ReviewState = "rejected"
+
+	ReviewDecisionApproved ReviewDecision = "approved"
+	ReviewDecisionRejected ReviewDecision = "rejected"
+
 	ReasonCancelRequested       = "CancelRequested"
 	ReasonSupersededByGitChange = "SupersededByGitChange"
+	ReasonReviewRejected        = "ReviewRejected"
 )
 
 var (
@@ -60,6 +69,7 @@ var (
 	ErrNoRunAssignment     = errors.New("no run assignment available")
 	ErrNoRunToCancel       = errors.New("no run to cancel")
 	ErrObservationConflict = errors.New("run observation conflict")
+	ErrReviewConflict      = errors.New("run review decision conflicts with current state")
 	ErrIdempotencyConflict = errors.New("run idempotency key conflict")
 	ErrGitRunSuperseded    = errors.New("git-triggered run superseded by a newer desired commit")
 )
@@ -71,6 +81,10 @@ type Outcome string
 type SourceType string
 
 type RerunMode string
+
+type ReviewState string
+
+type ReviewDecision string
 
 type ObservationState string
 
@@ -103,14 +117,23 @@ type CreateRequest struct {
 	// CatalogRevisionID pins internal automated requests to an immutable
 	// accepted catalog revision. HTTP-created Runs leave it unset.
 	CatalogRevisionID *uuid.UUID
-	Source            Source
-	IdempotencyKey    *string
-	Actor             *productidentity.Principal
+	// ReviewRequired is an internal Git-delivery snapshot. Product Run creation
+	// requests never set it.
+	ReviewRequired bool
+	Source         Source
+	IdempotencyKey *string
+	Actor          *productidentity.Principal
 }
 
 type CancelRequest struct {
 	RunID uuid.UUID
 	Actor *productidentity.Principal
+}
+
+type ReviewDecisionRequest struct {
+	RunID    uuid.UUID
+	Decision ReviewDecision
+	Actor    *productidentity.Principal
 }
 
 type RerunRequest struct {
@@ -171,6 +194,7 @@ type Run struct {
 	Snapshot                 Snapshot
 	CreatedBy                *productidentity.ActorSnapshot
 	CanceledBy               *productidentity.ActorSnapshot
+	Review                   Review
 	CreatedAt                time.Time
 	AssignedAt               *time.Time
 	PreparingAt              *time.Time
@@ -182,6 +206,12 @@ type Run struct {
 	OutcomeReason            *string
 	OutcomeMessage           *string
 	ExitCode                 *int32
+}
+
+type Review struct {
+	State     ReviewState
+	DecidedBy *productidentity.ActorSnapshot
+	DecidedAt *time.Time
 }
 
 type Snapshot struct {

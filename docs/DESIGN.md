@@ -297,16 +297,36 @@ actor from the new request boundary.
 
 ### Git triggers
 
-Named Action triggers use `git: {}`, optional static `parameters`, and the
-Target's required `watch` patterns. Trigger names are unique within an Action.
-Triggered Actions cannot have artifact inputs. Catalog loading validates and
-normalizes static parameters with the ordinary Run parameter rules.
+Named Action triggers use `git: {}`, optional static `parameters`, an optional
+`review: required`, and the Target's required `watch` patterns. Trigger names
+are unique within an Action. Triggered Actions cannot have artifact inputs.
+Catalog loading validates and normalizes static parameters with the ordinary
+Run parameter rules. Omitting `review` preserves direct execution.
 
 After initial indexing, accepting a changed head atomically activates the
 catalog, updates Targets, and records one durable delivery for each matching
 trigger. Unchanged or rejected heads create no deliveries. Delivery is per
 accepted head, not per underlying commit in a multi-commit fetch. Each delivery
-freezes the accepted revision and normalized parameters.
+freezes the accepted revision, normalized parameters, and whether review is
+required. Run creation snapshots that requirement as Run-owned review state.
+
+A review-required Git Run remains `queued` with review state `pending` and is
+ineligible for assignment. Review state is orthogonal to lifecycle phase and
+outcome: `not-required`, `pending`, `approved`, or `rejected`. Approval records
+one immutable Principal-attributed decision and makes the existing queued Run
+eligible for ordinary FIFO assignment; it does not assign or execute the Run.
+Rejection atomically records the decision and finishes the undispatched Run as
+`canceled` with reason `ReviewRejected`. The operator role and
+`slipramp:runs:write` API-key scope decide reviews in this first slice.
+
+Review decisions are accepted only for queued pending Runs. Repeating the same
+decision by the same Principal is idempotent while an approval remains queued;
+a rejected decision is also idempotent because its own transition finishes the
+Run. A different decision or Principal, or a decision after cancellation,
+supersession, assignment, or another terminal transition, conflicts. Ordinary
+cancellation retains `CancelRequested`. Exact and latest reruns are ordinary
+manual or API requests and do not inherit the parent Run's review requirement
+or decision.
 
 Automatic Git work uses latest-wins coalescing per Repository and Target. When
 an affected Target's desired commit advances or the Target is archived, the
@@ -314,6 +334,8 @@ same transaction supersedes older undispatched deliveries and finishes queued
 Git Runs as canceled with reason `SupersededByGitChange`, including phase
 transitions. Superseded deliveries remain history. Assigned, preparing, and
 running Git Runs finish normally; manual and API Runs are never superseded.
+Pending and approved-but-still-queued Runs receive the same latest-wins
+treatment; approval never protects stale work.
 
 The dispatcher pins ordinary Run creation to the delivery revision and uses its
 stable delivery ID for idempotency. At insertion, PostgreSQL locks and reads
@@ -486,7 +508,11 @@ are absent from PostgreSQL, structured logs, and the product API.
 Repository maintainers execute code with the authority granted by a Placement.
 Containers do not provide a complete security boundary. Safety policy is
 opt-in: direct actions, including unreviewed `terraform apply`, remain valid.
-Preview artifacts and Kargo review policy add optional controls to this model.
+Preview artifacts, repository-controlled Git-trigger review, and Kargo review
+policy add optional controls to this model. A repository maintainer can remove
+`review: required`; Run review is therefore a voluntary operational guard, not
+a Server-owned security policy, separation-of-duties boundary, or source-wide
+enforcement mechanism.
 
 ## Logs and artifacts
 
