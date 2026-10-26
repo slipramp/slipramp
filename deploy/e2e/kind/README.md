@@ -17,7 +17,8 @@ It then verifies the accepted baseline end to end:
 - idempotent manual Run creation and exact-commit checkout;
 - review-required Git Runs remaining undispatched until approval, approved Runs
   executing their exact accepted commit, rejected Runs finishing as canceled
-  without a Job, and pending reviews appearing in the operational Inbox;
+  without a Job, immutable comments reaching the API and Web, pending-review
+  filtering, and review-only authorization independent from Run writes;
 - preview logs and a declared plan artifact downloaded through the web process;
 - promotion of that plan into an apply Run pinned to its commit and catalog
   revision;

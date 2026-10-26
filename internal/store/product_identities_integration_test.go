@@ -78,6 +78,7 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		Scopes: []productidentity.Scope{
 			productidentity.ScopeRead,
 			productidentity.ScopeRunsWrite,
+			productidentity.ScopeRunsReview,
 			productidentity.ScopeInboxWrite,
 			productidentity.ScopePromotionsSubmit,
 			productidentity.ScopePromotionsWrite,
@@ -90,7 +91,7 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 	}
 	if key.PrincipalID != serviceAccount.ID ||
 		key.CreatedByPrincipalID != user.ID ||
-		len(key.Scopes) != 5 ||
+		len(key.Scopes) != 6 ||
 		key.Scopes[0] != productidentity.ScopeRead {
 		t.Errorf("created API key = %#v", key)
 	}

@@ -25,6 +25,7 @@ const (
 
 	ScopeRead             Scope = "slipramp:read"
 	ScopeRunsWrite        Scope = "slipramp:runs:write"
+	ScopeRunsReview       Scope = "slipramp:runs:review"
 	ScopeInboxWrite       Scope = "slipramp:inbox:write"
 	ScopePromotionsSubmit Scope = "slipramp:promotions:submit"
 	ScopePromotionsWrite  Scope = "slipramp:promotions:write"
@@ -261,7 +262,7 @@ func validateScopes(scopes []Scope) error {
 
 	seen := make(map[Scope]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if scope != ScopeRead && scope != ScopeRunsWrite && scope != ScopeInboxWrite &&
+		if scope != ScopeRead && scope != ScopeRunsWrite && scope != ScopeRunsReview && scope != ScopeInboxWrite &&
 			scope != ScopePromotionsSubmit && scope != ScopePromotionsWrite && scope != ScopeAdmin {
 			return fmt.Errorf("%w: API key scope %q is invalid", ErrInvalid, scope)
 		}

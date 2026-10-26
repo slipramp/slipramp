@@ -457,7 +457,7 @@ decideRunReview:
             schema:
               $ref: ../components/common.yaml#/Problem
       "403":
-        description: Operator permission and runs-write scope are required.
+        description: Operator permission and runs-review scope are required.
         content:
           application/problem+json:
             schema:

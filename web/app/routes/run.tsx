@@ -257,7 +257,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     (navigation.formData?.get("intent") === "rerun-exact" ||
       navigation.formData?.get("intent") === "rerun-latest");
   const hasArtifactInputs = Object.keys(run.inputs).length > 0;
-  const canWrite =
+  const canReview =
     loaderData.principal?.role === "operator" || loaderData.principal?.role === "admin";
   const actionConflict =
     actionData !== undefined && "conflict" in actionData && actionData.conflict === true;
@@ -432,7 +432,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         </Alert>
       ) : null}
 
-      <RunReviewPanel canWrite={canWrite} run={run} />
+      <RunReviewPanel canReview={canReview} run={run} />
 
       {run.phase !== "finished" && run.observationState === "unknown" ? (
         <Alert color="yellow" title="Execution observation unavailable">
@@ -500,12 +500,12 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
   );
 }
 
-function RunReviewPanel({ canWrite, run }: Readonly<{ canWrite: boolean; run: Run }>) {
+function RunReviewPanel({ canReview, run }: Readonly<{ canReview: boolean; run: Run }>) {
   const navigation = useNavigation();
   if (run.review.state === "not-required") return null;
 
   const pending = run.review.state === "pending";
-  const canDecide = canWrite && pending && run.phase === "queued";
+  const canDecide = canReview && pending && run.phase === "queued";
   const decision =
     !pending && run.review.decidedBy && run.review.decidedAt
       ? { at: run.review.decidedAt, by: run.review.decidedBy }
@@ -607,9 +607,9 @@ function RunReviewPanel({ canWrite, run }: Readonly<{ canWrite: boolean; run: Ru
               </Group>
             </Stack>
           </Form>
-        ) : pending && run.phase === "queued" && !canWrite ? (
+        ) : pending && run.phase === "queued" && !canReview ? (
           <Text c="dimmed" size="sm">
-            Operator permission is required to decide this Run review.
+            Run review permission is required to decide this review.
           </Text>
         ) : null}
       </Stack>

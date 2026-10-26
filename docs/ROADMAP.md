@@ -129,15 +129,16 @@ exposes permission-aware Approve and Reject controls, decision attribution, and
 review-aware activity and history labels. Pending Run reviews appear in the
 operational Inbox only for Principals authorized to decide them, and Run history
 supports exact review-state filtering. Optional decision comments are trimmed,
-bounded, persisted and displayed as part of the immutable decision.
+bounded, persisted and displayed as part of the immutable decision. A dedicated
+`runs:review` permission and `slipramp:runs:review` API-key scope authorize Run
+decisions and Inbox visibility independently from Run creation and cancellation.
 Review-required Git Run creation reuses the routed `review.requested`
 notification contract with a Run subject; the Run, delivery linkage, event, and
 outbound deliveries commit atomically.
 
 - [ ] Design Server-owned policies, source-wide enforcement, separation of
-      duties, dedicated review authorization, and required preview or artifact
-      rules only when operators need a security boundary stronger than
-      repository-controlled configuration.
+      duties, and required preview or artifact rules only when operators need a
+      security boundary stronger than repository-controlled configuration.
 - [ ] Add expiry and dedicated review queues only with explicit product
       semantics for recovery, noise, and operator ownership.
 - [ ] Extract shared review persistence only if another implemented flow beyond

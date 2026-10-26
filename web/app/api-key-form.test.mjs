@@ -52,3 +52,15 @@ test("accepts the Inbox acknowledgement scope", () => {
     scopes: ["slipramp:read", "slipramp:inbox:write"],
   });
 });
+
+test("accepts the Run review scope", () => {
+  const formData = new FormData();
+  formData.set("name", "review automation");
+  formData.set("scopes", "slipramp:read,slipramp:runs:review");
+
+  assert.deepEqual(apiKeyCreateBody(formData), {
+    expiresAt: undefined,
+    name: "review automation",
+    scopes: ["slipramp:read", "slipramp:runs:review"],
+  });
+});

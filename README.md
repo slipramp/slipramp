@@ -26,7 +26,7 @@ detail. Approval executes the existing Run at its exact accepted commit;
 rejection finishes it as canceled. The setting applies only to that trigger:
 manual and API Runs remain directly runnable, and omitting `review` preserves
 automatic execution. API keys deciding reviews require
-`slipramp:runs:write`.
+`slipramp:runs:review`; that scope does not grant Run creation or cancellation.
 
 The Inbox shows terminal Git-trigger failures with Target/Action context and
 safe diagnostics. The authenticated read API

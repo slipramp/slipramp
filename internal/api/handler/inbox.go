@@ -34,7 +34,7 @@ func (h *Handler) GetInbox(
 	snapshot, err := h.inbox.Load(ctx, inbox.Query{
 		PrincipalID:               authentication.Principal.ID,
 		IncludePromotionDecisions: authentication.Authorizes(productidentity.PermissionPromotionsWrite),
-		IncludeRunDecisions:       authentication.Authorizes(productidentity.PermissionRunsWrite),
+		IncludeRunDecisions:       authentication.Authorizes(productidentity.PermissionRunsReview),
 	})
 	if err != nil {
 		return nil, err

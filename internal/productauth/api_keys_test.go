@@ -40,6 +40,7 @@ func TestServiceCreatesAuthenticatesAndRevokesAPIKey(t *testing.T) {
 		"automation",
 		[]productidentity.Scope{
 			productidentity.ScopeRunsWrite,
+			productidentity.ScopeRunsReview,
 			productidentity.ScopeRead,
 		},
 		&expiresAt,
@@ -57,7 +58,8 @@ func TestServiceCreatesAuthenticatesAndRevokesAPIKey(t *testing.T) {
 		t.Error("API key digest does not match the returned token")
 	}
 	if credential.Key.Scopes[0] != productidentity.ScopeRead ||
-		credential.Key.Scopes[1] != productidentity.ScopeRunsWrite {
+		credential.Key.Scopes[1] != productidentity.ScopeRunsReview ||
+		credential.Key.Scopes[2] != productidentity.ScopeRunsWrite {
 		t.Errorf("API key scopes = %v", credential.Key.Scopes)
 	}
 	if !credential.Key.ExpiresAt.Equal(expiresAt) {
@@ -72,7 +74,7 @@ func TestServiceCreatesAuthenticatesAndRevokesAPIKey(t *testing.T) {
 		authentication.Method != productidentity.AuthenticationMethodAPIKey ||
 		authentication.CredentialID != credential.Key.ID ||
 		authentication.CredentialLabel != "automation" ||
-		len(authentication.Scopes) != 2 {
+		len(authentication.Scopes) != 3 {
 		t.Errorf("API key authentication = %#v", authentication)
 	}
 	if store.keyTouches != 1 {

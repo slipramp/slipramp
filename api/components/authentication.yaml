@@ -33,6 +33,7 @@ APIKeyScope:
   enum:
     - slipramp:read
     - slipramp:runs:write
+    - slipramp:runs:review
     - slipramp:inbox:write
     - slipramp:promotions:submit
     - slipramp:promotions:write

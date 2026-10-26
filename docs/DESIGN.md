@@ -317,8 +317,10 @@ one immutable Principal-attributed decision, including an optional comment of
 up to 4,096 characters, and makes the existing queued Run eligible for ordinary
 FIFO assignment; it does not assign or execute the Run. Rejection atomically
 records the decision and optional comment and finishes the undispatched Run as
-`canceled` with reason `ReviewRejected`. The operator role and
-`slipramp:runs:write` API-key scope decide reviews in this first slice.
+`canceled` with reason `ReviewRejected`. The operator role and dedicated
+`slipramp:runs:review` API-key scope decide reviews. The review scope does not
+grant Run creation or cancellation, and `slipramp:runs:write` does not grant
+review decisions.
 
 Review decisions are accepted only for queued pending Runs. Repeating the same
 decision, Principal, and comment is idempotent while an approval remains
@@ -624,6 +626,7 @@ signs in through OIDC.
 | -------------------------------------------------------------------------------- | ------------------------ | ---------------------------- |
 | Read product state, history, logs, artifact metadata and non-sensitive downloads | viewer                   | `slipramp:read`              |
 | Create or cancel Runs                                                            | operator                 | `slipramp:runs:write`        |
+| Decide Run reviews                                                               | operator                 | `slipramp:runs:review`       |
 | Acknowledge Inbox problems                                                       | operator                 | `slipramp:inbox:write`       |
 | Submit or poll Kargo Promotions                                                  | operator service account | `slipramp:promotions:submit` |
 | Create or decide Promotions, or change Stage policy                              | operator                 | `slipramp:promotions:write`  |

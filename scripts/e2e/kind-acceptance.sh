@@ -221,6 +221,68 @@ api_get_with_key() {
     "$server_url$path"
 }
 
+create_service_account() {
+  local display_name=$1
+  local role=$2
+  local body
+  body=$(jq -cn \
+    --arg displayName "$display_name" \
+    --arg role "$role" \
+    '{displayName: $displayName, role: $role}')
+
+  curl --fail-with-body --silent --show-error \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $product_api_key" \
+    --data "$body" \
+    "$server_url/api/v1/service-accounts" | jq -er '.principalId'
+}
+
+create_service_account_api_key() {
+  local principal_id=$1
+  local name=$2
+  local scopes=$3
+  local body
+  body=$(jq -cn \
+    --arg name "$name" \
+    --argjson scopes "$scopes" \
+    '{name: $name, scopes: $scopes}')
+
+  curl --fail-with-body --silent --show-error \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $product_api_key" \
+    --data "$body" \
+    "$server_url/api/v1/service-accounts/$principal_id/api-keys" | jq -er '.token'
+}
+
+assert_post_forbidden() {
+  local api_key=$1
+  local path=$2
+  local body=${3:-}
+  local response_file="$temporary_directory/forbidden-response.json"
+  local status
+  local -a arguments=(
+    --silent
+    --show-error
+    --output "$response_file"
+    --write-out '%{http_code}'
+    -X POST
+    -H "Authorization: Bearer $api_key"
+  )
+  if [[ -n "$body" ]]; then
+    arguments+=(
+      -H 'Content-Type: application/json'
+      --data "$body"
+    )
+  fi
+
+  status=$(curl "${arguments[@]}" "$server_url$path")
+  if [[ "$status" != 403 ]]; then
+    printf 'POST %s returned %s, expected 403\n' "$path" "$status" >&2
+    jq -c . "$response_file" >&2 2>/dev/null || true
+    return 1
+  fi
+}
+
 wait_for_cluster_inbox_problem() {
   local api_key=$1
   local deadline=$((SECONDS + timeout_seconds))
@@ -264,13 +326,11 @@ wait_for_cluster_inbox_recovery() {
   return 1
 }
 
-create_run() {
+run_request_body() {
   local action=$1
   local parameters=$2
   local inputs=$3
-  local idempotency_key=$4
-  local body
-  body=$(jq -cn \
+  jq -cn \
     --arg targetId "$target_id" \
     --arg action "$action" \
     --argjson parameters "$parameters" \
@@ -280,7 +340,16 @@ create_run() {
       action: $action,
       parameters: $parameters,
       inputs: $inputs
-    }')
+    }'
+}
+
+create_run() {
+  local action=$1
+  local parameters=$2
+  local inputs=$3
+  local idempotency_key=$4
+  local body
+  body=$(run_request_body "$action" "$parameters" "$inputs")
 
   curl --fail --silent --show-error \
     -H 'Content-Type: application/json' \
@@ -319,7 +388,7 @@ wait_for_pending_review_run() {
   local response run_id
   while ((SECONDS < deadline)); do
     if response=$(api_get \
-      "/api/v1/runs?repositoryId=$repository_id&commitSha=$commit&limit=100" \
+      "/api/v1/runs?repositoryId=$repository_id&commitSha=$commit&reviewState=pending&limit=100" \
       2>/dev/null); then
       run_id=$(jq -r --arg commit "$commit" '
         [.items[] | select(
@@ -402,13 +471,27 @@ cancel_run() {
     "$server_url/api/v1/runs/$run_id/cancel" >/dev/null
 }
 
+run_review_request_body() {
+  local decision=$1
+  local comment=${2:-}
+  jq -cn \
+    --arg decision "$decision" \
+    --arg comment "$comment" \
+    '{decision: $decision} + if $comment == "" then {} else {comment: $comment} end'
+}
+
 decide_run_review() {
   local run_id=$1
   local decision=$2
+  local comment=${3:-}
+  local api_key=${4:-$product_api_key}
+  local body
+  body=$(run_review_request_body "$decision" "$comment")
+
   curl --fail-with-body --silent --show-error \
     -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $product_api_key" \
-    --data "{\"decision\":\"$decision\"}" \
+    -H "Authorization: Bearer $api_key" \
+    --data "$body" \
     "$server_url/api/v1/runs/$run_id/review"
 }
 
@@ -784,11 +867,21 @@ assert_log_contains "$server_recovery_run" 'acceptance recovery completed'
 source "$repository_root/scripts/e2e/kargo-promotions.sh"
 
 log "testing approval and rejection of review-required Git Runs"
+review_principal_id=$(create_service_account "Run review acceptance" operator)
+review_api_key=$(create_service_account_api_key \
+  "$review_principal_id" \
+  "Run review decisions" \
+  '["slipramp:read","slipramp:runs:review"]')
+run_write_api_key=$(create_service_account_api_key \
+  "$review_principal_id" \
+  "Run write without review" \
+  '["slipramp:read","slipramp:runs:write"]')
+
 update_repository_head "$approved_review_commit"
 wait_for_repository "$approved_review_commit"
 approved_review_run=$(wait_for_pending_review_run "$approved_review_commit")
 assert_pending_review_not_dispatched "$approved_review_run"
-api_get /api/v1/inbox |
+api_get_with_key "$review_api_key" /api/v1/inbox |
   jq -e --arg id "$approved_review_run" '
     any(.decisions[];
       .kind == "run-review" and
@@ -796,30 +889,61 @@ api_get /api/v1/inbox |
       .destination.id == $id
     )
   ' >/dev/null
-approved_review_response=$(decide_run_review "$approved_review_run" approved)
-jq -e --arg commit "$approved_review_commit" '
+api_get_with_key "$run_write_api_key" /api/v1/inbox |
+  jq -e --arg id "$approved_review_run" '
+    all(.decisions[];
+      .kind != "run-review" or .destination.id != $id
+    )
+  ' >/dev/null
+
+review_create_body=$(run_request_body preview "$preview_parameters" '{}')
+approval_comment="Approved by the review-only acceptance key."
+approval_body=$(run_review_request_body approved "$approval_comment")
+assert_post_forbidden "$review_api_key" /api/v1/runs "$review_create_body"
+assert_post_forbidden "$review_api_key" "/api/v1/runs/$approved_review_run/cancel"
+assert_post_forbidden \
+  "$run_write_api_key" \
+  "/api/v1/runs/$approved_review_run/review" \
+  "$approval_body"
+
+approved_review_response=$(decide_run_review \
+  "$approved_review_run" approved "$approval_comment" "$review_api_key")
+jq -e --arg commit "$approved_review_commit" --arg comment "$approval_comment" '
   .commit.sha == $commit and
   .source.type == "git" and
-  .review.state == "approved"
+  .review.state == "approved" and
+  .review.comment == $comment and
+  .review.decidedBy.displayName == "Run review acceptance"
 ' <<<"$approved_review_response" >/dev/null
 wait_for_run_outcome "$approved_review_run" succeeded
 assert_log_contains "$approved_review_run" 'acceptance reviewed Git run: approved'
+api_get "/api/v1/runs/$approved_review_run" |
+  jq -e --arg comment "$approval_comment" '.review.comment == $comment' >/dev/null
+curl --fail --silent --show-error \
+  --cookie "$product_cookie_jar" \
+  "$web_url/runs/$approved_review_run" \
+  --output "$temporary_directory/approved-review-run.html"
+grep -Fq "$approval_comment" "$temporary_directory/approved-review-run.html"
 
 update_repository_head "$rejected_review_commit"
 wait_for_repository "$rejected_review_commit"
 rejected_review_run=$(wait_for_pending_review_run "$rejected_review_commit")
 assert_pending_review_not_dispatched "$rejected_review_run"
-rejected_review_response=$(decide_run_review "$rejected_review_run" rejected)
-jq -e --arg commit "$rejected_review_commit" '
+rejection_comment="Rejected by the review-only acceptance key."
+rejected_review_response=$(decide_run_review \
+  "$rejected_review_run" rejected "$rejection_comment" "$review_api_key")
+jq -e --arg commit "$rejected_review_commit" --arg comment "$rejection_comment" '
   .commit.sha == $commit and
   .phase == "finished" and
   .outcome == "canceled" and
   .outcomeReason == "ReviewRejected" and
-  .review.state == "rejected"
+  .review.state == "rejected" and
+  .review.comment == $comment and
+  .review.decidedBy.displayName == "Run review acceptance"
 ' <<<"$rejected_review_response" >/dev/null
 wait_for_run_outcome "$rejected_review_run" canceled
 wait_for_job_deletion "$rejected_review_run"
-api_get /api/v1/inbox |
+api_get_with_key "$review_api_key" /api/v1/inbox |
   jq -e --arg approved "$approved_review_run" --arg rejected "$rejected_review_run" '
     all(.decisions[];
       .kind != "run-review" or
@@ -828,16 +952,11 @@ api_get /api/v1/inbox |
   ' >/dev/null
 
 log "testing operational Inbox projection and personal acknowledgements"
-inbox_principal_id=$(curl --fail-with-body --silent --show-error \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $product_api_key" \
-  --data '{"displayName":"Inbox acceptance","role":"operator"}' \
-  "$server_url/api/v1/service-accounts" | jq -er '.principalId')
-inbox_api_key=$(curl --fail-with-body --silent --show-error \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $product_api_key" \
-  --data '{"name":"Inbox acceptance","scopes":["slipramp:read","slipramp:inbox:write"]}' \
-  "$server_url/api/v1/service-accounts/$inbox_principal_id/api-keys" | jq -er '.token')
+inbox_principal_id=$(create_service_account "Inbox acceptance" operator)
+inbox_api_key=$(create_service_account_api_key \
+  "$inbox_principal_id" \
+  "Inbox acceptance" \
+  '["slipramp:read","slipramp:inbox:write"]')
 
 "${kubectl_command[@]}" -n "$system_namespace" scale \
   deployment/slipramp-controller --replicas=0

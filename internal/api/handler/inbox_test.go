@@ -94,10 +94,17 @@ func TestGetInboxDecisionVisibilityMatchesPermissions(t *testing.T) {
 			scopes: []productidentity.Scope{productidentity.ScopeRead},
 		},
 		{
-			name: "Run decisions",
+			name: "Run write does not imply Run decisions",
 			scopes: []productidentity.Scope{
 				productidentity.ScopeRead,
 				productidentity.ScopeRunsWrite,
+			},
+		},
+		{
+			name: "Run decisions",
+			scopes: []productidentity.Scope{
+				productidentity.ScopeRead,
+				productidentity.ScopeRunsReview,
 			},
 			wantRunDecisions: true,
 		},

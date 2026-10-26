@@ -125,6 +125,24 @@ func TestProductAuthenticationRejectsInsufficientRoleOrScope(t *testing.T) {
 			),
 			operationID: "RemoveRepository",
 		},
+		{
+			name: "Run write key cannot decide reviews",
+			authentication: productAuthentication(
+				productidentity.RoleOperator,
+				productidentity.AuthenticationMethodAPIKey,
+				[]productidentity.Scope{productidentity.ScopeRunsWrite},
+			),
+			operationID: "DecideRunReview",
+		},
+		{
+			name: "Run review key cannot cancel Runs",
+			authentication: productAuthentication(
+				productidentity.RoleOperator,
+				productidentity.AuthenticationMethodAPIKey,
+				[]productidentity.Scope{productidentity.ScopeRunsReview},
+			),
+			operationID: "CancelRun",
+		},
 	}
 
 	for _, test := range tests {
@@ -161,7 +179,7 @@ func TestProductAuthenticationAttachesAuthorizedIdentity(t *testing.T) {
 	}{
 		{name: "Run cancellation", operationID: "CancelRun", scope: productidentity.ScopeRunsWrite},
 		{name: "Run rerun", operationID: "RerunRun", scope: productidentity.ScopeRunsWrite},
-		{name: "Run review decision", operationID: "DecideRunReview", scope: productidentity.ScopeRunsWrite},
+		{name: "Run review decision", operationID: "DecideRunReview", scope: productidentity.ScopeRunsReview},
 		{name: "API key revocation", operationID: "RevokeAPIKey", scope: productidentity.ScopeRunsWrite},
 		{
 			name:        "Inbox acknowledgement",

@@ -12,6 +12,7 @@ const (
 
 	PermissionRead                   Permission = "read"
 	PermissionRunsWrite              Permission = "runs:write"
+	PermissionRunsReview             Permission = "runs:review"
 	PermissionInboxWrite             Permission = "inbox:write"
 	PermissionAdmin                  Permission = "admin"
 	PermissionAPIKeyRevoke           Permission = "api-keys:revoke"
@@ -90,7 +91,7 @@ func roleAuthorizes(role Role, permission Permission) bool {
 	switch permission {
 	case PermissionRead:
 		return role == RoleViewer || role == RoleOperator || role == RoleAdmin
-	case PermissionRunsWrite, PermissionInboxWrite:
+	case PermissionRunsWrite, PermissionRunsReview, PermissionInboxWrite:
 		return role == RoleOperator || role == RoleAdmin
 	case PermissionPromotionsSubmit, PermissionPromotionsWrite:
 		return role == RoleOperator || role == RoleAdmin
@@ -124,6 +125,10 @@ func scopesAuthorize(scopes []Scope, permission Permission) bool {
 			if scope == ScopeRunsWrite {
 				return true
 			}
+		case PermissionRunsReview:
+			if scope == ScopeRunsReview {
+				return true
+			}
 		case PermissionInboxWrite:
 			if scope == ScopeInboxWrite {
 				return true
@@ -137,7 +142,7 @@ func scopesAuthorize(scopes []Scope, permission Permission) bool {
 				return true
 			}
 		case PermissionAPIKeyRevoke:
-			if scope == ScopeRead || scope == ScopeRunsWrite || scope == ScopeInboxWrite {
+			if scope == ScopeRead || scope == ScopeRunsWrite || scope == ScopeRunsReview || scope == ScopeInboxWrite {
 				return true
 			}
 		case PermissionAdmin:

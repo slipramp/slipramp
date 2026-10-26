@@ -207,16 +207,11 @@ kargo_target_id=$(api_get "/api/v1/targets?repositoryId=$repository_id" |
   jq -er '.items[] | select(.name == "kargo-promotions") | .id')
 
 log "configuring the Kargo acceptance service account"
-kargo_principal_id=$(curl --fail-with-body --silent --show-error \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $product_api_key" \
-  --data '{"displayName":"Kargo acceptance","role":"operator"}' \
-  "$server_url/api/v1/service-accounts" | jq -er '.principalId')
-kargo_api_key=$(curl --fail-with-body --silent --show-error \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $product_api_key" \
-  --data '{"name":"Kargo acceptance","scopes":["slipramp:promotions:submit"]}' \
-  "$server_url/api/v1/service-accounts/$kargo_principal_id/api-keys" | jq -er '.token')
+kargo_principal_id=$(create_service_account "Kargo acceptance" operator)
+kargo_api_key=$(create_service_account_api_key \
+  "$kargo_principal_id" \
+  "Kargo acceptance" \
+  '["slipramp:promotions:submit"]')
 
 kargo_stage_snapshot=$(wait_for_kargo_stage)
 kargo_stage_id=$(jq -er \

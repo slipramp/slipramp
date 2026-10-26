@@ -1583,6 +1583,7 @@ export type ArtifactProvenance = {
 export type ApiKeyScope =
   | "slipramp:read"
   | "slipramp:runs:write"
+  | "slipramp:runs:review"
   | "slipramp:inbox:write"
   | "slipramp:promotions:submit"
   | "slipramp:promotions:write"
@@ -3393,7 +3394,7 @@ export type DecideRunReviewErrors = {
    */
   401: Problem;
   /**
-   * Operator permission and runs-write scope are required.
+   * Operator permission and runs-review scope are required.
    */
   403: Problem;
   /**
