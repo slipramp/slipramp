@@ -11,12 +11,13 @@ import (
 )
 
 const (
-	ExitValid      = 0
-	ExitInvalid    = 1
-	ExitInvocation = 2
-	ExitInternal   = 3
-	ExitRemote     = 4
-	ExitIncomplete = 5
+	ExitValid           = 0
+	ExitInvalid         = 1
+	ExitInvocation      = 2
+	ExitInternal        = 3
+	ExitRemote          = 4
+	ExitIncomplete      = 5
+	ExitRunUnsuccessful = 6
 )
 
 type App struct {
@@ -43,7 +44,7 @@ func (a App) Run(arguments []string) int {
 func (a App) newRootCommand(exitCode *int) *cobra.Command {
 	command := &cobra.Command{
 		Use:           "slipramp",
-		Short:         "Operate Slipramp catalogs and Runs",
+		Short:         "Operate Slipramp catalogs, Runs, and Artifacts",
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args: func(_ *cobra.Command, arguments []string) error {
@@ -66,6 +67,7 @@ func (a App) newRootCommand(exitCode *int) *cobra.Command {
 		a.newCatalogCommand(exitCode),
 		a.newTargetCommand(exitCode),
 		a.newRunCommand(exitCode),
+		a.newArtifactCommand(exitCode),
 	)
 
 	return command

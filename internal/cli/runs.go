@@ -10,16 +10,20 @@ import (
 func (a App) newRunCommand(exitCode *int) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "run",
-		Short: "Create and inspect Runs",
+		Short: "Operate Runs",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return errors.New("run requires the create, get, logs, or cancel command")
+			return errors.New("run requires the list, create, get, logs, wait, cancel, rerun, or review command")
 		},
 	}
 	command.AddCommand(
+		a.newRunListCommand(exitCode),
 		a.newRunCreateCommand(exitCode),
 		a.newRunGetCommand(exitCode),
 		a.newRunLogsCommand(exitCode),
+		a.newRunWaitCommand(exitCode),
 		a.newRunCancelCommand(exitCode),
+		a.newRunRerunCommand(exitCode),
+		a.newRunReviewCommand(exitCode),
 	)
 
 	return command

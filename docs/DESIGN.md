@@ -205,7 +205,8 @@ commands remain offline: no Server/Kubernetes access, image inspection, Secret
 lookup, Job rendering, or local Action execution.
 
 The CLI also provides a focused remote operator boundary for listing active
-Targets and creating, inspecting, following, and canceling Runs. It uses the
+Targets; listing, creating, inspecting, following, waiting for, rerunning,
+reviewing, and canceling Runs; and listing and downloading Artifacts. It uses the
 generated OpenAPI client and models for ordinary requests, with one small
 handwritten SSE reader for log reconnection and byte decoding. The Server URL
 comes from a command flag or `SLIPRAMP_URL`; the API key comes only from
@@ -218,14 +219,39 @@ package-global commands and `init` registration are not used. Catalog behavior,
 remote API access, rendering, and log streaming remain framework-independent
 command handlers so their contracts can be tested without Cobra internals.
 
-Remote Run creation selects an exact durable Target UUID and Action name. The
-client reads the current Target definition, rejects artifact-consuming Actions,
-and applies the shared catalog parameter parser and Run normalization rules
-before submitting a generated `RunCreate` request with an idempotency key. The
-Server remains authoritative and repeats validation. Artifact-input selection
-stays in the Web producing-Run workflow. Remote reads and cancellation return
-the canonical generated Run representation; text rendering is only a terminal
-projection of that response.
+Remote Run creation selects an exact durable Target UUID and Action name. Without
+Artifact inputs, the client reads the current Target definition and applies the
+shared catalog parameter parser and Run normalization rules before submitting a
+generated `RunCreate` request with an idempotency key. Repeatable explicit input
+bindings map declared input names to exact Artifact UUIDs. An input-bound CLI
+request cannot also supply parameter strings because the selected Artifact may
+pin creation to an older catalog revision whose parameter declarations are not
+available through the remote CLI contract. The Server remains authoritative,
+resolves the producing revision, and validates input retention, provenance,
+compatibility, completeness, and parameter defaults.
+
+Exact and latest reruns require an explicit mode and use the Server's ordinary
+idempotent rerun boundary. Run review approval and rejection use the dedicated
+review endpoint and optional normalized immutable comments. These mutations,
+ordinary reads, and cancellation return the canonical generated Run
+representation; text rendering is only a terminal projection of that response.
+
+Run listing exposes the Server's exact Repository, Target, commit, input
+Artifact, Cluster, phase, and review-state filters with offset pagination. Text
+output preserves phase, outcome, review state, and observation freshness as
+separate facts; JSON returns the generated `RunList` unchanged. Run waiting
+polls the ordinary generated Run read until the canonical record is finished,
+with an optional client-side timeout and a configurable poll interval. It writes
+the terminal Run before returning success for `succeeded` or a dedicated
+unsuccessful-Run exit code for `failed`, `canceled`, and `timed-out`. Client
+cancellation interrupts both the request and the interval wait.
+
+Artifact listing returns the generated Artifact metadata for one exact Run.
+Downloads require an explicit output path or standard output, stream the raw
+response body, and verify the required SHA-256 `Digest` header. File output uses
+mode `0600`, refuses to replace an existing path, and removes partial or
+digest-invalid contents. A standard-output download may already have emitted
+bytes before a terminal digest mismatch is known and therefore returns nonzero.
 
 The log command writes decoded chunk contents directly to standard output and
 keeps diagnostics on standard error. SSE event IDs and generated `LogEvent`
@@ -658,7 +684,7 @@ signs in through OIDC.
 | Operation                                                                        | Minimum role             | API-key scope                |
 | -------------------------------------------------------------------------------- | ------------------------ | ---------------------------- |
 | Read product state, history, logs, artifact metadata and non-sensitive downloads | viewer                   | `slipramp:read`              |
-| Create or cancel Runs                                                            | operator                 | `slipramp:runs:write`        |
+| Create, rerun, or cancel Runs                                                     | operator                 | `slipramp:runs:write`        |
 | Decide Run reviews                                                               | operator                 | `slipramp:runs:review`       |
 | Acknowledge Inbox problems                                                       | operator                 | `slipramp:inbox:write`       |
 | Submit or poll Kargo Promotions                                                  | operator service account | `slipramp:promotions:submit` |

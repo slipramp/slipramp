@@ -35,6 +35,8 @@ func renderRunText(output io.Writer, runRecord api.Run) error {
 		fmt.Sprintf("Target: %s (%s)", runRecord.Target, runRecord.TargetID),
 		fmt.Sprintf("Action: %s", runRecord.Action),
 		fmt.Sprintf("Source: %s", renderRunSource(runRecord.Source)),
+		fmt.Sprintf("Review: %s", renderRunReview(runRecord.Review)),
+		fmt.Sprintf("Review comment: %s", optionalString(runRecord.Review.Comment)),
 		fmt.Sprintf("Commit: %s", runRecord.Commit.Sha),
 		fmt.Sprintf("Placement: %s", runRecord.Placement),
 		fmt.Sprintf("Cluster: %s", runRecord.Cluster),
@@ -53,6 +55,18 @@ func renderRunText(output io.Writer, runRecord api.Run) error {
 	_, err := fmt.Fprintln(output, strings.Join(lines, "\n"))
 
 	return err
+}
+
+func renderRunReview(review api.RunReview) string {
+	result := string(review.State)
+	if review.DecidedBy != nil {
+		result += " by " + review.DecidedBy.DisplayName
+	}
+	if review.DecidedAt != nil {
+		result += " at " + renderTime(review.DecidedAt)
+	}
+
+	return result
 }
 
 func renderRunSource(source api.RunSource) string {

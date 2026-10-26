@@ -24,10 +24,37 @@ type runCreateOptions struct {
 	action         string
 	idempotencyKey string
 	parameters     parameterAssignments
+	inputs         runInputAssignments
+}
+
+type runInputAssignments map[string]uuid.UUID
+
+func (i runInputAssignments) String() string { return "" }
+
+func (i runInputAssignments) Type() string { return "NAME=ARTIFACT_UUID" }
+
+func (i runInputAssignments) Set(assignment string) error {
+	name, encodedID, ok := strings.Cut(assignment, "=")
+	if !ok || name == "" || encodedID == "" {
+		return errors.New("--input requires NAME=ARTIFACT_UUID")
+	}
+	if _, duplicate := i[name]; duplicate {
+		return fmt.Errorf("input %q was supplied more than once", name)
+	}
+	artifactID, err := uuid.Parse(encodedID)
+	if err != nil {
+		return fmt.Errorf("input %q Artifact ID must be a UUID", name)
+	}
+	i[name] = artifactID
+
+	return nil
 }
 
 func (a App) newRunCreateCommand(exitCode *int) *cobra.Command {
-	options := runCreateOptions{parameters: parameterAssignments{}}
+	options := runCreateOptions{
+		parameters: parameterAssignments{},
+		inputs:     runInputAssignments{},
+	}
 	command := &cobra.Command{
 		Use:   "create",
 		Short: "Create a Run",
@@ -47,6 +74,7 @@ func (a App) newRunCreateCommand(exitCode *int) *cobra.Command {
 	flags.StringVar(&options.target, "target", "", "exact Target UUID (required)")
 	flags.StringVar(&options.action, "action", "", "Action name (required)")
 	flags.Var(&options.parameters, "set", "parameter NAME=VALUE (repeatable)")
+	flags.Var(&options.inputs, "input", "artifact input NAME=ARTIFACT_UUID (repeatable)")
 	flags.StringVar(&options.idempotencyKey, "idempotency-key", "", "stable request key (default: fresh random UUID)")
 	flags.StringVar(&options.format, "format", "text", "output format: text or json")
 
@@ -64,51 +92,56 @@ func (a App) runRunCreate(options runCreateOptions) int {
 	if options.action == "" {
 		return a.invocationError("--action is required")
 	}
-	if options.idempotencyKey == "" {
-		options.idempotencyKey = uuid.NewString()
-	} else if !utf8.ValidString(options.idempotencyKey) || strings.TrimSpace(options.idempotencyKey) == "" ||
-		utf8.RuneCountInString(options.idempotencyKey) > 128 ||
-		strings.IndexFunc(options.idempotencyKey, unicode.IsControl) >= 0 {
-		return a.invocationError("--idempotency-key must contain 1 to 128 characters")
+	idempotencyKey, err := runIdempotencyKey(options.idempotencyKey)
+	if err != nil {
+		return a.invocationError(err.Error())
+	}
+	if len(options.inputs) != 0 && len(options.parameters) != 0 {
+		return a.invocationError("--set cannot be combined with --input")
 	}
 
 	client, err := a.remoteClient(options.serverURL)
 	if err != nil {
 		return a.invocationError(err.Error())
 	}
-	target, exitCode := a.loadRunTarget(client, targetID)
-	if exitCode != ExitValid {
-		return exitCode
-	}
-	action, found := target.Definition.Spec.Actions[options.action]
-	if !found {
-		return a.runValidationError(fmt.Errorf(
-			"action %q is not defined by Target %s",
-			options.action,
-			targetID,
-		))
-	}
-	if action.Inputs != nil && len(*action.Inputs) != 0 {
-		return a.runValidationError(errors.New(
-			"this Action requires artifact inputs; open the producing Run in the Web UI to start it",
-		))
-	}
+	requestParameters := map[string]api.ParameterValue{}
+	if len(options.inputs) == 0 {
+		target, exitCode := a.loadRunTarget(client, targetID)
+		if exitCode != ExitValid {
+			return exitCode
+		}
+		action, found := target.Definition.Spec.Actions[options.action]
+		if !found {
+			return a.runValidationError(fmt.Errorf(
+				"action %q is not defined by Target %s",
+				options.action,
+				targetID,
+			))
+		}
+		if action.Inputs != nil && len(*action.Inputs) != 0 {
+			return a.runValidationError(errors.New(
+				"this Action requires artifact inputs; supply each binding with --input NAME=ARTIFACT_UUID",
+			))
+		}
 
-	declarations := catalogParameters(action.Parameters)
-	values, err := catalog.ParseParameterValues(declarations, options.parameters)
-	if err != nil {
-		return a.runValidationError(err)
+		declarations := catalogParameters(action.Parameters)
+		values, parseErr := catalog.ParseParameterValues(declarations, options.parameters)
+		if parseErr != nil {
+			return a.runValidationError(parseErr)
+		}
+		requestParameters, err = apiParameterValues(values)
+		if err != nil {
+			return a.internalError("encode Run parameters", err)
+		}
 	}
-	requestParameters, err := apiParameterValues(values)
-	if err != nil {
-		return a.internalError("encode Run parameters", err)
-	}
+	requestInputs := map[string]uuid.UUID(options.inputs)
 	body := api.RunCreate{
 		TargetID:   targetID,
 		Action:     options.action,
 		Parameters: &requestParameters,
+		Inputs:     &requestInputs,
 	}
-	requestOptions := api.CreateRunParams{IdempotencyKey: &options.idempotencyKey}
+	requestOptions := api.CreateRunParams{IdempotencyKey: &idempotencyKey}
 	response, err := client.API.CreateRun(a.commandContext(), &requestOptions, body)
 	if err != nil {
 		return a.remoteError(client.NetworkError("create Run", err))
@@ -131,6 +164,18 @@ func (a App) runRunCreate(options runCreateOptions) int {
 	}
 
 	return ExitValid
+}
+
+func runIdempotencyKey(value string) (string, error) {
+	if value == "" {
+		return uuid.NewString(), nil
+	}
+	if !utf8.ValidString(value) || strings.TrimSpace(value) == "" ||
+		utf8.RuneCountInString(value) > 128 || strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return "", errors.New("--idempotency-key must contain 1 to 128 characters")
+	}
+
+	return value, nil
 }
 
 func (a App) loadRunTarget(client *remote.Client, targetID uuid.UUID) (api.Target, int) {

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	testTargetID = "018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"
-	testRunID    = "018f90ff-9fd8-7b5f-b7e1-f32ff54c1203"
+	testTargetID   = "018f90ff-9fd8-7b5f-b7e1-f32ff54c1202"
+	testRunID      = "018f90ff-9fd8-7b5f-b7e1-f32ff54c1203"
+	testArtifactID = "018f90ff-9fd8-7b5f-b7e1-f32ff54c1205"
 )
 
 func runRemoteApp(
@@ -92,8 +93,10 @@ func runResponse(phase string, outcome *string) map[string]any {
 	if outcome != nil {
 		response["outcome"] = *outcome
 		response["finishedAt"] = "2026-10-25T12:01:00Z"
-		response["outcomeReason"] = "ProcessExited"
-		response["outcomeMessage"] = "The process exited unsuccessfully."
+		if *outcome != "succeeded" {
+			response["outcomeReason"] = "ProcessExited"
+			response["outcomeMessage"] = "The process exited unsuccessfully."
+		}
 	}
 
 	return response

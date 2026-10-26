@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -38,7 +39,7 @@ func (a App) runRunGet(options runRecordOptions, identity string) int {
 	if err != nil {
 		return a.invocationError(err.Error())
 	}
-	runRecord, exitCode := a.loadRun(client, runID, "get Run")
+	runRecord, exitCode := a.loadRun(a.commandContext(), client, runID, "get Run")
 	if exitCode != ExitValid {
 		return exitCode
 	}
@@ -104,8 +105,13 @@ func (a App) runRunCancel(options runRecordOptions, identity string) int {
 	return ExitValid
 }
 
-func (a App) loadRun(client *remote.Client, runID uuid.UUID, operation string) (api.Run, int) {
-	response, err := client.API.GetRun(a.commandContext(), runID)
+func (a App) loadRun(
+	ctx context.Context,
+	client *remote.Client,
+	runID uuid.UUID,
+	operation string,
+) (api.Run, int) {
+	response, err := client.API.GetRun(ctx, runID)
 	if err != nil {
 		return api.Run{}, a.remoteError(client.NetworkError(operation, err))
 	}

@@ -14,7 +14,7 @@ func TestCommandTreeHelp(t *testing.T) {
 	if code != cli.ExitValid || stderr != "" {
 		t.Fatalf("root help exit = %d, stderr = %q", code, stderr)
 	}
-	for _, command := range []string{"catalog", "run", "target", "version"} {
+	for _, command := range []string{"artifact", "catalog", "run", "target", "version"} {
 		if !strings.Contains(output, command) {
 			t.Errorf("root help missing %q: %s", command, output)
 		}
@@ -27,7 +27,7 @@ func TestCommandTreeHelp(t *testing.T) {
 	if code != cli.ExitValid || stderr != "" {
 		t.Fatalf("Run creation help exit = %d, stderr = %q", code, stderr)
 	}
-	for _, option := range []string{"--action", "--idempotency-key", "--server", "--set", "--target"} {
+	for _, option := range []string{"--action", "--idempotency-key", "--input", "--server", "--set", "--target"} {
 		if !strings.Contains(output, option) {
 			t.Errorf("Run creation help missing %q: %s", option, output)
 		}
@@ -46,6 +46,7 @@ func TestCommandTreeInvocationFailures(t *testing.T) {
 		{name: "unknown command", args: []string{"launch"}, message: `unknown command "launch"`},
 		{name: "missing Run command", args: []string{"run"}, message: "run requires"},
 		{name: "missing Run ID", args: []string{"run", "get"}, message: "exactly one Run ID is required"},
+		{name: "missing Artifact command", args: []string{"artifact"}, message: "artifact requires"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -148,8 +148,11 @@ output or errors. HTTPS uses the system trust store; there is no insecure TLS
 mode. Plain HTTP should be used only when a trusted encrypted network already
 protects the connection.
 
-An API key needs `slipramp:read` for discovery, Run reads, and logs, and
-`slipramp:runs:write` to create or cancel Runs. For example:
+An API key needs `slipramp:read` for discovery, Run and Artifact reads, logs,
+and non-sensitive Artifact downloads; `slipramp:runs:write` to create, rerun,
+or cancel Runs; and `slipramp:runs:review` to approve or reject Run reviews.
+Sensitive Artifact contents additionally require an operator or administrator
+Principal. For example:
 
 ```console
 export SLIPRAMP_URL=https://slipramp.example.com
@@ -157,37 +160,66 @@ export SLIPRAMP_API_KEY='replace-with-an-api-key'
 
 slipramp target list --query storage --limit 25
 slipramp target list --repository-id 018f90ff-9fd8-7b5f-b7e1-f32ff54c1201 --format json
+slipramp run list --target-id 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 --phase running
+slipramp run list --review-state pending --format json
 slipramp run create --target 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 --action preview --set region=us-west-2
+slipramp run create --target 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 --action apply \
+  --input plan=018f90ff-9fd8-7b5f-b7e1-f32ff54c1206
 slipramp run get 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203
 slipramp run logs 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203
+slipramp run wait 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203 --timeout 30m
+slipramp run rerun 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203 --mode exact
+slipramp run review approve 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203 --comment 'Plan reviewed'
 slipramp run cancel 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203
+slipramp artifact list 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203
+slipramp artifact download 018f90ff-9fd8-7b5f-b7e1-f32ff54c1206 --output plan.tfplan
 ```
 
 `target list` also accepts exact `--runtime` and `--placement` filters plus
-`--offset`. `run create` requires an exact Target UUID and Action name. Its
-repeatable `--set NAME=VALUE` flags use the same typed parsing, required-field,
-enum, and normalization rules as catalog explanation and Server Run creation.
-Actions with artifact inputs must instead be started from the producing Run in
-the Web UI so the input is selected explicitly. Every create sends a fresh
-random idempotency key; automation may supply `--idempotency-key` to recover the
-same request safely.
+`--offset`. `run list` supports the Server's exact Repository, Target, commit,
+input Artifact, Cluster, phase, and review-state filters plus offset pagination.
+`run create` requires an exact Target UUID and Action name. Its repeatable
+`--set NAME=VALUE` flags use the same typed parsing, required-field, enum, and
+normalization rules as catalog explanation and Server Run creation. Repeatable
+`--input NAME=ARTIFACT_UUID` flags select exact retained Artifact inputs; the
+Server verifies compatibility and pins the Run to their producing commit and
+catalog revision. Because that historical revision's parameter declarations are
+not exposed to the CLI, `--input` cannot be combined with `--set`. This supports
+the same directly runnable, parameter-free preview/apply transitions exposed by
+the producing Run in the Web UI. Every create and rerun sends a fresh random
+idempotency key; automation may supply `--idempotency-key` to recover the same
+request safely. Reruns require an explicit `--mode exact` or `--mode latest`.
 
-Text is the default for `target list`, `run create`, `run get`, and `run cancel`;
-each accepts `--format json` to emit the generated API response shape. Structured
-and text results go to standard output. Errors and operational diagnostics go to
-standard error. `run logs` is intentionally unformatted: it writes decoded log
-bytes exactly to standard output, follows live output, and reconnects from the
-last durable byte offset without repeating content. It exits successfully only
-after the log is sealed. A failed/incomplete log leaves its retained prefix on
-standard output and exits distinctly.
+`run review approve` and `run review reject` accept an optional `--comment` and
+return the canonical updated Run. `artifact list RUN_ID` returns the log and
+declared outputs for one Run. `artifact download` requires `--output PATH`, or
+`--output -` for standard output. File downloads never replace an existing path,
+use mode `0600`, verify the Server's SHA-256 digest, and remove partial or invalid
+outputs.
+
+Text is the default for `target list`, `run list`, `run create`, `run get`,
+`run wait`, `run rerun`, both Run review decisions, `run cancel`, and
+`artifact list`; each accepts `--format json` to emit the generated API response
+shape. Structured and text results go to standard output. Errors and operational
+diagnostics go to standard error. `run wait` polls until the Run finishes, prints
+its canonical terminal state, and exits distinctly when the outcome is not
+`succeeded`. It waits without a deadline unless `--timeout` is set;
+`--poll-interval` defaults to one second. `run logs` is intentionally
+unformatted: it writes decoded log bytes exactly to standard output, follows
+live output, and reconnects from the last durable byte offset without repeating
+content. It exits successfully only after the log is sealed, independently of
+the Run outcome. A failed/incomplete log leaves its retained prefix on standard
+output and exits distinctly.
 
 Remote commands use exit code `0` for success, `1` for local Run validation
 failures, `2` for an invalid invocation or missing configuration, `3` for an
 unexpected local/output failure, `4` for a network or Server/API failure, and
-`5` for an explicitly incomplete log. Authentication, authorization,
-validation, conflict, and not-found problem responses include the HTTP status
-and the Server's safe problem detail. Ctrl-C cancels an active log request and
-returns promptly with a nonzero status.
+`5` for an explicitly incomplete log. `run wait` returns `6` after writing the
+terminal Run when its outcome is `failed`, `canceled`, or `timed-out`.
+Authentication, authorization, validation, conflict, and not-found problem
+responses include the HTTP status and the Server's safe problem detail. Ctrl-C
+cancels an active log request or Run wait and returns promptly with a nonzero
+status.
 
 ## Server configuration
 

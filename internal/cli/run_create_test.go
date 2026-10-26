@@ -115,3 +115,61 @@ func TestRunCreateGeneratesFreshIdempotencyKeys(t *testing.T) {
 		t.Errorf("idempotency keys = %#v", keys)
 	}
 }
+
+func TestRunCreateSubmitsExplicitArtifactInputs(t *testing.T) {
+	t.Parallel()
+
+	var createdBody map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/api/v1/runs" {
+			http.NotFound(writer, request)
+
+			return
+		}
+		if err := json.NewDecoder(request.Body).Decode(&createdBody); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		writeJSON(t, writer, http.StatusCreated, runResponse("queued", nil))
+	}))
+	defer server.Close()
+
+	code, output, stderr := runRemoteApp(
+		t,
+		context.Background(),
+		server,
+		"run", "create", "--target", testTargetID, "--action", "apply",
+		"--input", "plan="+testArtifactID,
+	)
+	if code != cli.ExitValid || stderr != "" || !strings.Contains(output, testRunID) {
+		t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, output, stderr)
+	}
+	inputs := createdBody["inputs"].(map[string]any)
+	if inputs["plan"] != testArtifactID {
+		t.Errorf("inputs = %#v", inputs)
+	}
+	if parameters := createdBody["parameters"].(map[string]any); len(parameters) != 0 {
+		t.Errorf("parameters = %#v", parameters)
+	}
+
+	code, output, stderr = runRemoteApp(
+		t,
+		context.Background(),
+		server,
+		"run", "create", "--target", testTargetID, "--action", "apply",
+		"--input", "plan="+testArtifactID, "--set", "force=true",
+	)
+	if code != cli.ExitInvocation || output != "" || !strings.Contains(stderr, "cannot be combined") {
+		t.Fatalf("mixed input exit = %d, stdout = %q, stderr = %q", code, output, stderr)
+	}
+
+	code, output, stderr = runRemoteApp(
+		t,
+		context.Background(),
+		server,
+		"run", "create", "--target", testTargetID, "--action", "apply",
+		"--input", "plan=not-a-uuid",
+	)
+	if code != cli.ExitInvocation || output != "" || !strings.Contains(stderr, "must be a UUID") {
+		t.Fatalf("invalid input exit = %d, stdout = %q, stderr = %q", code, output, stderr)
+	}
+}
