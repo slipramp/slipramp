@@ -44,3 +44,10 @@ spec:
     recover:
       intent: operation
       command: [/bin/sh, scripts/recover.sh]
+    review:
+      intent: operation
+      command: [/bin/sh, scripts/review.sh]
+      triggers:
+        - name: review-on-change
+          git: {}
+          review: required

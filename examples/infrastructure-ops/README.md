@@ -29,10 +29,20 @@ The RustFS target offers:
 - `apply`, which consumes an explicitly selected `plan` artifact from a
   `preview` run at the same catalog revision.
 - `sync`, which directly applies the current configuration without requiring a
-  preview.
+  preview. Its `sync-on-change` Git trigger requires an operator review before
+  the triggered Run can execute.
 
 The direct `sync` actions are deliberate. Slipramp's safety policy is opt-in;
-previews and canaries are useful operations rather than mandatory gates.
+previews and canaries are useful operations rather than mandatory gates. The
+RustFS trigger's `review: required` applies only to automatic Runs created by
+that named trigger. The same Action remains directly runnable through the Web
+or API.
+
+A review-required Git Run stays queued without a Kubernetes Job and appears in
+the operational Inbox for operators allowed to decide it. Approval releases
+that existing Run to ordinary scheduling at its exact accepted commit;
+rejection finishes it as canceled. Removing `review` from the trigger restores
+direct automatic execution.
 
 Action map keys such as `preview` and `apply` remain the stable names used by
 the CLI, API, triggers, and artifact references. Optional `title`, `description`,
@@ -89,6 +99,6 @@ ServiceAccount for repositories or actions that should not have that access.
 The runtime image is an illustrative placeholder and must be replaced with an
 image containing pyinfra, Terraform, kubectl, the MinIO client (`mc`), Bash,
 and SSH. The RustFS state bucket must also be bootstrapped before the
-remote-backend workflow can run. Those details, the omitted workload source,
-and action approvals are outside this example; the checked-in catalog is
-covered by a Go test.
+remote-backend workflow can run. Those deployment details and the omitted
+workload source are outside this example; the checked-in catalog is covered by
+a Go test.

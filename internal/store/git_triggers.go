@@ -41,7 +41,11 @@ func createGitTriggerDeliveries(
 					continue
 				}
 
-				parameters, err := json.Marshal(trigger.Parameters)
+				triggerParameters := trigger.Parameters
+				if triggerParameters == nil {
+					triggerParameters = map[string]any{}
+				}
+				parameters, err := json.Marshal(triggerParameters)
 				if err != nil {
 					return fmt.Errorf(
 						"marshal Git-trigger delivery parameters for target %q action %q trigger %q: %w",

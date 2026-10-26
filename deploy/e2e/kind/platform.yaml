@@ -77,7 +77,6 @@ spec:
               readOnly: true
             - name: repository
               mountPath: /srv
-              readOnly: true
             - name: sshd-config
               mountPath: /etc/ssh/acceptance
               readOnly: true

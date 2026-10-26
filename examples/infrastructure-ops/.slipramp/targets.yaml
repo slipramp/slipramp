@@ -85,6 +85,10 @@ spec:
     sync:
       intent: reconcile
       command: [./slipramp.sh, sync]
+      triggers:
+        - name: sync-on-change
+          git: {}
+          review: required
 ---
 apiVersion: slipramp.com/v1alpha1
 kind: Target

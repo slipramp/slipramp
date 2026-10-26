@@ -4,11 +4,12 @@ Slipramp is a GitOps-driven infrastructure control plane for homelabs and small
 teams. Connect a Git repository, discover versioned Targets and Actions, and
 execute exact commits as Kubernetes Jobs across one or more Clusters.
 
-Slipramp supports manual/API Runs, named Git triggers, live and retained logs,
-declared artifacts, pinned preview/apply flows, OIDC/API-key authentication, and
-optional Kargo Stage inventory, operator-started Promotions, and Promotion
-reviews with Git and Argo CD diffs. Its Server has no Kubernetes access;
-in-cluster Controllers manage execution through outbound HTTP.
+Slipramp supports manual/API Runs, named Git triggers, optional Run review,
+live and retained logs, declared artifacts, pinned preview/apply flows,
+OIDC/API-key authentication, and optional Kargo Stage inventory,
+operator-started Promotions, and Promotion reviews with Git and Argo CD diffs.
+Its Server has no Kubernetes access; in-cluster Controllers manage execution
+through outbound HTTP.
 
 Named Git-trigger deliveries retry Run creation with durable exponential backoff:
 five seconds initially, doubling to a five-minute cap, with terminal failure on
@@ -18,6 +19,14 @@ supersede pending retries; terminal failures remain history. Creating the Run
 and linking its delivery is one PostgreSQL transaction. Delivery retries only
 create the immutable Run; Slipramp never implicitly retries the resulting
 infrastructure command.
+
+A named Git trigger may set `review: required`. Its Run remains queued and
+cannot produce a Job until an operator approves it from the Inbox or Run
+detail. Approval executes the existing Run at its exact accepted commit;
+rejection finishes it as canceled. The setting applies only to that trigger:
+manual and API Runs remain directly runnable, and omitting `review` preserves
+automatic execution. API keys deciding reviews require
+`slipramp:runs:write`.
 
 The Inbox shows terminal Git-trigger failures with Target/Action context and
 safe diagnostics. The authenticated read API

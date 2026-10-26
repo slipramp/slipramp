@@ -591,6 +591,60 @@ func TestGitRunCreationRejectsRefreshRaceAtDatabaseBoundaryIntegration(t *testin
 	assertRunCounts(t, database, 0, 0)
 }
 
+func TestGitTriggerDeliveryWithoutParametersIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1650")
+	createdAt := time.Date(2026, time.October, 20, 12, 0, 0, 0, time.UTC)
+	_, err := database.CreateRepository(ctx, repository.Repository{
+		ID:             repositoryID,
+		Name:           "parameterless-git-trigger",
+		CloneURL:       "https://github.com/example/parameterless-git-trigger.git",
+		Branch:         "main",
+		CommitIndexing: repository.CommitIndexingObservedHeads,
+		CreatedAt:      createdAt,
+	})
+	if err != nil {
+		t.Fatalf("CreateRepository() error = %v", err)
+	}
+
+	parameterlessCatalog := gitTriggeredCatalog()
+	action := parameterlessCatalog.Targets[0].Spec.Actions["sync"]
+	action.Parameters = nil
+	action.Triggers[0].Parameters = nil
+	parameterlessCatalog.Targets[0].Spec.Actions["sync"] = action
+
+	initial := successfulCatalogRefresh(
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		createdAt.Add(time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1651"),
+	)
+	initial.Revision.Catalog = parameterlessCatalog
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, initial); err != nil {
+		t.Fatalf("record initial catalog: %v", err)
+	}
+
+	matching := successfulCatalogRefresh(
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		createdAt.Add(2*time.Minute),
+		uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1652"),
+	)
+	matching.ChangedPaths = []string{"infrastructure/network/main.tf"}
+	matching.Revision.Catalog = parameterlessCatalog
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, matching); err != nil {
+		t.Fatalf("record matching catalog: %v", err)
+	}
+
+	delivery, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("GetEligibleGitTriggerDelivery() error = %v", err)
+	}
+	if delivery.Parameters == nil || len(delivery.Parameters) != 0 {
+		t.Fatalf("delivery parameters = %#v, want empty object", delivery.Parameters)
+	}
+}
+
 func gitTriggeredCatalog() catalog.Catalog {
 	return gitTriggeredCatalogWithEnvironment("production")
 }

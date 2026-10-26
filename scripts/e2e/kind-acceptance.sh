@@ -271,13 +271,12 @@ create_run() {
   local idempotency_key=$4
   local body
   body=$(jq -cn \
-    --arg repositoryId "$repository_id" \
+    --arg targetId "$target_id" \
     --arg action "$action" \
     --argjson parameters "$parameters" \
     --argjson inputs "$inputs" \
     '{
-      repositoryId: $repositoryId,
-      target: "acceptance",
+      targetId: $targetId,
       action: $action,
       parameters: $parameters,
       inputs: $inputs
@@ -293,6 +292,7 @@ create_run() {
 }
 
 wait_for_repository() {
+  local expected_commit=$1
   local deadline=$((SECONDS + timeout_seconds))
   local response status commit
   while ((SECONDS < deadline)); do
@@ -301,14 +301,43 @@ wait_for_repository() {
         '.items[] | select(.id == $id) | .refresh.status' <<<"$response")
       commit=$(jq -r --arg id "$repository_id" \
         '.items[] | select(.id == $id) | .refresh.commit.sha // ""' <<<"$response")
-      if [[ "$status" == succeeded && "$commit" == "$fixture_commit" ]]; then
+      if [[ "$status" == succeeded && "$commit" == "$expected_commit" ]]; then
         return 0
       fi
     fi
     sleep 1
   done
 
-  printf 'repository did not refresh commit %s\n' "$fixture_commit" >&2
+  printf 'repository did not refresh commit %s\n' "$expected_commit" >&2
+  printf '%s\n' "${response:-no response}" >&2
+  return 1
+}
+
+wait_for_pending_review_run() {
+  local commit=$1
+  local deadline=$((SECONDS + timeout_seconds))
+  local response run_id
+  while ((SECONDS < deadline)); do
+    if response=$(api_get \
+      "/api/v1/runs?repositoryId=$repository_id&commitSha=$commit&limit=100" \
+      2>/dev/null); then
+      run_id=$(jq -r --arg commit "$commit" '
+        [.items[] | select(
+          .commit.sha == $commit and
+          .source.type == "git" and
+          .source.git.triggerName == "review-on-change" and
+          .review.state == "pending"
+        )][0].id // ""
+      ' <<<"$response")
+      if [[ -n "$run_id" ]]; then
+        printf '%s\n' "$run_id"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+
+  printf 'pending review Run did not appear for commit %s\n' "$commit" >&2
   printf '%s\n' "${response:-no response}" >&2
   return 1
 }
@@ -371,6 +400,40 @@ cancel_run() {
   curl --fail --silent --show-error -X POST \
     -H "Authorization: Bearer $product_api_key" \
     "$server_url/api/v1/runs/$run_id/cancel" >/dev/null
+}
+
+decide_run_review() {
+  local run_id=$1
+  local decision=$2
+  curl --fail-with-body --silent --show-error \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $product_api_key" \
+    --data "{\"decision\":\"$decision\"}" \
+    "$server_url/api/v1/runs/$run_id/review"
+}
+
+update_repository_head() {
+  local commit=$1
+  "${kubectl_command[@]}" -n "$system_namespace" exec \
+    deployment/acceptance-git -c git -- \
+    git --git-dir=/srv/repository.git update-ref refs/heads/main "$commit"
+}
+
+assert_pending_review_not_dispatched() {
+  local run_id=$1
+  local response jobs
+
+  sleep 3
+  response=$(api_get "/api/v1/runs/$run_id")
+  jq -e '
+    .phase == "queued" and
+    .review.state == "pending" and
+    (.jobUid == null)
+  ' <<<"$response" >/dev/null
+
+  jobs=$("${kubectl_command[@]}" -n "$run_namespace" get jobs \
+    -l "slipramp.com/run-id=$run_id" -o name)
+  test -z "$jobs"
 }
 
 artifact_id() {
@@ -475,6 +538,15 @@ candidate_commit=$(git -C "$fixture_directory" rev-parse HEAD)
 git -C "$fixture_directory" branch kargo/promotion/acceptance-operator
 git -C "$fixture_directory" branch kargo/promotion/acceptance-automatic
 git -C "$fixture_directory" branch kargo/promotion/acceptance-guarded
+git -C "$fixture_directory" checkout --quiet main
+git -C "$fixture_directory" checkout --quiet -b acceptance/run-review-approved
+printf 'approved\n' >"$fixture_directory/scripts/review.txt"
+git -C "$fixture_directory" commit --quiet -am 'Approved Run review fixture'
+approved_review_commit=$(git -C "$fixture_directory" rev-parse HEAD)
+git -C "$fixture_directory" checkout --quiet -b acceptance/run-review-rejected
+printf 'rejected\n' >"$fixture_directory/scripts/review.txt"
+git -C "$fixture_directory" commit --quiet -am 'Rejected Run review fixture'
+rejected_review_commit=$(git -C "$fixture_directory" rev-parse HEAD)
 git -C "$fixture_directory" checkout --quiet main
 git -C "$fixture_directory" bundle create \
   "$temporary_directory/repository.bundle" --all
@@ -635,7 +707,7 @@ repository_response=$(curl --fail-with-body --silent --show-error \
   }' \
   "$server_url/api/v1/repositories")
 repository_id=$(jq -er '.id' <<<"$repository_response")
-wait_for_repository
+wait_for_repository "$fixture_commit"
 
 catalog_response=$(api_get "/api/v1/repositories/$repository_id/catalog")
 jq -e --arg commit "$fixture_commit" '
@@ -643,6 +715,8 @@ jq -e --arg commit "$fixture_commit" '
   any(.targets[]; .metadata.name == "acceptance") and
   any(.runtimes[]; .metadata.name == "acceptance")
 ' <<<"$catalog_response" >/dev/null
+target_id=$(api_get "/api/v1/targets?repositoryId=$repository_id&limit=100" |
+  jq -er '.items[] | select(.name == "acceptance") | .id')
 
 log "running preview and checking idempotency"
 preview_parameters='{"message":"hello-kind"}'
@@ -708,6 +782,50 @@ wait_for_run_outcome "$server_recovery_run" succeeded
 assert_log_contains "$server_recovery_run" 'acceptance recovery completed'
 
 source "$repository_root/scripts/e2e/kargo-promotions.sh"
+
+log "testing approval and rejection of review-required Git Runs"
+update_repository_head "$approved_review_commit"
+wait_for_repository "$approved_review_commit"
+approved_review_run=$(wait_for_pending_review_run "$approved_review_commit")
+assert_pending_review_not_dispatched "$approved_review_run"
+api_get /api/v1/inbox |
+  jq -e --arg id "$approved_review_run" '
+    any(.decisions[];
+      .kind == "run-review" and
+      .destination.type == "run" and
+      .destination.id == $id
+    )
+  ' >/dev/null
+approved_review_response=$(decide_run_review "$approved_review_run" approved)
+jq -e --arg commit "$approved_review_commit" '
+  .commit.sha == $commit and
+  .source.type == "git" and
+  .review.state == "approved"
+' <<<"$approved_review_response" >/dev/null
+wait_for_run_outcome "$approved_review_run" succeeded
+assert_log_contains "$approved_review_run" 'acceptance reviewed Git run: approved'
+
+update_repository_head "$rejected_review_commit"
+wait_for_repository "$rejected_review_commit"
+rejected_review_run=$(wait_for_pending_review_run "$rejected_review_commit")
+assert_pending_review_not_dispatched "$rejected_review_run"
+rejected_review_response=$(decide_run_review "$rejected_review_run" rejected)
+jq -e --arg commit "$rejected_review_commit" '
+  .commit.sha == $commit and
+  .phase == "finished" and
+  .outcome == "canceled" and
+  .outcomeReason == "ReviewRejected" and
+  .review.state == "rejected"
+' <<<"$rejected_review_response" >/dev/null
+wait_for_run_outcome "$rejected_review_run" canceled
+wait_for_job_deletion "$rejected_review_run"
+api_get /api/v1/inbox |
+  jq -e --arg approved "$approved_review_run" --arg rejected "$rejected_review_run" '
+    all(.decisions[];
+      .kind != "run-review" or
+      (.destination.id != $approved and .destination.id != $rejected)
+    )
+  ' >/dev/null
 
 log "testing operational Inbox projection and personal acknowledgements"
 inbox_principal_id=$(curl --fail-with-body --silent --show-error \
@@ -778,3 +896,5 @@ printf 'Apply Run:         %s\n' "$apply_run"
 printf 'Canceled Run:      %s\n' "$cancel_run_id"
 printf 'Controller recovery Run: %s\n' "$controller_recovery_run"
 printf 'Server recovery Run:     %s\n' "$server_recovery_run"
+printf 'Approved review Run:      %s\n' "$approved_review_run"
+printf 'Rejected review Run:      %s\n' "$rejected_review_run"

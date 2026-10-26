@@ -63,4 +63,12 @@ func TestInfrastructureOpsExample(t *testing.T) {
 			catalog.ArtifactCompatibilityExactCatalogRevision,
 		)
 	}
+
+	syncAction, found := rustfs.EffectiveAction("sync")
+	if !found {
+		t.Fatal("rustfs sync action not found")
+	}
+	if len(syncAction.Triggers) != 1 || syncAction.Triggers[0].Review != catalog.TriggerReviewRequired {
+		t.Errorf("rustfs sync triggers = %#v, want one review-required trigger", syncAction.Triggers)
+	}
 }

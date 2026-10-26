@@ -15,6 +15,9 @@ It then verifies the accepted baseline end to end:
   including per-Principal acknowledgement isolation, persistence across a Web
   restart, decision preservation, and recurrence after Controller recovery;
 - idempotent manual Run creation and exact-commit checkout;
+- review-required Git Runs remaining undispatched until approval, approved Runs
+  executing their exact accepted commit, rejected Runs finishing as canceled
+  without a Job, and pending reviews appearing in the operational Inbox;
 - preview logs and a declared plan artifact downloaded through the web process;
 - promotion of that plan into an apply Run pinned to its commit and catalog
   revision;
