@@ -375,6 +375,7 @@ func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Datab
 	first := run.Run{
 		ID:                firstRunID,
 		Phase:             run.PhaseQueued,
+		Review:            run.Review{State: run.ReviewStateNotRequired},
 		TargetID:          targetRecord.ID,
 		RepositoryID:      repositoryID,
 		CatalogRevisionID: revisionID,

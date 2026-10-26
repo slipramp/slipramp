@@ -325,11 +325,18 @@ test("unfinished Runs never show a terminal mascot even with outcome data", () =
   }
 });
 
-test("queued activity explains that execution is waiting to start", () => {
-  const activity = runActivity({ phase: "queued" });
+test("queued activity distinguishes assignment from review waits", () => {
+  const assignment = runActivity({ phase: "queued", review: { state: "not-required" } });
+  const review = runActivity({ phase: "queued", review: { state: "pending" } });
 
-  assert.match(activity.title, /waiting/i);
-  assert.match(activity.description, /queued and waiting/i);
+  assert.match(assignment.title, /waiting/i);
+  assert.match(assignment.description, /queued and waiting/i);
+  assert.deepEqual(review, {
+    animation: "waiting",
+    title: "Waiting for approval",
+    description:
+      "This Git-triggered Run needs an operator's approval before it can be assigned to a Controller.",
+  });
 });
 
 test("unknown observations never claim current execution activity", () => {

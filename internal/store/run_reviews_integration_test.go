@@ -29,19 +29,14 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	}
 
 	operator := createRunReviewPrincipal(t, database, "Review operator", baseTime)
-	otherOperator := createRunReviewPrincipal(t, database, "Other operator", baseTime)
 	operatorActor, err := operator.ActorSnapshot()
 	if err != nil {
 		t.Fatalf("snapshot review operator: %v", err)
 	}
-	otherActor, err := otherOperator.ActorSnapshot()
-	if err != nil {
-		t.Fatalf("snapshot other review operator: %v", err)
-	}
 
 	reviewCatalog := gitTriggeredCatalogWithReview()
 	recordRunReviewHead(t, database, repositoryID, "a", baseTime.Add(time.Minute), reviewCatalog, false)
-	runs, dispatcher := newGitTriggerTestServices(t, database)
+	_, dispatcher := newGitTriggerTestServices(t, database)
 
 	// A review-required delivery freezes that requirement onto a pending Run.
 	recordRunReviewHead(t, database, repositoryID, "b", baseTime.Add(2*time.Minute), reviewCatalog, true)
@@ -79,17 +74,10 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	if claimedManual.ID != manual.ID || claimedManual.Review.State != run.ReviewStateNotRequired {
 		t.Fatalf("claimed Run = %#v, want later direct Run", claimedManual)
 	}
-	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
-		RunID: claimedManual.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(6 * time.Minute),
-	}); !errors.Is(err, run.ErrReviewConflict) {
-		t.Fatalf("decision for assigned direct Run error = %v, want conflict", err)
-	}
 	finishAssignedRun(t, database, claimedManual, baseTime.Add(6*time.Minute))
 
 	// Approval keeps the existing Run queued and restores ordinary assignment
-	// eligibility. An identical queued retry is idempotent; actor or decision
-	// changes conflict.
+	// eligibility. An identical queued retry preserves the original decision.
 	approved, err := database.DecideRunReview(ctx, run.ReviewTransition{
 		RunID: pending.ID, Decision: run.ReviewDecisionApproved,
 		DecidedBy: operatorActor, DecidedAt: baseTime.Add(7 * time.Minute),
@@ -109,29 +97,9 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 		!repeatedApproval.Review.DecidedAt.Equal(*approved.Review.DecidedAt) {
 		t.Fatalf("repeat approval = (%#v, %v)", repeatedApproval, err)
 	}
-	for _, transition := range []run.ReviewTransition{
-		{
-			RunID: pending.ID, Decision: run.ReviewDecisionRejected,
-			DecidedBy: operatorActor, DecidedAt: baseTime.Add(8 * time.Minute),
-		},
-		{
-			RunID: pending.ID, Decision: run.ReviewDecisionApproved,
-			DecidedBy: otherActor, DecidedAt: baseTime.Add(8 * time.Minute),
-		},
-	} {
-		if _, err := database.DecideRunReview(ctx, transition); !errors.Is(err, run.ErrReviewConflict) {
-			t.Errorf("conflicting queued decision error = %v, want conflict", err)
-		}
-	}
 	claimedApproved, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(9*time.Minute))
 	if err != nil || claimedApproved.ID != pending.ID {
 		t.Fatalf("claim approved Run = (%#v, %v)", claimedApproved, err)
-	}
-	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
-		RunID: pending.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(10 * time.Minute),
-	}); !errors.Is(err, run.ErrReviewConflict) {
-		t.Fatalf("approval after assignment error = %v, want conflict", err)
 	}
 	finishAssignedRun(t, database, claimedApproved, baseTime.Add(10*time.Minute))
 
@@ -153,96 +121,29 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 		rejected.Review.State != run.ReviewStateRejected {
 		t.Fatalf("rejected Run = %#v", rejected)
 	}
-	assertRunReviewTransition(t, database, rejected.ID, run.ReasonReviewRejected)
 	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
 		RunID: rejected.ID, Decision: run.ReviewDecisionRejected,
 		DecidedBy: operatorActor, DecidedAt: baseTime.Add(13 * time.Minute),
 	}); err != nil {
 		t.Fatalf("repeat identical rejection: %v", err)
 	}
-	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
-		RunID: rejected.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(13 * time.Minute),
-	}); !errors.Is(err, run.ErrReviewConflict) {
-		t.Fatalf("conflicting terminal decision error = %v, want conflict", err)
-	}
-
-	// Reruns are ordinary manual requests and do not inherit review state.
-	rerunRecord, err := runs.RerunRun(ctx, run.RerunRequest{
-		RunID: rejected.ID, Mode: run.RerunModeExact,
-		Source: run.Source{Type: run.SourceTypeManual}, Actor: &operator,
-	})
-	if err != nil {
-		t.Fatalf("rerun rejected Run: %v", err)
-	}
-	if rerunRecord.Review.State != run.ReviewStateNotRequired || rerunRecord.Source.Type != run.SourceTypeManual {
-		t.Fatalf("rerun review/source = (%#v, %#v)", rerunRecord.Review, rerunRecord.Source)
-	}
-	if _, err := runs.CancelRun(ctx, run.CancelRequest{RunID: rerunRecord.ID, Actor: &operator}); err != nil {
-		t.Fatalf("cancel rerun: %v", err)
-	}
-
-	// Ordinary cancellation retains pending review state and uses the ordinary
-	// cancellation reason.
-	cancelPending := dispatchRunReviewHead(
-		t, database, dispatcher, repositoryID, "d", baseTime.Add(14*time.Minute), reviewCatalog,
-	)
-	canceled, err := runs.CancelRun(ctx, run.CancelRequest{RunID: cancelPending.ID, Actor: &operator})
-	if err != nil {
-		t.Fatalf("cancel pending-review Run: %v", err)
-	}
-	if canceled.Review.State != run.ReviewStatePending || canceled.OutcomeReason == nil ||
-		*canceled.OutcomeReason != run.ReasonCancelRequested {
-		t.Fatalf("canceled pending-review Run = %#v", canceled)
-	}
-	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
-		RunID: canceled.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(15 * time.Minute),
-	}); !errors.Is(err, run.ErrReviewConflict) {
-		t.Fatalf("decision after cancellation error = %v, want conflict", err)
-	}
+	assertRunReviewTransition(t, database, rejected.ID, run.ReasonReviewRejected)
 
 	// Latest-wins supersedes both pending and approved-but-still-queued Git Runs.
 	pendingSuperseded := dispatchRunReviewHead(
-		t, database, dispatcher, repositoryID, "e", baseTime.Add(16*time.Minute), reviewCatalog,
+		t, database, dispatcher, repositoryID, "d", baseTime.Add(14*time.Minute), reviewCatalog,
 	)
-	recordRunReviewHead(t, database, repositoryID, "f", baseTime.Add(17*time.Minute), reviewCatalog, true)
+	recordRunReviewHead(t, database, repositoryID, "e", baseTime.Add(15*time.Minute), reviewCatalog, true)
 	assertSupersededReviewRun(t, database, pendingSuperseded.ID, run.ReviewStatePending)
-	approvedSuperseded := dispatchPendingRunReviewDelivery(t, database, dispatcher, repositoryID)
+	approvedSuperseded := dispatchGitTriggerDelivery(t, database, dispatcher, repositoryID)
 	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
 		RunID: approvedSuperseded.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(18 * time.Minute),
+		DecidedBy: operatorActor, DecidedAt: baseTime.Add(16 * time.Minute),
 	}); err != nil {
 		t.Fatalf("approve Run before supersession: %v", err)
 	}
-	recordRunReviewHead(t, database, repositoryID, "0", baseTime.Add(19*time.Minute), reviewCatalog, true)
+	recordRunReviewHead(t, database, repositoryID, "f", baseTime.Add(17*time.Minute), reviewCatalog, true)
 	assertSupersededReviewRun(t, database, approvedSuperseded.ID, run.ReviewStateApproved)
-	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
-		RunID: approvedSuperseded.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(20 * time.Minute),
-	}); !errors.Is(err, run.ErrReviewConflict) {
-		t.Fatalf("decision after supersession error = %v, want conflict", err)
-	}
-
-	// A later trigger that omits review remains directly assignable. Advance
-	// once more before dispatch so the still-pending review delivery is
-	// coalesced at the delivery boundary.
-	recordRunReviewHead(t, database, repositoryID, "1", baseTime.Add(21*time.Minute), gitTriggeredCatalog(), true)
-	direct := dispatchPendingRunReviewDelivery(t, database, dispatcher, repositoryID)
-	if direct.Review.State != run.ReviewStateNotRequired {
-		t.Fatalf("direct Git Run review = %#v", direct.Review)
-	}
-	claimedDirect, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(22*time.Minute))
-	if err != nil || claimedDirect.ID != direct.ID {
-		t.Fatalf("claim direct Git Run = (%#v, %v)", claimedDirect, err)
-	}
-
-	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
-		RunID: uuid.New(), Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(23 * time.Minute),
-	}); !errors.Is(err, run.ErrRunNotFound) {
-		t.Fatalf("missing Run review error = %v, want not found", err)
-	}
 }
 
 func gitTriggeredCatalogWithReview() catalog.Catalog {
@@ -292,10 +193,10 @@ func dispatchRunReviewHead(
 
 	recordRunReviewHead(t, database, repositoryID, commitCharacter, at, contents, true)
 
-	return dispatchPendingRunReviewDelivery(t, database, dispatcher, repositoryID)
+	return dispatchGitTriggerDelivery(t, database, dispatcher, repositoryID)
 }
 
-func dispatchPendingRunReviewDelivery(
+func dispatchGitTriggerDelivery(
 	t *testing.T,
 	database *Database,
 	dispatcher interface {

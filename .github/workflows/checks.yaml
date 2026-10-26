@@ -56,6 +56,10 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - uses: docker/setup-compose-action@v2
+        with:
+          version: v5.6.1
+
       - name: Install Task
         run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
 

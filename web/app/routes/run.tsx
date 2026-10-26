@@ -47,6 +47,7 @@ import { createServerAPIClient } from "~/api/client.server";
 import {
   cancelRun,
   createRun,
+  decideRunReview,
   getCurrentPrincipal,
   getRun,
   getTarget,
@@ -75,13 +76,6 @@ import {
 } from "~/display";
 import { pageTitle } from "~/page-title";
 import { runActivity, runResultActivity } from "~/execution-activity";
-import {
-  canWriteRuns,
-  runReviewActionsAvailable,
-  runReviewDecisionAttribution,
-  runReviewLabel,
-} from "~/run-review";
-import { submitRunReviewDecision } from "~/run-review.server";
 import { runStatusColor, runStatusLabel } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 import { targetFilterPath } from "~/target-filter";
@@ -130,16 +124,22 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
   if (intent === "approve-review" || intent === "reject-review") {
-    const result = await submitRunReviewDecision(
-      createServerAPIClient(request, context),
-      params.runId,
-      intent,
-    );
-    if (result.run) {
-      return redirect(`/runs/${result.run.id}`);
+    const result = await decideRunReview({
+      body: { decision: intent === "approve-review" ? "approved" : "rejected" },
+      client: createServerAPIClient(request, context),
+      path: { runId: params.runId },
+    });
+    if (result.data) {
+      return redirect(`/runs/${result.data.id}`);
     }
 
-    return { conflict: result.conflict, error: result.error };
+    return {
+      conflict: result.response?.status === 409,
+      error:
+        result.error?.detail ??
+        result.error?.title ??
+        "The Run review decision could not be recorded.",
+    };
   }
 
   if (intent === "cancel") {
@@ -254,7 +254,8 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     (navigation.formData?.get("intent") === "rerun-exact" ||
       navigation.formData?.get("intent") === "rerun-latest");
   const hasArtifactInputs = Object.keys(run.inputs).length > 0;
-  const canWrite = canWriteRuns(loaderData.principal);
+  const canWrite =
+    loaderData.principal?.role === "operator" || loaderData.principal?.role === "admin";
   const actionConflict =
     actionData !== undefined && "conflict" in actionData && actionData.conflict === true;
   return (
@@ -500,9 +501,17 @@ function RunReviewPanel({ canWrite, run }: Readonly<{ canWrite: boolean; run: Ru
   const navigation = useNavigation();
   if (run.review.state === "not-required") return null;
 
-  const attribution = runReviewDecisionAttribution(run.review);
-  const canDecide = runReviewActionsAvailable(run, canWrite);
   const pending = run.review.state === "pending";
+  const canDecide = canWrite && pending && run.phase === "queued";
+  const decision =
+    !pending && run.review.decidedBy && run.review.decidedAt
+      ? { at: run.review.decidedAt, by: run.review.decidedBy }
+      : undefined;
+  const reviewLabel = pending
+    ? "Awaiting review"
+    : run.review.state === "approved"
+      ? "Approved"
+      : "Rejected";
 
   return (
     <Alert
@@ -515,13 +524,15 @@ function RunReviewPanel({ canWrite, run }: Readonly<{ canWrite: boolean; run: Ru
             color={pending ? "yellow" : run.review.state === "approved" ? "green" : "red"}
             variant="light"
           >
-            {runReviewLabel(run.review)}
+            {reviewLabel}
           </Badge>
-          {attribution ? (
+          {decision ? (
             <>
-              <Text size="sm">{attribution.text}</Text>
+              <Text size="sm">
+                {reviewLabel} by {decision.by.displayName}
+              </Text>
               <Text c="dimmed">·</Text>
-              <Timestamp size="sm" value={attribution.decidedAt} />
+              <Timestamp size="sm" value={decision.at} />
             </>
           ) : null}
         </Group>

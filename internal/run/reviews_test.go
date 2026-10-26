@@ -18,8 +18,11 @@ func TestValidateReviewTransition(t *testing.T) {
 		Kind:        productidentity.KindUser,
 		DisplayName: "Ada Lovelace",
 	}
+	otherActor := actor
+	otherActor.PrincipalID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501")
 	decidedAt := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
 	approved := ReviewTransition{Decision: ReviewDecisionApproved, DecidedBy: actor, DecidedAt: decidedAt}
+	rejected := ReviewTransition{Decision: ReviewDecisionRejected, DecidedBy: actor, DecidedAt: decidedAt}
 
 	tests := []struct {
 		name       string
@@ -40,6 +43,13 @@ func TestValidateReviewTransition(t *testing.T) {
 			transition: approved,
 		},
 		{
+			name: "identical repeated rejection",
+			state: ReviewTransitionState{Phase: PhaseFinished, Review: Review{
+				State: ReviewStateRejected, DecidedBy: &actor, DecidedAt: &decidedAt,
+			}},
+			transition: rejected,
+		},
+		{
 			name: "different repeated decision",
 			state: ReviewTransitionState{Phase: PhaseQueued, Review: Review{
 				State: ReviewStateApproved, DecidedBy: &actor, DecidedAt: &decidedAt,
@@ -50,11 +60,29 @@ func TestValidateReviewTransition(t *testing.T) {
 			want: ErrReviewConflict,
 		},
 		{
+			name: "different deciding Principal",
+			state: ReviewTransitionState{Phase: PhaseQueued, Review: Review{
+				State: ReviewStateApproved, DecidedBy: &actor, DecidedAt: &decidedAt,
+			}},
+			transition: ReviewTransition{
+				Decision: ReviewDecisionApproved, DecidedBy: otherActor, DecidedAt: decidedAt,
+			},
+			want: ErrReviewConflict,
+		},
+		{
 			name: "approved then assigned",
 			state: ReviewTransitionState{Phase: PhaseAssigned, Review: Review{
 				State: ReviewStateApproved, DecidedBy: &actor, DecidedAt: &decidedAt,
 			}},
 			transition: approved,
+			want:       ErrReviewConflict,
+		},
+		{
+			name: "rejected without terminal transition",
+			state: ReviewTransitionState{Phase: PhaseQueued, Review: Review{
+				State: ReviewStateRejected, DecidedBy: &actor, DecidedAt: &decidedAt,
+			}},
+			transition: rejected,
 			want:       ErrReviewConflict,
 		},
 		{

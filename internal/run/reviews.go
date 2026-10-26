@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -48,7 +49,12 @@ func (s *Service) DecideRunReview(ctx context.Context, request ReviewDecisionReq
 		DecidedAt: s.now().UTC(),
 	})
 	if err != nil {
-		return Run{}, err
+		switch {
+		case errors.Is(err, ErrRunNotFound), errors.Is(err, ErrReviewConflict):
+			return Run{}, err
+		default:
+			return Run{}, fmt.Errorf("decide Run review: %w", err)
+		}
 	}
 
 	return record, nil
@@ -66,12 +72,21 @@ func ValidateReviewTransition(current ReviewTransitionState, transition ReviewTr
 	}
 
 	if current.Review.State == ReviewStateApproved || current.Review.State == ReviewStateRejected {
-		matchesExisting := current.Review.DecidedBy != nil &&
-			current.Review.State == ReviewState(transition.Decision) &&
-			current.Review.DecidedBy.PrincipalID == transition.DecidedBy.PrincipalID
-		if matchesExisting &&
-			(current.Review.State == ReviewStateRejected || current.Phase == PhaseQueued) {
-			return nil
+		if current.Review.DecidedBy == nil || current.Review.DecidedAt == nil ||
+			current.Review.State != ReviewState(transition.Decision) ||
+			current.Review.DecidedBy.PrincipalID != transition.DecidedBy.PrincipalID {
+			return ErrReviewConflict
+		}
+
+		switch current.Review.State {
+		case ReviewStateApproved:
+			if current.Phase == PhaseQueued {
+				return nil
+			}
+		case ReviewStateRejected:
+			if current.Phase == PhaseFinished {
+				return nil
+			}
 		}
 
 		return ErrReviewConflict
