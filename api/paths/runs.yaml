@@ -4,8 +4,8 @@ runs:
     summary: List recent Runs
     description: >-
       Lists Runs in descending creation order with offset pagination.
-      Repository, commit, input artifact, target, and cluster filters scope
-      execution history.
+      Repository, commit, input artifact, target, cluster, phase, and review
+      state filters scope execution history.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -55,6 +55,12 @@ runs:
         schema:
           type: string
           enum: [queued, assigned, preparing, running, finished]
+      - name: reviewState
+        in: query
+        required: false
+        description: Limit results to one Run review state.
+        schema:
+          $ref: ../components/runs.yaml#/RunReviewState
       - name: limit
         in: query
         required: false
@@ -410,7 +416,8 @@ decideRunReview:
     description: >-
       Approves or rejects a queued Git-triggered Run awaiting review. Approval
       makes the existing Run eligible for ordinary FIFO assignment. Rejection
-      finishes it as canceled.
+      finishes it as canceled. An optional comment is recorded immutably with
+      the decision.
     security:
       - ProductSession: []
       - ProductBearer: []

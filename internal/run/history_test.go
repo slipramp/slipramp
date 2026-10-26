@@ -26,6 +26,7 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 			InputArtifactID: &inputArtifactID,
 			ClusterName:     "colo",
 			Phase:           PhaseRunning,
+			ReviewState:     ReviewStatePending,
 		},
 	)
 	if err != nil {
@@ -43,8 +44,19 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 		*runs.listFilter.TargetID != testTargetID ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != PhaseRunning ||
+		runs.listFilter.ReviewState != ReviewStatePending ||
 		runs.listFilter.Limit != DefaultRunListLimit {
 		t.Errorf("ListRuns() filter = %#v", runs.listFilter)
+	}
+}
+
+func TestListRunsRejectsInvalidReviewState(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(context.Background(), RunListFilter{ReviewState: "waiting"})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
 	}
 }
 

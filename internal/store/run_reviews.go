@@ -53,6 +53,7 @@ func (d *Database) DecideRunReview(ctx context.Context, transition run.ReviewTra
 		ReviewDecidedByPrincipalID: decidedByPrincipalID,
 		ReviewDecidedBySnapshot:    decidedBySnapshot,
 		ReviewDecidedAt:            databaseTime(transition.DecidedAt),
+		ReviewComment:              transition.Comment,
 		ID:                         databaseUUID(transition.RunID),
 	})
 	if err != nil {

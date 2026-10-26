@@ -133,6 +133,7 @@ type CancelRequest struct {
 type ReviewDecisionRequest struct {
 	RunID    uuid.UUID
 	Decision ReviewDecision
+	Comment  *string
 	Actor    *productidentity.Principal
 }
 
@@ -151,6 +152,7 @@ type RunListFilter struct {
 	InputArtifactID *uuid.UUID
 	ClusterName     string
 	Phase           Phase
+	ReviewState     ReviewState
 	Limit           int32
 	Offset          int32
 }
@@ -212,6 +214,7 @@ type Review struct {
 	State     ReviewState
 	DecidedBy *productidentity.ActorSnapshot
 	DecidedAt *time.Time
+	Comment   *string
 }
 
 type Snapshot struct {

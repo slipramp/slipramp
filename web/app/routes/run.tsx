@@ -14,6 +14,7 @@ import {
   Switch,
   Table,
   Text,
+  Textarea,
   Timeline,
   Title,
 } from "@mantine/core";
@@ -74,6 +75,7 @@ import {
   formatElapsedDuration,
   shortIdentifier,
 } from "~/display";
+import { optionalFormValue } from "~/form-data";
 import { pageTitle } from "~/page-title";
 import { runActivity, runResultActivity } from "~/execution-activity";
 import { runStatusColor, runStatusLabel } from "~/run-status";
@@ -124,8 +126,9 @@ export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
   if (intent === "approve-review" || intent === "reject-review") {
+    const comment = optionalFormValue(formData, "comment");
     const result = await decideRunReview({
-      body: { decision: intent === "approve-review" ? "approved" : "rejected" },
+      body: { comment, decision: intent === "approve-review" ? "approved" : "rejected" },
       client: createServerAPIClient(request, context),
       path: { runId: params.runId },
     });
@@ -555,40 +558,55 @@ function RunReviewPanel({ canWrite, run }: Readonly<{ canWrite: boolean; run: Ru
           <Text size="sm">Rejection canceled this Run before it was assigned.</Text>
         )}
 
+        {run.review.comment ? (
+          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+            {run.review.comment}
+          </Text>
+        ) : null}
+
         {canDecide ? (
-          <Group gap="sm">
-            <Form method="post">
-              <input name="intent" type="hidden" value="reject-review" />
-              <Button
-                color="red"
-                leftSection={<IconX aria-hidden size={16} />}
-                loading={
-                  navigation.state === "submitting" &&
-                  navigation.formData?.get("intent") === "reject-review"
-                }
-                size="compact-md"
-                type="submit"
-                variant="light"
-              >
-                Reject
-              </Button>
-            </Form>
-            <Form method="post">
-              <input name="intent" type="hidden" value="approve-review" />
-              <Button
-                color="green"
-                leftSection={<IconCheck aria-hidden size={16} />}
-                loading={
-                  navigation.state === "submitting" &&
-                  navigation.formData?.get("intent") === "approve-review"
-                }
-                size="compact-md"
-                type="submit"
-              >
-                Approve
-              </Button>
-            </Form>
-          </Group>
+          <Form method="post" style={{ width: "100%" }}>
+            <Stack gap="sm">
+              <Textarea
+                label="Comment"
+                maxLength={4096}
+                minRows={3}
+                name="comment"
+                placeholder="Optional context for the immutable decision"
+              />
+              <Group gap="sm" justify="flex-end">
+                <Button
+                  color="red"
+                  leftSection={<IconX aria-hidden size={16} />}
+                  loading={
+                    navigation.state === "submitting" &&
+                    navigation.formData?.get("intent") === "reject-review"
+                  }
+                  name="intent"
+                  size="compact-md"
+                  type="submit"
+                  value="reject-review"
+                  variant="light"
+                >
+                  Reject
+                </Button>
+                <Button
+                  color="green"
+                  leftSection={<IconCheck aria-hidden size={16} />}
+                  loading={
+                    navigation.state === "submitting" &&
+                    navigation.formData?.get("intent") === "approve-review"
+                  }
+                  name="intent"
+                  size="compact-md"
+                  type="submit"
+                  value="approve-review"
+                >
+                  Approve
+                </Button>
+              </Group>
+            </Stack>
+          </Form>
         ) : pending && run.phase === "queued" && !canWrite ? (
           <Text c="dimmed" size="sm">
             Operator permission is required to decide this Run review.

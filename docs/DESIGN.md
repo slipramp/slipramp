@@ -313,30 +313,33 @@ required. Run creation snapshots that requirement as Run-owned review state.
 A review-required Git Run remains `queued` with review state `pending` and is
 ineligible for assignment. Review state is orthogonal to lifecycle phase and
 outcome: `not-required`, `pending`, `approved`, or `rejected`. Approval records
-one immutable Principal-attributed decision and makes the existing queued Run
-eligible for ordinary FIFO assignment; it does not assign or execute the Run.
-Rejection atomically records the decision and finishes the undispatched Run as
+one immutable Principal-attributed decision, including an optional comment of
+up to 4,096 characters, and makes the existing queued Run eligible for ordinary
+FIFO assignment; it does not assign or execute the Run. Rejection atomically
+records the decision and optional comment and finishes the undispatched Run as
 `canceled` with reason `ReviewRejected`. The operator role and
 `slipramp:runs:write` API-key scope decide reviews in this first slice.
 
 Review decisions are accepted only for queued pending Runs. Repeating the same
-decision by the same Principal is idempotent while an approval remains queued;
-a rejected decision is also idempotent because its own transition finishes the
-Run. A different decision or Principal, or a decision after cancellation,
-supersession, assignment, or another terminal transition, conflicts. Ordinary
-cancellation retains `CancelRequested`. Exact and latest reruns are ordinary
-manual or API requests and do not inherit the parent Run's review requirement
-or decision.
+decision, Principal, and comment is idempotent while an approval remains
+queued; a rejected decision is also idempotent because its own transition
+finishes the Run. A different decision, Principal, or comment, or a decision
+after cancellation, supersession, assignment, or another terminal transition,
+conflicts. Ordinary cancellation retains `CancelRequested`. Exact and latest
+reruns are ordinary manual or API requests and do not inherit the parent Run's
+review requirement or decision. Run history supports an exact review-state
+filter, including a stable `reviewState=pending` URL for operational review
+lists.
 
 The Web Run detail presents pending review separately from execution state and
 offers operator-only Approve and Reject controls alongside ordinary Run
 cancellation. It retains the deciding Principal and time for approved and
-rejected Runs. Run history and recent-Run tables label queued pending Runs as
-awaiting review; after approval they return to their ordinary queued or active
-execution presentation. The operational Inbox includes queued pending Runs for
-Principals authorized to decide them and links to the Run detail. A decision
-conflict refreshes the canonical Run while retaining the API diagnostic for the
-operator.
+rejected Runs and displays any immutable decision comment. Run history and
+recent-Run tables label queued pending Runs as awaiting review; after approval
+they return to their ordinary queued or active execution presentation. The
+operational Inbox includes queued pending Runs for Principals authorized to
+decide them and links to the Run detail. A decision conflict refreshes the
+canonical Run while retaining the API diagnostic for the operator.
 
 Automatic Git work uses latest-wins coalescing per Repository and Target. When
 an affected Target's desired commit advances or the Target is archived, the
@@ -1103,7 +1106,9 @@ desired relevance commit, separate last-attempted and last-successful sync Run
 checkpoints, their frozen markers and lifecycle facts, and a factual
 `matched`/`different`/`unknown` comparison. The Target page links those Runs and
 commits, keeps a latest failure visible beside an earlier matching success, and
-shows archived checkpoints without a convergence claim.
+shows archived checkpoints without a convergence claim. The Target index shows
+the current factual comparison only for active Targets that define the technical
+`sync` Action; Targets without `sync` have no reconciliation status to present.
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 

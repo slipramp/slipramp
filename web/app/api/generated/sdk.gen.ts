@@ -931,7 +931,7 @@ export const downloadRunInput = <ThrowOnError extends boolean = false>(
 /**
  * List recent Runs
  *
- * Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
+ * Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
  */
 export const listRuns = <ThrowOnError extends boolean = false>(
   options?: Options<ListRunsData, ThrowOnError>,
@@ -1062,7 +1062,7 @@ export const rerunRun = <ThrowOnError extends boolean = false>(
 /**
  * Decide a Run review
  *
- * Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+ * Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
  */
 export const decideRunReview = <ThrowOnError extends boolean = false>(
   options: Options<DecideRunReviewData, ThrowOnError>,

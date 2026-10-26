@@ -36,6 +36,7 @@ func (h *Handler) DecideRunReview(
 	record, err := h.runs.DecideRunReview(ctx, run.ReviewDecisionRequest{
 		RunID:    request.RunID,
 		Decision: run.ReviewDecision(request.Body.Decision),
+		Comment:  request.Body.Comment,
 		Actor:    currentProductPrincipal(ctx),
 	})
 	if err != nil {
@@ -169,6 +170,10 @@ func (h *Handler) ListRuns(
 	if request.Params.Phase != nil {
 		phase = run.Phase(*request.Params.Phase)
 	}
+	reviewState := run.ReviewState("")
+	if request.Params.ReviewState != nil {
+		reviewState = run.ReviewState(*request.Params.ReviewState)
+	}
 	commitSHA := ""
 	if request.Params.CommitSha != nil {
 		commitSHA = *request.Params.CommitSha
@@ -192,6 +197,7 @@ func (h *Handler) ListRuns(
 			InputArtifactID: request.Params.InputArtifactID,
 			ClusterName:     clusterName,
 			Phase:           phase,
+			ReviewState:     reviewState,
 			Limit:           limit,
 			Offset:          offset,
 		},
@@ -414,6 +420,7 @@ func runResponse(
 			State:     api.RunReviewState(record.Review.State),
 			DecidedBy: apiRunActor(record.Review.DecidedBy),
 			DecidedAt: record.Review.DecidedAt,
+			Comment:   record.Review.Comment,
 		},
 		Inputs:                  runInputResponse(record.Snapshot, commits),
 		ArtifactConsumers:       runArtifactConsumers(record.Snapshot),

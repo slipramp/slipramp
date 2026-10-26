@@ -2668,6 +2668,7 @@ type RunRerunMode string
 
 // RunReview defines model for RunReview.
 type RunReview struct {
+	Comment   *string        `json:"comment,omitempty"`
 	DecidedAt *time.Time     `json:"decidedAt,omitempty"`
 	DecidedBy *RunActor      `json:"decidedBy,omitempty"`
 	State     RunReviewState `json:"state"`
@@ -2678,6 +2679,8 @@ type RunReviewDecision string
 
 // RunReviewDecisionRequest defines model for RunReviewDecisionRequest.
 type RunReviewDecisionRequest struct {
+	// Comment Optional context recorded immutably with the decision.
+	Comment  *string           `json:"comment,omitempty"`
 	Decision RunReviewDecision `json:"decision"`
 }
 
@@ -3071,6 +3074,9 @@ type ListRunsParams struct {
 
 	// Phase Limit results to one durable lifecycle phase.
 	Phase *ListRunsParamsPhase `form:"phase,omitempty" json:"phase,omitempty"`
+
+	// ReviewState Limit results to one Run review state.
+	ReviewState *RunReviewState `form:"reviewState,omitempty" json:"reviewState,omitempty"`
 
 	// Limit Maximum number of recent Runs to return.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -3641,7 +3647,7 @@ type ClientInterface interface {
 
 	// ListRuns List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
 	//
 	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3708,7 +3714,7 @@ type ClientInterface interface {
 
 	// DecideRunReviewWithBody Decide a Run review
 	//
-	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3717,7 +3723,7 @@ type ClientInterface interface {
 
 	// DecideRunReview Decide a Run review
 	//
-	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4599,7 +4605,7 @@ func (c *Client) GetCommit(ctx context.Context, repositoryID openapi_types.UUID,
 
 // ListRuns List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
 //
 // Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4756,7 +4762,7 @@ func (c *Client) RerunRun(ctx context.Context, runID openapi_types.UUID, params 
 
 // DecideRunReviewWithBody Decide a Run review
 //
-// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4775,7 +4781,7 @@ func (c *Client) DecideRunReviewWithBody(ctx context.Context, runID openapi_type
 
 // DecideRunReview Decide a Run review
 //
-// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -7332,6 +7338,18 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
+		if params.ReviewState != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "reviewState", *params.ReviewState, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.Limit != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
@@ -9128,7 +9146,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListRunsWithResponse List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9205,7 +9223,7 @@ type ClientWithResponsesInterface interface {
 
 	// DecideRunReviewWithBodyWithResponse Decide a Run review
 	//
-	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9214,7 +9232,7 @@ type ClientWithResponsesInterface interface {
 
 	// DecideRunReviewWithResponse Decide a Run review
 	//
-	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+	// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -14585,7 +14603,7 @@ func (c *ClientWithResponses) GetCommitWithResponse(ctx context.Context, reposit
 
 // ListRunsWithResponse List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, and cluster filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -14716,7 +14734,7 @@ func (c *ClientWithResponses) RerunRunWithResponse(ctx context.Context, runID op
 
 // DecideRunReviewWithBodyWithResponse Decide a Run review
 //
-// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -14731,7 +14749,7 @@ func (c *ClientWithResponses) DecideRunReviewWithBodyWithResponse(ctx context.Co
 
 // DecideRunReviewWithResponse Decide a Run review
 //
-// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled.
+// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20719,6 +20737,19 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "phase"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "phase", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "reviewState" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "reviewState", r.URL.Query(), &params.ReviewState, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "reviewState"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "reviewState", Err: err})
 		}
 		return
 	}

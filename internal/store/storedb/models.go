@@ -352,6 +352,7 @@ type Run struct {
 	ReviewDecidedByPrincipalID pgtype.UUID
 	ReviewDecidedBySnapshot    []byte
 	ReviewDecidedAt            pgtype.Timestamptz
+	ReviewComment              *string
 }
 
 type RunArtifactInput struct {

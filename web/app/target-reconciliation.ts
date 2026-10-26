@@ -34,6 +34,13 @@ export function reconciliationPresentation(status: TargetReconciliationStatus, a
   }
 }
 
+export function activeTargetReconciliationPresentation(
+  actions: readonly string[],
+  status: TargetReconciliationStatus,
+) {
+  return actions.includes("sync") ? reconciliationPresentation(status, false) : undefined;
+}
+
 export function syncCheckpointResult(checkpoint: TargetSyncRunCheckpoint) {
   return checkpoint.outcome ?? checkpoint.phase;
 }

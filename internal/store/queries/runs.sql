@@ -102,6 +102,10 @@ AND (
     sqlc.narg(phase)::text IS NULL
     OR phase = sqlc.narg(phase)
 )
+AND (
+    sqlc.narg(review_state)::text IS NULL
+    OR review_state = sqlc.narg(review_state)
+)
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(result_limit)
 OFFSET sqlc.arg(result_offset);
@@ -137,6 +141,10 @@ AND (
 AND (
     sqlc.narg(phase)::text IS NULL
     OR phase = sqlc.narg(phase)
+)
+AND (
+    sqlc.narg(review_state)::text IS NULL
+    OR review_state = sqlc.narg(review_state)
 );
 
 -- name: CreateRunArtifactInput :execrows
@@ -188,6 +196,7 @@ SET review_state = sqlc.arg(review_state),
     review_decided_by_principal_id = sqlc.arg(review_decided_by_principal_id),
     review_decided_by_snapshot = sqlc.arg(review_decided_by_snapshot),
     review_decided_at = sqlc.arg(review_decided_at),
+    review_comment = sqlc.narg(review_comment),
     phase = CASE
         WHEN sqlc.arg(review_state)::text = 'rejected' THEN 'finished'
         ELSE phase

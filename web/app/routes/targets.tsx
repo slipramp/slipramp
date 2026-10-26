@@ -15,12 +15,13 @@ import { Link, redirect } from "react-router";
 
 import { actionRunPath } from "~/action-run";
 import { createServerAPIClient } from "~/api/client.server";
-import { listRepositories, listTargets } from "~/api/generated";
+import { listRepositories, listTargets, type TargetReconciliationStatus } from "~/api/generated";
 import { ListPagination, SearchParamFilters } from "~/components/list-controls";
 import { CommitReference } from "~/components/git-commit";
 import { EmptyState, PageHeader } from "~/components/page";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
+import { activeTargetReconciliationPresentation } from "~/target-reconciliation";
 
 import type { Route } from "./+types/targets";
 
@@ -163,13 +164,14 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
           ) : (
             <>
               <Paper withBorder>
-                <Table.ScrollContainer minWidth={900} type="native">
+                <Table.ScrollContainer minWidth={1080} type="native">
                   <Table highlightOnHover verticalSpacing="sm">
                     <Table.Thead>
                       <Table.Tr>
                         <Table.Th>Target</Table.Th>
                         <Table.Th>Runtime / placement</Table.Th>
                         <Table.Th>Last relevant change</Table.Th>
+                        <Table.Th>Sync reconciliation</Table.Th>
                         <Table.Th>Actions</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
@@ -232,6 +234,12 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
                             />
                           </Table.Td>
                           <Table.Td>
+                            <TargetReconciliationBadge
+                              actions={target.actions}
+                              status={target.reconciliation}
+                            />
+                          </Table.Td>
+                          <Table.Td>
                             <Menu position="bottom-start" shadow="md" width={220}>
                               <Menu.Target>
                                 <Button
@@ -276,6 +284,30 @@ export default function TargetIndex({ loaderData }: Route.ComponentProps) {
         </>
       )}
     </Stack>
+  );
+}
+
+function TargetReconciliationBadge({
+  actions,
+  status,
+}: Readonly<{
+  actions: readonly string[];
+  status: TargetReconciliationStatus;
+}>) {
+  const presentation = activeTargetReconciliationPresentation(actions, status);
+
+  if (!presentation) {
+    return (
+      <Text c="dimmed" size="sm">
+        —
+      </Text>
+    );
+  }
+
+  return (
+    <Badge color={presentation.color} title={presentation.description} variant="light">
+      {presentation.label}
+    </Badge>
   );
 }
 

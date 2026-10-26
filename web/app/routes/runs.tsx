@@ -39,6 +39,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const targetId = optionalSearchValue(url, "targetId");
   const cluster = optionalSearchValue(url, "cluster");
   const phase = optionalRunPhase(url.searchParams.get("phase"));
+  const reviewState = optionalRunReviewState(url.searchParams.get("reviewState"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const offset = (requestedPage - 1) * pageSize;
   const client = createServerAPIClient(request, context);
@@ -50,6 +51,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         limit: pageSize,
         offset,
         phase,
+        reviewState,
         repositoryId,
         targetId,
       },
@@ -70,6 +72,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       page: 1,
       phase,
       repositoryId,
+      reviewState,
       repositories: repositoriesResult.data?.items ?? [],
       runs: [],
       targetId,
@@ -96,6 +99,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     page: requestedPage,
     phase,
     repositoryId,
+    reviewState,
     repositories: repositoriesResult.data?.items ?? [],
     runs: initialRunsResult.data.items,
     targetId,
@@ -118,6 +122,7 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
         phase={loaderData.phase}
         repositoryId={loaderData.repositoryId}
         repositories={loaderData.repositories}
+        reviewState={loaderData.reviewState}
         targetId={loaderData.targetId}
       />
 
@@ -149,6 +154,7 @@ function HistoryFilters({
   phase,
   repositoryId,
   repositories,
+  reviewState,
   targetId,
 }: Readonly<{
   cluster?: string;
@@ -156,6 +162,7 @@ function HistoryFilters({
   phase?: Run["phase"];
   repositoryId?: string;
   repositories: Repository[];
+  reviewState?: Run["review"]["state"];
   targetId?: string;
 }>) {
   return (
@@ -209,6 +216,20 @@ function HistoryFilters({
           label: "Phase",
           name: "phase",
           value: phase,
+        },
+        {
+          active: Boolean(reviewState),
+          data: [
+            { label: "Any review state", value: "" },
+            { label: "Pending review", value: "pending" },
+            { label: "Approved", value: "approved" },
+            { label: "Rejected", value: "rejected" },
+            { label: "Not required", value: "not-required" },
+          ],
+          kind: "select",
+          label: "Review",
+          name: "reviewState",
+          value: reviewState,
         },
       ]}
     />
@@ -355,6 +376,18 @@ function optionalRunPhase(value: string | null): Run["phase"] | undefined {
     case "preparing":
     case "running":
     case "finished":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function optionalRunReviewState(value: string | null): Run["review"]["state"] | undefined {
+  switch (value) {
+    case "not-required":
+    case "pending":
+    case "approved":
+    case "rejected":
       return value;
     default:
       return undefined;

@@ -50,6 +50,9 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	if filter.Phase != "" && !validPhase(filter.Phase) {
 		return RunList{}, fmt.Errorf("%w: phase is invalid", ErrInvalidRequest)
 	}
+	if filter.ReviewState != "" && !validReviewState(filter.ReviewState) {
+		return RunList{}, fmt.Errorf("%w: review state is invalid", ErrInvalidRequest)
+	}
 	if filter.Limit == 0 {
 		filter.Limit = DefaultRunListLimit
 	}
@@ -66,6 +69,15 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	}
 
 	return records, nil
+}
+
+func validReviewState(state ReviewState) bool {
+	switch state {
+	case ReviewStateNotRequired, ReviewStatePending, ReviewStateApproved, ReviewStateRejected:
+		return true
+	default:
+		return false
+	}
 }
 
 func validPhase(phase Phase) bool {

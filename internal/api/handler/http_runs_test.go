@@ -346,7 +346,8 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		"/api/v1/runs?repositoryId="+repositoryID.String()+
 			"&commitSha=0123456789abcdef0123456789abcdef01234567"+
 			"&inputArtifactId="+inputArtifactID.String()+
-			"&targetId="+targetID.String()+"&cluster=colo&phase=running&limit=12&offset=4",
+			"&targetId="+targetID.String()+
+			"&cluster=colo&phase=running&reviewState=pending&limit=12&offset=4",
 		nil,
 	)
 	response := httptest.NewRecorder()
@@ -364,6 +365,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		runs.listFilter.TargetID == nil || *runs.listFilter.TargetID != targetID ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != run.PhaseRunning ||
+		runs.listFilter.ReviewState != run.ReviewStatePending ||
 		runs.listFilter.Limit != 12 ||
 		runs.listFilter.Offset != 4 {
 		t.Errorf("list filter = %#v", runs.listFilter)
@@ -520,6 +522,7 @@ func TestDecideRunReview(t *testing.T) {
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500")
 	decidedAt := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
+	comment := "Reviewed against change request 42."
 	runs := &recordingRunService{
 		reviewed: run.Run{
 			ID:         runID,
@@ -533,6 +536,7 @@ func TestDecideRunReview(t *testing.T) {
 					DisplayName: "Test administrator",
 				},
 				DecidedAt: &decidedAt,
+				Comment:   &comment,
 			},
 		},
 	}
@@ -540,7 +544,7 @@ func TestDecideRunReview(t *testing.T) {
 		context.Background(),
 		http.MethodPost,
 		"/api/v1/runs/"+runID.String()+"/review",
-		bytes.NewBufferString(`{"decision":"approved"}`),
+		bytes.NewBufferString(`{"decision":"approved","comment":"Reviewed against change request 42."}`),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -552,6 +556,7 @@ func TestDecideRunReview(t *testing.T) {
 	}
 	if runs.reviewRequest.RunID != runID ||
 		runs.reviewRequest.Decision != run.ReviewDecisionApproved ||
+		runs.reviewRequest.Comment == nil || *runs.reviewRequest.Comment != comment ||
 		runs.reviewRequest.Actor == nil {
 		t.Errorf("review request = %#v", runs.reviewRequest)
 	}
@@ -562,7 +567,8 @@ func TestDecideRunReview(t *testing.T) {
 	}
 	if result.Review.State != api.RunReviewStateApproved ||
 		result.Review.DecidedBy == nil || result.Review.DecidedBy.PrincipalID != principalID ||
-		result.Review.DecidedAt == nil || !result.Review.DecidedAt.Equal(decidedAt) {
+		result.Review.DecidedAt == nil || !result.Review.DecidedAt.Equal(decidedAt) ||
+		result.Review.Comment == nil || *result.Review.Comment != comment {
 		t.Errorf("review response = %#v", result.Review)
 	}
 }

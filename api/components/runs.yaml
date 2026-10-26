@@ -49,11 +49,17 @@ RunRerunMode:
 
 RunReviewDecisionRequest:
   type: object
+  additionalProperties: false
   required:
     - decision
   properties:
     decision:
       $ref: "#/RunReviewDecision"
+    comment:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Optional context recorded immutably with the decision.
 
 RunReview:
   type: object
@@ -67,6 +73,10 @@ RunReview:
     decidedAt:
       type: string
       format: date-time
+    comment:
+      type: string
+      minLength: 1
+      maxLength: 4096
 
 RunReviewState:
   type: string

@@ -56,6 +56,15 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	if pending.Phase != run.PhaseQueued || pending.Review.State != run.ReviewStatePending {
 		t.Fatalf("pending review Run = %#v", pending)
 	}
+	pendingPage, err := database.ListRuns(ctx, run.RunListFilter{
+		RepositoryID: &repositoryID,
+		ReviewState:  run.ReviewStatePending,
+		Limit:        10,
+	})
+	if err != nil || pendingPage.Total != 1 || len(pendingPage.Items) != 1 ||
+		pendingPage.Items[0].ID != pending.ID {
+		t.Fatalf("pending review Run filter = (%#v, %v)", pendingPage, err)
+	}
 	notificationPage, err := notifications.ListDeliveries(ctx, notification.DeliveryHistoryFilter{Limit: 25})
 	if err != nil || notificationPage.Total != 1 || len(notificationPage.Items) != 1 ||
 		notificationPage.Items[0].SubjectType != notification.SubjectTypeRun ||
@@ -91,24 +100,32 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 
 	// Approval keeps the existing Run queued and restores ordinary assignment
 	// eligibility. An identical queued retry preserves the original decision.
+	approvalComment := "Reviewed against change request 42."
 	approved, err := database.DecideRunReview(ctx, run.ReviewTransition{
 		RunID: pending.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(7 * time.Minute),
+		Comment: &approvalComment, DecidedBy: operatorActor, DecidedAt: baseTime.Add(7 * time.Minute),
 	})
 	if err != nil {
 		t.Fatalf("approve pending Run: %v", err)
 	}
 	if approved.Phase != run.PhaseQueued || approved.Review.State != run.ReviewStateApproved ||
-		approved.Review.DecidedBy == nil || approved.Review.DecidedBy.PrincipalID != operator.ID {
+		approved.Review.DecidedBy == nil || approved.Review.DecidedBy.PrincipalID != operator.ID ||
+		approved.Review.Comment == nil || *approved.Review.Comment != approvalComment {
 		t.Fatalf("approved Run = %#v", approved)
 	}
 	repeatedApproval, err := database.DecideRunReview(ctx, run.ReviewTransition{
 		RunID: pending.ID, Decision: run.ReviewDecisionApproved,
-		DecidedBy: operatorActor, DecidedAt: baseTime.Add(8 * time.Minute),
+		Comment: &approvalComment, DecidedBy: operatorActor, DecidedAt: baseTime.Add(8 * time.Minute),
 	})
 	if err != nil || repeatedApproval.Review.DecidedAt == nil || approved.Review.DecidedAt == nil ||
 		!repeatedApproval.Review.DecidedAt.Equal(*approved.Review.DecidedAt) {
 		t.Fatalf("repeat approval = (%#v, %v)", repeatedApproval, err)
+	}
+	if _, err := database.DecideRunReview(ctx, run.ReviewTransition{
+		RunID: pending.ID, Decision: run.ReviewDecisionApproved,
+		DecidedBy: operatorActor, DecidedAt: baseTime.Add(8 * time.Minute),
+	}); !errors.Is(err, run.ErrReviewConflict) {
+		t.Fatalf("change immutable approval comment: %v", err)
 	}
 	claimedApproved, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(9*time.Minute))
 	if err != nil || claimedApproved.ID != pending.ID {

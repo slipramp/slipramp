@@ -63,6 +63,11 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		value := string(filter.Phase)
 		phase = &value
 	}
+	var reviewState *string
+	if filter.ReviewState != "" {
+		value := string(filter.ReviewState)
+		reviewState = &value
+	}
 
 	query := storedb.ListRunsParams{
 		RepositoryID:    repositoryID,
@@ -71,6 +76,7 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
 		ClusterName:     clusterName,
 		Phase:           phase,
+		ReviewState:     reviewState,
 		ResultLimit:     filter.Limit,
 		ResultOffset:    filter.Offset,
 	}
@@ -88,6 +94,7 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
 		ClusterName:     clusterName,
 		Phase:           phase,
+		ReviewState:     reviewState,
 	})
 	if err != nil {
 		return run.RunList{}, fmt.Errorf("count Runs: %w", err)
@@ -429,6 +436,7 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 			State:     run.ReviewState(row.ReviewState),
 			DecidedBy: reviewDecidedBy,
 			DecidedAt: applicationTime(row.ReviewDecidedAt),
+			Comment:   row.ReviewComment,
 		},
 		CreatedAt:               row.CreatedAt.Time.UTC(),
 		AssignedAt:              applicationTime(row.AssignedAt),

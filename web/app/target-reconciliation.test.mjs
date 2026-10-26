@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  activeTargetReconciliationPresentation,
   reconciliationPresentation,
   syncCheckpointColor,
   syncCheckpointResult,
@@ -51,4 +52,15 @@ test("suppresses a convergence claim for archived targets", () => {
 
   assert.equal(presentation.label, "Historical checkpoints");
   assert.match(presentation.description, /no active convergence comparison/);
+});
+
+test("presents reconciliation on the target index only for targets with sync", () => {
+  assert.equal(
+    activeTargetReconciliationPresentation(["plan"], { comparison: "unknown" }),
+    undefined,
+  );
+  assert.equal(
+    activeTargetReconciliationPresentation(["plan", "sync"], { comparison: "different" })?.label,
+    "Desired commit differs",
+  );
 });

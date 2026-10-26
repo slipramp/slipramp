@@ -127,18 +127,19 @@ default. This is a voluntary repository-owned operational guard, separate from
 Kargo review and not a Server-enforced security policy. The Web Run detail now
 exposes permission-aware Approve and Reject controls, decision attribution, and
 review-aware activity and history labels. Pending Run reviews appear in the
-operational Inbox only for Principals authorized to decide them. Review-required
-Git Run creation reuses the routed `review.requested` notification contract with
-a Run subject; the Run, delivery linkage, event, and outbound deliveries commit
-atomically.
+operational Inbox only for Principals authorized to decide them, and Run history
+supports exact review-state filtering. Optional decision comments are trimmed,
+bounded, persisted and displayed as part of the immutable decision.
+Review-required Git Run creation reuses the routed `review.requested`
+notification contract with a Run subject; the Run, delivery linkage, event, and
+outbound deliveries commit atomically.
 
 - [ ] Design Server-owned policies, source-wide enforcement, separation of
       duties, dedicated review authorization, and required preview or artifact
       rules only when operators need a security boundary stronger than
       repository-controlled configuration.
-- [ ] Add expiry, dedicated review queues or pending-review filters, and comments
-      only with explicit product semantics for recovery, noise, and operator
-      ownership.
+- [ ] Add expiry and dedicated review queues only with explicit product
+      semantics for recovery, noise, and operator ownership.
 - [ ] Extract shared review persistence only if another implemented flow beyond
       Kargo demonstrates a genuinely common lifecycle rather than merely common
       vocabulary.

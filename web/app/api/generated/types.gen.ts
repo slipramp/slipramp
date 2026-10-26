@@ -1508,6 +1508,8 @@ export type LogSeal = {
   sha256: string;
 };
 
+export type RunReviewState = "not-required" | "pending" | "approved" | "rejected";
+
 export type GitRunSource = {
   triggerName: CatalogName;
   /**
@@ -1529,12 +1531,11 @@ export type RunSource = {
   promotion?: PromotionRunSource;
 };
 
-export type RunReviewState = "not-required" | "pending" | "approved" | "rejected";
-
 export type RunReview = {
   state: RunReviewState;
   decidedBy?: RunActor;
   decidedAt?: string;
+  comment?: string;
 };
 
 export type RunArtifactInput = {
@@ -1564,6 +1565,10 @@ export type RunReviewDecision = "approved" | "rejected";
 
 export type RunReviewDecisionRequest = {
   decision: RunReviewDecision;
+  /**
+   * Optional context recorded immutably with the decision.
+   */
+  comment?: string;
 };
 
 export type ArtifactProvenance = {
@@ -3108,6 +3113,10 @@ export type ListRunsData = {
      * Limit results to one durable lifecycle phase.
      */
     phase?: "queued" | "assigned" | "preparing" | "running" | "finished";
+    /**
+     * Limit results to one Run review state.
+     */
+    reviewState?: RunReviewState;
     /**
      * Maximum number of recent Runs to return.
      */
