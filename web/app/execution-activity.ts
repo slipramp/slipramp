@@ -5,6 +5,8 @@ export type ExecutionAnimation = "waiting" | "phone" | "working" | "celebrating"
 export type ExecutionAnimationPose =
   | "phone-scroll"
   | "book-browse"
+  | "camera-snap"
+  | "traffic-light-match"
   | "iced-coffee-sip"
   | "magazine-load"
   | "rifle-clean"
@@ -17,6 +19,8 @@ export type ExecutionAnimationPose =
   | "hourglass-turn"
   | "duck-float"
   | "lava-lamp-gaze"
+  | "plasma-globe-touch"
+  | "progress-bar-stare"
   | "snail-coach"
   | "beach-ball-roll"
   | "cat-petting"
@@ -31,6 +35,7 @@ export type ExecutionAnimationPose =
   | "red-eye-passenger"
   | "egg-basket-check"
   | "mainframe-reel-watch"
+  | "cpu-cooler-install"
   | "laptop-typing"
   | "inflight-laptop-typing"
   | "runway-marshal"
@@ -74,6 +79,7 @@ export type ExecutionAnimationPose =
   | "cowbell-clang"
   | "chart-rise"
   | "server-hug"
+  | "cargo-loader-triumph"
   | "guitar-power-chord"
   | "oven-mitt-triumph"
   | "laptop-slump"
@@ -90,6 +96,7 @@ export type ExecutionAnimationPose =
   | "anvil-bonk"
   | "cable-cocoon"
   | "nuclear-vaporize"
+  | "lightning-vaporize"
   | "too-many-arms"
   | "trapdoor-deploy"
   | "steamroller-flat"
@@ -101,6 +108,8 @@ export const executionAnimationPosePools = {
   waiting: [
     "phone-scroll",
     "book-browse",
+    "camera-snap",
+    "traffic-light-match",
     "iced-coffee-sip",
     "magazine-load",
     "rifle-clean",
@@ -113,6 +122,8 @@ export const executionAnimationPosePools = {
     "hourglass-turn",
     "duck-float",
     "lava-lamp-gaze",
+    "plasma-globe-touch",
+    "progress-bar-stare",
     "snail-coach",
     "beach-ball-roll",
     "cat-petting",
@@ -134,6 +145,7 @@ export const executionAnimationPosePools = {
     "runway-marshal",
     "flight-controller",
     "mainframe-reel-watch",
+    "cpu-cooler-install",
     "blueprint-review",
     "clipboard-check",
     "walkie-talkie",
@@ -176,6 +188,7 @@ export const executionAnimationPosePools = {
     "cowbell-clang",
     "chart-rise",
     "server-hug",
+    "cargo-loader-triumph",
     "guitar-power-chord",
     "oven-mitt-triumph",
   ],
@@ -194,6 +207,7 @@ export const executionAnimationPosePools = {
     "anvil-bonk",
     "cable-cocoon",
     "nuclear-vaporize",
+    "lightning-vaporize",
     "too-many-arms",
     "trapdoor-deploy",
     "steamroller-flat",

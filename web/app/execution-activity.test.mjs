@@ -24,7 +24,7 @@ test("animation offsets are stable and spread out similar Run IDs", () => {
 });
 
 test("waiting animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 75 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 200 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("waiting", id));
 
   assert.deepEqual(
@@ -36,6 +36,8 @@ test("waiting animation variants are stable and spread across IDs", () => {
     new Set([
       "phone-scroll",
       "book-browse",
+      "camera-snap",
+      "traffic-light-match",
       "iced-coffee-sip",
       "magazine-load",
       "rifle-clean",
@@ -48,6 +50,8 @@ test("waiting animation variants are stable and spread across IDs", () => {
       "hourglass-turn",
       "duck-float",
       "lava-lamp-gaze",
+      "plasma-globe-touch",
+      "progress-bar-stare",
       "snail-coach",
       "beach-ball-roll",
       "cat-petting",
@@ -81,6 +85,7 @@ test("working animation variants are stable and spread across IDs", () => {
       "runway-marshal",
       "flight-controller",
       "mainframe-reel-watch",
+      "cpu-cooler-install",
       "blueprint-review",
       "clipboard-check",
       "walkie-talkie",
@@ -136,6 +141,7 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "cowbell-clang",
       "chart-rise",
       "server-hug",
+      "cargo-loader-triumph",
       "guitar-power-chord",
       "oven-mitt-triumph",
     ]),
@@ -167,6 +173,7 @@ test("frustrated animation variants are stable and spread across IDs", () => {
       "anvil-bonk",
       "cable-cocoon",
       "nuclear-vaporize",
+      "lightning-vaporize",
       "too-many-arms",
       "trapdoor-deploy",
       "steamroller-flat",

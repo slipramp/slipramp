@@ -204,6 +204,39 @@ parameters but does not select artifact contents or create a Run. Both catalog
 commands remain offline: no Server/Kubernetes access, image inspection, Secret
 lookup, Job rendering, or local Action execution.
 
+The CLI also provides a focused remote operator boundary for listing active
+Targets and creating, inspecting, following, and canceling Runs. It uses the
+generated OpenAPI client and models for ordinary requests, with one small
+handwritten SSE reader for log reconnection and byte decoding. The Server URL
+comes from a command flag or `SLIPRAMP_URL`; the API key comes only from
+`SLIPRAMP_API_KEY` and is sent as a Bearer credential. TLS uses the system trust
+store and the client offers no insecure mode or persisted context.
+
+Cobra owns the CLI command tree, help, argument validation, and flag parsing.
+Command construction is explicit and receives the `App` dependency container;
+package-global commands and `init` registration are not used. Catalog behavior,
+remote API access, rendering, and log streaming remain framework-independent
+command handlers so their contracts can be tested without Cobra internals.
+
+Remote Run creation selects an exact durable Target UUID and Action name. The
+client reads the current Target definition, rejects artifact-consuming Actions,
+and applies the shared catalog parameter parser and Run normalization rules
+before submitting a generated `RunCreate` request with an idempotency key. The
+Server remains authoritative and repeats validation. Artifact-input selection
+stays in the Web producing-Run workflow. Remote reads and cancellation return
+the canonical generated Run representation; text rendering is only a terminal
+projection of that response.
+
+The log command writes decoded chunk contents directly to standard output and
+keeps diagnostics on standard error. SSE event IDs and generated `LogEvent`
+offsets are checked against the durable byte cursor. Retryable disconnects
+resume from that cursor and overlapping bytes are suppressed, while permanent
+HTTP failures are not retried. A sealed event is successful; a failed event is
+an explicit incomplete-log result after the retained prefix is written. Context
+cancellation interrupts both the HTTP request and reconnect wait. This boundary
+does not add infrastructure-command retries, Kubernetes access, browser login,
+credential persistence, or a general SSE framework.
+
 A valid commit creates or reuses an immutable catalog revision. An invalid
 commit records its SHA and a bounded safe diagnostic summary while the last
 valid revision stays active; it does not advance Target state or create Runs.

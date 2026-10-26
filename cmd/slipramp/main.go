@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
 
 	"github.com/slipramp/slipramp/internal/cli"
 )
@@ -9,9 +11,13 @@ import (
 var version = "dev"
 
 func main() {
-	os.Exit(cli.App{
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	exitCode := cli.App{
 		Stdout:  os.Stdout,
 		Stderr:  os.Stderr,
 		Version: version,
-	}.Run(os.Args[1:]))
+		Context: ctx,
+	}.Run(os.Args[1:])
+	stop()
+	os.Exit(exitCode)
 }

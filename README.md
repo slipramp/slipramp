@@ -138,6 +138,57 @@ effective fields carrying `value`, `resolved`, and `provenance`; unresolved
 fields also carry `unresolvedReason`. Checkout warnings remain in the explanation
 and do not prevent success.
 
+## Remote operator CLI
+
+The same `slipramp` binary supports a focused remote workflow against an
+existing Slipramp Server. Pass the absolute Server URL with `--server`, or set
+`SLIPRAMP_URL`. The CLI reads its credential only from `SLIPRAMP_API_KEY` and
+sends it as a Bearer token. It never writes the key to disk or includes it in
+output or errors. HTTPS uses the system trust store; there is no insecure TLS
+mode. Plain HTTP should be used only when a trusted encrypted network already
+protects the connection.
+
+An API key needs `slipramp:read` for discovery, Run reads, and logs, and
+`slipramp:runs:write` to create or cancel Runs. For example:
+
+```console
+export SLIPRAMP_URL=https://slipramp.example.com
+export SLIPRAMP_API_KEY='replace-with-an-api-key'
+
+slipramp target list --query storage --limit 25
+slipramp target list --repository-id 018f90ff-9fd8-7b5f-b7e1-f32ff54c1201 --format json
+slipramp run create --target 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 --action preview --set region=us-west-2
+slipramp run get 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203
+slipramp run logs 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203
+slipramp run cancel 018f90ff-9fd8-7b5f-b7e1-f32ff54c1203
+```
+
+`target list` also accepts exact `--runtime` and `--placement` filters plus
+`--offset`. `run create` requires an exact Target UUID and Action name. Its
+repeatable `--set NAME=VALUE` flags use the same typed parsing, required-field,
+enum, and normalization rules as catalog explanation and Server Run creation.
+Actions with artifact inputs must instead be started from the producing Run in
+the Web UI so the input is selected explicitly. Every create sends a fresh
+random idempotency key; automation may supply `--idempotency-key` to recover the
+same request safely.
+
+Text is the default for `target list`, `run create`, `run get`, and `run cancel`;
+each accepts `--format json` to emit the generated API response shape. Structured
+and text results go to standard output. Errors and operational diagnostics go to
+standard error. `run logs` is intentionally unformatted: it writes decoded log
+bytes exactly to standard output, follows live output, and reconnects from the
+last durable byte offset without repeating content. It exits successfully only
+after the log is sealed. A failed/incomplete log leaves its retained prefix on
+standard output and exits distinctly.
+
+Remote commands use exit code `0` for success, `1` for local Run validation
+failures, `2` for an invalid invocation or missing configuration, `3` for an
+unexpected local/output failure, `4` for a network or Server/API failure, and
+`5` for an explicitly incomplete log. Authentication, authorization,
+validation, conflict, and not-found problem responses include the HTTP status
+and the Server's safe problem detail. Ctrl-C cancels an active log request and
+returns promptly with a nonzero status.
+
 ## Server configuration
 
 The Server accepts these environment variables:

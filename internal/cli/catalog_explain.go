@@ -3,11 +3,11 @@ package cli
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"os"
 	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
@@ -16,6 +16,8 @@ import (
 type parameterAssignments map[string]string
 
 func (p parameterAssignments) String() string { return "" }
+
+func (p parameterAssignments) Type() string { return "NAME=VALUE" }
 
 func (p parameterAssignments) Set(assignment string) error {
 	name, value, ok := strings.Cut(assignment, "=")
@@ -30,48 +32,56 @@ func (p parameterAssignments) Set(assignment string) error {
 	return nil
 }
 
-func (a App) runCatalogExplain(arguments []string) int {
-	flags := flag.NewFlagSet("slipramp catalog explain", flag.ContinueOnError)
-	flags.SetOutput(io.Discard)
-	root := flags.String("root", ".", "repository root (defaults to current directory)")
-	placementsPath := flags.String("placements", "", "PlacementConfig file for deployment validation")
-	format := flags.String("format", "text", "output format: text or json")
-	parameters := parameterAssignments{}
-	flags.Var(parameters, "set", "parameter NAME=VALUE (repeatable)")
+type catalogExplainOptions struct {
+	root           string
+	placementsPath string
+	format         string
+	parameters     parameterAssignments
+}
 
-	// The public command places identities before flags. Also accept the usual
-	// standard-library flag ordering before both identities.
-	identities := []string{}
-	if len(arguments) >= 2 && !strings.HasPrefix(arguments[0], "-") && !strings.HasPrefix(arguments[1], "-") {
-		identities = arguments[:2]
-		arguments = arguments[2:]
-	}
-	if err := flags.Parse(arguments); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			if err := printCatalogExplainUsage(a.Stdout); err != nil {
-				return a.internalError("write usage", err)
+func (a App) newCatalogExplainCommand(exitCode *int) *cobra.Command {
+	options := catalogExplainOptions{parameters: parameterAssignments{}}
+	command := &cobra.Command{
+		Use:   "explain TARGET ACTION",
+		Short: "Explain the effective process for a Target Action",
+		Args: func(_ *cobra.Command, arguments []string) error {
+			if len(arguments) != 2 {
+				return errors.New("catalog explain requires TARGET ACTION [flags]")
 			}
-			return ExitValid
-		}
-		return a.invocationError(err.Error())
+
+			return nil
+		},
+		Run: func(_ *cobra.Command, arguments []string) {
+			*exitCode = a.runCatalogExplain(options, arguments)
+		},
 	}
-	identities = append(identities, flags.Args()...)
-	if len(identities) != 2 {
-		return a.invocationError("catalog explain requires TARGET ACTION [flags]")
+	command.Flags().StringVar(&options.root, "root", ".", "repository root (defaults to current directory)")
+	command.Flags().StringVar(
+		&options.placementsPath,
+		"placements",
+		"",
+		"PlacementConfig file for deployment validation",
+	)
+	command.Flags().Var(&options.parameters, "set", "parameter NAME=VALUE (repeatable)")
+	command.Flags().StringVar(&options.format, "format", "text", "output format: text or json")
+
+	return command
+}
+
+func (a App) runCatalogExplain(options catalogExplainOptions, identities []string) int {
+	if options.format != "text" && options.format != "json" {
+		return a.invocationError(fmt.Sprintf("unsupported output format %q", options.format))
 	}
-	if *format != "text" && *format != "json" {
-		return a.invocationError(fmt.Sprintf("unsupported output format %q", *format))
-	}
-	resolvedRoot, err := a.resolvePath(*root)
+	resolvedRoot, err := a.resolvePath(options.root)
 	if err != nil {
 		return a.invocationError(fmt.Sprintf("resolve repository root: %v", err))
 	}
 	if err := requireRepositoryRoot(resolvedRoot); err != nil {
 		return a.invocationError(err.Error())
 	}
-	options := catalog.Options{}
-	if *placementsPath != "" {
-		resolved, err := a.resolvePath(*placementsPath)
+	catalogOptions := catalog.Options{}
+	if options.placementsPath != "" {
+		resolved, err := a.resolvePath(options.placementsPath)
 		if err != nil {
 			return a.invocationError(fmt.Sprintf("resolve Placement file: %v", err))
 		}
@@ -79,15 +89,15 @@ func (a App) runCatalogExplain(arguments []string) int {
 		if err != nil {
 			return a.invocationError(err.Error())
 		}
-		options.Placements = &placements
+		catalogOptions.Placements = &placements
 	}
-	result, err := catalog.Process(os.DirFS(resolvedRoot), options)
+	result, err := catalog.Process(os.DirFS(resolvedRoot), catalogOptions)
 	if err != nil {
 		return a.invocationError(err.Error())
 	}
 	if result.Diagnostics.HasErrors() {
-		summary := summarize(result, options.Placements)
-		if *format == "json" {
+		summary := summarize(result, catalogOptions.Placements)
+		if options.format == "json" {
 			err = renderJSON(a.Stdout, result, summary, false)
 		} else {
 			err = renderText(a.Stdout, result, summary)
@@ -97,14 +107,14 @@ func (a App) runCatalogExplain(arguments []string) int {
 		}
 		return ExitInvalid
 	}
-	explanation, err := result.Explain(identities[0], identities[1], parameters)
+	explanation, err := result.Explain(identities[0], identities[1], options.parameters)
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(a.Stderr, "slipramp: %v\n", err); writeErr != nil {
 			return ExitInternal
 		}
 		return ExitInvalid
 	}
-	if *format == "json" {
+	if options.format == "json" {
 		encoder := json.NewEncoder(a.Stdout)
 		encoder.SetIndent("", "  ")
 		err = encoder.Encode(explanation)
@@ -116,15 +126,4 @@ func (a App) runCatalogExplain(arguments []string) int {
 	}
 
 	return ExitValid
-}
-
-func printCatalogExplainUsage(output io.Writer) error {
-	_, err := fmt.Fprintln(output, `usage: slipramp catalog explain TARGET ACTION [flags]
-
-  --root PATH        Repository root (default: current directory)
-  --placements PATH  PlacementConfig file for deployment validation
-  --set NAME=VALUE   Parameter value (repeatable; names must be unique)
-  --format text|json Output format (default: text)`)
-
-	return err
 }

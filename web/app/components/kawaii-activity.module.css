@@ -59,6 +59,17 @@
   animation-duration: 3.2s;
 }
 
+.sprite[data-pose="camera-snap"] {
+  background-image: url("../assets/slipramp-axolotl-camera-snap.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="traffic-light-match"] {
+  background-image: url("../assets/slipramp-axolotl-traffic-light-match.webp");
+  animation-name: even-frames;
+  animation-duration: 3.2s;
+}
+
 .sprite[data-pose="iced-coffee-sip"] {
   background-image: url("../assets/slipramp-axolotl-iced-coffee-sip.webp");
   animation-duration: 2.8s;
@@ -116,6 +127,18 @@
 
 .sprite[data-pose="lava-lamp-gaze"] {
   background-image: url("../assets/slipramp-axolotl-lava-lamp-gaze.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="plasma-globe-touch"] {
+  background-image: url("../assets/slipramp-axolotl-plasma-globe-touch.webp");
+  animation-name: even-frames;
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="progress-bar-stare"] {
+  background-image: url("../assets/slipramp-axolotl-progress-bar-stare.webp");
+  animation-name: even-frames;
   animation-duration: 3.2s;
 }
 
@@ -189,6 +212,12 @@
 
 .sprite[data-pose="mainframe-reel-watch"] {
   background-image: url("../assets/slipramp-axolotl-mainframe-reel-watch.webp");
+  animation-name: even-frames;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="cpu-cooler-install"] {
+  background-image: url("../assets/slipramp-axolotl-cpu-cooler-install.webp");
   animation-name: even-frames;
   animation-duration: 2.4s;
 }
@@ -422,6 +451,12 @@
   animation-duration: 2.8s;
 }
 
+.sprite[data-pose="cargo-loader-triumph"] {
+  background-image: url("../assets/slipramp-axolotl-cargo-loader-triumph.webp");
+  animation-name: cargo-loader-triumph;
+  animation-duration: 2.6s;
+}
+
 .sprite[data-pose="guitar-power-chord"] {
   background-image: url("../assets/slipramp-axolotl-guitar-power-chord.webp");
   animation-name: guitar-power-chord;
@@ -504,6 +539,11 @@
 .sprite[data-pose="nuclear-vaporize"] {
   background-image: url("../assets/slipramp-axolotl-nuclear-vaporize.webp");
   animation-duration: 2.8s;
+}
+
+.sprite[data-pose="lightning-vaporize"] {
+  background-image: url("../assets/slipramp-axolotl-lightning-vaporize.webp");
+  animation-duration: 2.4s;
 }
 
 .sprite[data-pose="too-many-arms"] {
@@ -996,6 +1036,25 @@
   }
 
   76.785714% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes cargo-loader-triumph {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  23.076923% {
+    background-position-x: calc(100% / 3);
+  }
+
+  42.307692% {
+    background-position-x: calc(200% / 3);
+  }
+
+  73.076923% {
     background-position-x: 100%;
   }
 }

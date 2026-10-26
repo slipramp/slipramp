@@ -57,8 +57,23 @@ test("every gallery tag is assigned to at least one pose", () => {
   assert.ok(findMascotPose("runway-marshal")?.tags.includes("aviation"));
   assert.ok(findMascotPose("window-seat-dreamer")?.tags.includes("aviation"));
   assert.ok(findMascotPose("inflight-laptop-typing")?.tags.includes("aviation"));
+  assert.deepEqual(findMascotPose("flight-controller")?.tags, ["aviation"]);
   assert.ok(findMascotPose("hay-bale-roll")?.tags.includes("agriculture"));
-  assert.ok(findMascotPose("mainframe-reel-watch")?.tags.includes("construction"));
+
+  for (const pose of [
+    "progress-bar-stare",
+    "mainframe-reel-watch",
+    "cpu-cooler-install",
+    "laptop-typing",
+    "server-hug",
+    "laptop-slump",
+    "server-bite",
+    "kaiju-server-stomp",
+    "cable-cocoon",
+  ]) {
+    assert.ok(findMascotPose(pose)?.tags.includes("computers"));
+    assert.ok(!findMascotPose(pose)?.tags.includes("construction"));
+  }
 });
 
 test("tag filtering matches one selected tag while preserving phase groups", () => {
