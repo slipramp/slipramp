@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -103,10 +104,23 @@ func (r *GitCandidateBranchRemote) DeleteCandidateBranch(
 		return CandidateBranchMoved, nil
 	}
 
+	pushDirectory, err := os.MkdirTemp("", "slipramp-candidate-branch-delete-*")
+	if err != nil {
+		return "", fmt.Errorf("create candidate branch deletion repository: %w", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(pushDirectory)
+	}()
+	if _, err := runGit(ctx, environment, "init", "--quiet", "--bare", pushDirectory); err != nil {
+		return "", fmt.Errorf("initialize candidate branch deletion repository: %w", err)
+	}
+
 	lease := "--force-with-lease=" + reference + ":" + expectedRevision
 	_, deleteErr := runGit(
 		ctx,
 		environment,
+		"-C",
+		pushDirectory,
 		"push",
 		"--porcelain",
 		lease,

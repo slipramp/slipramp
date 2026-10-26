@@ -10,8 +10,6 @@ import (
 )
 
 func TestGitCandidateBranchRemoteListsAndDeletesExactTip(t *testing.T) {
-	t.Parallel()
-
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("Git is not installed")
 	}
@@ -42,6 +40,7 @@ func TestGitCandidateBranchRemoteListsAndDeletesExactTip(t *testing.T) {
 	record := Repository{
 		Config: Config{CloneURL: remoteDirectory}, //nolint:modernize // A keyed embedded Config keeps this fixture focused.
 	}
+	t.Chdir(t.TempDir())
 
 	branches, err := remote.ListCandidateBranches(context.Background(), record, "cleanup")
 	if err != nil {

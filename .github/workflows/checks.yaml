@@ -97,6 +97,10 @@ jobs:
           name: mascot-site
           path: web/dist/mascot
 
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.22.0
+
       - name: Deploy to Cloudflare
         uses: cloudflare/wrangler-action@v4
         with:
