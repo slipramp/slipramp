@@ -74,6 +74,7 @@ InboxItem:
       type: string
       enum:
         - promotion-review
+        - run-review
         - promotion-error
         - git-trigger-failure
         - repository-refresh

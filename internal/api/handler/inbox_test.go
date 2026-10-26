@@ -66,7 +66,8 @@ func TestGetInboxMapsSnapshotAndPermissions(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if service.query.PrincipalID != authentication.Principal.ID || !service.query.IncludePromotionDecisions {
+	if service.query.PrincipalID != authentication.Principal.ID ||
+		!service.query.IncludePromotionDecisions || !service.query.IncludeRunDecisions {
 		t.Errorf("query = %#v", service.query)
 	}
 	if !body.GeneratedAt.Equal(at) || !body.Capabilities.AcknowledgeProblems ||
@@ -76,6 +77,59 @@ func TestGetInboxMapsSnapshotAndPermissions(t *testing.T) {
 	if len(body.Decisions) != 1 || body.Decisions[0].Kind != api.InboxItemKindPromotionReview ||
 		len(body.Problems) != 1 || body.Problems[0].ID != problemID {
 		t.Errorf("Inbox items = decisions %#v, problems %#v", body.Decisions, body.Problems)
+	}
+}
+
+func TestGetInboxDecisionVisibilityMatchesPermissions(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		scopes           []productidentity.Scope
+		wantPromotions   bool
+		wantRunDecisions bool
+	}{
+		{
+			name:   "read only",
+			scopes: []productidentity.Scope{productidentity.ScopeRead},
+		},
+		{
+			name: "Run decisions",
+			scopes: []productidentity.Scope{
+				productidentity.ScopeRead,
+				productidentity.ScopeRunsWrite,
+			},
+			wantRunDecisions: true,
+		},
+		{
+			name: "Promotion decisions",
+			scopes: []productidentity.Scope{
+				productidentity.ScopeRead,
+				productidentity.ScopePromotionsWrite,
+			},
+			wantPromotions: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := &recordingInboxService{snapshot: inbox.Snapshot{}}
+			authentication := inboxHandlerAuthentication(productidentity.RoleOperator, test.scopes)
+			request := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/inbox", nil)
+			request.Header.Set("Authorization", "Bearer inbox-key")
+			response := httptest.NewRecorder()
+
+			inboxHTTPHandler(service, authentication).ServeHTTP(response, request)
+
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+			}
+			if service.query.IncludePromotionDecisions != test.wantPromotions ||
+				service.query.IncludeRunDecisions != test.wantRunDecisions {
+				t.Errorf("query = %#v", service.query)
+			}
+		})
 	}
 }
 

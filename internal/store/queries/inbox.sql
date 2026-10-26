@@ -25,6 +25,7 @@ SELECT
     action_name,
     cluster_name,
     created_at,
+    review_state,
     assigned_at,
     last_observed_at
 FROM runs

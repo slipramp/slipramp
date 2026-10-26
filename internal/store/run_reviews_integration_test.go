@@ -54,6 +54,11 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	if pending.Phase != run.PhaseQueued || pending.Review.State != run.ReviewStatePending {
 		t.Fatalf("pending review Run = %#v", pending)
 	}
+	inboxRuns, err := database.ListInboxActiveRuns(ctx)
+	if err != nil || len(inboxRuns) != 1 || inboxRuns[0].ID != pending.ID ||
+		inboxRuns[0].Review != run.ReviewStatePending {
+		t.Fatalf("pending Inbox Run = (%#v, %v)", inboxRuns, err)
+	}
 	if _, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(3*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Fatalf("claim pending-review Run error = %v, want no assignment", err)
 	}

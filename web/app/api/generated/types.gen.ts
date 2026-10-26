@@ -100,6 +100,7 @@ export type InboxItem = {
   id: string;
   kind:
     | "promotion-review"
+    | "run-review"
     | "promotion-error"
     | "git-trigger-failure"
     | "repository-refresh"

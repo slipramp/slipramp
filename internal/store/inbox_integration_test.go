@@ -91,6 +91,7 @@ func TestInboxActiveRunReadIntegration(t *testing.T) {
 		t.Fatalf("ListInboxActiveRuns() error = %v", err)
 	}
 	if len(active) != 1 || active[0].ID != runID || active[0].Status.Phase != run.PhaseRunning ||
+		active[0].Review != run.ReviewStateNotRequired ||
 		active[0].Status.LastObservedAt == nil || !active[0].Status.LastObservedAt.Equal(observedAt) {
 		t.Errorf("active Runs = %#v", active)
 	}

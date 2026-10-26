@@ -24,6 +24,13 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 	at := now.UTC()
 	offlineRunID := uuid.MustParse("00000000-0000-0000-0000-000000000101")
 	staleRunID := uuid.MustParse("00000000-0000-0000-0000-000000000102")
+	pendingReview := activeRun(
+		uuid.MustParse("00000000-0000-0000-0000-000000000100"),
+		run.PhaseQueued,
+		"connected",
+		at,
+	)
+	pendingReview.Review = run.ReviewStatePending
 	store := &serviceStore{
 		repositories: []repository.Repository{
 			failedRepository(uuid.MustParse("00000000-0000-0000-0000-000000000201"), "infrastructure", at.Add(-10*time.Minute)),
@@ -33,7 +40,7 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 			{Name: "connected", FirstSeenAt: at.Add(-time.Hour), LastSeenAt: at.Add(-time.Minute)},
 		},
 		runs: []ActiveRun{
-			activeRun(uuid.MustParse("00000000-0000-0000-0000-000000000100"), run.PhaseQueued, "connected", at),
+			pendingReview,
 			activeRun(offlineRunID, run.PhasePreparing, "offline", at.Add(-3*time.Minute)),
 			activeRun(staleRunID, run.PhaseAssigned, "connected", at.Add(-2*time.Minute)),
 			activeRun(uuid.MustParse("00000000-0000-0000-0000-000000000103"), run.PhaseRunning, "connected", at.Add(-30*time.Second)),
@@ -58,6 +65,7 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 	query := Query{
 		PrincipalID:               uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 		IncludePromotionDecisions: true,
+		IncludeRunDecisions:       true,
 	}
 
 	result, err := service.Load(t.Context(), query)
@@ -70,7 +78,8 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 	if result.Activity != (Activity{Queued: 1, Starting: 2, Running: 1}) {
 		t.Errorf("activity = %#v", result.Activity)
 	}
-	if len(result.Decisions) != 1 || result.Decisions[0].Kind != KindPromotionReview {
+	if len(result.Decisions) != 2 || result.Decisions[0].Kind != KindRunReview ||
+		result.Decisions[1].Kind != KindPromotionReview {
 		t.Errorf("decisions = %#v", result.Decisions)
 	}
 	if len(result.Problems) != 5 {
@@ -91,6 +100,51 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 	}
 	if !slices.IsSortedFunc(result.Problems, newestInboxItemFirst) {
 		t.Errorf("problems are not newest-first: %#v", result.Problems)
+	}
+}
+
+func TestServiceAppliesDecisionVisibility(t *testing.T) {
+	t.Parallel()
+
+	at := time.Date(2026, time.October, 23, 17, 0, 0, 0, time.UTC)
+	pendingRun := activeRun(
+		uuid.MustParse("00000000-0000-0000-0000-000000000501"),
+		run.PhaseQueued,
+		"connected",
+		at,
+	)
+	pendingRun.Review = run.ReviewStatePending
+	store := &serviceStore{
+		runs: []ActiveRun{pendingRun},
+		promotions: []PromotionState{
+			inboxPromotion(
+				uuid.MustParse("00000000-0000-0000-0000-000000000502"),
+				promotion.StatusPending,
+				at.Add(-time.Minute),
+			),
+		},
+	}
+	service := newTestService(store, at)
+	principalID := uuid.MustParse("00000000-0000-0000-0000-000000000503")
+
+	runOnly, err := service.Load(t.Context(), Query{PrincipalID: principalID, IncludeRunDecisions: true})
+	if err != nil {
+		t.Fatalf("Load() Run decisions error = %v", err)
+	}
+	if len(runOnly.Decisions) != 1 || runOnly.Decisions[0].Kind != KindRunReview ||
+		runOnly.Decisions[0].Destination.ID != pendingRun.ID.String() {
+		t.Errorf("Run decisions = %#v", runOnly.Decisions)
+	}
+
+	promotionOnly, err := service.Load(
+		t.Context(),
+		Query{PrincipalID: principalID, IncludePromotionDecisions: true},
+	)
+	if err != nil {
+		t.Fatalf("Load() Promotion decisions error = %v", err)
+	}
+	if len(promotionOnly.Decisions) != 1 || promotionOnly.Decisions[0].Kind != KindPromotionReview {
+		t.Errorf("Promotion decisions = %#v", promotionOnly.Decisions)
 	}
 }
 

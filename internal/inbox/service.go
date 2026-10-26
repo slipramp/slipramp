@@ -227,6 +227,10 @@ func buildSnapshot(query Query, generatedAt time.Time, source projectionSource) 
 		default:
 			return Snapshot{}, fmt.Errorf("active Run %s has phase %q", record.ID, record.Status.Phase)
 		}
+		if query.IncludeRunDecisions && record.Status.Phase == run.PhaseQueued &&
+			record.Review == run.ReviewStatePending {
+			result.Decisions = append(result.Decisions, runReviewItem(record))
+		}
 
 		observationState, present := run.DeriveObservationState(
 			record.Status,

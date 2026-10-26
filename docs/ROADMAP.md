@@ -126,13 +126,14 @@ coalescing continues before and after approval. Direct execution remains the
 default. This is a voluntary repository-owned operational guard, separate from
 Kargo review and not a Server-enforced security policy. The Web Run detail now
 exposes permission-aware Approve and Reject controls, decision attribution, and
-review-aware activity and history labels.
+review-aware activity and history labels. Pending Run reviews appear in the
+operational Inbox only for Principals authorized to decide them.
 
 - [ ] Design Server-owned policies, source-wide enforcement, separation of
       duties, dedicated review authorization, and required preview or artifact
       rules only when operators need a security boundary stronger than
       repository-controlled configuration.
-- [ ] Add expiry, notifications, review queues or pending-review filters, and
+- [ ] Add expiry, notifications, dedicated review queues or pending-review filters, and
       comments only with explicit product semantics for recovery, noise, and
       operator ownership. Reuse `review.requested` notifications with a Run
       subject if notifications land.

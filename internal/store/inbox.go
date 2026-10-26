@@ -74,6 +74,7 @@ func (d *Database) ListInboxActiveRuns(ctx context.Context) ([]inbox.ActiveRun, 
 			ActionName:  row.ActionName,
 			ClusterName: row.ClusterName,
 			CreatedAt:   row.CreatedAt.Time.UTC(),
+			Review:      run.ReviewState(row.ReviewState),
 			Status: run.ObservationStatus{
 				Phase:          run.Phase(row.Phase),
 				AssignedAt:     optionalTime(row.AssignedAt),

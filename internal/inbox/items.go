@@ -11,6 +11,20 @@ import (
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
+func runReviewItem(record ActiveRun) Item {
+	title := fmt.Sprintf("%s · %s awaits review", record.TargetName, record.ActionName)
+
+	return Item{
+		ID:          string(KindRunReview) + ":" + record.ID.String(),
+		Kind:        KindRunReview,
+		Title:       truncateText(title, maximumTitleLength),
+		Description: "A Git-triggered Run is waiting for an operator decision before it can be assigned.",
+		OccurredAt:  record.CreatedAt.UTC(),
+		ActionLabel: "Review",
+		Destination: Destination{Type: DestinationRun, ID: record.ID.String()},
+	}
+}
+
 func promotionItem(record PromotionState) (Item, error) {
 	destination := Destination{Type: DestinationPromotion, ID: record.ID.String()}
 	switch record.Status {

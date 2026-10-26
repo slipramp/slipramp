@@ -16,6 +16,7 @@ type ActiveRun struct {
 	ActionName  string
 	ClusterName string
 	CreatedAt   time.Time
+	Review      run.ReviewState
 	Status      run.ObservationStatus
 }
 

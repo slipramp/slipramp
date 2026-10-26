@@ -44,6 +44,7 @@ SELECT
     action_name,
     cluster_name,
     created_at,
+    review_state,
     assigned_at,
     last_observed_at
 FROM runs
@@ -58,6 +59,7 @@ type ListInboxActiveRunsRow struct {
 	ActionName     string
 	ClusterName    string
 	CreatedAt      pgtype.Timestamptz
+	ReviewState    string
 	AssignedAt     pgtype.Timestamptz
 	LastObservedAt pgtype.Timestamptz
 }
@@ -78,6 +80,7 @@ func (q *Queries) ListInboxActiveRuns(ctx context.Context) ([]ListInboxActiveRun
 			&i.ActionName,
 			&i.ClusterName,
 			&i.CreatedAt,
+			&i.ReviewState,
 			&i.AssignedAt,
 			&i.LastObservedAt,
 		); err != nil {

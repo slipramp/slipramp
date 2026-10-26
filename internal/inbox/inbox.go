@@ -12,6 +12,7 @@ import (
 
 const (
 	KindPromotionReview    Kind = "promotion-review"
+	KindRunReview          Kind = "run-review"
 	KindPromotionError     Kind = "promotion-error"
 	KindGitTriggerFailure  Kind = "git-trigger-failure"
 	KindRepositoryRefresh  Kind = "repository-refresh"
@@ -42,6 +43,7 @@ type DestinationType string
 type Query struct {
 	PrincipalID               uuid.UUID
 	IncludePromotionDecisions bool
+	IncludeRunDecisions       bool
 }
 
 type Snapshot struct {

@@ -16,6 +16,7 @@ import {
   IconAlertTriangle,
   IconArrowRight,
   IconCheck,
+  IconChecklist,
   IconCircleCheck,
   IconGitBranch,
   IconGitPullRequest,
@@ -381,6 +382,8 @@ function itemPresentation(kind: InboxItem["kind"]): {
   switch (kind) {
     case "promotion-review":
       return { color: "yellow", icon: IconGitPullRequest, tone: "warning" };
+    case "run-review":
+      return { color: "yellow", icon: IconChecklist, tone: "warning" };
     case "run-observation":
       return { color: "orange", icon: IconActivityHeartbeat, tone: "warning" };
     case "repository-refresh":
