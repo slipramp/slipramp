@@ -25,7 +25,14 @@ export type ExecutionAnimationPose =
   | "skull-consult"
   | "candle-vigil"
   | "ghost-jar"
+  | "ramen-slurp"
+  | "window-seat-dreamer"
+  | "tray-table-snack"
+  | "red-eye-passenger"
   | "laptop-typing"
+  | "inflight-laptop-typing"
+  | "runway-marshal"
+  | "flight-controller"
   | "blueprint-review"
   | "clipboard-check"
   | "walkie-talkie"
@@ -39,6 +46,12 @@ export type ExecutionAnimationPose =
   | "paint-roller-swipe"
   | "pumpkin-autopsy"
   | "breaker-bar-bounce"
+  | "dough-flip"
+  | "dough-knead"
+  | "cake-piping"
+  | "grillmaster-flip"
+  | "wok-toss"
+  | "kebab-turn"
   | "beer-sip"
   | "pennant-wave"
   | "check-badge"
@@ -52,6 +65,7 @@ export type ExecutionAnimationPose =
   | "chart-rise"
   | "server-hug"
   | "guitar-power-chord"
+  | "oven-mitt-triumph"
   | "laptop-slump"
   | "server-bite"
   | "rocket-boot-misfire"
@@ -97,10 +111,17 @@ export const executionAnimationPosePools = {
     "skull-consult",
     "candle-vigil",
     "ghost-jar",
+    "ramen-slurp",
+    "window-seat-dreamer",
+    "tray-table-snack",
+    "red-eye-passenger",
   ],
   phone: ["phone-scroll"],
   working: [
     "laptop-typing",
+    "inflight-laptop-typing",
+    "runway-marshal",
+    "flight-controller",
     "blueprint-review",
     "clipboard-check",
     "walkie-talkie",
@@ -114,6 +135,12 @@ export const executionAnimationPosePools = {
     "paint-roller-swipe",
     "pumpkin-autopsy",
     "breaker-bar-bounce",
+    "dough-flip",
+    "dough-knead",
+    "cake-piping",
+    "grillmaster-flip",
+    "wok-toss",
+    "kebab-turn",
   ],
   celebrating: [
     "beer-sip",
@@ -130,6 +157,7 @@ export const executionAnimationPosePools = {
     "chart-rise",
     "server-hug",
     "guitar-power-chord",
+    "oven-mitt-triumph",
   ],
   frustrated: [
     "laptop-slump",

@@ -56,12 +56,16 @@ test("waiting animation variants are stable and spread across IDs", () => {
       "skull-consult",
       "candle-vigil",
       "ghost-jar",
+      "ramen-slurp",
+      "window-seat-dreamer",
+      "tray-table-snack",
+      "red-eye-passenger",
     ]),
   );
 });
 
 test("working animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 40 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 100 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("working", id));
 
   assert.deepEqual(
@@ -72,6 +76,9 @@ test("working animation variants are stable and spread across IDs", () => {
     new Set(variants),
     new Set([
       "laptop-typing",
+      "inflight-laptop-typing",
+      "runway-marshal",
+      "flight-controller",
       "blueprint-review",
       "clipboard-check",
       "walkie-talkie",
@@ -85,6 +92,12 @@ test("working animation variants are stable and spread across IDs", () => {
       "paint-roller-swipe",
       "pumpkin-autopsy",
       "breaker-bar-bounce",
+      "dough-flip",
+      "dough-knead",
+      "cake-piping",
+      "grillmaster-flip",
+      "wok-toss",
+      "kebab-turn",
     ]),
   );
 });
@@ -114,6 +127,7 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "chart-rise",
       "server-hug",
       "guitar-power-chord",
+      "oven-mitt-triumph",
     ]),
   );
 });

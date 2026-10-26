@@ -41,6 +41,7 @@ export function MascotGallery({
   detailPathPrefix = "/mascot",
   galleryPath = "/mascot",
 }: Readonly<{ detailPathPrefix?: string; galleryPath?: string }>) {
+  const [compactView, setCompactView] = useState(false);
   const [hideSmallVariants, setHideSmallVariants] = useState(false);
   const [searchParams] = useSearchParams();
   const selectedTag = mascotTagFromSearchParams(searchParams);
@@ -114,11 +115,19 @@ export function MascotGallery({
 
         <PageHeader
           actions={
-            <Switch
-              checked={hideSmallVariants}
-              label="Hide small variants"
-              onChange={(event) => setHideSmallVariants(event.currentTarget.checked)}
-            />
+            <Group gap="md">
+              <Switch
+                checked={hideSmallVariants}
+                disabled={compactView}
+                label="Hide small variants"
+                onChange={(event) => setHideSmallVariants(event.currentTarget.checked)}
+              />
+              <Switch
+                checked={compactView}
+                label="Compact view"
+                onChange={(event) => setCompactView(event.currentTarget.checked)}
+              />
+            </Group>
           }
           description={
             !selectedTag
@@ -144,9 +153,14 @@ export function MascotGallery({
             </Badge>
           </Group>
           <Text c="dimmed">{group.description}</Text>
-          <SimpleGrid cols={{ base: 1, sm: 2, xl: 3 }}>
+          <SimpleGrid
+            cols={compactView ? { base: 2, sm: 3, md: 4, xl: 6 } : { base: 1, sm: 2, xl: 3 }}
+            spacing={compactView ? "sm" : "md"}
+            verticalSpacing={compactView ? "sm" : "md"}
+          >
             {group.poses.map((pose) => (
               <MascotCard
+                compact={compactView}
                 detailPathPrefix={detailPathPrefix}
                 hideSmallVariants={hideSmallVariants}
                 key={`${group.title}:${pose.pose}`}
@@ -161,12 +175,15 @@ export function MascotGallery({
 }
 
 function MascotCard({
+  compact,
   detailPathPrefix,
   hideSmallVariants,
   label,
   pose,
   tags,
-}: Readonly<MascotPose & { detailPathPrefix: string; hideSmallVariants: boolean }>) {
+}: Readonly<
+  MascotPose & { compact: boolean; detailPathPrefix: string; hideSmallVariants: boolean }
+>) {
   const { entry, ref } = useIntersection<HTMLDivElement>({ rootMargin: "320px 0px" });
   const loaded = entry?.isIntersecting ?? false;
 
@@ -174,28 +191,36 @@ function MascotCard({
     <Box ref={ref}>
       <Paper
         aria-label={`View ${label}`}
-        className={galleryStyles.card}
+        className={`${galleryStyles.card} ${compact ? galleryStyles.compactCard : ""}`}
         component={Link}
-        p="lg"
+        p={compact ? "sm" : "lg"}
         to={`${detailPathPrefix}/${encodeURIComponent(pose)}`}
         withBorder
       >
-        <Stack align="center" gap="md">
+        <Stack align="center" gap={compact ? "xs" : "md"}>
           <SpritePreview label={label} loaded={loaded} pose={pose} size={140} />
           <Stack align="center" gap="xs">
             <Stack align="center" gap={2}>
-              <Text fw={650}>{label}</Text>
-              {hideSmallVariants ? null : <Code>{pose}</Code>}
+              <Text
+                className={compact ? galleryStyles.compactLabel : undefined}
+                fw={650}
+                size={compact ? "sm" : undefined}
+              >
+                {label}
+              </Text>
+              {compact || hideSmallVariants ? null : <Code>{pose}</Code>}
             </Stack>
-            <Group gap={5} justify="center">
-              {tags.map((tag) => (
-                <Badge color="pink" key={tag} size="sm" variant="light">
-                  {mascotTagLabels[tag]}
-                </Badge>
-              ))}
-            </Group>
+            {compact ? null : (
+              <Group gap={5} justify="center">
+                {tags.map((tag) => (
+                  <Badge color="pink" key={tag} size="sm" variant="light">
+                    {mascotTagLabels[tag]}
+                  </Badge>
+                ))}
+              </Group>
+            )}
           </Stack>
-          {hideSmallVariants ? null : (
+          {compact || hideSmallVariants ? null : (
             <Group align="flex-end" gap="xl">
               <PreviewSize label="Mobile" loaded={loaded} pose={pose} size={104} />
               <PreviewSize label="Compact" loaded={loaded} pose={pose} size={48} />

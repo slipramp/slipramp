@@ -50,6 +50,13 @@ test("every gallery tag is assigned to at least one pose", () => {
   assert.ok(findMascotPose("play-dead")?.tags.includes("macabre"));
   assert.ok(findMascotPose("too-many-arms")?.tags.includes("macabre"));
   assert.ok(findMascotPose("under-desk-drag")?.tags.includes("macabre"));
+  assert.ok(findMascotPose("ramen-slurp")?.tags.includes("food-and-drink"));
+  assert.ok(findMascotPose("grillmaster-flip")?.tags.includes("food-and-drink"));
+  assert.ok(findMascotPose("wok-toss")?.tags.includes("food-and-drink"));
+  assert.ok(findMascotPose("kebab-turn")?.tags.includes("food-and-drink"));
+  assert.ok(findMascotPose("runway-marshal")?.tags.includes("aviation"));
+  assert.ok(findMascotPose("window-seat-dreamer")?.tags.includes("aviation"));
+  assert.ok(findMascotPose("inflight-laptop-typing")?.tags.includes("aviation"));
 });
 
 test("tag filtering matches one selected tag while preserving phase groups", () => {

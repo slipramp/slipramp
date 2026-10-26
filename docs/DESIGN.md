@@ -1030,13 +1030,16 @@ the same authenticated contract.
 The optional kawaii theme adds an animated axolotl beside status badges and on
 detail pages. While a Run is queued, she uses a deterministic waiting pose such
 as reading, sipping iced coffee, eating popcorn, listening to music, playing
-on her phone, or touching the lawn beneath her. After assignment, she uses a
-deterministic working pose throughout preparation and execution. Creating or preparing Promotions use the same
+on her phone, touching the lawn beneath her, slurping ramen, or passing time in
+an airplane window seat. After assignment, she uses a deterministic working pose
+throughout preparation and execution, including runway marshalling, flight
+control, and inflight laptop work. Creating or preparing Promotions use the same
 working-pose selection; Promotions awaiting review use the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose, including an affectionate server hug or a guitar
 power chord with a broad strum, joyful singing expression, and golden sound
-bursts; failed or timed-out Runs choose a deterministic
+bursts, or a raised oven-mitt triumph. Working variations include dough flipping,
+dough kneading, cake piping, grillmaster flipping, wok tossing, and kebab turning. Failed or timed-out Runs choose a deterministic
 failure pose ranging from a laptop slump to server biting, tool fumbles,
 rocket-boot misfires, server stomping, emergency controls, and harmless slapstick
 retreats; canceled Runs use a neutral phone animation.
@@ -1064,8 +1067,10 @@ Waiting, working, celebration, and failure mascot poses also vary
 deterministically by that identity, so the same Run or Promotion keeps its
 selected pose across refreshes. The unlinked, authenticated `/mascot` route
 groups every production animation by state at its detail, mobile, and compact
-display sizes for visual review. Every pose has descriptive tags and a dedicated
-`/mascot/:pose` page, and the gallery's tag filter is encoded in its URL. A
+display sizes for visual review. Its optional compact gallery view uses the
+supported 104px mobile presentation and denser cards for scanning more poses at
+once. Every pose has descriptive tags and a dedicated `/mascot/:pose` page, and
+the gallery's tag filter is encoded in its URL. A
 separate static build reuses that gallery at `https://mascot.slipramp.com`
 without authentication, product navigation, API access, or a connection to the
 Slipramp deployment. Its public pose pages use `/poses/:pose`. Cloudflare Workers

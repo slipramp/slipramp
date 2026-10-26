@@ -20,6 +20,16 @@
   outline-offset: 3px;
 }
 
+.compactCard {
+  min-width: 0;
+}
+
+.compactLabel {
+  min-height: 2.4em;
+  line-height: 1.2;
+  text-align: center;
+}
+
 .detail {
   overflow: hidden;
   background:

@@ -160,6 +160,42 @@
   animation-duration: 3.2s;
 }
 
+.sprite[data-pose="ramen-slurp"] {
+  background-image: url("../assets/slipramp-axolotl-ramen-slurp.webp");
+  animation-name: ramen-slurp;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="window-seat-dreamer"] {
+  background-image: url("../assets/slipramp-axolotl-window-seat-dreamer.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="tray-table-snack"] {
+  background-image: url("../assets/slipramp-axolotl-tray-table-snack.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="red-eye-passenger"] {
+  background-image: url("../assets/slipramp-axolotl-red-eye-passenger.webp");
+  animation-duration: 3.2s;
+}
+
+.sprite[data-pose="inflight-laptop-typing"] {
+  background-image: url("../assets/slipramp-axolotl-inflight-laptop-typing.webp");
+  animation-duration: 1.6s;
+}
+
+.sprite[data-pose="runway-marshal"] {
+  background-image: url("../assets/slipramp-axolotl-runway-marshal.webp");
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="flight-controller"] {
+  background-image: url("../assets/slipramp-axolotl-flight-controller.webp");
+  animation-duration: 2.4s;
+}
+
 .sprite[data-pose="blueprint-review"] {
   background-image: url("../assets/slipramp-axolotl-blueprint-review.webp");
 }
@@ -225,6 +261,42 @@
   background-image: url("../assets/slipramp-axolotl-breaker-bar-bounce.webp");
   animation-name: breaker-bar-bounce;
   animation-duration: 1.6s;
+}
+
+.sprite[data-pose="dough-flip"] {
+  background-image: url("../assets/slipramp-axolotl-dough-flip.webp");
+  animation-name: dough-flip;
+  animation-duration: 2s;
+}
+
+.sprite[data-pose="dough-knead"] {
+  background-image: url("../assets/slipramp-axolotl-dough-knead.webp");
+  animation-name: dough-knead;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="cake-piping"] {
+  background-image: url("../assets/slipramp-axolotl-cake-piping.webp");
+  animation-name: cake-piping;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="grillmaster-flip"] {
+  background-image: url("../assets/slipramp-axolotl-grillmaster-flip.webp");
+  animation-name: grillmaster-flip;
+  animation-duration: 2s;
+}
+
+.sprite[data-pose="wok-toss"] {
+  background-image: url("../assets/slipramp-axolotl-wok-toss.webp");
+  animation-name: wok-toss;
+  animation-duration: 2s;
+}
+
+.sprite[data-pose="kebab-turn"] {
+  background-image: url("../assets/slipramp-axolotl-kebab-turn.webp");
+  animation-name: kebab-turn;
+  animation-duration: 2.4s;
 }
 
 .sprite[data-pose="beer-sip"] {
@@ -293,6 +365,12 @@
   background-image: url("../assets/slipramp-axolotl-guitar-power-chord.webp");
   animation-name: guitar-power-chord;
   animation-duration: 2.2s;
+}
+
+.sprite[data-pose="oven-mitt-triumph"] {
+  background-image: url("../assets/slipramp-axolotl-oven-mitt-triumph.webp");
+  animation-name: oven-mitt-triumph;
+  animation-duration: 2.4s;
 }
 
 .sprite[data-pose="laptop-slump"] {
@@ -519,6 +597,139 @@
   }
 }
 
+@keyframes dough-flip {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  32.5% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.5% {
+    background-position-x: calc(200% / 3);
+  }
+
+  65% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes ramen-slurp {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  29.166667% {
+    background-position-x: calc(100% / 3);
+  }
+
+  50% {
+    background-position-x: calc(200% / 3);
+  }
+
+  70.833333% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes dough-knead {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.916667% {
+    background-position-x: calc(200% / 3);
+  }
+
+  68.75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes cake-piping {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  50% {
+    background-position-x: calc(200% / 3);
+  }
+
+  72.916667% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes grillmaster-flip {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  32.5% {
+    background-position-x: calc(100% / 3);
+  }
+
+  52.5% {
+    background-position-x: calc(200% / 3);
+  }
+
+  67.5% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes wok-toss {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  32.5% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.5% {
+    background-position-x: calc(200% / 3);
+  }
+
+  67.5% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes kebab-turn {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.916667% {
+    background-position-x: calc(200% / 3);
+  }
+
+  72.916667% {
+    background-position-x: 100%;
+  }
+}
+
 @keyframes rocket-boot-misfire {
   0%,
   100% {
@@ -610,6 +821,25 @@
   }
 
   70.454545% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes oven-mitt-triumph {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  41.666667% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
     background-position-x: 100%;
   }
 }
