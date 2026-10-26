@@ -67,9 +67,36 @@ and catalog revision.
 `sync` is an optional recognized Action name. Targets without it remain useful
 collections of operations. The Target's desired commit is a relevance marker
 for scheduling and Git delivery coalescing, not an applied-infrastructure or
-Run checkout revision. Slipramp does not currently infer reconciliation state
-from successful Runs or claim that generic infrastructure is continuously in
-sync.
+Run checkout revision. Reconciliation checkpoints use only the Action whose
+technical name is exactly `sync`; Action intent and other successful Runs do not
+participate. Slipramp compares immutable checkpoints and never claims that
+infrastructure is continuously in sync.
+
+Every new Run freezes the Target's desired relevance commit independently from
+its checkout commit. Exact reruns preserve the original marker, while latest
+reruns capture the Target's current marker. A Run pinned by artifact inputs
+inherits the producer Run's marker, so a plan from an older desired revision
+cannot represent the current one. Multiple inputs must agree on that marker.
+Historical Runs created before markers were recorded, and exact reruns of those
+Runs, remain unknown; checkout commits are never used to infer or backfill them.
+
+A Target durably references its last attempted and last successful sync Runs.
+Assignment advances the attempted checkpoint atomically with the transition
+from `queued` to `assigned`, so queued cancellation is not an attempt. A sync
+Run finishing `succeeded` advances the successful checkpoint atomically with
+its terminal transition. Failed, canceled, and timed-out attempts remain the
+latest attempt without replacing an earlier success, and duplicate terminal
+observations cannot move either checkpoint backward. Repository refresh may
+advance the desired commit while a sync Run is active but never changes that
+Run's marker. A later exact rerun of an older revision is a new factual attempt
+and, if successful, a new successful checkpoint with the older marker.
+
+For an active Target that still defines `sync`, reconciliation comparison is
+`matched` when the last successful marker equals the desired commit,
+`different` when both are known and differ, and `unknown` without a trustworthy
+successful marker. Archived Targets retain both historical Run references but
+always report `unknown`; reactivation retains the history and resumes the
+factual comparison against the new desired commit.
 
 Actions are independent executions. Multi-step procedures belong inside the
 invoked script, task runner, or container rather than a Slipramp workflow graph.
@@ -233,10 +260,11 @@ UI, API, Git delivery, and Promotion preparation use the same Run-creation
 service. Requests select the durable Target ID and Action name; the service
 resolves the Target's active repository catalog, validates parameters and
 artifact bindings, accepts an optional idempotency key, and freezes the
-Repository, commit, catalog revision, Target, Action, Runtime, Placement,
-source, and actor. Authenticated request idempotency is scoped to the submitting
-Principal. Historical creator and cancellation attribution includes both a
-Principal reference and an immutable actor snapshot.
+Repository, checkout commit, independent Target relevance commit, catalog
+revision, Target, Action, Runtime, Placement, source, and actor. Authenticated
+request idempotency is scoped to the submitting Principal. Historical creator
+and cancellation attribution includes both a Principal reference and an
+immutable actor snapshot.
 
 Promotion preparation Run insertion and linkage to its requesting Promotion
 commit in the same transaction, so an ambiguous creation response cannot leave
@@ -259,11 +287,12 @@ validation before writing the observation and phase history in the same
 transaction. Callers do not supply their own allowed predecessor phases.
 
 Finished Runs support two explicit rerun modes. Exact reruns copy the frozen
-execution snapshot, commit, catalog revision, parameters, and retained inputs.
-Latest reruns resolve the same Target, Action, and parameter values against the
-active catalog and current Placement configuration. Latest reruns reject
-artifact inputs because inputs pin consumers to their producing revision. Both
-modes create a new Run linked to its immediate parent and derive source and
+execution snapshot, checkout commit, Target relevance marker, catalog revision,
+parameters, and retained inputs. Latest reruns resolve the same Target, Action,
+and parameter values against the active catalog and current Placement
+configuration and capture the current Target relevance marker. Latest reruns
+reject artifact inputs because inputs pin consumers to their producing revision.
+Both modes create a new Run linked to its immediate parent and derive source and
 actor from the new request boundary.
 
 ### Git triggers
@@ -1023,7 +1052,12 @@ paginated index. Product navigation addresses Targets directly as
 owning Target URLs. The API follows the same resource boundary with
 `/api/v1/targets/{targetId}`, Target-scoped Action explanation, Target-ID Run
 creation, and Target-ID Run history filtering. Repository catalog reads remain
-available as immutable definition collections.
+available as immutable definition collections. Target responses include the
+desired relevance commit, separate last-attempted and last-successful sync Run
+checkpoints, their frozen markers and lifecycle facts, and a factual
+`matched`/`different`/`unknown` comparison. The Target page links those Runs and
+commits, keeps a latest failure visible beside an earlier matching success, and
+shows archived checkpoints without a convergence claim.
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 
@@ -1038,8 +1072,12 @@ working-pose selection; Promotions awaiting review use the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose, including an affectionate server hug or a guitar
 power chord with a broad strum, joyful singing expression, and golden sound
-bursts, or a raised oven-mitt triumph. Working variations include dough flipping,
-dough kneading, cake piping, grillmaster flipping, wok tossing, and kebab turning. Failed or timed-out Runs choose a deterministic
+bursts, a raised oven-mitt triumph, or a formal flag salute. Working variations
+include dough flipping, dough kneading, cake piping, grillmaster flipping, wok
+tossing, kebab turning, checking an inert shoulder-launcher training replica,
+reading a consistently oriented field map, scanning through a handheld rangefinder,
+and inspecting a compact field-medic kit.
+Failed or timed-out Runs choose a deterministic
 failure pose ranging from a laptop slump to server biting, tool fumbles,
 rocket-boot misfires, server stomping, emergency controls, and harmless slapstick
 retreats; canceled Runs use a neutral phone animation.
@@ -1059,7 +1097,8 @@ preparation. In the kawaii theme, visible lists refresh while Runs are unfinishe
 or Promotions are creating or preparing.
 Animation timing varies by Run or Promotion identity and stays stable across
 refreshes. Compact standing variations include a determined working bounce and a
-rising-chart celebration. Pose-specific frame holds retain reviewed jumps and
+rising-chart celebration, plus a silver-pistol salute that racks the slide before
+one upward celebratory shot. Pose-specific frame holds retain reviewed jumps and
 emotional reactions, including the rocket misfire's hopeful start and disappointed
 ending, the server hug's squeeze, and the guitar's brief strum and sustained chord,
 while sprite geometry and reduced-motion behavior remain shared.
@@ -1069,7 +1108,8 @@ selected pose across refreshes. The unlinked, authenticated `/mascot` route
 groups every production animation by state at its detail, mobile, and compact
 display sizes for visual review. Its optional compact gallery view uses the
 supported 104px mobile presentation and denser cards for scanning more poses at
-once. Every pose has descriptive tags and a dedicated `/mascot/:pose` page, and
+once; it is the default gallery view and can be toggled off. Every pose has
+descriptive tags and a dedicated `/mascot/:pose` page, and
 the gallery's tag filter is encoded in its URL. A
 separate static build reuses that gallery at `https://mascot.slipramp.com`
 without authentication, product navigation, API access, or a connection to the

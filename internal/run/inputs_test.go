@@ -22,7 +22,7 @@ func TestCreateRunPinsArtifactInputToProducerRevision(t *testing.T) {
 		"plan": {Path: "/artifacts/plan.tfplan"},
 	}
 	target.Spec.Actions["preview"] = preview
-	target.Spec.Actions["apply"] = catalog.Action{
+	target.Spec.Actions["sync"] = catalog.Action{
 		Command: []string{"terraform", "apply"},
 		Inputs: map[string]catalog.Input{
 			"plan": {
@@ -34,6 +34,7 @@ func TestCreateRunPinsArtifactInputToProducerRevision(t *testing.T) {
 	service.catalogs = &recordingCatalogs{revision: revision}
 	artifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1300")
 	producerRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1301")
+	producerRelevanceCommitSHA := strings.Repeat("b", 40)
 	runs.artifacts = map[uuid.UUID]ArtifactInput{
 		artifactID: {
 			ArtifactID: artifactID, ProducerRunID: producerRunID, Name: "plan",
@@ -41,12 +42,13 @@ func TestCreateRunPinsArtifactInputToProducerRevision(t *testing.T) {
 			SHA256: strings.Repeat("a", 64), RetentionState: "retained",
 			TargetID: testTargetID, RepositoryID: testRepositoryID, CatalogRevisionID: testRevisionID,
 			CommitSHA: testCommitSHA, TargetName: "network", ActionName: "preview",
+			TargetRelevanceCommitSHA: &producerRelevanceCommitSHA,
 		},
 	}
 
 	created, err := service.CreateRun(context.Background(), CreateRequest{
 		TargetID:   testTargetID,
-		ActionName: "apply",
+		ActionName: "sync",
 		Inputs:     map[string]uuid.UUID{"plan": artifactID},
 		Source:     Source{Type: SourceTypeManual},
 	})
@@ -55,6 +57,8 @@ func TestCreateRunPinsArtifactInputToProducerRevision(t *testing.T) {
 	}
 	input := created.Snapshot.Inputs["plan"]
 	if created.CatalogRevisionID != testRevisionID || created.CommitSHA != testCommitSHA ||
+		created.TargetRelevanceCommitSHA == nil ||
+		*created.TargetRelevanceCommitSHA != producerRelevanceCommitSHA ||
 		input.ArtifactID != artifactID || input.ProducerRunID != producerRunID {
 		t.Errorf("created input-pinned Run = %#v", created)
 	}

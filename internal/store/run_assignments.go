@@ -65,6 +65,21 @@ func (d *Database) ClaimQueuedRun(ctx context.Context, clusterName string, claim
 	); err != nil {
 		return run.Run{}, fmt.Errorf("record assigned Run phase: %w", err)
 	}
+	if row.ActionName == "sync" {
+		updated, err := queries.RecordTargetSyncAttempt(
+			ctx,
+			storedb.RecordTargetSyncAttemptParams{
+				RunID:    row.ID,
+				TargetID: row.TargetID,
+			},
+		)
+		if err != nil {
+			return run.Run{}, fmt.Errorf("record Target sync attempt: %w", err)
+		}
+		if updated != 1 {
+			return run.Run{}, errors.New("record Target sync attempt: Target does not exist")
+		}
+	}
 
 	if err := transaction.Commit(ctx); err != nil {
 		return run.Run{}, fmt.Errorf("commit Run claim transaction: %w", err)

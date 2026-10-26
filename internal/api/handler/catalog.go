@@ -129,6 +129,8 @@ func (h *Handler) ListTargets(
 			commitKey(item.RepositoryID, item.CatalogCommitSHA),
 			commitKey(item.RepositoryID, item.DesiredCommitSHA),
 		)
+		keys = appendTargetCheckpointCommitKeys(keys, item.RepositoryID, item.LastAttemptedSync)
+		keys = appendTargetCheckpointCommitKeys(keys, item.RepositoryID, item.LastSuccessfulSync)
 	}
 	commits, err := h.commitResponses(ctx, keys)
 	if err != nil {
@@ -142,6 +144,7 @@ func (h *Handler) ListTargets(
 			CatalogCommit:     commits[commitKey(item.RepositoryID, item.CatalogCommitSHA)],
 			CatalogRevisionID: item.CatalogRevisionID,
 			DesiredCommit:     commits[commitKey(item.RepositoryID, item.DesiredCommitSHA)],
+			Reconciliation:    targetReconciliationResponse(item, commits),
 			ID:                item.ID,
 			Name:              item.Target.Metadata.Name,
 			Placement:         optionalString(item.Target.Spec.Placement),
@@ -178,6 +181,8 @@ func (h *Handler) GetTarget(
 		commitKey(record.RepositoryID, record.CatalogCommitSHA),
 		commitKey(record.RepositoryID, record.DesiredCommitSHA),
 	}
+	keys = appendTargetCheckpointCommitKeys(keys, record.RepositoryID, record.LastAttemptedSync)
+	keys = appendTargetCheckpointCommitKeys(keys, record.RepositoryID, record.LastSuccessfulSync)
 	commits, err := h.commitResponses(ctx, keys)
 	if err != nil {
 		return nil, err
@@ -187,6 +192,9 @@ func (h *Handler) GetTarget(
 		catalog.TargetState{DesiredCommitSHA: record.DesiredCommitSHA},
 		commits,
 		record.RepositoryID,
+		record.ArchivedAt != nil,
+		record.LastAttemptedSync,
+		record.LastSuccessfulSync,
 	)
 	if err != nil {
 		return nil, err
@@ -238,6 +246,8 @@ func (h *Handler) GetRepositoryCatalog(
 	keys := []repository.CommitKey{commitKey(request.RepositoryID, active.Revision.CommitSHA)}
 	for _, state := range active.TargetStates {
 		keys = append(keys, commitKey(request.RepositoryID, state.DesiredCommitSHA))
+		keys = appendTargetCheckpointCommitKeys(keys, request.RepositoryID, state.LastAttemptedSync)
+		keys = appendTargetCheckpointCommitKeys(keys, request.RepositoryID, state.LastSuccessfulSync)
 	}
 	commits, err := h.commitResponses(ctx, keys)
 	if err != nil {
@@ -270,6 +280,9 @@ func activeCatalogResponse(
 			active.TargetStates[target.Metadata.Name],
 			commits,
 			repositoryID,
+			false,
+			active.TargetStates[target.Metadata.Name].LastAttemptedSync,
+			active.TargetStates[target.Metadata.Name].LastSuccessfulSync,
 		)
 		if err != nil {
 			return api.CatalogRevision{}, err
@@ -342,6 +355,9 @@ func catalogTargetResponse(
 	state catalog.TargetState,
 	commits map[repository.CommitKey]api.GitCommit,
 	repositoryID uuid.UUID,
+	archived bool,
+	lastAttemptedSync *catalog.SyncRunCheckpoint,
+	lastSuccessfulSync *catalog.SyncRunCheckpoint,
 ) (api.TargetDefinition, error) {
 	actions, err := catalogActionsResponse(target.Spec.Actions)
 	if err != nil {
@@ -365,8 +381,93 @@ func catalogTargetResponse(
 		Source: catalogSourceResponse(target.Source),
 		Status: api.TargetStatus{
 			DesiredCommit: commits[commitKey(repositoryID, state.DesiredCommitSHA)],
+			Reconciliation: targetReconciliationStatusResponse(
+				target,
+				state.DesiredCommitSHA,
+				archived,
+				lastAttemptedSync,
+				lastSuccessfulSync,
+				commits,
+				repositoryID,
+			),
 		},
 	}, nil
+}
+
+func appendTargetCheckpointCommitKeys(
+	keys []repository.CommitKey,
+	repositoryID uuid.UUID,
+	checkpoint *catalog.SyncRunCheckpoint,
+) []repository.CommitKey {
+	if checkpoint != nil && checkpoint.RelevanceCommitSHA != nil {
+		return append(keys, commitKey(repositoryID, *checkpoint.RelevanceCommitSHA))
+	}
+
+	return keys
+}
+
+func targetReconciliationResponse(
+	record catalog.TargetSummary,
+	commits map[repository.CommitKey]api.GitCommit,
+) api.TargetReconciliationStatus {
+	return targetReconciliationStatusResponse(
+		record.Target,
+		record.DesiredCommitSHA,
+		record.ArchivedAt != nil,
+		record.LastAttemptedSync,
+		record.LastSuccessfulSync,
+		commits,
+		record.RepositoryID,
+	)
+}
+
+func targetReconciliationStatusResponse(
+	target catalog.Target,
+	desiredCommitSHA string,
+	archived bool,
+	lastAttemptedSync *catalog.SyncRunCheckpoint,
+	lastSuccessfulSync *catalog.SyncRunCheckpoint,
+	commits map[repository.CommitKey]api.GitCommit,
+	repositoryID uuid.UUID,
+) api.TargetReconciliationStatus {
+	return api.TargetReconciliationStatus{
+		Comparison: api.TargetReconciliationStatusComparison(catalog.CompareReconciliation(
+			target,
+			desiredCommitSHA,
+			archived,
+			lastSuccessfulSync,
+		)),
+		LastAttemptedSync:  targetSyncCheckpointResponse(lastAttemptedSync, commits, repositoryID),
+		LastSuccessfulSync: targetSyncCheckpointResponse(lastSuccessfulSync, commits, repositoryID),
+	}
+}
+
+func targetSyncCheckpointResponse(
+	checkpoint *catalog.SyncRunCheckpoint,
+	commits map[repository.CommitKey]api.GitCommit,
+	repositoryID uuid.UUID,
+) *api.TargetSyncRunCheckpoint {
+	if checkpoint == nil {
+		return nil
+	}
+	var outcome *api.RunOutcome
+	if checkpoint.Outcome != nil {
+		converted := api.RunOutcome(*checkpoint.Outcome)
+		outcome = &converted
+	}
+
+	return &api.TargetSyncRunCheckpoint{
+		RunID:                   checkpoint.RunID,
+		RelevanceCommit:         optionalCommit(repositoryID, checkpoint.RelevanceCommitSHA, commits),
+		Phase:                   api.RunPhase(checkpoint.Phase),
+		Outcome:                 outcome,
+		CreatedAt:               checkpoint.CreatedAt,
+		AssignedAt:              checkpoint.AssignedAt,
+		PreparingAt:             checkpoint.PreparingAt,
+		StartedAt:               checkpoint.StartedAt,
+		FinishedAt:              checkpoint.FinishedAt,
+		CancellationRequestedAt: checkpoint.CancellationRequestedAt,
+	}
 }
 
 func catalogActionsResponse(actions map[string]catalog.Action) (map[string]api.Action, error) {

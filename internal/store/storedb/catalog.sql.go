@@ -534,7 +534,7 @@ func (q *Queries) ListCatalogRuntimes(ctx context.Context, catalogRevisionID pgt
 }
 
 const listCatalogTargetStates = `-- name: ListCatalogTargetStates :many
-SELECT name, desired_commit_sha
+SELECT id, name, desired_commit_sha
 FROM targets
 WHERE catalog_revision_id = $1
   AND archived_at IS NULL
@@ -542,6 +542,7 @@ ORDER BY name
 `
 
 type ListCatalogTargetStatesRow struct {
+	ID               pgtype.UUID
 	Name             string
 	DesiredCommitSha string
 }
@@ -555,7 +556,7 @@ func (q *Queries) ListCatalogTargetStates(ctx context.Context, catalogRevisionID
 	var items []ListCatalogTargetStatesRow
 	for rows.Next() {
 		var i ListCatalogTargetStatesRow
-		if err := rows.Scan(&i.Name, &i.DesiredCommitSha); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.DesiredCommitSha); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -621,6 +622,104 @@ func (q *Queries) ListRepositoryTargetStates(ctx context.Context, repositoryID p
 			&i.Name,
 			&i.DesiredCommitSha,
 			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTargetSyncCheckpoints = `-- name: ListTargetSyncCheckpoints :many
+SELECT
+    targets.id AS target_id,
+    attempted.id AS last_attempted_sync_run_id,
+    attempted.target_relevance_commit_sha AS last_attempted_sync_relevance_commit_sha,
+    attempted.phase AS last_attempted_sync_phase,
+    attempted.outcome AS last_attempted_sync_outcome,
+    attempted.created_at AS last_attempted_sync_created_at,
+    attempted.assigned_at AS last_attempted_sync_assigned_at,
+    attempted.preparing_at AS last_attempted_sync_preparing_at,
+    attempted.started_at AS last_attempted_sync_started_at,
+    attempted.finished_at AS last_attempted_sync_finished_at,
+    attempted.cancellation_requested_at AS last_attempted_sync_cancellation_requested_at,
+    successful.id AS last_successful_sync_run_id,
+    successful.target_relevance_commit_sha AS last_successful_sync_relevance_commit_sha,
+    successful.phase AS last_successful_sync_phase,
+    successful.outcome AS last_successful_sync_outcome,
+    successful.created_at AS last_successful_sync_created_at,
+    successful.assigned_at AS last_successful_sync_assigned_at,
+    successful.preparing_at AS last_successful_sync_preparing_at,
+    successful.started_at AS last_successful_sync_started_at,
+    successful.finished_at AS last_successful_sync_finished_at,
+    successful.cancellation_requested_at AS last_successful_sync_cancellation_requested_at
+FROM targets
+LEFT JOIN runs AS attempted
+  ON attempted.id = targets.last_attempted_sync_run_id
+LEFT JOIN runs AS successful
+  ON successful.id = targets.last_successful_sync_run_id
+WHERE targets.id = ANY($1::uuid[])
+ORDER BY targets.id
+`
+
+type ListTargetSyncCheckpointsRow struct {
+	TargetID                                  pgtype.UUID
+	LastAttemptedSyncRunID                    pgtype.UUID
+	LastAttemptedSyncRelevanceCommitSha       *string
+	LastAttemptedSyncPhase                    *string
+	LastAttemptedSyncOutcome                  *string
+	LastAttemptedSyncCreatedAt                pgtype.Timestamptz
+	LastAttemptedSyncAssignedAt               pgtype.Timestamptz
+	LastAttemptedSyncPreparingAt              pgtype.Timestamptz
+	LastAttemptedSyncStartedAt                pgtype.Timestamptz
+	LastAttemptedSyncFinishedAt               pgtype.Timestamptz
+	LastAttemptedSyncCancellationRequestedAt  pgtype.Timestamptz
+	LastSuccessfulSyncRunID                   pgtype.UUID
+	LastSuccessfulSyncRelevanceCommitSha      *string
+	LastSuccessfulSyncPhase                   *string
+	LastSuccessfulSyncOutcome                 *string
+	LastSuccessfulSyncCreatedAt               pgtype.Timestamptz
+	LastSuccessfulSyncAssignedAt              pgtype.Timestamptz
+	LastSuccessfulSyncPreparingAt             pgtype.Timestamptz
+	LastSuccessfulSyncStartedAt               pgtype.Timestamptz
+	LastSuccessfulSyncFinishedAt              pgtype.Timestamptz
+	LastSuccessfulSyncCancellationRequestedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListTargetSyncCheckpoints(ctx context.Context, targetIds []pgtype.UUID) ([]ListTargetSyncCheckpointsRow, error) {
+	rows, err := q.db.Query(ctx, listTargetSyncCheckpoints, targetIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTargetSyncCheckpointsRow
+	for rows.Next() {
+		var i ListTargetSyncCheckpointsRow
+		if err := rows.Scan(
+			&i.TargetID,
+			&i.LastAttemptedSyncRunID,
+			&i.LastAttemptedSyncRelevanceCommitSha,
+			&i.LastAttemptedSyncPhase,
+			&i.LastAttemptedSyncOutcome,
+			&i.LastAttemptedSyncCreatedAt,
+			&i.LastAttemptedSyncAssignedAt,
+			&i.LastAttemptedSyncPreparingAt,
+			&i.LastAttemptedSyncStartedAt,
+			&i.LastAttemptedSyncFinishedAt,
+			&i.LastAttemptedSyncCancellationRequestedAt,
+			&i.LastSuccessfulSyncRunID,
+			&i.LastSuccessfulSyncRelevanceCommitSha,
+			&i.LastSuccessfulSyncPhase,
+			&i.LastSuccessfulSyncOutcome,
+			&i.LastSuccessfulSyncCreatedAt,
+			&i.LastSuccessfulSyncAssignedAt,
+			&i.LastSuccessfulSyncPreparingAt,
+			&i.LastSuccessfulSyncStartedAt,
+			&i.LastSuccessfulSyncFinishedAt,
+			&i.LastSuccessfulSyncCancellationRequestedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -150,37 +150,38 @@ type Observation struct {
 }
 
 type Run struct {
-	ID                      uuid.UUID
-	Phase                   Phase
-	Outcome                 *Outcome
-	TargetID                uuid.UUID
-	RepositoryID            uuid.UUID
-	CatalogRevisionID       uuid.UUID
-	CommitSHA               string
-	TargetName              string
-	ActionName              string
-	Parameters              map[string]any
-	PlacementName           string
-	ClusterName             string
-	Source                  Source
-	IdempotencyKey          *string
-	RequestDigest           string
-	RerunOfRunID            *uuid.UUID
-	RerunMode               *RerunMode
-	Snapshot                Snapshot
-	CreatedBy               *productidentity.ActorSnapshot
-	CanceledBy              *productidentity.ActorSnapshot
-	CreatedAt               time.Time
-	AssignedAt              *time.Time
-	PreparingAt             *time.Time
-	StartedAt               *time.Time
-	FinishedAt              *time.Time
-	LastObservedAt          *time.Time
-	CancellationRequestedAt *time.Time
-	JobUID                  *string
-	OutcomeReason           *string
-	OutcomeMessage          *string
-	ExitCode                *int32
+	ID                       uuid.UUID
+	Phase                    Phase
+	Outcome                  *Outcome
+	TargetID                 uuid.UUID
+	RepositoryID             uuid.UUID
+	CatalogRevisionID        uuid.UUID
+	CommitSHA                string
+	TargetRelevanceCommitSHA *string
+	TargetName               string
+	ActionName               string
+	Parameters               map[string]any
+	PlacementName            string
+	ClusterName              string
+	Source                   Source
+	IdempotencyKey           *string
+	RequestDigest            string
+	RerunOfRunID             *uuid.UUID
+	RerunMode                *RerunMode
+	Snapshot                 Snapshot
+	CreatedBy                *productidentity.ActorSnapshot
+	CanceledBy               *productidentity.ActorSnapshot
+	CreatedAt                time.Time
+	AssignedAt               *time.Time
+	PreparingAt              *time.Time
+	StartedAt                *time.Time
+	FinishedAt               *time.Time
+	LastObservedAt           *time.Time
+	CancellationRequestedAt  *time.Time
+	JobUID                   *string
+	OutcomeReason            *string
+	OutcomeMessage           *string
+	ExitCode                 *int32
 }
 
 type Snapshot struct {
@@ -193,20 +194,21 @@ type Snapshot struct {
 }
 
 type ArtifactInput struct {
-	ArtifactID        uuid.UUID `json:"artifactId"`
-	ProducerRunID     uuid.UUID `json:"producerRunId"`
-	Name              string    `json:"name"`
-	MediaType         string    `json:"mediaType"`
-	SizeBytes         int64     `json:"sizeBytes"`
-	SHA256            string    `json:"sha256"`
-	Sensitive         bool      `json:"sensitive"`
-	RetentionState    string    `json:"retentionState"`
-	TargetID          uuid.UUID `json:"targetId"`
-	RepositoryID      uuid.UUID `json:"repositoryId"`
-	CatalogRevisionID uuid.UUID `json:"catalogRevisionId"`
-	CommitSHA         string    `json:"commitSha"`
-	TargetName        string    `json:"targetName"`
-	ActionName        string    `json:"actionName"`
+	ArtifactID               uuid.UUID `json:"artifactId"`
+	ProducerRunID            uuid.UUID `json:"producerRunId"`
+	Name                     string    `json:"name"`
+	MediaType                string    `json:"mediaType"`
+	SizeBytes                int64     `json:"sizeBytes"`
+	SHA256                   string    `json:"sha256"`
+	Sensitive                bool      `json:"sensitive"`
+	RetentionState           string    `json:"retentionState"`
+	TargetID                 uuid.UUID `json:"targetId"`
+	RepositoryID             uuid.UUID `json:"repositoryId"`
+	CatalogRevisionID        uuid.UUID `json:"catalogRevisionId"`
+	CommitSHA                string    `json:"commitSha"`
+	TargetRelevanceCommitSHA *string   `json:"targetRelevanceCommitSha,omitempty"`
+	TargetName               string    `json:"targetName"`
+	ActionName               string    `json:"actionName"`
 }
 
 type RepositorySnapshot struct {

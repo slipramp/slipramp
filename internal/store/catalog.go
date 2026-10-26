@@ -44,9 +44,23 @@ func (d *Database) GetActiveCatalog(ctx context.Context, repositoryID uuid.UUID)
 		return catalog.ActiveCatalog{}, fmt.Errorf("list catalog target states: %w", err)
 	}
 
+	targetIDs := make([]pgtype.UUID, 0, len(states))
+	for _, state := range states {
+		targetIDs = append(targetIDs, state.ID)
+	}
+	checkpoints, err := loadTargetSyncCheckpoints(ctx, queries, targetIDs)
+	if err != nil {
+		return catalog.ActiveCatalog{}, err
+	}
+
 	targetStates := make(map[string]catalog.TargetState, len(states))
 	for _, state := range states {
-		targetStates[state.Name] = catalog.TargetState{DesiredCommitSHA: state.DesiredCommitSha}
+		checkpoint := checkpoints[uuid.UUID(state.ID.Bytes)]
+		targetStates[state.Name] = catalog.TargetState{
+			DesiredCommitSHA:   state.DesiredCommitSha,
+			LastAttemptedSync:  checkpoint.lastAttempted,
+			LastSuccessfulSync: checkpoint.lastSuccessful,
+		}
 	}
 
 	if err := transaction.Commit(ctx); err != nil {
@@ -125,6 +139,14 @@ func (d *Database) ListActiveTargets(
 	if err != nil {
 		return catalog.TargetList{}, fmt.Errorf("list active targets: %w", err)
 	}
+	targetIDs := make([]pgtype.UUID, 0, len(rows))
+	for _, row := range rows {
+		targetIDs = append(targetIDs, row.ID)
+	}
+	checkpoints, err := loadTargetSyncCheckpoints(ctx, d.queries, targetIDs)
+	if err != nil {
+		return catalog.TargetList{}, err
+	}
 
 	items := make([]catalog.TargetSummary, 0, len(rows))
 	for _, row := range rows {
@@ -133,14 +155,18 @@ func (d *Database) ListActiveTargets(
 			return catalog.TargetList{}, fmt.Errorf("decode active target: %w", err)
 		}
 
+		targetID := uuid.UUID(row.ID.Bytes)
+		checkpoint := checkpoints[targetID]
 		items = append(items, catalog.TargetSummary{
-			ID:                uuid.UUID(row.ID.Bytes),
-			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
-			RepositoryName:    row.RepositoryName,
-			CatalogRevisionID: uuid.UUID(row.CatalogRevisionID.Bytes),
-			CatalogCommitSHA:  row.CatalogCommitSha,
-			DesiredCommitSHA:  row.DesiredCommitSha,
-			Target:            target,
+			ID:                 targetID,
+			RepositoryID:       uuid.UUID(row.RepositoryID.Bytes),
+			RepositoryName:     row.RepositoryName,
+			CatalogRevisionID:  uuid.UUID(row.CatalogRevisionID.Bytes),
+			CatalogCommitSHA:   row.CatalogCommitSha,
+			DesiredCommitSHA:   row.DesiredCommitSha,
+			LastAttemptedSync:  checkpoint.lastAttempted,
+			LastSuccessfulSync: checkpoint.lastSuccessful,
+			Target:             target,
 		})
 	}
 
@@ -156,7 +182,7 @@ func (d *Database) GetTarget(ctx context.Context, targetID uuid.UUID) (catalog.T
 		return catalog.TargetSummary{}, fmt.Errorf("get Target: %w", err)
 	}
 
-	return targetSummaryFromRow(
+	result, err := targetSummaryFromRow(
 		row.ID,
 		row.RepositoryID,
 		row.RepositoryName,
@@ -166,6 +192,11 @@ func (d *Database) GetTarget(ctx context.Context, targetID uuid.UUID) (catalog.T
 		row.ArchivedAt,
 		row.Definition,
 	)
+	if err != nil {
+		return catalog.TargetSummary{}, err
+	}
+
+	return attachTargetSyncCheckpoints(ctx, d.queries, result)
 }
 
 func (d *Database) GetActiveTargetByName(
@@ -184,7 +215,7 @@ func (d *Database) GetActiveTargetByName(
 		return catalog.TargetSummary{}, fmt.Errorf("get active Target by name: %w", err)
 	}
 
-	return targetSummaryFromRow(
+	result, err := targetSummaryFromRow(
 		row.ID,
 		row.RepositoryID,
 		row.RepositoryName,
@@ -194,6 +225,128 @@ func (d *Database) GetActiveTargetByName(
 		row.ArchivedAt,
 		row.Definition,
 	)
+	if err != nil {
+		return catalog.TargetSummary{}, err
+	}
+
+	return attachTargetSyncCheckpoints(ctx, d.queries, result)
+}
+
+type targetSyncCheckpoints struct {
+	lastAttempted  *catalog.SyncRunCheckpoint
+	lastSuccessful *catalog.SyncRunCheckpoint
+}
+
+func attachTargetSyncCheckpoints(
+	ctx context.Context,
+	queries *storedb.Queries,
+	record catalog.TargetSummary,
+) (catalog.TargetSummary, error) {
+	checkpoints, err := loadTargetSyncCheckpoints(ctx, queries, []pgtype.UUID{databaseUUID(record.ID)})
+	if err != nil {
+		return catalog.TargetSummary{}, err
+	}
+	checkpoint := checkpoints[record.ID]
+	record.LastAttemptedSync = checkpoint.lastAttempted
+	record.LastSuccessfulSync = checkpoint.lastSuccessful
+
+	return record, nil
+}
+
+func loadTargetSyncCheckpoints(
+	ctx context.Context,
+	queries *storedb.Queries,
+	targetIDs []pgtype.UUID,
+) (map[uuid.UUID]targetSyncCheckpoints, error) {
+	result := make(map[uuid.UUID]targetSyncCheckpoints, len(targetIDs))
+	if len(targetIDs) == 0 {
+		return result, nil
+	}
+
+	rows, err := queries.ListTargetSyncCheckpoints(ctx, targetIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list Target sync checkpoints: %w", err)
+	}
+	for _, row := range rows {
+		attempted, err := targetSyncCheckpoint(
+			row.LastAttemptedSyncRunID,
+			row.LastAttemptedSyncRelevanceCommitSha,
+			row.LastAttemptedSyncPhase,
+			row.LastAttemptedSyncOutcome,
+			row.LastAttemptedSyncCreatedAt,
+			row.LastAttemptedSyncAssignedAt,
+			row.LastAttemptedSyncPreparingAt,
+			row.LastAttemptedSyncStartedAt,
+			row.LastAttemptedSyncFinishedAt,
+			row.LastAttemptedSyncCancellationRequestedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("decode last attempted sync checkpoint: %w", err)
+		}
+		successful, err := targetSyncCheckpoint(
+			row.LastSuccessfulSyncRunID,
+			row.LastSuccessfulSyncRelevanceCommitSha,
+			row.LastSuccessfulSyncPhase,
+			row.LastSuccessfulSyncOutcome,
+			row.LastSuccessfulSyncCreatedAt,
+			row.LastSuccessfulSyncAssignedAt,
+			row.LastSuccessfulSyncPreparingAt,
+			row.LastSuccessfulSyncStartedAt,
+			row.LastSuccessfulSyncFinishedAt,
+			row.LastSuccessfulSyncCancellationRequestedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("decode last successful sync checkpoint: %w", err)
+		}
+		result[uuid.UUID(row.TargetID.Bytes)] = targetSyncCheckpoints{
+			lastAttempted:  attempted,
+			lastSuccessful: successful,
+		}
+	}
+
+	return result, nil
+}
+
+func targetSyncCheckpoint(
+	runID pgtype.UUID,
+	relevanceCommitSHA *string,
+	phase *string,
+	outcome *string,
+	createdAt pgtype.Timestamptz,
+	assignedAt pgtype.Timestamptz,
+	preparingAt pgtype.Timestamptz,
+	startedAt pgtype.Timestamptz,
+	finishedAt pgtype.Timestamptz,
+	cancellationRequestedAt pgtype.Timestamptz,
+) (*catalog.SyncRunCheckpoint, error) {
+	if !runID.Valid {
+		return nil, nil
+	}
+	if phase == nil || !createdAt.Valid || !assignedAt.Valid {
+		return nil, errors.New("referenced sync Run is missing required lifecycle facts")
+	}
+
+	return &catalog.SyncRunCheckpoint{
+		RunID:                   uuid.UUID(runID.Bytes),
+		RelevanceCommitSHA:      cloneOptionalString(relevanceCommitSHA),
+		Phase:                   *phase,
+		Outcome:                 cloneOptionalString(outcome),
+		CreatedAt:               createdAt.Time.UTC(),
+		AssignedAt:              assignedAt.Time.UTC(),
+		PreparingAt:             applicationTime(preparingAt),
+		StartedAt:               applicationTime(startedAt),
+		FinishedAt:              applicationTime(finishedAt),
+		CancellationRequestedAt: applicationTime(cancellationRequestedAt),
+	}, nil
+}
+
+func cloneOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+
+	return &cloned
 }
 
 func targetSummaryFromRow(

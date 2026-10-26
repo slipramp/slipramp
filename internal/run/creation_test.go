@@ -92,6 +92,35 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 	}
 }
 
+func TestCreateRunFreezesTargetRelevanceSeparatelyFromCheckout(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	desiredCommitSHA := strings.Repeat("b", 40)
+	service.catalogs = &recordingCatalogs{
+		revision:         testRevision(),
+		desiredCommitSHA: desiredCommitSHA,
+	}
+
+	created, err := service.CreateRun(context.Background(), CreateRequest{
+		TargetID:   testTargetID,
+		ActionName: "preview",
+		Parameters: map[string]any{"mode": "safe"},
+		Source:     Source{Type: SourceTypeManual},
+	})
+	if err != nil {
+		t.Fatalf("CreateRun() error = %v", err)
+	}
+	if created.CommitSHA != testCommitSHA || created.TargetRelevanceCommitSHA == nil ||
+		*created.TargetRelevanceCommitSHA != desiredCommitSHA {
+		t.Errorf(
+			"Run commits = checkout %q, relevance %v",
+			created.CommitSHA,
+			created.TargetRelevanceCommitSHA,
+		)
+	}
+}
+
 func TestCreateRunRejectsInvalidParametersBeforePersistence(t *testing.T) {
 	t.Parallel()
 

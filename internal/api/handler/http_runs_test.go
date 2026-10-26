@@ -29,19 +29,21 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
 	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1500")
 	createdAt := time.Date(2026, time.October, 16, 12, 5, 0, 0, time.UTC)
+	relevanceCommitSHA := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	runs := &recordingRunService{
 		created: run.Run{
-			ID:                runID,
-			Phase:             run.PhaseQueued,
-			TargetID:          targetID,
-			RepositoryID:      repositoryID,
-			CatalogRevisionID: revisionID,
-			CommitSHA:         "0123456789abcdef0123456789abcdef01234567",
-			TargetName:        "network",
-			ActionName:        "preview",
-			Parameters:        map[string]any{"mode": "safe", "refresh": true},
-			PlacementName:     "infrastructure",
-			ClusterName:       "colo",
+			ID:                       runID,
+			Phase:                    run.PhaseQueued,
+			TargetID:                 targetID,
+			RepositoryID:             repositoryID,
+			CatalogRevisionID:        revisionID,
+			CommitSHA:                "0123456789abcdef0123456789abcdef01234567",
+			TargetRelevanceCommitSHA: &relevanceCommitSHA,
+			TargetName:               "network",
+			ActionName:               "preview",
+			Parameters:               map[string]any{"mode": "safe", "refresh": true},
+			PlacementName:            "infrastructure",
+			ClusterName:              "colo",
 			Snapshot: run.Snapshot{
 				Action: catalog.EffectiveAction{
 					Title:            "Preview changes",
@@ -97,7 +99,8 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 		result.ActionTitle == nil || *result.ActionTitle != "Preview changes" ||
 		result.ActionDescription == nil || *result.ActionDescription != "Creates a Terraform plan." ||
 		result.ActionDocumentationURL == nil ||
-		*result.ActionDocumentationURL != "https://docs.example.com/actions/preview" {
+		*result.ActionDocumentationURL != "https://docs.example.com/actions/preview" ||
+		result.TargetRelevanceCommit == nil || result.TargetRelevanceCommit.Sha != relevanceCommitSHA {
 		t.Errorf("Run response = %#v", result)
 	}
 	mode, err := result.Parameters["mode"].AsParameterValue0()

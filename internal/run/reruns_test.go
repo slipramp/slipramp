@@ -18,6 +18,8 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 
 	service, runs := testService(t)
 	original := finishedTestRun(t)
+	originalRelevanceCommitSHA := strings.Repeat("b", 40)
+	original.TargetRelevanceCommitSHA = &originalRelevanceCommitSHA
 	runs.loaded = original
 	newID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1301")
 	createdAt := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
@@ -51,6 +53,10 @@ func TestRerunRunExactCopiesFrozenExecution(t *testing.T) {
 		created.ClusterName != original.ClusterName || created.PlacementName != original.PlacementName ||
 		!created.CreatedAt.Equal(createdAt) {
 		t.Errorf("exact rerun = %#v", created)
+	}
+	if created.TargetRelevanceCommitSHA == nil ||
+		*created.TargetRelevanceCommitSHA != originalRelevanceCommitSHA {
+		t.Errorf("exact rerun relevance marker = %v", created.TargetRelevanceCommitSHA)
 	}
 	if created.RerunOfRunID == nil || *created.RerunOfRunID != original.ID ||
 		created.RerunMode == nil || *created.RerunMode != RerunModeExact {
@@ -93,6 +99,9 @@ func TestRerunRunLatestResolvesActiveExecution(t *testing.T) {
 	if created.CatalogRevisionID != latest.ID || created.CommitSHA != latest.CommitSHA ||
 		created.Snapshot.Runtime.Spec.Image != "hashicorp/terraform:1.15.0" {
 		t.Errorf("latest rerun resolution = %#v", created)
+	}
+	if created.TargetRelevanceCommitSHA == nil || *created.TargetRelevanceCommitSHA != latest.CommitSHA {
+		t.Errorf("latest rerun relevance marker = %v, want %q", created.TargetRelevanceCommitSHA, latest.CommitSHA)
 	}
 	if created.RerunOfRunID == nil || *created.RerunOfRunID != original.ID ||
 		created.RerunMode == nil || *created.RerunMode != RerunModeLatest {

@@ -365,6 +365,7 @@ export type TargetSummary = {
    * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
    */
   desiredCommit: GitCommit;
+  reconciliation: TargetReconciliationStatus;
 };
 
 export type TargetSummaryList = {
@@ -524,7 +525,7 @@ export type Run = {
   /**
    * Durable lifecycle position of the Run.
    */
-  phase: "queued" | "assigned" | "preparing" | "running" | "finished";
+  phase: RunPhase;
   /**
    * Stable identity of the durable Target selected for this Run.
    */
@@ -536,10 +537,14 @@ export type Run = {
   /**
    * Terminal result, present only when phase is finished.
    */
-  outcome?: "succeeded" | "failed" | "canceled" | "timed-out";
+  outcome?: RunOutcome;
   repositoryId: string;
   catalogRevisionId: string;
   commit: GitCommit;
+  /**
+   * Target desired relevance commit frozen when the Run was created. This is independent of the checkout commit. It is absent for historical Runs whose relevance marker is not trustworthy.
+   */
+  targetRelevanceCommit?: GitCommit;
   target: CatalogName;
   action: CatalogName;
   /**
@@ -1074,11 +1079,47 @@ export type TargetSpec = {
   };
 };
 
+export type RunPhase = "queued" | "assigned" | "preparing" | "running" | "finished";
+
+export type RunOutcome = "succeeded" | "failed" | "canceled" | "timed-out";
+
+export type TargetSyncRunCheckpoint = {
+  runId: string;
+  /**
+   * Target relevance commit frozen by the Run. It is absent when the Run predates trustworthy relevance markers or exactly reruns such a Run.
+   */
+  relevanceCommit?: GitCommit;
+  phase: RunPhase;
+  outcome?: RunOutcome;
+  createdAt: string;
+  assignedAt: string;
+  preparingAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  cancellationRequestedAt?: string;
+};
+
+export type TargetReconciliationStatus = {
+  /**
+   * Factual comparison of the active Target's desired relevance commit with its last successful sync Run marker. Archived Targets, Targets without a current sync Action, and Targets without a trustworthy successful marker report unknown.
+   */
+  comparison: "matched" | "different" | "unknown";
+  /**
+   * Most recently assigned Run for the Action whose technical name is exactly sync. A queued cancellation is not an attempt.
+   */
+  lastAttemptedSync?: TargetSyncRunCheckpoint;
+  /**
+   * Most recently assigned sync Run that finished with outcome succeeded.
+   */
+  lastSuccessfulSync?: TargetSyncRunCheckpoint;
+};
+
 export type TargetStatus = {
   /**
    * Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
    */
   desiredCommit: GitCommit;
+  reconciliation: TargetReconciliationStatus;
 };
 
 export type CatalogName = string;

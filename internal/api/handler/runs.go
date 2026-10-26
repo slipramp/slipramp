@@ -355,6 +355,7 @@ func runResponse(
 		RepositoryID:            record.RepositoryID,
 		CatalogRevisionID:       record.CatalogRevisionID,
 		Commit:                  commits[commitKey(record.RepositoryID, record.CommitSHA)],
+		TargetRelevanceCommit:   optionalCommit(record.RepositoryID, record.TargetRelevanceCommitSHA, commits),
 		Target:                  api.CatalogName(record.TargetName),
 		Action:                  api.CatalogName(record.ActionName),
 		ActionTitle:             optionalString(record.Snapshot.Action.Title),
@@ -437,6 +438,9 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 	commitKeys := make([]repository.CommitKey, 0, len(records))
 	for _, record := range records {
 		commitKeys = append(commitKeys, commitKey(record.RepositoryID, record.CommitSHA))
+		if record.TargetRelevanceCommitSHA != nil {
+			commitKeys = append(commitKeys, commitKey(record.RepositoryID, *record.TargetRelevanceCommitSHA))
+		}
 		for _, input := range record.Snapshot.Inputs {
 			commitKeys = append(commitKeys, commitKey(input.RepositoryID, input.CommitSHA))
 		}
@@ -488,6 +492,19 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 	}
 
 	return items, nil
+}
+
+func optionalCommit(
+	repositoryID uuid.UUID,
+	commitSHA *string,
+	commits map[repository.CommitKey]api.GitCommit,
+) *api.GitCommit {
+	if commitSHA == nil {
+		return nil
+	}
+	commit := commits[commitKey(repositoryID, *commitSHA)]
+
+	return &commit
 }
 
 func runArtifactConsumers(snapshot run.Snapshot) map[string][]api.RunArtifactConsumer {

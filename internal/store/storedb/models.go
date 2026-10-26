@@ -313,39 +313,40 @@ type RepositoryTrackedBranchCommit struct {
 }
 
 type Run struct {
-	ID                      pgtype.UUID
-	Phase                   string
-	Outcome                 *string
-	RepositoryID            pgtype.UUID
-	CatalogRevisionID       pgtype.UUID
-	CommitSha               string
-	TargetName              string
-	ActionName              string
-	Parameters              []byte
-	PlacementName           string
-	ClusterName             string
-	Source                  []byte
-	IdempotencyKey          *string
-	RequestDigest           string
-	Snapshot                []byte
-	CreatedAt               pgtype.Timestamptz
-	AssignedAt              pgtype.Timestamptz
-	PreparingAt             pgtype.Timestamptz
-	StartedAt               pgtype.Timestamptz
-	FinishedAt              pgtype.Timestamptz
-	LastObservedAt          pgtype.Timestamptz
-	CancellationRequestedAt pgtype.Timestamptz
-	JobUid                  *string
-	OutcomeReason           *string
-	OutcomeMessage          *string
-	ExitCode                *int32
-	CreatedByPrincipalID    pgtype.UUID
-	CreatedBySnapshot       []byte
-	CanceledByPrincipalID   pgtype.UUID
-	CanceledBySnapshot      []byte
-	RerunOfRunID            pgtype.UUID
-	RerunMode               *string
-	TargetID                pgtype.UUID
+	ID                       pgtype.UUID
+	Phase                    string
+	Outcome                  *string
+	RepositoryID             pgtype.UUID
+	CatalogRevisionID        pgtype.UUID
+	CommitSha                string
+	TargetName               string
+	ActionName               string
+	Parameters               []byte
+	PlacementName            string
+	ClusterName              string
+	Source                   []byte
+	IdempotencyKey           *string
+	RequestDigest            string
+	Snapshot                 []byte
+	CreatedAt                pgtype.Timestamptz
+	AssignedAt               pgtype.Timestamptz
+	PreparingAt              pgtype.Timestamptz
+	StartedAt                pgtype.Timestamptz
+	FinishedAt               pgtype.Timestamptz
+	LastObservedAt           pgtype.Timestamptz
+	CancellationRequestedAt  pgtype.Timestamptz
+	JobUid                   *string
+	OutcomeReason            *string
+	OutcomeMessage           *string
+	ExitCode                 *int32
+	CreatedByPrincipalID     pgtype.UUID
+	CreatedBySnapshot        []byte
+	CanceledByPrincipalID    pgtype.UUID
+	CanceledBySnapshot       []byte
+	RerunOfRunID             pgtype.UUID
+	RerunMode                *string
+	TargetID                 pgtype.UUID
+	TargetRelevanceCommitSha *string
 }
 
 type RunArtifactInput struct {
@@ -366,14 +367,16 @@ type RunPhaseTransition struct {
 }
 
 type Target struct {
-	RepositoryID      pgtype.UUID
-	Name              string
-	CatalogRevisionID pgtype.UUID
-	DesiredCommitSha  string
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-	ArchivedAt        pgtype.Timestamptz
-	ID                pgtype.UUID
+	RepositoryID            pgtype.UUID
+	Name                    string
+	CatalogRevisionID       pgtype.UUID
+	DesiredCommitSha        string
+	CreatedAt               pgtype.Timestamptz
+	UpdatedAt               pgtype.Timestamptz
+	ArchivedAt              pgtype.Timestamptz
+	ID                      pgtype.UUID
+	LastAttemptedSyncRunID  pgtype.UUID
+	LastSuccessfulSyncRunID pgtype.UUID
 }
 
 type WebSession struct {

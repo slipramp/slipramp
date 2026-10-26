@@ -402,19 +402,19 @@ func (e ParameterType) Valid() bool {
 
 // Defines values for PromotionBranchDriftStatus.
 const (
-	Current PromotionBranchDriftStatus = "current"
-	Drifted PromotionBranchDriftStatus = "drifted"
-	Unknown PromotionBranchDriftStatus = "unknown"
+	PromotionBranchDriftStatusCurrent PromotionBranchDriftStatus = "current"
+	PromotionBranchDriftStatusDrifted PromotionBranchDriftStatus = "drifted"
+	PromotionBranchDriftStatusUnknown PromotionBranchDriftStatus = "unknown"
 )
 
 // Valid indicates whether the value is a known member of the PromotionBranchDriftStatus enum.
 func (e PromotionBranchDriftStatus) Valid() bool {
 	switch e {
-	case Current:
+	case PromotionBranchDriftStatusCurrent:
 		return true
-	case Drifted:
+	case PromotionBranchDriftStatusDrifted:
 		return true
-	case Unknown:
+	case PromotionBranchDriftStatusUnknown:
 		return true
 	default:
 		return false
@@ -480,16 +480,16 @@ func (e PromotionFreightArtifactKind) Valid() bool {
 
 // Defines values for PromotionFreightComparisonStatus.
 const (
-	Different PromotionFreightComparisonStatus = "different"
-	Equal     PromotionFreightComparisonStatus = "equal"
+	PromotionFreightComparisonStatusDifferent PromotionFreightComparisonStatus = "different"
+	PromotionFreightComparisonStatusEqual     PromotionFreightComparisonStatus = "equal"
 )
 
 // Valid indicates whether the value is a known member of the PromotionFreightComparisonStatus enum.
 func (e PromotionFreightComparisonStatus) Valid() bool {
 	switch e {
-	case Different:
+	case PromotionFreightComparisonStatusDifferent:
 		return true
-	case Equal:
+	case PromotionFreightComparisonStatusEqual:
 		return true
 	default:
 		return false
@@ -667,57 +667,6 @@ func (e RunObservationState) Valid() bool {
 	}
 }
 
-// Defines values for RunOutcome.
-const (
-	RunOutcomeCanceled  RunOutcome = "canceled"
-	RunOutcomeFailed    RunOutcome = "failed"
-	RunOutcomeSucceeded RunOutcome = "succeeded"
-	RunOutcomeTimedOut  RunOutcome = "timed-out"
-)
-
-// Valid indicates whether the value is a known member of the RunOutcome enum.
-func (e RunOutcome) Valid() bool {
-	switch e {
-	case RunOutcomeCanceled:
-		return true
-	case RunOutcomeFailed:
-		return true
-	case RunOutcomeSucceeded:
-		return true
-	case RunOutcomeTimedOut:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for RunPhase.
-const (
-	RunPhaseAssigned  RunPhase = "assigned"
-	RunPhaseFinished  RunPhase = "finished"
-	RunPhasePreparing RunPhase = "preparing"
-	RunPhaseQueued    RunPhase = "queued"
-	RunPhaseRunning   RunPhase = "running"
-)
-
-// Valid indicates whether the value is a known member of the RunPhase enum.
-func (e RunPhase) Valid() bool {
-	switch e {
-	case RunPhaseAssigned:
-		return true
-	case RunPhaseFinished:
-		return true
-	case RunPhasePreparing:
-		return true
-	case RunPhaseQueued:
-		return true
-	case RunPhaseRunning:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for RunActorKind.
 const (
 	RunActorKindServiceAccount RunActorKind = "service-account"
@@ -796,6 +745,57 @@ func (e RunObservationPhase) Valid() bool {
 	case RunObservationPhasePreparing:
 		return true
 	case RunObservationPhaseRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunOutcome.
+const (
+	RunOutcomeCanceled  RunOutcome = "canceled"
+	RunOutcomeFailed    RunOutcome = "failed"
+	RunOutcomeSucceeded RunOutcome = "succeeded"
+	RunOutcomeTimedOut  RunOutcome = "timed-out"
+)
+
+// Valid indicates whether the value is a known member of the RunOutcome enum.
+func (e RunOutcome) Valid() bool {
+	switch e {
+	case RunOutcomeCanceled:
+		return true
+	case RunOutcomeFailed:
+		return true
+	case RunOutcomeSucceeded:
+		return true
+	case RunOutcomeTimedOut:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunPhase.
+const (
+	RunPhaseAssigned  RunPhase = "assigned"
+	RunPhaseFinished  RunPhase = "finished"
+	RunPhasePreparing RunPhase = "preparing"
+	RunPhaseQueued    RunPhase = "queued"
+	RunPhaseRunning   RunPhase = "running"
+)
+
+// Valid indicates whether the value is a known member of the RunPhase enum.
+func (e RunPhase) Valid() bool {
+	switch e {
+	case RunPhaseAssigned:
+		return true
+	case RunPhaseFinished:
+		return true
+	case RunPhasePreparing:
+		return true
+	case RunPhaseQueued:
+		return true
+	case RunPhaseRunning:
 		return true
 	default:
 		return false
@@ -898,6 +898,27 @@ const (
 func (e TargetDefinitionKind) Valid() bool {
 	switch e {
 	case TargetKindTarget:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TargetReconciliationStatusComparison.
+const (
+	TargetReconciliationStatusComparisonDifferent TargetReconciliationStatusComparison = "different"
+	TargetReconciliationStatusComparisonMatched   TargetReconciliationStatusComparison = "matched"
+	TargetReconciliationStatusComparisonUnknown   TargetReconciliationStatusComparison = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the TargetReconciliationStatusComparison enum.
+func (e TargetReconciliationStatusComparison) Valid() bool {
+	switch e {
+	case TargetReconciliationStatusComparisonDifferent:
+		return true
+	case TargetReconciliationStatusComparisonMatched:
+		return true
+	case TargetReconciliationStatusComparisonUnknown:
 		return true
 	default:
 		return false
@@ -2376,16 +2397,13 @@ type Run struct {
 
 	// TargetID Stable identity of the durable Target selected for this Run.
 	TargetID openapi_types.UUID `json:"targetId"`
+
+	// TargetRelevanceCommit Target desired relevance commit frozen when the Run was created. This is independent of the checkout commit. It is absent for historical Runs whose relevance marker is not trustworthy.
+	TargetRelevanceCommit *GitCommit `json:"targetRelevanceCommit,omitempty"`
 }
 
 // RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
 type RunObservationState string
-
-// RunOutcome Terminal result, present only when phase is finished.
-type RunOutcome string
-
-// RunPhase Durable lifecycle position of the Run.
-type RunPhase string
 
 // RunActor defines model for RunActor.
 type RunActor struct {
@@ -2563,6 +2581,12 @@ type RunObservationOutcome string
 // RunObservationPhase Lifecycle phase observed from the Run's Kubernetes Job.
 type RunObservationPhase string
 
+// RunOutcome defines model for RunOutcome.
+type RunOutcome string
+
+// RunPhase defines model for RunPhase.
+type RunPhase string
+
 // RunRerun defines model for RunRerun.
 type RunRerun struct {
 	// Mode Exact reuses the original Run's frozen commit, catalog, parameters, artifact inputs, and execution configuration. Latest resolves the original target, action, and parameters against the active catalog and current placement configuration.
@@ -2679,6 +2703,21 @@ type TargetDefinitionAPIVersion string
 // TargetDefinitionKind defines model for TargetDefinition.Kind.
 type TargetDefinitionKind string
 
+// TargetReconciliationStatus defines model for TargetReconciliationStatus.
+type TargetReconciliationStatus struct {
+	// Comparison Factual comparison of the active Target's desired relevance commit with its last successful sync Run marker. Archived Targets, Targets without a current sync Action, and Targets without a trustworthy successful marker report unknown.
+	Comparison TargetReconciliationStatusComparison `json:"comparison"`
+
+	// LastAttemptedSync Most recently assigned Run for the Action whose technical name is exactly sync. A queued cancellation is not an attempt.
+	LastAttemptedSync *TargetSyncRunCheckpoint `json:"lastAttemptedSync,omitempty"`
+
+	// LastSuccessfulSync Most recently assigned sync Run that finished with outcome succeeded.
+	LastSuccessfulSync *TargetSyncRunCheckpoint `json:"lastSuccessfulSync,omitempty"`
+}
+
+// TargetReconciliationStatusComparison Factual comparison of the active Target's desired relevance commit with its last successful sync Run marker. Archived Targets, Targets without a current sync Action, and Targets without a trustworthy successful marker report unknown.
+type TargetReconciliationStatusComparison string
+
 // TargetSpec defines model for TargetSpec.
 type TargetSpec struct {
 	Actions     map[string]Action     `json:"actions"`
@@ -2694,7 +2733,8 @@ type TargetSpec struct {
 // TargetStatus defines model for TargetStatus.
 type TargetStatus struct {
 	// DesiredCommit Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
-	DesiredCommit GitCommit `json:"desiredCommit"`
+	DesiredCommit  GitCommit                  `json:"desiredCommit"`
+	Reconciliation TargetReconciliationStatus `json:"reconciliation"`
 }
 
 // TargetSummary defines model for TargetSummary.
@@ -2707,13 +2747,14 @@ type TargetSummary struct {
 	DesiredCommit GitCommit `json:"desiredCommit"`
 
 	// ID Stable identity of the durable Target.
-	ID             openapi_types.UUID `json:"id"`
-	Name           string             `json:"name"`
-	Placement      *string            `json:"placement,omitempty"`
-	RepositoryID   openapi_types.UUID `json:"repositoryId"`
-	RepositoryName string             `json:"repositoryName"`
-	Runtime        *string            `json:"runtime,omitempty"`
-	Title          *string            `json:"title,omitempty"`
+	ID             openapi_types.UUID         `json:"id"`
+	Name           string                     `json:"name"`
+	Placement      *string                    `json:"placement,omitempty"`
+	Reconciliation TargetReconciliationStatus `json:"reconciliation"`
+	RepositoryID   openapi_types.UUID         `json:"repositoryId"`
+	RepositoryName string                     `json:"repositoryName"`
+	Runtime        *string                    `json:"runtime,omitempty"`
+	Title          *string                    `json:"title,omitempty"`
 }
 
 // TargetSummaryList defines model for TargetSummaryList.
@@ -2724,6 +2765,22 @@ type TargetSummaryList struct {
 
 	// Total Total number of active targets matching the filters.
 	Total int64 `json:"total"`
+}
+
+// TargetSyncRunCheckpoint defines model for TargetSyncRunCheckpoint.
+type TargetSyncRunCheckpoint struct {
+	AssignedAt              time.Time   `json:"assignedAt"`
+	CancellationRequestedAt *time.Time  `json:"cancellationRequestedAt,omitempty"`
+	CreatedAt               time.Time   `json:"createdAt"`
+	FinishedAt              *time.Time  `json:"finishedAt,omitempty"`
+	Outcome                 *RunOutcome `json:"outcome,omitempty"`
+	Phase                   RunPhase    `json:"phase"`
+	PreparingAt             *time.Time  `json:"preparingAt,omitempty"`
+
+	// RelevanceCommit Target relevance commit frozen by the Run. It is absent when the Run predates trustworthy relevance markers or exactly reruns such a Run.
+	RelevanceCommit *GitCommit         `json:"relevanceCommit,omitempty"`
+	RunID           openapi_types.UUID `json:"runId"`
+	StartedAt       *time.Time         `json:"startedAt,omitempty"`
 }
 
 // Limit defines model for Limit.

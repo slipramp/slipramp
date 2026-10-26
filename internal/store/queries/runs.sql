@@ -6,6 +6,7 @@ INSERT INTO runs (
     repository_id,
     catalog_revision_id,
     commit_sha,
+    target_relevance_commit_sha,
     target_name,
     action_name,
     parameters,
@@ -27,6 +28,7 @@ INSERT INTO runs (
     sqlc.arg(repository_id),
     sqlc.arg(catalog_revision_id),
     sqlc.arg(commit_sha),
+    sqlc.narg(target_relevance_commit_sha),
     sqlc.arg(target_name),
     sqlc.arg(action_name),
     sqlc.arg(parameters),
@@ -159,6 +161,7 @@ SELECT
     runs.repository_id,
     runs.catalog_revision_id,
     runs.commit_sha,
+    runs.target_relevance_commit_sha,
     runs.target_name,
     runs.action_name
 FROM artifacts
@@ -218,7 +221,7 @@ INSERT INTO run_phase_transitions (
 );
 
 -- name: GetRunObservationStateForUpdate :one
-SELECT phase, outcome, job_uid, cancellation_requested_at
+SELECT target_id, action_name, phase, outcome, job_uid, cancellation_requested_at
 FROM runs
 WHERE id = sqlc.arg(id)
   AND cluster_name = sqlc.arg(cluster_name)
@@ -262,6 +265,16 @@ SET phase = sqlc.arg(phase),
         ELSE exit_code
     END
 WHERE id = sqlc.arg(id);
+
+-- name: RecordTargetSyncAttempt :execrows
+UPDATE targets
+SET last_attempted_sync_run_id = sqlc.arg(run_id)
+WHERE id = sqlc.arg(target_id);
+
+-- name: RecordTargetSyncSuccess :execrows
+UPDATE targets
+SET last_successful_sync_run_id = sqlc.arg(run_id)
+WHERE id = sqlc.arg(target_id);
 
 -- name: GetAssignedRunForCluster :one
 SELECT *

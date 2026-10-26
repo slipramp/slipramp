@@ -41,7 +41,7 @@ export function MascotGallery({
   detailPathPrefix = "/mascot",
   galleryPath = "/mascot",
 }: Readonly<{ detailPathPrefix?: string; galleryPath?: string }>) {
-  const [compactView, setCompactView] = useState(false);
+  const [compactView, setCompactView] = useState(true);
   const [hideSmallVariants, setHideSmallVariants] = useState(false);
   const [searchParams] = useSearchParams();
   const selectedTag = mascotTagFromSearchParams(searchParams);

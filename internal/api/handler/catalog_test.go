@@ -16,6 +16,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/run"
 )
 
 func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
@@ -408,6 +409,86 @@ func TestGetTargetReturnsArchivedDefinition(t *testing.T) {
 		body.ArchivedAt == nil || !body.ArchivedAt.Equal(archivedAt) ||
 		body.Definition.Metadata.Name != "network" || body.CatalogCommit.Sha != commitSHA {
 		t.Errorf("Target response = %#v", body)
+	}
+}
+
+func TestGetTargetExposesLatestSyncFailureAndMatchingSuccess(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
+	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	attemptedRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
+	successfulRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1204")
+	commitSHA := "0123456789abcdef0123456789abcdef01234567"
+	failed := string(run.OutcomeFailed)
+	succeeded := string(run.OutcomeSucceeded)
+	finished := string(run.PhaseFinished)
+	createdAt := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
+	assignedAt := createdAt.Add(time.Minute)
+	finishedAt := assignedAt.Add(time.Minute)
+	successfulFinishedAt := finishedAt.Add(-time.Hour)
+	catalogs := &recordingCatalogService{target: catalog.TargetSummary{
+		ID:                targetID,
+		RepositoryID:      repositoryID,
+		RepositoryName:    "infrastructure",
+		CatalogRevisionID: revisionID,
+		CatalogCommitSHA:  commitSHA,
+		DesiredCommitSHA:  commitSHA,
+		LastAttemptedSync: &catalog.SyncRunCheckpoint{
+			RunID:              attemptedRunID,
+			RelevanceCommitSHA: &commitSHA,
+			Phase:              finished,
+			Outcome:            &failed,
+			CreatedAt:          createdAt,
+			AssignedAt:         assignedAt,
+			FinishedAt:         &finishedAt,
+		},
+		LastSuccessfulSync: &catalog.SyncRunCheckpoint{
+			RunID:              successfulRunID,
+			RelevanceCommitSHA: &commitSHA,
+			Phase:              finished,
+			Outcome:            &succeeded,
+			CreatedAt:          createdAt.Add(-time.Hour),
+			AssignedAt:         assignedAt.Add(-time.Hour),
+			FinishedAt:         &successfulFinishedAt,
+		},
+		Target: catalog.Target{
+			APIVersion: catalog.APIVersion,
+			Kind:       catalog.TargetKind,
+			Metadata:   catalog.Metadata{Name: "network"},
+			Spec: catalog.TargetSpec{Actions: map[string]catalog.Action{
+				"sync": {Command: []string{"terraform", "apply"}},
+			}},
+		},
+	}}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/targets/"+targetID.String(),
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, catalogs, nil, nil, nil).
+		ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var body api.Target
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	status := body.Definition.Status.Reconciliation
+	if status.Comparison != api.TargetReconciliationStatusComparisonMatched ||
+		status.LastAttemptedSync == nil || status.LastAttemptedSync.RunID != attemptedRunID ||
+		status.LastAttemptedSync.Outcome == nil || *status.LastAttemptedSync.Outcome != api.RunOutcomeFailed ||
+		status.LastSuccessfulSync == nil || status.LastSuccessfulSync.RunID != successfulRunID ||
+		status.LastSuccessfulSync.Outcome == nil || *status.LastSuccessfulSync.Outcome != api.RunOutcomeSucceeded ||
+		status.LastSuccessfulSync.RelevanceCommit == nil ||
+		status.LastSuccessfulSync.RelevanceCommit.Sha != commitSHA {
+		t.Errorf("Target reconciliation response = %#v", status)
 	}
 }
 

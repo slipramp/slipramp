@@ -267,13 +267,18 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetArtifactInputCandidate() error = %v", err)
 	}
+	if candidate.TargetRelevanceCommitSHA == nil ||
+		*candidate.TargetRelevanceCommitSHA != "0123456789abcdef0123456789abcdef01234567" {
+		t.Errorf("artifact producer relevance marker = %v", candidate.TargetRelevanceCommitSHA)
+	}
 	consumerID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1406")
 	_, err = database.CreateRun(ctx, run.Run{
 		ID: consumerID, Phase: run.PhaseQueued,
 		TargetID:     candidate.TargetID,
 		RepositoryID: candidate.RepositoryID, CatalogRevisionID: candidate.CatalogRevisionID,
 		CommitSHA: candidate.CommitSHA, TargetName: candidate.TargetName, ActionName: "apply",
-		Parameters: map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
+		TargetRelevanceCommitSHA: candidate.TargetRelevanceCommitSHA,
+		Parameters:               map[string]any{}, PlacementName: "infrastructure", ClusterName: "colo",
 		Source: run.Source{Type: run.SourceTypeAPI}, RequestDigest: strings.Repeat("f", 64),
 		Snapshot: run.Snapshot{
 			Inputs: map[string]run.ArtifactInput{"plan": candidate},
@@ -568,19 +573,20 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 	}
 
 	_, err = database.CreateRun(ctx, run.Run{
-		ID:                runID,
-		Phase:             run.PhaseQueued,
-		TargetID:          activeTargetID(t, database, repositoryID, "network"),
-		RepositoryID:      repositoryID,
-		CatalogRevisionID: revisionID,
-		CommitSHA:         refresh.Commit.SHA,
-		TargetName:        "network",
-		ActionName:        "preview",
-		Parameters:        map[string]any{},
-		PlacementName:     "infrastructure",
-		ClusterName:       "colo",
-		Source:            run.Source{Type: run.SourceTypeManual},
-		RequestDigest:     strings.Repeat("c", 64),
+		ID:                       runID,
+		Phase:                    run.PhaseQueued,
+		TargetID:                 activeTargetID(t, database, repositoryID, "network"),
+		RepositoryID:             repositoryID,
+		CatalogRevisionID:        revisionID,
+		CommitSHA:                refresh.Commit.SHA,
+		TargetRelevanceCommitSHA: &refresh.Commit.SHA,
+		TargetName:               "network",
+		ActionName:               "preview",
+		Parameters:               map[string]any{},
+		PlacementName:            "infrastructure",
+		ClusterName:              "colo",
+		Source:                   run.Source{Type: run.SourceTypeManual},
+		RequestDigest:            strings.Repeat("c", 64),
 		Snapshot: run.Snapshot{
 			Repository: run.RepositorySnapshot{
 				Name:     "artifact-test",

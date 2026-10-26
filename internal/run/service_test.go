@@ -189,9 +189,10 @@ func (s *recordingRepositories) GetRepository(context.Context, uuid.UUID) (repos
 }
 
 type recordingCatalogs struct {
-	revision  catalog.Revision
-	err       error
-	targetErr error
+	revision         catalog.Revision
+	desiredCommitSHA string
+	err              error
+	targetErr        error
 }
 
 type pinnedCatalogs struct {
@@ -215,6 +216,7 @@ func (s *pinnedCatalogs) GetTarget(
 		ID:                testTargetID,
 		RepositoryID:      testRepositoryID,
 		CatalogRevisionID: s.active.ID,
+		DesiredCommitSHA:  s.active.CommitSHA,
 		Target:            s.active.Catalog.Targets[0],
 	}, nil
 }
@@ -244,10 +246,16 @@ func (s *recordingCatalogs) GetTarget(
 		revision = testRevision()
 	}
 
+	desiredCommitSHA := s.desiredCommitSHA
+	if desiredCommitSHA == "" {
+		desiredCommitSHA = revision.CommitSHA
+	}
+
 	return catalog.TargetSummary{
 		ID:                testTargetID,
 		RepositoryID:      testRepositoryID,
 		CatalogRevisionID: revision.ID,
+		DesiredCommitSHA:  desiredCommitSHA,
 		Target:            revision.Catalog.Targets[0],
 	}, nil
 }

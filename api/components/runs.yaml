@@ -97,13 +97,7 @@ Run:
       format: uuid
       description: Stable identity of the immutable action execution.
     phase:
-      type: string
-      enum:
-        - queued
-        - assigned
-        - preparing
-        - running
-        - finished
+      $ref: "#/RunPhase"
       description: Durable lifecycle position of the Run.
     targetId:
       type: string
@@ -126,12 +120,7 @@ Run:
         the controller is unreachable or its observation is stale; neither
         state changes the durable lifecycle phase.
     outcome:
-      type: string
-      enum:
-        - succeeded
-        - failed
-        - canceled
-        - timed-out
+      $ref: "#/RunOutcome"
       description: Terminal result, present only when phase is finished.
     repositoryId:
       type: string
@@ -141,6 +130,12 @@ Run:
       format: uuid
     commit:
       $ref: ./common.yaml#/GitCommit
+    targetRelevanceCommit:
+      $ref: ./common.yaml#/GitCommit
+      description: >-
+        Target desired relevance commit frozen when the Run was created. This
+        is independent of the checkout commit. It is absent for historical
+        Runs whose relevance marker is not trustworthy.
     target:
       $ref: "#/CatalogName"
     action:
@@ -234,6 +229,23 @@ Run:
       type: integer
       format: int32
       minimum: 0
+
+RunPhase:
+  type: string
+  enum:
+    - queued
+    - assigned
+    - preparing
+    - running
+    - finished
+
+RunOutcome:
+  type: string
+  enum:
+    - succeeded
+    - failed
+    - canceled
+    - timed-out
 
 RunArtifactInput:
   type: object

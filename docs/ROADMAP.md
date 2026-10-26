@@ -50,20 +50,6 @@ Scheduled and webhook triggers also need explicit missed-event and overlap
 semantics. All adapters must use ordinary Run creation and preserve manual/API
 execution without requiring a trigger.
 
-## Target reconciliation status
-
-The durable Target desired commit currently identifies the latest accepted
-revision relevant to target-scoped scheduling and Git delivery coalescing. It
-does not represent applied infrastructure, and ordinary successful Runs do not
-advance a reconciliation checkpoint.
-
-- [ ] Design reconciliation status only around the optional recognized `sync`
-      Action. Freeze the Target relevance marker into each qualifying Run and
-      define last-attempted and last-successful semantics, including cancellation,
-      reruns, concurrent repository refresh, and target archival, before exposing
-      a convergence comparison. Do not infer this state from arbitrary
-      `reconcile` intents or label it continuously in sync.
-
 ## Catalog tooling
 
 The shared diagnostic pipeline, portable and deployment validation levels,

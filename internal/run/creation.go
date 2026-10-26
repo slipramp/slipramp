@@ -95,7 +95,7 @@ func (s *Service) createRun(
 	if err != nil {
 		return Run{}, fmt.Errorf("get run repository: %w", err)
 	}
-	inputs, pinnedRevisionID, err := s.resolveInputCandidates(ctx, request)
+	inputs, pinnedRevisionID, inputRelevanceCommitSHA, err := s.resolveInputCandidates(ctx, request)
 	if err != nil {
 		return Run{}, err
 	}
@@ -154,22 +154,27 @@ func (s *Service) createRun(
 	if err != nil {
 		return Run{}, err
 	}
+	targetRelevanceCommitSHA := cloneString(inputRelevanceCommitSHA)
+	if len(inputs) == 0 {
+		targetRelevanceCommitSHA = cloneString(&targetRecord.DesiredCommitSHA)
+	}
 	record := Run{
-		ID:                s.newID(),
-		Phase:             PhaseQueued,
-		TargetID:          targetRecord.ID,
-		RepositoryID:      targetRecord.RepositoryID,
-		CatalogRevisionID: revision.ID,
-		CommitSHA:         revision.CommitSHA,
-		TargetName:        targetRecord.Target.Metadata.Name,
-		ActionName:        request.ActionName,
-		Parameters:        parameters,
-		PlacementName:     action.Placement,
-		ClusterName:       placementConfig.ClusterName,
-		Source:            request.Source,
-		IdempotencyKey:    cloneString(request.IdempotencyKey),
-		RequestDigest:     digest,
-		CreatedBy:         createdBy,
+		ID:                       s.newID(),
+		Phase:                    PhaseQueued,
+		TargetID:                 targetRecord.ID,
+		RepositoryID:             targetRecord.RepositoryID,
+		CatalogRevisionID:        revision.ID,
+		CommitSHA:                revision.CommitSHA,
+		TargetRelevanceCommitSHA: targetRelevanceCommitSHA,
+		TargetName:               targetRecord.Target.Metadata.Name,
+		ActionName:               request.ActionName,
+		Parameters:               parameters,
+		PlacementName:            action.Placement,
+		ClusterName:              placementConfig.ClusterName,
+		Source:                   request.Source,
+		IdempotencyKey:           cloneString(request.IdempotencyKey),
+		RequestDigest:            digest,
+		CreatedBy:                createdBy,
 		Snapshot: Snapshot{
 			Repository: RepositorySnapshot{
 				Name:                   repositoryRecord.Name,

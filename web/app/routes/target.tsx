@@ -27,14 +27,22 @@ import {
   type ArtifactInput,
   type Parameter,
   type TargetDefinition,
+  type TargetReconciliationStatus,
+  type TargetSyncRunCheckpoint,
 } from "~/api/generated";
 import { pageTitle } from "~/page-title";
 import { targetFilterPath } from "~/target-filter";
 import { CommitReference } from "~/components/git-commit";
+import { Timestamp } from "~/components/display";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
 import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { RunHistoryButton } from "~/components/run-history-button";
+import {
+  reconciliationPresentation,
+  syncCheckpointColor,
+  syncCheckpointResult,
+} from "~/target-reconciliation";
 import {
   CodeList,
   CommandBlock,
@@ -139,6 +147,12 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
         </Alert>
       ) : null}
 
+      <TargetReconciliation
+        archived={record.archivedAt !== undefined}
+        repositoryId={record.repositoryId}
+        status={target.status.reconciliation}
+      />
+
       <Stack gap="md">
         <SectionHeader
           description="Each action resolves the target defaults below into an immutable execution."
@@ -170,6 +184,110 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
 
       <TargetDefaults target={target} />
     </Stack>
+  );
+}
+
+function TargetReconciliation({
+  archived,
+  repositoryId,
+  status,
+}: Readonly<{
+  archived: boolean;
+  repositoryId: string;
+  status: TargetReconciliationStatus;
+}>) {
+  const presentation = reconciliationPresentation(status, archived);
+
+  return (
+    <Paper p="lg" withBorder>
+      <Stack gap="md">
+        <Group justify="space-between" wrap="wrap">
+          <Stack gap={2}>
+            <Title order={2}>Sync reconciliation</Title>
+            <Text c="dimmed" size="sm">
+              {presentation.description}
+            </Text>
+          </Stack>
+          <Badge color={presentation.color} size="lg" variant="light">
+            {presentation.label}
+          </Badge>
+        </Group>
+
+        <SimpleGrid cols={{ base: 1, md: 2 }}>
+          <SyncCheckpoint
+            checkpoint={status.lastAttemptedSync}
+            empty="No sync Run has reached assignment."
+            label="Last attempted sync"
+            repositoryId={repositoryId}
+          />
+          <SyncCheckpoint
+            checkpoint={status.lastSuccessfulSync}
+            empty="No assigned sync Run has succeeded."
+            label="Last successful sync"
+            repositoryId={repositoryId}
+          />
+        </SimpleGrid>
+      </Stack>
+    </Paper>
+  );
+}
+
+function SyncCheckpoint({
+  checkpoint,
+  empty,
+  label,
+  repositoryId,
+}: Readonly<{
+  checkpoint?: TargetSyncRunCheckpoint;
+  empty: string;
+  label: string;
+  repositoryId: string;
+}>) {
+  return (
+    <Paper p="md" radius="md" withBorder>
+      <Stack gap="xs">
+        <Text c="dimmed" fw={650} size="xs" tt="uppercase">
+          {label}
+        </Text>
+        {checkpoint ? (
+          <>
+            <Group gap="xs" justify="space-between" wrap="wrap">
+              <Anchor component={Link} fw={650} to={`/runs/${checkpoint.runId}`}>
+                View Run
+              </Anchor>
+              <Badge color={syncCheckpointColor(checkpoint)} variant="light">
+                {syncCheckpointResult(checkpoint)}
+              </Badge>
+            </Group>
+            <Group gap="xs" wrap="wrap">
+              <Text c="dimmed" size="sm">
+                Relevance marker
+              </Text>
+              {checkpoint.relevanceCommit ? (
+                <CommitReference commit={checkpoint.relevanceCommit} repositoryId={repositoryId} />
+              ) : (
+                <Text c="dimmed" fs="italic" size="sm">
+                  Unknown
+                </Text>
+              )}
+            </Group>
+            <Text c="dimmed" size="xs">
+              Assigned <Timestamp inherit value={checkpoint.assignedAt} />
+              {checkpoint.finishedAt ? (
+                <>
+                  {" · Finished "}
+                  <Timestamp inherit value={checkpoint.finishedAt} />
+                </>
+              ) : null}
+            </Text>
+          </>
+        ) : (
+          <Text c="dimmed" size="sm">
+            {empty}
+          </Text>
+        )}
+      </Stack>
+    </Paper>
   );
 }
 

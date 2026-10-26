@@ -8,5 +8,7 @@ type ActiveCatalog struct {
 
 // TargetState is the mutable projection associated with a target definition.
 type TargetState struct {
-	DesiredCommitSHA string
+	DesiredCommitSHA   string
+	LastAttemptedSync  *SyncRunCheckpoint
+	LastSuccessfulSync *SyncRunCheckpoint
 }

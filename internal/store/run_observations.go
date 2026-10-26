@@ -79,6 +79,22 @@ func (d *Database) ApplyRunObservation(ctx context.Context, observation run.Obse
 			return fmt.Errorf("record Run phase transition: %w", err)
 		}
 	}
+	if current.ActionName == "sync" && phaseChanged && observation.Phase == run.PhaseFinished &&
+		observation.Outcome != nil && *observation.Outcome == run.OutcomeSucceeded {
+		updated, err := queries.RecordTargetSyncSuccess(
+			ctx,
+			storedb.RecordTargetSyncSuccessParams{
+				RunID:    databaseUUID(observation.ID),
+				TargetID: current.TargetID,
+			},
+		)
+		if err != nil {
+			return fmt.Errorf("record Target sync success: %w", err)
+		}
+		if updated != 1 {
+			return errors.New("record Target sync success: Target does not exist")
+		}
+	}
 
 	if err := transaction.Commit(ctx); err != nil {
 		return fmt.Errorf("commit Run observation transaction: %w", err)

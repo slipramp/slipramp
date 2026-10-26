@@ -150,7 +150,7 @@ SET catalog_revision_id = EXCLUDED.catalog_revision_id,
     archived_at = NULL;
 
 -- name: ListCatalogTargetStates :many
-SELECT name, desired_commit_sha
+SELECT id, name, desired_commit_sha
 FROM targets
 WHERE catalog_revision_id = sqlc.arg(catalog_revision_id)
   AND archived_at IS NULL
@@ -255,6 +255,37 @@ WHERE targets.repository_id = sqlc.arg(repository_id)
   AND targets.name = sqlc.arg(name)
   AND targets.archived_at IS NULL
   AND repositories.removed_at IS NULL;
+
+-- name: ListTargetSyncCheckpoints :many
+SELECT
+    targets.id AS target_id,
+    attempted.id AS last_attempted_sync_run_id,
+    attempted.target_relevance_commit_sha AS last_attempted_sync_relevance_commit_sha,
+    attempted.phase AS last_attempted_sync_phase,
+    attempted.outcome AS last_attempted_sync_outcome,
+    attempted.created_at AS last_attempted_sync_created_at,
+    attempted.assigned_at AS last_attempted_sync_assigned_at,
+    attempted.preparing_at AS last_attempted_sync_preparing_at,
+    attempted.started_at AS last_attempted_sync_started_at,
+    attempted.finished_at AS last_attempted_sync_finished_at,
+    attempted.cancellation_requested_at AS last_attempted_sync_cancellation_requested_at,
+    successful.id AS last_successful_sync_run_id,
+    successful.target_relevance_commit_sha AS last_successful_sync_relevance_commit_sha,
+    successful.phase AS last_successful_sync_phase,
+    successful.outcome AS last_successful_sync_outcome,
+    successful.created_at AS last_successful_sync_created_at,
+    successful.assigned_at AS last_successful_sync_assigned_at,
+    successful.preparing_at AS last_successful_sync_preparing_at,
+    successful.started_at AS last_successful_sync_started_at,
+    successful.finished_at AS last_successful_sync_finished_at,
+    successful.cancellation_requested_at AS last_successful_sync_cancellation_requested_at
+FROM targets
+LEFT JOIN runs AS attempted
+  ON attempted.id = targets.last_attempted_sync_run_id
+LEFT JOIN runs AS successful
+  ON successful.id = targets.last_successful_sync_run_id
+WHERE targets.id = ANY(sqlc.arg(target_ids)::uuid[])
+ORDER BY targets.id;
 
 -- name: CountActiveTargets :one
 SELECT count(*)

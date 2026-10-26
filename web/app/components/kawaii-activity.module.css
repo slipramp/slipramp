@@ -235,6 +235,30 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="shoulder-launcher-check"] {
+  background-image: url("../assets/slipramp-axolotl-shoulder-launcher-check.webp");
+  animation-name: shoulder-launcher-check;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="map-coordinate-check"] {
+  background-image: url("../assets/slipramp-axolotl-map-coordinate-check.webp");
+  animation-name: map-coordinate-check;
+  animation-duration: 2.6s;
+}
+
+.sprite[data-pose="rangefinder-check"] {
+  background-image: url("../assets/slipramp-axolotl-rangefinder-check.webp");
+  animation-name: rangefinder-check;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="field-medic-check"] {
+  background-image: url("../assets/slipramp-axolotl-field-medic-check.webp");
+  animation-name: field-medic-check;
+  animation-duration: 2.5s;
+}
+
 .sprite[data-pose="jackhammer-ride"] {
   background-image: url("../assets/slipramp-axolotl-jackhammer-ride.webp");
   animation-duration: 1.6s;
@@ -334,9 +358,16 @@
   animation-duration: 2.4s;
 }
 
-.sprite[data-pose="rifle-salute"] {
-  background-image: url("../assets/slipramp-axolotl-rifle-salute.webp");
-  animation-duration: 1.6s;
+.sprite[data-pose="pistol-salute"] {
+  background-image: url("../assets/slipramp-axolotl-pistol-salute.webp");
+  animation-name: pistol-salute;
+  animation-duration: 1.8s;
+}
+
+.sprite[data-pose="flag-salute"] {
+  background-image: url("../assets/slipramp-axolotl-flag-salute.webp");
+  animation-name: flag-salute;
+  animation-duration: 2.8s;
 }
 
 .sprite[data-pose="trophy-hoist"] {
@@ -783,6 +814,120 @@
   }
 
   75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes flag-salute {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  39.285714% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes pistol-salute {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  33.333333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  52.777778% {
+    background-position-x: calc(200% / 3);
+  }
+
+  66.666667% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes shoulder-launcher-check {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  45.833333% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes map-coordinate-check {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  26.923077% {
+    background-position-x: calc(100% / 3);
+  }
+
+  48.076923% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes rangefinder-check {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.916667% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes field-medic-check {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  26% {
+    background-position-x: calc(100% / 3);
+  }
+
+  44% {
+    background-position-x: calc(200% / 3);
+  }
+
+  72% {
     background-position-x: 100%;
   }
 }

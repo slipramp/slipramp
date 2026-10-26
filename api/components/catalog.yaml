@@ -678,6 +678,7 @@ TargetSummary:
     - name
     - actions
     - desiredCommit
+    - reconciliation
   properties:
     id:
       type: string
@@ -723,6 +724,8 @@ TargetSummary:
         active. This is a target-scoped relevance marker for scheduling and Git
         delivery coalescing, not an applied-infrastructure or Run checkout
         revision.
+    reconciliation:
+      $ref: "#/TargetReconciliationStatus"
 
 Runtime:
   type: object
@@ -819,6 +822,7 @@ TargetStatus:
   type: object
   required:
     - desiredCommit
+    - reconciliation
   properties:
     desiredCommit:
       $ref: ./common.yaml#/GitCommit
@@ -828,6 +832,75 @@ TargetStatus:
         active. This is a target-scoped relevance marker for scheduling and Git
         delivery coalescing, not an applied-infrastructure or Run checkout
         revision.
+    reconciliation:
+      $ref: "#/TargetReconciliationStatus"
+
+TargetReconciliationStatus:
+  type: object
+  additionalProperties: false
+  required:
+    - comparison
+  properties:
+    comparison:
+      type: string
+      enum:
+        - matched
+        - different
+        - unknown
+      description: >-
+        Factual comparison of the active Target's desired relevance commit
+        with its last successful sync Run marker. Archived Targets, Targets
+        without a current sync Action, and Targets without a trustworthy
+        successful marker report unknown.
+    lastAttemptedSync:
+      $ref: "#/TargetSyncRunCheckpoint"
+      description: >-
+        Most recently assigned Run for the Action whose technical name is
+        exactly sync. A queued cancellation is not an attempt.
+    lastSuccessfulSync:
+      $ref: "#/TargetSyncRunCheckpoint"
+      description: >-
+        Most recently assigned sync Run that finished with outcome succeeded.
+
+TargetSyncRunCheckpoint:
+  type: object
+  additionalProperties: false
+  required:
+    - runId
+    - phase
+    - createdAt
+    - assignedAt
+  properties:
+    runId:
+      type: string
+      format: uuid
+    relevanceCommit:
+      $ref: ./common.yaml#/GitCommit
+      description: >-
+        Target relevance commit frozen by the Run. It is absent when the Run
+        predates trustworthy relevance markers or exactly reruns such a Run.
+    phase:
+      $ref: ./runs.yaml#/RunPhase
+    outcome:
+      $ref: ./runs.yaml#/RunOutcome
+    createdAt:
+      type: string
+      format: date-time
+    assignedAt:
+      type: string
+      format: date-time
+    preparingAt:
+      type: string
+      format: date-time
+    startedAt:
+      type: string
+      format: date-time
+    finishedAt:
+      type: string
+      format: date-time
+    cancellationRequestedAt:
+      type: string
+      format: date-time
 
 ResourceMetadata:
   type: object

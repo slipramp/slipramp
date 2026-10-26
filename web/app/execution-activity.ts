@@ -41,6 +41,10 @@ export type ExecutionAnimationPose =
   | "weld-spark-pipe"
   | "grenade-throw"
   | "mortar-drop"
+  | "shoulder-launcher-check"
+  | "map-coordinate-check"
+  | "rangefinder-check"
+  | "field-medic-check"
   | "jackhammer-ride"
   | "bubble-level-check"
   | "paint-roller-swipe"
@@ -59,7 +63,8 @@ export type ExecutionAnimationPose =
   | "flower-offer"
   | "championship-belt"
   | "confetti-cannon"
-  | "rifle-salute"
+  | "pistol-salute"
+  | "flag-salute"
   | "trophy-hoist"
   | "cowbell-clang"
   | "chart-rise"
@@ -130,6 +135,10 @@ export const executionAnimationPosePools = {
     "weld-spark-pipe",
     "grenade-throw",
     "mortar-drop",
+    "shoulder-launcher-check",
+    "map-coordinate-check",
+    "rangefinder-check",
+    "field-medic-check",
     "jackhammer-ride",
     "bubble-level-check",
     "paint-roller-swipe",
@@ -151,7 +160,8 @@ export const executionAnimationPosePools = {
     "flower-offer",
     "championship-belt",
     "confetti-cannon",
-    "rifle-salute",
+    "pistol-salute",
+    "flag-salute",
     "trophy-hoist",
     "cowbell-clang",
     "chart-rise",
