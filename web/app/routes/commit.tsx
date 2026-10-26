@@ -15,7 +15,7 @@ import { abbreviateMiddle, shortIdentifier } from "~/display";
 import { promotionActivity, runActivity } from "~/execution-activity";
 import { pageTitle } from "~/page-title";
 import { runSourceLabel } from "~/run-source";
-import { runStatusColor } from "~/run-status";
+import { runStatusColor, runStatusLabel } from "~/run-status";
 import { pageFromSearchParam } from "~/search-params";
 
 import type { Route } from "./+types/commit";
@@ -216,7 +216,7 @@ function RunAssociations({ runs }: Readonly<{ runs: Run[] }>) {
                 <Table.Td>
                   <Group gap="xs" justify="space-between" wrap="nowrap">
                     <Badge color={runStatusColor(run)} variant="light">
-                      {run.outcome ?? run.phase}
+                      {runStatusLabel(run)}
                     </Badge>
                     <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
                   </Group>

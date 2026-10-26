@@ -1,6 +1,7 @@
 import type { Run } from "~/api/generated";
 
 export function runStatusColor(run: Run) {
+  if (run.phase === "queued" && run.review.state === "pending") return "yellow";
   if (run.observationState === "unknown") return "yellow";
 
   switch (run.outcome ?? run.phase) {
@@ -19,4 +20,12 @@ export function runStatusColor(run: Run) {
     default:
       return "gray";
   }
+}
+
+export function runStatusLabel(run: Pick<Run, "outcome" | "phase" | "review">) {
+  if (run.phase === "queued" && run.review.state === "pending") {
+    return "Awaiting review";
+  }
+
+  return run.outcome ?? run.phase;
 }

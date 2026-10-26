@@ -20,7 +20,7 @@ import { PageHeader } from "~/components/page";
 import { formatDuration, shortIdentifier } from "~/display";
 import { runActivity } from "~/execution-activity";
 import { pageTitle } from "~/page-title";
-import { runStatusColor } from "~/run-status";
+import { runStatusColor, runStatusLabel } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 import { pageFromSearchParam } from "~/search-params";
 import { targetFilterPath } from "~/target-filter";
@@ -261,7 +261,7 @@ function HistoryTable({
                   <Group gap="xs" justify="space-between" wrap="nowrap">
                     <Group gap="xs" wrap="nowrap">
                       <Badge color={runStatusColor(run)} variant="light">
-                        {run.outcome ?? run.phase}
+                        {runStatusLabel(run)}
                       </Badge>
                       {run.observationState === "unknown" ? (
                         <Badge color="yellow" variant="outline">

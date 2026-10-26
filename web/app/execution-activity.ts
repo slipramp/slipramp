@@ -244,7 +244,8 @@ export function activityAnimationPose(
 }
 
 export function runActivity(
-  run: Pick<Run, "phase" | "observationState" | "cancellationRequestedAt">,
+  run: Pick<Run, "phase" | "observationState" | "cancellationRequestedAt"> &
+    Partial<Pick<Run, "review">>,
 ): ExecutionActivity | undefined {
   if (run.phase === "finished" || run.observationState === "unknown") {
     return undefined;
@@ -260,6 +261,15 @@ export function runActivity(
 
   switch (run.phase) {
     case "queued":
+      if (run.review?.state === "pending") {
+        return {
+          animation: "waiting",
+          title: "Waiting for approval",
+          description:
+            "This Git-triggered Run needs an operator's approval before it can be assigned to a Controller.",
+        };
+      }
+
       return {
         animation: "waiting",
         title: "Waiting for a turn",

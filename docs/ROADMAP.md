@@ -124,7 +124,9 @@ queued but ineligible for assignment, approval restores ordinary FIFO
 eligibility, rejection cancels with stable attribution, and latest-wins
 coalescing continues before and after approval. Direct execution remains the
 default. This is a voluntary repository-owned operational guard, separate from
-Kargo review and not a Server-enforced security policy.
+Kargo review and not a Server-enforced security policy. The Web Run detail now
+exposes permission-aware Approve and Reject controls, decision attribution, and
+review-aware activity and history labels.
 
 - [ ] Design Server-owned policies, source-wide enforcement, separation of
       duties, dedicated review authorization, and required preview or artifact

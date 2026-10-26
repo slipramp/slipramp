@@ -42,6 +42,7 @@ import { formValue, optionalFormValue } from "~/form-data";
 import { promotionActivity, promotionDetailActivity } from "~/execution-activity";
 import { filterArgoDiffResources, parseArgoDiff, type ArgoDiffResource } from "~/promotion-diff";
 import { pageTitle } from "~/page-title";
+import { runStatusLabel } from "~/run-status";
 
 import { promotionStatusColor, promotionStatusLabel } from "./promotions";
 import styles from "./promotion.module.css";
@@ -313,7 +314,7 @@ function Preparation({ promotion }: Readonly<{ promotion: Promotion }>) {
               <Anchor component={Link} to={`/runs/${run.id}`}>
                 View status and logs
               </Anchor>
-              <Badge variant="light">{run.outcome ?? run.phase}</Badge>
+              <Badge variant="light">{runStatusLabel(run)}</Badge>
             </Group>
           </Group>
         )}

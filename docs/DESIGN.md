@@ -328,6 +328,14 @@ cancellation retains `CancelRequested`. Exact and latest reruns are ordinary
 manual or API requests and do not inherit the parent Run's review requirement
 or decision.
 
+The Web Run detail presents pending review separately from execution state and
+offers operator-only Approve and Reject controls alongside ordinary Run
+cancellation. It retains the deciding Principal and time for approved and
+rejected Runs. Run history and recent-Run tables label queued pending Runs as
+awaiting review; after approval they return to their ordinary queued or active
+execution presentation. A decision conflict refreshes the canonical Run while
+retaining the API diagnostic for the operator.
+
 Automatic Git work uses latest-wins coalescing per Repository and Target. When
 an affected Target's desired commit advances or the Target is archived, the
 same transaction supersedes older undispatched deliveries and finishes queued

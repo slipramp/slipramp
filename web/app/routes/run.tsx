@@ -47,6 +47,7 @@ import { createServerAPIClient } from "~/api/client.server";
 import {
   cancelRun,
   createRun,
+  getCurrentPrincipal,
   getRun,
   getTarget,
   listRunArtifacts,
@@ -74,7 +75,14 @@ import {
 } from "~/display";
 import { pageTitle } from "~/page-title";
 import { runActivity, runResultActivity } from "~/execution-activity";
-import { runStatusColor } from "~/run-status";
+import {
+  canWriteRuns,
+  runReviewActionsAvailable,
+  runReviewDecisionAttribution,
+  runReviewLabel,
+} from "~/run-review";
+import { submitRunReviewDecision } from "~/run-review.server";
+import { runStatusColor, runStatusLabel } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
 import { targetFilterPath } from "~/target-filter";
 
@@ -91,9 +99,10 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [runResult, artifactResult] = await Promise.all([
+  const [runResult, artifactResult, principalResult] = await Promise.all([
     getRun({ client, path: { runId: params.runId } }),
     listRunArtifacts({ client, path: { runId: params.runId } }),
+    getCurrentPrincipal({ client }),
   ]);
   const planArtifact = artifactResult.data?.items.find((artifact) => artifact.name === "plan");
   const [planRunsResult, targetResult] = await Promise.all([
@@ -109,6 +118,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     otherActions: otherTargetActions(activeTarget?.spec.actions, runResult.data?.action ?? ""),
     planRuns: planRunsResult?.data?.items ?? [],
     planRunsAvailable: planRunsResult === undefined || planRunsResult.data !== undefined,
+    principal: principalResult.data,
     repositoryName: targetResult?.data?.repositoryName,
     rerunKey: crypto.randomUUID(),
     run: runResult.data,
@@ -119,6 +129,19 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
 export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
   const intent = formData.get("intent");
+  if (intent === "approve-review" || intent === "reject-review") {
+    const result = await submitRunReviewDecision(
+      createServerAPIClient(request, context),
+      params.runId,
+      intent,
+    );
+    if (result.run) {
+      return redirect(`/runs/${result.run.id}`);
+    }
+
+    return { conflict: result.conflict, error: result.error };
+  }
+
   if (intent === "cancel") {
     const result = await cancelRun({
       client: createServerAPIClient(request, context),
@@ -231,6 +254,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     (navigation.formData?.get("intent") === "rerun-exact" ||
       navigation.formData?.get("intent") === "rerun-latest");
   const hasArtifactInputs = Object.keys(run.inputs).length > 0;
+  const canWrite = canWriteRuns(loaderData.principal);
+  const actionConflict =
+    actionData !== undefined && "conflict" in actionData && actionData.conflict === true;
   return (
     <Stack gap="lg">
       <PageHeader
@@ -323,7 +349,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         badges={
           <>
             <Badge color={runStatusColor(run)} variant="light">
-              {run.outcome ?? run.phase}
+              {runStatusLabel(run)}
             </Badge>
             {run.phase !== "finished" && run.cancellationRequestedAt !== undefined ? (
               <Badge color="yellow" variant="outline">
@@ -390,9 +416,19 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
       {actionData?.error ? (
         <Alert color="red" title="Run operation failed">
-          {actionData.error}
+          <Stack gap={4}>
+            <Text>{actionData.error}</Text>
+            {actionConflict ? (
+              <Text size="sm">
+                The Run changed before the decision could be recorded. Its refreshed state is shown
+                on this page.
+              </Text>
+            ) : null}
+          </Stack>
         </Alert>
       ) : null}
+
+      <RunReviewPanel canWrite={canWrite} run={run} />
 
       {run.phase !== "finished" && run.observationState === "unknown" ? (
         <Alert color="yellow" title="Execution observation unavailable">
@@ -457,6 +493,98 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         producerSucceeded={run.outcome === "succeeded"}
       />
     </Stack>
+  );
+}
+
+function RunReviewPanel({ canWrite, run }: Readonly<{ canWrite: boolean; run: Run }>) {
+  const navigation = useNavigation();
+  if (run.review.state === "not-required") return null;
+
+  const attribution = runReviewDecisionAttribution(run.review);
+  const canDecide = runReviewActionsAvailable(run, canWrite);
+  const pending = run.review.state === "pending";
+
+  return (
+    <Alert
+      color={pending ? "yellow" : run.review.state === "approved" ? "green" : "red"}
+      title={pending ? "Review required" : "Run review"}
+    >
+      <Stack align="flex-start" gap="sm">
+        <Group gap="xs" wrap="wrap">
+          <Badge
+            color={pending ? "yellow" : run.review.state === "approved" ? "green" : "red"}
+            variant="light"
+          >
+            {runReviewLabel(run.review)}
+          </Badge>
+          {attribution ? (
+            <>
+              <Text size="sm">{attribution.text}</Text>
+              <Text c="dimmed">·</Text>
+              <Timestamp size="sm" value={attribution.decidedAt} />
+            </>
+          ) : null}
+        </Group>
+
+        {pending && run.phase === "queued" ? (
+          <Text size="sm">
+            This Git-triggered Run will stay queued and cannot be assigned to a Controller until an
+            operator approves it.
+          </Text>
+        ) : pending ? (
+          <Text size="sm">
+            No review decision was recorded before this Run left the queued state.
+          </Text>
+        ) : run.review.state === "approved" ? (
+          <Text size="sm">
+            Approval made this Run eligible for ordinary assignment. It does not indicate that
+            execution succeeded.
+          </Text>
+        ) : (
+          <Text size="sm">Rejection canceled this Run before it was assigned.</Text>
+        )}
+
+        {canDecide ? (
+          <Group gap="sm">
+            <Form method="post">
+              <input name="intent" type="hidden" value="reject-review" />
+              <Button
+                color="red"
+                leftSection={<IconX aria-hidden size={16} />}
+                loading={
+                  navigation.state === "submitting" &&
+                  navigation.formData?.get("intent") === "reject-review"
+                }
+                size="compact-md"
+                type="submit"
+                variant="light"
+              >
+                Reject
+              </Button>
+            </Form>
+            <Form method="post">
+              <input name="intent" type="hidden" value="approve-review" />
+              <Button
+                color="green"
+                leftSection={<IconCheck aria-hidden size={16} />}
+                loading={
+                  navigation.state === "submitting" &&
+                  navigation.formData?.get("intent") === "approve-review"
+                }
+                size="compact-md"
+                type="submit"
+              >
+                Approve
+              </Button>
+            </Form>
+          </Group>
+        ) : pending && run.phase === "queued" && !canWrite ? (
+          <Text c="dimmed" size="sm">
+            Operator permission is required to decide this Run review.
+          </Text>
+        ) : null}
+      </Stack>
+    </Alert>
   );
 }
 
@@ -561,7 +689,7 @@ function PlanLineage({
                     </Table.Td>
                     <Table.Td>
                       <Badge color={runStatusColor(consumerRun)} variant="light">
-                        {consumerRun.outcome ?? consumerRun.phase}
+                        {runStatusLabel(consumerRun)}
                       </Badge>
                     </Table.Td>
                     <Table.Td>

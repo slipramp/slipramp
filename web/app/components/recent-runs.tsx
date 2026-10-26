@@ -9,7 +9,7 @@ import { KawaiiActivity } from "~/components/kawaii-activity";
 import { SectionHeader } from "~/components/page";
 import { formatDuration, shortIdentifier } from "~/display";
 import { runActivity } from "~/execution-activity";
-import { runStatusColor } from "~/run-status";
+import { runStatusColor, runStatusLabel } from "~/run-status";
 import { targetFilterPath } from "~/target-filter";
 
 export const recentRunLimit = 10;
@@ -97,7 +97,7 @@ export function RecentRuns({
                     <Table.Td>
                       <Group gap="xs" justify="space-between" wrap="nowrap">
                         <Badge color={runStatusColor(run)} variant="light">
-                          {run.outcome ?? run.phase}
+                          {runStatusLabel(run)}
                         </Badge>
                         <KawaiiActivity activity={runActivity(run)} animationKey={run.id} compact />
                       </Group>
