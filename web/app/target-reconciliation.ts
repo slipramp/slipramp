@@ -4,9 +4,8 @@ export function reconciliationPresentation(status: TargetReconciliationStatus, a
   if (archived) {
     return {
       color: "gray",
-      label: "Historical checkpoints",
-      description:
-        "Sync history is retained, but an archived target has no active convergence comparison.",
+      label: "Archived",
+      description: "Sync history is retained for this archived target.",
     };
   }
 
@@ -14,22 +13,21 @@ export function reconciliationPresentation(status: TargetReconciliationStatus, a
     case "matched":
       return {
         color: "green",
-        label: "Desired commit matched",
+        label: "Synced",
         description:
-          "The last successful sync used the current desired relevance commit. This is a checkpoint, not continuous drift detection.",
+          "The latest successful sync matches the target's current commit. This does not check for drift.",
       };
     case "different":
       return {
         color: "yellow",
-        label: "Desired commit differs",
-        description: "The last successful sync used an older or different relevance commit.",
+        label: "Out of sync",
+        description: "The latest successful sync used a different commit.",
       };
     default:
       return {
         color: "gray",
-        label: "Comparison unknown",
-        description:
-          "No trustworthy successful sync marker is available for the active target and its current sync action.",
+        label: "Unknown",
+        description: "No successful sync commit is available for comparison.",
       };
   }
 }
@@ -39,6 +37,13 @@ export function activeTargetReconciliationPresentation(
   status: TargetReconciliationStatus,
 ) {
   return actions.includes("sync") ? reconciliationPresentation(status, false) : undefined;
+}
+
+export function showLastAttemptedSync(status: TargetReconciliationStatus) {
+  return (
+    status.lastAttemptedSync === undefined ||
+    status.lastAttemptedSync.runId !== status.lastSuccessfulSync?.runId
+  );
 }
 
 export function syncCheckpointResult(checkpoint: TargetSyncRunCheckpoint) {

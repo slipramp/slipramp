@@ -47,6 +47,34 @@ type Fetcher interface {
 	Fetch(ctx context.Context, repository Repository) (FetchedCommit, error)
 }
 
+type RefreshAttemptResult string
+
+const (
+	RefreshAttemptSucceeded       RefreshAttemptResult = "succeeded"
+	RefreshAttemptFetchFailed     RefreshAttemptResult = "fetch_failed"
+	RefreshAttemptCatalogRejected RefreshAttemptResult = "catalog_rejected"
+	RefreshAttemptPersistFailed   RefreshAttemptResult = "persist_failed"
+)
+
+type RefreshObserver interface {
+	ObserveRepositoryRefresh(context.Context, RefreshAttemptResult, time.Duration)
+}
+
+type RefresherOption func(*Refresher)
+
+func WithRefreshObserver(observer RefreshObserver) RefresherOption {
+	return func(refresher *Refresher) {
+		if observer != nil {
+			refresher.observer = observer
+		}
+	}
+}
+
+type noopRefreshObserver struct{}
+
+func (noopRefreshObserver) ObserveRepositoryRefresh(context.Context, RefreshAttemptResult, time.Duration) {
+}
+
 type Refresher struct {
 	repositories RefreshStore
 	fetcher      Fetcher
@@ -56,6 +84,7 @@ type Refresher struct {
 	logger       *slog.Logger
 	newID        func() uuid.UUID
 	now          func() time.Time
+	observer     RefreshObserver
 }
 
 func NewRefresher(
@@ -65,8 +94,9 @@ func NewRefresher(
 	interval time.Duration,
 	fetchTimeout time.Duration,
 	logger *slog.Logger,
+	options ...RefresherOption,
 ) *Refresher {
-	return &Refresher{
+	refresher := &Refresher{
 		repositories: repositories,
 		fetcher:      fetcher,
 		placements:   placements,
@@ -75,7 +105,13 @@ func NewRefresher(
 		logger:       logger.With("component", "repository_refresher"),
 		newID:        uuid.New,
 		now:          time.Now,
+		observer:     noopRefreshObserver{},
 	}
+	for _, option := range options {
+		option(refresher)
+	}
+
+	return refresher
 }
 
 func (r *Refresher) Run(ctx context.Context) {
@@ -114,6 +150,7 @@ func (r *Refresher) refreshAll(ctx context.Context) {
 }
 
 func (r *Refresher) refresh(ctx context.Context, item Repository) {
+	startedAt := time.Now()
 	attemptedAt := r.now().UTC()
 	fetchContext, cancel := context.WithTimeout(ctx, r.fetchTimeout)
 	fetched, fetchErr := r.fetcher.Fetch(fetchContext, item)
@@ -162,11 +199,16 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	}
 
 	err := r.repositories.RecordRepositoryRefresh(ctx, item.ID, result)
-	if errors.Is(err, ErrNotFound) {
-		return
-	}
-
 	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
+
+		r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptPersistFailed, time.Since(startedAt))
+		if errors.Is(err, ErrNotFound) {
+			return
+		}
+
 		r.logger.Error(
 			"record repository refresh",
 			"repository", item.Name,
@@ -177,6 +219,7 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	}
 
 	if fetchErr != nil {
+		r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptFetchFailed, time.Since(startedAt))
 		r.logger.Warn(
 			"repository refresh failed",
 			"repository", item.Name,
@@ -186,6 +229,7 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 		return
 	}
 	if result.FailureReason != nil {
+		r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptCatalogRejected, time.Since(startedAt))
 		r.logger.Warn(
 			"repository catalog rejected",
 			"repository", item.Name,
@@ -196,6 +240,7 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 		return
 	}
 
+	r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptSucceeded, time.Since(startedAt))
 	r.logger.Info(
 		"repository catalog indexed",
 		"repository", item.Name,

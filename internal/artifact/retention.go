@@ -40,6 +40,42 @@ type ReconciliationResult struct {
 	DeletedOrphans   int
 }
 
+type ReconciliationOutcome string
+
+const (
+	ReconciliationSucceeded ReconciliationOutcome = "succeeded"
+	ReconciliationFailed    ReconciliationOutcome = "failed"
+)
+
+type ReconciliationObserver interface {
+	ObserveArtifactReconciliation(
+		context.Context,
+		ReconciliationOutcome,
+		time.Duration,
+		ReconciliationResult,
+	)
+}
+
+type ReconcilerOption func(*Reconciler)
+
+func WithReconciliationObserver(observer ReconciliationObserver) ReconcilerOption {
+	return func(reconciler *Reconciler) {
+		if observer != nil {
+			reconciler.observer = observer
+		}
+	}
+}
+
+type noopReconciliationObserver struct{}
+
+func (noopReconciliationObserver) ObserveArtifactReconciliation(
+	context.Context,
+	ReconciliationOutcome,
+	time.Duration,
+	ReconciliationResult,
+) {
+}
+
 type Reconciler struct {
 	metadata          RetentionStore
 	contents          RetentionObjectStore
@@ -48,6 +84,7 @@ type Reconciler struct {
 	orphanGracePeriod time.Duration
 	logger            *slog.Logger
 	now               func() time.Time
+	observer          ReconciliationObserver
 }
 
 func NewReconciler(
@@ -57,8 +94,9 @@ func NewReconciler(
 	period time.Duration,
 	orphanGracePeriod time.Duration,
 	logger *slog.Logger,
+	options ...ReconcilerOption,
 ) *Reconciler {
-	return &Reconciler{
+	reconciler := &Reconciler{
 		metadata:          metadata,
 		contents:          contents,
 		retentionPeriod:   retentionPeriod,
@@ -66,7 +104,13 @@ func NewReconciler(
 		orphanGracePeriod: orphanGracePeriod,
 		logger:            logger.With("component", "artifact_reconciler"),
 		now:               time.Now,
+		observer:          noopReconciliationObserver{},
 	}
+	for _, option := range options {
+		option(reconciler)
+	}
+
+	return reconciler
 }
 
 func (r *Reconciler) Run(ctx context.Context) {
@@ -86,6 +130,7 @@ func (r *Reconciler) Run(ctx context.Context) {
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context) (ReconciliationResult, error) {
+	startedAt := time.Now()
 	now := r.now().UTC()
 	result := ReconciliationResult{}
 	var reconciliationErr error
@@ -113,6 +158,14 @@ func (r *Reconciler) Reconcile(ctx context.Context) (ReconciliationResult, error
 	result.DeletedOrphans = deleted
 	if err != nil {
 		reconciliationErr = errors.Join(reconciliationErr, err)
+	}
+
+	if ctx.Err() == nil {
+		outcome := ReconciliationSucceeded
+		if reconciliationErr != nil {
+			outcome = ReconciliationFailed
+		}
+		r.observer.ObserveArtifactReconciliation(ctx, outcome, time.Since(startedAt), result)
 	}
 
 	return result, reconciliationErr

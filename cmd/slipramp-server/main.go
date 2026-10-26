@@ -11,6 +11,8 @@ import (
 	"github.com/slipramp/slipramp/internal/server"
 )
 
+var version = "dev"
+
 func main() {
 	os.Exit(run())
 }
@@ -27,7 +29,7 @@ func run() int {
 		return 1
 	}
 
-	app, err := server.New(ctx, cfg, logger)
+	app, err := server.New(ctx, cfg, logger, version)
 	if err != nil {
 		logger.Error("initialize server", "error", err)
 

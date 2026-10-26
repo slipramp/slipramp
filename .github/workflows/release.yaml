@@ -93,6 +93,7 @@ jobs:
           target: ${{ matrix.target }}
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
+          build-args: VERSION=${{ needs.validate.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
 

@@ -12,6 +12,7 @@ COPY internal ./internal
 
 ARG TARGETARCH
 ARG TARGETOS
+ARG VERSION=dev
 RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     go build -trimpath -ldflags="-s -w" \
     -o /out/slipramp-controller ./cmd/slipramp-controller
@@ -22,7 +23,7 @@ RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     go build -trimpath -ldflags="-s -w" \
     -o /out/slipramp-kargo-tools ./cmd/slipramp-kargo-tools
 RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
-    go build -trimpath -ldflags="-s -w" \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/slipramp-server ./cmd/slipramp-server
 
 FROM scratch AS controller

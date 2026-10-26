@@ -28,22 +28,64 @@ type RunCreator interface {
 	CreateRun(ctx context.Context, request run.CreateRequest) (run.Run, error)
 }
 
+type DeliveryAttemptResult string
+
+const (
+	DeliveryAttemptCreated        DeliveryAttemptResult = "created"
+	DeliveryAttemptSuperseded     DeliveryAttemptResult = "superseded"
+	DeliveryAttemptRetryScheduled DeliveryAttemptResult = "retry_scheduled"
+	DeliveryAttemptTerminalFailed DeliveryAttemptResult = "terminal_failed"
+	DeliveryAttemptRecordFailed   DeliveryAttemptResult = "record_failed"
+)
+
+type DeliveryObserver interface {
+	ObserveGitTriggerDelivery(context.Context, DeliveryAttemptResult, time.Duration)
+}
+
+type DispatcherOption func(*Dispatcher)
+
+func WithDeliveryObserver(observer DeliveryObserver) DispatcherOption {
+	return func(dispatcher *Dispatcher) {
+		if observer != nil {
+			dispatcher.observer = observer
+		}
+	}
+}
+
+type noopDeliveryObserver struct{}
+
+func (noopDeliveryObserver) ObserveGitTriggerDelivery(context.Context, DeliveryAttemptResult, time.Duration) {
+}
+
 type Dispatcher struct {
 	deliveries Store
 	runs       RunCreator
 	interval   time.Duration
 	logger     *slog.Logger
 	now        func() time.Time
+	observer   DeliveryObserver
 }
 
-func NewDispatcher(deliveries Store, runs RunCreator, interval time.Duration, logger *slog.Logger) *Dispatcher {
-	return &Dispatcher{
+func NewDispatcher(
+	deliveries Store,
+	runs RunCreator,
+	interval time.Duration,
+	logger *slog.Logger,
+	options ...DispatcherOption,
+) *Dispatcher {
+	dispatcher := &Dispatcher{
 		deliveries: deliveries,
 		now:        time.Now,
 		runs:       runs,
 		interval:   interval,
 		logger:     logger.With("component", "git_trigger_dispatcher"),
+		observer:   noopDeliveryObserver{},
 	}
+	for _, option := range options {
+		option(dispatcher)
+	}
+
+	return dispatcher
 }
 
 func (d *Dispatcher) Run(ctx context.Context) {
@@ -87,6 +129,7 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("get eligible delivery: %w", err)
 	}
+	startedAt := time.Now()
 
 	idempotencyKey := delivery.ID.String()
 	revisionID := delivery.CatalogRevisionID
@@ -107,6 +150,7 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 		IdempotencyKey: &idempotencyKey,
 	})
 	if errors.Is(err, run.ErrGitRunSuperseded) {
+		d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptSuperseded, time.Since(startedAt))
 		d.logger.Info(
 			"Git-trigger delivery was superseded before Run creation",
 			"delivery", delivery.ID,
@@ -117,6 +161,10 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 	if err != nil {
+		if ctx.Err() != nil {
+			return true, nil
+		}
+
 		diagnostic := FailureDiagnostic(err)
 		failure, recorded, recordErr := d.deliveries.RecordGitTriggerDeliveryFailure(
 			ctx,
@@ -125,9 +173,11 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 			diagnostic,
 		)
 		if recordErr != nil {
+			d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptRecordFailed, time.Since(startedAt))
 			return false, fmt.Errorf("record failed attempt for delivery %s: %w", delivery.ID, recordErr)
 		}
 		if !recorded {
+			d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptSuperseded, time.Since(startedAt))
 			d.logger.Info("Git-trigger delivery was resolved after Run creation failed",
 				"delivery", delivery.ID,
 				"repository", delivery.RepositoryID,
@@ -135,6 +185,11 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 			)
 			return true, nil
 		}
+		result := DeliveryAttemptRetryScheduled
+		if failure.Terminal {
+			result = DeliveryAttemptTerminalFailed
+		}
+		d.observer.ObserveGitTriggerDelivery(ctx, result, time.Since(startedAt))
 		d.logger.Warn("Git-trigger delivery could not create Run",
 			"delivery", delivery.ID,
 			"repository", delivery.RepositoryID,
@@ -148,6 +203,7 @@ func (d *Dispatcher) ProcessNext(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
+	d.observer.ObserveGitTriggerDelivery(ctx, DeliveryAttemptCreated, time.Since(startedAt))
 	d.logger.Info(
 		"Git-trigger delivery created Run",
 		"delivery", delivery.ID,

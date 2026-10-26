@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,7 +34,7 @@ func TestPersistenceIntegration(t *testing.T) {
 	defer cancel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	app, err := New(ctx, cfg, logger)
+	app, err := New(ctx, cfg, logger, "test")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -59,5 +60,26 @@ func TestPersistenceIntegration(t *testing.T) {
 	}
 	if readinessResponse.JSON200 == nil || readinessResponse.JSON200.Status != api.Ready {
 		t.Errorf("readiness response = %#v, want ready", readinessResponse.JSON200)
+	}
+
+	metricsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/metrics", nil)
+	metricsResponse := httptest.NewRecorder()
+	app.httpServer.Handler.ServeHTTP(metricsResponse, metricsRequest)
+	if metricsResponse.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, want %d", metricsResponse.Code, http.StatusOK)
+	}
+	metricsBody := metricsResponse.Body.String()
+	if !strings.Contains(metricsBody, "target_info") ||
+		!strings.Contains(metricsBody, `service_name="slipramp-server"`) {
+		t.Errorf("metrics response does not contain the Slipramp resource: %s", metricsBody)
+	}
+	if strings.Contains(metricsBody, `http_route="/metrics"`) {
+		t.Error("metrics endpoint instrumented itself")
+	}
+	if !strings.Contains(metricsBody, `http_route="/readyz"`) {
+		t.Errorf("metrics response does not contain the readiness route template: %s", metricsBody)
+	}
+	if strings.Contains(metricsBody, `http_route="/"`) {
+		t.Error("readiness metrics use the root fallback instead of the matched route template")
 	}
 }

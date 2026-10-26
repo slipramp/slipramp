@@ -147,6 +147,31 @@ AND (
     OR review_state = sqlc.narg(review_state)
 );
 
+-- name: CountActiveRunsByPhase :many
+SELECT phase, count(*)::bigint AS run_count
+FROM runs
+WHERE phase IN ('assigned', 'preparing', 'running')
+GROUP BY phase
+ORDER BY phase;
+
+-- name: CountPendingRunReviews :one
+SELECT count(*)
+FROM runs
+WHERE phase = 'queued'
+  AND review_state = 'pending';
+
+-- name: GetOldestEligibleRunCreatedAt :one
+SELECT min(queued.created_at)::timestamptz AS created_at
+FROM runs AS queued
+WHERE queued.phase = 'queued'
+  AND queued.review_state IN ('not-required', 'approved')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM runs AS active
+      WHERE active.target_id = queued.target_id
+        AND active.phase IN ('assigned', 'preparing', 'running')
+  );
+
 -- name: CreateRunArtifactInput :execrows
 INSERT INTO run_artifact_inputs (run_id, input_name, artifact_id)
 SELECT sqlc.arg(run_id), sqlc.arg(input_name), artifacts.id

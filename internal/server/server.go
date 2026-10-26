@@ -25,6 +25,7 @@ import (
 	"github.com/slipramp/slipramp/internal/readiness"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
+	"github.com/slipramp/slipramp/internal/telemetry"
 )
 
 const (
@@ -42,9 +43,10 @@ type Server struct {
 	persistence          *persistence
 	workers              []func(context.Context)
 	promotionBranchDrift *promotion.BranchDriftService
+	telemetry            *telemetry.Telemetry
 }
 
-func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) {
+func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion string) (*Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -57,6 +59,20 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	if err != nil {
 		return nil, err
 	}
+	metrics, err := telemetry.New(ctx, telemetry.Config{
+		ServiceVersion: serviceVersion,
+		Store:          persistence.database,
+		Logger:         logger,
+	})
+	if err != nil {
+		persistence.Close()
+
+		return nil, fmt.Errorf("initialize telemetry: %w", err)
+	}
+	closeInitialization := func() {
+		_ = metrics.Shutdown(context.Background())
+		persistence.Close()
+	}
 
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
@@ -64,7 +80,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	repositories := repository.NewService(persistence.database, cfg.RepositoryRefreshCredentials)
 	notificationService, err := notification.NewService(cfg.Notifications, persistence.database)
 	if err != nil {
-		persistence.Close()
+		closeInitialization()
 
 		return nil, fmt.Errorf("initialize notifications: %w", err)
 	}
@@ -89,7 +105,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	})
 	provider, err := productauth.DiscoverOIDCProvider(ctx, cfg.ProductAuthentication.OIDC)
 	if err != nil {
-		persistence.Close()
+		closeInitialization()
 
 		return nil, err
 	}
@@ -100,7 +116,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		cfg.ProductAuthentication,
 	)
 	if err != nil {
-		persistence.Close()
+		closeInitialization()
 
 		return nil, fmt.Errorf("initialize product authentication: %w", err)
 	}
@@ -111,6 +127,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		cfg.RepositoryRefreshInterval,
 		cfg.RepositoryFetchTimeout,
 		logger,
+		repository.WithRefreshObserver(metrics),
 	)
 	commitHistoryIndexer := repository.NewCommitHistoryIndexer(
 		persistence.database,
@@ -124,6 +141,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		runs,
 		gittrigger.DefaultDispatchInterval,
 		logger,
+		gittrigger.WithDeliveryObserver(metrics),
 	)
 	artifactReconciler := artifact.NewReconciler(
 		persistence.database,
@@ -132,6 +150,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		cfg.ArtifactReconcileInterval,
 		cfg.ArtifactOrphanGracePeriod,
 		logger,
+		artifact.WithReconciliationObserver(metrics),
 	)
 	readinessService := readiness.NewService(persistence.database, persistence.artifactContents)
 	promotionStages := promotion.NewStageService(
@@ -179,6 +198,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		persistence.database,
 		notification.DefaultDispatchInterval,
 		logger,
+		notification.WithDeliveryObserver(metrics),
 	)
 	workers := []func(context.Context){
 		repositoryRefresher.Run,
@@ -187,6 +207,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		artifactReconciler.Run,
 		notificationDispatcher.Run,
 		notificationRetention.Run,
+		metrics.RunSnapshotWorker,
 	}
 	if len(cfg.KargoIntegrations) > 0 {
 		promotionPreparations := promotion.NewPreparationCoordinator(
@@ -242,10 +263,15 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 			Logger:                     logger,
 		},
 	)
-	server := newServer(cfg, logger, httpHandler)
+	rootHandler := http.NewServeMux()
+	rootHandler.Handle("GET /metrics", metrics.Handler())
+	rootHandler.Handle("/", httpHandler)
+
+	server := newServer(cfg, logger, metrics.InstrumentHTTP(rootHandler))
 	server.persistence = persistence
 	server.workers = workers
 	server.promotionBranchDrift = promotionBranchDrift
+	server.telemetry = metrics
 
 	return server, nil
 }
@@ -270,6 +296,9 @@ func (s *Server) Close() {
 		if err := s.promotionBranchDrift.Close(); err != nil {
 			s.logger.Warn("clean branch drift cache", "error", err)
 		}
+	}
+	if err := s.shutdownTelemetry(); err != nil {
+		s.logger.Warn("shut down telemetry", "error", err)
 	}
 	s.persistence.Close()
 }
@@ -299,8 +328,24 @@ func (s *Server) serveWithWorkers(ctx context.Context, listener net.Listener) er
 	serveErr := s.serve(runContext, listener)
 	stop()
 	workers.Wait()
+	telemetryErr := s.shutdownTelemetry()
 
-	return serveErr
+	return errors.Join(serveErr, telemetryErr)
+}
+
+func (s *Server) shutdownTelemetry() error {
+	if s.telemetry == nil {
+		return nil
+	}
+
+	shutdownContext, cancel := context.WithTimeout(context.Background(), s.shutdownTimeout)
+	defer cancel()
+
+	if err := s.telemetry.Shutdown(shutdownContext); err != nil {
+		return fmt.Errorf("shut down telemetry: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Server) serve(ctx context.Context, listener net.Listener) error {

@@ -56,12 +56,12 @@ func TestServiceReportsConnectionState(t *testing.T) {
 			{
 				Name:        "connected",
 				FirstSeenAt: now.Add(-time.Hour),
-				LastSeenAt:  now.Add(-connectionWindow),
+				LastSeenAt:  now.Add(-ConnectionWindow),
 			},
 			{
 				Name:        "unreachable",
 				FirstSeenAt: now.Add(-time.Hour),
-				LastSeenAt:  now.Add(-connectionWindow - time.Nanosecond),
+				LastSeenAt:  now.Add(-ConnectionWindow - time.Nanosecond),
 			},
 		},
 	}
@@ -92,7 +92,7 @@ func TestDeriveConnectionStateUsesProvidedEvaluationTime(t *testing.T) {
 	t.Parallel()
 
 	at := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
-	observation := Observation{LastSeenAt: at.Add(-connectionWindow)}
+	observation := Observation{LastSeenAt: at.Add(-ConnectionWindow)}
 	if state := DeriveConnectionState(observation, at); state != ConnectionStateConnected {
 		t.Errorf("state at freshness boundary = %q, want %q", state, ConnectionStateConnected)
 	}

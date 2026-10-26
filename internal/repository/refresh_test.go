@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -58,6 +59,8 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	refresher := NewRefresher(repositories, fetcher, testRepositoryPlacements(t), time.Minute, 10*time.Second, logger)
+	observer := &recordingRefreshObserver{}
+	refresher.observer = observer
 	attemptedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	refresher.now = func() time.Time { return attemptedAt }
@@ -98,6 +101,12 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 		!failed.AttemptedAt.Equal(attemptedAt) {
 		t.Errorf("failed refresh = %#v", failed)
 	}
+	if got, want := observer.results, []RefreshAttemptResult{
+		RefreshAttemptSucceeded,
+		RefreshAttemptFetchFailed,
+	}; !slices.Equal(got, want) {
+		t.Errorf("refresh metric results = %v, want %v", got, want)
+	}
 }
 
 func TestRefresherRecordsCatalogValidationFailure(t *testing.T) {
@@ -128,6 +137,8 @@ func TestRefresherRecordsCatalogValidationFailure(t *testing.T) {
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	refresher := NewRefresher(repositories, fetcher, testRepositoryPlacements(t), time.Minute, 10*time.Second, logger)
+	observer := &recordingRefreshObserver{}
+	refresher.observer = observer
 
 	refresher.refreshAll(context.Background())
 
@@ -136,6 +147,78 @@ func TestRefresherRecordsCatalogValidationFailure(t *testing.T) {
 		result.Revision != nil || result.FailureReason == nil ||
 		!strings.Contains(*result.FailureReason, ".slipramp/catalog.yaml") {
 		t.Errorf("invalid catalog refresh = %#v", result)
+	}
+	if !slices.Equal(observer.results, []RefreshAttemptResult{RefreshAttemptCatalogRejected}) {
+		t.Errorf("refresh metric results = %v, want catalog rejection", observer.results)
+	}
+}
+
+func TestRefresherRecordsPersistFailureAfterAttempt(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.New()
+	repositories := &recordingRefreshStore{
+		items:       []Repository{{ID: repositoryID, Name: "infrastructure"}},
+		recordError: errors.New("database unavailable"),
+	}
+	fetcher := &recordingFetcher{commits: map[RepositoryID]FetchedCommit{
+		repositoryID: {
+			Commit: Commit{RepositoryID: repositoryID, SHA: strings.Repeat("a", 40)},
+			Files:  validCatalogFiles(),
+		},
+	}}
+	observer := &recordingRefreshObserver{}
+	refresher := NewRefresher(
+		repositories,
+		fetcher,
+		testRepositoryPlacements(t),
+		time.Minute,
+		10*time.Second,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithRefreshObserver(observer),
+	)
+
+	refresher.refreshAll(t.Context())
+
+	if !slices.Equal(observer.results, []RefreshAttemptResult{RefreshAttemptPersistFailed}) {
+		t.Errorf("refresh metric results = %v, want persist failure", observer.results)
+	}
+	if len(repositories.results) != 0 {
+		t.Errorf("failed persistence stored results: %v", repositories.results)
+	}
+}
+
+func TestRefresherDoesNotRecordIdleOrShutdownCancellation(t *testing.T) {
+	t.Parallel()
+
+	observer := &recordingRefreshObserver{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	idle := NewRefresher(
+		&recordingRefreshStore{},
+		&recordingFetcher{},
+		placement.Set{},
+		time.Minute,
+		time.Second,
+		logger,
+		WithRefreshObserver(observer),
+	)
+	idle.refreshAll(t.Context())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	repositoryID := uuid.New()
+	canceled := NewRefresher(
+		&recordingRefreshStore{items: []Repository{{ID: repositoryID}}},
+		cancelingFetcher{cancel: cancel},
+		placement.Set{},
+		time.Minute,
+		time.Second,
+		logger,
+		WithRefreshObserver(observer),
+	)
+	canceled.refreshAll(ctx)
+
+	if len(observer.results) != 0 {
+		t.Errorf("idle or canceled refresh recorded metrics: %v", observer.results)
 	}
 }
 
@@ -339,8 +422,21 @@ func TestValidateRefreshResult(t *testing.T) {
 }
 
 type recordingRefreshStore struct {
-	items   []Repository
-	results map[RepositoryID]RefreshResult
+	items       []Repository
+	results     map[RepositoryID]RefreshResult
+	recordError error
+}
+
+type recordingRefreshObserver struct {
+	results []RefreshAttemptResult
+}
+
+func (o *recordingRefreshObserver) ObserveRepositoryRefresh(
+	_ context.Context,
+	result RefreshAttemptResult,
+	_ time.Duration,
+) {
+	o.results = append(o.results, result)
 }
 
 func (s *recordingRefreshStore) ListRepositories(context.Context) ([]Repository, error) {
@@ -352,6 +448,9 @@ func (s *recordingRefreshStore) RecordRepositoryRefresh(
 	repositoryID RepositoryID,
 	result RefreshResult,
 ) error {
+	if s.recordError != nil {
+		return s.recordError
+	}
 	if s.results == nil {
 		s.results = map[RepositoryID]RefreshResult{}
 	}
@@ -376,6 +475,16 @@ func (blockingFetcher) Fetch(ctx context.Context, _ Repository) (FetchedCommit, 
 	<-ctx.Done()
 
 	return FetchedCommit{}, ctx.Err()
+}
+
+type cancelingFetcher struct {
+	cancel context.CancelFunc
+}
+
+func (f cancelingFetcher) Fetch(context.Context, Repository) (FetchedCommit, error) {
+	f.cancel()
+
+	return FetchedCommit{}, context.Canceled
 }
 
 func validCatalogFiles() fstest.MapFS {

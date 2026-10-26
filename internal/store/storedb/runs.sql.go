@@ -166,6 +166,53 @@ func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) 
 	return i, err
 }
 
+const countActiveRunsByPhase = `-- name: CountActiveRunsByPhase :many
+SELECT phase, count(*)::bigint AS run_count
+FROM runs
+WHERE phase IN ('assigned', 'preparing', 'running')
+GROUP BY phase
+ORDER BY phase
+`
+
+type CountActiveRunsByPhaseRow struct {
+	Phase    string
+	RunCount int64
+}
+
+func (q *Queries) CountActiveRunsByPhase(ctx context.Context) ([]CountActiveRunsByPhaseRow, error) {
+	rows, err := q.db.Query(ctx, countActiveRunsByPhase)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountActiveRunsByPhaseRow
+	for rows.Next() {
+		var i CountActiveRunsByPhaseRow
+		if err := rows.Scan(&i.Phase, &i.RunCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countPendingRunReviews = `-- name: CountPendingRunReviews :one
+SELECT count(*)
+FROM runs
+WHERE phase = 'queued'
+  AND review_state = 'pending'
+`
+
+func (q *Queries) CountPendingRunReviews(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingRunReviews)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countRuns = `-- name: CountRuns :one
 SELECT count(*)
 FROM runs
@@ -653,6 +700,26 @@ func (q *Queries) GetAssignedRunForCluster(ctx context.Context, clusterName stri
 		&i.ReviewComment,
 	)
 	return i, err
+}
+
+const getOldestEligibleRunCreatedAt = `-- name: GetOldestEligibleRunCreatedAt :one
+SELECT min(queued.created_at)::timestamptz AS created_at
+FROM runs AS queued
+WHERE queued.phase = 'queued'
+  AND queued.review_state IN ('not-required', 'approved')
+  AND NOT EXISTS (
+      SELECT 1
+      FROM runs AS active
+      WHERE active.target_id = queued.target_id
+        AND active.phase IN ('assigned', 'preparing', 'running')
+  )
+`
+
+func (q *Queries) GetOldestEligibleRunCreatedAt(ctx context.Context) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getOldestEligibleRunCreatedAt)
+	var created_at pgtype.Timestamptz
+	err := row.Scan(&created_at)
+	return created_at, err
 }
 
 const getRun = `-- name: GetRun :one

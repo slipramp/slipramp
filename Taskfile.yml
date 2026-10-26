@@ -111,8 +111,8 @@ tasks:
     cmds:
       - '"{{.PNPM}}" --filter @slipramp/web run deploy:mascot'
 
-  local:up:
-    desc: Start local PostgreSQL, RustFS, and Dex dependencies
+  local:dependencies:
+    internal: true
     cmds:
       - docker compose -f deploy/compose.yaml up -d --wait postgres rustfs dex
       - docker compose -f deploy/compose.yaml run --rm rustfs-init
@@ -125,6 +125,12 @@ tasks:
         done
         printf 'Dex did not become ready\n' >&2
         exit 1
+
+  local:up:
+    desc: Start the local dependencies and observability stack
+    deps: [local:dependencies]
+    cmds:
+      - docker compose -f deploy/compose.yaml up -d --wait prometheus grafana
 
   local:server:
     desc: Run the hot-reloading Server with local Dex and kcloud-ops integration configuration
@@ -221,7 +227,7 @@ tasks:
 
   integration:
     desc: Run PostgreSQL and S3 integration tests against local dependencies
-    deps: [local:up]
+    deps: [local:dependencies]
     env:
       TEST_DATABASE_URL: postgres://slipramp:slipramp-development@127.0.0.1:5432/slipramp?sslmode=disable
       TEST_S3_ACCESS_KEY_ID: slipramp

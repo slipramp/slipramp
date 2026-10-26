@@ -46,6 +46,8 @@ failures first (`limit` 1–200). There is no manual delivery retry action.
 - [Server/web chart](deploy/charts/slipramp/README.md) and
   [Controller chart](deploy/charts/slipramp-controller/README.md): Kubernetes
   installation and deployment configuration.
+- [Metrics](docs/METRICS.md): Prometheus endpoint, complete metric catalog,
+  semantic-convention status, labels, and scrape guidance.
 - [End-to-end acceptance](deploy/e2e/README.md): disposable kind coverage and
   diagnostics.
 - [Mascot gallery](https://mascot.slipramp.com): the production axolotl
@@ -371,7 +373,8 @@ uses operator-managed Secret references by default, rolls the Server when its
 Placement ConfigMap changes, and gives the Server neither RBAC nor a mounted
 service-account token. Its optional single-host Ingress routes API, Controller,
 execution, and health paths to the Server and the remaining web path to the web
-process.
+process. The Server also exposes `GET /metrics` for trusted in-cluster
+scraping; the chart deliberately leaves that path out of its Ingress.
 
 Install [`deploy/charts/slipramp-controller`](deploy/charts/slipramp-controller/README.md)
 once in each execution Cluster. It requires one stable Cluster name and one or
@@ -411,7 +414,8 @@ git push origin v0.1.0
 ## Development
 
 Go 1.27.2, Git, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
-required. Docker is required for the local PostgreSQL, RustFS, and Dex services.
+required. Docker is required for the local PostgreSQL, RustFS, Dex, Prometheus,
+and Grafana services.
 Development tool and package versions are pinned by `Taskfile.yml`, `go.mod`,
 `package.json`, and `pnpm-lock.yaml`; `task deps` installs the pinned Go tools
 and pnpm release into the ignored repository cache. The local stack includes a
@@ -442,6 +446,10 @@ Worker and its static assets without rewriting that zone binding.
 Open `http://localhost:5173` and sign in with
 `admin@slipramp.local` / `slipramp`. These credentials and the static OIDC
 client secret are only for local development. Dex stores its state in memory.
+Prometheus is available at `http://localhost:9090`, and the provisioned
+Slipramp Server dashboard is available anonymously at
+`http://localhost:3000/d/slipramp-server/slipramp-server`. Grafana's local
+administrator credentials are `slipramp` / `slipramp-development`.
 
 Register the private operational repositories with:
 
@@ -484,12 +492,14 @@ bootstrap API key in source control.
 The controller is exercised through unit tests locally and runs with a
 Kubernetes service account in a cluster.
 
-`task local:up` starts PostgreSQL, RustFS, and Dex without starting the Server.
-`task local:down` stops them while retaining the PostgreSQL and RustFS named
-volumes. Database migrations live in `internal/store/migrations`, queries live
-in `internal/store/queries`, and `task generate` refreshes both sqlc output and
-the OpenAPI-generated clients. `task local:server` rebuilds and gracefully
-restarts the Server after server source, Go module, or local Placement changes.
+`task local:up` starts PostgreSQL, RustFS, Dex, Prometheus, and Grafana without
+starting the Server. `task integration` intentionally starts only PostgreSQL,
+RustFS, and Dex, so the monitoring images are not part of CI. `task local:down`
+stops the stack while retaining its named volumes. Database migrations live in
+`internal/store/migrations`, queries live in `internal/store/queries`, and
+`task generate` refreshes both sqlc output and the OpenAPI-generated clients.
+`task local:server` rebuilds and gracefully restarts the Server after server
+source, Go module, or local Placement changes.
 Rapid file changes are coalesced, and a failed rebuild leaves the last good
 Server binary available. While the repository and database contracts are still
 pre-stable, schema baselines may be rewritten instead of migrated compatibly;

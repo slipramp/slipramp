@@ -24,6 +24,8 @@ func TestProcessNextCreatesPinnedGitRun(t *testing.T) {
 		runID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203"),
 	}
 	dispatcher := testDispatcher(store, runs)
+	observer := &recordingDeliveryObserver{}
+	dispatcher.observer = observer
 
 	processed, err := dispatcher.ProcessNext(t.Context())
 	if err != nil || !processed {
@@ -31,6 +33,9 @@ func TestProcessNextCreatesPinnedGitRun(t *testing.T) {
 	}
 	if store.failureCalls != 0 {
 		t.Fatal("successful creation recorded a failure")
+	}
+	if !reflect.DeepEqual(observer.results, []DeliveryAttemptResult{DeliveryAttemptCreated}) {
+		t.Errorf("delivery metric results = %v, want created", observer.results)
 	}
 
 	request := runs.request
@@ -63,6 +68,8 @@ func TestProcessNextConsumesSupersededDeliveryWithoutRecordingFailure(t *testing
 	dispatcher := testDispatcher(store, runCreatorFunc(func(context.Context, run.CreateRequest) (run.Run, error) {
 		return run.Run{}, run.ErrGitRunSuperseded
 	}))
+	observer := &recordingDeliveryObserver{}
+	dispatcher.observer = observer
 
 	processed, err := dispatcher.ProcessNext(t.Context())
 	if err != nil || !processed {
@@ -70,6 +77,9 @@ func TestProcessNextConsumesSupersededDeliveryWithoutRecordingFailure(t *testing
 	}
 	if store.failureCalls != 0 {
 		t.Fatal("supersession recorded a failure")
+	}
+	if !reflect.DeepEqual(observer.results, []DeliveryAttemptResult{DeliveryAttemptSuperseded}) {
+		t.Errorf("delivery metric results = %v, want superseded", observer.results)
 	}
 }
 
@@ -87,13 +97,98 @@ func TestDispatcherContinuesAfterRunCreationFailure(t *testing.T) {
 		return run.Run{ID: uuid.New()}, nil
 	})
 
-	testDispatcher(store, creator).drain(t.Context())
+	dispatcher := testDispatcher(store, creator)
+	observer := &recordingDeliveryObserver{}
+	dispatcher.observer = observer
+	dispatcher.drain(t.Context())
 
 	if createCalls != 2 || store.failureCalls != 1 || len(store.queue) != 0 {
 		t.Fatalf("create calls=%d failure calls=%d remaining=%d", createCalls, store.failureCalls, len(store.queue))
 	}
 	if store.diagnostic != FailureDiagnostic(errors.New("configuration unavailable")) {
 		t.Errorf("diagnostic = %q", store.diagnostic)
+	}
+	wantResults := []DeliveryAttemptResult{DeliveryAttemptRetryScheduled, DeliveryAttemptCreated}
+	if !reflect.DeepEqual(observer.results, wantResults) {
+		t.Errorf("delivery metric results = %v, want %v", observer.results, wantResults)
+	}
+}
+
+func TestProcessNextRecordsTerminalAndPersistenceFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		store      *deliveryStore
+		wantResult DeliveryAttemptResult
+		wantError  bool
+	}{
+		{
+			name: "terminal failure",
+			store: &deliveryStore{
+				queue:           []Delivery{testDelivery()},
+				failureTerminal: true,
+			},
+			wantResult: DeliveryAttemptTerminalFailed,
+		},
+		{
+			name: "record failure",
+			store: &deliveryStore{
+				queue:       []Delivery{testDelivery()},
+				recordError: errors.New("database unavailable"),
+			},
+			wantResult: DeliveryAttemptRecordFailed,
+			wantError:  true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			dispatcher := testDispatcher(test.store, runCreatorFunc(
+				func(context.Context, run.CreateRequest) (run.Run, error) {
+					return run.Run{}, errors.New("creation failed")
+				},
+			))
+			observer := &recordingDeliveryObserver{}
+			dispatcher.observer = observer
+
+			processed, err := dispatcher.ProcessNext(t.Context())
+			if processed != !test.wantError || (err != nil) != test.wantError {
+				t.Fatalf("ProcessNext() = (%t, %v), want error %t", processed, err, test.wantError)
+			}
+			if !reflect.DeepEqual(observer.results, []DeliveryAttemptResult{test.wantResult}) {
+				t.Errorf("delivery metric results = %v, want %s", observer.results, test.wantResult)
+			}
+		})
+	}
+}
+
+func TestProcessNextDoesNotRecordIdleOrShutdownCancellation(t *testing.T) {
+	t.Parallel()
+
+	observer := &recordingDeliveryObserver{}
+	idle := testDispatcher(&deliveryStore{}, &recordingRunCreator{})
+	idle.observer = observer
+	processed, err := idle.ProcessNext(t.Context())
+	if err != nil || processed {
+		t.Fatalf("idle ProcessNext() = (%t, %v), want no work", processed, err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	store := &deliveryStore{queue: []Delivery{testDelivery()}}
+	canceled := testDispatcher(store, runCreatorFunc(func(context.Context, run.CreateRequest) (run.Run, error) {
+		cancel()
+
+		return run.Run{}, context.Canceled
+	}))
+	canceled.observer = observer
+	processed, err = canceled.ProcessNext(ctx)
+	if err != nil || !processed {
+		t.Fatalf("canceled ProcessNext() = (%t, %v)", processed, err)
+	}
+	if len(observer.results) != 0 || store.failureCalls != 0 {
+		t.Errorf("idle or canceled delivery recorded metrics %v or failures %d", observer.results, store.failureCalls)
 	}
 }
 
@@ -165,9 +260,23 @@ func (c *recordingRunCreator) CreateRun(_ context.Context, request run.CreateReq
 }
 
 type deliveryStore struct {
-	queue        []Delivery
-	failureCalls int
-	diagnostic   string
+	queue           []Delivery
+	failureCalls    int
+	diagnostic      string
+	failureTerminal bool
+	recordError     error
+}
+
+type recordingDeliveryObserver struct {
+	results []DeliveryAttemptResult
+}
+
+func (o *recordingDeliveryObserver) ObserveGitTriggerDelivery(
+	_ context.Context,
+	result DeliveryAttemptResult,
+	_ time.Duration,
+) {
+	o.results = append(o.results, result)
 }
 
 func (s *deliveryStore) GetEligibleGitTriggerDelivery(context.Context, time.Time) (Delivery, error) {
@@ -185,6 +294,9 @@ func (s *deliveryStore) RecordGitTriggerDeliveryFailure(
 ) (FailureState, bool, error) {
 	s.failureCalls++
 	s.diagnostic = diagnostic
+	if s.recordError != nil {
+		return FailureState{}, false, s.recordError
+	}
 	s.queue = s.queue[1:]
-	return FailureState{Count: s.failureCalls}, true, nil
+	return FailureState{Count: s.failureCalls, Terminal: s.failureTerminal}, true, nil
 }

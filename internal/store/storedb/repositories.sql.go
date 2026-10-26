@@ -11,6 +11,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRepositoryRefreshStates = `-- name: CountRepositoryRefreshStates :many
+SELECT refresh_status, count(*)::bigint AS repository_count
+FROM repositories
+WHERE removed_at IS NULL
+GROUP BY refresh_status
+ORDER BY refresh_status
+`
+
+type CountRepositoryRefreshStatesRow struct {
+	RefreshStatus   string
+	RepositoryCount int64
+}
+
+func (q *Queries) CountRepositoryRefreshStates(ctx context.Context) ([]CountRepositoryRefreshStatesRow, error) {
+	rows, err := q.db.Query(ctx, countRepositoryRefreshStates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountRepositoryRefreshStatesRow
+	for rows.Next() {
+		var i CountRepositoryRefreshStatesRow
+		if err := rows.Scan(&i.RefreshStatus, &i.RepositoryCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createRepository = `-- name: CreateRepository :one
 INSERT INTO repositories (
     id,

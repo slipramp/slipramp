@@ -1240,6 +1240,18 @@ storage concurrently under a two-second deadline, returning non-sensitive
 per-dependency states and `503` when required dependencies are unavailable.
 The Server emits structured JSON logs and handles graceful shutdown.
 
+`GET /metrics` exposes Prometheus/OpenMetrics text from a private registry on
+the same listener. Application instrumentation uses OpenTelemetry with pinned
+semantic conventions; stable HTTP telemetry excludes the metrics endpoint and
+records matched route templates rather than raw paths. A 15-second worker
+publishes bounded current-state gauges from one repeatable-read PostgreSQL
+snapshot under a two-second deadline. Scrapes only read the last complete
+in-memory view, and a failed refresh retains it while exposing snapshot
+freshness. Narrow domain observers record Repository refresh, Git-trigger
+delivery, notification delivery, and Artifact retention outcomes without
+identifiers or other unbounded labels. The complete contract and convention
+status are documented in the [metric catalog](./METRICS.md).
+
 Two focused [Helm charts](../deploy/charts) deploy one Server/web pair and one
 Controller per Cluster. The central chart requires external PostgreSQL and S3,
 gives the Server no RBAC or service-account token, and offers single-host

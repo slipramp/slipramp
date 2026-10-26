@@ -40,6 +40,7 @@ import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { RunHistoryButton } from "~/components/run-history-button";
 import {
   reconciliationPresentation,
+  showLastAttemptedSync,
   syncCheckpointColor,
   syncCheckpointResult,
 } from "~/target-reconciliation";
@@ -126,7 +127,7 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
                 {record.repositoryName}
               </Anchor>
             </PageHeaderFact>
-            <PageHeaderFact label="Last relevant change">
+            <PageHeaderFact label="Last changed">
               <CommitReference
                 commit={target.status.desiredCommit}
                 repositoryId={record.repositoryId}
@@ -147,11 +148,13 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
         </Alert>
       ) : null}
 
-      <TargetReconciliation
-        archived={record.archivedAt !== undefined}
-        repositoryId={record.repositoryId}
-        status={target.status.reconciliation}
-      />
+      {target.spec.actions.sync ? (
+        <TargetReconciliation
+          archived={record.archivedAt !== undefined}
+          repositoryId={record.repositoryId}
+          status={target.status.reconciliation}
+        />
+      ) : null}
 
       <Stack gap="md">
         <SectionHeader
@@ -199,36 +202,37 @@ function TargetReconciliation({
   const presentation = reconciliationPresentation(status, archived);
 
   return (
-    <Paper p="lg" withBorder>
-      <Stack gap="md">
-        <Group justify="space-between" wrap="wrap">
-          <Stack gap={2}>
-            <Title order={2}>Sync reconciliation</Title>
-            <Text c="dimmed" size="sm">
-              {presentation.description}
-            </Text>
-          </Stack>
+    <Stack gap="md">
+      <SectionHeader
+        actions={
           <Badge color={presentation.color} size="lg" variant="light">
             {presentation.label}
           </Badge>
-        </Group>
+        }
+        title="Sync reconciliation"
+      />
 
-        <SimpleGrid cols={{ base: 1, md: 2 }}>
+      <Stack gap="sm">
+        {showLastAttemptedSync(status) ? (
           <SyncCheckpoint
             checkpoint={status.lastAttemptedSync}
-            empty="No sync Run has reached assignment."
-            label="Last attempted sync"
+            empty="No sync Run has been assigned."
+            label="Last attempt"
             repositoryId={repositoryId}
+            timestamp="assignedAt"
+            timestampLabel="Assigned"
           />
-          <SyncCheckpoint
-            checkpoint={status.lastSuccessfulSync}
-            empty="No assigned sync Run has succeeded."
-            label="Last successful sync"
-            repositoryId={repositoryId}
-          />
-        </SimpleGrid>
+        ) : null}
+        <SyncCheckpoint
+          checkpoint={status.lastSuccessfulSync}
+          empty="No sync Run has succeeded."
+          label="Last success"
+          repositoryId={repositoryId}
+          timestamp="finishedAt"
+          timestampLabel="Finished"
+        />
       </Stack>
-    </Paper>
+    </Stack>
   );
 }
 
@@ -237,57 +241,50 @@ function SyncCheckpoint({
   empty,
   label,
   repositoryId,
+  timestamp,
+  timestampLabel,
 }: Readonly<{
   checkpoint?: TargetSyncRunCheckpoint;
   empty: string;
   label: string;
   repositoryId: string;
+  timestamp: "assignedAt" | "finishedAt";
+  timestampLabel: string;
 }>) {
+  const timestampValue = checkpoint?.[timestamp];
+
   return (
-    <Paper p="md" radius="md" withBorder>
-      <Stack gap="xs">
-        <Text c="dimmed" fw={650} size="xs" tt="uppercase">
-          {label}
-        </Text>
-        {checkpoint ? (
-          <>
-            <Group gap="xs" justify="space-between" wrap="wrap">
-              <Anchor component={Link} fw={650} to={`/runs/${checkpoint.runId}`}>
-                View Run
-              </Anchor>
-              <Badge color={syncCheckpointColor(checkpoint)} variant="light">
-                {syncCheckpointResult(checkpoint)}
-              </Badge>
-            </Group>
-            <Group gap="xs" wrap="wrap">
-              <Text c="dimmed" size="sm">
-                Relevance marker
-              </Text>
-              {checkpoint.relevanceCommit ? (
-                <CommitReference commit={checkpoint.relevanceCommit} repositoryId={repositoryId} />
-              ) : (
-                <Text c="dimmed" fs="italic" size="sm">
-                  Unknown
-                </Text>
-              )}
-            </Group>
-            <Text c="dimmed" size="xs">
-              Assigned <Timestamp inherit value={checkpoint.assignedAt} />
-              {checkpoint.finishedAt ? (
-                <>
-                  {" · Finished "}
-                  <Timestamp inherit value={checkpoint.finishedAt} />
-                </>
-              ) : null}
+    <Group gap="md" justify="space-between" wrap="wrap">
+      <Text c="dimmed" fw={650} size="xs" tt="uppercase">
+        {label}
+      </Text>
+      {checkpoint ? (
+        <Group gap="sm" justify="flex-end" wrap="wrap">
+          <Badge color={syncCheckpointColor(checkpoint)} variant="light">
+            {syncCheckpointResult(checkpoint)}
+          </Badge>
+          {checkpoint.relevanceCommit ? (
+            <CommitReference commit={checkpoint.relevanceCommit} repositoryId={repositoryId} />
+          ) : (
+            <Text c="dimmed" fs="italic" size="sm">
+              Unknown commit
             </Text>
-          </>
-        ) : (
-          <Text c="dimmed" size="sm">
-            {empty}
-          </Text>
-        )}
-      </Stack>
-    </Paper>
+          )}
+          {timestampValue ? (
+            <Text c="dimmed" size="xs">
+              {timestampLabel} <Timestamp inherit value={timestampValue} />
+            </Text>
+          ) : null}
+          <Anchor component={Link} fw={650} size="sm" to={`/runs/${checkpoint.runId}`}>
+            View Run
+          </Anchor>
+        </Group>
+      ) : (
+        <Text c="dimmed" size="sm">
+          {empty}
+        </Text>
+      )}
+    </Group>
   );
 }
 

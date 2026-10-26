@@ -24,6 +24,25 @@ func (q *Queries) GetCluster(ctx context.Context, name string) (Cluster, error) 
 	return i, err
 }
 
+const getControllerMetrics = `-- name: GetControllerMetrics :one
+SELECT
+    count(*) FILTER (WHERE last_seen_at >= $1)::bigint AS connected_count,
+    max(last_seen_at)::timestamptz AS last_seen_at
+FROM clusters
+`
+
+type GetControllerMetricsRow struct {
+	ConnectedCount int64
+	LastSeenAt     pgtype.Timestamptz
+}
+
+func (q *Queries) GetControllerMetrics(ctx context.Context, connectedAfter pgtype.Timestamptz) (GetControllerMetricsRow, error) {
+	row := q.db.QueryRow(ctx, getControllerMetrics, connectedAfter)
+	var i GetControllerMetricsRow
+	err := row.Scan(&i.ConnectedCount, &i.LastSeenAt)
+	return i, err
+}
+
 const listClusters = `-- name: ListClusters :many
 SELECT name, first_seen_at, last_seen_at
 FROM clusters

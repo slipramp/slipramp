@@ -139,6 +139,12 @@ LIMIT sqlc.arg(result_limit) OFFSET sqlc.arg(result_offset);
 -- name: CountNotificationDeliveries :one
 SELECT count(*) FROM notification_deliveries;
 
+-- name: CountNotificationDeliveryStates :many
+SELECT state, count(*)::bigint AS delivery_count
+FROM notification_deliveries
+GROUP BY state
+ORDER BY state;
+
 -- name: DeleteTerminalNotificationEventsBefore :execrows
 DELETE FROM notification_events AS event
 WHERE EXISTS (

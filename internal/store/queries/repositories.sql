@@ -103,6 +103,13 @@ LEFT JOIN repository_commit_history_indexes
 WHERE repositories.id = sqlc.arg(id)
   AND repositories.removed_at IS NULL;
 
+-- name: CountRepositoryRefreshStates :many
+SELECT refresh_status, count(*)::bigint AS repository_count
+FROM repositories
+WHERE removed_at IS NULL
+GROUP BY refresh_status
+ORDER BY refresh_status;
+
 -- name: UpdateRepositoryCommitIndexing :execrows
 UPDATE repositories
 SET commit_indexing_mode = sqlc.arg(commit_indexing_mode)

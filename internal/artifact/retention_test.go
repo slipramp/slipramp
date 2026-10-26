@@ -145,6 +145,8 @@ func TestReconcilerExpiresDeletesAndRemovesOldOrphans(t *testing.T) {
 		},
 	}}
 	reconciler := newTestReconciler(metadata, contents)
+	observer := &recordingReconciliationObserver{}
+	reconciler.observer = observer
 	reconciler.now = func() time.Time { return now }
 
 	result, err := reconciler.Reconcile(context.Background())
@@ -165,6 +167,10 @@ func TestReconcilerExpiresDeletesAndRemovesOldOrphans(t *testing.T) {
 	slices.Sort(wantDeleted)
 	if !slices.Equal(contents.deleted, wantDeleted) {
 		t.Errorf("deleted objects = %v, want %v", contents.deleted, wantDeleted)
+	}
+	if !slices.Equal(observer.outcomes, []ReconciliationOutcome{ReconciliationSucceeded}) ||
+		observer.results[0] != result {
+		t.Errorf("reconciliation metrics = %v, %#v", observer.outcomes, observer.results)
 	}
 }
 
@@ -191,6 +197,8 @@ func TestReconcilerRetriesExpiredArtifactAfterObjectDeletionFailure(t *testing.T
 		deleteError: map[string]error{objectKey: errors.New("object store unavailable")},
 	}
 	reconciler := newTestReconciler(metadata, contents)
+	observer := &recordingReconciliationObserver{}
+	reconciler.observer = observer
 	reconciler.now = func() time.Time { return now }
 
 	result, err := reconciler.Reconcile(context.Background())
@@ -211,6 +219,33 @@ func TestReconcilerRetriesExpiredArtifactAfterObjectDeletionFailure(t *testing.T
 		metadata.records[artifactID].RetentionState != RetentionDeleted {
 		t.Errorf("retry result = %#v, Artifact = %#v", result, metadata.records[artifactID])
 	}
+	wantOutcomes := []ReconciliationOutcome{ReconciliationFailed, ReconciliationSucceeded}
+	if !slices.Equal(observer.outcomes, wantOutcomes) {
+		t.Errorf("reconciliation metric outcomes = %v, want %v", observer.outcomes, wantOutcomes)
+	}
+}
+
+func TestReconcilerDoesNotRecordShutdownCancellation(t *testing.T) {
+	t.Parallel()
+
+	observer := &recordingReconciliationObserver{}
+	reconciler := NewReconciler(
+		&retentionMetadataStore{},
+		&retentionContentStore{},
+		DefaultRetentionPeriod,
+		DefaultReconcileInterval,
+		DefaultOrphanGracePeriod,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		WithReconciliationObserver(observer),
+	)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, _ = reconciler.Reconcile(ctx)
+
+	if len(observer.outcomes) != 0 {
+		t.Errorf("canceled reconciliation recorded metrics: %v", observer.outcomes)
+	}
 }
 
 func newTestReconciler(metadata RetentionStore, contents RetentionObjectStore) *Reconciler {
@@ -224,4 +259,19 @@ func newTestReconciler(metadata RetentionStore, contents RetentionObjectStore) *
 		DefaultOrphanGracePeriod,
 		logger,
 	)
+}
+
+type recordingReconciliationObserver struct {
+	outcomes []ReconciliationOutcome
+	results  []ReconciliationResult
+}
+
+func (o *recordingReconciliationObserver) ObserveArtifactReconciliation(
+	_ context.Context,
+	outcome ReconciliationOutcome,
+	_ time.Duration,
+	result ReconciliationResult,
+) {
+	o.outcomes = append(o.outcomes, outcome)
+	o.results = append(o.results, result)
 }

@@ -69,6 +69,55 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "127.0.0.1:9090:9090"
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ./local/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:9090/-/healthy"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:13.2.4
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: slipramp-development
+      GF_SECURITY_ADMIN_USER: slipramp
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./local/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./local/grafana/dashboards:/etc/grafana/dashboards:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:3000/api/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    security_opt:
+      - no-new-privileges:true
+
 volumes:
+  grafana-data:
   postgres-data:
+  prometheus-data:
   rustfs-data:

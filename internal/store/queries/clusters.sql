@@ -20,3 +20,9 @@ WHERE name = sqlc.arg(name);
 SELECT name, first_seen_at, last_seen_at
 FROM clusters
 ORDER BY name;
+
+-- name: GetControllerMetrics :one
+SELECT
+    count(*) FILTER (WHERE last_seen_at >= sqlc.arg(connected_after))::bigint AS connected_count,
+    max(last_seen_at)::timestamptz AS last_seen_at
+FROM clusters;

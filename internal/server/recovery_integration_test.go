@@ -42,7 +42,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 	ctx := t.Context()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
-	app, err := New(ctx, cfg, logger)
+	app, err := New(ctx, cfg, logger, "test")
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -131,7 +131,7 @@ func TestServerRestartRecoversActiveRunIntegration(t *testing.T) {
 	app.Close()
 	app = nil
 
-	app, err = New(ctx, cfg, logger)
+	app, err = New(ctx, cfg, logger, "test")
 	if err != nil {
 		t.Fatalf("New() after restart error = %v", err)
 	}

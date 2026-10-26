@@ -2,7 +2,7 @@ package cluster
 
 import "time"
 
-const connectionWindow = time.Minute
+const ConnectionWindow = time.Minute
 
 type ConnectionState string
 
@@ -23,7 +23,7 @@ type Status struct {
 }
 
 func DeriveConnectionState(observation Observation, at time.Time) ConnectionState {
-	if at.Sub(observation.LastSeenAt) <= connectionWindow {
+	if at.Sub(observation.LastSeenAt) <= ConnectionWindow {
 		return ConnectionStateConnected
 	}
 

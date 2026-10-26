@@ -137,6 +137,23 @@ checks at two seconds. PostgreSQL, S3, and Slack webhook Secret changes require
 an explicit Server rollout. The chart fixes Server and web replicas at one and
 does not claim high-availability support.
 
+The Server also exposes unauthenticated Prometheus/OpenMetrics text at
+`/metrics` on its `http` Service port. The Ingress intentionally does not route
+that path. Configure an in-cluster scraper explicitly, for example with Service
+annotations in an overlay:
+
+```yaml
+server:
+  service:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/path: /metrics
+      prometheus.io/port: "8080"
+```
+
+See the [metric catalog](../../../docs/METRICS.md) for the complete emitted
+contract, labels, bucket boundaries, convention status, and freshness model.
+
 Released chart versions are published as OCI artifacts in GHCR. Pin the chart
 version explicitly; the same release version is the default Server and web
 image tag.

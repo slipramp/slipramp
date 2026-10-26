@@ -54,6 +54,38 @@ func (q *Queries) CountNotificationDeliveries(ctx context.Context) (int64, error
 	return count, err
 }
 
+const countNotificationDeliveryStates = `-- name: CountNotificationDeliveryStates :many
+SELECT state, count(*)::bigint AS delivery_count
+FROM notification_deliveries
+GROUP BY state
+ORDER BY state
+`
+
+type CountNotificationDeliveryStatesRow struct {
+	State         string
+	DeliveryCount int64
+}
+
+func (q *Queries) CountNotificationDeliveryStates(ctx context.Context) ([]CountNotificationDeliveryStatesRow, error) {
+	rows, err := q.db.Query(ctx, countNotificationDeliveryStates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountNotificationDeliveryStatesRow
+	for rows.Next() {
+		var i CountNotificationDeliveryStatesRow
+		if err := rows.Scan(&i.State, &i.DeliveryCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createNotificationDelivery = `-- name: CreateNotificationDelivery :exec
 INSERT INTO notification_deliveries (
     id,

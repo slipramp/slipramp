@@ -77,6 +77,17 @@ assert_contains "$server_render" 'path: /readyz'
 assert_contains "$server_render" 'timeoutSeconds: 3'
 assert_not_contains "$server_render" '^kind: (ClusterRole|Role|RoleBinding|ServiceAccount)$'
 
+"$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/slipramp-required.yaml" \
+  --values "$testdata/slipramp-metrics.yaml" \
+  >"$test_directory/server-metrics.yaml"
+assert_contains "$test_directory/server-metrics.yaml" 'prometheus.io/scrape: "true"'
+assert_contains "$test_directory/server-metrics.yaml" 'prometheus.io/path: /metrics'
+assert_contains "$test_directory/server-metrics.yaml" 'prometheus.io/port: "8080"'
+assert_contains "$test_directory/server-metrics.yaml" 'name: http'
+assert_contains "$test_directory/server-metrics.yaml" 'port: 8080'
+
 checksum_default=$(grep -E 'checksum/placements:' "$server_render" | awk '{print $2}')
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
@@ -96,6 +107,7 @@ assert_contains "$test_directory/server-scheduling.yaml" 'ingressClassName: ngin
 assert_contains "$test_directory/server-scheduling.yaml" 'topologySpreadConstraints:'
 assert_contains "$test_directory/server-scheduling.yaml" 'name: registry-credentials'
 assert_contains "$test_directory/server-scheduling.yaml" 'kubernetes.io/os: linux'
+assert_not_contains "$test_directory/server-scheduling.yaml" 'path: /metrics'
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
