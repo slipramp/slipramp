@@ -39,6 +39,8 @@ export function notificationSubjectHref(delivery: NotificationDelivery) {
   switch (delivery.subjectType) {
     case "promotion":
       return `/promotions/${delivery.subjectId}`;
+    case "run":
+      return `/runs/${delivery.subjectId}`;
     default:
       return unreachableState(delivery.subjectType);
   }
@@ -48,6 +50,8 @@ export function notificationSubjectLabel(subjectType: NotificationDelivery["subj
   switch (subjectType) {
     case "promotion":
       return "Promotion";
+    case "run":
+      return "Run";
     default:
       return unreachableState(subjectType);
   }

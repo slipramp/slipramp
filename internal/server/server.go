@@ -62,6 +62,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database, cfg.Placements)
 	repositories := repository.NewService(persistence.database, cfg.RepositoryRefreshCredentials)
+	notificationService, err := notification.NewService(cfg.Notifications, persistence.database)
+	if err != nil {
+		persistence.Close()
+
+		return nil, fmt.Errorf("initialize notifications: %w", err)
+	}
 	runs := run.NewService(run.Dependencies{
 		Creation:      persistence.database,
 		History:       persistence.database,
@@ -72,6 +78,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		Repositories:  repositories,
 		Catalogs:      catalogs,
 		Placements:    cfg.Placements,
+		Notifications: notificationService,
 	})
 	artifacts := artifact.NewService(artifact.Dependencies{
 		Runs:      persistence.database,
@@ -161,12 +168,6 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*Server, error) 
 		Acknowledgements: persistence.database,
 		Promotions:       promotionReviews,
 	})
-	notificationService, err := notification.NewService(cfg.Notifications, persistence.database)
-	if err != nil {
-		persistence.Close()
-
-		return nil, fmt.Errorf("initialize notifications: %w", err)
-	}
 	notificationRetention := notification.NewRetentionReconciler(
 		persistence.database,
 		cfg.Notifications.RetentionPeriod,

@@ -16,6 +16,7 @@ import (
 const (
 	EventTypeReviewRequested EventType   = "review.requested"
 	SubjectTypePromotion     SubjectType = "promotion"
+	SubjectTypeRun           SubjectType = "run"
 
 	maximumDeduplicationKeyLength = 512
 	maximumTitleLength            = 200
@@ -36,7 +37,7 @@ func (t EventType) Valid() bool {
 type SubjectType string
 
 func (t SubjectType) Valid() bool {
-	return t == SubjectTypePromotion
+	return t == SubjectTypePromotion || t == SubjectTypeRun
 }
 
 type Subject struct {
@@ -79,6 +80,7 @@ type Event struct {
 
 type ReviewRequestedInput struct {
 	ID               uuid.UUID
+	SubjectType      SubjectType
 	SubjectID        uuid.UUID
 	OccurredAt       time.Time
 	DeduplicationKey string
@@ -95,7 +97,7 @@ func NewReviewRequestedEvent(input ReviewRequestedInput) (Event, error) {
 		Type:          EventTypeReviewRequested,
 		SchemaVersion: 1,
 		Subject: Subject{
-			Type: SubjectTypePromotion,
+			Type: input.SubjectType,
 			ID:   input.SubjectID,
 		},
 		Title:     input.Title,
@@ -134,7 +136,7 @@ func (p ReviewRequestedPayload) Validate() error {
 	if p.Type != EventTypeReviewRequested || p.SchemaVersion != 1 {
 		return errors.New("review-requested notification payload contract is invalid")
 	}
-	if p.Subject.Type != SubjectTypePromotion || p.Subject.ID == uuid.Nil {
+	if !p.Subject.Type.Valid() || p.Subject.ID == uuid.Nil {
 		return errors.New("review-requested notification subject is invalid")
 	}
 	if err := boundedRequired("notification title", p.Title, maximumTitleLength); err != nil {

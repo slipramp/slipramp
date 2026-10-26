@@ -284,7 +284,7 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 			Inputs: map[string]run.ArtifactInput{"plan": candidate},
 		},
 		CreatedAt: createdAt.Add(3 * time.Minute),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create artifact-consuming Run: %v", err)
 	}
@@ -485,7 +485,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 			Inputs: map[string]run.ArtifactInput{"plan": candidate},
 		},
 		CreatedAt: sealedAt.Add(2 * time.Minute),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create consuming Run: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 			Inputs: map[string]run.ArtifactInput{"stale": staleCandidate},
 		},
 		CreatedAt: sealedAt.Add(3 * time.Minute),
-	})
+	}, nil)
 	if !errors.Is(err, run.ErrInvalidInputs) {
 		t.Fatalf("CreateRun() with expired input error = %v, want invalid inputs", err)
 	}
@@ -614,7 +614,7 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 			},
 		},
 		CreatedAt: createdAt.Add(2 * time.Second),
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("create Run: %v", err)
 	}

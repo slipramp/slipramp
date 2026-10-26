@@ -132,7 +132,7 @@ export type NotificationDelivery = {
   id: string;
   eventId: string;
   eventType: "review.requested";
-  subjectType: "promotion";
+  subjectType: "promotion" | "run";
   subjectId: string;
   occurredAt: string;
   destinationName: string;

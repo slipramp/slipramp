@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -36,7 +37,8 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 
 	reviewCatalog := gitTriggeredCatalogWithReview()
 	recordRunReviewHead(t, database, repositoryID, "a", baseTime.Add(time.Minute), reviewCatalog, false)
-	_, dispatcher := newGitTriggerTestServices(t, database)
+	notifications := notificationServiceForDestinations(t, database, "operations")
+	_, dispatcher := newGitTriggerTestServicesWithNotifications(t, database, notifications)
 
 	// A review-required delivery freezes that requirement onto a pending Run.
 	recordRunReviewHead(t, database, repositoryID, "b", baseTime.Add(2*time.Minute), reviewCatalog, true)
@@ -54,6 +56,12 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	if pending.Phase != run.PhaseQueued || pending.Review.State != run.ReviewStatePending {
 		t.Fatalf("pending review Run = %#v", pending)
 	}
+	notificationPage, err := notifications.ListDeliveries(ctx, notification.DeliveryHistoryFilter{Limit: 25})
+	if err != nil || notificationPage.Total != 1 || len(notificationPage.Items) != 1 ||
+		notificationPage.Items[0].SubjectType != notification.SubjectTypeRun ||
+		notificationPage.Items[0].SubjectID != pending.ID {
+		t.Fatalf("Run review notification history = (%#v, %v)", notificationPage, err)
+	}
 	inboxRuns, err := database.ListInboxActiveRuns(ctx)
 	if err != nil || len(inboxRuns) != 1 || inboxRuns[0].ID != pending.ID ||
 		inboxRuns[0].Review != run.ReviewStatePending {
@@ -69,7 +77,7 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 		uuid.New(), pending.TargetID, repositoryID, pending.CatalogRevisionID,
 		pending.CommitSHA, run.SourceTypeAPI, baseTime.Add(4*time.Minute), "1",
 	)
-	if _, err := database.CreateRun(ctx, manual); err != nil {
+	if _, err := database.CreateRun(ctx, manual, nil); err != nil {
 		t.Fatalf("create later eligible Run: %v", err)
 	}
 	claimedManual, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(5*time.Minute))
@@ -149,6 +157,73 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	}
 	recordRunReviewHead(t, database, repositoryID, "f", baseTime.Add(17*time.Minute), reviewCatalog, true)
 	assertSupersededReviewRun(t, database, approvedSuperseded.ID, run.ReviewStateApproved)
+}
+
+func TestRunReviewNotificationFailureRollsBackRunCreationIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	baseTime := time.Now().UTC().Truncate(time.Second).Add(-time.Hour)
+	repositoryID := uuid.New()
+	if _, err := database.CreateRepository(ctx, repository.Repository{
+		ID: repositoryID, Name: "run-review-notification-failure",
+		CloneURL: "https://github.com/example/run-review-notification-failure.git",
+		Branch:   "main", CommitIndexing: repository.CommitIndexingObservedHeads, CreatedAt: baseTime,
+	}); err != nil {
+		t.Fatalf("create review repository: %v", err)
+	}
+
+	reviewCatalog := gitTriggeredCatalogWithReview()
+	recordRunReviewHead(t, database, repositoryID, "a", baseTime.Add(time.Minute), reviewCatalog, false)
+	recordRunReviewHead(t, database, repositoryID, "b", baseTime.Add(2*time.Minute), reviewCatalog, true)
+	delivery, err := database.GetEligibleGitTriggerDelivery(ctx, time.Now())
+	if err != nil {
+		t.Fatalf("get review-required delivery: %v", err)
+	}
+	notifications := notificationServiceForDestinations(t, database, "operations")
+	_, dispatcher := newGitTriggerTestServicesWithNotifications(t, database, notifications)
+
+	_, err = database.pool.Exec(ctx, `CREATE FUNCTION reject_run_notification_delivery() RETURNS trigger LANGUAGE plpgsql AS
+        $$ BEGIN RAISE EXCEPTION 'simulated Run notification delivery storage failure'; END; $$;
+        CREATE TRIGGER reject_run_notification_delivery BEFORE INSERT ON notification_deliveries
+        FOR EACH ROW EXECUTE FUNCTION reject_run_notification_delivery();`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if processed, err := dispatcher.ProcessNext(ctx); err != nil || !processed {
+		t.Fatalf("dispatch review-required Run with notification failure = (%t, %v)", processed, err)
+	}
+
+	listed, err := database.ListRuns(ctx, run.RunListFilter{RepositoryID: &repositoryID, Limit: 10})
+	if err != nil || listed.Total != 0 {
+		t.Fatalf("Runs after notification rollback = (%#v, %v)", listed, err)
+	}
+	var eventCount, notificationDeliveryCount int
+	if err := database.pool.QueryRow(
+		ctx,
+		"SELECT (SELECT count(*) FROM notification_events), (SELECT count(*) FROM notification_deliveries)",
+	).Scan(&eventCount, &notificationDeliveryCount); err != nil {
+		t.Fatal(err)
+	}
+	if eventCount != 0 || notificationDeliveryCount != 0 {
+		t.Fatalf(
+			"notification rows after Run rollback = events %d, deliveries %d",
+			eventCount,
+			notificationDeliveryCount,
+		)
+	}
+	var failureCount int
+	if err := database.pool.QueryRow(
+		ctx,
+		"SELECT failure_count FROM git_trigger_deliveries WHERE id = $1",
+		delivery.ID,
+	).Scan(&failureCount); err != nil {
+		t.Fatal(err)
+	}
+	assertGitTriggerDeliveryState(t, database, delivery.ID, false, false)
+	if failureCount != 1 {
+		t.Fatalf("delivery failures after Run rollback = %d, want 1", failureCount)
+	}
 }
 
 func gitTriggeredCatalogWithReview() catalog.Catalog {

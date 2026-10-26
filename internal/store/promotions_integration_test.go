@@ -526,7 +526,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.CreateRun(ctx, preparationRun); err == nil {
+	if _, err := database.CreateRun(ctx, preparationRun, nil); err == nil {
 		t.Fatal("expected preparation link failure")
 	}
 	assertRunCounts(t, database, 1, 1)
@@ -535,7 +535,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	preparationRun, err = database.CreateRun(ctx, preparationRun)
+	preparationRun, err = database.CreateRun(ctx, preparationRun, nil)
 	if err != nil {
 		t.Fatalf("create preparation Run: %v", err)
 	}
@@ -609,7 +609,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reserve second preparation revision: %v", err)
 	}
-	preparationRun, err = database.CreateRun(ctx, preparationRun)
+	preparationRun, err = database.CreateRun(ctx, preparationRun, nil)
 	if err != nil {
 		t.Fatalf("create second preparation Run: %v", err)
 	}
@@ -868,6 +868,7 @@ func promotionReviewNotification(
 
 	event, err := notification.NewReviewRequestedEvent(notification.ReviewRequestedInput{
 		ID:               uuid.New(),
+		SubjectType:      notification.SubjectTypePromotion,
 		SubjectID:        record.ID,
 		OccurredAt:       occurredAt,
 		DeduplicationKey: "promotion:" + record.ID.String() + ":review-requested",
@@ -1380,7 +1381,7 @@ func preparePromotionForCompletion(
 	); err != nil {
 		t.Fatalf("reserve preparation revision: %v", err)
 	}
-	preparationRun, err = fixture.database.CreateRun(fixture.ctx, preparationRun)
+	preparationRun, err = fixture.database.CreateRun(fixture.ctx, preparationRun, nil)
 	if err != nil {
 		t.Fatalf("create preparation Run: %v", err)
 	}

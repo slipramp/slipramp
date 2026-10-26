@@ -79,7 +79,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 		CreatedAt: createdAt.Add(2 * time.Minute),
 	}
 
-	created, err := database.CreateRun(ctx, record)
+	created, err := database.CreateRun(ctx, record, nil)
 	if err != nil {
 		t.Fatalf("CreateRun() error = %v", err)
 	}
@@ -92,7 +92,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 
 	retry := record
 	retry.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
-	retried, err := database.CreateRun(ctx, retry)
+	retried, err := database.CreateRun(ctx, retry, nil)
 	if err != nil {
 		t.Fatalf("idempotent CreateRun() error = %v", err)
 	}
@@ -103,7 +103,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 
 	conflict := retry
 	conflict.RequestDigest = strings.Repeat("b", 64)
-	_, err = database.CreateRun(ctx, conflict)
+	_, err = database.CreateRun(ctx, conflict, nil)
 	if !errors.Is(err, run.ErrIdempotencyConflict) {
 		t.Errorf("conflicting CreateRun() error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	rerunMode := run.RerunModeLatest
 	second.RerunOfRunID = &record.ID
 	second.RerunMode = &rerunMode
-	createdSecond, err := database.CreateRun(ctx, second)
+	createdSecond, err := database.CreateRun(ctx, second, nil)
 	if err != nil {
 		t.Fatalf("create second Run: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	third.IdempotencyKey = nil
 	third.RequestDigest = strings.Repeat("d", 64)
 	third.CreatedAt = cancelAt.Add(2 * time.Minute)
-	if _, err := database.CreateRun(ctx, third); err != nil {
+	if _, err := database.CreateRun(ctx, third, nil); err != nil {
 		t.Fatalf("create third Run: %v", err)
 	}
 	queuedCancelAt := third.CreatedAt.Add(time.Minute)
@@ -522,7 +522,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 		CreatedBy: &creatorSnapshot,
 		CreatedAt: createdAt.Add(2 * time.Minute),
 	}
-	created, err := database.CreateRun(ctx, first)
+	created, err := database.CreateRun(ctx, first, nil)
 	if err != nil {
 		t.Fatalf("create attributed Run: %v", err)
 	}
@@ -533,7 +533,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 
 	retry := first
 	retry.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1521")
-	retried, err := database.CreateRun(ctx, retry)
+	retried, err := database.CreateRun(ctx, retry, nil)
 	if err != nil {
 		t.Fatalf("retry attributed Run: %v", err)
 	}
@@ -549,7 +549,7 @@ func TestRunAttributionPersistenceIntegration(t *testing.T) {
 	second.ID = uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1522")
 	second.CreatedBy = &cancelerSnapshot
 	second.CreatedAt = first.CreatedAt.Add(time.Minute)
-	createdSecond, err := database.CreateRun(ctx, second)
+	createdSecond, err := database.CreateRun(ctx, second, nil)
 	if err != nil {
 		t.Fatalf("reuse idempotency key for another principal: %v", err)
 	}

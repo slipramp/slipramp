@@ -18,6 +18,7 @@ type Service struct {
 	repositories  RepositoryService
 	catalogs      CatalogService
 	placements    placement.Set
+	notifications CreationNotifications
 	newID         func() uuid.UUID
 	now           func() time.Time
 }
@@ -32,6 +33,7 @@ type Dependencies struct {
 	Repositories  RepositoryService
 	Catalogs      CatalogService
 	Placements    placement.Set
+	Notifications CreationNotifications
 }
 
 func NewService(dependencies Dependencies) *Service {
@@ -45,6 +47,7 @@ func NewService(dependencies Dependencies) *Service {
 		repositories:  dependencies.Repositories,
 		catalogs:      dependencies.Catalogs,
 		placements:    dependencies.Placements,
+		notifications: dependencies.Notifications,
 		newID:         uuid.New,
 		now:           time.Now,
 	}

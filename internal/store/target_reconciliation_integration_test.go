@@ -227,7 +227,7 @@ func createReconciliationRun(
 		Snapshot:                 run.Snapshot{},
 		CreatedAt:                createdAt,
 	}
-	created, err := database.CreateRun(ctx, record)
+	created, err := database.CreateRun(ctx, record, nil)
 	if err != nil {
 		t.Fatalf("create %s Run: %v", actionName, err)
 	}

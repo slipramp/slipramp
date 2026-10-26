@@ -148,7 +148,7 @@ func TestGitRunAndDeliveryLinkCommitAtomicallyIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.CreateRun(ctx, record); err == nil {
+	if _, err := database.CreateRun(ctx, record, nil); err == nil {
 		t.Fatal("expected link storage failure")
 	}
 	assertRunCounts(t, database, 0, 0)
@@ -160,7 +160,7 @@ func TestGitRunAndDeliveryLinkCommitAtomicallyIntegration(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := database.CreateRun(ctx, record); err != nil {
+	if _, err := database.CreateRun(ctx, record, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertRunCounts(t, database, 1, 1)
@@ -174,7 +174,7 @@ func TestGitRunLinkRejectsMismatchedDeliveryIntegration(t *testing.T) {
 	delivery, attemptedAt := seedGitDelivery(t, database)
 	record := queuedGitTestRun(uuid.New(), delivery, strings.Repeat("b", 40), attemptedAt.Add(time.Second))
 	record.Source.Git.TriggerName = "other-trigger"
-	if _, err := database.CreateRun(ctx, record); err == nil {
+	if _, err := database.CreateRun(ctx, record, nil); err == nil {
 		t.Fatal("mismatched delivery created a Run")
 	}
 	assertRunCounts(t, database, 0, 0)

@@ -49,6 +49,7 @@ NotificationDelivery:
       type: string
       enum:
         - promotion
+        - run
     subjectId:
       type: string
       format: uuid

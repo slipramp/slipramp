@@ -390,7 +390,7 @@ func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Datab
 		Snapshot:          snapshot,
 		CreatedAt:         createdAt.Add(2 * time.Second),
 	}
-	if _, err := database.CreateRun(ctx, first); err != nil {
+	if _, err := database.CreateRun(ctx, first, nil); err != nil {
 		t.Fatalf("create first recovery Run: %v", err)
 	}
 
@@ -398,7 +398,7 @@ func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Datab
 	second.ID = secondRunID
 	second.RequestDigest = strings.Repeat("c", 64)
 	second.CreatedAt = first.CreatedAt.Add(time.Second)
-	if _, err := database.CreateRun(ctx, second); err != nil {
+	if _, err := database.CreateRun(ctx, second, nil); err != nil {
 		t.Fatalf("create second recovery Run: %v", err)
 	}
 

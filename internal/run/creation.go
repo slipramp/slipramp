@@ -10,12 +10,13 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type CreationStore interface {
-	CreateRun(ctx context.Context, record Run) (Run, error)
+	CreateRun(ctx context.Context, record Run, notificationPlan *notification.EnqueuePlan) (Run, error)
 	GetRunByIdempotencyKey(
 		ctx context.Context,
 		principalID *uuid.UUID,
@@ -198,7 +199,12 @@ func (s *Service) createRun(
 		record.RerunMode = &rerunMode
 	}
 
-	created, err := s.creation.CreateRun(ctx, record)
+	notificationPlan, err := s.planReviewRequestedNotification(record)
+	if err != nil {
+		return Run{}, err
+	}
+
+	created, err := s.creation.CreateRun(ctx, record, notificationPlan)
 	if err != nil {
 		return Run{}, fmt.Errorf("create run: %w", err)
 	}

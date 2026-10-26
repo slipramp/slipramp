@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/repository"
 )
@@ -128,6 +129,7 @@ type recordingRuns struct {
 	reviewed               Run
 	reviewError            error
 	reviewTransition       ReviewTransition
+	notificationPlan       *notification.EnqueuePlan
 }
 
 func (s *recordingRuns) DecideRunReview(_ context.Context, transition ReviewTransition) (Run, error) {
@@ -162,9 +164,14 @@ func (s *recordingRuns) GetArtifactInputCandidate(_ context.Context, artifactID 
 	return input, nil
 }
 
-func (s *recordingRuns) CreateRun(_ context.Context, record Run) (Run, error) {
+func (s *recordingRuns) CreateRun(
+	_ context.Context,
+	record Run,
+	notificationPlan *notification.EnqueuePlan,
+) (Run, error) {
 	s.calls++
 	s.created = record
+	s.notificationPlan = notificationPlan
 
 	return record, s.err
 }

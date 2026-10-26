@@ -967,7 +967,7 @@ matching remains deliberately smaller than arbitrary predicates, labels, or user
 subscriptions.
 
 The initial contract is `review.requested` schema version 1 with a `promotion`
-subject, bounded title, summary, ordered facts, optional expiry, and an
+or `run` subject, bounded title, summary, ordered facts, optional expiry, and an
 application-relative action path. Facts come from the already-authorized domain
 snapshot; adapters may omit unsupported presentation details but do not re-read
 the subject to enrich a delivery. The model rejects external action URLs.
@@ -1032,8 +1032,18 @@ one deduplicated `review.requested` event, and inserts all selected deliveries.
 With no matching route, the transaction changes only the Promotion. Automatic
 Promotions and preparation failures emit no review request, and repeated
 reconciliation cannot enqueue another event. The shared event shape does not
-create shared approval persistence: Promotions continue to own their decisions,
-and a future reviewed Run may own a different state machine.
+create shared approval persistence: Promotions continue to own their decisions.
+
+When a review-required Git-trigger delivery creates a Run, route resolution
+precedes persistence and the same transaction inserts the immutable queued Run,
+links its delivery, records its initial phase, and enqueues one deduplicated
+`review.requested` event with a `run` subject. Its snapshot includes Repository,
+Target, Action, trigger, and commit facts plus a link to Run detail. With no
+matching route, the Run and delivery linkage still commit. A notification write
+failure rolls the entire transition back, so ordinary bounded Git-delivery
+backoff may retry Run creation; it never retries an infrastructure command.
+Approval, rejection, supersession, polling, and Inbox rendering cannot enqueue a
+second request for that Run.
 
 The generated read-only `/api/v1/notification-deliveries` endpoint uses ordinary
 product read authorization. It exposes event and subject identity, destination

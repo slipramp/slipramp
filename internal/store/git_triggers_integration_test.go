@@ -457,10 +457,10 @@ func TestGitRefreshPreservesManualAndAPIFIFOIntegration(t *testing.T) {
 		baseTime.Add(3*time.Minute),
 		"b",
 	)
-	if _, err := database.CreateRun(ctx, manual); err != nil {
+	if _, err := database.CreateRun(ctx, manual, nil); err != nil {
 		t.Fatalf("create manual Run: %v", err)
 	}
-	if _, err := database.CreateRun(ctx, apiRun); err != nil {
+	if _, err := database.CreateRun(ctx, apiRun, nil); err != nil {
 		t.Fatalf("create API Run: %v", err)
 	}
 
@@ -578,7 +578,7 @@ func TestGitRunCreationRejectsRefreshRaceAtDatabaseBoundaryIntegration(t *testin
 			delivery,
 			commitB,
 			baseTime.Add(3*time.Minute),
-		))
+		), nil)
 		result <- createErr
 	}()
 	if err := refreshTransaction.Commit(ctx); err != nil {
@@ -722,6 +722,14 @@ func newGitTriggerTestServices(
 	t *testing.T,
 	database *Database,
 ) (*run.Service, *gittrigger.Dispatcher) {
+	return newGitTriggerTestServicesWithNotifications(t, database, nil)
+}
+
+func newGitTriggerTestServicesWithNotifications(
+	t *testing.T,
+	database *Database,
+	notifications run.CreationNotifications,
+) (*run.Service, *gittrigger.Dispatcher) {
 	t.Helper()
 
 	placements, err := placement.NewSet(map[string]placement.Config{
@@ -745,6 +753,7 @@ func newGitTriggerTestServices(
 		Repositories:  repositories,
 		Catalogs:      catalogs,
 		Placements:    placements,
+		Notifications: notifications,
 	})
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 

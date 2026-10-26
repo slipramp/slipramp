@@ -143,6 +143,7 @@ func TestNotificationEnqueueRejectsDeduplicationKeyCollision(t *testing.T) {
 	}
 	collision, err := notification.NewReviewRequestedEvent(notification.ReviewRequestedInput{
 		ID:               uuid.New(),
+		SubjectType:      event.SubjectType,
 		SubjectID:        event.SubjectID,
 		OccurredAt:       event.OccurredAt,
 		DeduplicationKey: event.DeduplicationKey,
@@ -290,15 +291,16 @@ func notificationTestEvent(t *testing.T) notification.Event {
 	subjectID := uuid.MustParse("00000000-0000-0000-0000-000000000202")
 	event, err := notification.NewReviewRequestedEvent(notification.ReviewRequestedInput{
 		ID:               uuid.MustParse("00000000-0000-0000-0000-000000000201"),
+		SubjectType:      notification.SubjectTypeRun,
 		SubjectID:        subjectID,
 		OccurredAt:       at,
-		DeduplicationKey: "promotion:" + subjectID.String() + ":review-requested",
-		Title:            "Promotion to production needs review",
-		Summary:          "external-dns - candidate to production",
+		DeduplicationKey: "run:" + subjectID.String() + ":review-requested",
+		Title:            "Run needs review",
+		Summary:          "network sync is ready for review",
 		Facts:            []notification.Fact{{Label: "Repository", Value: "kcloud-ops"}},
 		Action: notification.Action{
 			Label: "Review in Slipramp",
-			Path:  "/promotions/" + subjectID.String(),
+			Path:  "/runs/" + subjectID.String(),
 		},
 		CreatedAt: at,
 	})

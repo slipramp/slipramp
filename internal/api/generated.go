@@ -382,12 +382,15 @@ func (e NotificationDeliveryState) Valid() bool {
 // Defines values for NotificationDeliverySubjectType.
 const (
 	NotificationDeliverySubjectTypePromotion NotificationDeliverySubjectType = "promotion"
+	NotificationDeliverySubjectTypeRun       NotificationDeliverySubjectType = "run"
 )
 
 // Valid indicates whether the value is a known member of the NotificationDeliverySubjectType enum.
 func (e NotificationDeliverySubjectType) Valid() bool {
 	switch e {
 	case NotificationDeliverySubjectTypePromotion:
+		return true
+	case NotificationDeliverySubjectTypeRun:
 		return true
 	default:
 		return false

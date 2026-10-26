@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/store/storedb"
@@ -165,7 +166,11 @@ func (d *Database) GetRunByIdempotencyKey(
 	return record, nil
 }
 
-func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, error) {
+func (d *Database) CreateRun(
+	ctx context.Context,
+	record run.Run,
+	notificationPlan *notification.EnqueuePlan,
+) (run.Run, error) {
 	source, err := json.Marshal(record.Source)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("marshal run source: %w", err)
@@ -190,6 +195,11 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 	}
 	if record.Review.DecidedBy != nil || record.Review.DecidedAt != nil {
 		return run.Run{}, fmt.Errorf("%w: new Run must not have a review decision", run.ErrInvalidRequest)
+	}
+	if notificationPlan != nil {
+		if err := validateRunNotificationPlan(record, *notificationPlan); err != nil {
+			return run.Run{}, err
+		}
 	}
 
 	transaction, err := d.pool.Begin(ctx)
@@ -293,6 +303,16 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 	if err := linkPromotionPreparationRun(ctx, queries, record, createdBySnapshot); err != nil {
 		return run.Run{}, err
 	}
+	if notificationPlan != nil {
+		if _, err := enqueueNotification(
+			ctx,
+			queries,
+			notificationPlan.Event,
+			notificationPlan.Destinations,
+		); err != nil {
+			return run.Run{}, fmt.Errorf("enqueue Run review notification: %w", err)
+		}
+	}
 
 	if err := transaction.Commit(ctx); err != nil {
 		return run.Run{}, fmt.Errorf("commit run transaction: %w", err)
@@ -304,6 +324,20 @@ func (d *Database) CreateRun(ctx context.Context, record run.Run) (run.Run, erro
 	}
 
 	return created, nil
+}
+
+func validateRunNotificationPlan(record run.Run, plan notification.EnqueuePlan) error {
+	if err := plan.Validate(); err != nil {
+		return err
+	}
+	wantDeduplicationKey := "run:" + record.ID.String() + ":review-requested"
+	if record.Review.State != run.ReviewStatePending || plan.Event.SubjectType != notification.SubjectTypeRun ||
+		plan.Event.SubjectID != record.ID || plan.Event.DeduplicationKey != wantDeduplicationKey ||
+		!plan.Event.OccurredAt.Equal(record.CreatedAt) || !plan.Event.CreatedAt.Equal(record.CreatedAt) {
+		return fmt.Errorf("%w: Run notification plan does not match the review transition", run.ErrInvalidRequest)
+	}
+
+	return nil
 }
 
 func existingIdempotentRun(

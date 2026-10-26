@@ -419,6 +419,7 @@ func (c *PreparationCoordinator) reviewRequestedEvent(record Promotion, occurred
 
 	event, err := notification.NewReviewRequestedEvent(notification.ReviewRequestedInput{
 		ID:               uuid.New(),
+		SubjectType:      notification.SubjectTypePromotion,
 		SubjectID:        record.ID,
 		OccurredAt:       occurredAt,
 		DeduplicationKey: "promotion:" + record.ID.String() + ":review-requested",

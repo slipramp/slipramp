@@ -94,7 +94,7 @@ func (s *Service) RerunRun(ctx context.Context, request RerunRequest) (Run, erro
 	}
 	record.Snapshot.Inputs = maps.Clone(original.Snapshot.Inputs)
 
-	created, err := s.creation.CreateRun(ctx, record)
+	created, err := s.creation.CreateRun(ctx, record, nil)
 	if errors.Is(err, ErrInvalidInputs) {
 		return Run{}, ErrRerunInputsMissing
 	}

@@ -156,6 +156,15 @@ func TestReviewRequestedEventValidatesChannelNeutralPayload(t *testing.T) {
 	_, err := NewReviewRequestedEvent(input)
 	testcheck.ErrorContains(t, err, "application-relative")
 
+	input = validReviewRequestedInput()
+	input.SubjectType = SubjectTypeRun
+	input.DeduplicationKey = "run:00000000-0000-0000-0000-000000000002:review-requested"
+	input.Action.Path = "/runs/00000000-0000-0000-0000-000000000002"
+	runEvent, err := NewReviewRequestedEvent(input)
+	if err != nil || runEvent.SubjectType != SubjectTypeRun {
+		t.Fatalf("Run review event = %#v, %v", runEvent, err)
+	}
+
 	event.Payload = append(event.Payload[:len(event.Payload)-1], []byte(`,"secret":"must-not-pass"}`)...)
 	testcheck.ErrorContains(t, event.Validate(), "does not match")
 }
@@ -217,6 +226,7 @@ func validReviewRequestedInput() ReviewRequestedInput {
 	at := time.Date(2026, time.October, 23, 18, 0, 0, 0, time.UTC)
 	return ReviewRequestedInput{
 		ID:               uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		SubjectType:      SubjectTypePromotion,
 		SubjectID:        uuid.MustParse("00000000-0000-0000-0000-000000000002"),
 		OccurredAt:       at,
 		DeduplicationKey: "promotion:00000000-0000-0000-0000-000000000002:review-requested",
