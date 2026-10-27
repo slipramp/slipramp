@@ -300,6 +300,54 @@
   animation-duration: 2.5s;
 }
 
+.sprite[data-pose="field-radio-operator"] {
+  background-image: url("../assets/slipramp-axolotl-field-radio-operator.webp");
+  animation-name: field-radio-operator;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="belt-feed-check"] {
+  background-image: url("../assets/slipramp-axolotl-belt-feed-check.webp");
+  animation-name: belt-feed-check;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="entrenching-tool-dig"] {
+  background-image: url("../assets/slipramp-axolotl-entrenching-tool-dig.webp");
+  animation-name: entrenching-tool-dig;
+  animation-duration: 2.6s;
+}
+
+.sprite[data-pose="gas-mask-seal-check"] {
+  background-image: url("../assets/slipramp-axolotl-gas-mask-seal-check.webp");
+  animation-name: gas-mask-seal-check;
+  animation-duration: 2.7s;
+}
+
+.sprite[data-pose="drone-reconnaissance"] {
+  background-image: url("../assets/slipramp-axolotl-drone-reconnaissance.webp");
+  animation-name: drone-reconnaissance;
+  animation-duration: 2.6s;
+}
+
+.sprite[data-pose="plate-carrier-donning"] {
+  background-image: url("../assets/slipramp-axolotl-plate-carrier-donning.webp");
+  animation-name: plate-carrier-donning;
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="eod-suit-rise"] {
+  background-image: url("../assets/slipramp-axolotl-eod-suit-rise.webp");
+  animation-name: eod-suit-rise;
+  animation-duration: 2.8s;
+}
+
+.sprite[data-pose="field-generator-start"] {
+  background-image: url("../assets/slipramp-axolotl-field-generator-start.webp");
+  animation-name: field-generator-start;
+  animation-duration: 2.6s;
+}
+
 .sprite[data-pose="jackhammer-ride"] {
   background-image: url("../assets/slipramp-axolotl-jackhammer-ride.webp");
   animation-duration: 1.6s;
@@ -469,6 +517,12 @@
   animation-duration: 2.4s;
 }
 
+.sprite[data-pose="parachute-landing"] {
+  background-image: url("../assets/slipramp-axolotl-parachute-landing.webp");
+  animation-name: parachute-landing;
+  animation-duration: 2.6s;
+}
+
 .sprite[data-pose="laptop-slump"] {
   background-image: url("../assets/slipramp-axolotl-laptop-slump.webp");
   animation-duration: 2.8s;
@@ -571,6 +625,12 @@
 
   background-image: url("../assets/slipramp-axolotl-fire-extinguisher-blast.webp");
   animation-duration: 2s;
+}
+
+.sprite[data-pose="parachute-collapse"] {
+  background-image: url("../assets/slipramp-axolotl-parachute-collapse.webp");
+  animation-name: parachute-collapse;
+  animation-duration: 2.4s;
 }
 
 .sprite[data-pose="explosion-walkaway"] {
@@ -1021,6 +1081,158 @@
   }
 }
 
+@keyframes field-radio-operator {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.916667% {
+    background-position-x: calc(200% / 3);
+  }
+
+  75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes belt-feed-check {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.916667% {
+    background-position-x: calc(200% / 3);
+  }
+
+  70.833333% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes entrenching-tool-dig {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  44.230769% {
+    background-position-x: calc(200% / 3);
+  }
+
+  65.384615% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes gas-mask-seal-check {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  24.074074% {
+    background-position-x: calc(100% / 3);
+  }
+
+  42.592593% {
+    background-position-x: calc(200% / 3);
+  }
+
+  68.518519% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes drone-reconnaissance {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  44.230769% {
+    background-position-x: calc(200% / 3);
+  }
+
+  69.230769% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes plate-carrier-donning {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  46.428571% {
+    background-position-x: calc(200% / 3);
+  }
+
+  67.857143% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes eod-suit-rise {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  42.857143% {
+    background-position-x: calc(200% / 3);
+  }
+
+  64.285714% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes field-generator-start {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  26.923077% {
+    background-position-x: calc(100% / 3);
+  }
+
+  46.153846% {
+    background-position-x: calc(200% / 3);
+  }
+
+  61.538462% {
+    background-position-x: 100%;
+  }
+}
+
 @keyframes server-hug {
   0%,
   100% {
@@ -1093,6 +1305,44 @@
   }
 
   75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes parachute-landing {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  21.153846% {
+    background-position-x: calc(100% / 3);
+  }
+
+  38.461538% {
+    background-position-x: calc(200% / 3);
+  }
+
+  61.538462% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes parachute-collapse {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  27.083333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  43.75% {
+    background-position-x: calc(200% / 3);
+  }
+
+  54.166667% {
     background-position-x: 100%;
   }
 }

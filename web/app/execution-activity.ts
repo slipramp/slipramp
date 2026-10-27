@@ -52,6 +52,14 @@ export type ExecutionAnimationPose =
   | "map-coordinate-check"
   | "rangefinder-check"
   | "field-medic-check"
+  | "field-radio-operator"
+  | "belt-feed-check"
+  | "entrenching-tool-dig"
+  | "gas-mask-seal-check"
+  | "drone-reconnaissance"
+  | "plate-carrier-donning"
+  | "eod-suit-rise"
+  | "field-generator-start"
   | "jackhammer-ride"
   | "bubble-level-check"
   | "paint-roller-swipe"
@@ -82,6 +90,7 @@ export type ExecutionAnimationPose =
   | "cargo-loader-triumph"
   | "guitar-power-chord"
   | "oven-mitt-triumph"
+  | "parachute-landing"
   | "laptop-slump"
   | "server-bite"
   | "rocket-boot-misfire"
@@ -102,6 +111,7 @@ export type ExecutionAnimationPose =
   | "steamroller-flat"
   | "under-desk-drag"
   | "fire-extinguisher-blast"
+  | "parachute-collapse"
   | "explosion-walkaway";
 
 export const executionAnimationPosePools = {
@@ -158,6 +168,14 @@ export const executionAnimationPosePools = {
     "map-coordinate-check",
     "rangefinder-check",
     "field-medic-check",
+    "field-radio-operator",
+    "belt-feed-check",
+    "entrenching-tool-dig",
+    "gas-mask-seal-check",
+    "drone-reconnaissance",
+    "plate-carrier-donning",
+    "eod-suit-rise",
+    "field-generator-start",
     "jackhammer-ride",
     "bubble-level-check",
     "paint-roller-swipe",
@@ -191,6 +209,7 @@ export const executionAnimationPosePools = {
     "cargo-loader-triumph",
     "guitar-power-chord",
     "oven-mitt-triumph",
+    "parachute-landing",
   ],
   frustrated: [
     "laptop-slump",
@@ -213,6 +232,7 @@ export const executionAnimationPosePools = {
     "steamroller-flat",
     "under-desk-drag",
     "fire-extinguisher-blast",
+    "parachute-collapse",
   ],
 } as const satisfies Record<ExecutionAnimation, readonly ExecutionAnimationPose[]>;
 

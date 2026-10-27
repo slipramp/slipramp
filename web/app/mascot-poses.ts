@@ -98,6 +98,23 @@ const mascotPoseMetadata = {
   "map-coordinate-check": { label: "Map coordinate check", tags: ["military"] },
   "rangefinder-check": { label: "Rangefinder check", tags: ["military"] },
   "field-medic-check": { label: "Field medic check", tags: ["military"] },
+  "field-radio-operator": { label: "Field-radio operator", tags: ["military"] },
+  "belt-feed-check": { label: "Belt-feed check", tags: ["military"] },
+  "entrenching-tool-dig": {
+    label: "Entrenching-tool dig",
+    tags: ["construction", "military"],
+  },
+  "gas-mask-seal-check": { label: "Gas-mask seal check", tags: ["military"] },
+  "drone-reconnaissance": {
+    label: "Drone reconnaissance",
+    tags: ["aviation", "military"],
+  },
+  "plate-carrier-donning": { label: "Plate-carrier donning", tags: ["military"] },
+  "eod-suit-rise": { label: "EOD-suit rise", tags: ["military"] },
+  "field-generator-start": {
+    label: "Field-generator start",
+    tags: ["construction", "military"],
+  },
   "jackhammer-ride": { label: "Jackhammer ride", tags: ["construction", "slapstick"] },
   "bubble-level-check": { label: "Bubble-level check", tags: ["construction"] },
   "paint-roller-swipe": { label: "Paint-roller swipe", tags: ["construction"] },
@@ -131,6 +148,7 @@ const mascotPoseMetadata = {
   },
   "guitar-power-chord": { label: "Guitar power chord", tags: ["leisure"] },
   "oven-mitt-triumph": { label: "Oven-mitt triumph", tags: ["food-and-drink"] },
+  "parachute-landing": { label: "Parachute landing", tags: ["aviation", "military"] },
   "laptop-slump": { label: "Laptop slump", tags: ["computers", "slapstick"] },
   "server-bite": { label: "Server bite", tags: ["computers", "slapstick"] },
   "rocket-boot-misfire": { label: "Rocket-boot misfire", tags: ["science-fiction", "slapstick"] },
@@ -165,6 +183,10 @@ const mascotPoseMetadata = {
   "fire-extinguisher-blast": {
     label: "Fire-extinguisher blast",
     tags: ["construction", "slapstick"],
+  },
+  "parachute-collapse": {
+    label: "Parachute collapse",
+    tags: ["aviation", "military", "slapstick"],
   },
   "explosion-walkaway": {
     label: "Explosion walkaway",

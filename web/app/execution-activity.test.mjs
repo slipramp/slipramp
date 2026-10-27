@@ -71,7 +71,7 @@ test("waiting animation variants are stable and spread across IDs", () => {
 });
 
 test("working animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 200 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 1000 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("working", id));
 
   assert.deepEqual(
@@ -99,6 +99,14 @@ test("working animation variants are stable and spread across IDs", () => {
       "map-coordinate-check",
       "rangefinder-check",
       "field-medic-check",
+      "field-radio-operator",
+      "belt-feed-check",
+      "entrenching-tool-dig",
+      "gas-mask-seal-check",
+      "drone-reconnaissance",
+      "plate-carrier-donning",
+      "eod-suit-rise",
+      "field-generator-start",
       "jackhammer-ride",
       "bubble-level-check",
       "paint-roller-swipe",
@@ -145,6 +153,7 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "cargo-loader-triumph",
       "guitar-power-chord",
       "oven-mitt-triumph",
+      "parachute-landing",
     ]),
   );
 });
@@ -180,6 +189,7 @@ test("frustrated animation variants are stable and spread across IDs", () => {
       "steamroller-flat",
       "under-desk-drag",
       "fire-extinguisher-blast",
+      "parachute-collapse",
     ]),
   );
 });

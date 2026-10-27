@@ -59,6 +59,9 @@ test("every gallery tag is assigned to at least one pose", () => {
   assert.ok(findMascotPose("inflight-laptop-typing")?.tags.includes("aviation"));
   assert.deepEqual(findMascotPose("flight-controller")?.tags, ["aviation"]);
   assert.ok(findMascotPose("hay-bale-roll")?.tags.includes("agriculture"));
+  assert.deepEqual(findMascotPose("plate-carrier-donning")?.tags, ["military"]);
+  assert.deepEqual(findMascotPose("eod-suit-rise")?.tags, ["military"]);
+  assert.deepEqual(findMascotPose("field-generator-start")?.tags, ["construction", "military"]);
 
   for (const pose of [
     "progress-bar-stare",

@@ -1186,15 +1186,19 @@ awaiting review return to the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose, including an affectionate server hug or a guitar
 power chord with a broad strum, joyful singing expression, and golden sound
-bursts, a raised oven-mitt triumph, or a formal flag salute. Working variations
+bursts, a raised oven-mitt triumph, a controlled parachute landing, or a formal
+flag salute. Working variations
 include dough flipping, dough kneading, cake piping, grillmaster flipping, wok
 tossing, kebab turning, checking an inert shoulder-launcher training replica,
 reading a consistently oriented field map, scanning through a handheld rangefinder,
-and inspecting a compact field-medic kit.
+inspecting a compact field-medic kit, operating a field radio, checking a belt-fed
+training weapon, digging with a folding entrenching tool, testing a full-face
+respirator seal, and conducting small-drone reconnaissance.
 Failed or timed-out Runs choose a deterministic
 failure pose ranging from a laptop slump to server biting, tool fumbles,
 rocket-boot misfires, server stomping, emergency controls, and harmless slapstick
-retreats; canceled Runs use a neutral phone animation.
+retreats, including a collapsed parachute ending in a harmless cartoon splat;
+canceled Runs use a neutral phone animation.
 Approved Promotions celebrate, rejected or failed Promotions use the failure
 selection, and expired Promotions use the neutral phone animation. These outcome
 cards replace the terminal result alert. Successful Run cards show only the
