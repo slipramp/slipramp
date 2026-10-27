@@ -33,9 +33,13 @@ export type ExecutionAnimationPose =
   | "window-seat-dreamer"
   | "tray-table-snack"
   | "red-eye-passenger"
+  | "seatbelt-click"
+  | "turbulence-cup-save"
+  | "cabin-blanket-tuck"
   | "egg-basket-check"
   | "mainframe-reel-watch"
   | "cpu-cooler-install"
+  | "ram-install"
   | "laptop-typing"
   | "inflight-laptop-typing"
   | "runway-marshal"
@@ -81,6 +85,7 @@ export type ExecutionAnimationPose =
   | "flower-offer"
   | "championship-belt"
   | "confetti-cannon"
+  | "jackpot-stars"
   | "pistol-salute"
   | "flag-salute"
   | "trophy-hoist"
@@ -146,6 +151,9 @@ export const executionAnimationPosePools = {
     "window-seat-dreamer",
     "tray-table-snack",
     "red-eye-passenger",
+    "seatbelt-click",
+    "turbulence-cup-save",
+    "cabin-blanket-tuck",
     "egg-basket-check",
   ],
   phone: ["phone-scroll"],
@@ -156,6 +164,7 @@ export const executionAnimationPosePools = {
     "flight-controller",
     "mainframe-reel-watch",
     "cpu-cooler-install",
+    "ram-install",
     "blueprint-review",
     "clipboard-check",
     "walkie-talkie",
@@ -200,6 +209,7 @@ export const executionAnimationPosePools = {
     "flower-offer",
     "championship-belt",
     "confetti-cannon",
+    "jackpot-stars",
     "pistol-salute",
     "flag-salute",
     "trophy-hoist",

@@ -1178,10 +1178,12 @@ The optional kawaii theme adds an animated axolotl beside status badges and on
 detail pages. While a Run is queued, she uses a deterministic waiting pose such
 as reading, sipping iced coffee, eating popcorn, listening to music, playing
 on her phone, touching the lawn beneath her, slurping ramen, or passing time in
-an airplane window seat. After assignment, she uses a deterministic working pose
-throughout preparation and execution, including runway marshalling, flight
-control, and inflight laptop work. Promotions being created in Kargo use the
-waiting selection; preparing Promotions use the working selection, and Promotions
+an airplane window seat by fastening a lap belt, saving a drink during stormy
+turbulence, or tucking into a cabin blanket. After assignment, she uses a
+deterministic working pose throughout preparation and execution, including
+runway marshalling, flight control, and inflight laptop work. Promotions being
+created in Kargo use the waiting selection; preparing Promotions use the working
+selection, and Promotions
 awaiting review return to the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose, including an affectionate server hug or a guitar
@@ -1193,7 +1195,8 @@ tossing, kebab turning, checking an inert shoulder-launcher training replica,
 reading a consistently oriented field map, scanning through a handheld rangefinder,
 inspecting a compact field-medic kit, operating a field radio, checking a belt-fed
 training weapon, digging with a folding entrenching tool, testing a full-face
-respirator seal, and conducting small-drone reconnaissance.
+respirator seal, conducting small-drone reconnaissance, and carefully installing
+RAM into a minimal motherboard.
 Failed or timed-out Runs choose a deterministic
 failure pose ranging from a laptop slump to server biting, tool fumbles,
 rocket-boot misfires, server stomping, emergency controls, and harmless slapstick

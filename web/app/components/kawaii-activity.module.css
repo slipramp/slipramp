@@ -204,6 +204,24 @@
   animation-duration: 3.2s;
 }
 
+.sprite[data-pose="seatbelt-click"] {
+  background-image: url("../assets/slipramp-axolotl-seatbelt-click.webp");
+  animation-name: seatbelt-click;
+  animation-duration: 2.6s;
+}
+
+.sprite[data-pose="turbulence-cup-save"] {
+  background-image: url("../assets/slipramp-axolotl-turbulence-cup-save.webp");
+  animation-name: turbulence-cup-save;
+  animation-duration: 2.4s;
+}
+
+.sprite[data-pose="cabin-blanket-tuck"] {
+  background-image: url("../assets/slipramp-axolotl-cabin-blanket-tuck.webp");
+  animation-name: cabin-blanket-tuck;
+  animation-duration: 3s;
+}
+
 .sprite[data-pose="egg-basket-check"] {
   background-image: url("../assets/slipramp-axolotl-egg-basket-check.webp");
   animation-name: even-frames;
@@ -220,6 +238,12 @@
   background-image: url("../assets/slipramp-axolotl-cpu-cooler-install.webp");
   animation-name: even-frames;
   animation-duration: 2.4s;
+}
+
+.sprite[data-pose="ram-install"] {
+  background-image: url("../assets/slipramp-axolotl-ram-install.webp");
+  animation-name: ram-install;
+  animation-duration: 2.6s;
 }
 
 .sprite[data-pose="inflight-laptop-typing"] {
@@ -463,6 +487,12 @@
 .sprite[data-pose="confetti-cannon"] {
   background-image: url("../assets/slipramp-axolotl-confetti-cannon.webp");
   animation-duration: 2.4s;
+}
+
+.sprite[data-pose="jackpot-stars"] {
+  background-image: url("../assets/slipramp-axolotl-jackpot-stars.webp");
+  animation-name: jackpot-stars;
+  animation-duration: 2.75s;
 }
 
 .sprite[data-pose="pistol-salute"] {
@@ -754,6 +784,63 @@
   }
 
   75% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes seatbelt-click {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  25% {
+    background-position-x: calc(100% / 3);
+  }
+
+  44.230769% {
+    background-position-x: calc(200% / 3);
+  }
+
+  65.384615% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes turbulence-cup-save {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  33.333333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  47.916667% {
+    background-position-x: calc(200% / 3);
+  }
+
+  70.833333% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes cabin-blanket-tuck {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  23.333333% {
+    background-position-x: calc(100% / 3);
+  }
+
+  43.333333% {
+    background-position-x: calc(200% / 3);
+  }
+
+  70% {
     background-position-x: 100%;
   }
 }
@@ -1233,6 +1320,25 @@
   }
 }
 
+@keyframes ram-install {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  26.923077% {
+    background-position-x: calc(100% / 3);
+  }
+
+  51.923077% {
+    background-position-x: calc(200% / 3);
+  }
+
+  69.230769% {
+    background-position-x: 100%;
+  }
+}
+
 @keyframes server-hug {
   0%,
   100% {
@@ -1248,6 +1354,25 @@
   }
 
   76.785714% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes jackpot-stars {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  23.636364% {
+    background-position-x: calc(100% / 3);
+  }
+
+  40% {
+    background-position-x: calc(200% / 3);
+  }
+
+  72.727273% {
     background-position-x: 100%;
   }
 }

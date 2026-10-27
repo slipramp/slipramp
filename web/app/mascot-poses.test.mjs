@@ -57,6 +57,9 @@ test("every gallery tag is assigned to at least one pose", () => {
   assert.ok(findMascotPose("runway-marshal")?.tags.includes("aviation"));
   assert.ok(findMascotPose("window-seat-dreamer")?.tags.includes("aviation"));
   assert.ok(findMascotPose("inflight-laptop-typing")?.tags.includes("aviation"));
+  assert.deepEqual(findMascotPose("seatbelt-click")?.tags, ["aviation"]);
+  assert.deepEqual(findMascotPose("turbulence-cup-save")?.tags, ["aviation"]);
+  assert.ok(findMascotPose("cabin-blanket-tuck")?.tags.includes("aviation"));
   assert.deepEqual(findMascotPose("flight-controller")?.tags, ["aviation"]);
   assert.ok(findMascotPose("hay-bale-roll")?.tags.includes("agriculture"));
   assert.deepEqual(findMascotPose("plate-carrier-donning")?.tags, ["military"]);
@@ -67,6 +70,7 @@ test("every gallery tag is assigned to at least one pose", () => {
     "progress-bar-stare",
     "mainframe-reel-watch",
     "cpu-cooler-install",
+    "ram-install",
     "laptop-typing",
     "server-hug",
     "laptop-slump",

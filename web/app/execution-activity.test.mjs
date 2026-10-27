@@ -65,6 +65,9 @@ test("waiting animation variants are stable and spread across IDs", () => {
       "window-seat-dreamer",
       "tray-table-snack",
       "red-eye-passenger",
+      "seatbelt-click",
+      "turbulence-cup-save",
+      "cabin-blanket-tuck",
       "egg-basket-check",
     ]),
   );
@@ -87,6 +90,7 @@ test("working animation variants are stable and spread across IDs", () => {
       "flight-controller",
       "mainframe-reel-watch",
       "cpu-cooler-install",
+      "ram-install",
       "blueprint-review",
       "clipboard-check",
       "walkie-talkie",
@@ -126,7 +130,7 @@ test("working animation variants are stable and spread across IDs", () => {
 });
 
 test("celebrating animation variants are stable and spread across IDs", () => {
-  const ids = Array.from({ length: 40 }, (_, index) => `run-${index}`);
+  const ids = Array.from({ length: 80 }, (_, index) => `run-${index}`);
   const variants = ids.map((id) => activityAnimationPose("celebrating", id));
 
   assert.deepEqual(
@@ -144,6 +148,7 @@ test("celebrating animation variants are stable and spread across IDs", () => {
       "flower-offer",
       "championship-belt",
       "confetti-cannon",
+      "jackpot-stars",
       "pistol-salute",
       "flag-salute",
       "trophy-hoist",
