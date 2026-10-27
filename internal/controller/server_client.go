@@ -164,8 +164,11 @@ func (c *serverClient) AppendLogChunk(ctx context.Context, runID uuid.UUID, offs
 	}
 }
 
-func newServerClient(cfg Config) (*serverClient, error) {
-	httpClient := &http.Client{Timeout: pollRequestTimeout}
+func newServerClient(cfg Config, transport http.RoundTripper) (*serverClient, error) {
+	httpClient := &http.Client{
+		Transport: transport,
+		Timeout:   pollRequestTimeout,
+	}
 
 	return newServerClientWithHTTPClient(cfg, httpClient)
 }

@@ -19,6 +19,33 @@ Cluster name, and do not reuse a namespace until all Jobs left by its prior
 owner have been removed. The chart has no leader election, lease, fencing, or
 failover behavior, and its schema rejects any replica count other than one.
 
+## Metrics
+
+The Controller exposes unauthenticated Prometheus/OpenMetrics text at
+`GET /metrics` on a dedicated listener. The chart creates a cluster-internal
+Service named for the release with a `metrics` port, defaulting to `9091`, and
+does not create an Ingress. Keep it reachable only from the Cluster's trusted
+monitoring network.
+
+The endpoint contains `target_info` Resource metadata, stable outbound HTTP
+metrics for the generated Slipramp client, maintained OpenTelemetry Go runtime
+metrics, and native Prometheus process metrics. It does not yet expose
+Controller-specific operation metrics. Configure annotation-based discovery
+with:
+
+```yaml
+metrics:
+  port: 9091
+  service:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/path: /metrics
+      prometheus.io/port: "9091"
+```
+
+The complete metric names and convention status are documented in the
+[metric catalog](../../../docs/METRICS.md).
+
 ## Credentials and images
 
 Enrollment and bearer credentials default to keys in an operator-managed

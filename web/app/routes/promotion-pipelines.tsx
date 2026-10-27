@@ -248,20 +248,15 @@ function PipelineComparison({
               {pipeline.project} · {pipeline.repository}
             </Text>
           </Stack>
-          <Group gap="xs">
-            {differentCount > 0 ? (
-              <Badge color="yellow" variant="light">
-                {differentCount} different
-              </Badge>
-            ) : equalCount > 0 ? (
-              <Badge color="green" variant="light">
-                Freight aligned
-              </Badge>
-            ) : null}
-            <Badge color="gray" variant="outline">
-              {columns.length} environment{columns.length === 1 ? "" : "s"}
+          {differentCount > 0 ? (
+            <Badge color="yellow" variant="light">
+              {differentCount} different
             </Badge>
-          </Group>
+          ) : equalCount > 0 ? (
+            <Badge color="green" variant="light">
+              Freight aligned
+            </Badge>
+          ) : null}
         </Group>
         {rows.length === 0 ? (
           <Text c="dimmed">

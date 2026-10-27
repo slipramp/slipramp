@@ -72,13 +72,6 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
   },
   {
     items: [
-      { icon: IconGitBranch, label: "Repositories", to: "/repositories" },
-      { icon: IconServer2, label: "Clusters", to: "/clusters" },
-    ],
-    label: "Inventory",
-  },
-  {
-    items: [
       { icon: IconFolder, label: "Projects", to: "/promotion-projects" },
       { icon: IconRocket, label: "Promotions", to: "/promotions" },
       { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines?status=different" },
@@ -90,6 +83,13 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
       { icon: IconShieldCheck, label: "Stage policies", to: "/promotion-stages" },
     ],
     label: "Promote",
+  },
+  {
+    items: [
+      { icon: IconGitBranch, label: "Repositories", to: "/repositories" },
+      { icon: IconServer2, label: "Clusters", to: "/clusters" },
+    ],
+    label: "Inventory",
   },
 ];
 

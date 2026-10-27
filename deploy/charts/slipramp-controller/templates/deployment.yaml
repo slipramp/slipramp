@@ -30,6 +30,10 @@ spec:
         - name: controller
           image: {{ include "slipramp-controller.image" .Values.image | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           env:
@@ -37,6 +41,8 @@ spec:
               value: {{ .Values.clusterName | quote }}
             - name: SLIPRAMP_CONTROLLER_SERVER_URL
               value: {{ .Values.serverURL | quote }}
+            - name: SLIPRAMP_CONTROLLER_METRICS_ADDRESS
+              value: {{ printf ":%d" (.Values.metrics.port | int) | quote }}
             - name: SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN
               valueFrom:
                 secretKeyRef:

@@ -45,6 +45,43 @@ func (f httpDoerFunc) Do(request *http.Request) (*http.Response, error) {
 	return f(request)
 }
 
+type roundTripperFunc func(request *http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func TestServerClientUsesConfiguredHTTPTransport(t *testing.T) {
+	t.Parallel()
+
+	called := false
+	client, err := newServerClient(
+		validConfig(),
+		roundTripperFunc(func(_ *http.Request) (*http.Response, error) {
+			called = true
+
+			return &http.Response{
+				StatusCode: http.StatusNoContent,
+				Body:       io.NopCloser(strings.NewReader("")),
+			}, nil
+		}),
+	)
+	if err != nil {
+		t.Fatalf("newServerClient() error = %v", err)
+	}
+
+	command, err := client.Poll(t.Context())
+	if err != nil {
+		t.Fatalf("Poll() error = %v", err)
+	}
+	if command != nil {
+		t.Errorf("Poll() command = %#v, want nil", command)
+	}
+	if !called {
+		t.Fatal("configured HTTP transport was not called")
+	}
+}
+
 func TestServerClientEnrollsControllerCredential(t *testing.T) {
 	t.Parallel()
 

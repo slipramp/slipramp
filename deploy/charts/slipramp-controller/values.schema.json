@@ -10,6 +10,7 @@
     "image",
     "checkoutImage",
     "harnessImage",
+    "metrics",
     "credentials",
     "gitCredentials",
     "kargo",
@@ -40,6 +41,20 @@
     "image": { "$ref": "#/$defs/image" },
     "checkoutImage": { "$ref": "#/$defs/imageReference" },
     "harnessImage": { "$ref": "#/$defs/imageReference" },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["port", "service"],
+      "properties": {
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["annotations"],
+          "properties": { "annotations": { "$ref": "#/$defs/stringMap" } }
+        }
+      }
+    },
     "credentials": {
       "type": "object",
       "additionalProperties": false,

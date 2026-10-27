@@ -12,6 +12,7 @@ import (
 const (
 	controllerClusterEnvironment             = "SLIPRAMP_CONTROLLER_CLUSTER"
 	controllerServerEnvironment              = "SLIPRAMP_CONTROLLER_SERVER_URL"
+	controllerMetricsAddressEnvironment      = "SLIPRAMP_CONTROLLER_METRICS_ADDRESS"
 	controllerEnrollmentTokenEnvironment     = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
 	controllerTokenEnvironment               = "SLIPRAMP_CONTROLLER_TOKEN"
 	controllerCheckoutImageEnvironment       = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
@@ -29,6 +30,10 @@ func LoadController(lookupEnvironment func(string) (string, bool)) (controller.C
 	cfg := controller.Config{}
 	cfg.ClusterName, _ = lookupEnvironment(controllerClusterEnvironment)
 	cfg.ServerURL, _ = lookupEnvironment(controllerServerEnvironment)
+	cfg.MetricsAddress = controller.DefaultMetricsAddress
+	if value, ok := lookupEnvironment(controllerMetricsAddressEnvironment); ok {
+		cfg.MetricsAddress = value
+	}
 	cfg.EnrollmentToken, _ = lookupEnvironment(controllerEnrollmentTokenEnvironment)
 	cfg.BearerToken, _ = lookupEnvironment(controllerTokenEnvironment)
 	cfg.CheckoutImage, _ = lookupEnvironment(controllerCheckoutImageEnvironment)

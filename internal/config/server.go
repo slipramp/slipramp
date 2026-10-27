@@ -21,6 +21,7 @@ import (
 
 const (
 	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
+	serverMetricsAddressEnvironment               = "SLIPRAMP_SERVER_METRICS_ADDRESS"
 	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
 	serverControllerEnrollmentTokensEnvironment   = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS"
 	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
@@ -93,6 +94,10 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 
 	if value, ok := lookupEnvironment(serverAddressEnvironment); ok {
 		cfg.Address = value
+	}
+
+	if value, ok := lookupEnvironment(serverMetricsAddressEnvironment); ok {
+		cfg.MetricsAddress = value
 	}
 
 	if value, ok := lookupEnvironment(serverShutdownTimeoutEnvironment); ok {

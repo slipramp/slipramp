@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/metricsserver"
 )
 
 const (
@@ -30,6 +31,10 @@ var (
 
 type controllerEnroller interface {
 	Enroll(ctx context.Context) error
+}
+
+type componentRunner interface {
+	Run(context.Context) error
 }
 
 type commandPoller interface {
@@ -99,6 +104,7 @@ type Controller struct {
 	promotionReconciler            kargoPromotionReconciler
 	workers                        sync.WaitGroup
 	stop                           context.CancelCauseFunc
+	metrics                        componentRunner
 }
 
 func New(
@@ -106,6 +112,7 @@ func New(
 	logger *slog.Logger,
 	kubeClient kubernetes.Interface,
 	dynamicClient dynamic.Interface,
+	options ...Option,
 ) (*Controller, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -121,7 +128,11 @@ func New(
 		return nil, errors.New("dynamic Kubernetes client is required for Kargo observation")
 	}
 
-	server, err := newServerClient(cfg)
+	settings := controllerOptions{}
+	for _, option := range options {
+		option(&settings)
+	}
+	server, err := newServerClient(cfg, settings.serverHTTPTransport)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +153,13 @@ func New(
 		heartbeatEvery:                 observationHeartbeatPeriod,
 		now:                            time.Now,
 		activeRuns:                     make(map[uuid.UUID]*runWorker),
+	}
+	if settings.metricsHandler != nil {
+		controller.metrics = metricsserver.New(
+			cfg.MetricsAddress,
+			settings.metricsHandler,
+			logger.With("component", "controller_metrics"),
+		)
 	}
 	if len(cfg.KargoIntegrations) > 0 {
 		controller.stageObservers = newKargoStageObservers(
@@ -177,6 +195,7 @@ func (c *Controller) Run(ctx context.Context) (result error) {
 		"server_url", c.serverURL,
 	)
 	defer c.logger.Info("controller stopped", "cluster", c.clusterName)
+	c.startMetrics(observeContext)
 
 	if err := c.enroll(observeContext); err != nil {
 		return err
@@ -225,6 +244,18 @@ func (c *Controller) Run(ctx context.Context) (result error) {
 			return nil
 		}
 	}
+}
+
+func (c *Controller) startMetrics(ctx context.Context) {
+	if c.metrics == nil {
+		return
+	}
+
+	c.workers.Go(func() {
+		if err := c.metrics.Run(ctx); err != nil && c.stop != nil {
+			c.stop(err)
+		}
+	})
 }
 
 func (c *Controller) startStageObservers(ctx context.Context) {

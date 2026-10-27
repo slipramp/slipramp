@@ -10,6 +10,7 @@ import (
 const (
 	controllerClusterEnvironment             = "SLIPRAMP_CONTROLLER_CLUSTER"
 	controllerServerEnvironment              = "SLIPRAMP_CONTROLLER_SERVER_URL"
+	controllerMetricsAddressEnvironment      = "SLIPRAMP_CONTROLLER_METRICS_ADDRESS"
 	controllerEnrollmentTokenEnvironment     = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
 	controllerTokenEnvironment               = "SLIPRAMP_CONTROLLER_TOKEN"
 	controllerCheckoutImageEnvironment       = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
@@ -25,6 +26,7 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 	environment := map[string]string{
 		controllerClusterEnvironment:             "colo",
 		controllerServerEnvironment:              "https://slipramp.example.com",
+		controllerMetricsAddressEnvironment:      ":9191",
 		controllerEnrollmentTokenEnvironment:     "enrollment-token",
 		controllerTokenEnvironment:               "controller-token",
 		controllerCheckoutImageEnvironment:       "registry.example.com/slipramp-checkout:1",
@@ -45,6 +47,9 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 
 	if cfg.ServerURL != "https://slipramp.example.com" {
 		t.Errorf("ServerURL = %q, want %q", cfg.ServerURL, "https://slipramp.example.com")
+	}
+	if cfg.MetricsAddress != ":9191" {
+		t.Errorf("MetricsAddress = %q, want %q", cfg.MetricsAddress, ":9191")
 	}
 
 	if cfg.BearerToken != "controller-token" {
@@ -76,6 +81,18 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestLoadControllerDefaultsMetricsAddress(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.LoadController(mapEnvironment(validControllerEnvironment()))
+	if err != nil {
+		t.Fatalf("LoadController() error = %v", err)
+	}
+	if cfg.MetricsAddress != ":9091" {
+		t.Errorf("MetricsAddress = %q, want %q", cfg.MetricsAddress, ":9091")
+	}
+}
+
 func TestLoadControllerRejectsInvalidEnvironment(t *testing.T) {
 	t.Parallel()
 
@@ -97,6 +114,13 @@ func TestLoadControllerRejectsInvalidEnvironment(t *testing.T) {
 				environment[controllerGitCredentialsEnvironment] = "not-json"
 			},
 			wantError: controllerGitCredentialsEnvironment,
+		},
+		{
+			name: "invalid metrics address",
+			configure: func(environment map[string]string) {
+				environment[controllerMetricsAddressEnvironment] = "localhost"
+			},
+			wantError: "metrics address",
 		},
 		{
 			name: "invalid execution namespaces",

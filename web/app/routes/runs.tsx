@@ -256,10 +256,10 @@ function HistoryTable({
             <Table.Tr>
               <Table.Th>Run / workload</Table.Th>
               <Table.Th>Status</Table.Th>
-              <Table.Th>Source / actor</Table.Th>
               <Table.Th>Execution</Table.Th>
-              <Table.Th>Timing</Table.Th>
               <Table.Th>Revision</Table.Th>
+              <Table.Th>Source / author</Table.Th>
+              <Table.Th>Created</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -295,26 +295,6 @@ function HistoryTable({
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={0}>
-                    {run.source.type === "promotion" && run.source.promotion ? (
-                      <Anchor
-                        component={Link}
-                        size="sm"
-                        to={`/promotions/${run.source.promotion.promotionId}`}
-                      >
-                        {runSourceLabel(run.source)}
-                      </Anchor>
-                    ) : (
-                      <Text size="sm">{runSourceLabel(run.source)}</Text>
-                    )}
-                    <Identity
-                      avatarSize={22}
-                      name={run.createdBy?.displayName ?? "System"}
-                      nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
-                    />
-                  </Stack>
-                </Table.Td>
-                <Table.Td>
-                  <Stack gap={0}>
                     <Anchor
                       component={Link}
                       size="sm"
@@ -334,6 +314,34 @@ function HistoryTable({
                 </Table.Td>
                 <Table.Td>
                   <Stack gap={0}>
+                    <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
+                    <Text c="dimmed" size="xs">
+                      Catalog {shortIdentifier(run.catalogRevisionId)}
+                    </Text>
+                  </Stack>
+                </Table.Td>
+                <Table.Td>
+                  <Stack gap={0}>
+                    {run.source.type === "promotion" && run.source.promotion ? (
+                      <Anchor
+                        component={Link}
+                        size="sm"
+                        to={`/promotions/${run.source.promotion.promotionId}`}
+                      >
+                        {runSourceLabel(run.source)}
+                      </Anchor>
+                    ) : (
+                      <Text size="sm">{runSourceLabel(run.source)}</Text>
+                    )}
+                    <Identity
+                      avatarSize={22}
+                      name={run.createdBy?.displayName ?? "System"}
+                      nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
+                    />
+                  </Stack>
+                </Table.Td>
+                <Table.Td style={{ whiteSpace: "nowrap" }}>
+                  <Stack gap={0}>
                     <RelativeTime size="sm" value={run.createdAt} />
                     {run.startedAt && run.finishedAt ? (
                       <Text c="dimmed" size="xs">
@@ -346,14 +354,6 @@ function HistoryTable({
                         Not started
                       </Text>
                     )}
-                  </Stack>
-                </Table.Td>
-                <Table.Td>
-                  <Stack gap={0}>
-                    <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
-                    <Text c="dimmed" size="xs">
-                      Catalog {shortIdentifier(run.catalogRevisionId)}
-                    </Text>
                   </Stack>
                 </Table.Td>
               </Table.Tr>

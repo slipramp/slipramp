@@ -18,6 +18,10 @@ spec:
       port: {{ .Values.server.service.port }}
       targetPort: http
       protocol: TCP
+    - name: metrics
+      port: {{ .Values.server.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
 ---
 apiVersion: v1
 kind: Service

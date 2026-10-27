@@ -11,3 +11,6 @@ their lifecycle.
 Do not install another active Controller with the same Cluster name or reuse an
 execution namespace until every Slipramp Job left by its previous owner has
 been removed. This chart intentionally provides no leader election or failover.
+
+Prometheus metrics are available inside the Cluster at:
+  http://{{ include "slipramp-controller.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.metrics.port }}/metrics

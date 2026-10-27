@@ -10,6 +10,7 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/auth"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/metricsserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/placement"
@@ -21,6 +22,7 @@ import (
 
 type Config struct {
 	Address                      string
+	MetricsAddress               string
 	ShutdownTimeout              time.Duration
 	ControllerEnrollmentTokens   map[string]string
 	Placements                   placement.Set
@@ -41,6 +43,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		Address:                      ":8080",
+		MetricsAddress:               metricsserver.DefaultAddress,
 		ShutdownTimeout:              10 * time.Second,
 		ControllerEnrollmentTokens:   map[string]string{},
 		RepositoryRefreshCredentials: repository.RefreshCredentials{},
@@ -75,6 +78,10 @@ func (c Config) Validate() error {
 
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("shutdown timeout must be positive")
+	}
+
+	if err := metricsserver.ValidateAddress(c.MetricsAddress); err != nil {
+		return err
 	}
 
 	if err := c.RepositoryRefreshCredentials.Validate(); err != nil {

@@ -84,9 +84,11 @@ assert_not_contains "$server_render" '^kind: (ClusterRole|Role|RoleBinding|Servi
   >"$test_directory/server-metrics.yaml"
 assert_contains "$test_directory/server-metrics.yaml" 'prometheus.io/scrape: "true"'
 assert_contains "$test_directory/server-metrics.yaml" 'prometheus.io/path: /metrics'
-assert_contains "$test_directory/server-metrics.yaml" 'prometheus.io/port: "8080"'
-assert_contains "$test_directory/server-metrics.yaml" 'name: http'
-assert_contains "$test_directory/server-metrics.yaml" 'port: 8080'
+assert_contains "$test_directory/server-metrics.yaml" 'prometheus.io/port: "9091"'
+assert_contains "$test_directory/server-metrics.yaml" 'name: metrics'
+assert_contains "$test_directory/server-metrics.yaml" 'port: 9091'
+assert_contains "$test_directory/server-metrics.yaml" 'name: SLIPRAMP_SERVER_METRICS_ADDRESS'
+assert_contains "$test_directory/server-metrics.yaml" 'value: ":9091"'
 
 checksum_default=$(grep -E 'checksum/placements:' "$server_render" | awk '{print $2}')
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
@@ -154,6 +156,19 @@ assert_contains "$controller_render" 'namespace: runs-green'
 assert_contains "$controller_render" 'value: "\[\\"runs-blue\\",\\"runs-green\\"\]"'
 assert_contains "$controller_render" 'name: slipramp-controller-credentials'
 assert_contains "$controller_render" 'github-readonly'
+assert_contains "$controller_render" 'name: SLIPRAMP_CONTROLLER_METRICS_ADDRESS'
+assert_contains "$controller_render" 'value: ":9091"'
+assert_contains "$controller_render" 'name: metrics'
+assert_contains "$controller_render" 'port: 9091'
+
+"$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/controller-required.yaml" \
+  --values "$testdata/controller-metrics.yaml" \
+  >"$test_directory/controller-metrics.yaml"
+assert_contains "$test_directory/controller-metrics.yaml" 'prometheus.io/scrape: "true"'
+assert_contains "$test_directory/controller-metrics.yaml" 'prometheus.io/path: /metrics'
+assert_contains "$test_directory/controller-metrics.yaml" 'prometheus.io/port: "9091"'
 
 kargo_controller_render="$test_directory/controller-kargo.yaml"
 "$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \

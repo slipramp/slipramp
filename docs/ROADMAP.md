@@ -81,9 +81,10 @@ intentionally deferred until Slipramp begins versioning releases:
       exercise it against real dependencies with responsive command polling
       during blocked Run work, coalesced cancellation, bounded Kargo command
       attempts, Promotion preparation retry recovery, and terminal diagnostics.
-- [ ] Expand operational diagnostics beyond the implemented HTTP, process,
-      runtime, PostgreSQL-pool, current-state, and core worker metrics. Add
-      focused signals only when the remaining failure cases justify them.
+- [ ] Expand operational diagnostics beyond the implemented Server HTTP,
+      process, runtime, PostgreSQL-pool, current-state, and core worker metrics
+      plus the Controller process/runtime foundation. Add focused signals only
+      when the remaining failure cases justify them.
 - [ ] Document upgrades, coordinated PostgreSQL/object-storage backups, restore,
       recovery drills, and troubleshooting beyond existing identity recovery,
       Helm installation, local development, and kind instructions.

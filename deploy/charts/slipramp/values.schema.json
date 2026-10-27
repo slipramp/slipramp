@@ -22,6 +22,7 @@
         "replicaCount",
         "image",
         "service",
+        "metrics",
         "shutdownTimeout",
         "database",
         "objectStore",
@@ -47,6 +48,14 @@
         "replicaCount": { "type": "integer", "const": 1 },
         "image": { "$ref": "#/$defs/image" },
         "service": { "$ref": "#/$defs/service" },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["port"],
+          "properties": {
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+          }
+        },
         "shutdownTimeout": { "$ref": "#/$defs/duration" },
         "database": {
           "type": "object",

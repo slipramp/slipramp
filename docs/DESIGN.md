@@ -1180,8 +1180,9 @@ as reading, sipping iced coffee, eating popcorn, listening to music, playing
 on her phone, touching the lawn beneath her, slurping ramen, or passing time in
 an airplane window seat. After assignment, she uses a deterministic working pose
 throughout preparation and execution, including runway marshalling, flight
-control, and inflight laptop work. Creating or preparing Promotions use the same
-working-pose selection; Promotions awaiting review use the waiting selection.
+control, and inflight laptop work. Promotions being created in Kargo use the
+waiting selection; preparing Promotions use the working selection, and Promotions
+awaiting review return to the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose, including an affectionate server hug or a guitar
 power chord with a broad strum, joyful singing expression, and golden sound
@@ -1206,7 +1207,8 @@ only for unfinished Runs. Promotion list rows show activity only while creating
 or preparing; waiting and terminal Promotion mascots stay on the detail page.
 Cancellation intent retains the corresponding live animation with stopping text
 until the Run finishes. Promotion details refresh throughout creation and
-preparation. In the kawaii theme, visible lists refresh while Runs are unfinished
+preparation, and continue after the pending transition until both prepared diffs
+are loaded. In the kawaii theme, visible lists refresh while Runs are unfinished
 or Promotions are creating or preparing.
 Animation timing varies by Run or Promotion identity and stays stable across
 refreshes. Compact standing variations include a determined working bounce and a
@@ -1240,10 +1242,12 @@ storage concurrently under a two-second deadline, returning non-sensitive
 per-dependency states and `503` when required dependencies are unavailable.
 The Server emits structured JSON logs and handles graceful shutdown.
 
-`GET /metrics` exposes Prometheus/OpenMetrics text from a private registry on
-the same listener. Application instrumentation uses OpenTelemetry with pinned
-semantic conventions; stable HTTP telemetry excludes the metrics endpoint and
-records matched route templates rather than raw paths. A 15-second worker
+`GET /metrics` exposes Prometheus/OpenMetrics text from a private registry on a
+dedicated listener. The Server and Controller share the listener implementation
+and lifecycle behavior. Application instrumentation uses OpenTelemetry with
+pinned semantic conventions; the separately served metrics endpoint does not
+enter HTTP telemetry, which records matched route templates rather than raw
+paths. A 15-second worker
 publishes bounded current-state gauges from one repeatable-read PostgreSQL
 snapshot under a two-second deadline. Scrapes only read the last complete
 in-memory view, and a failed refresh retains it while exposing snapshot
@@ -1251,6 +1255,15 @@ freshness. Narrow domain observers record Repository refresh, Git-trigger
 delivery, notification delivery, and Artifact retention outcomes without
 identifiers or other unbounded labels. The complete contract and convention
 status are documented in the [metric catalog](./METRICS.md).
+
+Each Controller owns a separate private OpenTelemetry/Prometheus provider and
+serves `GET /metrics` from a dedicated cluster-local listener. The initial
+Controller surface contains Resource metadata, maintained Go runtime and native
+process metrics, plus stable OTel HTTP client metrics around every request made
+by the generated Slipramp client. Client metrics omit raw URL paths and
+identifiers. It is scraped directly inside the execution Cluster; the Server
+does not proxy, aggregate, or require Controller metrics. The Controller chart
+creates an internal metrics Service and no public route.
 
 Two focused [Helm charts](../deploy/charts) deploy one Server/web pair and one
 Controller per Cluster. The central chart requires external PostgreSQL and S3,

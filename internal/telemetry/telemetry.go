@@ -1,4 +1,4 @@
-// Package telemetry owns Slipramp Server metrics construction and export.
+// Package telemetry owns Slipramp process metrics construction and export.
 package telemetry
 
 import (
@@ -43,14 +43,23 @@ type Config struct {
 	Logger         *slog.Logger
 }
 
-type Telemetry struct {
+type RuntimeConfig struct {
+	ServiceName    string
+	ServiceVersion string
+}
+
+type Runtime struct {
 	provider       *sdkmetric.MeterProvider
 	registry       *prometheus.Registry
 	handler        http.Handler
-	operations     operationInstruments
-	snapshots      *snapshotPublisher
 	shutdownOnce   sync.Once
 	shutdownResult error
+}
+
+type Telemetry struct {
+	*Runtime
+	operations operationInstruments
+	snapshots  *snapshotPublisher
 }
 
 func New(ctx context.Context, config Config) (*Telemetry, error) {
@@ -61,7 +70,48 @@ func New(ctx context.Context, config Config) (*Telemetry, error) {
 		return nil, errors.New("telemetry logger is required")
 	}
 
-	telemetryResource, err := newResource(ctx, config.ServiceVersion)
+	runtimeTelemetry, err := newRuntime(ctx, RuntimeConfig{
+		ServiceName:    "slipramp-server",
+		ServiceVersion: config.ServiceVersion,
+	}, metricViews())
+	if err != nil {
+		return nil, err
+	}
+
+	meter := runtimeTelemetry.provider.Meter(
+		instrumentationScope,
+		metric.WithSchemaURL(semconv.SchemaURL),
+	)
+	operations, err := newOperationInstruments(meter)
+	if err != nil {
+		_ = runtimeTelemetry.Shutdown(context.Background())
+
+		return nil, err
+	}
+	snapshots, err := newSnapshotPublisher(meter, config.Store, config.Logger)
+	if err != nil {
+		_ = runtimeTelemetry.Shutdown(context.Background())
+
+		return nil, err
+	}
+
+	return &Telemetry{
+		Runtime:    runtimeTelemetry,
+		operations: operations,
+		snapshots:  snapshots,
+	}, nil
+}
+
+func NewRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
+	return newRuntime(ctx, config, runtimeMetricViews())
+}
+
+func newRuntime(ctx context.Context, config RuntimeConfig, views []sdkmetric.View) (*Runtime, error) {
+	if strings.TrimSpace(config.ServiceName) == "" {
+		return nil, errors.New("telemetry service name is required")
+	}
+
+	telemetryResource, err := newResource(ctx, config.ServiceName, config.ServiceVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -81,47 +131,31 @@ func New(ctx context.Context, config Config) (*Telemetry, error) {
 		return nil, fmt.Errorf("create Prometheus metric reader: %w", err)
 	}
 
-	provider := sdkmetric.NewMeterProvider(
+	providerOptions := []sdkmetric.Option{
 		sdkmetric.WithResource(telemetryResource),
 		sdkmetric.WithReader(exporter),
 		sdkmetric.WithCardinalityLimit(cardinalityLimit),
-		sdkmetric.WithView(metricViews()...),
-	)
+	}
+	if len(views) > 0 {
+		providerOptions = append(providerOptions, sdkmetric.WithView(views...))
+	}
+	provider := sdkmetric.NewMeterProvider(providerOptions...)
 	if err := otelruntime.Start(otelruntime.WithMeterProvider(provider)); err != nil {
 		_ = provider.Shutdown(context.Background())
 
 		return nil, fmt.Errorf("start Go runtime metrics: %w", err)
 	}
 
-	meter := provider.Meter(
-		instrumentationScope,
-		metric.WithSchemaURL(semconv.SchemaURL),
-	)
-	operations, err := newOperationInstruments(meter)
-	if err != nil {
-		_ = provider.Shutdown(context.Background())
-
-		return nil, err
-	}
-	snapshots, err := newSnapshotPublisher(meter, config.Store, config.Logger)
-	if err != nil {
-		_ = provider.Shutdown(context.Background())
-
-		return nil, err
-	}
-
-	return &Telemetry{
-		provider:   provider,
-		registry:   registry,
-		handler:    promhttp.HandlerFor(registry, promhttp.HandlerOpts{EnableOpenMetrics: true}),
-		operations: operations,
-		snapshots:  snapshots,
+	return &Runtime{
+		provider: provider,
+		registry: registry,
+		handler:  promhttp.HandlerFor(registry, promhttp.HandlerOpts{EnableOpenMetrics: true}),
 	}, nil
 }
 
-func newResource(ctx context.Context, serviceVersion string) (*resource.Resource, error) {
+func newResource(ctx context.Context, serviceName, serviceVersion string) (*resource.Resource, error) {
 	attributes := []attribute.KeyValue{
-		semconv.ServiceName("slipramp-server"),
+		semconv.ServiceName(serviceName),
 		semconv.ServiceNamespace("slipramp"),
 	}
 	if version := strings.TrimSpace(serviceVersion); version != "" {
@@ -140,8 +174,15 @@ func newResource(ctx context.Context, serviceVersion string) (*resource.Resource
 	return telemetryResource, nil
 }
 
-func (t *Telemetry) Handler() http.Handler {
+func (t *Runtime) Handler() http.Handler {
 	return t.handler
+}
+
+func (t *Runtime) InstrumentHTTPTransport(transport http.RoundTripper) http.RoundTripper {
+	return otelhttp.NewTransport(
+		transport,
+		otelhttp.WithMeterProvider(t.provider),
+	)
 }
 
 func (t *Telemetry) InstrumentHTTP(handler http.Handler) http.Handler {
@@ -149,9 +190,6 @@ func (t *Telemetry) InstrumentHTTP(handler http.Handler) http.Handler {
 		handler,
 		"HTTP",
 		otelhttp.WithMeterProvider(t.provider),
-		otelhttp.WithFilter(func(request *http.Request) bool {
-			return request.URL.Path != "/metrics"
-		}),
 	)
 }
 
@@ -159,7 +197,7 @@ func (t *Telemetry) RunSnapshotWorker(ctx context.Context) {
 	t.snapshots.Run(ctx)
 }
 
-func (t *Telemetry) Shutdown(ctx context.Context) error {
+func (t *Runtime) Shutdown(ctx context.Context) error {
 	t.shutdownOnce.Do(func() {
 		t.shutdownResult = t.provider.Shutdown(ctx)
 	})
@@ -168,7 +206,7 @@ func (t *Telemetry) Shutdown(ctx context.Context) error {
 }
 
 func metricViews() []sdkmetric.View {
-	httpAttributes := func(value attribute.KeyValue) bool {
+	httpServerAttributes := func(value attribute.KeyValue) bool {
 		switch value.Key {
 		case semconv.HTTPRequestMethodKey,
 			semconv.URLSchemeKey,
@@ -189,23 +227,25 @@ func metricViews() []sdkmetric.View {
 		return value.Key == attribute.Key("operation")
 	}
 
-	return []sdkmetric.View{
+	views := runtimeMetricViews()
+
+	return append(views,
 		histogramView(
 			"http.server.request.duration",
 			[]float64{0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10},
-			httpAttributes,
+			httpServerAttributes,
 		),
 		histogramView(
 			"http.server.request.body.size",
 			[]float64{0, 1024, 4 * 1024, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024, 4 * 1024 * 1024,
 				16 * 1024 * 1024, 64 * 1024 * 1024},
-			httpAttributes,
+			httpServerAttributes,
 		),
 		histogramView(
 			"http.server.response.body.size",
 			[]float64{0, 1024, 4 * 1024, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024, 4 * 1024 * 1024,
 				16 * 1024 * 1024, 64 * 1024 * 1024},
-			httpAttributes,
+			httpServerAttributes,
 		),
 		histogramView(
 			"slipramp.repository.refresh.duration",
@@ -232,6 +272,38 @@ func metricViews() []sdkmetric.View {
 		attributeView("slipramp.notification.delivery.attempts", resultAttribute),
 		attributeView("slipramp.artifact.reconciliation.runs", resultAttribute),
 		attributeView("slipramp.artifact.reconciliation.items", operationAttribute),
+	)
+}
+
+func runtimeMetricViews() []sdkmetric.View {
+	httpClientAttributes := func(value attribute.KeyValue) bool {
+		switch value.Key {
+		case semconv.HTTPRequestMethodKey,
+			semconv.URLSchemeKey,
+			semconv.ServerAddressKey,
+			semconv.ServerPortKey,
+			semconv.HTTPResponseStatusCodeKey,
+			semconv.NetworkProtocolNameKey,
+			semconv.NetworkProtocolVersionKey,
+			semconv.ErrorTypeKey:
+			return true
+		default:
+			return false
+		}
+	}
+
+	return []sdkmetric.View{
+		histogramView(
+			"http.client.request.duration",
+			[]float64{0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10, 15, 30, 60},
+			httpClientAttributes,
+		),
+		histogramView(
+			"http.client.request.body.size",
+			[]float64{0, 1024, 4 * 1024, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024, 4 * 1024 * 1024,
+				16 * 1024 * 1024, 64 * 1024 * 1024},
+			httpClientAttributes,
+		),
 	}
 }
 

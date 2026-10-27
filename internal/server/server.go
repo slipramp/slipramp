@@ -18,6 +18,7 @@ import (
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/inbox"
+	"github.com/slipramp/slipramp/internal/metricsserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
@@ -40,10 +41,15 @@ type Server struct {
 	placements           placement.Set
 	logger               *slog.Logger
 	httpServer           *http.Server
+	metricsServer        metricsRunner
 	persistence          *persistence
 	workers              []func(context.Context)
 	promotionBranchDrift *promotion.BranchDriftService
 	telemetry            *telemetry.Telemetry
+}
+
+type metricsRunner interface {
+	Run(context.Context) error
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion string) (*Server, error) {
@@ -263,15 +269,16 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			Logger:                     logger,
 		},
 	)
-	rootHandler := http.NewServeMux()
-	rootHandler.Handle("GET /metrics", metrics.Handler())
-	rootHandler.Handle("/", httpHandler)
-
-	server := newServer(cfg, logger, metrics.InstrumentHTTP(rootHandler))
+	server := newServer(cfg, logger, metrics.InstrumentHTTP(httpHandler))
 	server.persistence = persistence
 	server.workers = workers
 	server.promotionBranchDrift = promotionBranchDrift
 	server.telemetry = metrics
+	server.metricsServer = metricsserver.New(
+		cfg.MetricsAddress,
+		metrics.Handler(),
+		logger.With("component", "server_metrics"),
+	)
 
 	return server, nil
 }
@@ -315,8 +322,8 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) serveWithWorkers(ctx context.Context, listener net.Listener) error {
-	runContext, stop := context.WithCancel(ctx)
-	defer stop()
+	runContext, stop := context.WithCancelCause(ctx)
+	defer stop(nil)
 
 	var workers sync.WaitGroup
 	for _, runWorker := range s.workers {
@@ -324,10 +331,24 @@ func (s *Server) serveWithWorkers(ctx context.Context, listener net.Listener) er
 			runWorker(runContext)
 		})
 	}
+	if s.metricsServer != nil {
+		workers.Go(func() {
+			if err := s.metricsServer.Run(runContext); err != nil {
+				stop(err)
+			}
+		})
+	}
 
 	serveErr := s.serve(runContext, listener)
-	stop()
+	if serveErr != nil {
+		stop(serveErr)
+	} else {
+		stop(nil)
+	}
 	workers.Wait()
+	if serveErr == nil && ctx.Err() == nil {
+		serveErr = context.Cause(runContext)
+	}
 	telemetryErr := s.shutdownTelemetry()
 
 	return errors.Join(serveErr, telemetryErr)

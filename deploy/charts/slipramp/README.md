@@ -138,9 +138,9 @@ an explicit Server rollout. The chart fixes Server and web replicas at one and
 does not claim high-availability support.
 
 The Server also exposes unauthenticated Prometheus/OpenMetrics text at
-`/metrics` on its `http` Service port. The Ingress intentionally does not route
-that path. Configure an in-cluster scraper explicitly, for example with Service
-annotations in an overlay:
+`/metrics` on its dedicated `metrics` Service port, defaulting to `9091`. The
+Ingress does not expose that port. Configure an in-cluster scraper explicitly,
+for example with Service annotations in an overlay:
 
 ```yaml
 server:
@@ -148,7 +148,7 @@ server:
     annotations:
       prometheus.io/scrape: "true"
       prometheus.io/path: /metrics
-      prometheus.io/port: "8080"
+      prometheus.io/port: "9091"
 ```
 
 See the [metric catalog](../../../docs/METRICS.md) for the complete emitted

@@ -6,6 +6,7 @@ import {
   activityAnimationPose,
   promotionActivity,
   promotionDetailActivity,
+  promotionDetailNeedsRefresh,
   runActivity,
   runResultActivity,
 } from "./execution-activity.ts";
@@ -364,18 +365,31 @@ test("cancellation intent shows stopping until the Run finishes", () => {
 });
 
 test("only creating and preparing Promotions show activity", () => {
-  for (const status of ["creating", "preparing"]) {
-    assert.equal(promotionActivity({ status }).animation, "working", status);
-  }
+  assert.equal(promotionActivity({ status: "creating" }).animation, "waiting");
+  assert.equal(promotionActivity({ status: "preparing" }).animation, "working");
 
   for (const status of ["pending", "approved", "rejected", "expired", "error"]) {
     assert.equal(promotionActivity({ status }), undefined, status);
   }
 });
 
+test("Promotion details refresh until pending diffs are loaded", () => {
+  for (const status of ["creating", "preparing"]) {
+    assert.equal(promotionDetailNeedsRefresh({ status }, false), true, status);
+    assert.equal(promotionDetailNeedsRefresh({ status }, true), true, status);
+  }
+
+  assert.equal(promotionDetailNeedsRefresh({ status: "pending" }, false), true);
+  assert.equal(promotionDetailNeedsRefresh({ status: "pending" }, true), false);
+
+  for (const status of ["approved", "rejected", "expired", "error"]) {
+    assert.equal(promotionDetailNeedsRefresh({ status }, false), false, status);
+  }
+});
+
 test("Promotion details give every lifecycle status a fitting mascot", () => {
   const expected = {
-    creating: { animation: "working", title: "Making a little momentum" },
+    creating: { animation: "waiting", title: "Making a little momentum" },
     preparing: { animation: "working", title: "Good things are in motion" },
     pending: { animation: "waiting", title: "Ready when you are" },
     approved: { animation: "celebrating", tone: "success", title: "Promotion approved" },

@@ -39,7 +39,7 @@ import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/components/page";
 import { formValue, optionalFormValue } from "~/form-data";
-import { promotionActivity, promotionDetailActivity } from "~/execution-activity";
+import { promotionDetailActivity, promotionDetailNeedsRefresh } from "~/execution-activity";
 import { filterArgoDiffResources, parseArgoDiff, type ArgoDiffResource } from "~/promotion-diff";
 import { pageTitle } from "~/page-title";
 import { runStatusLabel } from "~/run-status";
@@ -120,8 +120,14 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
 export default function PromotionDetail({ actionData, loaderData }: Route.ComponentProps) {
   useActionSuccessToast(actionData, "Decision recorded", actionData?.message);
+
+  const canReadDiffs = canReadSensitiveArtifacts(loaderData.principal);
+  const preparedDiffsLoaded =
+    !canReadDiffs ||
+    (loaderData.gitDiff.contents !== undefined && loaderData.argoResources !== undefined);
   useActivityRefresh(
-    loaderData.promotion !== undefined && promotionActivity(loaderData.promotion) !== undefined,
+    loaderData.promotion !== undefined &&
+      promotionDetailNeedsRefresh(loaderData.promotion, preparedDiffsLoaded),
   );
 
   if (!loaderData.promotion) {

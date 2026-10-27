@@ -117,6 +117,34 @@ func TestServerWorkersShareCancellationAndFinishBeforeReturn(t *testing.T) {
 	})
 }
 
+func TestMetricsServerFailureStopsServer(t *testing.T) {
+	t.Parallel()
+
+	listener := newBlockingListener()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	app := newServer(DefaultConfig(), logger, http.NewServeMux())
+	wantErr := errors.New("metrics listener failed")
+	app.metricsServer = metricsRunnerFunc(func(context.Context) error {
+		<-listener.accepting
+
+		return wantErr
+	})
+
+	result := make(chan error, 1)
+	go func() {
+		result <- app.serveWithWorkers(t.Context(), listener)
+	}()
+
+	select {
+	case err := <-result:
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("serveWithWorkers() error = %v, want %v", err, wantErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Server did not stop after the metrics server failed")
+	}
+}
+
 func TestServerShutdownCancelsActiveControllerPoll(t *testing.T) {
 	t.Parallel()
 
@@ -286,4 +314,10 @@ func (localAddress) Network() string {
 
 func (a localAddress) String() string {
 	return string(a)
+}
+
+type metricsRunnerFunc func(context.Context) error
+
+func (f metricsRunnerFunc) Run(ctx context.Context) error {
+	return f(ctx)
 }

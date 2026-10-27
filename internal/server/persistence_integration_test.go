@@ -64,7 +64,7 @@ func TestPersistenceIntegration(t *testing.T) {
 
 	metricsRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/metrics", nil)
 	metricsResponse := httptest.NewRecorder()
-	app.httpServer.Handler.ServeHTTP(metricsResponse, metricsRequest)
+	app.telemetry.Handler().ServeHTTP(metricsResponse, metricsRequest)
 	if metricsResponse.Code != http.StatusOK {
 		t.Fatalf("metrics status = %d, want %d", metricsResponse.Code, http.StatusOK)
 	}
@@ -81,5 +81,15 @@ func TestPersistenceIntegration(t *testing.T) {
 	}
 	if strings.Contains(metricsBody, `http_route="/"`) {
 		t.Error("readiness metrics use the root fallback instead of the matched route template")
+	}
+
+	applicationMetricsResponse := httptest.NewRecorder()
+	app.httpServer.Handler.ServeHTTP(applicationMetricsResponse, metricsRequest)
+	if applicationMetricsResponse.Code != http.StatusNotFound {
+		t.Fatalf(
+			"application metrics status = %d, want %d",
+			applicationMetricsResponse.Code,
+			http.StatusNotFound,
+		)
 	}
 }

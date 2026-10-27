@@ -25,6 +25,27 @@ func TestConfigValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "empty metrics address",
+			configure: func(settings *Config) {
+				settings.MetricsAddress = ""
+			},
+			wantError: "metrics address",
+		},
+		{
+			name: "metrics address without port",
+			configure: func(settings *Config) {
+				settings.MetricsAddress = "localhost"
+			},
+			wantError: "metrics address",
+		},
+		{
+			name: "metrics address with zero port",
+			configure: func(settings *Config) {
+				settings.MetricsAddress = ":0"
+			},
+			wantError: "metrics address",
+		},
+		{
 			name: "empty cluster name",
 			configure: func(settings *Config) {
 				settings.ClusterName = ""
@@ -197,6 +218,7 @@ func validConfig() Config {
 	return Config{
 		ClusterName:         "colo",
 		ServerURL:           "https://slipramp.example.com",
+		MetricsAddress:      DefaultMetricsAddress,
 		EnrollmentToken:     "enrollment-token",
 		BearerToken:         "controller-token",
 		CheckoutImage:       "registry.example.com/slipramp-checkout:1",

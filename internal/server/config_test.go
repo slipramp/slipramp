@@ -18,6 +18,9 @@ func TestDefaultConfig(t *testing.T) {
 	if settings.Address != ":8080" {
 		t.Errorf("Address = %q, want %q", settings.Address, ":8080")
 	}
+	if settings.MetricsAddress != ":9091" {
+		t.Errorf("MetricsAddress = %q, want %q", settings.MetricsAddress, ":9091")
+	}
 
 	if settings.ShutdownTimeout != 10*time.Second {
 		t.Errorf("ShutdownTimeout = %s, want %s", settings.ShutdownTimeout, 10*time.Second)
@@ -125,6 +128,27 @@ func TestConfigValidate(t *testing.T) {
 				settings.Address = ":0"
 			},
 			wantError: "address",
+		},
+		{
+			name: "empty metrics address",
+			configure: func(settings *Config) {
+				settings.MetricsAddress = ""
+			},
+			wantError: "metrics address",
+		},
+		{
+			name: "invalid metrics address",
+			configure: func(settings *Config) {
+				settings.MetricsAddress = "localhost"
+			},
+			wantError: "metrics address",
+		},
+		{
+			name: "zero metrics port",
+			configure: func(settings *Config) {
+				settings.MetricsAddress = ":0"
+			},
+			wantError: "metrics address",
 		},
 		{
 			name: "negative shutdown timeout",

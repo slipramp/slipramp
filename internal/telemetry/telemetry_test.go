@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -166,6 +167,138 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	assertMetricLine(t, failedScrape, "slipramp_run_active", `phase="running"`, " 2")
 	if got := metricLine(t, failedScrape, "slipramp_metrics_snapshot_last_success_time_seconds"); got != lastSuccess {
 		t.Errorf("last-success metric changed after failed refresh: %q, want %q", got, lastSuccess)
+	}
+}
+
+func TestRuntimeExportsControllerResourceAndProcessMetrics(t *testing.T) {
+	runtimeTelemetry, err := NewRuntime(t.Context(), RuntimeConfig{
+		ServiceName:    "slipramp-controller",
+		ServiceVersion: "test-version",
+	})
+	if err != nil {
+		t.Fatalf("NewRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := runtimeTelemetry.Shutdown(context.Background()); err != nil {
+			t.Errorf("Shutdown() error = %v", err)
+		}
+	})
+
+	exposition := scrape(t, runtimeTelemetry.Handler())
+	assertMetricLine(
+		t,
+		exposition,
+		"target_info",
+		`service_name="slipramp-controller"`,
+		`service_namespace="slipramp"`,
+		`service_version="test-version"`,
+	)
+	assertMetricLine(t, exposition, "go_goroutine_count")
+	assertMetricLine(t, exposition, "process_start_time_seconds")
+	if strings.Contains(exposition, "slipramp_run_active") {
+		t.Fatal("runtime telemetry unexpectedly contains Server product metrics")
+	}
+}
+
+func TestRuntimeInstrumentsHTTPClient(t *testing.T) {
+	t.Parallel()
+
+	runtimeTelemetry, err := NewRuntime(t.Context(), RuntimeConfig{
+		ServiceName:    "slipramp-controller",
+		ServiceVersion: "test-version",
+	})
+	if err != nil {
+		t.Fatalf("NewRuntime() error = %v", err)
+	}
+	t.Cleanup(func() {
+		if err := runtimeTelemetry.Shutdown(context.Background()); err != nil {
+			t.Errorf("Shutdown() error = %v", err)
+		}
+	})
+
+	transport := runtimeTelemetry.InstrumentHTTPTransport(roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path == "/failed" {
+			return nil, errors.New("connection failed")
+		}
+		_, _ = io.Copy(io.Discard, request.Body)
+		_ = request.Body.Close()
+
+		return &http.Response{
+			StatusCode: http.StatusNoContent,
+			Body:       http.NoBody,
+			Request:    request,
+		}, nil
+	}))
+	client := &http.Client{Transport: transport}
+	request, err := http.NewRequestWithContext(
+		t.Context(),
+		http.MethodPost,
+		"http://slipramp.example.com:8443/controller/v1/runs/unbounded-run-id/observations",
+		bytes.NewBufferString("hello"),
+	)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v", err)
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if err := response.Body.Close(); err != nil {
+		t.Fatalf("close response body: %v", err)
+	}
+	failedRequest, err := http.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"http://slipramp.example.com:8443/failed",
+		http.NoBody,
+	)
+	if err != nil {
+		t.Fatalf("NewRequestWithContext() error = %v", err)
+	}
+	failedResponse, err := client.Do(failedRequest)
+	if failedResponse != nil {
+		_ = failedResponse.Body.Close()
+	}
+	if err == nil {
+		t.Fatal("failed request error = nil")
+	}
+
+	exposition := scrape(t, runtimeTelemetry.Handler())
+	assertMetricLine(
+		t,
+		exposition,
+		"http_client_request_duration_seconds_count",
+		`http_request_method="POST"`,
+		`http_response_status_code="204"`,
+		`server_address="slipramp.example.com"`,
+		`server_port="8443"`,
+		`url_scheme="http"`,
+		" 1",
+	)
+	assertMetricLine(t, exposition, "http_client_request_body_size_bytes_count", " 1")
+	assertMetricLine(t, exposition, "http_client_request_body_size_bytes_sum", " 5")
+	assertMetricLine(
+		t,
+		exposition,
+		"http_client_request_duration_seconds_count",
+		`error_type="errors.errorString"`,
+		" 1",
+	)
+	if strings.Contains(exposition, "unbounded-run-id") {
+		t.Fatal("HTTP client metrics contain the raw URI path")
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
+
+func TestRuntimeRequiresServiceName(t *testing.T) {
+	_, err := NewRuntime(t.Context(), RuntimeConfig{})
+	if err == nil || !strings.Contains(err.Error(), "service name") {
+		t.Fatalf("NewRuntime() error = %v, want service-name validation", err)
 	}
 }
 

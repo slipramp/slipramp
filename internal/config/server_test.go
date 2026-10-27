@@ -12,6 +12,7 @@ import (
 
 const (
 	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
+	serverMetricsAddressEnvironment               = "SLIPRAMP_SERVER_METRICS_ADDRESS"
 	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
 	serverControllerEnrollmentTokensEnvironment   = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS"
 	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
@@ -48,6 +49,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 
 	environment := map[string]string{
 		serverAddressEnvironment:                      "127.0.0.1:9000",
+		serverMetricsAddressEnvironment:               "127.0.0.1:9191",
 		serverShutdownTimeoutEnvironment:              "25s",
 		serverControllerEnrollmentTokensEnvironment:   `{"colo":"enrollment-token"}`,
 		serverRepositoryRefreshCredentialsEnvironment: `{"github-server":"/var/run/secrets/slipramp/github.gitconfig"}`,
@@ -85,6 +87,9 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 
 	if cfg.Address != "127.0.0.1:9000" {
 		t.Errorf("Address = %q, want %q", cfg.Address, "127.0.0.1:9000")
+	}
+	if cfg.MetricsAddress != "127.0.0.1:9191" {
+		t.Errorf("MetricsAddress = %q, want %q", cfg.MetricsAddress, "127.0.0.1:9191")
 	}
 
 	if cfg.ShutdownTimeout != 25*time.Second {
@@ -202,6 +207,13 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 				serverShutdownTimeoutEnvironment: "soon",
 			},
 			wantError: serverShutdownTimeoutEnvironment,
+		},
+		{
+			name: "malformed metrics address",
+			environment: map[string]string{
+				serverMetricsAddressEnvironment: "localhost",
+			},
+			wantError: "metrics address",
 		},
 		{
 			name: "malformed controller enrollment tokens",

@@ -28,6 +28,10 @@ type controllerEnrollerFunc func(context.Context) error
 
 func (f controllerEnrollerFunc) Enroll(ctx context.Context) error { return f(ctx) }
 
+type componentRunnerFunc func(context.Context) error
+
+func (f componentRunnerFunc) Run(ctx context.Context) error { return f(ctx) }
+
 type runObservationReporterFunc func(context.Context, uuid.UUID, api.RunObservation) error
 
 func (f runObservationReporterFunc) ReportObservation(
@@ -117,6 +121,23 @@ func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Run() did not stop after context cancellation")
+	}
+}
+
+func TestControllerStopsWhenMetricsServerFails(t *testing.T) {
+	t.Parallel()
+
+	want := errors.New("metrics listener failed")
+	app := newTestController(&stubRunJobs{}, &memoryLogReporter{})
+	app.metrics = componentRunnerFunc(func(context.Context) error { return want })
+	app.enrollment = controllerEnrollerFunc(func(ctx context.Context) error {
+		<-ctx.Done()
+
+		return nil
+	})
+
+	if err := app.Run(context.Background()); !errors.Is(err, want) {
+		t.Fatalf("Run() error = %v, want %v", err, want)
 	}
 }
 

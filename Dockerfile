@@ -14,7 +14,7 @@ ARG TARGETARCH
 ARG TARGETOS
 ARG VERSION=dev
 RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
-    go build -trimpath -ldflags="-s -w" \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/slipramp-controller ./cmd/slipramp-controller
 RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     go build -trimpath -ldflags="-s -w" \
@@ -32,6 +32,7 @@ COPY --from=go-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certif
 COPY --from=go-build /out/slipramp-controller /slipramp-controller
 
 USER 65532:65532
+EXPOSE 9091
 ENTRYPOINT ["/slipramp-controller"]
 
 FROM scratch AS harness
@@ -52,7 +53,7 @@ COPY --from=go-build /out/slipramp-server /slipramp-server
 ENV HOME=/tmp
 
 USER 65532:65532
-EXPOSE 8080
+EXPOSE 8080 9091
 ENTRYPOINT ["/slipramp-server"]
 
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS checkout

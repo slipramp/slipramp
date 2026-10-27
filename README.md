@@ -230,6 +230,7 @@ The Server accepts these environment variables:
 | Variable                                    | Default                          | Purpose                                                                                                                    |
 | ------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `SLIPRAMP_SERVER_ADDRESS`                   | `:8080`                          | TCP address on which the Server listens                                                                                    |
+| `SLIPRAMP_SERVER_METRICS_ADDRESS`           | `:9091`                          | Dedicated operational metrics listener address                                                                             |
 | `SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT`          | `10s`                            | Graceful shutdown deadline                                                                                                 |
 | `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`     | `{}`                             | JSON object mapping cluster names to their bootstrap enrollment credentials                                                |
 | `SLIPRAMP_PLACEMENTS_FILE`                  | Unset                            | Path to the versioned YAML placement configuration                                                                         |
@@ -334,22 +335,26 @@ Placement configuration is loaded at Server startup.
 The controller requires in-cluster Kubernetes configuration and these
 environment variables:
 
-| Variable                                   | Purpose                                                                                                          |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `SLIPRAMP_CONTROLLER_CLUSTER`              | Stable logical name of this execution cluster                                                                    |
-| `SLIPRAMP_CONTROLLER_SERVER_URL`           | Absolute HTTP or HTTPS URL of the Slipramp Server; use plaintext HTTP only over a trusted encrypted network      |
-| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN`     | Cluster-scoped bootstrap credential used only to enroll the controller                                           |
-| `SLIPRAMP_CONTROLLER_TOKEN`                | Controller-owned bearer credential registered during enrollment and used for ongoing requests                    |
-| `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE`       | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container                                  |
-| `SLIPRAMP_CONTROLLER_HARNESS_IMAGE`        | Pinned image whose entrypoint is `slipramp-harness`                                                              |
-| `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS`      | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
-| `SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES` | Required JSON array of exclusively owned execution namespaces                                                    |
-| `SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS`   | JSON array of optional Kargo integration names and Stage namespaces; defaults to `[]`                            |
+| Variable                                    | Purpose                                                                                                          |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `SLIPRAMP_CONTROLLER_CLUSTER`               | Stable logical name of this execution cluster                                                                    |
+| `SLIPRAMP_CONTROLLER_SERVER_URL`            | Absolute HTTP or HTTPS URL of the Slipramp Server; use plaintext HTTP only over a trusted encrypted network      |
+| `SLIPRAMP_CONTROLLER_METRICS_ADDRESS`       | Metrics listener address; defaults to `:9091`                                                                    |
+| `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN`      | Cluster-scoped bootstrap credential used only to enroll the controller                                           |
+| `SLIPRAMP_CONTROLLER_TOKEN`                 | Controller-owned bearer credential registered during enrollment and used for ongoing requests                    |
+| `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE`        | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container                                  |
+| `SLIPRAMP_CONTROLLER_HARNESS_IMAGE`         | Pinned image whose entrypoint is `slipramp-harness`                                                              |
+| `SLIPRAMP_CONTROLLER_GIT_CREDENTIALS`       | JSON object mapping logical checkout credential names to cluster-local Kubernetes Secret names; defaults to `{}` |
+| `SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES`  | Required JSON array of exclusively owned execution namespaces                                                    |
+| `SLIPRAMP_CONTROLLER_KARGO_INTEGRATIONS`    | JSON array of optional Kargo integration names and Stage namespaces; defaults to `[]`                            |
 
 Each Controller owns its configured execution namespaces and uses
 namespace-scoped RBAC. Git checkout and execution Secrets remain in that
 Cluster. Optional Kargo observers submit complete Stage snapshots only after
 all configured namespace listings succeed.
+The metrics listener is unauthenticated and should remain reachable only from
+the Cluster's trusted monitoring network. It exposes outbound Slipramp HTTP
+client, Go runtime, and process metrics.
 
 ## Web configuration
 
@@ -373,8 +378,8 @@ uses operator-managed Secret references by default, rolls the Server when its
 Placement ConfigMap changes, and gives the Server neither RBAC nor a mounted
 service-account token. Its optional single-host Ingress routes API, Controller,
 execution, and health paths to the Server and the remaining web path to the web
-process. The Server also exposes `GET /metrics` for trusted in-cluster
-scraping; the chart deliberately leaves that path out of its Ingress.
+process. The Server also exposes `GET /metrics` on a dedicated port for trusted
+in-cluster scraping; the chart deliberately leaves that port out of its Ingress.
 
 Install [`deploy/charts/slipramp-controller`](deploy/charts/slipramp-controller/README.md)
 once in each execution Cluster. It requires one stable Cluster name and one or

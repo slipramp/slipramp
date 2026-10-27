@@ -11,12 +11,16 @@ import (
 	"github.com/slipramp/slipramp/internal/auth"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
+	"github.com/slipramp/slipramp/internal/metricsserver"
 	"github.com/slipramp/slipramp/internal/promotion"
 )
+
+const DefaultMetricsAddress = metricsserver.DefaultAddress
 
 type Config struct {
 	ClusterName         string
 	ServerURL           string
+	MetricsAddress      string
 	EnrollmentToken     string
 	BearerToken         string
 	CheckoutImage       string
@@ -47,6 +51,10 @@ func (c Config) Validate() error {
 
 	if serverURL.RawQuery != "" || serverURL.Fragment != "" {
 		return errors.New("server URL must not contain a query or fragment")
+	}
+
+	if err := metricsserver.ValidateAddress(c.MetricsAddress); err != nil {
+		return err
 	}
 
 	if err := auth.ValidateBearerToken(c.BearerToken); err != nil {

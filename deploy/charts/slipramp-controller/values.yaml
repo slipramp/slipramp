@@ -17,6 +17,11 @@ harnessImage:
   repository: ghcr.io/slipramp/slipramp-harness
   tag: "0.1.0"
 
+metrics:
+  port: 9091
+  service:
+    annotations: {}
+
 credentials:
   enrollmentToken:
     value: ""

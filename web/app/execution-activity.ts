@@ -368,7 +368,7 @@ export function promotionActivity(
   switch (promotion.status) {
     case "creating":
       return {
-        animation: "working",
+        animation: "waiting",
         title: "Making a little momentum",
         description: "Creating your Promotion in Kargo and waiting for its data.",
       };
@@ -381,6 +381,16 @@ export function promotionActivity(
     default:
       return undefined;
   }
+}
+
+export function promotionDetailNeedsRefresh(
+  promotion: Pick<Promotion, "status">,
+  preparedDiffsLoaded: boolean,
+): boolean {
+  return (
+    promotionActivity(promotion) !== undefined ||
+    (promotion.status === "pending" && !preparedDiffsLoaded)
+  );
 }
 
 export function promotionDetailActivity(

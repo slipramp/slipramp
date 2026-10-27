@@ -349,9 +349,11 @@ function StageRow({
       <Table.Td>
         <Stack gap={0}>
           <RelativeTime size="sm" value={stage.lastObservedAt} />
-          <Text c="dimmed" size="xs">
-            {stage.pendingPromotionCount} pending review
-          </Text>
+          {stage.pendingPromotionCount > 0 ? (
+            <Text c="dimmed" size="xs">
+              {stage.pendingPromotionCount} pending review
+            </Text>
+          ) : null}
         </Stack>
       </Table.Td>
       <Table.Td>

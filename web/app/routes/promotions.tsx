@@ -162,15 +162,16 @@ function PromotionFilters({
 function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={960} type="native">
+      <Table.ScrollContainer minWidth={1080} type="native">
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Promotion / Stage</Table.Th>
+              <Table.Th>Status</Table.Th>
               <Table.Th>Application</Table.Th>
               <Table.Th>Change</Table.Th>
-              <Table.Th>Status</Table.Th>
-              <Table.Th>Requested</Table.Th>
+              <Table.Th>Source / author</Table.Th>
+              <Table.Th>Created</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -213,6 +214,18 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
             ) : null}
           </Group>
         </Stack>
+      </Table.Td>
+      <Table.Td>
+        <Group gap="xs" justify="space-between" wrap="nowrap">
+          <Badge color={promotionStatusColor(promotion.status)} variant="light">
+            {promotionStatusLabel(promotion.status)}
+          </Badge>
+          <KawaiiActivity
+            activity={promotionActivity(promotion)}
+            animationKey={promotion.id}
+            compact
+          />
+        </Group>
       </Table.Td>
       <Table.Td>
         <Stack gap={0}>
@@ -260,26 +273,17 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
         )}
       </Table.Td>
       <Table.Td>
-        <Group gap="xs" justify="space-between" wrap="nowrap">
-          <Badge color={promotionStatusColor(promotion.status)} variant="light">
-            {promotionStatusLabel(promotion.status)}
-          </Badge>
-          <KawaiiActivity
-            activity={promotionActivity(promotion)}
-            animationKey={promotion.id}
-            compact
-          />
-        </Group>
-      </Table.Td>
-      <Table.Td>
         <Stack gap={0}>
+          <Text size="sm">{promotion.source === "kargo" ? "Kargo" : "Slipramp"}</Text>
           <Identity
-            avatarSize={24}
+            avatarSize={22}
             name={promotion.requestedBy.displayName}
-            nameProps={{ fw: 500, size: "sm" }}
+            nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
           />
-          <RelativeTime c="dimmed" size="xs" value={promotion.createdAt} />
         </Stack>
+      </Table.Td>
+      <Table.Td style={{ whiteSpace: "nowrap" }}>
+        <RelativeTime size="sm" value={promotion.createdAt} />
       </Table.Td>
     </Table.Tr>
   );

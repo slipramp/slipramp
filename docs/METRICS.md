@@ -3,35 +3,54 @@
 The telemetry path is deliberately short:
 
 ```text
-HTTP/runtime/domain observers -> OTel SDK MeterProvider
+Server HTTP/runtime/domain observers -> Server OTel SDK MeterProvider
+Controller runtime/client instrumentation -> Controller OTel SDK MeterProvider
     -> in-process Prometheus Reader on a private registry
     -> GET /metrics -> Prometheus
 ```
 
-The Slipramp Server exposes Prometheus/OpenMetrics text at `GET /metrics` on
-its main listener. The endpoint is operational and unauthenticated, like
-`/healthz` and `/readyz`; expose it only to a trusted monitoring network. The
-central Helm chart intentionally does not route `/metrics` through its public
-Ingress. A scraper can reach the Server Service directly on its `http` port:
+The Slipramp Server exposes Prometheus/OpenMetrics text at `GET /metrics` on a
+dedicated listener, defaulting to port `9091`. The endpoint is operational and
+unauthenticated; expose it only to a trusted monitoring network. The central
+Helm chart exposes the listener only on the internal Server Service and does not
+route it through the public Ingress:
 
 ```yaml
 scrape_configs:
   - job_name: slipramp-server
     metrics_path: /metrics
     static_configs:
-      - targets: [slipramp-server.slipramp-system.svc:8080]
+      - targets: [slipramp-server.slipramp-system.svc:9091]
 ```
 
 For annotation-based discovery, set the Server Service annotations shown in
 the [chart operations guide](../deploy/charts/slipramp/README.md#ingress-and-operation).
 
+Each Controller exposes its own Prometheus/OpenMetrics endpoint at
+`GET /metrics` on the shared metrics-server implementation, defaulting to port
+`9091`. The Controller chart creates an internal Service for that port; it has
+no public Ingress. Scrape the Controller inside its execution Cluster so process
+health remains observable when the Controller cannot reach the Server:
+
+```yaml
+scrape_configs:
+  - job_name: slipramp-controller
+    metrics_path: /metrics
+    static_configs:
+      - targets: [slipramp-controller.slipramp-system.svc:9091]
+```
+
+The Controller emits Resource metadata, outbound Slipramp HTTP client metrics,
+and the Go runtime and native process metrics cataloged below.
+Controller-specific operation metrics remain future work.
+
 ## Local Prometheus and Grafana
 
 `task local:up` provisions Prometheus `v3.15.1` and Grafana `13.2.4` alongside
-the other development services. Prometheus scrapes the host-running Server at
-`host.docker.internal:8080` every 15 seconds and retains seven days of local
-data. Docker's host-gateway mapping makes the same target work on Linux and
-Docker Desktop.
+the other development services. Prometheus scrapes the host-running Server
+metrics listener at `host.docker.internal:9091` every 15 seconds and retains
+seven days of local data. Docker's host-gateway mapping makes the same target
+work on Linux and Docker Desktop.
 
 Prometheus is available at `http://localhost:9090`. Grafana is available at
 `http://localhost:3000` with anonymous viewer access, and opens the versioned
@@ -45,12 +64,13 @@ The monitoring services are developer-only. The integration task starts the
 core PostgreSQL, RustFS, and Dex dependencies directly and does not start or
 pull Prometheus or Grafana in CI.
 
-The Server uses a private Prometheus registry, so imported libraries cannot
-silently add collectors to this contract. OpenTelemetry is the application
-instrumentation API. Metric names below are the Prometheus names after the
-OpenTelemetry Prometheus translator applies unit suffixes. All OpenTelemetry
-series expose resource metadata through `target_info`, including
-`service_name="slipramp-server"`, `service_namespace="slipramp"`, and the
+The Server and each Controller use separate private Prometheus registries, so
+imported libraries cannot silently add collectors to this contract.
+OpenTelemetry is the application instrumentation API. Metric names below are
+the Prometheus names after the OpenTelemetry Prometheus translator applies unit
+suffixes. All OpenTelemetry series expose resource metadata through
+`target_info`, including `service_name="slipramp-server"` or
+`service_name="slipramp-controller"`, `service_namespace="slipramp"`, and the
 build's `service_version` when available. Release image builds inject the
 release version; source builds use `dev`.
 
@@ -71,9 +91,9 @@ dependency upgrades must verify and update the catalog intentionally.
 ## HTTP server metrics
 
 HTTP telemetry comes from the maintained OpenTelemetry `otelhttp` middleware.
-`/metrics` is excluded so scraping cannot inflate traffic measurements.
-`http_route` contains the matched Go route template, never the raw request
-path.
+The metrics listener is separate from the instrumented application listener,
+so scraping cannot inflate traffic measurements. `http_route` contains the
+matched Go route template, never the raw request path.
 
 | OTel instrument | Prometheus metric | Type / UCUM unit | Attributes | Origin / status |
 | --- | --- | --- | --- | --- |
@@ -95,6 +115,30 @@ convention recommendation.
 
 Both body-size histograms use explicit boundaries at 0, 1 KiB, 4 KiB,
 16 KiB, 64 KiB, 256 KiB, 1 MiB, 4 MiB, 16 MiB, and 64 MiB.
+
+## HTTP client metrics
+
+The Controller instruments the generated Slipramp client at its HTTP transport
+boundary. This covers enrollment, command polling, observations, log transfer,
+and Kargo reports without coupling telemetry to generated client methods. Raw
+paths are intentionally absent because those URLs can contain Run, Promotion,
+and integration identifiers.
+
+| OTel instrument | Prometheus metric | Type / UCUM unit | Attributes | Origin / status |
+| --- | --- | --- | --- | --- |
+| `http.client.request.duration` | `http_client_request_duration_seconds` | histogram / `s` | HTTP client set below | OTel HTTP / stable |
+| `http.client.request.body.size` | `http_client_request_body_size_bytes` | histogram / `By` | HTTP client set below | OTel HTTP / stable |
+
+The bounded client set is `http.request.method`, `url.scheme`,
+`server.address`, `server.port`, `http.response.status_code`,
+`network.protocol.name`, `network.protocol.version`, and `error.type`. Each
+Controller has one statically configured Server destination. `error.type` is a
+transport error classification, not error text.
+
+Client duration boundaries are 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25,
+0.5, 0.75, 1, 2.5, 5, 7.5, 10, 15, 30, and 60 seconds. The upper buckets cover
+normal long polling and its 35-second client timeout. Request-body boundaries
+match the HTTP server body-size boundaries above.
 
 ## Slipramp current-state metrics
 
@@ -148,8 +192,8 @@ Repository and Artifact duration buckets are 0.05, 0.1, 0.25, 0.5, 1, 2.5,
 
 ## Go runtime and process metrics
 
-The OpenTelemetry Go runtime instrumentation emits these development-status
-conventions by default:
+The Server and Controller OpenTelemetry providers emit these development-status
+Go runtime conventions by default:
 
 | OTel instrument | Prometheus metric | Type / UCUM unit | Attributes or notes |
 | --- | --- | --- | --- |
@@ -166,7 +210,7 @@ conventions by default:
 All metrics in this table are OTel Go runtime development conventions supplied
 by the maintained `go.opentelemetry.io/contrib/instrumentation/runtime` module.
 
-The private registry also registers the native Prometheus process collector:
+Each private registry also registers the native Prometheus process collector:
 
 | Prometheus metric | Type / unit | Notes |
 | --- | --- | --- |
@@ -184,7 +228,7 @@ These are Prometheus-native metrics from `client_golang`'s maintained process
 collector, not OTel semantic-convention instruments. Availability is
 platform-dependent.
 
-The Server does not enable the OpenTelemetry runtime package's deprecated
+Neither process enables the OpenTelemetry runtime package's deprecated
 `runtime.go.*` compatibility metrics.
 
 ## PostgreSQL pool metrics
@@ -215,9 +259,10 @@ labels. Instrumentation scope metadata is disabled.
 The SDK enforces a per-instrument cardinality limit of 256 as a final
 guardrail. Product instruments use only the enum values listed above. Slipramp
 does not emit IDs, Target or Repository names, action names, Git SHAs, URLs,
-paths, notification destinations, diagnostics, error text, or Go error types
-as metric attributes. The HTTP route attribute contains only matched route
-templates.
+paths, notification destinations, diagnostics, or error text as metric
+attributes. The HTTP server route attribute contains only matched route
+templates. HTTP client metrics contain only the single configured Server
+destination and may contain the OTel transport error classification.
 
 ## Example alerts
 
