@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
@@ -383,6 +384,44 @@ func TestProductAuthenticationFailsClosedForUnmappedProductOperation(t *testing.
 	}
 	if authenticator.calls != 0 {
 		t.Errorf("authentication calls = %d, want 0", authenticator.calls)
+	}
+}
+
+func TestEveryGeneratedOperationHasAuthenticationBoundary(t *testing.T) {
+	t.Parallel()
+
+	nonProductOperations := map[string]struct{}{
+		"EnrollController":                   {},
+		"PollForControllerCommand":           {},
+		"ReplaceKargoStageSnapshot":          {},
+		"ReportKargoPromotionDispatch":       {},
+		"ReportKargoPromotionReconciliation": {},
+		"AppendRunLogChunk":                  {},
+		"FailRunLog":                         {},
+		"GetRunLogCursor":                    {},
+		"ReportRunObservation":               {},
+		"SealRunLog":                         {},
+		"DownloadRunInput":                   {},
+		"UploadRunArtifact":                  {},
+		"GetHealth":                          {},
+		"GetReadiness":                       {},
+	}
+	serverInterface := reflect.TypeFor[api.StrictServerInterface]()
+	for method := range serverInterface.Methods() {
+		operationID := method.Name
+		boundaries := 0
+		if _, found := productOperationPermissions[operationID]; found {
+			boundaries++
+		}
+		if _, found := productAuthenticationOperations[operationID]; found {
+			boundaries++
+		}
+		if _, found := nonProductOperations[operationID]; found {
+			boundaries++
+		}
+		if boundaries != 1 {
+			t.Errorf("generated operation %q has %d authentication boundaries, want 1", operationID, boundaries)
+		}
 	}
 }
 

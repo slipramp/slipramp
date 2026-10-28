@@ -39,7 +39,8 @@ func TestInventoryServiceReturnsSanitizedEffectiveConfiguration(t *testing.T) {
 	lastSeenAt := time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)
 	service := NewInventoryService(configured, staticClusterInventory{statuses: []cluster.Status{
 		{
-			Observation:     cluster.Observation{Name: "development", LastSeenAt: lastSeenAt},
+			Name:            "development",
+			LastSeenAt:      lastSeenAt,
 			ConnectionState: cluster.ConnectionStateConnected,
 		},
 	}})

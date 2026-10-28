@@ -1203,6 +1203,18 @@ the current factual comparison only for active Targets that define the technical
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 
+The authenticated Placement inventory exposes the validated effective
+configuration currently held by the Server through `/api/v1/placements` and the
+`/placements` Web page. It reports Placement name, Cluster, namespace, effective
+service account, timeout and resource defaults, logical credential source names,
+and a deterministic SHA-256 checksum of the complete effective Placement set.
+The inventory joins existing Controller observations: a configured Cluster that
+has never checked in or whose observation is stale is `unreachable`, and the
+last contact is present when known. Kubernetes Secret references, node selectors,
+arbitrary pod-template contents, and Secret values are excluded. This is a
+Server configuration and observation view; it does not contact Kubernetes or
+claim that referenced cluster objects exist.
+
 The optional kawaii theme adds an animated axolotl beside status badges and on
 detail pages. While a Run is queued, she uses a deterministic waiting pose such
 as reading, sipping iced coffee, eating popcorn, listening to music, playing

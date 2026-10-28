@@ -123,7 +123,7 @@ type checksumPlacement struct {
 	JobNamespace       string                  `json:"jobNamespace"`
 	ServiceAccountName string                  `json:"serviceAccountName,omitempty"`
 	TimeoutNanoseconds int64                   `json:"timeoutNanoseconds,omitempty"`
-	Resources          checksumResources       `json:"resources,omitempty"`
+	Resources          checksumResources       `json:"resources"`
 	NodeSelector       map[string]string       `json:"nodeSelector,omitempty"`
 	Credentials        map[string]string       `json:"credentials,omitempty"`
 	PodTemplate        *corev1.PodTemplateSpec `json:"podTemplate,omitempty"`

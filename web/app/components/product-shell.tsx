@@ -30,6 +30,7 @@ import {
   IconLayoutSidebarLeftCollapse,
   IconLayoutSidebarLeftExpand,
   IconLogout,
+  IconMapPin,
   IconMoon,
   IconNotification,
   IconPalette,
@@ -88,6 +89,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
     items: [
       { icon: IconGitBranch, label: "Repositories", to: "/repositories" },
       { icon: IconServer2, label: "Clusters", to: "/clusters" },
+      { icon: IconMapPin, label: "Placements", to: "/placements" },
     ],
     label: "Inventory",
   },

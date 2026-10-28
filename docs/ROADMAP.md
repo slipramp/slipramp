@@ -74,24 +74,20 @@ intentionally deferred until Slipramp begins versioning releases:
 
 ## Placement inventory and Controller preflight
 
-Placements are authoritative Server configuration for execution, but they do
-not yet have a dedicated API or Web inventory. Static deployment validation can
-prove that a Placement offers the credential names and resource bounds required
-by a catalog; it deliberately cannot prove that the referenced Kubernetes
-objects or permissions exist. Close both operator gaps without giving the
-Server Kubernetes credentials or direct Kubernetes API access:
+The authenticated API and Web now provide a sanitized Placement inventory with
+Cluster, namespace, effective service account, timeout and resource defaults,
+logical credential source names, Controller connectivity, last contact, and a
+checksum of the effective configuration loaded by the Server. The inventory
+excludes Secret references and arbitrary pod configuration. Static deployment
+validation can prove that a Placement offers catalog credential names and
+resource bounds; it deliberately cannot prove that the referenced Kubernetes
+objects or permissions exist. Remaining work must preserve the Server's lack of
+Kubernetes credentials and direct Kubernetes API access:
 
-- [ ] Add an authenticated, sanitized Placement inventory to the Server API and
-      Web. Show Cluster, namespace, service account, resource defaults,
-      credential source names, active Target usage, and the checksum of the
-      Placement configuration currently loaded by the Server. Exclude Secret
-      values, arbitrary Secret-bearing pod configuration, and other sensitive
-      fields.
-- [ ] Join Placement inventory with Controller observations so Placements whose
-      configured Cluster is disconnected are explicit. Derive catalog-aware
-      Runtime credential compatibility from the current accepted revisions so
-      operators can see whether every required logical credential is offered by
-      a Placement; keep this static result distinct from live Secret checks.
+- [ ] Add active Target usage and derive catalog-aware Runtime credential
+      compatibility from current accepted revisions. Show whether every required
+      logical credential is offered by a Placement while keeping this static
+      result distinct from live Secret checks.
 - [ ] Add an explicit, operator-started preflight command dispatched through the
       existing outbound Controller poll/report boundary. The Controller, not the
       Server, performs Kubernetes checks and returns bounded, sanitized results.
