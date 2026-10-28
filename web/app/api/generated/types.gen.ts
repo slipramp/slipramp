@@ -455,6 +455,10 @@ export type Placement = {
    * Logical credential sources offered by this Placement.
    */
   credentialNames: Array<CatalogName>;
+  /**
+   * Number of active Targets with at least one Action using this Placement.
+   */
+  targetCount: number;
 };
 
 export type PlacementList = {

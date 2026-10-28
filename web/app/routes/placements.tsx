@@ -116,7 +116,22 @@ function PlacementRow({ placement }: Readonly<{ placement: Placement }>) {
   return (
     <Table.Tr>
       <Table.Td>
-        <Text fw={650}>{placement.name}</Text>
+        <Stack gap={0}>
+          <Text fw={650}>{placement.name}</Text>
+          {placement.targetCount > 0 ? (
+            <Anchor
+              component={Link}
+              size="xs"
+              to={`/targets?placement=${encodeURIComponent(placement.name)}`}
+            >
+              {placement.targetCount} Target{placement.targetCount === 1 ? "" : "s"}
+            </Anchor>
+          ) : (
+            <Text c="dimmed" size="xs">
+              No active Targets
+            </Text>
+          )}
+        </Stack>
       </Table.Td>
       <Table.Td>
         <Stack gap={0}>

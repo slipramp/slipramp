@@ -33,6 +33,7 @@ func TestListPlacements(t *testing.T) {
 					Limits:   map[string]string{"memory": "1Gi"},
 				},
 				CredentialNames: []string{"cloud"},
+				TargetCount:     4,
 			},
 		},
 	}}
@@ -66,7 +67,7 @@ func TestListPlacements(t *testing.T) {
 		item.ControllerConnectionState != api.PlacementControllerConnectionStateConnected ||
 		item.ControllerLastSeenAt == nil || !item.ControllerLastSeenAt.Equal(lastSeenAt) ||
 		item.Resources.Requests["cpu"] != "100m" || item.Resources.Limits["memory"] != "1Gi" ||
-		len(item.CredentialNames) != 1 || item.CredentialNames[0] != "cloud" {
+		len(item.CredentialNames) != 1 || item.CredentialNames[0] != "cloud" || item.TargetCount != 4 {
 		t.Errorf("ListPlacements() item = %#v", item)
 	}
 }

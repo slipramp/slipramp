@@ -242,7 +242,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
 			Clusters:                 clusters,
-			Placements:               placement.NewInventoryService(cfg.Placements, clusters),
+			Placements:               placement.NewInventoryService(cfg.Placements, clusters, persistence.database),
 			ControllerIdentities:     identities,
 			ControllerCommands:       controllerCommands,
 			Repositories:             repositories,

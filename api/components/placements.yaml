@@ -9,6 +9,7 @@ Placement:
     - serviceAccount
     - resources
     - credentialNames
+    - targetCount
   properties:
     name:
       $ref: ./runs.yaml#/CatalogName
@@ -47,6 +48,11 @@ Placement:
       description: Logical credential sources offered by this Placement.
       items:
         $ref: ./runs.yaml#/CatalogName
+    targetCount:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Number of active Targets with at least one Action using this Placement.
 
 PlacementResourceRequirements:
   type: object

@@ -15,9 +15,14 @@ type ClusterInventory interface {
 	ListClusters(ctx context.Context) ([]cluster.Status, error)
 }
 
+type TargetUsage interface {
+	ListPlacementTargetUsage(ctx context.Context) (map[string]int64, error)
+}
+
 type InventoryService struct {
 	placements Set
 	clusters   ClusterInventory
+	targets    TargetUsage
 }
 
 type Inventory struct {
@@ -35,14 +40,19 @@ type InventoryPlacement struct {
 	Timeout                   *time.Duration
 	Resources                 ResourceRequirements
 	CredentialNames           []string
+	TargetCount               int64
 }
 
-func NewInventoryService(placements Set, clusters ClusterInventory) *InventoryService {
-	return &InventoryService{placements: placements, clusters: clusters}
+func NewInventoryService(placements Set, clusters ClusterInventory, targets TargetUsage) *InventoryService {
+	return &InventoryService{placements: placements, clusters: clusters, targets: targets}
 }
 
 func (s *InventoryService) Inventory(ctx context.Context) (Inventory, error) {
 	clusterStatuses, err := s.clusters.ListClusters(ctx)
+	if err != nil {
+		return Inventory{}, err
+	}
+	targetUsage, err := s.targets.ListPlacementTargetUsage(ctx)
 	if err != nil {
 		return Inventory{}, err
 	}
@@ -71,6 +81,7 @@ func (s *InventoryService) Inventory(ctx context.Context) (Inventory, error) {
 				Limits:   cloneInventoryMap(cfg.Resources.Limits),
 			},
 			CredentialNames: slices.Sorted(maps.Keys(cfg.Credentials)),
+			TargetCount:     targetUsage[name],
 		}
 		if cfg.Timeout > 0 {
 			item.Timeout = new(cfg.Timeout)

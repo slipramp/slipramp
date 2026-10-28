@@ -1918,6 +1918,9 @@ type Placement struct {
 	// ServiceAccount Effective Kubernetes service account, including the default.
 	ServiceAccount string `json:"serviceAccount"`
 
+	// TargetCount Number of active Targets with at least one Action using this Placement.
+	TargetCount int64 `json:"targetCount"`
+
 	// Timeout Placement timeout default when one is configured.
 	Timeout *string `json:"timeout,omitempty"`
 }

@@ -173,6 +173,20 @@ func (d *Database) ListActiveTargets(
 	return catalog.TargetList{Items: items, Total: total}, nil
 }
 
+func (d *Database) ListPlacementTargetUsage(ctx context.Context) (map[string]int64, error) {
+	rows, err := d.queries.ListActiveTargetPlacementUsage(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active Target Placement usage: %w", err)
+	}
+
+	usage := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		usage[row.PlacementName] = row.TargetCount
+	}
+
+	return usage, nil
+}
+
 func (d *Database) GetTarget(ctx context.Context, targetID uuid.UUID) (catalog.TargetSummary, error) {
 	row, err := d.queries.GetTarget(ctx, databaseUUID(targetID))
 	if errors.Is(err, pgx.ErrNoRows) {

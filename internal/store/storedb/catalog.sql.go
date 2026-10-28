@@ -81,7 +81,16 @@ WHERE targets.archived_at IS NULL
   )
   AND (
       $3::text IS NULL
-      OR catalog_targets.definition->'spec'->>'placement' = $3
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_each(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name, definition)
+          WHERE coalesce(
+              nullif(action.definition->>'placement', ''),
+              catalog_targets.definition->'spec'->>'placement'
+          ) = $3
+      )
   )
   AND (
       $4::text IS NULL
@@ -394,6 +403,59 @@ func (q *Queries) GetTarget(ctx context.Context, id pgtype.UUID) (GetTargetRow, 
 	return i, err
 }
 
+const listActiveTargetPlacementUsage = `-- name: ListActiveTargetPlacementUsage :many
+WITH active_target_actions AS (
+    SELECT
+        targets.id AS target_id,
+        coalesce(
+            nullif(action.definition->>'placement', ''),
+            catalog_targets.definition->'spec'->>'placement'
+        ) AS placement_name
+    FROM targets
+    JOIN repositories
+      ON repositories.id = targets.repository_id
+    JOIN catalog_targets
+      ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+     AND catalog_targets.name = targets.name
+    CROSS JOIN LATERAL jsonb_each(
+        catalog_targets.definition->'spec'->'actions'
+    ) AS action(name, definition)
+    WHERE targets.archived_at IS NULL
+      AND repositories.removed_at IS NULL
+)
+SELECT placement_name::text AS placement_name, count(DISTINCT target_id) AS target_count
+FROM active_target_actions
+WHERE placement_name IS NOT NULL
+  AND placement_name <> ''
+GROUP BY placement_name
+ORDER BY placement_name
+`
+
+type ListActiveTargetPlacementUsageRow struct {
+	PlacementName string
+	TargetCount   int64
+}
+
+func (q *Queries) ListActiveTargetPlacementUsage(ctx context.Context) ([]ListActiveTargetPlacementUsageRow, error) {
+	rows, err := q.db.Query(ctx, listActiveTargetPlacementUsage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveTargetPlacementUsageRow
+	for rows.Next() {
+		var i ListActiveTargetPlacementUsageRow
+		if err := rows.Scan(&i.PlacementName, &i.TargetCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveTargets = `-- name: ListActiveTargets :many
 SELECT
     targets.id,
@@ -423,7 +485,16 @@ WHERE targets.archived_at IS NULL
   )
   AND (
       $3::text IS NULL
-      OR catalog_targets.definition->'spec'->>'placement' = $3
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_each(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name, definition)
+          WHERE coalesce(
+              nullif(action.definition->>'placement', ''),
+              catalog_targets.definition->'spec'->>'placement'
+          ) = $3
+      )
   )
   AND (
       $4::text IS NULL

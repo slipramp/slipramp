@@ -37,13 +37,17 @@ func TestInventoryServiceReturnsSanitizedEffectiveConfiguration(t *testing.T) {
 	}
 
 	lastSeenAt := time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)
-	service := NewInventoryService(configured, staticClusterInventory{statuses: []cluster.Status{
-		{
-			Name:            "development",
-			LastSeenAt:      lastSeenAt,
-			ConnectionState: cluster.ConnectionStateConnected,
-		},
-	}})
+	service := NewInventoryService(
+		configured,
+		staticClusterInventory{statuses: []cluster.Status{
+			{
+				Name:            "development",
+				LastSeenAt:      lastSeenAt,
+				ConnectionState: cluster.ConnectionStateConnected,
+			},
+		}},
+		staticTargetUsage{usage: map[string]int64{"preview": 3}},
+	)
 
 	inventory, err := service.Inventory(context.Background())
 	if err != nil {
@@ -66,7 +70,7 @@ func TestInventoryServiceReturnsSanitizedEffectiveConfiguration(t *testing.T) {
 		t.Errorf("infrastructure = %#v", infrastructure)
 	}
 	if infrastructure.ControllerConnectionState != cluster.ConnectionStateUnreachable ||
-		infrastructure.ControllerLastSeenAt != nil {
+		infrastructure.ControllerLastSeenAt != nil || infrastructure.TargetCount != 0 {
 		t.Errorf("infrastructure Controller state = %#v", infrastructure)
 	}
 	if infrastructure.Timeout != nil || len(infrastructure.Resources.Requests) != 0 ||
@@ -76,7 +80,8 @@ func TestInventoryServiceReturnsSanitizedEffectiveConfiguration(t *testing.T) {
 
 	preview := inventory.Items[1]
 	if preview.ControllerConnectionState != cluster.ConnectionStateConnected ||
-		preview.ControllerLastSeenAt == nil || !preview.ControllerLastSeenAt.Equal(lastSeenAt) {
+		preview.ControllerLastSeenAt == nil || !preview.ControllerLastSeenAt.Equal(lastSeenAt) ||
+		preview.TargetCount != 3 {
 		t.Errorf("preview Controller state = %#v", preview)
 	}
 	if preview.Timeout == nil || *preview.Timeout != 20*time.Minute ||
@@ -102,7 +107,19 @@ func TestInventoryServiceReturnsClusterFailure(t *testing.T) {
 	t.Parallel()
 
 	want := errors.New("database unavailable")
-	service := NewInventoryService(Set{}, staticClusterInventory{err: want})
+	service := NewInventoryService(Set{}, staticClusterInventory{err: want}, staticTargetUsage{})
+
+	_, err := service.Inventory(context.Background())
+	if !errors.Is(err, want) {
+		t.Fatalf("Inventory() error = %v, want %v", err, want)
+	}
+}
+
+func TestInventoryServiceReturnsTargetUsageFailure(t *testing.T) {
+	t.Parallel()
+
+	want := errors.New("database unavailable")
+	service := NewInventoryService(Set{}, staticClusterInventory{}, staticTargetUsage{err: want})
 
 	_, err := service.Inventory(context.Background())
 	if !errors.Is(err, want) {
@@ -117,4 +134,13 @@ type staticClusterInventory struct {
 
 func (s staticClusterInventory) ListClusters(context.Context) ([]cluster.Status, error) {
 	return s.statuses, s.err
+}
+
+type staticTargetUsage struct {
+	usage map[string]int64
+	err   error
+}
+
+func (s staticTargetUsage) ListPlacementTargetUsage(context.Context) (map[string]int64, error) {
+	return s.usage, s.err
 }

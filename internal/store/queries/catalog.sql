@@ -185,7 +185,16 @@ WHERE targets.archived_at IS NULL
   )
   AND (
       sqlc.narg(placement)::text IS NULL
-      OR catalog_targets.definition->'spec'->>'placement' = sqlc.narg(placement)
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_each(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name, definition)
+          WHERE coalesce(
+              nullif(action.definition->>'placement', ''),
+              catalog_targets.definition->'spec'->>'placement'
+          ) = sqlc.narg(placement)
+      )
   )
   AND (
       sqlc.narg(search_query)::text IS NULL
@@ -307,7 +316,16 @@ WHERE targets.archived_at IS NULL
   )
   AND (
       sqlc.narg(placement)::text IS NULL
-      OR catalog_targets.definition->'spec'->>'placement' = sqlc.narg(placement)
+      OR EXISTS (
+          SELECT 1
+          FROM jsonb_each(
+              catalog_targets.definition->'spec'->'actions'
+          ) AS action(name, definition)
+          WHERE coalesce(
+              nullif(action.definition->>'placement', ''),
+              catalog_targets.definition->'spec'->>'placement'
+          ) = sqlc.narg(placement)
+      )
   )
   AND (
       sqlc.narg(search_query)::text IS NULL
@@ -325,3 +343,30 @@ WHERE targets.archived_at IS NULL
           WHERE strpos(lower(action.name), lower(sqlc.narg(search_query))) > 0
       )
   );
+
+-- name: ListActiveTargetPlacementUsage :many
+WITH active_target_actions AS (
+    SELECT
+        targets.id AS target_id,
+        coalesce(
+            nullif(action.definition->>'placement', ''),
+            catalog_targets.definition->'spec'->>'placement'
+        ) AS placement_name
+    FROM targets
+    JOIN repositories
+      ON repositories.id = targets.repository_id
+    JOIN catalog_targets
+      ON catalog_targets.catalog_revision_id = targets.catalog_revision_id
+     AND catalog_targets.name = targets.name
+    CROSS JOIN LATERAL jsonb_each(
+        catalog_targets.definition->'spec'->'actions'
+    ) AS action(name, definition)
+    WHERE targets.archived_at IS NULL
+      AND repositories.removed_at IS NULL
+)
+SELECT placement_name::text AS placement_name, count(DISTINCT target_id) AS target_count
+FROM active_target_actions
+WHERE placement_name IS NOT NULL
+  AND placement_name <> ''
+GROUP BY placement_name
+ORDER BY placement_name;

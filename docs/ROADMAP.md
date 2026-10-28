@@ -77,17 +77,19 @@ intentionally deferred until Slipramp begins versioning releases:
 The authenticated API and Web now provide a sanitized Placement inventory with
 Cluster, namespace, effective service account, timeout and resource defaults,
 logical credential source names, Controller connectivity, last contact, and a
-checksum of the effective configuration loaded by the Server. The inventory
-excludes Secret references and arbitrary pod configuration. Static deployment
-validation can prove that a Placement offers catalog credential names and
-resource bounds; it deliberately cannot prove that the referenced Kubernetes
-objects or permissions exist. Remaining work must preserve the Server's lack of
-Kubernetes credentials and direct Kubernetes API access:
+checksum of the effective configuration loaded by the Server. It also counts
+active Targets by effective Action Placement and links to the matching Target
+inventory. The inventory excludes Secret references and arbitrary pod
+configuration. Static deployment validation can prove that a Placement offers
+catalog credential names and resource bounds; it deliberately cannot prove that
+the referenced Kubernetes objects or permissions exist. Remaining work must
+preserve the Server's lack of Kubernetes credentials and direct Kubernetes API
+access:
 
-- [ ] Add active Target usage and derive catalog-aware Runtime credential
-      compatibility from current accepted revisions. Show whether every required
-      logical credential is offered by a Placement while keeping this static
-      result distinct from live Secret checks.
+- [ ] Derive catalog-aware Runtime credential compatibility from current
+      accepted revisions. Show whether every required logical credential is
+      offered by a Placement while keeping this static result distinct from live
+      Secret checks.
 - [ ] Add an explicit, operator-started preflight command dispatched through the
       existing outbound Controller poll/report boundary. The Controller, not the
       Server, performs Kubernetes checks and returns bounded, sanitized results.

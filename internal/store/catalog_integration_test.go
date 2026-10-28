@@ -394,6 +394,15 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	)
 	secondTarget := testCatalogTarget("backups", "backups/**")
 	secondTarget.Metadata.Title = "Backups"
+	secondTarget.Spec.Placement = "infrastructure"
+	secondTarget.Spec.Actions["preview"] = catalog.Action{
+		Command:   []string{"preview"},
+		Placement: "preview",
+	}
+	secondTarget.Spec.Actions["verify"] = catalog.Action{
+		Command:   []string{"verify"},
+		Placement: "preview",
+	}
 	secondRefresh.Revision.Catalog.Targets = []catalog.Target{secondTarget}
 	if err := database.RecordRepositoryRefresh(ctx, secondRepositoryID, secondRefresh); err != nil {
 		t.Fatalf("record second catalog: %v", err)
@@ -438,9 +447,27 @@ func TestListActiveTargetsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("filter active targets by placement: %v", err)
 	}
-	if placementFiltered.Total != 1 || len(placementFiltered.Items) != 1 ||
-		placementFiltered.Items[0].Target.Metadata.Name != "network" {
+	if placementFiltered.Total != 2 || len(placementFiltered.Items) != 2 {
 		t.Errorf("placement target filter = %#v", placementFiltered)
+	}
+	previewFiltered, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{
+		Placement: "preview",
+		Limit:     25,
+	})
+	if err != nil {
+		t.Fatalf("filter active targets by Action placement: %v", err)
+	}
+	if previewFiltered.Total != 1 || len(previewFiltered.Items) != 1 ||
+		previewFiltered.Items[0].Target.Metadata.Name != "backups" {
+		t.Errorf("Action placement target filter = %#v", previewFiltered)
+	}
+
+	usage, err := database.ListPlacementTargetUsage(ctx)
+	if err != nil {
+		t.Fatalf("ListPlacementTargetUsage() error = %v", err)
+	}
+	if !reflect.DeepEqual(usage, map[string]int64{"infrastructure": 2, "preview": 1}) {
+		t.Errorf("Placement Target usage = %v", usage)
 	}
 
 	filtered, err := database.ListActiveTargets(ctx, catalog.TargetListFilter{

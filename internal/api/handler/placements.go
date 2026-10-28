@@ -41,6 +41,7 @@ func (h *Handler) ListPlacements(
 				Limits:   configured.Resources.Limits,
 			},
 			CredentialNames: configured.CredentialNames,
+			TargetCount:     configured.TargetCount,
 		}
 		if configured.Timeout != nil {
 			item.Timeout = new(configured.Timeout.String())
