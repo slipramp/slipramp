@@ -176,6 +176,7 @@ export type {
   EnrollControllerErrors,
   EnrollControllerResponse,
   EnrollControllerResponses,
+  ExecutionImages,
   ExplainedActionTrigger,
   ExplainedArtifact,
   ExplainedArtifactInput,

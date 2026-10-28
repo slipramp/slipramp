@@ -97,6 +97,8 @@ RunObservation:
         Kubernetes UID of the materialized Job. Required for preparing and
         running observations and for every observation after the Run is bound
         to a Job.
+    images:
+      $ref: ./common.yaml#/ExecutionImages
     reason:
       type: string
       minLength: 1

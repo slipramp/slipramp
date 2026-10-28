@@ -309,6 +309,8 @@ Run:
       type: string
       minLength: 1
       description: Kubernetes UID of the materialized Job.
+    images:
+      $ref: ./common.yaml#/ExecutionImages
     outcomeReason:
       type: string
       minLength: 1

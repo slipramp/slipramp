@@ -552,6 +552,7 @@ export type RunObservation = {
    * Kubernetes UID of the materialized Job. Required for preparing and running observations and for every observation after the Run is bound to a Job.
    */
   jobUid?: string;
+  images?: ExecutionImages;
   reason?: string;
   message?: string;
   exitCode?: number;
@@ -676,6 +677,7 @@ export type Run = {
    * Kubernetes UID of the materialized Job.
    */
   jobUid?: string;
+  images?: ExecutionImages;
   outcomeReason?: string;
   outcomeMessage?: string;
   exitCode?: number;
@@ -1585,6 +1587,24 @@ export type KargoPromotionReconciliationReport = {
    * Bounded description of the terminal pre-callback state.
    */
   diagnostic: string;
+};
+
+/**
+ * Actual image identities reported by Kubernetes for the containers that participated in execution. Fields appear as each container starts and are retained as Run provenance.
+ */
+export type ExecutionImages = {
+  /**
+   * Kubernetes status.imageID for the Action container.
+   */
+  action?: string;
+  /**
+   * Kubernetes status.imageID for the checkout init container.
+   */
+  checkout?: string;
+  /**
+   * Kubernetes status.imageID for the Harness install init container.
+   */
+  harness?: string;
 };
 
 export type LogSeal = {

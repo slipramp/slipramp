@@ -447,9 +447,14 @@ func runFromRow(row storedb.Run) (run.Run, error) {
 		LastObservedAt:          applicationTime(row.LastObservedAt),
 		CancellationRequestedAt: applicationTime(row.CancellationRequestedAt),
 		JobUID:                  row.JobUid,
-		OutcomeReason:           row.OutcomeReason,
-		OutcomeMessage:          row.OutcomeMessage,
-		ExitCode:                row.ExitCode,
+		Images: run.ExecutionImages{
+			Action:   row.ActionImageID,
+			Checkout: row.CheckoutImageID,
+			Harness:  row.HarnessImageID,
+		},
+		OutcomeReason:  row.OutcomeReason,
+		OutcomeMessage: row.OutcomeMessage,
+		ExitCode:       row.ExitCode,
 	}, nil
 }
 

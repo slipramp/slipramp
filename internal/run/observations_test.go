@@ -111,6 +111,9 @@ func TestReportObservationRejectsInvalidPhaseOutcomeCombinations(t *testing.T) {
 		{name: "invalid outcome", observation: Observation{Phase: PhaseFinished, Outcome: &invalidOutcome}},
 		{name: "blank reason", observation: Observation{Phase: PhaseFinished, Outcome: &succeeded, Reason: &blank}},
 		{name: "blank message", observation: Observation{Phase: PhaseFinished, Outcome: &succeeded, Message: &blank}},
+		{name: "blank image ID", observation: Observation{
+			Phase: PhaseRunning, JobUID: new("job-uid"), Images: ExecutionImages{Action: &blank},
+		}},
 		{name: "negative exit code", observation: Observation{
 			Phase: PhaseFinished, Outcome: &succeeded, ExitCode: &negativeExitCode,
 		}},
@@ -144,6 +147,8 @@ func TestValidateObservationTransitionChecksPinnedJobAndTerminalOutcome(t *testi
 
 	jobUID := "job-uid"
 	otherJobUID := "other-job-uid"
+	actionImageID := "registry.example.com/tools@sha256:first"
+	otherActionImageID := "registry.example.com/tools@sha256:second"
 	succeeded := OutcomeSucceeded
 	failed := OutcomeFailed
 	canceled := OutcomeCanceled
@@ -164,6 +169,26 @@ func TestValidateObservationTransitionChecksPinnedJobAndTerminalOutcome(t *testi
 			current:     ObservationTransitionState{Phase: PhaseRunning, JobUID: &jobUID},
 			observation: Observation{Phase: PhaseFinished, Outcome: &succeeded},
 			wantError:   true,
+		},
+		{
+			name: "reject changed image ID",
+			current: ObservationTransitionState{
+				Phase: PhaseRunning, JobUID: &jobUID,
+				Images: ExecutionImages{Action: &actionImageID},
+			},
+			observation: Observation{
+				Phase: PhaseRunning, JobUID: &jobUID,
+				Images: ExecutionImages{Action: &otherActionImageID},
+			},
+			wantError: true,
+		},
+		{
+			name: "retain image ID when later observation omits it",
+			current: ObservationTransitionState{
+				Phase: PhaseRunning, JobUID: &jobUID,
+				Images: ExecutionImages{Action: &actionImageID},
+			},
+			observation: Observation{Phase: PhaseRunning, JobUID: &jobUID},
 		},
 		{
 			name:        "failure before Job exists",

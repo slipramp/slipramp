@@ -20,6 +20,7 @@ type ObservationTransitionState struct {
 	Phase                 Phase
 	Outcome               *Outcome
 	JobUID                *string
+	Images                ExecutionImages
 	CancellationRequested bool
 }
 
@@ -58,6 +59,7 @@ func ValidateObservationTransition(current ObservationTransitionState, observati
 	}
 	if !validObservationPhaseTransition(current.Phase, observation.Phase) ||
 		!sameObservationJob(current.JobUID, observation.JobUID) ||
+		!sameExecutionImages(current.Images, observation.Images) ||
 		!sameFinishedOutcome(current, observation.Outcome) ||
 		(observation.Outcome != nil && *observation.Outcome == OutcomeCanceled && !current.CancellationRequested) {
 		return ErrObservationConflict
@@ -82,6 +84,30 @@ func validateObservation(observation Observation) error {
 	}
 	if observation.ExitCode != nil && *observation.ExitCode < 0 {
 		return fmt.Errorf("%w: exit code must not be negative", ErrInvalidRequest)
+	}
+	images := []struct {
+		name  string
+		value *string
+	}{
+		{name: "Action image ID", value: observation.Images.Action},
+		{name: "checkout image ID", value: observation.Images.Checkout},
+		{name: "Harness image ID", value: observation.Images.Harness},
+	}
+	for _, image := range images {
+		if image.value == nil {
+			continue
+		}
+		if strings.TrimSpace(*image.value) == "" {
+			return fmt.Errorf("%w: %s must not be blank", ErrInvalidRequest, image.name)
+		}
+		if len(*image.value) > MaximumImageIDLength {
+			return fmt.Errorf(
+				"%w: %s must not exceed %d bytes",
+				ErrInvalidRequest,
+				image.name,
+				MaximumImageIDLength,
+			)
+		}
 	}
 
 	switch observation.Phase {
@@ -125,6 +151,16 @@ func validObservationPhaseTransition(current, observed Phase) bool {
 
 func sameObservationJob(current, observed *string) bool {
 	return current == nil || observed != nil && *current == *observed
+}
+
+func sameExecutionImages(current, observed ExecutionImages) bool {
+	return sameOptionalObservationValue(current.Action, observed.Action) &&
+		sameOptionalObservationValue(current.Checkout, observed.Checkout) &&
+		sameOptionalObservationValue(current.Harness, observed.Harness)
+}
+
+func sameOptionalObservationValue(current, observed *string) bool {
+	return current == nil || observed == nil || *current == *observed
 }
 
 func sameFinishedOutcome(current ObservationTransitionState, observed *Outcome) bool {

@@ -60,6 +60,30 @@ GitCommit:
       format: uri
       description: Provider commit page when the repository supports web links.
 
+ExecutionImages:
+  type: object
+  additionalProperties: false
+  description: >-
+    Actual image identities reported by Kubernetes for the containers that
+    participated in execution. Fields appear as each container starts and are
+    retained as Run provenance.
+  properties:
+    action:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: Kubernetes status.imageID for the Action container.
+    checkout:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: Kubernetes status.imageID for the checkout init container.
+    harness:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: Kubernetes status.imageID for the Harness install init container.
+
 Problem:
   type: object
   description: An RFC 9457 problem detail.

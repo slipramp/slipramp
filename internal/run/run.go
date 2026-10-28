@@ -18,6 +18,7 @@ const (
 	MaximumRunListLimit            = 100
 	MaximumRunListOffset           = 2_147_483_647
 	DefaultMaximumActiveRuns int32 = 4
+	MaximumImageIDLength           = 2_048
 
 	PhaseQueued    Phase = "queued"
 	PhaseAssigned  Phase = "assigned"
@@ -177,10 +178,21 @@ type Observation struct {
 	Phase       Phase
 	Outcome     *Outcome
 	JobUID      *string
+	Images      ExecutionImages
 	Reason      *string
 	Message     *string
 	ExitCode    *int32
 	ObservedAt  time.Time
+}
+
+type ExecutionImages struct {
+	Action   *string
+	Checkout *string
+	Harness  *string
+}
+
+func (i ExecutionImages) Present() bool {
+	return i.Action != nil || i.Checkout != nil || i.Harness != nil
 }
 
 type Run struct {
@@ -214,6 +226,7 @@ type Run struct {
 	LastObservedAt           *time.Time
 	CancellationRequestedAt  *time.Time
 	JobUID                   *string
+	Images                   ExecutionImages
 	OutcomeReason            *string
 	OutcomeMessage           *string
 	ExitCode                 *int32

@@ -847,6 +847,21 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
                 </Text>
               )}
             </Fact>
+            {run.images?.action ? (
+              <Fact label="Action image ID">
+                <Code style={{ overflowWrap: "anywhere" }}>{run.images.action}</Code>
+              </Fact>
+            ) : null}
+            {run.images?.checkout ? (
+              <Fact label="Checkout image ID">
+                <Code style={{ overflowWrap: "anywhere" }}>{run.images.checkout}</Code>
+              </Fact>
+            ) : null}
+            {run.images?.harness ? (
+              <Fact label="Harness image ID">
+                <Code style={{ overflowWrap: "anywhere" }}>{run.images.harness}</Code>
+              </Fact>
+            ) : null}
           </SimpleGrid>
           {run.lastObservedAt ? (
             <Group gap={4}>

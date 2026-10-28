@@ -66,3 +66,22 @@ func TestShouldReportRunObservation(t *testing.T) {
 		})
 	}
 }
+
+func TestObservationRequestIncludesExecutionImages(t *testing.T) {
+	t.Parallel()
+
+	action := "registry.example.com/tools@sha256:action"
+	checkout := "registry.example.com/checkout@sha256:checkout"
+	harness := "registry.example.com/harness@sha256:harness"
+	request := observationRequest(runObservation{
+		phase: api.RunObservationPhaseRunning,
+		images: api.ExecutionImages{
+			Action: &action, Checkout: &checkout, Harness: &harness,
+		},
+	})
+	if request.Images == nil || request.Images.Action == nil || *request.Images.Action != action ||
+		request.Images.Checkout == nil || *request.Images.Checkout != checkout ||
+		request.Images.Harness == nil || *request.Images.Harness != harness {
+		t.Errorf("observation request images = %#v", request.Images)
+	}
+}

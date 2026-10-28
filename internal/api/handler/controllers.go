@@ -198,6 +198,7 @@ func (h *Handler) ReportRunObservation(
 			Phase:       run.Phase(request.Body.Phase),
 			Outcome:     runObservationOutcome(request.Body.Outcome),
 			JobUID:      request.Body.JobUID,
+			Images:      runObservationImages(request.Body.Images),
 			Reason:      request.Body.Reason,
 			Message:     request.Body.Message,
 			ExitCode:    request.Body.ExitCode,
@@ -340,6 +341,18 @@ func runObservationOutcome(value *api.RunObservationOutcome) *run.Outcome {
 	converted := run.Outcome(*value)
 
 	return &converted
+}
+
+func runObservationImages(value *api.ExecutionImages) run.ExecutionImages {
+	if value == nil {
+		return run.ExecutionImages{}
+	}
+
+	return run.ExecutionImages{
+		Action:   value.Action,
+		Checkout: value.Checkout,
+		Harness:  value.Harness,
+	}
 }
 
 func runAssignmentCommand(assignment api.RunAssignment) api.ControllerCommand {

@@ -237,14 +237,32 @@ func TestRunPersistenceIntegration(t *testing.T) {
 	}
 
 	runningAt := preparingAt.Add(time.Minute)
+	actionImageID := "registry.example.com/terraform@sha256:action"
+	checkoutImageID := "registry.example.com/slipramp-checkout@sha256:checkout"
+	harnessImageID := "registry.example.com/slipramp-harness@sha256:harness"
 	if err := database.ApplyRunObservation(
 		ctx,
 		run.Observation{
 			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
-			JobUID: &jobUID, ObservedAt: runningAt,
+			JobUID: &jobUID,
+			Images: run.ExecutionImages{
+				Action: &actionImageID, Checkout: &checkoutImageID, Harness: &harnessImageID,
+			},
+			ObservedAt: runningAt,
 		},
 	); err != nil {
 		t.Fatalf("observe Run running: %v", err)
+	}
+	conflictingActionImageID := "registry.example.com/terraform@sha256:different"
+	if err := database.ApplyRunObservation(
+		ctx,
+		run.Observation{
+			ID: record.ID, ClusterName: "colo", Phase: run.PhaseRunning,
+			JobUID: &jobUID, Images: run.ExecutionImages{Action: &conflictingActionImageID},
+			ObservedAt: runningAt.Add(time.Second),
+		},
+	); !errors.Is(err, run.ErrObservationConflict) {
+		t.Fatalf("changed image observation error = %v, want observation conflict", err)
 	}
 
 	succeeded := run.OutcomeSucceeded
@@ -336,6 +354,15 @@ func TestRunPersistenceIntegration(t *testing.T) {
 			storedExitCode,
 			lastObservedAt,
 		)
+	}
+	stored, err := database.GetRun(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetRun() with image provenance: %v", err)
+	}
+	if stored.Images.Action == nil || *stored.Images.Action != actionImageID ||
+		stored.Images.Checkout == nil || *stored.Images.Checkout != checkoutImageID ||
+		stored.Images.Harness == nil || *stored.Images.Harness != harnessImageID {
+		t.Errorf("stored execution images = %#v", stored.Images)
 	}
 
 	claimed, err = database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), completedAt.Add(time.Minute))

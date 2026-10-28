@@ -299,6 +299,7 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 		wantOutcome *api.RunObservationOutcome
 		wantReason  string
 		wantExit    *int32
+		wantImages  api.ExecutionImages
 	}{
 		{
 			name:      "active Job with pending action",
@@ -308,12 +309,18 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 		{
 			name: "running",
 			podStatus: &corev1.ContainerStatus{
-				Name: actionContainerName,
+				Name:    actionContainerName,
+				ImageID: "registry.example.com/terraform@sha256:action",
 				State: corev1.ContainerState{
 					Running: &corev1.ContainerStateRunning{},
 				},
 			},
 			wantPhase: api.RunObservationPhaseRunning,
+			wantImages: api.ExecutionImages{
+				Action:   new("registry.example.com/terraform@sha256:action"),
+				Checkout: new("registry.example.com/slipramp-checkout@sha256:checkout"),
+				Harness:  new("registry.example.com/slipramp-harness@sha256:harness"),
+			},
 		},
 		{
 			name: "succeeded",
@@ -403,6 +410,12 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 				pod.Status = corev1.PodStatus{
 					ContainerStatuses: []corev1.ContainerStatus{*test.podStatus},
 				}
+				if test.wantImages.Harness != nil {
+					pod.Status.InitContainerStatuses = []corev1.ContainerStatus{
+						{Name: harnessContainerName, ImageID: *test.wantImages.Harness},
+						{Name: checkoutContainerName, ImageID: *test.wantImages.Checkout},
+					}
+				}
 				if test.canceled {
 					pod.Annotations = map[string]string{
 						cancellationAnnotation: "true",
@@ -427,7 +440,8 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 				!equalPointers(observation.outcome, test.wantOutcome) ||
 				valueOrEmpty(observation.jobUID) != "job-uid" ||
 				valueOrEmpty(observation.reason) != test.wantReason ||
-				!equalPointers(observation.exitCode, test.wantExit) {
+				!equalPointers(observation.exitCode, test.wantExit) ||
+				!equalExecutionImages(observation.images, test.wantImages) {
 				t.Errorf("Observe() = %#v", observation)
 			}
 		})

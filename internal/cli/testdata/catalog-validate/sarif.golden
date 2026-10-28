@@ -8,12 +8,37 @@
           "name": "slipramp/catalog",
           "rules": [
             {
+              "id": "catalog.runtime.image-mutable"
+            },
+            {
               "id": "catalog.target.path-not-found"
             }
           ]
         }
       },
       "results": [
+        {
+          "ruleId": "catalog.runtime.image-mutable",
+          "level": "warning",
+          "message": {
+            "text": "runtime spec.image \"example.com/tools:1\" is not pinned by digest Hint: Use a repository@algorithm:digest reference when reproducible image bytes are required."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".slipramp/catalog.yaml"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 10,
+                  "endLine": 6,
+                  "endColumn": 29
+                }
+              }
+            }
+          ]
+        },
         {
           "ruleId": "catalog.target.path-not-found",
           "level": "warning",

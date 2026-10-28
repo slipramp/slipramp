@@ -11,9 +11,24 @@
       "test"
     ],
     "errors": 0,
-    "warnings": 1
+    "warnings": 2
   },
   "diagnostics": [
+    {
+      "code": "catalog.runtime.image-mutable",
+      "severity": "warning",
+      "message": "runtime spec.image \"example.com/tools:1\" is not pinned by digest",
+      "hint": "Use a repository@algorithm:digest reference when reproducible image bytes are required.",
+      "location": {
+        "path": ".slipramp/catalog.yaml",
+        "document": 1,
+        "line": 6,
+        "column": 10,
+        "endLine": 6,
+        "endColumn": 29,
+        "fieldPath": "spec.image"
+      }
+    },
     {
       "code": "catalog.target.path-not-found",
       "severity": "warning",

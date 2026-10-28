@@ -40,6 +40,19 @@ func validateRuntimePortable(input Catalog, runtime Runtime) Diagnostics {
 			"catalog.runtime.image-invalid",
 			errors.New("runtime spec.image must not contain whitespace"),
 		)
+	} else if !imageIsDigestPinned(runtime.Spec.Image) {
+		item := diagnostic(
+			input,
+			RuntimeKind,
+			runtime.Metadata.Name,
+			runtime.Source,
+			"spec.image",
+			"catalog.runtime.image-mutable",
+			SeverityWarning,
+			fmt.Errorf("runtime spec.image %q is not pinned by digest", runtime.Spec.Image),
+		)
+		item.Hint = "Use a repository@algorithm:digest reference when reproducible image bytes are required."
+		diagnostics = append(diagnostics, item)
 	}
 
 	if runtime.Spec.WorkingDirectory != "" {
@@ -86,6 +99,61 @@ func validateRuntimePortable(input Catalog, runtime Runtime) Diagnostics {
 	}
 
 	return diagnostics
+}
+
+func imageIsDigestPinned(image string) bool {
+	at := strings.LastIndexByte(image, '@')
+	if at <= 0 || at == len(image)-1 {
+		return false
+	}
+
+	algorithm, encoded, found := strings.Cut(image[at+1:], ":")
+	if !found || algorithm == "" || len(encoded) < 32 {
+		return false
+	}
+	for index, character := range algorithm {
+		if isASCIILetter(character) || index > 0 && character >= '0' && character <= '9' ||
+			index > 0 && strings.ContainsRune("+._-", character) {
+			continue
+		}
+
+		return false
+	}
+	for _, character := range encoded {
+		if isASCIILetter(character) || character >= '0' && character <= '9' ||
+			strings.ContainsRune("=_-", character) {
+			continue
+		}
+
+		return false
+	}
+	knownHexLength := map[string]int{
+		"sha256": 64,
+		"sha384": 96,
+		"sha512": 128,
+	}[strings.ToLower(algorithm)]
+	if knownHexLength != 0 && (len(encoded) != knownHexLength || !isHexDigest(encoded)) {
+		return false
+	}
+
+	return true
+}
+
+func isASCIILetter(character rune) bool {
+	return character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z'
+}
+
+func isHexDigest(encoded string) bool {
+	for _, character := range encoded {
+		if character < '0' || character > '9' {
+			lower := character | ('a' - 'A')
+			if lower < 'a' || lower > 'f' {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func validateCredentialInjection(

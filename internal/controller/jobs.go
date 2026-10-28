@@ -133,6 +133,7 @@ type runObservation struct {
 	phase    api.RunObservationPhase
 	outcome  *api.RunObservationOutcome
 	jobUID   *string
+	images   api.ExecutionImages
 	reason   *string
 	message  *string
 	exitCode *int32
@@ -304,6 +305,13 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 			break
 		}
 	}
+	images, err := observedExecutionImages(pods)
+	if err != nil {
+		return runObservation{}, err
+	}
+	if terminal != nil {
+		terminal.images = images
+	}
 
 	for podIndex := range pods {
 		for statusIndex := range pods[podIndex].Status.ContainerStatuses {
@@ -320,12 +328,16 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 				return runObservation{
 					phase:  api.RunObservationPhaseRunning,
 					jobUID: uid,
+					images: images,
 				}, nil
 			}
 			if status.State.Terminated != nil {
 				terminated := status.State.Terminated
 				if terminal == nil {
-					return canceledIfRequested(terminatedObservation(terminated, uid), cancellationRequested), nil
+					observation := terminatedObservation(terminated, uid)
+					observation.images = images
+
+					return canceledIfRequested(observation, cancellationRequested), nil
 				}
 
 				terminal.exitCode = &terminated.ExitCode
@@ -347,7 +359,58 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 	return runObservation{
 		phase:  api.RunObservationPhasePreparing,
 		jobUID: uid,
+		images: images,
 	}, nil
+}
+
+func observedExecutionImages(pods []corev1.Pod) (api.ExecutionImages, error) {
+	images := api.ExecutionImages{}
+	for podIndex := range pods {
+		for statusIndex := range pods[podIndex].Status.InitContainerStatuses {
+			status := &pods[podIndex].Status.InitContainerStatuses[statusIndex]
+			var destination **string
+			switch status.Name {
+			case harnessContainerName:
+				destination = &images.Harness
+			case checkoutContainerName:
+				destination = &images.Checkout
+			default:
+				continue
+			}
+			if err := recordObservedImageID(status.Name, status.ImageID, destination); err != nil {
+				return api.ExecutionImages{}, err
+			}
+		}
+		for statusIndex := range pods[podIndex].Status.ContainerStatuses {
+			status := &pods[podIndex].Status.ContainerStatuses[statusIndex]
+			if status.Name != actionContainerName {
+				continue
+			}
+			if err := recordObservedImageID(status.Name, status.ImageID, &images.Action); err != nil {
+				return api.ExecutionImages{}, err
+			}
+		}
+	}
+
+	return images, nil
+}
+
+func recordObservedImageID(containerName, imageID string, destination **string) error {
+	if imageID == "" {
+		return nil
+	}
+	if *destination != nil && **destination != imageID {
+		return fmt.Errorf(
+			"execution container %q has conflicting image IDs %q and %q",
+			containerName,
+			**destination,
+			imageID,
+		)
+	}
+
+	*destination = new(imageID)
+
+	return nil
 }
 
 func canceledIfRequested(observation runObservation, requested bool) runObservation {

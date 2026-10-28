@@ -1,3 +1,7 @@
+.slipramp/catalog.yaml:6:10: warning [catalog.runtime.image-mutable]
+runtime spec.image "example.com/tools:1" is not pinned by digest
+hint: Use a repository@algorithm:digest reference when reproducible image bytes are required.
+
 .slipramp/catalog.yaml:13:9: warning [catalog.target.path-not-found]
 target path "missing" does not exist in the checkout
 hint: The path may be generated later; create it or ignore this warning when that is intentional.
@@ -5,4 +9,4 @@ hint: The path may be generated later; create it or ignore this warning when tha
 Catalog is portable-valid: 1 runtimes, 1 targets, 1 actions.
 Deployment checks were not run for placements: test.
 
-0 errors, 1 warnings
+0 errors, 2 warnings

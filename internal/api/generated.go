@@ -1435,6 +1435,18 @@ type CredentialSourceExplanation struct {
 // DependencyStatus defines model for DependencyStatus.
 type DependencyStatus string
 
+// ExecutionImages Actual image identities reported by Kubernetes for the containers that participated in execution. Fields appear as each container starts and are retained as Run provenance.
+type ExecutionImages struct {
+	// Action Kubernetes status.imageID for the Action container.
+	Action *string `json:"action,omitempty"`
+
+	// Checkout Kubernetes status.imageID for the checkout init container.
+	Checkout *string `json:"checkout,omitempty"`
+
+	// Harness Kubernetes status.imageID for the Harness install init container.
+	Harness *string `json:"harness,omitempty"`
+}
+
 // ExplainedActionTrigger defines model for ExplainedActionTrigger.
 type ExplainedActionTrigger struct {
 	Provenance       []ExplanationOrigin `json:"provenance"`
@@ -2533,7 +2545,10 @@ type Run struct {
 	FinishedAt       *time.Time `json:"finishedAt,omitempty"`
 
 	// ID Stable identity of the immutable action execution.
-	ID     openapi_types.UUID          `json:"id"`
+	ID openapi_types.UUID `json:"id"`
+
+	// Images Actual image identities reported by Kubernetes for the containers that participated in execution. Fields appear as each container starts and are retained as Run provenance.
+	Images *ExecutionImages            `json:"images,omitempty"`
 	Inputs map[string]RunArtifactInput `json:"inputs"`
 
 	// JobUID Kubernetes UID of the materialized Job.
@@ -2747,6 +2762,9 @@ type RunList struct {
 // RunObservation defines model for RunObservation.
 type RunObservation struct {
 	ExitCode *int32 `json:"exitCode,omitempty"`
+
+	// Images Actual image identities reported by Kubernetes for the containers that participated in execution. Fields appear as each container starts and are retained as Run provenance.
+	Images *ExecutionImages `json:"images,omitempty"`
 
 	// JobUID Kubernetes UID of the materialized Job. Required for preparing and running observations and for every observation after the Run is bound to a Job.
 	JobUID  *string `json:"jobUid,omitempty"`

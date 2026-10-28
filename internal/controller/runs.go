@@ -423,7 +423,7 @@ func (c *Controller) reportTerminalObservation(ctx context.Context, runID uuid.U
 }
 
 func observationRequest(observation runObservation) api.RunObservation {
-	return api.RunObservation{
+	request := api.RunObservation{
 		Phase:    observation.phase,
 		Outcome:  observation.outcome,
 		JobUID:   observation.jobUID,
@@ -431,4 +431,9 @@ func observationRequest(observation runObservation) api.RunObservation {
 		Message:  observation.message,
 		ExitCode: observation.exitCode,
 	}
+	if observation.images.Action != nil || observation.images.Checkout != nil || observation.images.Harness != nil {
+		request.Images = &observation.images
+	}
+
+	return request
 }

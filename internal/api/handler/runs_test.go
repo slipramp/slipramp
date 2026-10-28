@@ -26,6 +26,27 @@ func TestAPIRunSourceIncludesPromotionBacklink(t *testing.T) {
 	}
 }
 
+func TestAPIExecutionImagesIncludesRecordedProvenance(t *testing.T) {
+	t.Parallel()
+
+	action := "registry.example.com/tools@sha256:action"
+	checkout := "registry.example.com/checkout@sha256:checkout"
+	harness := "registry.example.com/harness@sha256:harness"
+	response := apiExecutionImages(run.ExecutionImages{
+		Action:   &action,
+		Checkout: &checkout,
+		Harness:  &harness,
+	})
+	if response == nil || response.Action == nil || *response.Action != action ||
+		response.Checkout == nil || *response.Checkout != checkout ||
+		response.Harness == nil || *response.Harness != harness {
+		t.Errorf("API execution images = %#v", response)
+	}
+	if empty := apiExecutionImages(run.ExecutionImages{}); empty != nil {
+		t.Errorf("empty API execution images = %#v, want nil", empty)
+	}
+}
+
 func TestRunArtifactConsumersUsesFrozenDirectlyRunnableActions(t *testing.T) {
 	t.Parallel()
 

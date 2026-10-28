@@ -36,9 +36,14 @@ func (d *Database) ApplyRunObservation(ctx context.Context, observation run.Obse
 	}
 
 	state := run.ObservationTransitionState{
-		Phase:                 run.Phase(current.Phase),
-		Outcome:               runOutcome(current.Outcome),
-		JobUID:                current.JobUid,
+		Phase:   run.Phase(current.Phase),
+		Outcome: runOutcome(current.Outcome),
+		JobUID:  current.JobUid,
+		Images: run.ExecutionImages{
+			Action:   current.ActionImageID,
+			Checkout: current.CheckoutImageID,
+			Harness:  current.HarnessImageID,
+		},
 		CancellationRequested: current.CancellationRequestedAt.Valid,
 	}
 	if err := run.ValidateObservationTransition(state, observation); err != nil {
@@ -48,14 +53,17 @@ func (d *Database) ApplyRunObservation(ctx context.Context, observation run.Obse
 	if err := queries.UpdateRunObservation(
 		ctx,
 		storedb.UpdateRunObservationParams{
-			Phase:      string(observation.Phase),
-			Outcome:    outcomeString(observation.Outcome),
-			JobUid:     observation.JobUID,
-			ObservedAt: databaseTime(observation.ObservedAt),
-			Reason:     observation.Reason,
-			Message:    observation.Message,
-			ExitCode:   observation.ExitCode,
-			ID:         databaseUUID(observation.ID),
+			Phase:           string(observation.Phase),
+			Outcome:         outcomeString(observation.Outcome),
+			JobUid:          observation.JobUID,
+			ActionImageID:   observation.Images.Action,
+			CheckoutImageID: observation.Images.Checkout,
+			HarnessImageID:  observation.Images.Harness,
+			ObservedAt:      databaseTime(observation.ObservedAt),
+			Reason:          observation.Reason,
+			Message:         observation.Message,
+			ExitCode:        observation.ExitCode,
+			ID:              databaseUUID(observation.ID),
 		},
 	); err != nil {
 		return fmt.Errorf("update Run observation: %w", err)

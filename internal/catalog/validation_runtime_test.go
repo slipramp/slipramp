@@ -157,6 +157,28 @@ func TestValidateRuntimeCredentials(t *testing.T) {
 	runValidationTests(t, tests)
 }
 
+func TestValidateRuntimeWarnsWhenImageIsNotDigestPinned(t *testing.T) {
+	t.Parallel()
+
+	input := validCatalog()
+	diagnostics := catalog.ValidatePortable(input)
+	item := findDiagnostic(t, diagnostics, "catalog.runtime.image-mutable")
+	if item.Severity != catalog.SeverityWarning || item.Location.FieldPath != "spec.image" {
+		t.Errorf("mutable image diagnostic = %#v", item)
+	}
+
+	input.Runtimes[0].Spec.Image =
+		"hashicorp/terraform:1.14.3@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	for _, item := range catalog.ValidatePortable(input) {
+		if item.Code == "catalog.runtime.image-mutable" {
+			t.Errorf("digest-pinned image diagnostic = %#v", item)
+		}
+	}
+
+	input.Runtimes[0].Spec.Image = "hashicorp/terraform@sha256:not-a-valid-digest"
+	findDiagnostic(t, catalog.ValidatePortable(input), "catalog.runtime.image-mutable")
+}
+
 func addRuntimeCredential(input *catalog.Catalog, name string, injection catalog.CredentialInjection) {
 	input.Runtimes[0].Spec.Credentials = map[string]catalog.RuntimeCredential{
 		name: {Inject: injection},

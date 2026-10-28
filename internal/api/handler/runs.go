@@ -439,10 +439,23 @@ func runResponse(
 		LastObservedAt:          record.LastObservedAt,
 		CancellationRequestedAt: record.CancellationRequestedAt,
 		JobUID:                  record.JobUID,
+		Images:                  apiExecutionImages(record.Images),
 		OutcomeReason:           record.OutcomeReason,
 		OutcomeMessage:          record.OutcomeMessage,
 		ExitCode:                record.ExitCode,
 	}, nil
+}
+
+func apiExecutionImages(value run.ExecutionImages) *api.ExecutionImages {
+	if !value.Present() {
+		return nil
+	}
+
+	return &api.ExecutionImages{
+		Action:   value.Action,
+		Checkout: value.Checkout,
+		Harness:  value.Harness,
+	}
 }
 
 func apiRerunMode(value *run.RerunMode) *api.RunRerunMode {

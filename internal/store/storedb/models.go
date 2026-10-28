@@ -353,6 +353,9 @@ type Run struct {
 	ReviewDecidedBySnapshot    []byte
 	ReviewDecidedAt            pgtype.Timestamptz
 	ReviewComment              *string
+	ActionImageID              *string
+	CheckoutImageID            *string
+	HarnessImageID             *string
 }
 
 type RunArtifactInput struct {

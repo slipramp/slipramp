@@ -251,9 +251,16 @@ func sameObservation(left, right runObservation) bool {
 	return left.phase == right.phase &&
 		equalPointers(left.outcome, right.outcome) &&
 		equalPointers(left.jobUID, right.jobUID) &&
+		equalExecutionImages(left.images, right.images) &&
 		equalPointers(left.reason, right.reason) &&
 		equalPointers(left.message, right.message) &&
 		equalPointers(left.exitCode, right.exitCode)
+}
+
+func equalExecutionImages(left, right api.ExecutionImages) bool {
+	return equalPointers(left.Action, right.Action) &&
+		equalPointers(left.Checkout, right.Checkout) &&
+		equalPointers(left.Harness, right.Harness)
 }
 
 func equalPointers[T comparable](left, right *T) bool {

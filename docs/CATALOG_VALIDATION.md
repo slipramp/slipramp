@@ -57,8 +57,11 @@ or Artifact map keys as technical identities.
 Slipramp Server always performs portable and deployment validation with its
 configured Placements. For the same checkout and `PlacementConfig`, a passing
 deployment-aware CLI result has the same acceptance result as repository
-refresh. Warnings do not reject Server refresh; `--strict` only makes warnings
-fail the CLI invocation.
+refresh. A Runtime image without a content digest produces a warning because a
+mutable tag can resolve to different bytes later; it remains valid, and the
+Controller records the actual Kubernetes image identities on each Run.
+Warnings do not reject Server refresh; `--strict` only makes warnings fail the
+CLI invocation.
 
 Run portable validation from the catalog repository root:
 

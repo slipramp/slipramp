@@ -153,10 +153,12 @@ The CLI can render the same sorted diagnostics as compiler-style text,
 schema-versioned JSON, or SARIF 2.1.0 without absolute checkout paths. Its
 repository-aware warnings cover currently missing Target paths, watch patterns
 with no matches, missing relative command files, command files outside the
-Target watch scope, and duplicate or completely subsumed watch patterns. Strict
-mode changes only the CLI exit result for warnings. Validation remains static:
-neither the Server nor CLI contacts Kubernetes, resolves Secret values, or
-inspects Runtime images.
+Target watch scope, and duplicate or completely subsumed watch patterns.
+Portable validation also warns when a Runtime image is not pinned by a content
+digest. This is provenance guidance, not an image policy: mutable tags remain
+valid. Strict mode changes only the CLI exit result for warnings. Validation
+remains static: neither the Server nor CLI contacts Kubernetes, resolves Secret
+values, or inspects registries.
 
 A checked-in Draft 2020-12 JSON Schema is generated from the Go Runtime and
 Target definitions and checked for freshness. It supports per-document editor
@@ -359,9 +361,10 @@ Target, and capacity constraints permit assignment.
 
 Lifecycle phase (`queued`, `assigned`, `preparing`, `running`, `finished`),
 terminal outcome (`succeeded`, `failed`, `canceled`, `timed-out`), cancellation
-intent, Job identity, exit code, diagnostics, and observation freshness are
-separate facts. A disconnected Controller or stale observation derives an
-unknown observation; it does not change phase or fail an active Run.
+intent, Job identity, actual execution image identities, exit code, diagnostics,
+and observation freshness are separate facts. A disconnected Controller or
+stale observation derives an unknown observation; it does not change phase or
+fail an active Run.
 
 The Run package owns Controller observation rules for phase progression,
 pinned Job identity, repeated terminal outcomes, and cancellation intent.
@@ -546,6 +549,13 @@ checkout image containing shell, Git, and SSH then runs the Harness around
 checkout of the exact commit into a second `emptyDir`. The Action container
 mounts the repository at Runtime `workingDirectory` or `/workspace` and runs
 from the Target's repository-relative path through the injected Harness.
+
+As each container starts, the Controller reports Kubernetes `status.imageID`
+for the Harness, checkout, and Action containers. PostgreSQL retains the first
+identity observed for each role on the Run and rejects a conflicting later
+identity. These observed identities record the bytes Kubernetes actually used,
+including when configuration selected a mutable tag; they do not gate execution
+or require digest-pinned configuration.
 
 Checkout makes the Pod-private tree writable across unrelated container user
 IDs. Placement security context, including `fsGroup` where needed, provides

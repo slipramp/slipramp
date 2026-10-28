@@ -664,6 +664,9 @@ func TestGetRunReportsDerivedObservationState(t *testing.T) {
 
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	observedAt := time.Now().UTC()
+	actionImageID := "registry.example.com/tools@sha256:action"
+	checkoutImageID := "registry.example.com/checkout@sha256:checkout"
+	harnessImageID := "registry.example.com/harness@sha256:harness"
 	runs := &recordingRunService{
 		loaded: run.Run{
 			ID:             runID,
@@ -671,6 +674,11 @@ func TestGetRunReportsDerivedObservationState(t *testing.T) {
 			ClusterName:    "colo",
 			Parameters:     map[string]any{},
 			LastObservedAt: &observedAt,
+			Images: run.ExecutionImages{
+				Action:   &actionImageID,
+				Checkout: &checkoutImageID,
+				Harness:  &harnessImageID,
+			},
 		},
 	}
 	clusterObservation := cluster.Observation{Name: "colo"}
@@ -702,6 +710,11 @@ func TestGetRunReportsDerivedObservationState(t *testing.T) {
 	if result.ObservationState == nil ||
 		*result.ObservationState != api.RunObservationStateCurrent {
 		t.Errorf("observation state = %v, want %q", result.ObservationState, api.RunObservationStateCurrent)
+	}
+	if result.Images == nil || result.Images.Action == nil || *result.Images.Action != actionImageID ||
+		result.Images.Checkout == nil || *result.Images.Checkout != checkoutImageID ||
+		result.Images.Harness == nil || *result.Images.Harness != harnessImageID {
+		t.Errorf("execution images = %#v", result.Images)
 	}
 }
 

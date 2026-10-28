@@ -878,7 +878,15 @@ func TestControllerReportsRunObservation(t *testing.T) {
 		context.Background(),
 		http.MethodPost,
 		"/controller/v1/runs/"+runID.String()+"/observations",
-		strings.NewReader(`{"phase":"running","jobUid":"job-uid"}`),
+		strings.NewReader(`{
+            "phase":"running",
+            "jobUid":"job-uid",
+            "images":{
+                "action":"registry.example.com/tools@sha256:action",
+                "checkout":"registry.example.com/checkout@sha256:checkout",
+                "harness":"registry.example.com/harness@sha256:harness"
+            }
+        }`),
 	)
 	request.Header.Set("Authorization", "Bearer controller-token")
 	request.Header.Set("Content-Type", "application/json")
@@ -900,7 +908,13 @@ func TestControllerReportsRunObservation(t *testing.T) {
 	if runs.reportCalls != 1 || runs.observation.ID != runID ||
 		runs.observation.ClusterName != "colo" ||
 		runs.observation.Phase != run.PhaseRunning ||
-		runs.observation.JobUID == nil || *runs.observation.JobUID != "job-uid" {
+		runs.observation.JobUID == nil || *runs.observation.JobUID != "job-uid" ||
+		runs.observation.Images.Action == nil ||
+		*runs.observation.Images.Action != "registry.example.com/tools@sha256:action" ||
+		runs.observation.Images.Checkout == nil ||
+		*runs.observation.Images.Checkout != "registry.example.com/checkout@sha256:checkout" ||
+		runs.observation.Images.Harness == nil ||
+		*runs.observation.Images.Harness != "registry.example.com/harness@sha256:harness" {
 		t.Errorf("observation = %#v", runs.observation)
 	}
 	if controllers.calls != 1 || controllers.clusterName != "colo" {

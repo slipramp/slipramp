@@ -288,7 +288,15 @@ INSERT INTO run_phase_transitions (
 );
 
 -- name: GetRunObservationStateForUpdate :one
-SELECT target_id, action_name, phase, outcome, job_uid, cancellation_requested_at
+SELECT target_id,
+       action_name,
+       phase,
+       outcome,
+       job_uid,
+       action_image_id,
+       checkout_image_id,
+       harness_image_id,
+       cancellation_requested_at
 FROM runs
 WHERE id = sqlc.arg(id)
   AND cluster_name = sqlc.arg(cluster_name)
@@ -299,6 +307,9 @@ UPDATE runs
 SET phase = sqlc.arg(phase),
     outcome = sqlc.narg(outcome),
     job_uid = COALESCE(job_uid, sqlc.narg(job_uid)),
+    action_image_id = COALESCE(action_image_id, sqlc.narg(action_image_id)),
+    checkout_image_id = COALESCE(checkout_image_id, sqlc.narg(checkout_image_id)),
+    harness_image_id = COALESCE(harness_image_id, sqlc.narg(harness_image_id)),
     last_observed_at = GREATEST(last_observed_at, sqlc.arg(observed_at)),
     preparing_at = CASE
         WHEN sqlc.arg(phase) IN ('preparing', 'running', 'finished')
