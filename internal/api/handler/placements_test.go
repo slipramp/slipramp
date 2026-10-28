@@ -101,6 +101,49 @@ func TestListPlacementsReturnsInventoryFailure(t *testing.T) {
 	}
 }
 
+func TestGetPlacement(t *testing.T) {
+	t.Parallel()
+
+	service := &staticPlacementService{inventory: placement.Inventory{
+		ConfigurationChecksum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Items: []placement.InventoryPlacement{
+			{Name: "infrastructure", ClusterName: "colo", TargetCount: 3},
+		},
+	}}
+	handler := newHandler(Dependencies{Placements: service})
+
+	response, err := handler.GetPlacement(context.Background(), api.GetPlacementRequestObject{
+		PlacementName: "infrastructure",
+	})
+	if err != nil {
+		t.Fatalf("GetPlacement() error = %v", err)
+	}
+	result, ok := response.(api.GetPlacement200JSONResponse)
+	if !ok {
+		t.Fatalf("GetPlacement() response = %T", response)
+	}
+	if result.ConfigurationChecksum != service.inventory.ConfigurationChecksum ||
+		result.Placement.Name != "infrastructure" || result.Placement.Cluster != "colo" ||
+		result.Placement.TargetCount != 3 {
+		t.Errorf("GetPlacement() result = %#v", result)
+	}
+}
+
+func TestGetPlacementReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	handler := newHandler(Dependencies{Placements: &staticPlacementService{}})
+	response, err := handler.GetPlacement(context.Background(), api.GetPlacementRequestObject{
+		PlacementName: "missing",
+	})
+	if err != nil {
+		t.Fatalf("GetPlacement() error = %v", err)
+	}
+	if _, ok := response.(api.GetPlacement404ApplicationProblemPlusJSONResponse); !ok {
+		t.Fatalf("GetPlacement() response = %T", response)
+	}
+}
+
 type staticPlacementService struct {
 	inventory placement.Inventory
 	err       error

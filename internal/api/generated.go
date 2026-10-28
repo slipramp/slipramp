@@ -1928,6 +1928,13 @@ type Placement struct {
 // PlacementControllerConnectionState Whether the configured Cluster's Controller has checked in within the connection window. A Controller that has never checked in is unreachable.
 type PlacementControllerConnectionState string
 
+// PlacementDetail defines model for PlacementDetail.
+type PlacementDetail struct {
+	// ConfigurationChecksum SHA-256 checksum of the validated effective Placement set.
+	ConfigurationChecksum string    `json:"configurationChecksum"`
+	Placement             Placement `json:"placement"`
+}
+
 // PlacementExplanation defines model for PlacementExplanation.
 type PlacementExplanation struct {
 	Cluster                ExplainedString    `json:"cluster"`
@@ -3626,6 +3633,13 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/placements (the `ListPlacements` operationId).
 	ListPlacements(ctx context.Context, params *ListPlacementsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetPlacement Get a configured execution Placement
+	//
+	// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+	//
+	// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
+	GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	//
 	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -4391,6 +4405,23 @@ func (c *Client) ListNotificationDeliveries(ctx context.Context, params *ListNot
 // Corresponds with GET /api/v1/placements (the `ListPlacements` operationId).
 func (c *Client) ListPlacements(ctx context.Context, params *ListPlacementsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListPlacementsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetPlacement Get a configured execution Placement
+//
+// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+//
+// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
+func (c *Client) GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPlacementRequest(c.Server, placementName)
 	if err != nil {
 		return nil, err
 	}
@@ -6317,6 +6348,40 @@ func NewListPlacementsRequest(server string, params *ListPlacementsParams) (*htt
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetPlacementRequest constructs an http.Request for the GetPlacement method
+func NewGetPlacementRequest(server string, placementName CatalogName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "placementName", placementName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/placements/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -9197,6 +9262,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/placements (the `ListPlacements` operationId).
 	ListPlacementsWithResponse(ctx context.Context, params *ListPlacementsParams, reqEditors ...RequestEditorFn) (*ListPlacementsResponse, error)
 
+	// GetPlacementWithResponse Get a configured execution Placement
+	//
+	// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
+	GetPlacementWithResponse(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*GetPlacementResponse, error)
+
 	// ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 	//
 	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -10901,6 +10975,82 @@ func (r ListPlacementsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListPlacementsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetPlacementResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PlacementDetail
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetPlacementResponse) GetJSON200() *PlacementDetail {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetPlacementResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetPlacementResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetPlacementResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetPlacementResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetPlacementResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetPlacementResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPlacementResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPlacementResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetPlacementResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14625,6 +14775,21 @@ func (c *ClientWithResponses) ListPlacementsWithResponse(ctx context.Context, pa
 	return ParseListPlacementsResponse(rsp)
 }
 
+// GetPlacementWithResponse Get a configured execution Placement
+//
+// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
+func (c *ClientWithResponses) GetPlacementWithResponse(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*GetPlacementResponse, error) {
+	rsp, err := c.GetPlacement(ctx, placementName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPlacementResponse(rsp)
+}
+
 // ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 //
 // Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -16527,6 +16692,67 @@ func ParseListPlacementsResponse(rsp *http.Response) (*ListPlacementsResponse, e
 			return nil, err
 		}
 		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPlacementResponse parses an HTTP response from a GetPlacementWithResponse call
+func ParseGetPlacementResponse(rsp *http.Response) (*GetPlacementResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPlacementResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PlacementDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
 		var dest Problem
@@ -19420,6 +19646,9 @@ type ServerInterface interface {
 	// ListPlacements List configured execution Placements
 	// (GET /api/v1/placements)
 	ListPlacements(w http.ResponseWriter, r *http.Request, params ListPlacementsParams)
+	// GetPlacement Get a configured execution Placement
+	// (GET /api/v1/placements/{placementName})
+	GetPlacement(w http.ResponseWriter, r *http.Request, placementName CatalogName)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(w http.ResponseWriter, r *http.Request, params ListPromotionBranchDriftParams)
@@ -20175,6 +20404,32 @@ func (siw *ServerInterfaceWrapper) ListPlacements(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPlacements(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPlacement operation middleware
+func (siw *ServerInterfaceWrapper) GetPlacement(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "placementName" -------------
+	var placementName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "placementName", r.PathValue("placementName"), &placementName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placementName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPlacement(w, r, placementName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22324,6 +22579,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets/{targetId}", wrapper.GetTarget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements", wrapper.ListPlacements)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements/{placementName}", wrapper.GetPlacement)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/promotions/{promotionId}/dispatch", wrapper.ReportKargoPromotionDispatch)
@@ -23891,6 +24147,98 @@ func (response ListPlacements405ApplicationProblemPlusJSONResponse) VisitListPla
 type ListPlacements500ApplicationProblemPlusJSONResponse Problem
 
 func (response ListPlacements500ApplicationProblemPlusJSONResponse) VisitListPlacementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlacementRequestObject struct {
+	PlacementName CatalogName `json:"placementName"`
+}
+
+type GetPlacementResponseObject interface {
+	VisitGetPlacementResponse(w http.ResponseWriter) error
+}
+
+type GetPlacement200JSONResponse PlacementDetail
+
+func (response GetPlacement200JSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlacement401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPlacement401ApplicationProblemPlusJSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlacement403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPlacement403ApplicationProblemPlusJSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlacement404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPlacement404ApplicationProblemPlusJSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlacement405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPlacement405ApplicationProblemPlusJSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPlacement500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPlacement500ApplicationProblemPlusJSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -28383,6 +28731,9 @@ type StrictServerInterface interface {
 	// ListPlacements List configured execution Placements
 	// (GET /api/v1/placements)
 	ListPlacements(ctx context.Context, request ListPlacementsRequestObject) (ListPlacementsResponseObject, error)
+	// GetPlacement Get a configured execution Placement
+	// (GET /api/v1/placements/{placementName})
+	GetPlacement(ctx context.Context, request GetPlacementRequestObject) (GetPlacementResponseObject, error)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(ctx context.Context, request ListPromotionBranchDriftRequestObject) (ListPromotionBranchDriftResponseObject, error)
@@ -28981,6 +29332,32 @@ func (sh *strictHandler) ListPlacements(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListPlacementsResponseObject); ok {
 		if err := validResponse.VisitListPlacementsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPlacement operation middleware
+func (sh *strictHandler) GetPlacement(w http.ResponseWriter, r *http.Request, placementName CatalogName) {
+	var request GetPlacementRequestObject
+
+	request.PlacementName = placementName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPlacement(ctx, request.(GetPlacementRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPlacement")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPlacementResponseObject); ok {
+		if err := validResponse.VisitGetPlacementResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

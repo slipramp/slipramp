@@ -63,3 +63,61 @@ placements:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+placement:
+  get:
+    operationId: getPlacement
+    summary: Get a configured execution Placement
+    description: >-
+      Returns one sanitized effective Placement currently loaded by the Server
+      together with the checksum of the complete effective Placement set.
+      Kubernetes Secret references and arbitrary pod configuration are not exposed.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Placements
+    parameters:
+      - name: placementName
+        in: path
+        required: true
+        description: Configured Placement name.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    responses:
+      "200":
+        description: The configured Placement.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/placements.yaml#/PlacementDetail
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Placement is not configured.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Placement inventory could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

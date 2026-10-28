@@ -1208,13 +1208,15 @@ Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
 the same authenticated contract.
 
 The authenticated Placement inventory exposes the validated effective
-configuration currently held by the Server through `/api/v1/placements` and the
-`/placements` Web page. It reports Placement name, Cluster, namespace, effective
-service account, timeout and resource defaults, logical credential source names,
-active Target usage, and a deterministic SHA-256 checksum of the complete
-effective Placement set. Usage counts each active Target once per Placement when
-at least one resolved Action uses it; a Target whose Actions span Placements
-contributes to each. The Web count links to the matching Target inventory.
+configuration currently held by the Server through `/api/v1/placements`,
+`/api/v1/placements/{placementName}`, and the corresponding Web pages. The index
+keeps Placement name, Cluster, Controller connectivity, and active Target usage
+scannable; the detail page carries namespace, effective service account, timeout
+and resource defaults, logical credential source names, last contact, and the
+deterministic SHA-256 checksum of the complete effective Placement set. Usage
+counts each active Target once per Placement when at least one resolved Action
+uses it; a Target whose Actions span Placements contributes to each. The Web
+count links to the matching Target inventory.
 The inventory joins existing Controller observations: a configured Cluster that
 has never checked in or whose observation is stale is `unreachable`, and the
 last contact is present when known. Kubernetes Secret references, node selectors,

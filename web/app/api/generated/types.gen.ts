@@ -472,6 +472,14 @@ export type PlacementList = {
   offset: number;
 };
 
+export type PlacementDetail = {
+  placement: Placement;
+  /**
+   * SHA-256 checksum of the validated effective Placement set.
+   */
+  configurationChecksum: string;
+};
+
 export type RunAssignment = {
   /**
    * Stable Run identity used to derive Kubernetes object names.
@@ -2675,6 +2683,52 @@ export type ListPlacementsResponses = {
 };
 
 export type ListPlacementsResponse = ListPlacementsResponses[keyof ListPlacementsResponses];
+
+export type GetPlacementData = {
+  body?: never;
+  path: {
+    /**
+     * Configured Placement name.
+     */
+    placementName: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/placements/{placementName}";
+};
+
+export type GetPlacementErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The Placement is not configured.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Placement inventory could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetPlacementError = GetPlacementErrors[keyof GetPlacementErrors];
+
+export type GetPlacementResponses = {
+  /**
+   * The configured Placement.
+   */
+  200: PlacementDetail;
+};
+
+export type GetPlacementResponse = GetPlacementResponses[keyof GetPlacementResponses];
 
 export type EnrollControllerData = {
   body: ControllerEnrollment;

@@ -99,3 +99,17 @@ PlacementList:
     offset:
       type: integer
       minimum: 0
+
+PlacementDetail:
+  type: object
+  additionalProperties: false
+  required:
+    - placement
+    - configurationChecksum
+  properties:
+    placement:
+      $ref: "#/Placement"
+    configurationChecksum:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+      description: SHA-256 checksum of the validated effective Placement set.

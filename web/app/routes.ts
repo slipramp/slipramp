@@ -15,6 +15,7 @@ export default [
   route("clusters", "routes/clusters.tsx"),
   route("clusters/:clusterName", "routes/cluster.tsx"),
   route("placements", "routes/placements.tsx"),
+  route("placements/:placementName", "routes/placement.tsx"),
   route("repositories", "routes/repositories.tsx"),
   route("repositories/new", "routes/repository-new.tsx"),
   route("repositories/:repositoryId/delete", "routes/repository-delete.tsx"),

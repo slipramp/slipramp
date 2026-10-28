@@ -38,6 +38,8 @@ paths:
     $ref: ./paths/controllers.yaml#/clusters
   /api/v1/placements:
     $ref: ./paths/placements.yaml#/placements
+  /api/v1/placements/{placementName}:
+    $ref: ./paths/placements.yaml#/placement
   /controller/v1/enroll:
     $ref: ./paths/controllers.yaml#/enroll
   /controller/v1/poll:
@@ -213,6 +215,8 @@ components:
       $ref: ./components/placements.yaml#/Placement
     PlacementList:
       $ref: ./components/placements.yaml#/PlacementList
+    PlacementDetail:
+      $ref: ./components/placements.yaml#/PlacementDetail
     RunAssignment:
       $ref: ./components/controllers.yaml#/RunAssignment
     CancelRunCommand:

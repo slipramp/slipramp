@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Code, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Badge, Paper, Stack, Table, Text } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -36,7 +36,6 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 
   return {
     available: result.data !== undefined,
-    configurationChecksum: result.data?.configurationChecksum,
     error: result.error?.detail ?? result.error?.title,
     page,
     placements: result.data?.items ?? [],
@@ -51,17 +50,6 @@ export default function Placements({ loaderData }: Route.ComponentProps) {
         description="Sanitized execution configuration and Controller connectivity currently loaded by the Server."
         title="Placements"
       />
-
-      {loaderData.configurationChecksum ? (
-        <Paper p="md" withBorder>
-          <Stack gap={4}>
-            <Text c="dimmed" size="xs" tt="uppercase">
-              Effective configuration checksum
-            </Text>
-            <Code style={{ overflowWrap: "anywhere" }}>{loaderData.configurationChecksum}</Code>
-          </Stack>
-        </Paper>
-      ) : null}
 
       {!loaderData.available ? (
         <Alert color="red" title="Placements unavailable">
@@ -89,16 +77,14 @@ export default function Placements({ loaderData }: Route.ComponentProps) {
 function PlacementTable({ placements }: Readonly<{ placements: Placement[] }>) {
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={980} type="native">
+      <Table.ScrollContainer minWidth={680} type="native">
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Placement</Table.Th>
-              <Table.Th>Destination</Table.Th>
+              <Table.Th>Cluster</Table.Th>
               <Table.Th>Controller</Table.Th>
-              <Table.Th>Service account</Table.Th>
-              <Table.Th>Defaults</Table.Th>
-              <Table.Th>Credentials</Table.Th>
+              <Table.Th>Active Targets</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -116,40 +102,22 @@ function PlacementRow({ placement }: Readonly<{ placement: Placement }>) {
   return (
     <Table.Tr>
       <Table.Td>
-        <Stack gap={0}>
-          <Text fw={650}>{placement.name}</Text>
-          {placement.targetCount > 0 ? (
-            <Anchor
-              component={Link}
-              size="xs"
-              to={`/targets?placement=${encodeURIComponent(placement.name)}`}
-            >
-              {placement.targetCount} Target{placement.targetCount === 1 ? "" : "s"}
-            </Anchor>
-          ) : (
-            <Text c="dimmed" size="xs">
-              No active Targets
-            </Text>
-          )}
-        </Stack>
+        <Anchor component={Link} fw={650} to={`/placements/${encodeURIComponent(placement.name)}`}>
+          {placement.name}
+        </Anchor>
       </Table.Td>
       <Table.Td>
-        <Stack gap={0}>
-          {placement.controllerLastSeenAt ? (
-            <Anchor
-              component={Link}
-              fw={600}
-              to={`/clusters/${encodeURIComponent(placement.cluster)}`}
-            >
-              {placement.cluster}
-            </Anchor>
-          ) : (
-            <Text fw={600}>{placement.cluster}</Text>
-          )}
-          <Text c="dimmed" ff="monospace" size="xs">
-            {placement.namespace}
-          </Text>
-        </Stack>
+        {placement.controllerLastSeenAt ? (
+          <Anchor
+            component={Link}
+            fw={600}
+            to={`/clusters/${encodeURIComponent(placement.cluster)}`}
+          >
+            {placement.cluster}
+          </Anchor>
+        ) : (
+          <Text fw={600}>{placement.cluster}</Text>
+        )}
       </Table.Td>
       <Table.Td>
         <Stack align="flex-start" gap={2}>
@@ -169,20 +137,10 @@ function PlacementRow({ placement }: Readonly<{ placement: Placement }>) {
         </Stack>
       </Table.Td>
       <Table.Td>
-        <Code>{placement.serviceAccount}</Code>
-      </Table.Td>
-      <Table.Td>
-        <PlacementDefaults placement={placement} />
-      </Table.Td>
-      <Table.Td>
-        {placement.credentialNames.length > 0 ? (
-          <Group gap={4} wrap="wrap">
-            {placement.credentialNames.map((name) => (
-              <Badge color="gray" key={name} variant="light">
-                {name}
-              </Badge>
-            ))}
-          </Group>
+        {placement.targetCount > 0 ? (
+          <Anchor component={Link} to={`/targets?placement=${encodeURIComponent(placement.name)}`}>
+            {placement.targetCount} Target{placement.targetCount === 1 ? "" : "s"}
+          </Anchor>
         ) : (
           <Text c="dimmed" size="sm">
             None
@@ -191,37 +149,4 @@ function PlacementRow({ placement }: Readonly<{ placement: Placement }>) {
       </Table.Td>
     </Table.Tr>
   );
-}
-
-function PlacementDefaults({ placement }: Readonly<{ placement: Placement }>) {
-  const requests = resourceValues("requests", placement.resources.requests);
-  const limits = resourceValues("limits", placement.resources.limits);
-  if (!placement.timeout && requests.length === 0 && limits.length === 0) {
-    return (
-      <Text c="dimmed" size="sm">
-        None
-      </Text>
-    );
-  }
-
-  return (
-    <Stack gap={1}>
-      {placement.timeout ? (
-        <Text size="xs">
-          Timeout <Code>{placement.timeout}</Code>
-        </Text>
-      ) : null}
-      {[...requests, ...limits].map((value) => (
-        <Text ff="monospace" key={value} size="xs">
-          {value}
-        </Text>
-      ))}
-    </Stack>
-  );
-}
-
-function resourceValues(kind: "limits" | "requests", values: Record<string, string>) {
-  return Object.entries(values)
-    .toSorted(([left], [right]) => left.localeCompare(right))
-    .map(([name, value]) => `${kind} ${name}=${value}`);
 }

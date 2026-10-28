@@ -79,12 +79,14 @@ Cluster, namespace, effective service account, timeout and resource defaults,
 logical credential source names, Controller connectivity, last contact, and a
 checksum of the effective configuration loaded by the Server. It also counts
 active Targets by effective Action Placement and links to the matching Target
-inventory. The inventory excludes Secret references and arbitrary pod
-configuration. Static deployment validation can prove that a Placement offers
-catalog credential names and resource bounds; it deliberately cannot prove that
-the referenced Kubernetes objects or permissions exist. Remaining work must
-preserve the Server's lack of Kubernetes credentials and direct Kubernetes API
-access:
+inventory. A focused Placement detail page carries the lower-level execution
+defaults, credential names, last contact, and checksum while the index remains
+an operational overview. The inventory excludes Secret references and arbitrary
+pod configuration. Static deployment validation can prove that a Placement
+offers catalog credential names and resource bounds; it deliberately cannot
+prove that the referenced Kubernetes objects or permissions exist. Remaining
+work must preserve the Server's lack of Kubernetes credentials and direct
+Kubernetes API access:
 
 - [ ] Derive catalog-aware Runtime credential compatibility from current
       accepted revisions. Show whether every required logical credential is

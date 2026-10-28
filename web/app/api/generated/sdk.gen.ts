@@ -74,6 +74,9 @@ import type {
   GetInboxData,
   GetInboxErrors,
   GetInboxResponses,
+  GetPlacementData,
+  GetPlacementErrors,
+  GetPlacementResponses,
   GetPromotionData,
   GetPromotionErrors,
   GetPromotionResponses,
@@ -681,6 +684,31 @@ export const listPlacements = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/placements",
+    ...options,
+  });
+
+/**
+ * Get a configured execution Placement
+ *
+ * Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+ */
+export const getPlacement = <ThrowOnError extends boolean = false>(
+  options: Options<GetPlacementData, ThrowOnError>,
+): RequestResult<GetPlacementResponses, GetPlacementErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetPlacementResponses, GetPlacementErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/placements/{placementName}",
     ...options,
   });
 
