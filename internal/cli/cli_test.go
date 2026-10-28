@@ -46,6 +46,9 @@ func TestCommandTreeInvocationFailures(t *testing.T) {
 		{name: "unknown command", args: []string{"launch"}, message: `unknown command "launch"`},
 		{name: "missing Run command", args: []string{"run"}, message: "run requires"},
 		{name: "missing Run ID", args: []string{"run", "get"}, message: "exactly one Run ID is required"},
+		{name: "missing Target command", args: []string{"target"}, message: "target requires"},
+		{name: "missing Target ID", args: []string{"target", "get"}, message: "exactly one Target ID is required"},
+		{name: "missing Target Action", args: []string{"target", "explain", testTargetID}, message: "requires TARGET_ID ACTION"},
 		{name: "missing Artifact command", args: []string{"artifact"}, message: "artifact requires"},
 	}
 	for _, test := range tests {

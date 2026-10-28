@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/cli"
 )
 
@@ -127,4 +129,69 @@ func TestRunListRejectsInvalidFilters(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRunListAllPages(t *testing.T) {
+	t.Parallel()
+
+	var requestsMu sync.Mutex
+	offsets := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet || request.URL.Path != "/api/v1/runs" {
+			http.NotFound(writer, request)
+
+			return
+		}
+		offset := request.URL.Query().Get("offset")
+		requestsMu.Lock()
+		offsets = append(offsets, offset)
+		requestsMu.Unlock()
+		items := []map[string]any{}
+		switch offset {
+		case "1":
+			items = append(items,
+				runListResponse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203"),
+				runListResponse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1206"),
+			)
+		case "3":
+			items = append(items, runListResponse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1207"))
+		default:
+			t.Errorf("unexpected offset %q", offset)
+		}
+		writeJSON(t, writer, http.StatusOK, map[string]any{
+			"items": items, "total": 4, "limit": 2, "offset": json.Number(offset),
+		})
+	}))
+	defer server.Close()
+
+	code, output, stderr := runRemoteApp(
+		t,
+		context.Background(),
+		server,
+		"run", "list", "--all", "--limit", "2", "--offset", "1", "--format", "json",
+	)
+	if code != cli.ExitValid || stderr != "" {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	var list api.RunList
+	if err := json.Unmarshal([]byte(output), &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Items) != 3 || list.Items[0].ID.String() != testRunID ||
+		list.Items[2].ID.String() != "018f90ff-9fd8-7b5f-b7e1-f32ff54c1207" ||
+		list.Total != 4 || list.Limit != 2 || list.Offset != 1 {
+		t.Errorf("Run list = %#v", list)
+	}
+	requestsMu.Lock()
+	defer requestsMu.Unlock()
+	if strings.Join(offsets, ",") != "1,3" {
+		t.Errorf("offsets = %v, want [1 3]", offsets)
+	}
+}
+
+func runListResponse(id string) map[string]any {
+	response := runResponse("running", nil)
+	response["id"] = id
+
+	return response
 }

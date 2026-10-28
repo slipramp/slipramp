@@ -11,18 +11,24 @@ It then verifies the accepted baseline end to end:
 - repository registration, authenticated refresh, and catalog indexing;
 - OIDC administrator login through Dex followed by product API authentication
   with a key created through the authenticated management API;
+- the built `slipramp` binary discovering every paginated Target, reading a
+  durable Target, and explaining an Action against Server Placement defaults;
 - complete operational Inbox projection through the Web and generated API,
   including per-Principal acknowledgement isolation, persistence across a Web
   restart, decision preservation, and recurrence after Controller recovery;
-- idempotent manual Run creation and exact-commit checkout;
+- typed, idempotent manual Run creation, waiting, inspection, paginated listing,
+  exact reruns, durable log streaming, and exact-commit checkout through the CLI;
 - review-required Git Runs remaining undispatched until approval, approved Runs
   executing their exact accepted commit, rejected Runs finishing as canceled
-  without a Job, immutable comments reaching the API and Web, pending-review
-  filtering, and review-only authorization independent from Run writes;
-- preview logs and a declared plan artifact downloaded through the web process;
-- promotion of that plan into an apply Run pinned to its commit and catalog
-  revision;
-- default per-Target serialization plus queued and running cancellation;
+  without a Job, immutable CLI-submitted comments reaching the API and Web,
+  CLI pending-review filtering, and review-only authorization independent from
+  Run writes;
+- preview logs streamed and a declared plan Artifact listed, downloaded, and
+  digest-verified through the CLI;
+- promotion of that plan through CLI Artifact input selection into an apply Run
+  pinned to its commit and catalog revision;
+- default per-Target serialization plus CLI queued and running cancellation,
+  including the unsuccessful terminal-wait exit contract;
 - controller and Server restart recovery while Runs are active;
 - automatic Kargo Promotion approval without a preparation Run;
 - operator-started Kargo Promotion creation through Controller materialization
@@ -43,8 +49,9 @@ controllers or exercise their target-branch push and reconciliation. Those
 behaviors remain part of operational cutover acceptance.
 
 The cluster and all generated SSH keys are deleted when the test exits. Run it
-from the repository root with Docker, kubectl, curl, Git, jq, and `ssh-keygen`
-available. The Task workflow installs pinned kind and Helm binaries:
+from the repository root with Docker, Go, kubectl, curl, Git, jq, and
+`ssh-keygen` available. The Task workflow installs pinned kind and Helm
+binaries:
 
 ```console
 task acceptance:kind
@@ -76,5 +83,5 @@ kubectl binary can be overridden with the `SLIPRAMP_ACCEPTANCE_*`,
 environment variables used near the top of
 [`kind-acceptance.sh`](../../../scripts/e2e/kind-acceptance.sh).
 
-The `Checks` GitHub Actions workflow runs the same task for pushes to `main`,
-pull requests, and manual workflow dispatches.
+The suite remains an explicit local task rather than part of the hosted `Checks`
+workflow.

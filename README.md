@@ -162,8 +162,11 @@ export SLIPRAMP_API_KEY='replace-with-an-api-key'
 
 slipramp target list --query storage --limit 25
 slipramp target list --repository-id 018f90ff-9fd8-7b5f-b7e1-f32ff54c1201 --format json
+slipramp target list --all --format json
+slipramp target get 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202
+slipramp target explain 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 preview
 slipramp run list --target-id 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 --phase running
-slipramp run list --review-state pending --format json
+slipramp run list --review-state pending --all --format json
 slipramp run create --target 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 --action preview --set region=us-west-2
 slipramp run create --target 018f90ff-9fd8-7b5f-b7e1-f32ff54c1202 --action apply \
   --input plan=018f90ff-9fd8-7b5f-b7e1-f32ff54c1206
@@ -178,9 +181,18 @@ slipramp artifact download 018f90ff-9fd8-7b5f-b7e1-f32ff54c1206 --output plan.tf
 ```
 
 `target list` also accepts exact `--runtime` and `--placement` filters plus
-`--offset`. `run list` supports the Server's exact Repository, Target, commit,
-input Artifact, Cluster, phase, and review-state filters plus offset pagination.
-`run create` requires an exact Target UUID and Action name. Its repeatable
+`--offset`. `target get` returns a durable active or archived Target and its most
+recently accepted definition. `target explain` returns the effective Action
+contract resolved against the Server's current Placement configuration;
+required parameters may remain omitted for inspection, and parameter simulation
+stays with the offline `catalog explain` command. `run list` supports the
+Server's exact Repository, Target, commit, input Artifact, Cluster, phase, and
+review-state filters plus offset pagination. Both list commands accept `--all`
+to fetch every matching record at or after `--offset`; `--limit` remains the
+request page size. Aggregate JSON retains the normal list envelope with all
+fetched records in `items`, the page size in `limit`, the initial offset, and the
+Server's matching total. `run create` requires an exact Target UUID and Action
+name. Its repeatable
 `--set NAME=VALUE` flags use the same typed parsing, required-field, enum, and
 normalization rules as catalog explanation and Server Run creation. Repeatable
 `--input NAME=ARTIFACT_UUID` flags select exact retained Artifact inputs; the
@@ -199,11 +211,12 @@ declared outputs for one Run. `artifact download` requires `--output PATH`, or
 use mode `0600`, verify the Server's SHA-256 digest, and remove partial or invalid
 outputs.
 
-Text is the default for `target list`, `run list`, `run create`, `run get`,
-`run wait`, `run rerun`, both Run review decisions, `run cancel`, and
-`artifact list`; each accepts `--format json` to emit the generated API response
-shape. Structured and text results go to standard output. Errors and operational
-diagnostics go to standard error. `run wait` polls until the Run finishes, prints
+Text is the default for `target list`, `target get`, `target explain`, `run
+list`, `run create`, `run get`, `run wait`, `run rerun`, both Run review
+decisions, `run cancel`, and `artifact list`; each accepts `--format json` to
+emit the generated API response shape. Structured and text results go to
+standard output. Errors and operational diagnostics go to standard error. `run
+wait` polls until the Run finishes, prints
 its canonical terminal state, and exits distinctly when the outcome is not
 `succeeded`. It waits without a deadline unless `--timeout` is set;
 `--poll-interval` defaults to one second. `run logs` is intentionally

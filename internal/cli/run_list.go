@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/cli/remote"
 )
 
 var fullCommitSHA = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
@@ -27,6 +28,7 @@ type runListOptions struct {
 	cluster         string
 	phase           string
 	reviewState     string
+	all             bool
 	limit           int
 	offset          int
 }
@@ -61,7 +63,8 @@ func (a App) newRunListCommand(exitCode *int) *cobra.Command {
 		"",
 		"review state: not-required, pending, approved, or rejected",
 	)
-	flags.IntVar(&options.limit, "limit", 25, "maximum number of Runs")
+	flags.BoolVar(&options.all, "all", false, "retrieve every matching Run at or after --offset")
+	flags.IntVar(&options.limit, "limit", 25, "maximum number of Runs requested per page")
 	flags.IntVar(&options.offset, "offset", 0, "zero-based result offset")
 	flags.StringVar(&options.format, "format", "text", "output format: text or json")
 
@@ -77,31 +80,68 @@ func (a App) runRunList(options runListOptions) int {
 	if err != nil {
 		return a.invocationError(err.Error())
 	}
-	response, err := client.API.ListRuns(a.commandContext(), &params)
+	list, err := a.loadRunListPage(client, params)
 	if err != nil {
-		return a.remoteError(client.NetworkError("list Runs", err))
+		return a.remoteError(err)
 	}
-	defer func() { _ = response.Body.Close() }()
-	parsed, err := api.ParseListRunsResponse(response)
-	if err != nil {
-		return a.remoteError(client.InvalidResponse("list Runs", err))
-	}
-	if parsed.StatusCode() != http.StatusOK || parsed.JSON200 == nil {
-		return a.remoteError(client.ResponseError("list Runs", parsed.StatusCode(), parsed.Body))
+	if options.all {
+		items, total, collectErr := collectListPages(options.offset, func(offset int) (listPage[api.Run], error) {
+			if offset == options.offset {
+				return runListPage(list), nil
+			}
+			offset32 := int32(offset)
+			params.Offset = &offset32
+			page, loadErr := a.loadRunListPage(client, params)
+			if loadErr != nil {
+				return listPage[api.Run]{}, loadErr
+			}
+
+			return runListPage(page), nil
+		})
+		if collectErr != nil {
+			if isInvalidListPage(collectErr) {
+				return a.remoteError(client.InvalidResponse("list Runs", collectErr))
+			}
+
+			return a.remoteError(collectErr)
+		}
+		list.Items = items
+		list.Total = int(total)
 	}
 
 	if options.format == "json" {
-		if err := renderRemoteJSON(a.Stdout, parsed.JSON200); err != nil {
+		if err := renderRemoteJSON(a.Stdout, &list); err != nil {
 			return a.internalError("write Run list", err)
 		}
 
 		return ExitValid
 	}
-	if err := renderRunListText(a.Stdout, *parsed.JSON200); err != nil {
+	if err := renderRunListText(a.Stdout, list); err != nil {
 		return a.internalError("write Run list", err)
 	}
 
 	return ExitValid
+}
+
+func (a App) loadRunListPage(client *remote.Client, params api.ListRunsParams) (api.RunList, error) {
+	response, err := client.API.ListRuns(a.commandContext(), &params)
+	if err != nil {
+		return api.RunList{}, client.NetworkError("list Runs", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	parsed, err := api.ParseListRunsResponse(response)
+	if err != nil {
+		return api.RunList{}, client.InvalidResponse("list Runs", err)
+	}
+	if parsed.StatusCode() != http.StatusOK || parsed.JSON200 == nil {
+		return api.RunList{}, client.ResponseError("list Runs", parsed.StatusCode(), parsed.Body)
+	}
+
+	return *parsed.JSON200, nil
+}
+
+func runListPage(list api.RunList) listPage[api.Run] {
+	return listPage[api.Run]{items: list.Items, offset: list.Offset, total: int64(list.Total)}
 }
 
 func runListParams(options runListOptions) (api.ListRunsParams, error) {

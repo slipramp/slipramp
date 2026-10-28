@@ -150,6 +150,9 @@ const mascotPoseMetadata = {
   "cowbell-clang": { label: "Cowbell clang", tags: ["leisure"] },
   "chart-rise": { label: "Chart rise", tags: ["slapstick"] },
   "server-hug": { label: "Server hug", tags: ["computers"] },
+  "floppy-disk-insert": { label: "Floppy-disk insert", tags: ["computers"] },
+  "hard-drive-spinup": { label: "Hard-drive spinup", tags: ["computers"] },
+  "pixel-heart-display": { label: "Pixel-heart display", tags: ["computers"] },
   "cargo-loader-triumph": {
     label: "Cargo-loader triumph",
     tags: ["construction", "science-fiction"],

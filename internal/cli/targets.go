@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/slipramp/slipramp/internal/api"
+	"github.com/slipramp/slipramp/internal/cli/remote"
 )
 
 func (a App) newTargetCommand(exitCode *int) *cobra.Command {
@@ -20,10 +21,14 @@ func (a App) newTargetCommand(exitCode *int) *cobra.Command {
 		Use:   "target",
 		Short: "Inspect Targets",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return fmt.Errorf("target requires the list command")
+			return fmt.Errorf("target requires the list, get, or explain command")
 		},
 	}
-	command.AddCommand(a.newTargetListCommand(exitCode))
+	command.AddCommand(
+		a.newTargetListCommand(exitCode),
+		a.newTargetGetCommand(exitCode),
+		a.newTargetExplainCommand(exitCode),
+	)
 
 	return command
 }
@@ -35,6 +40,7 @@ type targetListOptions struct {
 	repositoryID string
 	runtime      string
 	placement    string
+	all          bool
 	limit        int
 	offset       int
 }
@@ -61,7 +67,8 @@ func (a App) newTargetListCommand(exitCode *int) *cobra.Command {
 	flags.StringVar(&options.repositoryID, "repository-id", "", "exact Repository UUID")
 	flags.StringVar(&options.runtime, "runtime", "", "exact target-level Runtime")
 	flags.StringVar(&options.placement, "placement", "", "exact target-level Placement")
-	flags.IntVar(&options.limit, "limit", 25, "maximum number of Targets")
+	flags.BoolVar(&options.all, "all", false, "retrieve every matching Target at or after --offset")
+	flags.IntVar(&options.limit, "limit", 25, "maximum number of Targets requested per page")
 	flags.IntVar(&options.offset, "offset", 0, "zero-based result offset")
 	flags.StringVar(&options.format, "format", "text", "output format: text or json")
 
@@ -105,31 +112,68 @@ func (a App) runTargetList(options targetListOptions) int {
 	if err != nil {
 		return a.invocationError(err.Error())
 	}
-	response, err := client.API.ListTargets(a.commandContext(), &params)
+	list, err := a.loadTargetListPage(client, params)
 	if err != nil {
-		return a.remoteError(client.NetworkError("list Targets", err))
+		return a.remoteError(err)
 	}
-	defer func() { _ = response.Body.Close() }()
-	parsed, err := api.ParseListTargetsResponse(response)
-	if err != nil {
-		return a.remoteError(client.InvalidResponse("list Targets", err))
-	}
-	if parsed.StatusCode() != http.StatusOK || parsed.JSON200 == nil {
-		return a.remoteError(client.ResponseError("list Targets", parsed.StatusCode(), parsed.Body))
+	if options.all {
+		items, total, collectErr := collectListPages(options.offset, func(offset int) (listPage[api.TargetSummary], error) {
+			if offset == options.offset {
+				return targetListPage(list), nil
+			}
+			offset32 := int32(offset)
+			params.Offset = &offset32
+			page, loadErr := a.loadTargetListPage(client, params)
+			if loadErr != nil {
+				return listPage[api.TargetSummary]{}, loadErr
+			}
+
+			return targetListPage(page), nil
+		})
+		if collectErr != nil {
+			if isInvalidListPage(collectErr) {
+				return a.remoteError(client.InvalidResponse("list Targets", collectErr))
+			}
+
+			return a.remoteError(collectErr)
+		}
+		list.Items = items
+		list.Total = total
 	}
 
 	if options.format == "json" {
-		if err := renderRemoteJSON(a.Stdout, parsed.JSON200); err != nil {
+		if err := renderRemoteJSON(a.Stdout, &list); err != nil {
 			return a.internalError("write Target list", err)
 		}
 
 		return ExitValid
 	}
-	if err := renderTargetListText(a.Stdout, *parsed.JSON200); err != nil {
+	if err := renderTargetListText(a.Stdout, list); err != nil {
 		return a.internalError("write Target list", err)
 	}
 
 	return ExitValid
+}
+
+func (a App) loadTargetListPage(client *remote.Client, params api.ListTargetsParams) (api.TargetSummaryList, error) {
+	response, err := client.API.ListTargets(a.commandContext(), &params)
+	if err != nil {
+		return api.TargetSummaryList{}, client.NetworkError("list Targets", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	parsed, err := api.ParseListTargetsResponse(response)
+	if err != nil {
+		return api.TargetSummaryList{}, client.InvalidResponse("list Targets", err)
+	}
+	if parsed.StatusCode() != http.StatusOK || parsed.JSON200 == nil {
+		return api.TargetSummaryList{}, client.ResponseError("list Targets", parsed.StatusCode(), parsed.Body)
+	}
+
+	return *parsed.JSON200, nil
+}
+
+func targetListPage(list api.TargetSummaryList) listPage[api.TargetSummary] {
+	return listPage[api.TargetSummary]{items: list.Items, offset: list.Offset, total: list.Total}
 }
 
 func renderTargetListText(output io.Writer, list api.TargetSummaryList) error {

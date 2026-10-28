@@ -92,6 +92,9 @@ export type ExecutionAnimationPose =
   | "cowbell-clang"
   | "chart-rise"
   | "server-hug"
+  | "floppy-disk-insert"
+  | "hard-drive-spinup"
+  | "pixel-heart-display"
   | "cargo-loader-triumph"
   | "guitar-power-chord"
   | "oven-mitt-triumph"
@@ -216,6 +219,9 @@ export const executionAnimationPosePools = {
     "cowbell-clang",
     "chart-rise",
     "server-hug",
+    "floppy-disk-insert",
+    "hard-drive-spinup",
+    "pixel-heart-display",
     "cargo-loader-triumph",
     "guitar-power-chord",
     "oven-mitt-triumph",

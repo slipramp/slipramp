@@ -204,14 +204,16 @@ parameters but does not select artifact contents or create a Run. Both catalog
 commands remain offline: no Server/Kubernetes access, image inspection, Secret
 lookup, Job rendering, or local Action execution.
 
-The CLI also provides a focused remote operator boundary for listing active
-Targets; listing, creating, inspecting, following, waiting for, rerunning,
-reviewing, and canceling Runs; and listing and downloading Artifacts. It uses the
-generated OpenAPI client and models for ordinary requests, with one small
-handwritten SSE reader for log reconnection and byte decoding. The Server URL
-comes from a command flag or `SLIPRAMP_URL`; the API key comes only from
-`SLIPRAMP_API_KEY` and is sent as a Bearer credential. TLS uses the system trust
-store and the client offers no insecure mode or persisted context.
+The CLI also provides a focused remote operator boundary for listing active and
+inspecting durable Targets; explaining active Actions against the Server's
+current Placement configuration; listing, creating, inspecting, following,
+waiting for, rerunning, reviewing, and canceling Runs; and listing and
+downloading Artifacts. It uses the generated OpenAPI client and models for
+ordinary requests, with one small handwritten SSE reader for log reconnection
+and byte decoding. The Server URL comes from a command flag or `SLIPRAMP_URL`;
+the API key comes only from `SLIPRAMP_API_KEY` and is sent as a Bearer
+credential. TLS uses the system trust store and the client offers no insecure
+mode or persisted context.
 
 Cobra owns the CLI command tree, help, argument validation, and flag parsing.
 Command construction is explicit and receives the `App` dependency container;
@@ -230,21 +232,31 @@ available through the remote CLI contract. The Server remains authoritative,
 resolves the producing revision, and validates input retention, provenance,
 compatibility, completeness, and parameter defaults.
 
+Remote Target explanation returns the Server's authoritative effective Action
+contract with current Placement defaults and references. It allows required
+parameters to remain omitted for inspection and does not accept parameter
+simulation; Run creation remains the strict parameter-validation boundary.
+
 Exact and latest reruns require an explicit mode and use the Server's ordinary
 idempotent rerun boundary. Run review approval and rejection use the dedicated
 review endpoint and optional normalized immutable comments. These mutations,
 ordinary reads, and cancellation return the canonical generated Run
 representation; text rendering is only a terminal projection of that response.
 
-Run listing exposes the Server's exact Repository, Target, commit, input
-Artifact, Cluster, phase, and review-state filters with offset pagination. Text
-output preserves phase, outcome, review state, and observation freshness as
-separate facts; JSON returns the generated `RunList` unchanged. Run waiting
-polls the ordinary generated Run read until the canonical record is finished,
-with an optional client-side timeout and a configurable poll interval. It writes
-the terminal Run before returning success for `succeeded` or a dedicated
-unsuccessful-Run exit code for `failed`, `canceled`, and `timed-out`. Client
-cancellation interrupts both the request and the interval wait.
+Target and Run listing support explicit offset pagination. Their opt-in `--all`
+mode follows every page at or after the requested offset using `--limit` as the
+page size, then renders one aggregate result. Aggregate JSON retains the
+generated list envelope: `items` contains every fetched record, `limit` is the
+request page size, `offset` is the initial offset, and `total` is the Server's
+matching total. Run listing exposes the Server's exact Repository, Target,
+commit, input Artifact, Cluster, phase, and review-state filters. Text output
+preserves phase, outcome, review state, and observation freshness as separate
+facts; ordinary single-page JSON returns the generated `RunList` unchanged. Run
+waiting polls the ordinary generated Run read until the canonical record is
+finished, with an optional client-side timeout and a configurable poll interval.
+It writes the terminal Run before returning success for `succeeded` or a
+dedicated unsuccessful-Run exit code for `failed`, `canceled`, and `timed-out`.
+Client cancellation interrupts both the request and the interval wait.
 
 Artifact listing returns the generated Artifact metadata for one exact Run.
 Downloads require an explicit output path or standard output, stream the raw
@@ -1188,8 +1200,9 @@ awaiting review return to the waiting selection.
 Terminal mascots appear only on Run and Promotion detail pages: successful Runs choose a
 deterministic celebration pose, including an affectionate server hug or a guitar
 power chord with a broad strum, joyful singing expression, and golden sound
-bursts, a raised oven-mitt triumph, a controlled parachute landing, or a formal
-flag salute. Working variations
+bursts, a floppy-disk insertion, a hard-drive spinup, a pixel heart on a CRT,
+a raised oven-mitt triumph, a controlled parachute landing, or a formal flag
+salute. Working variations
 include dough flipping, dough kneading, cake piping, grillmaster flipping, wok
 tossing, kebab turning, checking an inert shoulder-launcher training replica,
 reading a consistently oriented field map, scanning through a handheld rangefinder,
@@ -1286,9 +1299,11 @@ Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.
 Versions are pinned and warnings fail. Go uses golangci-lint v2; frontend uses
 Oxlint and Oxfmt. Disposable kind acceptance remains available through the
-local task but is not run in hosted CI. It covers execution, operator-started
-Kargo creation through real Controller materialization and callback hydration,
-and automatic/guarded preparation through real artifact uploads, including
-empty Git diffs. Minimal Stage and Promotion CRDs exercise the Kubernetes API
-boundary without installing Kargo controllers; broader failure and live cutover
-coverage remains on the [roadmap](./ROADMAP.md).
+local task but is not run in hosted CI. It exercises the built CLI across
+Target discovery and explanation, Run creation and control, log streaming,
+Artifact transfer, pagination, reruns, and review decisions. It also covers
+operator-started Kargo creation through real Controller materialization and
+callback hydration, and automatic/guarded preparation through real artifact
+uploads, including empty Git diffs. Minimal Stage and Promotion CRDs exercise
+the Kubernetes API boundary without installing Kargo controllers; broader
+failure and live cutover coverage remains on the [roadmap](./ROADMAP.md).

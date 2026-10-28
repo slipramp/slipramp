@@ -24,6 +24,7 @@ web_url="http://127.0.0.1:$web_port"
 oidc_host=acceptance-dex.slipramp-system.svc.cluster.local
 product_api_key=
 temporary_directory=$(mktemp -d "${TMPDIR:-/tmp}/slipramp-kind-acceptance.XXXXXX")
+cli_bin="$temporary_directory/slipramp"
 product_cookie_jar="$temporary_directory/oidc-cookies.txt"
 cluster_created=false
 server_forward_pid=
@@ -98,7 +99,7 @@ require_command() {
   fi
 }
 
-for required_command in curl docker git jq ssh-keygen "$kubectl_bin"; do
+for required_command in curl docker git go jq ssh-keygen "$kubectl_bin"; do
   require_command "$required_command"
 done
 if [[ ! -x "$kind_bin" ]]; then
@@ -219,6 +220,18 @@ api_get_with_key() {
   curl --fail --silent --show-error \
     -H "Authorization: Bearer $api_key" \
     "$server_url$path"
+}
+
+run_cli() {
+  local api_key=$1
+  shift
+  SLIPRAMP_URL="$server_url" \
+    SLIPRAMP_API_KEY="$api_key" \
+    "$cli_bin" "$@"
+}
+
+run_product_cli() {
+  run_cli "$product_api_key" "$@"
 }
 
 create_service_account() {
@@ -464,13 +477,6 @@ wait_for_run_outcome() {
   return 1
 }
 
-cancel_run() {
-  local run_id=$1
-  curl --fail --silent --show-error -X POST \
-    -H "Authorization: Bearer $product_api_key" \
-    "$server_url/api/v1/runs/$run_id/cancel" >/dev/null
-}
-
 run_review_request_body() {
   local decision=$1
   local comment=${2:-}
@@ -478,21 +484,6 @@ run_review_request_body() {
     --arg decision "$decision" \
     --arg comment "$comment" \
     '{decision: $decision} + if $comment == "" then {} else {comment: $comment} end'
-}
-
-decide_run_review() {
-  local run_id=$1
-  local decision=$2
-  local comment=${3:-}
-  local api_key=${4:-$product_api_key}
-  local body
-  body=$(run_review_request_body "$decision" "$comment")
-
-  curl --fail-with-body --silent --show-error \
-    -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $api_key" \
-    --data "$body" \
-    "$server_url/api/v1/runs/$run_id/review"
 }
 
 update_repository_head() {
@@ -545,6 +536,30 @@ assert_log_contains() {
   grep -Fq "$pattern" "$log_file"
 }
 
+assert_cli_wait_outcome() {
+  local run_id=$1
+  local expected_outcome=$2
+  local output_file="$temporary_directory/$run_id.cli-wait.json"
+  local status
+
+  if run_product_cli run wait "$run_id" \
+    --timeout "${timeout_seconds}s" \
+    --poll-interval 250ms \
+    --format json >"$output_file"; then
+    status=0
+  else
+    status=$?
+  fi
+  if [[ "$status" -ne 6 ]]; then
+    printf 'CLI wait for Run %s exited %s, expected 6\n' "$run_id" "$status" >&2
+    cat "$output_file" >&2
+    return 1
+  fi
+  jq -e --arg id "$run_id" --arg outcome "$expected_outcome" '
+    .id == $id and .phase == "finished" and .outcome == $outcome
+  ' "$output_file" >/dev/null
+}
+
 wait_for_job_deletion() {
   local run_id=$1
   local deadline=$((SECONDS + timeout_seconds))
@@ -561,6 +576,10 @@ wait_for_job_deletion() {
   printf 'execution Job for Run %s was not deleted\n' "$run_id" >&2
   return 1
 }
+
+log "building the Slipramp CLI"
+go -C "$repository_root" build -trimpath -o "$cli_bin" ./cmd/slipramp
+"$cli_bin" version | grep -Fxq 'slipramp dev'
 
 log "building Slipramp acceptance images"
 for target in acceptance-git checkout controller harness kargo-tools server web; do
@@ -798,29 +817,94 @@ jq -e --arg commit "$fixture_commit" '
   any(.targets[]; .metadata.name == "acceptance") and
   any(.runtimes[]; .metadata.name == "acceptance")
 ' <<<"$catalog_response" >/dev/null
-target_id=$(api_get "/api/v1/targets?repositoryId=$repository_id&limit=100" |
-  jq -er '.items[] | select(.name == "acceptance") | .id')
+target_list=$(run_product_cli target list \
+  --repository-id "$repository_id" \
+  --all \
+  --limit 1 \
+  --format json)
+jq -e '
+  .limit == 1 and .offset == 0 and .total == 2 and
+  ([.items[].name] | sort) == ["acceptance", "kargo-promotions"]
+' <<<"$target_list" >/dev/null
+target_id=$(jq -er '.items[] | select(.name == "acceptance") | .id' \
+  <<<"$target_list")
 
-log "running preview and checking idempotency"
+target_response=$(run_product_cli target get "$target_id" --format json)
+jq -e \
+  --arg id "$target_id" \
+  --arg repository "$repository_id" \
+  --arg commit "$fixture_commit" '
+    .id == $id and
+    .repositoryId == $repository and
+    .catalogCommit.sha == $commit and
+    .definition.metadata.name == "acceptance" and
+    .definition.spec.runtime == "acceptance" and
+    .definition.spec.placement == "acceptance" and
+    (.definition.spec.actions | has("preview"))
+  ' <<<"$target_response" >/dev/null
+
+target_explanation=$(run_product_cli target explain \
+  "$target_id" preview --format json)
+jq -e '
+  .schemaVersion == 1 and
+  .validationLevel == "deployment" and
+  .target.value.name == "acceptance" and
+  .action.value == "preview" and
+  .placement.configurationAvailable and
+  .placement.name.value == "acceptance" and
+  .placement.cluster.value == "kind" and
+  any(.parameters[]; .name == "message" and (.supplied | not))
+' <<<"$target_explanation" >/dev/null
+
+log "running preview through the CLI and checking idempotency"
 preview_parameters='{"message":"hello-kind"}'
-preview_run=$(create_run preview "$preview_parameters" '{}' acceptance-preview)
-preview_retry=$(create_run preview "$preview_parameters" '{}' acceptance-preview)
-test "$preview_run" = "$preview_retry"
-wait_for_run_outcome "$preview_run" succeeded
-preview_response=$(api_get "/api/v1/runs/$preview_run")
-jq -e --arg commit "$fixture_commit" '.commit.sha == $commit' \
-  <<<"$preview_response" >/dev/null
+preview_response=$(run_product_cli run create \
+  --target "$target_id" \
+  --action preview \
+  --set message=hello-kind \
+  --idempotency-key acceptance-preview \
+  --format json)
+preview_run=$(jq -er '.id' <<<"$preview_response")
+preview_retry_response=$(run_product_cli run create \
+  --target "$target_id" \
+  --action preview \
+  --set message=hello-kind \
+  --idempotency-key acceptance-preview \
+  --format json)
+test "$preview_run" = "$(jq -er '.id' <<<"$preview_retry_response")"
+preview_wait_response=$(run_product_cli run wait "$preview_run" \
+  --timeout "${timeout_seconds}s" \
+  --poll-interval 250ms \
+  --format json)
+jq -e --arg id "$preview_run" '
+  .id == $id and .phase == "finished" and .outcome == "succeeded"
+' <<<"$preview_wait_response" >/dev/null
+preview_response=$(run_product_cli run get "$preview_run" --format json)
+jq -e --arg commit "$fixture_commit" '
+  .commit.sha == $commit and .parameters.message == "hello-kind"
+' <<<"$preview_response" >/dev/null
 
-plan_id=$(artifact_id "$preview_run" plan)
-download_artifact "$plan_id" "$temporary_directory/plan.txt"
+preview_artifacts=$(run_product_cli artifact list "$preview_run" --format json)
+plan_id=$(jq -er '.items[] | select(.name == "plan") | .id' \
+  <<<"$preview_artifacts")
+run_product_cli artifact download "$plan_id" \
+  --output "$temporary_directory/plan.txt"
 test "$(cat "$temporary_directory/plan.txt")" = 'plan:hello-kind'
-assert_log_contains "$preview_run" 'acceptance preview complete: hello-kind'
+run_product_cli run logs "$preview_run" \
+  >"$temporary_directory/$preview_run.cli.log"
+grep -Fq 'acceptance preview complete: hello-kind' \
+  "$temporary_directory/$preview_run.cli.log"
 
-log "applying the exact preview artifact"
-apply_inputs=$(jq -cn --arg id "$plan_id" '{plan: $id}')
-apply_run=$(create_run apply '{}' "$apply_inputs" acceptance-apply)
+log "applying the exact preview artifact through the CLI"
+apply_response=$(run_product_cli run create \
+  --target "$target_id" \
+  --action apply \
+  --input "plan=$plan_id" \
+  --idempotency-key acceptance-apply \
+  --format json)
+apply_run=$(jq -er '.id' <<<"$apply_response")
 wait_for_run_outcome "$apply_run" succeeded
-apply_response=$(api_get "/api/v1/runs/$apply_run")
+apply_response=$(run_product_cli run get "$apply_run" --format json)
 jq -e \
   --arg commit "$(jq -r '.commit.sha' <<<"$preview_response")" \
   --arg revision "$(jq -r '.catalogRevisionId' <<<"$preview_response")" \
@@ -831,14 +915,40 @@ jq -e \
   ' <<<"$apply_response" >/dev/null
 assert_log_contains "$apply_run" 'acceptance apply consumed: plan:hello-kind'
 
+cli_run_list=$(run_product_cli run list \
+  --target-id "$target_id" \
+  --all \
+  --limit 1 \
+  --format json)
+jq -e --arg preview "$preview_run" --arg apply "$apply_run" '
+  .limit == 1 and .offset == 0 and .total >= 2 and
+  any(.items[]; .id == $preview) and
+  any(.items[]; .id == $apply)
+' <<<"$cli_run_list" >/dev/null
+
+log "rerunning the exact preview through the CLI"
+cli_rerun_response=$(run_product_cli run rerun "$preview_run" \
+  --mode exact \
+  --idempotency-key acceptance-cli-rerun \
+  --format json)
+cli_rerun=$(jq -er '.id' <<<"$cli_rerun_response")
+wait_for_run_outcome "$cli_rerun" succeeded
+assert_log_contains "$cli_rerun" 'acceptance preview complete: hello-kind'
+
 log "testing queued and running cancellation"
 cancel_run_id=$(create_run cancel '{}' '{}' acceptance-running-cancel)
 wait_for_run_phase "$cancel_run_id" running
 queued_run=$(create_run preview "$preview_parameters" '{}' acceptance-queued-cancel)
 wait_for_run_phase "$queued_run" queued
-cancel_run "$queued_run"
+queued_cancel_response=$(run_product_cli run cancel "$queued_run" --format json)
+jq -e --arg id "$queued_run" '.id == $id' \
+  <<<"$queued_cancel_response" >/dev/null
 wait_for_run_outcome "$queued_run" canceled
-cancel_run "$cancel_run_id"
+assert_cli_wait_outcome "$queued_run" canceled
+running_cancel_response=$(run_product_cli run cancel "$cancel_run_id" --format json)
+jq -e --arg id "$cancel_run_id" '
+  .id == $id and (.cancellationRequestedAt != null)
+' <<<"$running_cancel_response" >/dev/null
 wait_for_run_outcome "$cancel_run_id" canceled
 assert_log_contains "$cancel_run_id" 'acceptance cancellation observed'
 wait_for_job_deletion "$cancel_run_id"
@@ -881,6 +991,13 @@ update_repository_head "$approved_review_commit"
 wait_for_repository "$approved_review_commit"
 approved_review_run=$(wait_for_pending_review_run "$approved_review_commit")
 assert_pending_review_not_dispatched "$approved_review_run"
+pending_review_runs=$(run_cli "$review_api_key" run list \
+  --review-state pending \
+  --all \
+  --format json)
+jq -e --arg id "$approved_review_run" '
+  any(.items[]; .id == $id and .review.state == "pending")
+' <<<"$pending_review_runs" >/dev/null
 api_get_with_key "$review_api_key" /api/v1/inbox |
   jq -e --arg id "$approved_review_run" '
     any(.decisions[];
@@ -906,8 +1023,10 @@ assert_post_forbidden \
   "/api/v1/runs/$approved_review_run/review" \
   "$approval_body"
 
-approved_review_response=$(decide_run_review \
-  "$approved_review_run" approved "$approval_comment" "$review_api_key")
+approved_review_response=$(run_cli "$review_api_key" run review approve \
+  "$approved_review_run" \
+  --comment "$approval_comment" \
+  --format json)
 jq -e --arg commit "$approved_review_commit" --arg comment "$approval_comment" '
   .commit.sha == $commit and
   .source.type == "git" and
@@ -930,8 +1049,10 @@ wait_for_repository "$rejected_review_commit"
 rejected_review_run=$(wait_for_pending_review_run "$rejected_review_commit")
 assert_pending_review_not_dispatched "$rejected_review_run"
 rejection_comment="Rejected by the review-only acceptance key."
-rejected_review_response=$(decide_run_review \
-  "$rejected_review_run" rejected "$rejection_comment" "$review_api_key")
+rejected_review_response=$(run_cli "$review_api_key" run review reject \
+  "$rejected_review_run" \
+  --comment "$rejection_comment" \
+  --format json)
 jq -e --arg commit "$rejected_review_commit" --arg comment "$rejection_comment" '
   .commit.sha == $commit and
   .phase == "finished" and
@@ -1012,6 +1133,7 @@ log "kind acceptance passed"
 printf 'Repository commit: %s\n' "$fixture_commit"
 printf 'Preview Run:       %s\n' "$preview_run"
 printf 'Apply Run:         %s\n' "$apply_run"
+printf 'CLI rerun:         %s\n' "$cli_rerun"
 printf 'Canceled Run:      %s\n' "$cancel_run_id"
 printf 'Controller recovery Run: %s\n' "$controller_recovery_run"
 printf 'Server recovery Run:     %s\n' "$server_recovery_run"

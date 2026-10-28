@@ -529,6 +529,24 @@
   animation-duration: 2.8s;
 }
 
+.sprite[data-pose="floppy-disk-insert"] {
+  background-image: url("../assets/slipramp-axolotl-floppy-disk-insert.webp");
+  animation-name: floppy-disk-insert;
+  animation-duration: 2.65s;
+}
+
+.sprite[data-pose="hard-drive-spinup"] {
+  background-image: url("../assets/slipramp-axolotl-hard-drive-spinup.webp");
+  animation-name: hard-drive-spinup;
+  animation-duration: 2.45s;
+}
+
+.sprite[data-pose="pixel-heart-display"] {
+  background-image: url("../assets/slipramp-axolotl-pixel-heart-display.webp");
+  animation-name: pixel-heart-display;
+  animation-duration: 2.9s;
+}
+
 .sprite[data-pose="cargo-loader-triumph"] {
   background-image: url("../assets/slipramp-axolotl-cargo-loader-triumph.webp");
   animation-name: cargo-loader-triumph;
@@ -1354,6 +1372,63 @@
   }
 
   76.785714% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes floppy-disk-insert {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  24.528302% {
+    background-position-x: calc(100% / 3);
+  }
+
+  43.396226% {
+    background-position-x: calc(200% / 3);
+  }
+
+  67.924528% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes hard-drive-spinup {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  24.489796% {
+    background-position-x: calc(100% / 3);
+  }
+
+  42.857143% {
+    background-position-x: calc(200% / 3);
+  }
+
+  65.306122% {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes pixel-heart-display {
+  0%,
+  100% {
+    background-position-x: 0;
+  }
+
+  24.137931% {
+    background-position-x: calc(100% / 3);
+  }
+
+  44.827586% {
+    background-position-x: calc(200% / 3);
+  }
+
+  68.965517% {
     background-position-x: 100%;
   }
 }
