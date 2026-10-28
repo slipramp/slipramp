@@ -76,7 +76,7 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 		inboxRuns[0].Review != run.ReviewStatePending {
 		t.Fatalf("pending Inbox Run = (%#v, %v)", inboxRuns, err)
 	}
-	if _, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(3*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
+	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), baseTime.Add(3*time.Minute)); !errors.Is(err, run.ErrNoRunAssignment) {
 		t.Fatalf("claim pending-review Run error = %v, want no assignment", err)
 	}
 
@@ -89,7 +89,7 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	if _, err := database.CreateRun(ctx, manual, nil); err != nil {
 		t.Fatalf("create later eligible Run: %v", err)
 	}
-	claimedManual, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(5*time.Minute))
+	claimedManual, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), baseTime.Add(5*time.Minute))
 	if err != nil {
 		t.Fatalf("claim later eligible Run: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestRunReviewGitTriggerLifecycleIntegration(t *testing.T) {
 	}); !errors.Is(err, run.ErrReviewConflict) {
 		t.Fatalf("change immutable approval comment: %v", err)
 	}
-	claimedApproved, err := database.ClaimQueuedRun(ctx, "colo", baseTime.Add(9*time.Minute))
+	claimedApproved, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), baseTime.Add(9*time.Minute))
 	if err != nil || claimedApproved.ID != pending.ID {
 		t.Fatalf("claim approved Run = (%#v, %v)", claimedApproved, err)
 	}

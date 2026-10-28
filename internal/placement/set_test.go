@@ -1,7 +1,9 @@
 package placement
 
 import (
+	"regexp"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -56,5 +58,99 @@ func TestNewSetRejectsInvalidPlacement(t *testing.T) {
 	_, err := NewSet(map[string]Config{"Infrastructure": validConfig()})
 	if err == nil {
 		t.Fatal("NewSet() error = nil, want an error")
+	}
+}
+
+func TestSetChecksumIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	first, err := NewSet(map[string]Config{
+		"preview": {
+			ClusterName:  "development",
+			JobNamespace: "previews",
+		},
+		"infrastructure": {
+			ClusterName:        "colo",
+			JobNamespace:       "slipramp-runs",
+			ServiceAccountName: "infrastructure-admin",
+			Timeout:            30 * time.Minute,
+			Resources: ResourceRequirements{
+				Requests: map[string]string{"memory": "128Mi", "cpu": "100m"},
+				Limits:   map[string]string{"memory": "1Gi", "cpu": "1"},
+			},
+			NodeSelector: map[string]string{"region": "west", "pool": "operations"},
+			Credentials: map[string]CredentialSource{
+				"terraform-backend": {SecretRef: SecretReference{Name: "terraform-backend"}},
+				"cloud":             {SecretRef: SecretReference{Name: "cloud-credentials"}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewSet() first error = %v", err)
+	}
+
+	second, err := NewSet(map[string]Config{
+		"infrastructure": {
+			ClusterName:        "colo",
+			JobNamespace:       "slipramp-runs",
+			ServiceAccountName: "infrastructure-admin",
+			Timeout:            30 * time.Minute,
+			Resources: ResourceRequirements{
+				Requests: map[string]string{"cpu": "100m", "memory": "128Mi"},
+				Limits:   map[string]string{"cpu": "1", "memory": "1Gi"},
+			},
+			NodeSelector: map[string]string{"pool": "operations", "region": "west"},
+			Credentials: map[string]CredentialSource{
+				"cloud":             {SecretRef: SecretReference{Name: "cloud-credentials"}},
+				"terraform-backend": {SecretRef: SecretReference{Name: "terraform-backend"}},
+			},
+		},
+		"preview": {
+			ClusterName:  "development",
+			JobNamespace: "previews",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewSet() second error = %v", err)
+	}
+
+	if first.Checksum() != second.Checksum() {
+		t.Errorf("Checksum() = %q, want %q", first.Checksum(), second.Checksum())
+	}
+	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(first.Checksum()) {
+		t.Errorf("Checksum() = %q, want lowercase SHA-256", first.Checksum())
+	}
+}
+
+func TestSetChecksumChangesWithEffectiveConfiguration(t *testing.T) {
+	t.Parallel()
+
+	first, err := NewSet(map[string]Config{"infrastructure": validConfig()})
+	if err != nil {
+		t.Fatalf("NewSet() first error = %v", err)
+	}
+
+	changed := validConfig()
+	changed.JobNamespace = "other-runs"
+	second, err := NewSet(map[string]Config{"infrastructure": changed})
+	if err != nil {
+		t.Fatalf("NewSet() second error = %v", err)
+	}
+
+	if first.Checksum() == second.Checksum() {
+		t.Errorf("Checksum() = %q after effective configuration changed", first.Checksum())
+	}
+}
+
+func TestZeroSetHasEmptyConfigurationChecksum(t *testing.T) {
+	t.Parallel()
+
+	empty, err := NewSet(nil)
+	if err != nil {
+		t.Fatalf("NewSet() error = %v", err)
+	}
+
+	if (Set{}).Checksum() != empty.Checksum() {
+		t.Errorf("zero Checksum() = %q, want %q", (Set{}).Checksum(), empty.Checksum())
 	}
 }

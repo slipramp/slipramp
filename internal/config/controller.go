@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/slipramp/slipramp/internal/controller"
 	"github.com/slipramp/slipramp/internal/promotion"
@@ -13,6 +14,7 @@ const (
 	controllerClusterEnvironment             = "SLIPRAMP_CONTROLLER_CLUSTER"
 	controllerServerEnvironment              = "SLIPRAMP_CONTROLLER_SERVER_URL"
 	controllerMetricsAddressEnvironment      = "SLIPRAMP_CONTROLLER_METRICS_ADDRESS"
+	controllerMaximumActiveRunsEnvironment   = "SLIPRAMP_CONTROLLER_MAXIMUM_ACTIVE_RUNS"
 	controllerEnrollmentTokenEnvironment     = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
 	controllerTokenEnvironment               = "SLIPRAMP_CONTROLLER_TOKEN"
 	controllerCheckoutImageEnvironment       = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
@@ -31,8 +33,16 @@ func LoadController(lookupEnvironment func(string) (string, bool)) (controller.C
 	cfg.ClusterName, _ = lookupEnvironment(controllerClusterEnvironment)
 	cfg.ServerURL, _ = lookupEnvironment(controllerServerEnvironment)
 	cfg.MetricsAddress = controller.DefaultMetricsAddress
+	cfg.MaximumActiveRuns = controller.DefaultMaximumActiveRuns
 	if value, ok := lookupEnvironment(controllerMetricsAddressEnvironment); ok {
 		cfg.MetricsAddress = value
+	}
+	if value, ok := lookupEnvironment(controllerMaximumActiveRunsEnvironment); ok {
+		maximum, err := strconv.Atoi(value)
+		if err != nil {
+			return controller.Config{}, fmt.Errorf("parse %s: %w", controllerMaximumActiveRunsEnvironment, err)
+		}
+		cfg.MaximumActiveRuns = maximum
 	}
 	cfg.EnrollmentToken, _ = lookupEnvironment(controllerEnrollmentTokenEnvironment)
 	cfg.BearerToken, _ = lookupEnvironment(controllerTokenEnvironment)

@@ -36,6 +36,8 @@ paths:
     $ref: ./paths/catalog.yaml#/target
   /api/v1/clusters:
     $ref: ./paths/controllers.yaml#/clusters
+  /api/v1/placements:
+    $ref: ./paths/placements.yaml#/placements
   /controller/v1/enroll:
     $ref: ./paths/controllers.yaml#/enroll
   /controller/v1/poll:
@@ -207,6 +209,10 @@ components:
       $ref: ./components/controllers.yaml#/Cluster
     ClusterList:
       $ref: ./components/controllers.yaml#/ClusterList
+    Placement:
+      $ref: ./components/placements.yaml#/Placement
+    PlacementList:
+      $ref: ./components/placements.yaml#/PlacementList
     RunAssignment:
       $ref: ./components/controllers.yaml#/RunAssignment
     CancelRunCommand:

@@ -17,6 +17,12 @@ token key, and at least one Placement. The Artifact token key must contain at
 least 32 characters. Every Placement's Cluster must also be present in the
 Controller enrollment-token map stored in the referenced Secret.
 
+Run scheduling defaults to four active Runs per Cluster. Override that limit
+under `server.clusters.<name>.maximumActiveRuns`; a Placement may set a tighter
+`maximumActiveRuns`. Both limits count assigned, preparing, and running Runs,
+while one-active-Run-per-Target serialization and ordinary FIFO remain in
+effect.
+
 Secret-bearing settings use this shape:
 
 ```yaml

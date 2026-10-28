@@ -19,6 +19,7 @@ import (
 type Config struct {
 	ClusterName        string
 	JobNamespace       string
+	MaximumActiveRuns  int32
 	ServiceAccountName string
 	Timeout            time.Duration
 	Resources          ResourceRequirements
@@ -52,6 +53,10 @@ func (c Config) Validate() error {
 
 	if err := kubevalidate.DNSLabel("job namespace", c.JobNamespace); err != nil {
 		return err
+	}
+
+	if c.MaximumActiveRuns < 0 {
+		return fmt.Errorf("maximum active Runs must not be negative")
 	}
 
 	if c.ServiceAccountName != "" {

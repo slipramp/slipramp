@@ -9,5 +9,7 @@ data:
   placements.yaml: |
     apiVersion: slipramp.com/v1alpha1
     kind: PlacementConfig
+    clusters:
+      {{- .Values.server.clusters | toYaml | nindent 6 }}
     placements:
       {{- .Values.server.placements | toYaml | nindent 6 }}

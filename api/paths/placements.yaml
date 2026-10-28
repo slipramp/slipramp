@@ -1,0 +1,65 @@
+placements:
+  get:
+    operationId: listPlacements
+    summary: List configured execution Placements
+    description: >-
+      Lists the sanitized effective Placement configuration currently loaded by
+      the Server together with observed Controller connectivity. Kubernetes
+      Secret references and arbitrary pod configuration are not exposed.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Placements
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Placements ordered by name.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/placements.yaml#/PlacementList
+      "400":
+        description: The list window is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Placement inventory could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

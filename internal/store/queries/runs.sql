@@ -352,12 +352,29 @@ ORDER BY assigned_at, id
 LIMIT 1;
 
 -- name: ClaimQueuedRun :one
-WITH candidate AS (
+WITH active_runs AS (
+	SELECT active.placement_name
+	FROM runs AS active
+	WHERE active.cluster_name = sqlc.arg(cluster_name)
+	  AND active.phase IN ('assigned', 'preparing', 'running')
+), candidate AS (
     SELECT queued.id
     FROM runs AS queued
     WHERE queued.cluster_name = sqlc.arg(cluster_name)
       AND queued.phase = 'queued'
       AND queued.review_state IN ('not-required', 'approved')
+      AND (
+	          SELECT count(*)
+	          FROM active_runs
+	      ) < sqlc.arg(cluster_maximum_active_runs)::integer
+      AND (
+          NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? queued.placement_name)
+          OR COALESCE((
+	              SELECT count(*)
+	              FROM active_runs
+              WHERE placement_name = queued.placement_name
+	          ), 0) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> queued.placement_name)::bigint
+      )
       AND NOT EXISTS (
           SELECT 1
           FROM runs AS active
@@ -374,3 +391,77 @@ SET phase = 'assigned',
 FROM candidate
 WHERE runs.id = candidate.id
 RETURNING runs.*;
+
+-- name: GetRunSchedulingSnapshots :many
+SELECT
+    queued.id,
+    blocker.id AS blocking_run_id,
+    (
+        SELECT count(*)::bigint
+        FROM runs AS active
+        WHERE active.cluster_name = queued.cluster_name
+          AND active.phase IN ('assigned', 'preparing', 'running')
+    ) AS cluster_active_runs,
+    (
+        SELECT count(*)::bigint
+        FROM runs AS active
+        WHERE active.cluster_name = queued.cluster_name
+          AND active.placement_name = queued.placement_name
+          AND active.phase IN ('assigned', 'preparing', 'running')
+    ) AS placement_active_runs,
+    CAST(CASE
+        WHEN queued.review_state IN ('not-required', 'approved')
+          AND blocker.id IS NULL
+          AND (
+              SELECT count(*)
+              FROM runs AS active
+              WHERE active.cluster_name = queued.cluster_name
+                AND active.phase IN ('assigned', 'preparing', 'running')
+          ) < (sqlc.arg(cluster_maximum_active_runs)::jsonb ->> queued.cluster_name)::bigint
+          AND (
+              NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? queued.placement_name)
+              OR (
+                  SELECT count(*)
+                  FROM runs AS active
+                  WHERE active.cluster_name = queued.cluster_name
+                    AND active.placement_name = queued.placement_name
+                    AND active.phase IN ('assigned', 'preparing', 'running')
+              ) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> queued.placement_name)::bigint
+          )
+        THEN (
+            SELECT count(*)::integer + 1
+            FROM runs AS older
+            WHERE older.cluster_name = queued.cluster_name
+              AND older.phase = 'queued'
+              AND older.review_state IN ('not-required', 'approved')
+              AND (older.created_at, older.id) < (queued.created_at, queued.id)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM runs AS active
+                  WHERE active.target_id = older.target_id
+                    AND active.phase IN ('assigned', 'preparing', 'running')
+              )
+              AND (
+                  NOT (sqlc.arg(placement_maximum_active_runs)::jsonb ? older.placement_name)
+                  OR (
+                      SELECT count(*)
+                      FROM runs AS active
+                      WHERE active.cluster_name = older.cluster_name
+                        AND active.placement_name = older.placement_name
+                        AND active.phase IN ('assigned', 'preparing', 'running')
+                  ) < (sqlc.arg(placement_maximum_active_runs)::jsonb ->> older.placement_name)::bigint
+              )
+        )
+        ELSE 0
+    END AS integer) AS eligible_position
+FROM runs AS queued
+LEFT JOIN LATERAL (
+    SELECT active.id
+    FROM runs AS active
+    WHERE active.target_id = queued.target_id
+      AND active.phase IN ('assigned', 'preparing', 'running')
+    ORDER BY active.assigned_at, active.id
+    LIMIT 1
+) AS blocker ON true
+WHERE queued.id = ANY(sqlc.arg(run_ids)::uuid[])
+  AND queued.phase = 'queued';

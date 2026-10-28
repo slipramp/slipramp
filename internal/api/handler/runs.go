@@ -8,6 +8,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -27,6 +28,12 @@ type RunService interface {
 	CancelRun(ctx context.Context, request run.CancelRequest) (run.Run, error)
 	DecideRunReview(ctx context.Context, request run.ReviewDecisionRequest) (run.Run, error)
 	ReportObservation(ctx context.Context, observation run.Observation) error
+	Scheduling(
+		ctx context.Context,
+		records []run.Run,
+		connectedClusters map[string]bool,
+		at time.Time,
+	) (map[uuid.UUID]run.Scheduling, error)
 }
 
 func (h *Handler) DecideRunReview(
@@ -504,7 +511,7 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 
 	needsClusterStatus := false
 	for _, record := range records {
-		if record.Phase != run.PhaseQueued && record.Phase != run.PhaseFinished {
+		if record.Phase != run.PhaseFinished {
 			needsClusterStatus = true
 			break
 		}
@@ -524,6 +531,10 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 
 	items := make([]api.Run, 0, len(records))
 	now := h.now().UTC()
+	scheduling, err := h.runs.Scheduling(ctx, records, connectedClusters, now)
+	if err != nil {
+		return nil, err
+	}
 	for _, record := range records {
 		body, err := runResponse(record, commits)
 		if err != nil {
@@ -538,6 +549,14 @@ func (h *Handler) runResponses(ctx context.Context, records []run.Run) ([]api.Ru
 		if present {
 			value := api.RunObservationState(state)
 			body.ObservationState = &value
+		}
+		if detail, present := scheduling[record.ID]; present {
+			state := api.RunSchedulingState(detail.State)
+			body.SchedulingState = &state
+			body.BlockingRunID = detail.BlockingRunID
+			body.QueueAgeSeconds = new(int64(detail.QueueAge / time.Second))
+			body.EligiblePosition = detail.EligiblePosition
+			body.SchedulingSnapshotAt = &detail.SnapshotAt
 		}
 
 		items = append(items, body)

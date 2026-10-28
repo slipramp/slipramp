@@ -99,6 +99,7 @@ type Controller struct {
 	runMutex                       sync.Mutex
 	activeRuns                     map[uuid.UUID]*runWorker
 	runWorkers                     sync.WaitGroup
+	runSlots                       chan struct{}
 	stageObservers                 []*kargoStageObserver
 	promotions                     kargoPromotionCreator
 	promotionReconciler            kargoPromotionReconciler
@@ -153,6 +154,7 @@ func New(
 		heartbeatEvery:                 observationHeartbeatPeriod,
 		now:                            time.Now,
 		activeRuns:                     make(map[uuid.UUID]*runWorker),
+		runSlots:                       make(chan struct{}, cfg.MaximumActiveRuns),
 	}
 	if settings.metricsHandler != nil {
 		controller.metrics = metricsserver.New(

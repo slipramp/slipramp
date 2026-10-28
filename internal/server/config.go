@@ -105,6 +105,11 @@ func (c Config) Validate() error {
 			return fmt.Errorf("controller enrollment token for cluster %q is invalid: %w", clusterName, err)
 		}
 	}
+	for _, clusterName := range c.Placements.ClusterNames() {
+		if _, ok := c.ControllerEnrollmentTokens[clusterName]; !ok {
+			return fmt.Errorf("run capacity selects unregistered cluster %q", clusterName)
+		}
+	}
 
 	for _, placementName := range c.Placements.Names() {
 		placementConfig, _ := c.Placements.Lookup(placementName)

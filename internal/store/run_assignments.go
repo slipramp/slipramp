@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -31,7 +32,17 @@ func (d *Database) GetAssignedRunForCluster(ctx context.Context, clusterName str
 	return record, nil
 }
 
-func (d *Database) ClaimQueuedRun(ctx context.Context, clusterName string, claimedAt time.Time) (run.Run, error) {
+func (d *Database) ClaimQueuedRun(
+	ctx context.Context,
+	clusterName string,
+	capacity run.SchedulingCapacity,
+	claimedAt time.Time,
+) (run.Run, error) {
+	placementMaximumActiveRuns, err := json.Marshal(capacity.PlacementMaximumActiveRuns)
+	if err != nil {
+		return run.Run{}, fmt.Errorf("encode Placement Run capacities: %w", err)
+	}
+
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
 		return run.Run{}, fmt.Errorf("begin Run claim transaction: %w", err)
@@ -44,8 +55,10 @@ func (d *Database) ClaimQueuedRun(ctx context.Context, clusterName string, claim
 	row, err := queries.ClaimQueuedRun(
 		ctx,
 		storedb.ClaimQueuedRunParams{
-			AssignedAt:  databaseTime(claimedAt),
-			ClusterName: clusterName,
+			AssignedAt:                 databaseTime(claimedAt),
+			ClusterName:                clusterName,
+			ClusterMaximumActiveRuns:   capacity.ClusterMaximumActiveRuns,
+			PlacementMaximumActiveRuns: placementMaximumActiveRuns,
 		},
 	)
 	if errors.Is(err, pgx.ErrNoRows) || isTargetConcurrencyConflict(err) {

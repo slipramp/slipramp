@@ -10,7 +10,12 @@ import (
 
 type AssignmentStore interface {
 	GetAssignedRunForCluster(ctx context.Context, clusterName string) (Run, error)
-	ClaimQueuedRun(ctx context.Context, clusterName string, claimedAt time.Time) (Run, error)
+	ClaimQueuedRun(
+		ctx context.Context,
+		clusterName string,
+		capacity SchedulingCapacity,
+		claimedAt time.Time,
+	) (Run, error)
 }
 
 // NextRunAssignment returns a stable assignment for a cluster. Assigned Runs
@@ -30,7 +35,12 @@ func (s *Service) NextRunAssignment(ctx context.Context, clusterName string) (Ru
 		return Run{}, fmt.Errorf("get assigned run: %w", err)
 	}
 
-	assigned, err = s.assignments.ClaimQueuedRun(ctx, clusterName, s.now().UTC())
+	assigned, err = s.assignments.ClaimQueuedRun(
+		ctx,
+		clusterName,
+		s.AssignmentCapacity(clusterName),
+		s.now().UTC(),
+	)
 	if err != nil {
 		if errors.Is(err, ErrNoRunAssignment) {
 			return Run{}, ErrNoRunAssignment

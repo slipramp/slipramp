@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	DefaultRunListLimit  = 50
-	MaximumRunListLimit  = 100
-	MaximumRunListOffset = 2_147_483_647
+	DefaultRunListLimit            = 50
+	MaximumRunListLimit            = 100
+	MaximumRunListOffset           = 2_147_483_647
+	DefaultMaximumActiveRuns int32 = 4
 
 	PhaseQueued    Phase = "queued"
 	PhaseAssigned  Phase = "assigned"
@@ -48,6 +49,12 @@ const (
 	ReasonCancelRequested       = "CancelRequested"
 	ReasonSupersededByGitChange = "SupersededByGitChange"
 	ReasonReviewRejected        = "ReviewRejected"
+
+	SchedulingStateAwaitingReview     SchedulingState = "awaiting-review"
+	SchedulingStateTargetBusy         SchedulingState = "target-busy"
+	SchedulingStateClusterUnreachable SchedulingState = "cluster-unreachable"
+	SchedulingStateClusterCapacity    SchedulingState = "cluster-capacity"
+	SchedulingStateEligible           SchedulingState = "eligible"
 )
 
 var (
@@ -87,6 +94,8 @@ type ReviewState string
 type ReviewDecision string
 
 type ObservationState string
+
+type SchedulingState string
 
 const (
 	ObservationStateCurrent ObservationState = "current"
@@ -208,6 +217,28 @@ type Run struct {
 	OutcomeReason            *string
 	OutcomeMessage           *string
 	ExitCode                 *int32
+	Scheduling               *Scheduling
+}
+
+type Scheduling struct {
+	State            SchedulingState
+	BlockingRunID    *uuid.UUID
+	QueueAge         time.Duration
+	EligiblePosition *int32
+	SnapshotAt       time.Time
+}
+
+type SchedulingSnapshot struct {
+	RunID               uuid.UUID
+	BlockingRunID       *uuid.UUID
+	ClusterActiveRuns   int64
+	PlacementActiveRuns int64
+	EligiblePosition    *int32
+}
+
+type SchedulingCapacity struct {
+	ClusterMaximumActiveRuns   int32
+	PlacementMaximumActiveRuns map[string]int32
 }
 
 type Review struct {

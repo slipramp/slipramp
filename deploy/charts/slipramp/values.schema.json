@@ -34,6 +34,7 @@
         "kargo",
         "notifications",
         "placements",
+        "clusters",
         "livenessProbe",
         "readinessProbe",
         "resources",
@@ -216,6 +217,18 @@
           "propertyNames": { "$ref": "#/$defs/dnsLabel" },
           "additionalProperties": { "$ref": "#/$defs/placement" }
         },
+        "clusters": {
+          "type": "object",
+          "propertyNames": { "$ref": "#/$defs/dnsLabel" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["maximumActiveRuns"],
+            "properties": {
+              "maximumActiveRuns": { "type": "integer", "minimum": 1 }
+            }
+          }
+        },
         "livenessProbe": { "$ref": "#/$defs/probe" },
         "readinessProbe": {
           "allOf": [
@@ -393,6 +406,7 @@
       "properties": {
         "cluster": { "$ref": "#/$defs/dnsLabel" },
         "jobNamespace": { "$ref": "#/$defs/dnsLabel" },
+        "maximumActiveRuns": { "type": "integer", "minimum": 1 },
         "serviceAccountName": { "$ref": "#/$defs/dnsSubdomain" },
         "timeout": { "$ref": "#/$defs/duration" },
         "resources": {

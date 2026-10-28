@@ -41,7 +41,7 @@ Validation has three deliberately distinct scopes:
 | --- | --- | --- |
 | Portable | `slipramp catalog validate` | YAML structure, catalog names and references, resolved Actions, parameters, artifacts, triggers, repository paths, and watch patterns |
 | Deployment | `slipramp catalog validate --placements placements.yaml` | All portable checks plus Placement existence, offered credential sources, and effective resource constraints |
-| Live-cluster preflight | Not implemented | Cluster reachability, Secret contents, service-account permissions, Runtime image availability, and Kubernetes admission |
+| Live-cluster preflight | [Planned Controller-backed command](./ROADMAP.md#placement-inventory-and-controller-preflight) | Cluster reachability, Secret contents, service-account permissions, Runtime image availability, and Kubernetes admission |
 
 Portable validation accepts unknown but well-formed Placement names because
 Placements belong to a Slipramp installation rather than the repository. It

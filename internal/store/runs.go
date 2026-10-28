@@ -21,6 +21,7 @@ import (
 var (
 	_ run.CreationStore     = (*Database)(nil)
 	_ run.HistoryStore      = (*Database)(nil)
+	_ run.SchedulingStore   = (*Database)(nil)
 	_ run.AssignmentStore   = (*Database)(nil)
 	_ run.CancellationStore = (*Database)(nil)
 	_ run.ReviewStore       = (*Database)(nil)

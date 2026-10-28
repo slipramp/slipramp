@@ -434,6 +434,8 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
       <RunReviewPanel canReview={canReview} run={run} />
 
+      <RunSchedulingNotice run={run} />
+
       {run.phase !== "finished" && run.observationState === "unknown" ? (
         <Alert color="yellow" title="Execution observation unavailable">
           The cluster controller is unreachable or has not reported this Run recently. Its durable
@@ -497,6 +499,66 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         producerSucceeded={run.outcome === "succeeded"}
       />
     </Stack>
+  );
+}
+
+function RunSchedulingNotice({ run }: Readonly<{ run: Run }>) {
+  if (
+    run.phase !== "queued" ||
+    !run.schedulingState ||
+    run.queueAgeSeconds === undefined ||
+    !run.schedulingSnapshotAt
+  ) {
+    return null;
+  }
+
+  const title = runStatusLabel(run);
+  let explanation: ReactNode;
+  switch (run.schedulingState) {
+    case "awaiting-review":
+      explanation = "This Run must be approved before it can enter the eligible FIFO queue.";
+      break;
+    case "target-busy":
+      explanation = run.blockingRunId ? (
+        <>
+          The Target is serialized behind active Run{" "}
+          <Anchor component={Link} to={`/runs/${run.blockingRunId}`}>
+            {shortIdentifier(run.blockingRunId)}
+          </Anchor>
+          .
+        </>
+      ) : (
+        "Another active Run is serializing this Target."
+      );
+      break;
+    case "cluster-unreachable":
+      explanation = "The Cluster Controller is not currently reachable by the Server.";
+      break;
+    case "cluster-capacity":
+      explanation = "The Cluster or this Run's Placement has reached its active Run limit.";
+      break;
+    case "eligible":
+      explanation = "This Run satisfies the current review, Target, and capacity constraints.";
+      break;
+  }
+
+  return (
+    <Alert color={run.schedulingState === "eligible" ? "blue" : "yellow"} title={title}>
+      <Stack gap={4}>
+        <Text>{explanation}</Text>
+        <Group gap="xs" wrap="wrap">
+          <Text size="sm">
+            Queued for {formatDuration(new Date(0), new Date(run.queueAgeSeconds * 1000))}
+          </Text>
+          {run.eligiblePosition !== undefined ? (
+            <Text size="sm">· Eligible position {run.eligiblePosition}</Text>
+          ) : null}
+          <Text c="dimmed" size="sm">
+            · Snapshot <Timestamp value={run.schedulingSnapshotAt} />; not an ETA
+          </Text>
+        </Group>
+      </Stack>
+    </Alert>
   );
 }
 

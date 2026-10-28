@@ -6,6 +6,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/readiness"
 )
@@ -17,6 +18,7 @@ type ControllerIdentityService interface {
 
 type Handler struct {
 	clusters                 ClusterService
+	placements               PlacementService
 	identities               ControllerIdentityService
 	controllerCommands       ControllerCommandService
 	repositories             RepositoryService
@@ -46,6 +48,10 @@ type ReadinessService interface {
 	Check(ctx context.Context) readiness.Report
 }
 
+type PlacementService interface {
+	Inventory(ctx context.Context) (placement.Inventory, error)
+}
+
 type ProductAuthenticationService interface {
 	BrowserAuthenticationService
 	AccessService
@@ -53,6 +59,7 @@ type ProductAuthenticationService interface {
 
 type Dependencies struct {
 	Clusters                 ClusterService
+	Placements               PlacementService
 	ControllerIdentities     ControllerIdentityService
 	ControllerCommands       ControllerCommandService
 	Repositories             RepositoryService
@@ -82,6 +89,7 @@ var _ api.StrictServerInterface = (*Handler)(nil)
 func newHandler(dependencies Dependencies) *Handler {
 	return &Handler{
 		clusters:                 dependencies.Clusters,
+		placements:               dependencies.Placements,
 		identities:               dependencies.ControllerIdentities,
 		controllerCommands:       dependencies.ControllerCommands,
 		repositories:             dependencies.Repositories,

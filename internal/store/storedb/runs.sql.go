@@ -90,12 +90,29 @@ func (q *Queries) CancelRun(ctx context.Context, arg CancelRunParams) (Run, erro
 }
 
 const claimQueuedRun = `-- name: ClaimQueuedRun :one
-WITH candidate AS (
+WITH active_runs AS (
+	SELECT active.placement_name
+	FROM runs AS active
+	WHERE active.cluster_name = $2
+	  AND active.phase IN ('assigned', 'preparing', 'running')
+), candidate AS (
     SELECT queued.id
     FROM runs AS queued
     WHERE queued.cluster_name = $2
       AND queued.phase = 'queued'
       AND queued.review_state IN ('not-required', 'approved')
+      AND (
+	          SELECT count(*)
+	          FROM active_runs
+	      ) < $3::integer
+      AND (
+          NOT ($4::jsonb ? queued.placement_name)
+          OR COALESCE((
+	              SELECT count(*)
+	              FROM active_runs
+              WHERE placement_name = queued.placement_name
+	          ), 0) < ($4::jsonb ->> queued.placement_name)::bigint
+      )
       AND NOT EXISTS (
           SELECT 1
           FROM runs AS active
@@ -115,12 +132,19 @@ RETURNING runs.id, runs.phase, runs.outcome, runs.repository_id, runs.catalog_re
 `
 
 type ClaimQueuedRunParams struct {
-	AssignedAt  pgtype.Timestamptz
-	ClusterName string
+	AssignedAt                 pgtype.Timestamptz
+	ClusterName                string
+	ClusterMaximumActiveRuns   int32
+	PlacementMaximumActiveRuns []byte
 }
 
 func (q *Queries) ClaimQueuedRun(ctx context.Context, arg ClaimQueuedRunParams) (Run, error) {
-	row := q.db.QueryRow(ctx, claimQueuedRun, arg.AssignedAt, arg.ClusterName)
+	row := q.db.QueryRow(ctx, claimQueuedRun,
+		arg.AssignedAt,
+		arg.ClusterName,
+		arg.ClusterMaximumActiveRuns,
+		arg.PlacementMaximumActiveRuns,
+	)
 	var i Run
 	err := row.Scan(
 		&i.ID,
@@ -987,6 +1011,121 @@ func (q *Queries) GetRunObservationStateForUpdate(ctx context.Context, arg GetRu
 		&i.CancellationRequestedAt,
 	)
 	return i, err
+}
+
+const getRunSchedulingSnapshots = `-- name: GetRunSchedulingSnapshots :many
+SELECT
+    queued.id,
+    blocker.id AS blocking_run_id,
+    (
+        SELECT count(*)::bigint
+        FROM runs AS active
+        WHERE active.cluster_name = queued.cluster_name
+          AND active.phase IN ('assigned', 'preparing', 'running')
+    ) AS cluster_active_runs,
+    (
+        SELECT count(*)::bigint
+        FROM runs AS active
+        WHERE active.cluster_name = queued.cluster_name
+          AND active.placement_name = queued.placement_name
+          AND active.phase IN ('assigned', 'preparing', 'running')
+    ) AS placement_active_runs,
+    CAST(CASE
+        WHEN queued.review_state IN ('not-required', 'approved')
+          AND blocker.id IS NULL
+          AND (
+              SELECT count(*)
+              FROM runs AS active
+              WHERE active.cluster_name = queued.cluster_name
+                AND active.phase IN ('assigned', 'preparing', 'running')
+          ) < ($1::jsonb ->> queued.cluster_name)::bigint
+          AND (
+              NOT ($2::jsonb ? queued.placement_name)
+              OR (
+                  SELECT count(*)
+                  FROM runs AS active
+                  WHERE active.cluster_name = queued.cluster_name
+                    AND active.placement_name = queued.placement_name
+                    AND active.phase IN ('assigned', 'preparing', 'running')
+              ) < ($2::jsonb ->> queued.placement_name)::bigint
+          )
+        THEN (
+            SELECT count(*)::integer + 1
+            FROM runs AS older
+            WHERE older.cluster_name = queued.cluster_name
+              AND older.phase = 'queued'
+              AND older.review_state IN ('not-required', 'approved')
+              AND (older.created_at, older.id) < (queued.created_at, queued.id)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM runs AS active
+                  WHERE active.target_id = older.target_id
+                    AND active.phase IN ('assigned', 'preparing', 'running')
+              )
+              AND (
+                  NOT ($2::jsonb ? older.placement_name)
+                  OR (
+                      SELECT count(*)
+                      FROM runs AS active
+                      WHERE active.cluster_name = older.cluster_name
+                        AND active.placement_name = older.placement_name
+                        AND active.phase IN ('assigned', 'preparing', 'running')
+                  ) < ($2::jsonb ->> older.placement_name)::bigint
+              )
+        )
+        ELSE 0
+    END AS integer) AS eligible_position
+FROM runs AS queued
+LEFT JOIN LATERAL (
+    SELECT active.id
+    FROM runs AS active
+    WHERE active.target_id = queued.target_id
+      AND active.phase IN ('assigned', 'preparing', 'running')
+    ORDER BY active.assigned_at, active.id
+    LIMIT 1
+) AS blocker ON true
+WHERE queued.id = ANY($3::uuid[])
+  AND queued.phase = 'queued'
+`
+
+type GetRunSchedulingSnapshotsParams struct {
+	ClusterMaximumActiveRuns   []byte
+	PlacementMaximumActiveRuns []byte
+	RunIds                     []pgtype.UUID
+}
+
+type GetRunSchedulingSnapshotsRow struct {
+	ID                  pgtype.UUID
+	BlockingRunID       pgtype.UUID
+	ClusterActiveRuns   int64
+	PlacementActiveRuns int64
+	EligiblePosition    int32
+}
+
+func (q *Queries) GetRunSchedulingSnapshots(ctx context.Context, arg GetRunSchedulingSnapshotsParams) ([]GetRunSchedulingSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, getRunSchedulingSnapshots, arg.ClusterMaximumActiveRuns, arg.PlacementMaximumActiveRuns, arg.RunIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRunSchedulingSnapshotsRow
+	for rows.Next() {
+		var i GetRunSchedulingSnapshotsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BlockingRunID,
+			&i.ClusterActiveRuns,
+			&i.PlacementActiveRuns,
+			&i.EligiblePosition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getRunToCancelForCluster = `-- name: GetRunToCancelForCluster :one

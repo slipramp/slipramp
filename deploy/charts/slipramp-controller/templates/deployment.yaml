@@ -43,6 +43,8 @@ spec:
               value: {{ .Values.serverURL | quote }}
             - name: SLIPRAMP_CONTROLLER_METRICS_ADDRESS
               value: {{ printf ":%d" (.Values.metrics.port | int) | quote }}
+            - name: SLIPRAMP_CONTROLLER_MAXIMUM_ACTIVE_RUNS
+              value: {{ .Values.maximumActiveRuns | quote }}
             - name: SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN
               valueFrom:
                 secretKeyRef:

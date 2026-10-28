@@ -53,6 +53,13 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "cluster name",
 		},
 		{
+			name: "invalid maximum active Runs",
+			configure: func(settings *Config) {
+				settings.MaximumActiveRuns = 0
+			},
+			wantError: "maximum active Runs",
+		},
+		{
 			name: "invalid cluster name",
 			configure: func(settings *Config) {
 				settings.ClusterName = "Invalid Cluster"
@@ -219,6 +226,7 @@ func validConfig() Config {
 		ClusterName:         "colo",
 		ServerURL:           "https://slipramp.example.com",
 		MetricsAddress:      DefaultMetricsAddress,
+		MaximumActiveRuns:   DefaultMaximumActiveRuns,
 		EnrollmentToken:     "enrollment-token",
 		BearerToken:         "controller-token",
 		CheckoutImage:       "registry.example.com/slipramp-checkout:1",

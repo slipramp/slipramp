@@ -89,5 +89,7 @@ kubectl binary can be overridden with the `SLIPRAMP_ACCEPTANCE_*`,
 environment variables read by the Go acceptance suite in
 [`internal/acceptance/kind`](../../../internal/acceptance/kind/suite_test.go).
 
-The suite remains an explicit local task rather than part of the hosted `Checks`
-workflow.
+The `Checks` workflow also runs the suite as an independent, non-blocking job on
+the self-hosted runners. Each CI run uses a unique cluster name and performs an
+unconditional cleanup; the local task remains available for development and
+failure diagnosis.

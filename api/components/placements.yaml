@@ -1,0 +1,95 @@
+Placement:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+    - cluster
+    - controllerConnectionState
+    - namespace
+    - serviceAccount
+    - resources
+    - credentialNames
+  properties:
+    name:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    controllerConnectionState:
+      type: string
+      enum:
+        - connected
+        - unreachable
+      description: >-
+        Whether the configured Cluster's Controller has checked in within the
+        connection window. A Controller that has never checked in is unreachable.
+    controllerLastSeenAt:
+      type: string
+      format: date-time
+      description: Most recent Controller contact, absent when it has never checked in.
+    namespace:
+      type: string
+      minLength: 1
+      maxLength: 63
+    serviceAccount:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Effective Kubernetes service account, including the default.
+    timeout:
+      type: string
+      minLength: 1
+      description: Placement timeout default when one is configured.
+    resources:
+      $ref: "#/PlacementResourceRequirements"
+    credentialNames:
+      type: array
+      uniqueItems: true
+      description: Logical credential sources offered by this Placement.
+      items:
+        $ref: ./runs.yaml#/CatalogName
+
+PlacementResourceRequirements:
+  type: object
+  additionalProperties: false
+  required:
+    - requests
+    - limits
+  properties:
+    requests:
+      type: object
+      additionalProperties:
+        type: string
+        minLength: 1
+    limits:
+      type: object
+      additionalProperties:
+        type: string
+        minLength: 1
+
+PlacementList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+    - configurationChecksum
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/Placement"
+    configurationChecksum:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+      description: SHA-256 checksum of the validated effective Placement set.
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0

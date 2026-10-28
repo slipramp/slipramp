@@ -11,6 +11,7 @@ import (
 type Service struct {
 	creation      CreationStore
 	history       HistoryStore
+	scheduling    SchedulingStore
 	assignments   AssignmentStore
 	cancellations CancellationStore
 	reviews       ReviewStore
@@ -26,6 +27,7 @@ type Service struct {
 type Dependencies struct {
 	Creation      CreationStore
 	History       HistoryStore
+	Scheduling    SchedulingStore
 	Assignments   AssignmentStore
 	Cancellations CancellationStore
 	Reviews       ReviewStore
@@ -40,6 +42,7 @@ func NewService(dependencies Dependencies) *Service {
 	return &Service{
 		creation:      dependencies.Creation,
 		history:       dependencies.History,
+		scheduling:    dependencies.Scheduling,
 		assignments:   dependencies.Assignments,
 		cancellations: dependencies.Cancellations,
 		reviews:       dependencies.Reviews,

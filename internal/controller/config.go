@@ -15,12 +15,16 @@ import (
 	"github.com/slipramp/slipramp/internal/promotion"
 )
 
-const DefaultMetricsAddress = metricsserver.DefaultAddress
+const (
+	DefaultMetricsAddress    = metricsserver.DefaultAddress
+	DefaultMaximumActiveRuns = 4
+)
 
 type Config struct {
 	ClusterName         string
 	ServerURL           string
 	MetricsAddress      string
+	MaximumActiveRuns   int
 	EnrollmentToken     string
 	BearerToken         string
 	CheckoutImage       string
@@ -55,6 +59,10 @@ func (c Config) Validate() error {
 
 	if err := metricsserver.ValidateAddress(c.MetricsAddress); err != nil {
 		return err
+	}
+
+	if c.MaximumActiveRuns < 1 {
+		return errors.New("maximum active Runs must be positive")
 	}
 
 	if err := auth.ValidateBearerToken(c.BearerToken); err != nil {

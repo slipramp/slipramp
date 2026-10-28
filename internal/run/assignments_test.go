@@ -57,6 +57,13 @@ func TestNextRunAssignmentClaimsQueuedRun(t *testing.T) {
 	if runs.claimClusterName != "colo" {
 		t.Errorf("claim cluster = %q, want %q", runs.claimClusterName, "colo")
 	}
+	if runs.claimCapacity.ClusterMaximumActiveRuns != DefaultMaximumActiveRuns {
+		t.Errorf(
+			"claim cluster maximum = %d, want %d",
+			runs.claimCapacity.ClusterMaximumActiveRuns,
+			DefaultMaximumActiveRuns,
+		)
+	}
 	if !runs.claimedAt.Equal(claimedAt) || runs.claimedAt.Location() != time.UTC {
 		t.Errorf("claimed at = %s, want %s in UTC", runs.claimedAt, claimedAt)
 	}
@@ -98,6 +105,7 @@ type recordingAssignments struct {
 	assignedError    error
 	claimCalls       int
 	claimClusterName string
+	claimCapacity    SchedulingCapacity
 	claimedAt        time.Time
 	claimed          Run
 	claimError       error
@@ -112,10 +120,12 @@ func (s *recordingAssignments) GetAssignedRunForCluster(context.Context, string)
 func (s *recordingAssignments) ClaimQueuedRun(
 	_ context.Context,
 	clusterName string,
+	capacity SchedulingCapacity,
 	claimedAt time.Time,
 ) (Run, error) {
 	s.claimCalls++
 	s.claimClusterName = clusterName
+	s.claimCapacity = capacity
 	s.claimedAt = claimedAt
 
 	return s.claimed, s.claimError

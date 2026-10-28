@@ -145,6 +145,48 @@ Run:
     phase:
       $ref: "#/RunPhase"
       description: Durable lifecycle position of the Run.
+    schedulingState:
+      type: string
+      enum:
+        - awaiting-review
+        - target-busy
+        - cluster-unreachable
+        - cluster-capacity
+        - eligible
+      x-enum-varnames:
+        - RunSchedulingStateAwaitingReview
+        - RunSchedulingStateTargetBusy
+        - RunSchedulingStateClusterUnreachable
+        - RunSchedulingStateClusterCapacity
+        - RunSchedulingStateEligible
+      description: >-
+        Current reason a queued Run has not been assigned. Present only while
+        phase is queued and derived from a point-in-time scheduling snapshot.
+    blockingRunId:
+      type: string
+      format: uuid
+      description: >-
+        Active Run serializing the same Target. Present only when
+        schedulingState is target-busy.
+    queueAgeSeconds:
+      type: integer
+      format: int64
+      minimum: 0
+      description: >-
+        Whole seconds since the queued Run was created, evaluated at
+        schedulingSnapshotAt. This is historical age, not an execution ETA.
+    eligiblePosition:
+      type: integer
+      format: int32
+      minimum: 1
+      description: >-
+        One-based FIFO position among Runs eligible for this Cluster in the
+        same scheduling snapshot. Present only when current review, Target,
+        and capacity constraints allow assignment. This is not an ETA.
+    schedulingSnapshotAt:
+      type: string
+      format: date-time
+      description: Evaluation time for the derived scheduling fields.
     targetId:
       type: string
       format: uuid

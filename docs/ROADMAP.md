@@ -72,6 +72,38 @@ intentionally deferred until Slipramp begins versioning releases:
 - [ ] Reassess semantic `catalog diff` for comparing complete resolved catalogs
       rather than YAML text.
 
+## Placement inventory and Controller preflight
+
+Placements are authoritative Server configuration for execution, but they do
+not yet have a dedicated API or Web inventory. Static deployment validation can
+prove that a Placement offers the credential names and resource bounds required
+by a catalog; it deliberately cannot prove that the referenced Kubernetes
+objects or permissions exist. Close both operator gaps without giving the
+Server Kubernetes credentials or direct Kubernetes API access:
+
+- [ ] Add an authenticated, sanitized Placement inventory to the Server API and
+      Web. Show Cluster, namespace, service account, resource defaults,
+      credential source names, active Target usage, and the checksum of the
+      Placement configuration currently loaded by the Server. Exclude Secret
+      values, arbitrary Secret-bearing pod configuration, and other sensitive
+      fields.
+- [ ] Join Placement inventory with Controller observations so Placements whose
+      configured Cluster is disconnected are explicit. Derive catalog-aware
+      Runtime credential compatibility from the current accepted revisions so
+      operators can see whether every required logical credential is offered by
+      a Placement; keep this static result distinct from live Secret checks.
+- [ ] Add an explicit, operator-started preflight command dispatched through the
+      existing outbound Controller poll/report boundary. The Controller, not the
+      Server, performs Kubernetes checks and returns bounded, sanitized results.
+      Define idempotency, authorization, timeouts, concurrency, durable result
+      history, and behavior when the selected Controller is disconnected.
+- [ ] Check namespace ownership, service-account and referenced Secret
+      existence, required Secret keys, the relevant Controller and workload
+      RBAC, and representative pod admission. Evaluate image pullability as an
+      optional active probe with explicit cleanup and timeout semantics rather
+      than treating admission or registry metadata as proof of a successful
+      pull. Report unsupported or inconclusive checks separately from failures.
+
 ## Reliability and operator guidance
 
 - [ ] Broaden acceptance for multiple execution Clusters, network interruptions,

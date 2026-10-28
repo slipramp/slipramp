@@ -306,10 +306,14 @@ placements file may contain:
 ```yaml
 apiVersion: slipramp.com/v1alpha1
 kind: PlacementConfig
+clusters:
+  colo:
+    maximumActiveRuns: 4
 placements:
   infrastructure-admin:
     cluster: colo
     jobNamespace: slipramp-runs
+    maximumActiveRuns: 2
     serviceAccountName: infrastructure-admin
     timeout: 30m
     resources:
@@ -338,6 +342,9 @@ invalid Kubernetes names or resource quantities. The optional `podTemplate`
 accepts Kubernetes pod metadata and spec extensions, but cannot replace
 Slipramp-owned containers, init containers, restart policy, service account,
 node selector, or run deadline.
+Cluster scheduling defaults to four active Runs. A configured Cluster maximum
+replaces that default, and a Placement maximum must be no larger than its
+configured Cluster maximum.
 
 Kargo integration behavior, credential boundaries, Run execution, and artifact
 retention are described in the [design](docs/DESIGN.md). Integration and
@@ -353,6 +360,7 @@ environment variables:
 | `SLIPRAMP_CONTROLLER_CLUSTER`               | Stable logical name of this execution cluster                                                                    |
 | `SLIPRAMP_CONTROLLER_SERVER_URL`            | Absolute HTTP or HTTPS URL of the Slipramp Server; use plaintext HTTP only over a trusted encrypted network      |
 | `SLIPRAMP_CONTROLLER_METRICS_ADDRESS`       | Metrics listener address; defaults to `:9091`                                                                    |
+| `SLIPRAMP_CONTROLLER_MAXIMUM_ACTIVE_RUNS`   | Positive local worker limit for new assignments; defaults to `4`                                                |
 | `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN`      | Cluster-scoped bootstrap credential used only to enroll the controller                                           |
 | `SLIPRAMP_CONTROLLER_TOKEN`                 | Controller-owned bearer credential registered during enrollment and used for ongoing requests                    |
 | `SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE`        | Pinned image containing `/bin/sh`, Git, and SSH for the checkout init container                                  |

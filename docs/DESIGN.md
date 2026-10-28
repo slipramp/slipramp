@@ -342,8 +342,20 @@ commit in the same transaction, so an ambiguous creation response cannot leave
 an executing Run detached from preparation recovery.
 
 A Controller claims the oldest eligible queued Run for its Cluster. PostgreSQL
-coordinates one active Run per Target and ordinary FIFO scheduling among
-eligible Runs. Infrastructure commands are never retried implicitly.
+coordinates one active Run per Target, a default maximum of four active Runs
+per Cluster, optional tighter Placement maxima, and ordinary FIFO scheduling
+among Runs that satisfy those constraints. Capacity is current deployment
+policy rather than part of the immutable Run snapshot. Infrastructure commands
+are never retried implicitly.
+
+Queued Run reads derive a point-in-time scheduling explanation without
+persisting mutable queue state. `awaiting-review` precedes `target-busy`, which
+links the active Run serializing the same Target. Otherwise an unreachable
+Controller yields `cluster-unreachable`, exhausted Cluster or Placement capacity
+yields `cluster-capacity`, and a claimable Run is `eligible`. Queue age and an
+eligible FIFO position share an explicit snapshot time and are historical facts,
+not execution estimates. The position is present only when current review,
+Target, and capacity constraints permit assignment.
 
 Lifecycle phase (`queued`, `assigned`, `preparing`, `running`, `finished`),
 terminal outcome (`succeeded`, `failed`, `canceled`, `timed-out`), cancellation
@@ -477,11 +489,16 @@ owns authentication, long polling, and generated response mapping, including
 assignment artifact credentials.
 
 Controller polling dispatches Run work to one local worker per Run before Job
-materialization begins. That worker owns materialization, observation, log
-completion, terminal reporting, and cleanup. Duplicate assignments reuse the
-worker, and repeated cancellation commands coalesce without blocking polling.
-Completed workers remain registered through an in-flight poll response so a
-late assignment cannot recreate a finished Job.
+materialization begins. The Controller defaults to four concurrent new Run
+workers and may be configured with another positive bound. The Server remains
+authoritative for Cluster and Placement capacity; the local bound is defense in
+depth, and assignments beyond it wait before Job materialization. Recovered Jobs
+are always observed even when they exceed a newly lowered local bound. Each
+worker owns materialization, observation, log completion, terminal reporting,
+and cleanup. Duplicate assignments reuse the worker, and repeated cancellation
+commands coalesce without blocking polling. Completed workers remain registered
+through an in-flight poll response so a late assignment cannot recreate a
+finished Job.
 
 Promotion creation and pre-callback reconciliation have a 15-second Kubernetes
 operation budget per delivered command. Server reporting retains the Controller
@@ -1298,11 +1315,11 @@ with tag/chart/application/image versions required to agree.
 Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.
 Versions are pinned and warnings fail. Go uses golangci-lint v2; frontend uses
-Oxlint and Oxfmt. Disposable kind acceptance remains available through the
-local task but is not run in hosted CI. Its Go suite provisions the environment
-through the real kind, Helm, kubectl, Docker, and Git command boundaries, then
-exercises the built CLI across
-Target discovery and explanation, Run creation and control, log streaming,
+Oxlint and Oxfmt. Disposable kind acceptance runs as an independent,
+non-blocking CI job on the self-hosted runners and remains available through the
+local task. Its Go suite provisions the environment through the real kind,
+Helm, kubectl, Docker, and Git command boundaries, then exercises the built CLI
+across Target discovery and explanation, Run creation and control, log streaming,
 Artifact transfer, pagination, reruns, and review decisions. It also covers
 operator-started Kargo creation through real Controller materialization and
 callback hydration, and automatic/guarded preparation through real artifact

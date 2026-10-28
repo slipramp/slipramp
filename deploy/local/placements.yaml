@@ -1,5 +1,10 @@
 apiVersion: slipramp.com/v1alpha1
 kind: PlacementConfig
+clusters:
+  homelab:
+    maximumActiveRuns: 4
+  prod-sjc1:
+    maximumActiveRuns: 4
 placements:
   homelab-infrastructure:
     cluster: homelab

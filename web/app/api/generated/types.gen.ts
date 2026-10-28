@@ -430,6 +430,44 @@ export type ClusterList = {
   offset: number;
 };
 
+export type Placement = {
+  name: CatalogName;
+  cluster: CatalogName;
+  /**
+   * Whether the configured Cluster's Controller has checked in within the connection window. A Controller that has never checked in is unreachable.
+   */
+  controllerConnectionState: "connected" | "unreachable";
+  /**
+   * Most recent Controller contact, absent when it has never checked in.
+   */
+  controllerLastSeenAt?: string;
+  namespace: string;
+  /**
+   * Effective Kubernetes service account, including the default.
+   */
+  serviceAccount: string;
+  /**
+   * Placement timeout default when one is configured.
+   */
+  timeout?: string;
+  resources: PlacementResourceRequirements;
+  /**
+   * Logical credential sources offered by this Placement.
+   */
+  credentialNames: Array<CatalogName>;
+};
+
+export type PlacementList = {
+  items: Array<Placement>;
+  /**
+   * SHA-256 checksum of the validated effective Placement set.
+   */
+  configurationChecksum: string;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type RunAssignment = {
   /**
    * Stable Run identity used to derive Kubernetes object names.
@@ -527,6 +565,31 @@ export type Run = {
    * Durable lifecycle position of the Run.
    */
   phase: RunPhase;
+  /**
+   * Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+   */
+  schedulingState?:
+    | "awaiting-review"
+    | "target-busy"
+    | "cluster-unreachable"
+    | "cluster-capacity"
+    | "eligible";
+  /**
+   * Active Run serializing the same Target. Present only when schedulingState is target-busy.
+   */
+  blockingRunId?: string;
+  /**
+   * Whole seconds since the queued Run was created, evaluated at schedulingSnapshotAt. This is historical age, not an execution ETA.
+   */
+  queueAgeSeconds?: number;
+  /**
+   * One-based FIFO position among Runs eligible for this Cluster in the same scheduling snapshot. Present only when current review, Target, and capacity constraints allow assignment. This is not an ETA.
+   */
+  eligiblePosition?: number;
+  /**
+   * Evaluation time for the derived scheduling fields.
+   */
+  schedulingSnapshotAt?: string;
   /**
    * Stable identity of the durable Target selected for this Run.
    */
@@ -1332,6 +1395,15 @@ export type CatalogDiagnostic = {
   hint?: string;
   location: CatalogSourceRange;
   related?: Array<CatalogRelatedLocation>;
+};
+
+export type PlacementResourceRequirements = {
+  requests: {
+    [key: string]: string;
+  };
+  limits: {
+    [key: string]: string;
+  };
 };
 
 export type RunAssignmentRepository = {
@@ -2555,6 +2627,50 @@ export type ListClustersResponses = {
 };
 
 export type ListClustersResponse = ListClustersResponses[keyof ListClustersResponses];
+
+export type ListPlacementsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/placements";
+};
+
+export type ListPlacementsErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Placement inventory could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListPlacementsError = ListPlacementsErrors[keyof ListPlacementsErrors];
+
+export type ListPlacementsResponses = {
+  /**
+   * Placements ordered by name.
+   */
+  200: PlacementList;
+};
+
+export type ListPlacementsResponse = ListPlacementsResponses[keyof ListPlacementsResponses];
 
 export type EnrollControllerData = {
   body: ControllerEnrollment;

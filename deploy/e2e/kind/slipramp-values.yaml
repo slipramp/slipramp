@@ -81,6 +81,9 @@ server:
         limits:
           cpu: 250m
           memory: 128Mi
+  clusters:
+    kind:
+      maximumActiveRuns: 4
   resources:
     requests:
       cpu: 25m

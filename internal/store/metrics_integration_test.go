@@ -57,7 +57,7 @@ func TestMetricsSnapshotUsesDispatchEligibilityIntegration(t *testing.T) {
 	if _, err := database.CreateRun(ctx, active, nil); err != nil {
 		t.Fatalf("create active candidate Run: %v", err)
 	}
-	if _, err := database.ClaimQueuedRun(ctx, "colo", now.Add(-9*time.Minute)); err != nil {
+	if _, err := database.ClaimQueuedRun(ctx, "colo", testSchedulingCapacity(), now.Add(-9*time.Minute)); err != nil {
 		t.Fatalf("claim active Run: %v", err)
 	}
 

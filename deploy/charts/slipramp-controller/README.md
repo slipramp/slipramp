@@ -13,6 +13,12 @@ permissions are managed separately.
 Create every entry in `executionNamespaces` before installing the chart. The
 chart binds permissions into those namespaces but does not own their lifecycle.
 
+`maximumActiveRuns` defaults to four and bounds concurrent materialization and
+observation workers for newly assigned Runs. Configure the Server's matching
+Cluster capacity at the same or lower value. The Server scheduler remains
+authoritative; this Controller limit is a local guardrail, and recovered Jobs
+remain observable even if they exceed a newly lowered limit.
+
 Every configured execution namespace is exclusively owned by this Controller
 and Slipramp installation. Do not run another active Controller for the same
 Cluster name, and do not reuse a namespace until all Jobs left by its prior

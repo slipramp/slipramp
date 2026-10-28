@@ -11,6 +11,7 @@ const (
 	controllerClusterEnvironment             = "SLIPRAMP_CONTROLLER_CLUSTER"
 	controllerServerEnvironment              = "SLIPRAMP_CONTROLLER_SERVER_URL"
 	controllerMetricsAddressEnvironment      = "SLIPRAMP_CONTROLLER_METRICS_ADDRESS"
+	controllerMaximumActiveRunsEnvironment   = "SLIPRAMP_CONTROLLER_MAXIMUM_ACTIVE_RUNS"
 	controllerEnrollmentTokenEnvironment     = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKEN"
 	controllerTokenEnvironment               = "SLIPRAMP_CONTROLLER_TOKEN"
 	controllerCheckoutImageEnvironment       = "SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE"
@@ -27,6 +28,7 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 		controllerClusterEnvironment:             "colo",
 		controllerServerEnvironment:              "https://slipramp.example.com",
 		controllerMetricsAddressEnvironment:      ":9191",
+		controllerMaximumActiveRunsEnvironment:   "7",
 		controllerEnrollmentTokenEnvironment:     "enrollment-token",
 		controllerTokenEnvironment:               "controller-token",
 		controllerCheckoutImageEnvironment:       "registry.example.com/slipramp-checkout:1",
@@ -50,6 +52,9 @@ func TestLoadControllerFromEnvironment(t *testing.T) {
 	}
 	if cfg.MetricsAddress != ":9191" {
 		t.Errorf("MetricsAddress = %q, want %q", cfg.MetricsAddress, ":9191")
+	}
+	if cfg.MaximumActiveRuns != 7 {
+		t.Errorf("MaximumActiveRuns = %d, want 7", cfg.MaximumActiveRuns)
 	}
 
 	if cfg.BearerToken != "controller-token" {
@@ -121,6 +126,13 @@ func TestLoadControllerRejectsInvalidEnvironment(t *testing.T) {
 				environment[controllerMetricsAddressEnvironment] = "localhost"
 			},
 			wantError: "metrics address",
+		},
+		{
+			name: "invalid maximum active Runs",
+			configure: func(environment map[string]string) {
+				environment[controllerMaximumActiveRunsEnvironment] = "many"
+			},
+			wantError: controllerMaximumActiveRunsEnvironment,
 		},
 		{
 			name: "invalid execution namespaces",

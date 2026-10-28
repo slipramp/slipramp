@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api"
 )
 
@@ -32,6 +34,11 @@ func renderRunText(output io.Writer, runRecord api.Run) error {
 		fmt.Sprintf("Phase: %s", runRecord.Phase),
 		fmt.Sprintf("Outcome: %s", optionalRunOutcome(runRecord.Outcome)),
 		fmt.Sprintf("Observation: %s", optionalObservation(runRecord.ObservationState)),
+		fmt.Sprintf("Scheduling: %s", optionalSchedulingState(runRecord.SchedulingState)),
+		fmt.Sprintf("Blocking Run: %s", optionalUUID(runRecord.BlockingRunID)),
+		fmt.Sprintf("Queue age: %s", optionalSeconds(runRecord.QueueAgeSeconds)),
+		fmt.Sprintf("Eligible position: %s", optionalInt32(runRecord.EligiblePosition)),
+		fmt.Sprintf("Scheduling snapshot: %s", renderTime(runRecord.SchedulingSnapshotAt)),
 		fmt.Sprintf("Target: %s (%s)", runRecord.Target, runRecord.TargetID),
 		fmt.Sprintf("Action: %s", runRecord.Action),
 		fmt.Sprintf("Source: %s", renderRunSource(runRecord.Source)),
@@ -115,6 +122,30 @@ func optionalObservation(value *api.RunObservationState) string {
 	}
 
 	return string(*value)
+}
+
+func optionalSchedulingState(value *api.RunSchedulingState) string {
+	if value == nil {
+		return "-"
+	}
+
+	return string(*value)
+}
+
+func optionalUUID(value *uuid.UUID) string {
+	if value == nil {
+		return "-"
+	}
+
+	return value.String()
+}
+
+func optionalSeconds(value *int64) string {
+	if value == nil {
+		return "-"
+	}
+
+	return fmt.Sprintf("%ds", *value)
 }
 
 func optionalInt32(value *int32) string {

@@ -5,6 +5,7 @@ replicaCount: 1
 clusterName: ""
 serverURL: ""
 executionNamespaces: []
+maximumActiveRuns: 4
 
 image:
   repository: ghcr.io/slipramp/slipramp-controller

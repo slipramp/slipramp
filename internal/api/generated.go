@@ -421,6 +421,24 @@ func (e ParameterType) Valid() bool {
 	}
 }
 
+// Defines values for PlacementControllerConnectionState.
+const (
+	PlacementControllerConnectionStateConnected   PlacementControllerConnectionState = "connected"
+	PlacementControllerConnectionStateUnreachable PlacementControllerConnectionState = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the PlacementControllerConnectionState enum.
+func (e PlacementControllerConnectionState) Valid() bool {
+	switch e {
+	case PlacementControllerConnectionStateConnected:
+		return true
+	case PlacementControllerConnectionStateUnreachable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromotionBranchDriftStatus.
 const (
 	PromotionBranchDriftStatusCurrent PromotionBranchDriftStatus = "current"
@@ -682,6 +700,33 @@ func (e RunObservationState) Valid() bool {
 	case RunObservationStatePending:
 		return true
 	case RunObservationStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSchedulingState.
+const (
+	RunSchedulingStateAwaitingReview     RunSchedulingState = "awaiting-review"
+	RunSchedulingStateClusterCapacity    RunSchedulingState = "cluster-capacity"
+	RunSchedulingStateClusterUnreachable RunSchedulingState = "cluster-unreachable"
+	RunSchedulingStateEligible           RunSchedulingState = "eligible"
+	RunSchedulingStateTargetBusy         RunSchedulingState = "target-busy"
+)
+
+// Valid indicates whether the value is a known member of the RunSchedulingState enum.
+func (e RunSchedulingState) Valid() bool {
+	switch e {
+	case RunSchedulingStateAwaitingReview:
+		return true
+	case RunSchedulingStateClusterCapacity:
+		return true
+	case RunSchedulingStateClusterUnreachable:
+		return true
+	case RunSchedulingStateEligible:
+		return true
+	case RunSchedulingStateTargetBusy:
 		return true
 	default:
 		return false
@@ -1854,6 +1899,32 @@ type ParameterValue1 = bool
 // ParameterValue2 defines model for ParameterValue.2.
 type ParameterValue2 = float64
 
+// Placement defines model for Placement.
+type Placement struct {
+	Cluster CatalogName `json:"cluster"`
+
+	// ControllerConnectionState Whether the configured Cluster's Controller has checked in within the connection window. A Controller that has never checked in is unreachable.
+	ControllerConnectionState PlacementControllerConnectionState `json:"controllerConnectionState"`
+
+	// ControllerLastSeenAt Most recent Controller contact, absent when it has never checked in.
+	ControllerLastSeenAt *time.Time `json:"controllerLastSeenAt,omitempty"`
+
+	// CredentialNames Logical credential sources offered by this Placement.
+	CredentialNames []CatalogName                 `json:"credentialNames"`
+	Name            CatalogName                   `json:"name"`
+	Namespace       string                        `json:"namespace"`
+	Resources       PlacementResourceRequirements `json:"resources"`
+
+	// ServiceAccount Effective Kubernetes service account, including the default.
+	ServiceAccount string `json:"serviceAccount"`
+
+	// Timeout Placement timeout default when one is configured.
+	Timeout *string `json:"timeout,omitempty"`
+}
+
+// PlacementControllerConnectionState Whether the configured Cluster's Controller has checked in within the connection window. A Controller that has never checked in is unreachable.
+type PlacementControllerConnectionState string
+
 // PlacementExplanation defines model for PlacementExplanation.
 type PlacementExplanation struct {
 	Cluster                ExplainedString    `json:"cluster"`
@@ -1863,6 +1934,22 @@ type PlacementExplanation struct {
 	NodeSelector           ExplainedStringMap `json:"nodeSelector"`
 	PodExtensions          ExplainedBoolean   `json:"podExtensions"`
 	ServiceAccount         ExplainedString    `json:"serviceAccount"`
+}
+
+// PlacementList defines model for PlacementList.
+type PlacementList struct {
+	// ConfigurationChecksum SHA-256 checksum of the validated effective Placement set.
+	ConfigurationChecksum string      `json:"configurationChecksum"`
+	Items                 []Placement `json:"items"`
+	Limit                 int         `json:"limit"`
+	Offset                int         `json:"offset"`
+	Total                 int         `json:"total"`
+}
+
+// PlacementResourceRequirements defines model for PlacementResourceRequirements.
+type PlacementResourceRequirements struct {
+	Limits   map[string]string `json:"limits"`
+	Requests map[string]string `json:"requests"`
 }
 
 // Problem An RFC 9457 problem detail.
@@ -2417,17 +2504,23 @@ type Run struct {
 	ActionTitle *string `json:"actionTitle,omitempty"`
 
 	// ArtifactConsumers Directly runnable actions, grouped by produced artifact name, that can consume that one artifact without other required inputs or parameters.
-	ArtifactConsumers       map[string][]RunArtifactConsumer `json:"artifactConsumers"`
-	AssignedAt              *time.Time                       `json:"assignedAt,omitempty"`
-	CanceledBy              *RunActor                        `json:"canceledBy,omitempty"`
-	CancellationRequestedAt *time.Time                       `json:"cancellationRequestedAt,omitempty"`
-	CatalogRevisionID       openapi_types.UUID               `json:"catalogRevisionId"`
-	Cluster                 CatalogName                      `json:"cluster"`
-	Commit                  GitCommit                        `json:"commit"`
-	CreatedAt               time.Time                        `json:"createdAt"`
-	CreatedBy               *RunActor                        `json:"createdBy,omitempty"`
-	ExitCode                *int32                           `json:"exitCode,omitempty"`
-	FinishedAt              *time.Time                       `json:"finishedAt,omitempty"`
+	ArtifactConsumers map[string][]RunArtifactConsumer `json:"artifactConsumers"`
+	AssignedAt        *time.Time                       `json:"assignedAt,omitempty"`
+
+	// BlockingRunID Active Run serializing the same Target. Present only when schedulingState is target-busy.
+	BlockingRunID           *openapi_types.UUID `json:"blockingRunId,omitempty"`
+	CanceledBy              *RunActor           `json:"canceledBy,omitempty"`
+	CancellationRequestedAt *time.Time          `json:"cancellationRequestedAt,omitempty"`
+	CatalogRevisionID       openapi_types.UUID  `json:"catalogRevisionId"`
+	Cluster                 CatalogName         `json:"cluster"`
+	Commit                  GitCommit           `json:"commit"`
+	CreatedAt               time.Time           `json:"createdAt"`
+	CreatedBy               *RunActor           `json:"createdBy,omitempty"`
+
+	// EligiblePosition One-based FIFO position among Runs eligible for this Cluster in the same scheduling snapshot. Present only when current review, Target, and capacity constraints allow assignment. This is not an ETA.
+	EligiblePosition *int32     `json:"eligiblePosition,omitempty"`
+	ExitCode         *int32     `json:"exitCode,omitempty"`
+	FinishedAt       *time.Time `json:"finishedAt,omitempty"`
 
 	// ID Stable identity of the immutable action execution.
 	ID     openapi_types.UUID          `json:"id"`
@@ -2449,10 +2542,13 @@ type Run struct {
 	Parameters     map[string]ParameterValue `json:"parameters"`
 
 	// Phase Durable lifecycle position of the Run.
-	Phase        RunPhase           `json:"phase"`
-	Placement    CatalogName        `json:"placement"`
-	PreparingAt  *time.Time         `json:"preparingAt,omitempty"`
-	RepositoryID openapi_types.UUID `json:"repositoryId"`
+	Phase       RunPhase    `json:"phase"`
+	Placement   CatalogName `json:"placement"`
+	PreparingAt *time.Time  `json:"preparingAt,omitempty"`
+
+	// QueueAgeSeconds Whole seconds since the queued Run was created, evaluated at schedulingSnapshotAt. This is historical age, not an execution ETA.
+	QueueAgeSeconds *int64             `json:"queueAgeSeconds,omitempty"`
+	RepositoryID    openapi_types.UUID `json:"repositoryId"`
 
 	// RerunMode Resolution mode used to rerun the parent Run.
 	RerunMode *RunRerunMode `json:"rerunMode,omitempty"`
@@ -2461,9 +2557,15 @@ type Run struct {
 	RerunOfRunID *openapi_types.UUID `json:"rerunOfRunId,omitempty"`
 	Review       RunReview           `json:"review"`
 	Runtime      CatalogName         `json:"runtime"`
-	Source       RunSource           `json:"source"`
-	StartedAt    *time.Time          `json:"startedAt,omitempty"`
-	Target       CatalogName         `json:"target"`
+
+	// SchedulingSnapshotAt Evaluation time for the derived scheduling fields.
+	SchedulingSnapshotAt *time.Time `json:"schedulingSnapshotAt,omitempty"`
+
+	// SchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+	SchedulingState *RunSchedulingState `json:"schedulingState,omitempty"`
+	Source          RunSource           `json:"source"`
+	StartedAt       *time.Time          `json:"startedAt,omitempty"`
+	Target          CatalogName         `json:"target"`
 
 	// TargetID Stable identity of the durable Target selected for this Run.
 	TargetID openapi_types.UUID `json:"targetId"`
@@ -2474,6 +2576,9 @@ type Run struct {
 
 // RunObservationState Derived freshness of the execution observation. Present only while the Run is assigned, preparing, or running. Pending means a connected controller has not yet observed a recently assigned Run. Unknown means the controller is unreachable or its observation is stale; neither state changes the durable lifecycle phase.
 type RunObservationState string
+
+// RunSchedulingState Current reason a queued Run has not been assigned. Present only while phase is queued and derived from a point-in-time scheduling snapshot.
+type RunSchedulingState string
 
 // RunActor defines model for RunActor.
 type RunActor struct {
@@ -2976,6 +3081,12 @@ type ListFailedGitTriggerDeliveriesParams struct {
 
 // ListNotificationDeliveriesParams defines parameters for ListNotificationDeliveries.
 type ListNotificationDeliveriesParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListPlacementsParams defines parameters for ListPlacements.
+type ListPlacementsParams struct {
 	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
@@ -3504,6 +3615,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/notification-deliveries (the `ListNotificationDeliveries` operationId).
 	ListNotificationDeliveries(ctx context.Context, params *ListNotificationDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPlacements List configured execution Placements
+	//
+	// Lists the sanitized effective Placement configuration currently loaded by the Server together with observed Controller connectivity. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+	//
+	// Corresponds with GET /api/v1/placements (the `ListPlacements` operationId).
+	ListPlacements(ctx context.Context, params *ListPlacementsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	//
@@ -4253,6 +4371,23 @@ func (c *Client) SubmitKargoPromotion(ctx context.Context, integration CatalogNa
 // Corresponds with GET /api/v1/notification-deliveries (the `ListNotificationDeliveries` operationId).
 func (c *Client) ListNotificationDeliveries(ctx context.Context, params *ListNotificationDeliveriesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListNotificationDeliveriesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListPlacements List configured execution Placements
+//
+// Lists the sanitized effective Placement configuration currently loaded by the Server together with observed Controller connectivity. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+//
+// Corresponds with GET /api/v1/placements (the `ListPlacements` operationId).
+func (c *Client) ListPlacements(ctx context.Context, params *ListPlacementsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPlacementsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6067,6 +6202,72 @@ func NewListNotificationDeliveriesRequest(server string, params *ListNotificatio
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/notification-deliveries")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListPlacementsRequest constructs an http.Request for the ListPlacements method
+func NewListPlacementsRequest(server string, params *ListPlacementsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/placements")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -8984,6 +9185,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/notification-deliveries (the `ListNotificationDeliveries` operationId).
 	ListNotificationDeliveriesWithResponse(ctx context.Context, params *ListNotificationDeliveriesParams, reqEditors ...RequestEditorFn) (*ListNotificationDeliveriesResponse, error)
 
+	// ListPlacementsWithResponse List configured execution Placements
+	//
+	// Lists the sanitized effective Placement configuration currently loaded by the Server together with observed Controller connectivity. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/placements (the `ListPlacements` operationId).
+	ListPlacementsWithResponse(ctx context.Context, params *ListPlacementsParams, reqEditors ...RequestEditorFn) (*ListPlacementsResponse, error)
+
 	// ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 	//
 	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -10612,6 +10822,82 @@ func (r ListNotificationDeliveriesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListNotificationDeliveriesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListPlacementsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PlacementList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPlacementsResponse) GetJSON200() *PlacementList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListPlacementsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListPlacementsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListPlacementsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListPlacementsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListPlacementsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPlacementsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPlacementsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPlacementsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPlacementsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14321,6 +14607,21 @@ func (c *ClientWithResponses) ListNotificationDeliveriesWithResponse(ctx context
 	return ParseListNotificationDeliveriesResponse(rsp)
 }
 
+// ListPlacementsWithResponse List configured execution Placements
+//
+// Lists the sanitized effective Placement configuration currently loaded by the Server together with observed Controller connectivity. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/placements (the `ListPlacements` operationId).
+func (c *ClientWithResponses) ListPlacementsWithResponse(ctx context.Context, params *ListPlacementsParams, reqEditors ...RequestEditorFn) (*ListPlacementsResponse, error) {
+	rsp, err := c.ListPlacements(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPlacementsResponse(rsp)
+}
+
 // ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 //
 // Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -16137,6 +16438,67 @@ func ParseListNotificationDeliveriesResponse(rsp *http.Response) (*ListNotificat
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest NotificationDeliveryList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPlacementsResponse parses an HTTP response from a ListPlacementsWithResponse call
+func ParseListPlacementsResponse(rsp *http.Response) (*ListPlacementsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPlacementsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PlacementList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -19052,6 +19414,9 @@ type ServerInterface interface {
 	// ListNotificationDeliveries List notification delivery history
 	// (GET /api/v1/notification-deliveries)
 	ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, params ListNotificationDeliveriesParams)
+	// ListPlacements List configured execution Placements
+	// (GET /api/v1/placements)
+	ListPlacements(w http.ResponseWriter, r *http.Request, params ListPlacementsParams)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(w http.ResponseWriter, r *http.Request, params ListPromotionBranchDriftParams)
@@ -19761,6 +20126,52 @@ func (siw *ServerInterfaceWrapper) ListNotificationDeliveries(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListNotificationDeliveries(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlacements operation middleware
+func (siw *ServerInterfaceWrapper) ListPlacements(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPlacementsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlacements(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21909,6 +22320,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets", wrapper.ListTargets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/targets/{targetId}", wrapper.GetTarget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements", wrapper.ListPlacements)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/promotions/{promotionId}/dispatch", wrapper.ReportKargoPromotionDispatch)
@@ -23384,6 +23796,98 @@ func (response ListNotificationDeliveries405ApplicationProblemPlusJSONResponse) 
 type ListNotificationDeliveries500ApplicationProblemPlusJSONResponse Problem
 
 func (response ListNotificationDeliveries500ApplicationProblemPlusJSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementsRequestObject struct {
+	Params ListPlacementsParams
+}
+
+type ListPlacementsResponseObject interface {
+	VisitListPlacementsResponse(w http.ResponseWriter) error
+}
+
+type ListPlacements200JSONResponse PlacementList
+
+func (response ListPlacements200JSONResponse) VisitListPlacementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacements400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacements400ApplicationProblemPlusJSONResponse) VisitListPlacementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacements401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacements401ApplicationProblemPlusJSONResponse) VisitListPlacementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacements403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacements403ApplicationProblemPlusJSONResponse) VisitListPlacementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacements405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacements405ApplicationProblemPlusJSONResponse) VisitListPlacementsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacements500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacements500ApplicationProblemPlusJSONResponse) VisitListPlacementsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -27873,6 +28377,9 @@ type StrictServerInterface interface {
 	// ListNotificationDeliveries List notification delivery history
 	// (GET /api/v1/notification-deliveries)
 	ListNotificationDeliveries(ctx context.Context, request ListNotificationDeliveriesRequestObject) (ListNotificationDeliveriesResponseObject, error)
+	// ListPlacements List configured execution Placements
+	// (GET /api/v1/placements)
+	ListPlacements(ctx context.Context, request ListPlacementsRequestObject) (ListPlacementsResponseObject, error)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(ctx context.Context, request ListPromotionBranchDriftRequestObject) (ListPromotionBranchDriftResponseObject, error)
@@ -28445,6 +28952,32 @@ func (sh *strictHandler) ListNotificationDeliveries(w http.ResponseWriter, r *ht
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListNotificationDeliveriesResponseObject); ok {
 		if err := validResponse.VisitListNotificationDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPlacements operation middleware
+func (sh *strictHandler) ListPlacements(w http.ResponseWriter, r *http.Request, params ListPlacementsParams) {
+	var request ListPlacementsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPlacements(ctx, request.(ListPlacementsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlacements")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlacementsResponseObject); ok {
+		if err := validResponse.VisitListPlacementsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

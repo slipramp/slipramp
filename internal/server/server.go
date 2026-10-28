@@ -93,6 +93,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	runs := run.NewService(run.Dependencies{
 		Creation:      persistence.database,
 		History:       persistence.database,
+		Scheduling:    persistence.database,
 		Assignments:   persistence.database,
 		Cancellations: persistence.database,
 		Reviews:       persistence.database,
@@ -241,6 +242,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
 			Clusters:                 clusters,
+			Placements:               placement.NewInventoryService(cfg.Placements, clusters),
 			ControllerIdentities:     identities,
 			ControllerCommands:       controllerCommands,
 			Repositories:             repositories,

@@ -705,6 +705,52 @@ func TestGetRunReportsDerivedObservationState(t *testing.T) {
 	}
 }
 
+func TestGetRunReportsSchedulingSnapshot(t *testing.T) {
+	t.Parallel()
+
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
+	blockingRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
+	snapshotAt := time.Date(2026, time.October, 27, 12, 0, 0, 0, time.UTC)
+	runs := &recordingRunService{
+		loaded: run.Run{
+			ID: runID, Phase: run.PhaseQueued, ClusterName: "colo",
+			Review: run.Review{State: run.ReviewStateNotRequired}, Parameters: map[string]any{},
+		},
+		scheduling: map[uuid.UUID]run.Scheduling{
+			runID: {
+				State: run.SchedulingStateTargetBusy, BlockingRunID: &blockingRunID,
+				QueueAge: 90 * time.Second, SnapshotAt: snapshotAt,
+			},
+		},
+	}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/runs/"+runID.String(),
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(&recordingClusterService{}, nil, nil, nil, runs, nil, nil).
+		ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
+	}
+
+	var result api.Run
+	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if result.SchedulingState == nil ||
+		*result.SchedulingState != api.RunSchedulingStateTargetBusy ||
+		result.BlockingRunID == nil || *result.BlockingRunID != blockingRunID ||
+		result.QueueAgeSeconds == nil || *result.QueueAgeSeconds != 90 ||
+		result.SchedulingSnapshotAt == nil || !result.SchedulingSnapshotAt.Equal(snapshotAt) {
+		t.Errorf("scheduling response = %#v", result)
+	}
+}
+
 func TestCancelRunMapsExpectedFailures(t *testing.T) {
 	t.Parallel()
 
@@ -770,6 +816,7 @@ type recordingRunService struct {
 	reviewRequest run.ReviewDecisionRequest
 	reviewed      run.Run
 	reviewError   error
+	scheduling    map[uuid.UUID]run.Scheduling
 }
 
 func (s *recordingRunService) DecideRunReview(
@@ -816,4 +863,13 @@ func (s *recordingRunService) ReportObservation(_ context.Context, observation r
 	s.observation = observation
 
 	return s.reportError
+}
+
+func (s *recordingRunService) Scheduling(
+	context.Context,
+	[]run.Run,
+	map[string]bool,
+	time.Time,
+) (map[uuid.UUID]run.Scheduling, error) {
+	return s.scheduling, nil
 }

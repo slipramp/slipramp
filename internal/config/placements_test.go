@@ -18,10 +18,14 @@ func TestLoadServerPlacementsFile(t *testing.T) {
 	path := writePlacementsFile(t, `
 apiVersion: slipramp.com/v1alpha1
 kind: PlacementConfig
+clusters:
+  colo:
+    maximumActiveRuns: 6
 placements:
   infrastructure-admin:
     cluster: colo
     jobNamespace: slipramp-runs
+    maximumActiveRuns: 2
     serviceAccountName: infrastructure-admin
     timeout: 30m
     resources:
@@ -77,6 +81,13 @@ placements:
 
 	if configured.JobNamespace != "slipramp-runs" {
 		t.Errorf("JobNamespace = %q, want %q", configured.JobNamespace, "slipramp-runs")
+	}
+	if configured.MaximumActiveRuns != 2 {
+		t.Errorf("MaximumActiveRuns = %d, want 2", configured.MaximumActiveRuns)
+	}
+	clusterMaximum, ok := cfg.Placements.ClusterMaximumActiveRuns("colo")
+	if !ok || clusterMaximum != 6 {
+		t.Errorf("cluster MaximumActiveRuns = (%d, %t), want (6, true)", clusterMaximum, ok)
 	}
 
 	if configured.ServiceAccountName != "infrastructure-admin" {

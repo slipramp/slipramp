@@ -216,18 +216,19 @@ func renderRunListText(output io.Writer, list api.RunList) error {
 	table := tabwriter.NewWriter(output, 0, 4, 2, ' ', 0)
 	if _, err := fmt.Fprintln(
 		table,
-		"ID\tTARGET\tACTION\tPHASE\tOUTCOME\tREVIEW\tOBSERVATION\tCLUSTER\tSOURCE\tCREATED",
+		"ID\tTARGET\tACTION\tPHASE\tSCHEDULING\tOUTCOME\tREVIEW\tOBSERVATION\tCLUSTER\tSOURCE\tCREATED",
 	); err != nil {
 		return err
 	}
 	for _, runRecord := range list.Items {
 		if _, err := fmt.Fprintf(
 			table,
-			"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			runRecord.ID,
 			runRecord.Target,
 			runRecord.Action,
 			runRecord.Phase,
+			optionalSchedulingState(runRecord.SchedulingState),
 			optionalRunOutcome(runRecord.Outcome),
 			runRecord.Review.State,
 			optionalObservation(runRecord.ObservationState),

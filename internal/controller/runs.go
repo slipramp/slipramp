@@ -128,6 +128,21 @@ func (c *Controller) executeRun(
 	}()
 
 	if assignment != nil {
+		if c.runSlots != nil {
+			select {
+			case c.runSlots <- struct{}{}:
+				defer func() { <-c.runSlots }()
+			case command := <-observer.cancellations:
+				session := newRunObservationSession(c, handle, observer)
+				session.cancellation = &command
+				session.run(ctx)
+
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+
 		select {
 		case command := <-observer.cancellations:
 			session := newRunObservationSession(c, handle, observer)

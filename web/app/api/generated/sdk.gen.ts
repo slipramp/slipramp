@@ -110,6 +110,9 @@ import type {
   ListNotificationDeliveriesData,
   ListNotificationDeliveriesErrors,
   ListNotificationDeliveriesResponses,
+  ListPlacementsData,
+  ListPlacementsErrors,
+  ListPlacementsResponses,
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
@@ -653,6 +656,31 @@ export const listClusters = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/clusters",
+    ...options,
+  });
+
+/**
+ * List configured execution Placements
+ *
+ * Lists the sanitized effective Placement configuration currently loaded by the Server together with observed Controller connectivity. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+ */
+export const listPlacements = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPlacementsData, ThrowOnError>,
+): RequestResult<ListPlacementsResponses, ListPlacementsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListPlacementsResponses, ListPlacementsErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/placements",
     ...options,
   });
 

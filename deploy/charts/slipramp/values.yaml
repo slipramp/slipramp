@@ -81,6 +81,7 @@ server:
       maximumBackoff: 1h
     retentionPeriod: 720h
   placements: {}
+  clusters: {}
 
   livenessProbe:
     initialDelaySeconds: 0

@@ -79,6 +79,38 @@ jobs:
 
       - run: task integration
 
+  acceptance:
+    name: Disposable kind acceptance
+    runs-on: slipramp-prod
+    timeout-minutes: 40
+    continue-on-error: true
+    env:
+      SLIPRAMP_ACCEPTANCE_CLUSTER_NAME: slipramp-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.37.0
+
+      - name: Install Task
+        run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
+
+      - run: task acceptance:kind
+
+      - name: Clean up disposable cluster
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x .bin/kind ]]; then
+            .bin/kind delete cluster --name "$SLIPRAMP_ACCEPTANCE_CLUSTER_NAME"
+          fi
+
   deploy-mascot:
     name: Deploy mascot gallery
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

@@ -25,12 +25,18 @@ const (
 type fileDocument struct {
 	APIVersion string                   `yaml:"apiVersion"`
 	Kind       string                   `yaml:"kind"`
+	Clusters   map[string]fileCluster   `yaml:"clusters,omitempty"`
 	Placements map[string]filePlacement `yaml:"placements"`
+}
+
+type fileCluster struct {
+	MaximumActiveRuns *int32 `yaml:"maximumActiveRuns,omitempty"`
 }
 
 type filePlacement struct {
 	ClusterName        string                    `yaml:"cluster"`
 	JobNamespace       string                    `yaml:"jobNamespace"`
+	MaximumActiveRuns  *int32                    `yaml:"maximumActiveRuns,omitempty"`
 	ServiceAccountName string                    `yaml:"serviceAccountName,omitempty"`
 	Timeout            *string                   `yaml:"timeout,omitempty"`
 	Resources          fileResourceRequirements  `yaml:"resources,omitempty"`
@@ -89,9 +95,22 @@ func Decode(input io.Reader) (Set, error) {
 		return Set{}, errors.New("placement configuration must define placements")
 	}
 
+	clusterMaximumActiveRuns := make(map[string]int32, len(document.Clusters))
+	for _, name := range slices.Sorted(maps.Keys(document.Clusters)) {
+		maximum, err := positiveMaximumActiveRuns("cluster", name, document.Clusters[name].MaximumActiveRuns)
+		if err != nil {
+			return Set{}, err
+		}
+		clusterMaximumActiveRuns[name] = maximum
+	}
+
 	configured := make(map[string]Config, len(document.Placements))
 	for _, name := range slices.Sorted(maps.Keys(document.Placements)) {
 		input := document.Placements[name]
+		maximumActiveRuns, err := positiveMaximumActiveRuns("placement", name, input.MaximumActiveRuns)
+		if err != nil {
+			return Set{}, err
+		}
 		timeout, err := parseFileTimeout(name, input.Timeout)
 		if err != nil {
 			return Set{}, err
@@ -112,6 +131,7 @@ func Decode(input io.Reader) (Set, error) {
 		configured[name] = Config{
 			ClusterName:        input.ClusterName,
 			JobNamespace:       input.JobNamespace,
+			MaximumActiveRuns:  maximumActiveRuns,
 			ServiceAccountName: input.ServiceAccountName,
 			Timeout:            timeout,
 			Resources: ResourceRequirements{
@@ -124,7 +144,18 @@ func Decode(input io.Reader) (Set, error) {
 		}
 	}
 
-	return NewSet(configured)
+	return NewSetWithClusterLimits(configured, clusterMaximumActiveRuns)
+}
+
+func positiveMaximumActiveRuns(subject, name string, value *int32) (int32, error) {
+	if value == nil {
+		return 0, nil
+	}
+	if *value < 1 {
+		return 0, fmt.Errorf("%s %q maximum active Runs must be positive", subject, name)
+	}
+
+	return *value, nil
 }
 
 func decodeFilePodTemplate(placementName string, node yaml.Node) (*corev1.PodTemplateSpec, error) {

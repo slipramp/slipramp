@@ -12,3 +12,24 @@ test("pending review takes precedence over the queued execution status", () => {
   assert.equal(runStatusLabel(approved), "queued");
   assert.equal(runStatusColor(approved), "gray");
 });
+
+test("queued status presents the derived scheduling reason", () => {
+  const review = { state: "not-required" };
+
+  assert.equal(
+    runStatusLabel({ phase: "queued", review, schedulingState: "target-busy" }),
+    "Target busy",
+  );
+  assert.equal(
+    runStatusLabel({ phase: "queued", review, schedulingState: "cluster-unreachable" }),
+    "Cluster unreachable",
+  );
+  assert.equal(
+    runStatusLabel({ phase: "queued", review, schedulingState: "cluster-capacity" }),
+    "Cluster at capacity",
+  );
+  assert.equal(
+    runStatusLabel({ phase: "queued", review, schedulingState: "eligible" }),
+    "Eligible",
+  );
+});

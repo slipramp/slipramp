@@ -124,6 +124,49 @@ func TestControllerStopsWhenContextIsCanceled(t *testing.T) {
 	}
 }
 
+func TestRunWorkerLimitBoundsNewAssignments(t *testing.T) {
+	t.Parallel()
+
+	ensureCalls := make(chan uuid.UUID, 2)
+	jobs := &stubRunJobs{ensure: func(ctx context.Context, assignment api.RunAssignment) (ensuredRunJob, error) {
+		ensureCalls <- assignment.ID
+		<-ctx.Done()
+
+		return ensuredRunJob{}, ctx.Err()
+	}}
+	app := newTestController(jobs, &memoryLogReporter{})
+	app.runSlots = make(chan struct{}, 1)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	firstID := uuid.New()
+	secondID := uuid.New()
+	app.runWorkers.Add(2)
+	go app.executeRun(
+		ctx,
+		jobHandle{runID: firstID},
+		&api.RunAssignment{ID: firstID},
+		&runWorker{cancellations: make(chan api.CancelRunCommand, 1), done: make(chan struct{})},
+	)
+	if got := <-ensureCalls; got != firstID {
+		t.Fatalf("first materialized Run = %s, want %s", got, firstID)
+	}
+
+	go app.executeRun(
+		ctx,
+		jobHandle{runID: secondID},
+		&api.RunAssignment{ID: secondID},
+		&runWorker{cancellations: make(chan api.CancelRunCommand, 1), done: make(chan struct{})},
+	)
+	select {
+	case got := <-ensureCalls:
+		t.Fatalf("materialized Run %s while the worker limit was full", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	cancel()
+	app.runWorkers.Wait()
+}
+
 func TestControllerStopsWhenMetricsServerFails(t *testing.T) {
 	t.Parallel()
 
