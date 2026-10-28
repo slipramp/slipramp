@@ -1299,7 +1299,9 @@ Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.
 Versions are pinned and warnings fail. Go uses golangci-lint v2; frontend uses
 Oxlint and Oxfmt. Disposable kind acceptance remains available through the
-local task but is not run in hosted CI. It exercises the built CLI across
+local task but is not run in hosted CI. Its Go suite provisions the environment
+through the real kind, Helm, kubectl, Docker, and Git command boundaries, then
+exercises the built CLI across
 Target discovery and explanation, Run creation and control, log streaming,
 Artifact transfer, pagination, reruns, and review decisions. It also covers
 operator-started Kargo creation through real Controller materialization and

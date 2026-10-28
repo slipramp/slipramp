@@ -27,6 +27,15 @@ spec:
       containers:
         - name: postgres
           image: postgres:18.6-alpine3.24
+          # Keep PostgreSQL signalable without deleting the Pod-backed acceptance data.
+          command:
+            - /bin/sh
+            - -c
+            - |
+              /usr/local/bin/docker-entrypoint.sh postgres &
+              postgres_pid=$!
+              trap 'kill -TERM "$postgres_pid"; wait "$postgres_pid"' TERM INT
+              wait "$postgres_pid"
           env:
             - name: POSTGRES_DB
               value: slipramp
@@ -88,6 +97,16 @@ spec:
       containers:
         - name: rustfs
           image: rustfs/rustfs:1.0.1
+          # Keep RustFS signalable without deleting the Pod-backed acceptance data.
+          command:
+            - /bin/sh
+            - -c
+            - |
+              /entrypoint.sh rustfs &
+              rustfs_pid=$!
+              printf '%s\n' "$rustfs_pid" > /tmp/rustfs.pid
+              trap 'kill -TERM "$rustfs_pid"; wait "$rustfs_pid"' TERM INT
+              wait "$rustfs_pid"
           env:
             - name: RUSTFS_ACCESS_KEY
               value: slipramp

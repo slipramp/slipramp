@@ -30,6 +30,12 @@ It then verifies the accepted baseline end to end:
 - default per-Target serialization plus CLI queued and running cancellation,
   including the unsuccessful terminal-wait exit contract;
 - controller and Server restart recovery while Runs are active;
+- durable log recovery after RustFS is paused during an active Run, including
+  Job completion while storage is down and exact sealed-log recovery;
+- repeated cancellation delivery while RustFS is paused, including Controller
+  responsiveness, terminal log recovery, and execution Job cleanup;
+- active and queued Run recovery while PostgreSQL is paused, including truthful
+  health and readiness, retained Job cleanup, exact logs, and resumed scheduling;
 - automatic Kargo Promotion approval without a preparation Run;
 - operator-started Kargo Promotion creation through Controller materialization
   and callback hydration of the same durable record;
@@ -49,8 +55,8 @@ controllers or exercise their target-branch push and reconciliation. Those
 behaviors remain part of operational cutover acceptance.
 
 The cluster and all generated SSH keys are deleted when the test exits. Run it
-from the repository root with Docker, Go, kubectl, curl, Git, jq, and
-`ssh-keygen` available. The Task workflow installs pinned kind and Helm
+from the repository root with Docker, Go, kubectl, Git, and `ssh-keygen`
+available. The Task workflow installs pinned kind and Helm
 binaries:
 
 ```console
@@ -80,8 +86,8 @@ interactive demo or failure diagnosis. The context is
 The cluster name, forwarded Server and web ports, timeout, kind binary, and
 kubectl binary can be overridden with the `SLIPRAMP_ACCEPTANCE_*`,
 `SLIPRAMP_KIND_BIN`, `SLIPRAMP_HELM_BIN`, and `SLIPRAMP_KUBECTL_BIN`
-environment variables used near the top of
-[`kind-acceptance.sh`](../../../scripts/e2e/kind-acceptance.sh).
+environment variables read by the Go acceptance suite in
+[`internal/acceptance/kind`](../../../internal/acceptance/kind/suite_test.go).
 
 The suite remains an explicit local task rather than part of the hosted `Checks`
 workflow.

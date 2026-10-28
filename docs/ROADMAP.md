@@ -77,10 +77,18 @@ intentionally deferred until Slipramp begins versioning releases:
 - [ ] Broaden acceptance for multiple execution Clusters, network interruptions,
       Controller/Server restarts, and PostgreSQL/S3 outages, including retained
       log recovery, SSE reconnection, and cancellation under failure. Terminal
-      Pod loss with a partial durable log has unit and persistence coverage;
-      exercise it against real dependencies with responsive command polling
-      during blocked Run work, coalesced cancellation, bounded Kargo command
-      attempts, Promotion preparation retry recovery, and terminal diagnostics.
+      Pod loss with a partial durable log has unit and persistence coverage. A
+      kind scenario now pauses RustFS after the first durable log chunk,
+      completes the Job while storage is unavailable, resumes the service, and
+      verifies the exact sealed log. A second scenario repeatedly requests
+      cancellation while RustFS is paused, proves the Controller remains
+      responsive, then verifies the exact canceled log and Job cleanup after
+      recovery. A PostgreSQL outage scenario keeps an active terminal Job for
+      recovery, prevents a queued Run from dispatching, and verifies exact log
+      closure plus resumed scheduling after the database returns. Exercise the
+      remaining cases against real dependencies with cancellation submission
+      during a database outage, bounded Kargo command attempts, Promotion
+      preparation retry recovery, and terminal diagnostics.
 - [ ] Expand operational diagnostics beyond the implemented Server HTTP,
       process, runtime, PostgreSQL-pool, current-state, and core worker metrics
       plus the Controller process/runtime foundation. Add focused signals only

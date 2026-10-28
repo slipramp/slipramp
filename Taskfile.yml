@@ -261,8 +261,9 @@ tasks:
     deps: [deps:helm, deps:kind]
     env:
       SLIPRAMP_HELM_BIN: "{{.HELM}}"
+      SLIPRAMP_RUN_KIND_ACCEPTANCE: "1"
     cmds:
-      - ./scripts/e2e/kind-acceptance.sh
+      - go test -v -count=1 -timeout=30m ./internal/acceptance/kind
 
   build:
     desc: Build all processes
