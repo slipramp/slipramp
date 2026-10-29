@@ -844,6 +844,7 @@ export type Artifact = {
   provenance: ArtifactProvenance;
   createdAt: string;
   sealedAt?: string;
+  report?: RunReportSummary;
 };
 
 export type ArtifactList = {
@@ -859,9 +860,82 @@ export type ArtifactStorageUsage = {
    */
   artifactCount: number;
   /**
-   * Sum of the included records' sizeBytes values. For open or failed logs, this is the durable recorded prefix. Expired artifacts remain included until content deletion finishes and metadata is marked deleted.
+   * Sum of the included records' sizeBytes values and any report projection sizes. For open or failed logs, sizeBytes is the durable recorded prefix. Expired artifacts remain included until content deletion finishes and metadata is marked deleted.
    */
   recordedBytes: number;
+};
+
+export type RunReportSummary = TerraformPlanReportSummary;
+
+export type RunReportEnvelope = {
+  artifactId: string;
+  runId: string;
+  kind: "terraform-plan";
+  schemaVersion: number;
+  adapterVersion: number;
+  tool: string;
+  toolVersion?: string;
+  mode: "preview";
+  createdAt: string;
+};
+
+export type RunReport = TerraformPlanReport;
+
+export type TerraformPlanReportSummary = RunReportEnvelope & {
+  kind: "terraform-plan";
+  summary: TerraformPlanSummary;
+};
+
+export type TerraformPlanReport = RunReportEnvelope & {
+  kind: "terraform-plan";
+  summary: TerraformPlanSummary;
+  resourceChanges: Array<TerraformResourceChange>;
+  resourceDrift: Array<TerraformResourceChange>;
+};
+
+export type TerraformPlanSummary = {
+  resourceChanges: TerraformActionCounts;
+  driftedResources: number;
+  checks: TerraformCheckCounts;
+  outputChanges: TerraformActionCounts;
+  applyable?: boolean;
+  complete?: boolean;
+  errored?: boolean;
+};
+
+export type TerraformActionCounts = {
+  total: number;
+  noOp: number;
+  create: number;
+  read: number;
+  update: number;
+  delete: number;
+  replace: number;
+};
+
+export type TerraformCheckCounts = {
+  total: number;
+  pass: number;
+  fail: number;
+  error: number;
+  unknown: number;
+};
+
+export type TerraformResourceChange = {
+  address: string;
+  /**
+   * Opaque Terraform key distinguishing an old object retained during replacement from the current object at the same address.
+   */
+  replacedObjectKey?: string;
+  previousAddress?: string;
+  moduleAddress?: string;
+  mode: string;
+  type: string;
+  name: string;
+  providerName: string;
+  action: "no-op" | "create" | "read" | "update" | "delete" | "replace";
+  replacementOrder?: "destroy-before-create" | "create-before-destroy";
+  actionReason?: string;
 };
 
 export type LogCursor = {
@@ -4043,6 +4117,50 @@ export type DownloadArtifactResponses = {
 };
 
 export type DownloadArtifactResponse = DownloadArtifactResponses[keyof DownloadArtifactResponses];
+
+export type GetArtifactReportData = {
+  body?: never;
+  path: {
+    artifactId: string;
+  };
+  query?: never;
+  url: "/api/v1/artifacts/{artifactId}/report";
+};
+
+export type GetArtifactReportErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read sensitive artifact contents.
+   */
+  403: Problem;
+  /**
+   * The artifact, report, or retained report projection does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * The report projection could not be read.
+   */
+  500: Problem;
+};
+
+export type GetArtifactReportError = GetArtifactReportErrors[keyof GetArtifactReportErrors];
+
+export type GetArtifactReportResponses = {
+  /**
+   * Immutable typed report detail without source values.
+   */
+  200: RunReport;
+};
+
+export type GetArtifactReportResponse =
+  GetArtifactReportResponses[keyof GetArtifactReportResponses];
 
 export type BeginOidcLoginData = {
   body?: never;

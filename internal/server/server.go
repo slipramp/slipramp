@@ -121,11 +121,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		Notifications: notificationService,
 	})
 	artifacts := artifact.NewService(artifact.Dependencies{
-		Runs:      persistence.database,
-		Artifacts: persistence.database,
-		LogChunks: persistence.database,
-		Contents:  persistence.artifactContents,
-		TokenKey:  []byte(cfg.ArtifactTokenSecret),
+		Runs:           persistence.database,
+		Artifacts:      persistence.database,
+		LogChunks:      persistence.database,
+		Contents:       persistence.artifactContents,
+		ReportObserver: metrics,
+		TokenKey:       []byte(cfg.ArtifactTokenSecret),
 	})
 	provider, err := productauth.DiscoverOIDCProvider(ctx, cfg.ProductAuthentication.OIDC)
 	if err != nil {

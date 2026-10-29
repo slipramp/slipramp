@@ -39,6 +39,12 @@ SELECT EXISTS (
     JOIN artifacts ON artifacts.id = artifact_log_chunks.artifact_id
     WHERE artifacts.retention_state <> 'deleted'
       AND artifact_log_chunks.object_key = $1
+    UNION ALL
+    SELECT 1
+    FROM artifact_reports
+    JOIN artifacts ON artifacts.id = artifact_reports.artifact_id
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifact_reports.projection_object_key = $1
 ) AS exists
 `
 
@@ -435,8 +441,11 @@ func (q *Queries) GetArtifactRunClusterName(ctx context.Context, runID pgtype.UU
 const getArtifactStorageUsage = `-- name: GetArtifactStorageUsage :one
 SELECT
     COUNT(*)::bigint AS artifact_count,
-    COALESCE(SUM(size_bytes), 0)::bigint AS recorded_bytes
+    COALESCE(SUM(
+        artifacts.size_bytes + COALESCE(artifact_reports.projection_size_bytes, 0)
+    ), 0)::bigint AS recorded_bytes
 FROM artifacts
+LEFT JOIN artifact_reports ON artifact_reports.artifact_id = artifacts.id
 WHERE retention_state <> 'deleted'
 `
 
@@ -552,6 +561,10 @@ WHERE id = $1
 UNION ALL
 SELECT object_key
 FROM artifact_log_chunks
+WHERE artifact_id = $1
+UNION ALL
+SELECT projection_object_key
+FROM artifact_reports
 WHERE artifact_id = $1
 ORDER BY object_key
 `

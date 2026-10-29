@@ -55,8 +55,11 @@ ORDER BY created_at, id;
 -- name: GetArtifactStorageUsage :one
 SELECT
     COUNT(*)::bigint AS artifact_count,
-    COALESCE(SUM(size_bytes), 0)::bigint AS recorded_bytes
+    COALESCE(SUM(
+        artifacts.size_bytes + COALESCE(artifact_reports.projection_size_bytes, 0)
+    ), 0)::bigint AS recorded_bytes
 FROM artifacts
+LEFT JOIN artifact_reports ON artifact_reports.artifact_id = artifacts.id
 WHERE retention_state <> 'deleted';
 
 -- name: GetArtifactProvenance :one
@@ -205,6 +208,10 @@ UNION ALL
 SELECT object_key
 FROM artifact_log_chunks
 WHERE artifact_id = sqlc.arg(artifact_id)
+UNION ALL
+SELECT projection_object_key
+FROM artifact_reports
+WHERE artifact_id = sqlc.arg(artifact_id)
 ORDER BY object_key;
 
 -- name: MarkArtifactDeleted :one
@@ -226,4 +233,10 @@ SELECT EXISTS (
     JOIN artifacts ON artifacts.id = artifact_log_chunks.artifact_id
     WHERE artifacts.retention_state <> 'deleted'
       AND artifact_log_chunks.object_key = sqlc.arg(candidate_object_key)
+    UNION ALL
+    SELECT 1
+    FROM artifact_reports
+    JOIN artifacts ON artifacts.id = artifact_reports.artifact_id
+    WHERE artifacts.retention_state <> 'deleted'
+      AND artifact_reports.projection_object_key = sqlc.arg(candidate_object_key)
 ) AS exists;

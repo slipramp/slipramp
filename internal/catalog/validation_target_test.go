@@ -6,6 +6,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/runreport"
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
@@ -85,6 +86,34 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 				input.Targets[0].Spec.Actions["preview"] = action
 			},
 			wantError: "mediaType",
+		},
+		{
+			name: "Terraform report is sensitive",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Artifacts = map[string]catalog.Artifact{
+					"plan-report": {
+						Path:      "/artifacts/plan.json",
+						MediaType: runreport.TerraformPlanMediaType,
+					},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: "must set sensitive: true",
+		},
+		{
+			name: "sensitive Terraform report",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Artifacts = map[string]catalog.Artifact{
+					"plan-report": {
+						Path:      "/artifacts/plan.json",
+						MediaType: runreport.TerraformPlanMediaType + "; charset=utf-8",
+						Sensitive: true,
+					},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
 		},
 		{
 			name: "undefined source action",

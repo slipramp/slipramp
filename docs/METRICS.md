@@ -181,14 +181,18 @@ names, commit SHAs, paths, URLs, diagnostics, and other unbounded values.
 | `slipramp.artifact.reconciliation.runs` | `slipramp_artifact_reconciliation_runs_total` | counter / `{run}` | `result=succeeded|failed` |
 | `slipramp.artifact.reconciliation.duration` | `slipramp_artifact_reconciliation_duration_seconds` | histogram / `s` | same `result` |
 | `slipramp.artifact.reconciliation.items` | `slipramp_artifact_reconciliation_items_total` | counter / `{item}` | `operation=expired|deleted|orphan_deleted` |
+| `slipramp.artifact.report.ingestions` | `slipramp_artifact_report_ingestions_total` | counter / `{report}` | `report_kind=terraform-plan`, `result=succeeded|rejected|failed` |
+| `slipramp.artifact.report.duration` | `slipramp_artifact_report_duration_seconds` | histogram / `s` | same `report_kind` and `result` |
 
 Every metric in this table is a Slipramp-specific convention. An attempt is
 recorded once, after its durable result is known. Idle polls and normal shutdown
 cancellation do not increment the counters.
 
-Repository and Artifact duration buckets are 0.05, 0.1, 0.25, 0.5, 1, 2.5,
-5, 10, 30, 60, 120, and 300 seconds. Delivery duration buckets are 0.005,
-0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, and 30 seconds.
+Repository refresh duration buckets are 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
+30, 60, 120, and 300 seconds. Artifact reconciliation uses the same upper
+range with additional 0.005, 0.01, and 0.025 second buckets. Delivery and
+Artifact report ingestion duration buckets are 0.005, 0.01, 0.025, 0.05, 0.1,
+0.25, 0.5, 1, 2.5, 5, 10, and 30 seconds.
 
 ## Go runtime and process metrics
 

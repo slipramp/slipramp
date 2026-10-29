@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/objectstore"
+	"github.com/slipramp/slipramp/internal/runreport"
 )
 
 type ContentStore interface {
@@ -28,10 +29,17 @@ type RunStore interface {
 
 type ArtifactStore interface {
 	CreateArtifact(ctx context.Context, record Artifact) (Artifact, error)
+	CreateArtifactWithReport(
+		ctx context.Context,
+		record Artifact,
+		report runreport.ArtifactReport,
+	) (Artifact, error)
 	GetArtifact(ctx context.Context, artifactID uuid.UUID) (Artifact, error)
 	GetArtifactByRunAndName(ctx context.Context, runID uuid.UUID, name string) (Artifact, error)
 	GetArtifactStorageUsage(ctx context.Context) (StorageUsage, error)
+	GetArtifactReport(ctx context.Context, artifactID uuid.UUID) (runreport.ArtifactReport, error)
 	ListArtifactsForRun(ctx context.Context, runID uuid.UUID) ([]Artifact, error)
+	ListArtifactReportsForRun(ctx context.Context, runID uuid.UUID) ([]runreport.ArtifactReport, error)
 	FailArtifact(ctx context.Context, artifactID uuid.UUID) (Artifact, error)
 	SealArtifact(
 		ctx context.Context,
@@ -49,21 +57,23 @@ type LogChunkStore interface {
 }
 
 type Service struct {
-	runs      RunStore
-	artifacts ArtifactStore
-	logChunks LogChunkStore
-	contents  ContentStore
-	newID     func() uuid.UUID
-	now       func() time.Time
-	tokenKey  []byte
+	runs           RunStore
+	artifacts      ArtifactStore
+	logChunks      LogChunkStore
+	contents       ContentStore
+	reportObserver ReportIngestionObserver
+	newID          func() uuid.UUID
+	now            func() time.Time
+	tokenKey       []byte
 }
 
 type Dependencies struct {
-	Runs      RunStore
-	Artifacts ArtifactStore
-	LogChunks LogChunkStore
-	Contents  ContentStore
-	TokenKey  []byte
+	Runs           RunStore
+	Artifacts      ArtifactStore
+	LogChunks      LogChunkStore
+	Contents       ContentStore
+	ReportObserver ReportIngestionObserver
+	TokenKey       []byte
 }
 
 func NewService(dependencies Dependencies) *Service {
@@ -73,13 +83,14 @@ func NewService(dependencies Dependencies) *Service {
 	}
 
 	return &Service{
-		runs:      dependencies.Runs,
-		artifacts: dependencies.Artifacts,
-		logChunks: dependencies.LogChunks,
-		contents:  dependencies.Contents,
-		newID:     uuid.New,
-		now:       time.Now,
-		tokenKey:  tokenKey,
+		runs:           dependencies.Runs,
+		artifacts:      dependencies.Artifacts,
+		logChunks:      dependencies.LogChunks,
+		contents:       dependencies.Contents,
+		reportObserver: reportIngestionObserverOrNoop(dependencies.ReportObserver),
+		newID:          uuid.New,
+		now:            time.Now,
+		tokenKey:       tokenKey,
 	}
 }
 

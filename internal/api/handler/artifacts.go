@@ -26,6 +26,7 @@ type ArtifactService interface {
 	List(context.Context, uuid.UUID) ([]artifact.Record, error)
 	GetStorageUsage(context.Context) (artifact.StorageUsage, error)
 	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
+	OpenReport(context.Context, uuid.UUID) (artifact.ReportContent, error)
 	OpenInput(context.Context, uuid.UUID, string) (artifact.Content, error)
 	StreamLog(context.Context, uuid.UUID, int64) (artifact.LogStream, error)
 }
@@ -242,7 +243,11 @@ func (h *Handler) ListRunArtifacts(
 	items := make([]api.Artifact, 0, len(records))
 	for _, record := range records {
 		commit := commits[commitKey(record.Provenance.RepositoryID, record.Provenance.CommitSHA)]
-		items = append(items, artifactResponse(record, commit))
+		item, err := artifactResponse(record, commit)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
 	}
 
 	return api.ListRunArtifacts200JSONResponse{Items: items}, nil
@@ -342,7 +347,12 @@ func (h *Handler) DownloadRunInput(
 	}, nil
 }
 
-func artifactResponse(record artifact.Record, commit api.GitCommit) api.Artifact {
+func artifactResponse(record artifact.Record, commit api.GitCommit) (api.Artifact, error) {
+	report, err := reportSummaryResponse(record)
+	if err != nil {
+		return api.Artifact{}, err
+	}
+
 	return api.Artifact{
 		ID:             record.ID,
 		RunID:          record.RunID,
@@ -357,6 +367,7 @@ func artifactResponse(record artifact.Record, commit api.GitCommit) api.Artifact
 		RetentionState: api.ArtifactRetentionState(record.RetentionState),
 		CreatedAt:      record.CreatedAt,
 		SealedAt:       record.SealedAt,
+		Report:         report,
 		Provenance: api.ArtifactProvenance{
 			ProducerRunID:     record.Provenance.ProducerRunID,
 			RepositoryID:      record.Provenance.RepositoryID,
@@ -365,5 +376,5 @@ func artifactResponse(record artifact.Record, commit api.GitCommit) api.Artifact
 			Target:            api.CatalogName(record.Provenance.TargetName),
 			Action:            api.CatalogName(record.Provenance.ActionName),
 		},
-	}
+	}, nil
 }

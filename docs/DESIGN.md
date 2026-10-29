@@ -689,6 +689,30 @@ Artifact declaration descriptions are presentation metadata read from the
 frozen Run snapshot for output and input views; they do not alter artifact
 identity, compatibility, retention, or transfer behavior.
 
+An output whose declared media type matches a registered Run report adapter is
+validated and projected during upload. Report media types must be declared
+`sensitive` because their source documents may contain secret values. The
+source remains the ordinary immutable Artifact; the adapter produces a bounded,
+versioned projection that excludes tool values and other unneeded source data.
+The current adapter accepts Terraform plan JSON from `terraform show -json`,
+requires format major version 1 while ignoring unknown fields from compatible
+minor versions, and projects plan flags, aggregate resource/output/check counts,
+resource changes, drift, replacement order, and retained replaced-object identity.
+
+PostgreSQL stores the report kind, projection and adapter versions, tool
+metadata, mode, bounded summary, projection object metadata, and creation time
+atomically with the Artifact record. S3 stores both the original source and the
+normalized projection. Failed ingestion leaves no authoritative Artifact
+metadata; any already-written objects are ordinary orphans removed by the
+artifact reconciler after its grace period. Listing Artifacts includes the
+durable value-free summary. Reading projection detail or downloading the source
+uses the sensitive-artifact permission. Expiry removes both stored objects but
+retains report metadata and summary with the Artifact history.
+
+Report facts are descriptive output, not Run lifecycle authority or an approval
+gate. The Web renders the Terraform summary and normalized detail on Run pages
+while keeping the source JSON available as an explicit download.
+
 Inputs explicitly select a particular retained Artifact. `fromAction` must
 name an Action that declares the input's name as an output. The supported
 compatibility rule is `exact-catalog-revision`, also the default. Consumers are
@@ -706,10 +730,11 @@ PostgreSQL recheck. S3 lifecycle rules do not independently expire contents.
 
 The authenticated artifact-storage usage API and Web view report aggregate
 logical content consumption from authoritative PostgreSQL metadata. They sum
-`size_bytes` for every Artifact whose retention state is `retained` or
-`expired`, across `open`, `sealed`, and `failed` content states. Open and failed
-logs therefore contribute their durable recorded prefix, and expired Artifacts
-remain counted until object deletion completes and metadata becomes `deleted`.
+Artifact `size_bytes` and any report projection size for every Artifact whose
+retention state is `retained` or `expired`, across `open`, `sealed`, and `failed`
+content states. Open and failed logs therefore contribute their durable recorded
+prefix, and expired Artifacts remain counted until object deletion completes and
+metadata becomes `deleted`.
 The result is recorded content consumption, not object-store capacity, free
 space, physical allocation, replication overhead, or provider billing. It does
 not inspect the bucket or establish a quota or enforcement policy.
@@ -1388,9 +1413,9 @@ publishes bounded current-state gauges from one repeatable-read PostgreSQL
 snapshot under a two-second deadline. Scrapes only read the last complete
 in-memory view, and a failed refresh retains it while exposing snapshot
 freshness. Narrow domain observers record Repository refresh, Git-trigger
-delivery, notification delivery, and Artifact retention outcomes without
-identifiers or other unbounded labels. The complete contract and convention
-status are documented in the [metric catalog](./METRICS.md).
+delivery, notification delivery, Artifact report ingestion, and Artifact
+retention outcomes without identifiers or other unbounded labels. The complete
+contract and convention status are documented in the [metric catalog](./METRICS.md).
 
 Each Controller owns a separate private OpenTelemetry/Prometheus provider and
 serves `GET /metrics` from a dedicated cluster-local listener. The initial

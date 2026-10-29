@@ -54,11 +54,11 @@ artifactStorageUsage:
     operationId: getArtifactStorageUsage
     summary: Get recorded artifact-content storage usage
     description: >-
-      Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact
-      whose retention state is retained or expired. Open, sealed, and failed
-      artifacts are included; deleted artifacts are excluded. This is recorded
-      content consumption, not object-store capacity, free space, physical
-      allocation, replication, or billing.
+      Aggregates sizeBytes and any report projection size from PostgreSQL
+      artifact metadata for every artifact whose retention state is retained or
+      expired. Open, sealed, and failed artifacts are included; deleted artifacts
+      are excluded. This is recorded content consumption, not object-store
+      capacity, free space, physical allocation, replication, or billing.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -151,6 +151,57 @@ artifactDownload:
               $ref: ../components/common.yaml#/Problem
       "500":
         description: The artifact could not be downloaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+artifactReport:
+  get:
+    operationId: getArtifactReport
+    summary: Get a sealed artifact's typed report projection
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Artifacts]
+    parameters:
+      - name: artifactId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    responses:
+      "200":
+        description: Immutable typed report detail without source values.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/run-reports.yaml#/RunReport
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read sensitive artifact contents.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The artifact, report, or retained report projection does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The report projection could not be read.
         content:
           application/problem+json:
             schema:

@@ -1,10 +1,17 @@
 import type {
   Action,
+  Artifact,
   Parameter,
   ParameterValue,
   ResourceRequirements,
+  RunArtifactConsumer,
   TargetDefinition,
 } from "~/api/generated";
+
+export type ArtifactConsumerSelection = {
+  artifact: Artifact;
+  consumer: RunArtifactConsumer;
+};
 
 export function actionRunPath(targetId: string, actionName: string) {
   return `/targets/${targetId}/actions/${encodeURIComponent(actionName)}/run`;
@@ -17,6 +24,19 @@ export function otherTargetActions(
   return sortedEntries(actions)
     .filter(([name]) => name !== currentAction)
     .map(([name, action]) => ({ name, title: action.title }));
+}
+
+export function findArtifactConsumer(
+  artifacts: Artifact[],
+  consumers: Record<string, RunArtifactConsumer[]>,
+  action: string,
+): ArtifactConsumerSelection | undefined {
+  for (const artifact of artifacts) {
+    const consumer = consumers[artifact.name]?.find((candidate) => candidate.action === action);
+    if (consumer) return { artifact, consumer };
+  }
+
+  return undefined;
 }
 
 export function decodeActionParameters(

@@ -82,6 +82,8 @@ paths:
     $ref: ./paths/artifacts.yaml#/runLogs
   /api/v1/artifacts/{artifactId}/download:
     $ref: ./paths/artifacts.yaml#/artifactDownload
+  /api/v1/artifacts/{artifactId}/report:
+    $ref: ./paths/artifacts.yaml#/artifactReport
   /api/v1/auth/login:
     $ref: ./paths/authentication.yaml#/login
   /api/v1/auth/callback:
@@ -265,6 +267,24 @@ components:
       $ref: ./components/artifacts.yaml#/ArtifactList
     ArtifactStorageUsage:
       $ref: ./components/artifacts.yaml#/ArtifactStorageUsage
+    RunReportSummary:
+      $ref: ./components/run-reports.yaml#/RunReportSummary
+    RunReportEnvelope:
+      $ref: ./components/run-reports.yaml#/RunReportEnvelope
+    RunReport:
+      $ref: ./components/run-reports.yaml#/RunReport
+    TerraformPlanReportSummary:
+      $ref: ./components/run-reports.yaml#/TerraformPlanReportSummary
+    TerraformPlanReport:
+      $ref: ./components/run-reports.yaml#/TerraformPlanReport
+    TerraformPlanSummary:
+      $ref: ./components/run-reports.yaml#/TerraformPlanSummary
+    TerraformActionCounts:
+      $ref: ./components/run-reports.yaml#/TerraformActionCounts
+    TerraformCheckCounts:
+      $ref: ./components/run-reports.yaml#/TerraformCheckCounts
+    TerraformResourceChange:
+      $ref: ./components/run-reports.yaml#/TerraformResourceChange
     LogCursor:
       $ref: ./components/artifacts.yaml#/LogCursor
     LogEvent:

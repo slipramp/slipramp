@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { actionRunPath, otherTargetActions } from "./action-run.ts";
+import { actionRunPath, findArtifactConsumer, otherTargetActions } from "./action-run.ts";
 
 test("builds an encoded action Run path", () => {
   assert.equal(
@@ -25,4 +25,16 @@ test("lists other target actions by name with their display titles", () => {
       { name: "sync", title: undefined },
     ],
   );
+});
+
+test("selects artifact consumers from frozen metadata rather than artifact names", () => {
+  const artifact = { id: "binary-plan-id", name: "production-preview" };
+  const selection = findArtifactConsumer(
+    [artifact],
+    { production_preview: [], "production-preview": [{ action: "apply", input: "plan" }] },
+    "apply",
+  );
+
+  assert.equal(selection?.artifact.id, "binary-plan-id");
+  assert.equal(selection?.consumer.input, "plan");
 });

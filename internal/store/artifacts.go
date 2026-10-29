@@ -41,11 +41,19 @@ func (d *Database) GetRunClusterName(ctx context.Context, runID uuid.UUID) (stri
 }
 
 func (d *Database) CreateArtifact(ctx context.Context, record artifact.Artifact) (artifact.Artifact, error) {
+	return createArtifact(ctx, d.queries, record)
+}
+
+func createArtifact(
+	ctx context.Context,
+	queries *storedb.Queries,
+	record artifact.Artifact,
+) (artifact.Artifact, error) {
 	if err := record.Validate(); err != nil {
 		return artifact.Artifact{}, err
 	}
 
-	row, err := d.queries.CreateArtifact(
+	row, err := queries.CreateArtifact(
 		ctx,
 		storedb.CreateArtifactParams{
 			ID:               databaseUUID(record.ID),

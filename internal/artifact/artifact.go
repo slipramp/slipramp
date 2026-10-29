@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/kubevalidate"
+	"github.com/slipramp/slipramp/internal/runreport"
 )
 
 const (
@@ -77,6 +78,7 @@ type Record struct {
 	Artifact
 	Description string
 	Provenance  Provenance
+	Report      *runreport.ArtifactReport
 }
 
 // StorageUsage is the aggregate artifact-content consumption recorded in

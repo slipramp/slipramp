@@ -1,0 +1,95 @@
+{
+  "format_version": "1.1",
+  "terraform_version": "1.14.2",
+  "applyable": true,
+  "complete": false,
+  "errored": false,
+  "resource_changes": [
+    {
+      "address": "module.network.aws_security_group.app",
+      "module_address": "module.network",
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["update"], "before": {"secret": "do-not-project"}}
+    },
+    {
+      "address": "aws_instance.recreate_after_destroy",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "recreate_after_destroy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["delete", "create"]},
+      "action_reason": "replace_because_tainted"
+    },
+    {
+      "address": "data.aws_ami.current",
+      "mode": "data",
+      "type": "aws_ami",
+      "name": "current",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["read"]}
+    },
+    {
+      "address": "aws_instance.unchanged",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "unchanged",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["no-op"]}
+    },
+    {
+      "address": "aws_instance.create_before_destroy",
+      "previous_address": "aws_instance.old_name",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "create_before_destroy",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["create", "delete"]}
+    },
+    {
+      "address": "aws_instance.new",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "new",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["create"]}
+    },
+    {
+      "address": "aws_instance.old",
+      "deposed": "deadbeef",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "old",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["delete"]}
+    }
+  ],
+  "resource_drift": [
+    {
+      "address": "aws_instance.drifted",
+      "mode": "managed",
+      "type": "aws_instance",
+      "name": "drifted",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {"actions": ["update"], "after": {"password": "still-do-not-project"}}
+    }
+  ],
+  "output_changes": {
+    "endpoint": {"actions": ["create"], "after": "sensitive.example.com"},
+    "old_endpoint": {"actions": ["delete"], "before": "secret.example.com"},
+    "status": {"actions": ["update"]}
+  },
+  "checks": [
+    {
+      "status": "fail",
+      "instances": [
+        {"status": "pass"},
+        {"status": "fail", "problems": [{"message": "do-not-project-check-message"}]}
+      ]
+    },
+    {"status": "error", "instances": []},
+    {"status": "unknown"}
+  ]
+}

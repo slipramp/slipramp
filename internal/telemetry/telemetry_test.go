@@ -18,6 +18,7 @@ import (
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
+	"github.com/slipramp/slipramp/internal/runreport"
 	"github.com/slipramp/slipramp/internal/store"
 )
 
@@ -99,6 +100,12 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		2*time.Second,
 		artifact.ReconciliationResult{ExpiredArtifacts: 2, DeletedArtifacts: 3, DeletedOrphans: 4},
 	)
+	metrics.ObserveReportIngestion(
+		t.Context(),
+		runreport.TerraformPlanKind,
+		artifact.ReportIngestionSucceeded,
+		75*time.Millisecond,
+	)
 
 	firstScrape := scrape(t, handler)
 	secondScrape := scrape(t, handler)
@@ -152,6 +159,22 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	assertMetricLine(t, firstScrape, "slipramp_artifact_reconciliation_items_total", `operation="expired"`, " 2")
 	assertMetricLine(t, firstScrape, "slipramp_artifact_reconciliation_items_total", `operation="deleted"`, " 3")
 	assertMetricLine(t, firstScrape, "slipramp_artifact_reconciliation_items_total", `operation="orphan_deleted"`, " 4")
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_artifact_report_ingestions_total",
+		`report_kind="terraform-plan"`,
+		`result="succeeded"`,
+		" 1",
+	)
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_artifact_report_duration_seconds_count",
+		`report_kind="terraform-plan"`,
+		`result="succeeded"`,
+		" 1",
+	)
 	assertMetricLine(t, firstScrape, "go_goroutine_count")
 	assertMetricLine(t, firstScrape, "process_start_time_seconds")
 	if strings.Contains(firstScrape, "slipramp_test_global_registry_marker") {

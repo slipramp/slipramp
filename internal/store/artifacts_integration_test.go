@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/slipramp/slipramp/internal/objectstore"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
+	"github.com/slipramp/slipramp/internal/runreport"
 )
 
 func TestArtifactTransferIntegration(t *testing.T) {
@@ -103,6 +105,57 @@ func TestArtifactTransferIntegration(t *testing.T) {
 		t.Fatalf("conflicting Upload() error = %v, want chunk conflict", err)
 	}
 
+	reportSource := []byte(`{
+		"format_version":"1.0",
+		"terraform_version":"1.14.3",
+		"applyable":true,
+		"resource_changes":[{
+			"address":"example.main",
+			"mode":"managed",
+			"type":"example",
+			"name":"main",
+			"provider_name":"registry.example.com/example/provider",
+			"change":{"actions":["create"]}
+		}]
+	}`)
+	reportDigest := sha256.Sum256(reportSource)
+	reportUpload := artifact.UploadRequest{
+		RunID:     runID,
+		Name:      "plan-report",
+		Body:      bytes.NewReader(reportSource),
+		SizeBytes: int64(len(reportSource)),
+		SHA256:    hex.EncodeToString(reportDigest[:]),
+	}
+	if err := service.Upload(ctx, reportUpload); err != nil {
+		t.Fatalf("Upload(report) error = %v", err)
+	}
+
+	records, err = service.List(ctx, runID)
+	if err != nil {
+		t.Fatalf("List() after report error = %v", err)
+	}
+	var reportRecord *artifact.Record
+	for index := range records {
+		if records[index].Name == "plan-report" {
+			reportRecord = &records[index]
+		}
+	}
+	if reportRecord == nil || reportRecord.Report == nil {
+		t.Fatalf("report Artifact was not listed: %#v", records)
+	}
+	reportSummary, ok := reportRecord.Report.Summary.(*runreport.TerraformPlanSummary)
+	if !ok || reportSummary.ResourceChanges.Create != 1 {
+		t.Fatalf("stored report summary = %#v", reportRecord.Report.Summary)
+	}
+	reportContent, err := service.OpenReport(ctx, reportRecord.ID)
+	if err != nil {
+		t.Fatalf("OpenReport() error = %v", err)
+	}
+	plan, ok := reportContent.Report.(*runreport.TerraformPlanReport)
+	if !ok || len(plan.ResourceChanges) != 1 || plan.ResourceChanges[0].Address != "example.main" {
+		t.Fatalf("OpenReport() report = %#v", reportContent.Report)
+	}
+
 	logContents := []byte("first line\nsecond line\n")
 	if err := service.AppendLogChunk(ctx, artifact.AppendLogChunkRequest{
 		RunID:       runID,
@@ -150,6 +203,14 @@ func TestArtifactTransferIntegration(t *testing.T) {
 	}
 
 	for _, record := range records {
+		if record.Report != nil {
+			key := record.Report.ProjectionObjectKey
+			t.Cleanup(func() {
+				if err := objects.Delete(context.Background(), key); err != nil {
+					t.Errorf("delete test report projection %q: %v", key, err)
+				}
+			})
+		}
 		if record.ObjectKey != nil {
 			key := *record.ObjectKey
 			t.Cleanup(func() {
@@ -173,6 +234,84 @@ func TestArtifactTransferIntegration(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestArtifactReportPersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	digest := strings.Repeat("a", 64)
+	objectKey := "runs/report/artifacts/plan-report/content-a"
+	sealedAt := createdAt.Add(time.Minute)
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          runID,
+		Name:           "plan-report",
+		Kind:           artifact.KindOutput,
+		State:          artifact.StateSealed,
+		MediaType:      runreport.TerraformPlanMediaType,
+		SizeBytes:      512,
+		SHA256:         &digest,
+		Sensitive:      true,
+		ObjectKey:      &objectKey,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      sealedAt,
+		SealedAt:       &sealedAt,
+	}
+	report := testArtifactReport(
+		t,
+		record.ID,
+		"runs/report/artifacts/plan-report/reports/terraform-plan-v1-a.json",
+		sealedAt,
+	)
+	created, err := database.CreateArtifactWithReport(ctx, record, report)
+	if err != nil {
+		t.Fatalf("CreateArtifactWithReport() error = %v", err)
+	}
+	if created.ID != record.ID || created.SHA256 == nil || *created.SHA256 != digest ||
+		created.ObjectKey == nil || *created.ObjectKey != objectKey {
+		t.Fatalf("CreateArtifactWithReport() = %#v, want %#v", created, record)
+	}
+
+	loaded, err := database.GetArtifactReport(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetArtifactReport() error = %v", err)
+	}
+	summary, ok := loaded.Summary.(*runreport.TerraformPlanSummary)
+	if !ok || summary.ResourceChanges.Create != 1 ||
+		loaded.ProjectionObjectKey != report.ProjectionObjectKey || loaded.ProjectionSHA256 != report.ProjectionSHA256 {
+		t.Errorf("GetArtifactReport() = %#v", loaded)
+	}
+	reports, err := database.ListArtifactReportsForRun(ctx, runID)
+	if err != nil || len(reports) != 1 || reports[0].ArtifactID != record.ID {
+		t.Fatalf("ListArtifactReportsForRun() = %#v, error = %v", reports, err)
+	}
+	usage, err := database.GetArtifactStorageUsage(ctx)
+	if err != nil {
+		t.Fatalf("GetArtifactStorageUsage() error = %v", err)
+	}
+	wantUsage := artifact.StorageUsage{
+		ArtifactCount: 1,
+		RecordedBytes: record.SizeBytes + report.ProjectionSizeBytes,
+	}
+	if usage != wantUsage {
+		t.Errorf("GetArtifactStorageUsage() = %#v, want %#v", usage, wantUsage)
+	}
+
+	conflict := record
+	conflict.ID = uuid.New()
+	conflict.Name = "conflicting-report"
+	conflictObjectKey := "runs/report/artifacts/conflicting-report/content-b"
+	conflict.ObjectKey = &conflictObjectKey
+	conflictingReport := testArtifactReport(t, conflict.ID, report.ProjectionObjectKey, sealedAt)
+	if _, err := database.CreateArtifactWithReport(ctx, conflict, conflictingReport); !errors.Is(err, artifact.ErrAlreadyExists) {
+		t.Fatalf("CreateArtifactWithReport(conflict) error = %v, want already exists", err)
+	}
+	if _, err := database.GetArtifact(ctx, conflict.ID); !errors.Is(err, artifact.ErrNotFound) {
+		t.Fatalf("rolled-back Artifact lookup error = %v, want not found", err)
 	}
 }
 
@@ -491,15 +630,22 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 		Name:           "plan",
 		Kind:           artifact.KindOutput,
 		State:          artifact.StateSealed,
-		MediaType:      "application/octet-stream",
+		MediaType:      runreport.TerraformPlanMediaType,
 		SizeBytes:      128,
 		SHA256:         &digest,
+		Sensitive:      true,
 		ObjectKey:      &objectKey,
 		RetentionState: artifact.RetentionRetained,
 		CreatedAt:      sealedAt,
 		SealedAt:       &sealedAt,
 	}
-	if _, err := database.CreateArtifact(ctx, record); err != nil {
+	report := testArtifactReport(
+		t,
+		record.ID,
+		"runs/retention/artifacts/plan/reports/terraform-plan-v1-a.json",
+		sealedAt,
+	)
+	if _, err := database.CreateArtifactWithReport(ctx, record, report); err != nil {
 		t.Fatalf("create retained Artifact: %v", err)
 	}
 	staleObjectKey := "runs/retention/artifacts/stale/content-b"
@@ -584,12 +730,18 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	}
 
 	keys, err := database.ListArtifactObjectKeys(ctx, record.ID)
-	if err != nil || len(keys) != 1 || keys[0] != objectKey {
+	wantKeys := []string{objectKey, report.ProjectionObjectKey}
+	slices.Sort(wantKeys)
+	if err != nil || !slices.Equal(keys, wantKeys) {
 		t.Fatalf("ListArtifactObjectKeys() = %v, error = %v", keys, err)
 	}
 	exists, err := database.ArtifactObjectKeyExists(ctx, objectKey)
 	if err != nil || !exists {
 		t.Fatalf("ArtifactObjectKeyExists() = %t, error = %v", exists, err)
+	}
+	exists, err = database.ArtifactObjectKeyExists(ctx, report.ProjectionObjectKey)
+	if err != nil || !exists {
+		t.Fatalf("ArtifactObjectKeyExists(projection) = %t, error = %v", exists, err)
 	}
 
 	if err := database.MarkArtifactDeleted(ctx, record.ID); err != nil {
@@ -598,6 +750,10 @@ func TestArtifactRetentionPersistenceIntegration(t *testing.T) {
 	exists, err = database.ArtifactObjectKeyExists(ctx, objectKey)
 	if err != nil || exists {
 		t.Fatalf("ArtifactObjectKeyExists() after delete = %t, error = %v", exists, err)
+	}
+	exists, err = database.ArtifactObjectKeyExists(ctx, report.ProjectionObjectKey)
+	if err != nil || exists {
+		t.Fatalf("ArtifactObjectKeyExists(projection) after delete = %t, error = %v", exists, err)
 	}
 }
 
@@ -660,6 +816,11 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 						MediaType: "application/octet-stream",
 						Sensitive: true,
 					},
+					"plan-report": {
+						Path:      "plan.json",
+						MediaType: runreport.TerraformPlanMediaType,
+						Sensitive: true,
+					},
 				},
 			},
 			Runtime: refresh.Revision.Catalog.Runtimes[0],
@@ -676,4 +837,45 @@ func createArtifactTestRun(t *testing.T, ctx context.Context, database *Database
 	}
 
 	return runID
+}
+
+func testArtifactReport(
+	t *testing.T,
+	artifactID uuid.UUID,
+	projectionObjectKey string,
+	createdAt time.Time,
+) runreport.ArtifactReport {
+	t.Helper()
+
+	report, err := runreport.DecodeTerraformPlan(strings.NewReader(`{
+		"format_version":"1.0",
+		"terraform_version":"1.14.3",
+		"resource_changes":[{
+			"address":"example.main",
+			"mode":"managed",
+			"type":"example",
+			"name":"main",
+			"provider_name":"registry.example.com/example/provider",
+			"change":{"actions":["create"]}
+		}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := runreport.Encode(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := runreport.NewArtifactReport(
+		artifactID,
+		report,
+		projectionObjectKey,
+		projection,
+		createdAt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return metadata
 }

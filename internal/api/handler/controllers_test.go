@@ -1031,6 +1031,9 @@ type recordingArtifactService struct {
 	failErr      error
 	storageUsage artifact.StorageUsage
 	storageErr   error
+	report       artifact.ReportContent
+	reportErr    error
+	reportCalls  int
 }
 
 type recordingPromotionDispatchService struct {
@@ -1167,6 +1170,12 @@ func (r *recordingArtifactService) GetStorageUsage(context.Context) (artifact.St
 
 func (*recordingArtifactService) OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error) {
 	return artifact.Content{}, artifact.ErrNotFound
+}
+
+func (r *recordingArtifactService) OpenReport(context.Context, uuid.UUID) (artifact.ReportContent, error) {
+	r.reportCalls++
+
+	return r.report, r.reportErr
 }
 
 func (*recordingArtifactService) OpenInput(context.Context, uuid.UUID, string) (artifact.Content, error) {

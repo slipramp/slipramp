@@ -12,6 +12,7 @@ import (
 	"github.com/slipramp/slipramp/internal/durationvalidate"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/resourcevalidate"
+	"github.com/slipramp/slipramp/internal/runreport"
 )
 
 var (
@@ -195,6 +196,15 @@ func validateArtifacts(actionName string, artifacts map[string]Artifact) []valid
 					fieldPath: ".artifacts." + name + ".mediaType",
 					code:      "catalog.artifact.media-type-invalid",
 					err:       fmt.Errorf("%s mediaType: %w", subject, err),
+				})
+			} else if runreport.IsRecognizedMediaType(artifact.MediaType) && !artifact.Sensitive {
+				findings = append(findings, validationFinding{
+					fieldPath: ".artifacts." + name + ".sensitive",
+					code:      "catalog.artifact.report-sensitive-required",
+					err: fmt.Errorf(
+						"%s must set sensitive: true for recognized Run report media types",
+						subject,
+					),
 				})
 			}
 		}

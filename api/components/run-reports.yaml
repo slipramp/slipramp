@@ -1,0 +1,258 @@
+RunReportEnvelope:
+  type: object
+  required:
+    - artifactId
+    - runId
+    - kind
+    - schemaVersion
+    - adapterVersion
+    - tool
+    - mode
+    - createdAt
+  properties:
+    artifactId:
+      type: string
+      format: uuid
+    runId:
+      type: string
+      format: uuid
+    kind:
+      type: string
+      enum:
+        - terraform-plan
+    schemaVersion:
+      type: integer
+      minimum: 1
+    adapterVersion:
+      type: integer
+      minimum: 1
+    tool:
+      type: string
+      minLength: 1
+      maxLength: 64
+    toolVersion:
+      type: string
+      minLength: 1
+      maxLength: 128
+    mode:
+      type: string
+      enum:
+        - preview
+    createdAt:
+      type: string
+      format: date-time
+
+RunReportSummary:
+  oneOf:
+    - $ref: "#/TerraformPlanReportSummary"
+  discriminator:
+    propertyName: kind
+    mapping:
+      terraform-plan: "#/TerraformPlanReportSummary"
+
+RunReport:
+  oneOf:
+    - $ref: "#/TerraformPlanReport"
+  discriminator:
+    propertyName: kind
+    mapping:
+      terraform-plan: "#/TerraformPlanReport"
+
+TerraformPlanReportSummary:
+  allOf:
+    - $ref: "#/RunReportEnvelope"
+    - type: object
+      required:
+        - kind
+        - summary
+      properties:
+        kind:
+          type: string
+          enum:
+            - terraform-plan
+        summary:
+          $ref: "#/TerraformPlanSummary"
+
+TerraformPlanReport:
+  allOf:
+    - $ref: "#/RunReportEnvelope"
+    - type: object
+      required:
+        - kind
+        - summary
+        - resourceChanges
+        - resourceDrift
+      properties:
+        kind:
+          type: string
+          enum:
+            - terraform-plan
+        summary:
+          $ref: "#/TerraformPlanSummary"
+        resourceChanges:
+          type: array
+          maxItems: 20000
+          items:
+            $ref: "#/TerraformResourceChange"
+        resourceDrift:
+          type: array
+          maxItems: 20000
+          items:
+            $ref: "#/TerraformResourceChange"
+
+TerraformPlanSummary:
+  type: object
+  required:
+    - resourceChanges
+    - driftedResources
+    - checks
+    - outputChanges
+  properties:
+    resourceChanges:
+      $ref: "#/TerraformActionCounts"
+    driftedResources:
+      type: integer
+      minimum: 0
+      maximum: 20000
+    checks:
+      $ref: "#/TerraformCheckCounts"
+    outputChanges:
+      $ref: "#/TerraformActionCounts"
+    applyable:
+      type: boolean
+    complete:
+      type: boolean
+    errored:
+      type: boolean
+
+TerraformActionCounts:
+  type: object
+  required:
+    - total
+    - noOp
+    - create
+    - read
+    - update
+    - delete
+    - replace
+  properties:
+    total:
+      type: integer
+      minimum: 0
+      maximum: 20000
+    noOp:
+      type: integer
+      minimum: 0
+      maximum: 20000
+    create:
+      type: integer
+      minimum: 0
+      maximum: 20000
+    read:
+      type: integer
+      minimum: 0
+      maximum: 20000
+    update:
+      type: integer
+      minimum: 0
+      maximum: 20000
+    delete:
+      type: integer
+      minimum: 0
+      maximum: 20000
+    replace:
+      type: integer
+      minimum: 0
+      maximum: 20000
+
+TerraformCheckCounts:
+  type: object
+  required:
+    - total
+    - pass
+    - fail
+    - error
+    - unknown
+  properties:
+    total:
+      type: integer
+      minimum: 0
+      maximum: 10000
+    pass:
+      type: integer
+      minimum: 0
+      maximum: 10000
+    fail:
+      type: integer
+      minimum: 0
+      maximum: 10000
+    error:
+      type: integer
+      minimum: 0
+      maximum: 10000
+    unknown:
+      type: integer
+      minimum: 0
+      maximum: 10000
+
+TerraformResourceChange:
+  type: object
+  required:
+    - address
+    - mode
+    - type
+    - name
+    - providerName
+    - action
+  properties:
+    address:
+      type: string
+      minLength: 1
+      maxLength: 2048
+    replacedObjectKey:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: Opaque Terraform key distinguishing an old object retained during replacement from the current object at the same address.
+    previousAddress:
+      type: string
+      minLength: 1
+      maxLength: 2048
+    moduleAddress:
+      type: string
+      minLength: 1
+      maxLength: 2048
+    mode:
+      type: string
+      minLength: 1
+      maxLength: 64
+    type:
+      type: string
+      minLength: 1
+      maxLength: 256
+    name:
+      type: string
+      minLength: 1
+      maxLength: 256
+    providerName:
+      type: string
+      minLength: 1
+      maxLength: 512
+    action:
+      type: string
+      enum:
+        - no-op
+        - create
+        - read
+        - update
+        - delete
+        - replace
+    replacementOrder:
+      type: string
+      enum:
+        - destroy-before-create
+        - create-before-destroy
+    actionReason:
+      type: string
+      minLength: 1
+      maxLength: 256

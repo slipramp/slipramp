@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/objectstore"
+	"github.com/slipramp/slipramp/internal/runreport"
 )
 
 type serviceMetadataStore struct {
@@ -22,6 +23,8 @@ type serviceMetadataStore struct {
 	context    RunContext
 	usage      StorageUsage
 	usageErr   error
+	reports    map[uuid.UUID]runreport.ArtifactReport
+	reportErr  error
 }
 
 func (s *serviceMetadataStore) GetRunClusterName(_ context.Context, _ uuid.UUID) (string, error) {
@@ -43,6 +46,28 @@ func (s *serviceMetadataStore) CreateArtifact(_ context.Context, record Artifact
 	return record, nil
 }
 
+func (s *serviceMetadataStore) CreateArtifactWithReport(
+	_ context.Context,
+	record Artifact,
+	report runreport.ArtifactReport,
+) (Artifact, error) {
+	if s.reportErr != nil {
+		return Artifact{}, s.reportErr
+	}
+	if s.record != nil {
+		return Artifact{}, ErrAlreadyExists
+	}
+
+	copy := record
+	s.record = &copy
+	if s.reports == nil {
+		s.reports = map[uuid.UUID]runreport.ArtifactReport{}
+	}
+	s.reports[record.ID] = report
+
+	return record, nil
+}
+
 func (s *serviceMetadataStore) GetArtifact(_ context.Context, _ uuid.UUID) (Artifact, error) {
 	if s.record == nil {
 		return Artifact{}, ErrNotFound
@@ -59,12 +84,36 @@ func (s *serviceMetadataStore) GetArtifactByRunAndName(context.Context, uuid.UUI
 	return *s.record, nil
 }
 
+func (s *serviceMetadataStore) GetArtifactReport(
+	_ context.Context,
+	artifactID uuid.UUID,
+) (runreport.ArtifactReport, error) {
+	report, found := s.reports[artifactID]
+	if !found {
+		return runreport.ArtifactReport{}, ErrNotFound
+	}
+
+	return report, nil
+}
+
 func (s *serviceMetadataStore) ListArtifactsForRun(context.Context, uuid.UUID) ([]Artifact, error) {
 	if s.record == nil {
 		return nil, nil
 	}
 
 	return []Artifact{*s.record}, nil
+}
+
+func (s *serviceMetadataStore) ListArtifactReportsForRun(
+	context.Context,
+	uuid.UUID,
+) ([]runreport.ArtifactReport, error) {
+	result := make([]runreport.ArtifactReport, 0, len(s.reports))
+	for _, report := range s.reports {
+		result = append(result, report)
+	}
+
+	return result, nil
 }
 
 func (s *serviceMetadataStore) GetArtifactStorageUsage(context.Context) (StorageUsage, error) {
@@ -161,6 +210,7 @@ type serviceContentStore struct {
 	contents  string
 	mediaType string
 	err       error
+	failPut   int
 	events    *[]string
 	objects   map[string]string
 }
@@ -236,7 +286,7 @@ func (s *serviceContentStore) Put(
 	if s.events != nil {
 		*s.events = append(*s.events, "contents")
 	}
-	if s.err != nil {
+	if s.err != nil && (s.failPut == 0 || s.failPut == s.puts) {
 		return 0, s.err
 	}
 
@@ -254,7 +304,7 @@ func (s *serviceContentStore) Put(
 }
 
 func (s *serviceContentStore) Open(_ context.Context, key string) (objectstore.Object, error) {
-	if s.err != nil {
+	if s.err != nil && s.failPut == 0 {
 		return objectstore.Object{}, s.err
 	}
 	contents := s.contents
@@ -662,5 +712,62 @@ func TestServiceUploadsDeclaredArtifactIdempotently(t *testing.T) {
 	request.SizeBytes = 4
 	if err := service.Upload(context.Background(), request); !errors.Is(err, ErrChunkConflict) {
 		t.Errorf("conflicting Upload() error = %v", err)
+	}
+}
+
+func TestServiceRejectsUnsafeRunReportArtifactDeclarations(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		declaration Declaration
+		sizeBytes   int64
+		wantError   string
+	}{
+		{
+			name: "not sensitive",
+			declaration: Declaration{
+				MediaType: runreport.TerraformPlanMediaType,
+			},
+			sizeBytes: 2,
+			wantError: "must be sensitive",
+		},
+		{
+			name: "too large",
+			declaration: Declaration{
+				MediaType: runreport.TerraformPlanMediaType,
+				Sensitive: true,
+			},
+			sizeBytes: runreport.MaximumTerraformPlanSourceSizeBytes + 1,
+			wantError: "source limit",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			metadata := &serviceMetadataStore{
+				runCluster: "colo",
+				context: RunContext{Artifacts: map[string]Declaration{
+					"plan-report": test.declaration,
+				}},
+			}
+			contents := &serviceContentStore{}
+			service := newTestService(metadata, contents)
+			err := service.Upload(context.Background(), UploadRequest{
+				RunID:     uuid.New(),
+				Name:      "plan-report",
+				Body:      strings.NewReader("{}"),
+				SizeBytes: test.sizeBytes,
+				SHA256:    strings.Repeat("a", 64),
+			})
+			if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("Upload() error = %v, want invalid containing %q", err, test.wantError)
+			}
+			if contents.puts != 0 || metadata.record != nil {
+				t.Errorf("rejected report persisted content or metadata: puts=%d record=%#v", contents.puts, metadata.record)
+			}
+		})
 	}
 }

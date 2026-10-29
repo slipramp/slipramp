@@ -1,0 +1,19 @@
+{
+  "format_version": "1.99",
+  "terraform_version": "9.8.7",
+  "applyable": true,
+  "complete": true,
+  "errored": false,
+  "future_top_level": {"secret": "ignored"},
+  "resource_changes": [
+    {
+      "address": "example_resource.main",
+      "mode": "managed",
+      "type": "example_resource",
+      "name": "main",
+      "provider_name": "registry.example.com/example/provider",
+      "future_resource_field": true,
+      "change": {"actions": ["create"], "future_change_field": "ignored"}
+    }
+  ]
+}

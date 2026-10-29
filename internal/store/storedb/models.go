@@ -47,6 +47,21 @@ type ArtifactLogChunk struct {
 	CreatedAt   pgtype.Timestamptz
 }
 
+type ArtifactReport struct {
+	ArtifactID              pgtype.UUID
+	Kind                    string
+	ProjectionSchemaVersion int32
+	AdapterVersion          int32
+	Tool                    string
+	ToolVersion             *string
+	Mode                    string
+	Summary                 []byte
+	ProjectionObjectKey     string
+	ProjectionSizeBytes     int64
+	ProjectionSha256        string
+	CreatedAt               pgtype.Timestamptz
+}
+
 type CatalogRevision struct {
 	ID           pgtype.UUID
 	RepositoryID pgtype.UUID

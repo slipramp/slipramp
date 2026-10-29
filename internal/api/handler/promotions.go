@@ -765,10 +765,16 @@ func (h *Handler) promotionDetailResponse(
 		commit := artifactCommits[commitKey(record.Provenance.RepositoryID, record.Provenance.CommitSHA)]
 		switch record.ID {
 		case valueOrNilUUID(review.Promotion.GitDiffArtifactID):
-			value := artifactResponse(record, commit)
+			value, err := artifactResponse(record, commit)
+			if err != nil {
+				return api.Promotion{}, err
+			}
 			body.GitDiffArtifact = &value
 		case valueOrNilUUID(review.Promotion.ArgoDiffArtifactID):
-			value := artifactResponse(record, commit)
+			value, err := artifactResponse(record, commit)
+			if err != nil {
+				return api.Promotion{}, err
+			}
 			body.ArgoDiffArtifact = &value
 		}
 	}

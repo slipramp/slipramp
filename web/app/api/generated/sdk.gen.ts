@@ -62,6 +62,9 @@ import type {
   FailRunLogData,
   FailRunLogErrors,
   FailRunLogResponses,
+  GetArtifactReportData,
+  GetArtifactReportErrors,
+  GetArtifactReportResponses,
   GetArtifactStorageUsageData,
   GetArtifactStorageUsageErrors,
   GetArtifactStorageUsageResponses,
@@ -1286,7 +1289,7 @@ export const listRunArtifacts = <ThrowOnError extends boolean = false>(
 /**
  * Get recorded artifact-content storage usage
  *
- * Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+ * Aggregates sizeBytes and any report projection size from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
  */
 export const getArtifactStorageUsage = <ThrowOnError extends boolean = false>(
   options?: Options<GetArtifactStorageUsageData, ThrowOnError>,
@@ -1359,6 +1362,31 @@ export const downloadArtifact = <ThrowOnError extends boolean = false>(
     url: "/api/v1/artifacts/{artifactId}/download",
     ...options,
   });
+
+/**
+ * Get a sealed artifact's typed report projection
+ */
+export const getArtifactReport = <ThrowOnError extends boolean = false>(
+  options: Options<GetArtifactReportData, ThrowOnError>,
+): RequestResult<GetArtifactReportResponses, GetArtifactReportErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetArtifactReportResponses, GetArtifactReportErrors, ThrowOnError>(
+    {
+      security: [
+        {
+          in: "cookie",
+          name: "slipramp_session",
+          type: "apiKey",
+        },
+        {
+          key: "ProductBearer",
+          scheme: "bearer",
+          type: "http",
+        },
+      ],
+      url: "/api/v1/artifacts/{artifactId}/report",
+      ...options,
+    },
+  );
 
 /**
  * Begin browser login

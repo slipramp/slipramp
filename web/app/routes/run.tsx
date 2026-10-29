@@ -34,12 +34,14 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Form, Link, redirect, useNavigation } from "react-router";
 
-import { actionRunPath, otherTargetActions } from "~/action-run";
+import { actionRunPath, findArtifactConsumer, otherTargetActions } from "~/action-run";
 import { createServerAPIClient } from "~/api/client.server";
+import { canReadArtifactContents } from "~/artifact-access";
 import {
   cancelRun,
   createRun,
   decideRunReview,
+  getArtifactReport,
   getCurrentPrincipal,
   getRun,
   getTarget,
@@ -47,6 +49,7 @@ import {
   listRuns,
   rerunRun,
   type Artifact,
+  type ProductPrincipal,
   type Run,
   type RunArtifactConsumer,
   type RunArtifactInput,
@@ -60,6 +63,7 @@ import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
 import { RunLogViewer } from "~/components/run-log-viewer";
+import { TerraformPlanReportView } from "~/components/terraform-plan-report";
 import {
   formatBinarySize,
   formatDuration,
@@ -71,6 +75,7 @@ import { pageTitle } from "~/page-title";
 import { runActivity, runResultActivity } from "~/execution-activity";
 import { runStatusColor, runStatusLabel } from "~/run-status";
 import { runSourceLabel } from "~/run-source";
+import { reportDetailRequestState, type ReportLoad } from "~/run-reports";
 import { targetFilterPath } from "~/target-filter";
 
 import styles from "./run.module.css";
@@ -91,21 +96,53 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     listRunArtifacts({ client, path: { runId: params.runId } }),
     getCurrentPrincipal({ client }),
   ]);
-  const planArtifact = artifactResult.data?.items.find((artifact) => artifact.name === "plan");
-  const [planRunsResult, targetResult] = await Promise.all([
-    planArtifact
-      ? listRuns({ client, query: { inputArtifactId: planArtifact.id, limit: 100 } })
+  const artifacts = artifactResult.data?.items ?? [];
+  const applyArtifact = runResult.data
+    ? findArtifactConsumer(artifacts, runResult.data.artifactConsumers, "apply")?.artifact
+    : undefined;
+  const [consumerRunsResult, reportLoads, targetResult] = await Promise.all([
+    applyArtifact
+      ? listRuns({ client, query: { inputArtifactId: applyArtifact.id, limit: 100 } })
       : undefined,
+    Promise.all(
+      artifacts
+        .filter((artifact) => artifact.report !== undefined)
+        .map(async (artifact): Promise<ReportLoad> => {
+          const requestState = reportDetailRequestState(artifact, principalResult.data);
+          if (requestState !== "request") {
+            return { artifactId: artifact.id, state: requestState };
+          }
+
+          const result = await getArtifactReport({
+            client,
+            path: { artifactId: artifact.id },
+          });
+          if (result.data) {
+            return { artifactId: artifact.id, detail: result.data, state: "available" };
+          }
+
+          if (result.response?.status === 403) {
+            return { artifactId: artifact.id, state: "restricted" };
+          }
+          if (result.response?.status === 404) {
+            return { artifactId: artifact.id, state: "unavailable" };
+          }
+
+          return { artifactId: artifact.id, state: "error" };
+        }),
+    ),
     runResult.data ? getTarget({ client, path: { targetId: runResult.data.targetId } }) : undefined,
   ]);
   const activeTarget = targetResult?.data?.archivedAt ? undefined : targetResult?.data?.definition;
 
   return {
-    artifacts: artifactResult.data?.items,
+    artifactRuns: consumerRunsResult?.data?.items ?? [],
+    artifactRunsAvailable:
+      consumerRunsResult === undefined || consumerRunsResult.data !== undefined,
+    artifacts,
     otherActions: otherTargetActions(activeTarget?.spec.actions, runResult.data?.action ?? ""),
-    planRuns: planRunsResult?.data?.items ?? [],
-    planRunsAvailable: planRunsResult === undefined || planRunsResult.data !== undefined,
     principal: principalResult.data,
+    reportLoads,
     repositoryName: targetResult?.data?.repositoryName,
     rerunKey: crypto.randomUUID(),
     run: runResult.data,
@@ -217,7 +254,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
   const navigation = useNavigation();
   useActivityRefresh(
     loaderData.run?.phase !== "finished" ||
-      loaderData.planRuns.some((run) => run.phase !== "finished"),
+      loaderData.artifactRuns.some((run) => run.phase !== "finished"),
     runRevalidationIntervalMs,
   );
 
@@ -233,14 +270,12 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
   }
 
   const run = loaderData.run;
-  const planArtifact = loaderData.artifacts?.find((artifact) => artifact.name === "plan");
-  const logArtifact = loaderData.artifacts?.find((artifact) => artifact.kind === "log");
-  const applyConsumer = run.artifactConsumers.plan?.find((consumer) => consumer.action === "apply");
-  const planCanBeApplied =
+  const applySelection = findArtifactConsumer(loaderData.artifacts, run.artifactConsumers, "apply");
+  const logArtifact = loaderData.artifacts.find((artifact) => artifact.kind === "log");
+  const artifactCanBeApplied =
     run.outcome === "succeeded" &&
-    planArtifact?.state === "sealed" &&
-    planArtifact.retentionState === "retained" &&
-    applyConsumer !== undefined;
+    applySelection?.artifact.state === "sealed" &&
+    applySelection.artifact.retentionState === "retained";
   const resultActivity = runResultActivity(run);
   const activity = resultActivity ?? runActivity(run);
   const actor = run.createdBy?.displayName ?? (run.source.type === "git" ? "Automation" : "System");
@@ -259,15 +294,15 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         actions={
           run.phase === "finished" ? (
             <Group gap="sm" wrap="wrap">
-              {planCanBeApplied ? (
+              {artifactCanBeApplied && applySelection ? (
                 <ArtifactAction
-                  artifact={planArtifact}
-                  consumer={applyConsumer}
+                  artifact={applySelection.artifact}
+                  consumer={applySelection.consumer}
                   prominent
                   submitting={
                     navigation.state === "submitting" &&
-                    navigation.formData?.get("artifactId") === planArtifact.id &&
-                    navigation.formData?.get("actionName") === applyConsumer.action
+                    navigation.formData?.get("artifactId") === applySelection.artifact.id &&
+                    navigation.formData?.get("actionName") === applySelection.consumer.action
                   }
                 />
               ) : null}
@@ -281,7 +316,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                     loading={rerunSubmitting}
                     rightSection={<IconChevronDown aria-hidden size={14} />}
                     size="compact-md"
-                    variant={planCanBeApplied ? "light" : undefined}
+                    variant={artifactCanBeApplied ? "light" : undefined}
                   >
                     Run again
                   </Button>
@@ -473,12 +508,31 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
       ) : null}
 
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
+      {loaderData.artifacts
+        .filter((artifact) => artifact.report?.kind === "terraform-plan")
+        .map((artifact) => {
+          const load = loaderData.reportLoads.find(
+            (candidate) => candidate.artifactId === artifact.id,
+          );
+          if (!load) return null;
+
+          return (
+            <TerraformPlanReportView
+              artifact={artifact}
+              canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
+              key={artifact.id}
+              load={load}
+              run={run}
+            />
+          );
+        })}
       <RunLogViewer artifact={logArtifact} key={run.id} runId={run.id} />
-      {planArtifact ? (
-        <PlanLineage
-          available={loaderData.planRunsAvailable}
-          plan={planArtifact}
-          runs={loaderData.planRuns}
+      {applySelection ? (
+        <ArtifactLineage
+          artifact={applySelection.artifact}
+          available={loaderData.artifactRunsAvailable}
+          canReadContents={canReadArtifactContents(applySelection.artifact, loaderData.principal)}
+          runs={loaderData.artifactRuns}
         />
       ) : null}
       <RunOverview repositoryName={loaderData.repositoryName} run={run} />
@@ -486,8 +540,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
       <InputTable inputs={run.inputs} repositoryId={run.repositoryId} />
       <ArtifactTable
-        artifacts={loaderData.artifacts ?? []}
+        artifacts={loaderData.artifacts}
         consumers={run.artifactConsumers}
+        principal={loaderData.principal}
         producerSucceeded={run.outcome === "succeeded"}
       />
     </Stack>
@@ -716,11 +771,17 @@ function OtherActionMenu({
   );
 }
 
-function PlanLineage({
+function ArtifactLineage({
+  artifact,
   available,
-  plan,
+  canReadContents,
   runs,
-}: Readonly<{ available: boolean; plan: Artifact; runs: Run[] }>) {
+}: Readonly<{
+  artifact: Artifact;
+  available: boolean;
+  canReadContents: boolean;
+  runs: Run[];
+}>) {
   return (
     <Paper p="md" withBorder>
       <Stack gap="sm">
@@ -730,27 +791,29 @@ function PlanLineage({
               <Badge variant="light">
                 {runs.length} {runs.length === 1 ? "run" : "runs"}
               </Badge>
-              {plan.state === "sealed" && plan.retentionState === "retained" ? (
-                <Anchor href={`/api/v1/artifacts/${plan.id}/download`} size="sm">
-                  Download plan
+              {canReadContents &&
+              artifact.state === "sealed" &&
+              artifact.retentionState === "retained" ? (
+                <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
+                  Download Artifact
                 </Anchor>
               ) : null}
             </Group>
           }
           description={
-            plan.description
-              ? `${plan.description} Apply runs stay linked to the exact retained plan they consume.`
-              : "Apply runs stay linked to the exact retained plan they consume."
+            artifact.description
+              ? `${artifact.description} Consuming Runs stay linked to the exact retained Artifact.`
+              : "Consuming Runs stay linked to the exact retained Artifact."
           }
-          title="Plan"
+          title="Artifact lineage"
         />
         {!available ? (
-          <Alert color="red" title="Plan history unavailable">
-            Runs created from this plan could not be loaded.
+          <Alert color="red" title="Artifact history unavailable">
+            Runs created from this Artifact could not be loaded.
           </Alert>
         ) : runs.length === 0 ? (
           <Text c="dimmed" size="sm">
-            No runs have been created from this plan.
+            No Runs have been created from this Artifact.
           </Text>
         ) : (
           <Table.ScrollContainer minWidth={540} type="native">
@@ -1242,10 +1305,12 @@ function InputTable({
 function ArtifactTable({
   artifacts,
   consumers,
+  principal,
   producerSucceeded,
 }: Readonly<{
   artifacts: Artifact[];
   consumers: Record<string, RunArtifactConsumer[]>;
+  principal?: ProductPrincipal;
   producerSucceeded: boolean;
 }>) {
   const navigation = useNavigation();
@@ -1314,10 +1379,16 @@ function ArtifactTable({
                     </Table.Td>
                     <Table.Td>
                       <Group gap="sm" wrap="nowrap">
-                        {artifact.state === "sealed" && artifact.retentionState === "retained" ? (
+                        {artifact.state === "sealed" &&
+                        artifact.retentionState === "retained" &&
+                        canReadArtifactContents(artifact, principal) ? (
                           <Anchor href={`/api/v1/artifacts/${artifact.id}/download`}>
                             Download
                           </Anchor>
+                        ) : artifact.state === "sealed" &&
+                          artifact.retentionState === "retained" &&
+                          artifact.sensitive ? (
+                          <Text c="dimmed">Restricted</Text>
                         ) : (
                           <Text c="dimmed">Unavailable</Text>
                         )}
@@ -1361,10 +1432,9 @@ function ArtifactAction({
   prominent?: boolean;
   submitting: boolean;
 }>) {
-  const label =
-    artifact.name === "plan" && consumer.action === "apply"
-      ? "Apply this plan"
-      : `Run ${consumer.actionTitle ?? consumer.action}`;
+  const label = prominent
+    ? (consumer.actionTitle ?? `Run ${consumer.action}`)
+    : `Run ${consumer.actionTitle ?? consumer.action}`;
 
   return (
     <Form method="post">

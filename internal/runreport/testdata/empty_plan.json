@@ -1,0 +1,11 @@
+{
+  "format_version": "1.0",
+  "terraform_version": "1.14.2",
+  "applyable": false,
+  "complete": true,
+  "errored": false,
+  "resource_changes": [],
+  "resource_drift": [],
+  "output_changes": {},
+  "checks": []
+}

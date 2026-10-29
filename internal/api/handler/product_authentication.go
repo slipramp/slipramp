@@ -49,6 +49,7 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"ListRunArtifacts":               productidentity.PermissionRead,
 	"GetArtifactStorageUsage":        productidentity.PermissionRead,
 	"DownloadArtifact":               productidentity.PermissionRead,
+	"GetArtifactReport":              productidentity.PermissionRead,
 	"StreamRunLog":                   productidentity.PermissionRead,
 	"CreateRun":                      productidentity.PermissionRunsWrite,
 	"RerunRun":                       productidentity.PermissionRunsWrite,

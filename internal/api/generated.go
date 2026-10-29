@@ -925,6 +925,36 @@ func (e RunPhase) Valid() bool {
 	}
 }
 
+// Defines values for RunReportEnvelopeKind.
+const (
+	RunReportEnvelopeKindTerraformPlan RunReportEnvelopeKind = "terraform-plan"
+)
+
+// Valid indicates whether the value is a known member of the RunReportEnvelopeKind enum.
+func (e RunReportEnvelopeKind) Valid() bool {
+	switch e {
+	case RunReportEnvelopeKindTerraformPlan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunReportEnvelopeMode.
+const (
+	RunReportEnvelopeModePreview RunReportEnvelopeMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the RunReportEnvelopeMode enum.
+func (e RunReportEnvelopeMode) Valid() bool {
+	switch e {
+	case RunReportEnvelopeModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunRerunMode.
 const (
 	RunRerunModeExact  RunRerunMode = "exact"
@@ -1084,6 +1114,114 @@ func (e TargetReconciliationStatusComparison) Valid() bool {
 	case TargetReconciliationStatusComparisonMatched:
 		return true
 	case TargetReconciliationStatusComparisonUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TerraformPlanReportKind.
+const (
+	TerraformPlanReportKindTerraformPlan TerraformPlanReportKind = "terraform-plan"
+)
+
+// Valid indicates whether the value is a known member of the TerraformPlanReportKind enum.
+func (e TerraformPlanReportKind) Valid() bool {
+	switch e {
+	case TerraformPlanReportKindTerraformPlan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TerraformPlanReportMode.
+const (
+	TerraformPlanReportModePreview TerraformPlanReportMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the TerraformPlanReportMode enum.
+func (e TerraformPlanReportMode) Valid() bool {
+	switch e {
+	case TerraformPlanReportModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TerraformPlanReportSummaryKind.
+const (
+	TerraformPlanReportSummaryKindTerraformPlan TerraformPlanReportSummaryKind = "terraform-plan"
+)
+
+// Valid indicates whether the value is a known member of the TerraformPlanReportSummaryKind enum.
+func (e TerraformPlanReportSummaryKind) Valid() bool {
+	switch e {
+	case TerraformPlanReportSummaryKindTerraformPlan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TerraformPlanReportSummaryMode.
+const (
+	TerraformPlanReportSummaryModePreview TerraformPlanReportSummaryMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the TerraformPlanReportSummaryMode enum.
+func (e TerraformPlanReportSummaryMode) Valid() bool {
+	switch e {
+	case TerraformPlanReportSummaryModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TerraformResourceChangeAction.
+const (
+	Create  TerraformResourceChangeAction = "create"
+	Delete  TerraformResourceChangeAction = "delete"
+	NoOp    TerraformResourceChangeAction = "no-op"
+	Read    TerraformResourceChangeAction = "read"
+	Replace TerraformResourceChangeAction = "replace"
+	Update  TerraformResourceChangeAction = "update"
+)
+
+// Valid indicates whether the value is a known member of the TerraformResourceChangeAction enum.
+func (e TerraformResourceChangeAction) Valid() bool {
+	switch e {
+	case Create:
+		return true
+	case Delete:
+		return true
+	case NoOp:
+		return true
+	case Read:
+		return true
+	case Replace:
+		return true
+	case Update:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TerraformResourceChangeReplacementOrder.
+const (
+	CreateBeforeDestroy TerraformResourceChangeReplacementOrder = "create-before-destroy"
+	DestroyBeforeCreate TerraformResourceChangeReplacementOrder = "destroy-before-create"
+)
+
+// Valid indicates whether the value is a known member of the TerraformResourceChangeReplacementOrder enum.
+func (e TerraformResourceChangeReplacementOrder) Valid() bool {
+	switch e {
+	case CreateBeforeDestroy:
+		return true
+	case DestroyBeforeCreate:
 		return true
 	default:
 		return false
@@ -1267,6 +1405,7 @@ type Artifact struct {
 	MediaType      string                 `json:"mediaType"`
 	Name           CatalogName            `json:"name"`
 	Provenance     ArtifactProvenance     `json:"provenance"`
+	Report         *RunReportSummary      `json:"report,omitempty"`
 	RetentionState ArtifactRetentionState `json:"retentionState"`
 	RunID          openapi_types.UUID     `json:"runId"`
 	SealedAt       *time.Time             `json:"sealedAt,omitempty"`
@@ -1335,7 +1474,7 @@ type ArtifactStorageUsage struct {
 	// ArtifactCount Number of included artifact metadata records.
 	ArtifactCount int64 `json:"artifactCount"`
 
-	// RecordedBytes Sum of the included records' sizeBytes values. For open or failed logs, this is the durable recorded prefix. Expired artifacts remain included until content deletion finishes and metadata is marked deleted.
+	// RecordedBytes Sum of the included records' sizeBytes values and any report projection sizes. For open or failed logs, sizeBytes is the durable recorded prefix. Expired artifacts remain included until content deletion finishes and metadata is marked deleted.
 	RecordedBytes int64 `json:"recordedBytes"`
 }
 
@@ -2954,6 +3093,35 @@ type RunOutcome string
 // RunPhase defines model for RunPhase.
 type RunPhase string
 
+// RunReport defines model for RunReport.
+type RunReport struct {
+	union json.RawMessage
+}
+
+// RunReportEnvelope defines model for RunReportEnvelope.
+type RunReportEnvelope struct {
+	AdapterVersion int                   `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID    `json:"artifactId"`
+	CreatedAt      time.Time             `json:"createdAt"`
+	Kind           RunReportEnvelopeKind `json:"kind"`
+	Mode           RunReportEnvelopeMode `json:"mode"`
+	RunID          openapi_types.UUID    `json:"runId"`
+	SchemaVersion  int                   `json:"schemaVersion"`
+	Tool           string                `json:"tool"`
+	ToolVersion    *string               `json:"toolVersion,omitempty"`
+}
+
+// RunReportEnvelopeKind defines model for RunReportEnvelope.Kind.
+type RunReportEnvelopeKind string
+
+// RunReportEnvelopeMode defines model for RunReportEnvelope.Mode.
+type RunReportEnvelopeMode string
+
+// RunReportSummary defines model for RunReportSummary.
+type RunReportSummary struct {
+	union json.RawMessage
+}
+
 // RunRerun defines model for RunRerun.
 type RunRerun struct {
 	// Mode Exact reuses the original Run's frozen commit, catalog, parameters, artifact inputs, and execution configuration. Latest resolves the original target, action, and parameters against the active catalog and current placement configuration.
@@ -3154,6 +3322,102 @@ type TargetSyncRunCheckpoint struct {
 	RunID           openapi_types.UUID `json:"runId"`
 	StartedAt       *time.Time         `json:"startedAt,omitempty"`
 }
+
+// TerraformActionCounts defines model for TerraformActionCounts.
+type TerraformActionCounts struct {
+	Create  int `json:"create"`
+	Delete  int `json:"delete"`
+	NoOp    int `json:"noOp"`
+	Read    int `json:"read"`
+	Replace int `json:"replace"`
+	Total   int `json:"total"`
+	Update  int `json:"update"`
+}
+
+// TerraformCheckCounts defines model for TerraformCheckCounts.
+type TerraformCheckCounts struct {
+	Error   int `json:"error"`
+	Fail    int `json:"fail"`
+	Pass    int `json:"pass"`
+	Total   int `json:"total"`
+	Unknown int `json:"unknown"`
+}
+
+// TerraformPlanReport defines model for TerraformPlanReport.
+type TerraformPlanReport struct {
+	AdapterVersion  int                       `json:"adapterVersion"`
+	ArtifactID      openapi_types.UUID        `json:"artifactId"`
+	CreatedAt       time.Time                 `json:"createdAt"`
+	Kind            TerraformPlanReportKind   `json:"kind"`
+	Mode            TerraformPlanReportMode   `json:"mode"`
+	ResourceChanges []TerraformResourceChange `json:"resourceChanges"`
+	ResourceDrift   []TerraformResourceChange `json:"resourceDrift"`
+	RunID           openapi_types.UUID        `json:"runId"`
+	SchemaVersion   int                       `json:"schemaVersion"`
+	Summary         TerraformPlanSummary      `json:"summary"`
+	Tool            string                    `json:"tool"`
+	ToolVersion     *string                   `json:"toolVersion,omitempty"`
+}
+
+// TerraformPlanReportKind defines model for TerraformPlanReport.Kind.
+type TerraformPlanReportKind string
+
+// TerraformPlanReportMode defines model for TerraformPlanReport.Mode.
+type TerraformPlanReportMode string
+
+// TerraformPlanReportSummary defines model for TerraformPlanReportSummary.
+type TerraformPlanReportSummary struct {
+	AdapterVersion int                            `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID             `json:"artifactId"`
+	CreatedAt      time.Time                      `json:"createdAt"`
+	Kind           TerraformPlanReportSummaryKind `json:"kind"`
+	Mode           TerraformPlanReportSummaryMode `json:"mode"`
+	RunID          openapi_types.UUID             `json:"runId"`
+	SchemaVersion  int                            `json:"schemaVersion"`
+	Summary        TerraformPlanSummary           `json:"summary"`
+	Tool           string                         `json:"tool"`
+	ToolVersion    *string                        `json:"toolVersion,omitempty"`
+}
+
+// TerraformPlanReportSummaryKind defines model for TerraformPlanReportSummary.Kind.
+type TerraformPlanReportSummaryKind string
+
+// TerraformPlanReportSummaryMode defines model for TerraformPlanReportSummary.Mode.
+type TerraformPlanReportSummaryMode string
+
+// TerraformPlanSummary defines model for TerraformPlanSummary.
+type TerraformPlanSummary struct {
+	Applyable        *bool                 `json:"applyable,omitempty"`
+	Checks           TerraformCheckCounts  `json:"checks"`
+	Complete         *bool                 `json:"complete,omitempty"`
+	DriftedResources int                   `json:"driftedResources"`
+	Errored          *bool                 `json:"errored,omitempty"`
+	OutputChanges    TerraformActionCounts `json:"outputChanges"`
+	ResourceChanges  TerraformActionCounts `json:"resourceChanges"`
+}
+
+// TerraformResourceChange defines model for TerraformResourceChange.
+type TerraformResourceChange struct {
+	Action          TerraformResourceChangeAction `json:"action"`
+	ActionReason    *string                       `json:"actionReason,omitempty"`
+	Address         string                        `json:"address"`
+	Mode            string                        `json:"mode"`
+	ModuleAddress   *string                       `json:"moduleAddress,omitempty"`
+	Name            string                        `json:"name"`
+	PreviousAddress *string                       `json:"previousAddress,omitempty"`
+	ProviderName    string                        `json:"providerName"`
+
+	// ReplacedObjectKey Opaque Terraform key distinguishing an old object retained during replacement from the current object at the same address.
+	ReplacedObjectKey *string                                  `json:"replacedObjectKey,omitempty"`
+	ReplacementOrder  *TerraformResourceChangeReplacementOrder `json:"replacementOrder,omitempty"`
+	Type              string                                   `json:"type"`
+}
+
+// TerraformResourceChangeAction defines model for TerraformResourceChange.Action.
+type TerraformResourceChangeAction string
+
+// TerraformResourceChangeReplacementOrder defines model for TerraformResourceChange.ReplacementOrder.
+type TerraformResourceChangeReplacementOrder string
 
 // Limit defines model for Limit.
 type Limit = int
@@ -3600,6 +3864,136 @@ func (t *ParameterValue) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsTerraformPlanReport returns the union data inside the RunReport as a TerraformPlanReport
+func (t RunReport) AsTerraformPlanReport() (TerraformPlanReport, error) {
+	var body TerraformPlanReport
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTerraformPlanReport overwrites any union data inside the RunReport as the provided TerraformPlanReport
+func (t *RunReport) FromTerraformPlanReport(v TerraformPlanReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"terraform-plan"}`))
+	t.union = b
+	return err
+}
+
+// MergeTerraformPlanReport performs a merge with any union data inside the RunReport, using the provided TerraformPlanReport
+func (t *RunReport) MergeTerraformPlanReport(v TerraformPlanReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"terraform-plan"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t RunReport) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"kind"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t RunReport) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "terraform-plan":
+		return t.AsTerraformPlanReport()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t RunReport) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *RunReport) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsTerraformPlanReportSummary returns the union data inside the RunReportSummary as a TerraformPlanReportSummary
+func (t RunReportSummary) AsTerraformPlanReportSummary() (TerraformPlanReportSummary, error) {
+	var body TerraformPlanReportSummary
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromTerraformPlanReportSummary overwrites any union data inside the RunReportSummary as the provided TerraformPlanReportSummary
+func (t *RunReportSummary) FromTerraformPlanReportSummary(v TerraformPlanReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"terraform-plan"}`))
+	t.union = b
+	return err
+}
+
+// MergeTerraformPlanReportSummary performs a merge with any union data inside the RunReportSummary, using the provided TerraformPlanReportSummary
+func (t *RunReportSummary) MergeTerraformPlanReportSummary(v TerraformPlanReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"terraform-plan"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t RunReportSummary) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"kind"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t RunReportSummary) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "terraform-plan":
+		return t.AsTerraformPlanReportSummary()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t RunReportSummary) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *RunReportSummary) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
 
@@ -3676,7 +4070,7 @@ type ClientInterface interface {
 
 	// GetArtifactStorageUsage Get recorded artifact-content storage usage
 	//
-	// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+	// Aggregates sizeBytes and any report projection size from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
 	//
 	// Corresponds with GET /api/v1/artifacts/storage-usage (the `GetArtifactStorageUsage` operationId).
 	GetArtifactStorageUsage(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3685,6 +4079,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
 	DownloadArtifact(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetArtifactReport Get a sealed artifact's typed report projection
+	//
+	// Corresponds with GET /api/v1/artifacts/{artifactId}/report (the `GetArtifactReport` operationId).
+	GetArtifactReport(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListAPIKeys List API keys for the current principal
 	//
@@ -4339,7 +4738,7 @@ type ClientInterface interface {
 
 // GetArtifactStorageUsage Get recorded artifact-content storage usage
 //
-// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+// Aggregates sizeBytes and any report projection size from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
 //
 // Corresponds with GET /api/v1/artifacts/storage-usage (the `GetArtifactStorageUsage` operationId).
 func (c *Client) GetArtifactStorageUsage(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4359,6 +4758,21 @@ func (c *Client) GetArtifactStorageUsage(ctx context.Context, reqEditors ...Requ
 // Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
 func (c *Client) DownloadArtifact(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDownloadArtifactRequest(c.Server, artifactID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetArtifactReport Get a sealed artifact's typed report projection
+//
+// Corresponds with GET /api/v1/artifacts/{artifactId}/report (the `GetArtifactReport` operationId).
+func (c *Client) GetArtifactReport(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetArtifactReportRequest(c.Server, artifactID)
 	if err != nil {
 		return nil, err
 	}
@@ -5943,6 +6357,40 @@ func NewDownloadArtifactRequest(server string, artifactID openapi_types.UUID) (*
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/artifacts/%s/download", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetArtifactReportRequest constructs an http.Request for the GetArtifactReport method
+func NewGetArtifactReportRequest(server string, artifactID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "artifactId", artifactID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/artifacts/%s/report", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9800,7 +10248,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetArtifactStorageUsageWithResponse Get recorded artifact-content storage usage
 	//
-	// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+	// Aggregates sizeBytes and any report projection size from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9813,6 +10261,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/artifacts/{artifactId}/download (the `DownloadArtifact` operationId).
 	DownloadArtifactWithResponse(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*DownloadArtifactResponse, error)
+
+	// GetArtifactReportWithResponse Get a sealed artifact's typed report projection
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/artifacts/{artifactId}/report (the `GetArtifactReport` operationId).
+	GetArtifactReportWithResponse(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetArtifactReportResponse, error)
 
 	// ListAPIKeysWithResponse List API keys for the current principal
 	//
@@ -10700,6 +11155,82 @@ func (r DownloadArtifactResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DownloadArtifactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetArtifactReportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RunReport
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetArtifactReportResponse) GetJSON200() *RunReport {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetArtifactReportResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetArtifactReportResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetArtifactReportResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetArtifactReportResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetArtifactReportResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetArtifactReportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetArtifactReportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetArtifactReportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetArtifactReportResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15826,7 +16357,7 @@ func (r GetReadinessResponse) ContentType() string {
 
 // GetArtifactStorageUsageWithResponse Get recorded artifact-content storage usage
 //
-// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+// Aggregates sizeBytes and any report projection size from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15850,6 +16381,19 @@ func (c *ClientWithResponses) DownloadArtifactWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseDownloadArtifactResponse(rsp)
+}
+
+// GetArtifactReportWithResponse Get a sealed artifact's typed report projection
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/artifacts/{artifactId}/report (the `GetArtifactReport` operationId).
+func (c *ClientWithResponses) GetArtifactReportWithResponse(ctx context.Context, artifactID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetArtifactReportResponse, error) {
+	rsp, err := c.GetArtifactReport(ctx, artifactID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetArtifactReportResponse(rsp)
 }
 
 // ListAPIKeysWithResponse List API keys for the current principal
@@ -17248,6 +17792,67 @@ func ParseDownloadArtifactResponse(rsp *http.Response) (*DownloadArtifactRespons
 			headers.Digest = &value
 		}
 		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetArtifactReportResponse parses an HTTP response from a GetArtifactReportWithResponse call
+func ParseGetArtifactReportResponse(rsp *http.Response) (*GetArtifactReportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetArtifactReportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RunReport
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
 	}
 
 	return response, nil
@@ -21518,6 +22123,9 @@ type ServerInterface interface {
 	// DownloadArtifact Download a sealed artifact
 	// (GET /api/v1/artifacts/{artifactId}/download)
 	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID)
+	// GetArtifactReport Get a sealed artifact's typed report projection
+	// (GET /api/v1/artifacts/{artifactId}/report)
+	GetArtifactReport(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID)
 	// ListAPIKeys List API keys for the current principal
 	// (GET /api/v1/auth/api-keys)
 	ListAPIKeys(w http.ResponseWriter, r *http.Request, params ListAPIKeysParams)
@@ -21761,6 +22369,32 @@ func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DownloadArtifact(w, r, artifactID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactReport operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactId" -------------
+	var artifactID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactId", r.PathValue("artifactId"), &artifactID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactReport(w, r, artifactID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -24726,6 +25360,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/storage-usage", wrapper.GetArtifactStorageUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/logs", wrapper.StreamRunLog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/download", wrapper.DownloadArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/report", wrapper.GetArtifactReport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/login", wrapper.BeginOIDCLogin)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/callback", wrapper.CompleteOIDCLogin)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/session", wrapper.GetCurrentPrincipal)
@@ -24970,6 +25605,106 @@ func (response DownloadArtifact409ApplicationProblemPlusJSONResponse) VisitDownl
 type DownloadArtifact500ApplicationProblemPlusJSONResponse Problem
 
 func (response DownloadArtifact500ApplicationProblemPlusJSONResponse) VisitDownloadArtifactResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactReportRequestObject struct {
+	ArtifactID openapi_types.UUID `json:"artifactId"`
+}
+
+type GetArtifactReportResponseObject interface {
+	VisitGetArtifactReportResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactReport200JSONResponse RunReport
+
+func (t GetArtifactReport200JSONResponse) MarshalJSON() ([]byte, error) {
+	return RunReport(t).MarshalJSON()
+}
+
+func (t *GetArtifactReport200JSONResponse) UnmarshalJSON(b []byte) error {
+	return (*RunReport)(t).UnmarshalJSON(b)
+}
+
+func (response GetArtifactReport200JSONResponse) VisitGetArtifactReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactReport401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactReport401ApplicationProblemPlusJSONResponse) VisitGetArtifactReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactReport403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactReport403ApplicationProblemPlusJSONResponse) VisitGetArtifactReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactReport404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactReport404ApplicationProblemPlusJSONResponse) VisitGetArtifactReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactReport405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactReport405ApplicationProblemPlusJSONResponse) VisitGetArtifactReportResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactReport500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactReport500ApplicationProblemPlusJSONResponse) VisitGetArtifactReportResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -31503,6 +32238,9 @@ type StrictServerInterface interface {
 	// DownloadArtifact Download a sealed artifact
 	// (GET /api/v1/artifacts/{artifactId}/download)
 	DownloadArtifact(ctx context.Context, request DownloadArtifactRequestObject) (DownloadArtifactResponseObject, error)
+	// GetArtifactReport Get a sealed artifact's typed report projection
+	// (GET /api/v1/artifacts/{artifactId}/report)
+	GetArtifactReport(ctx context.Context, request GetArtifactReportRequestObject) (GetArtifactReportResponseObject, error)
 	// ListAPIKeys List API keys for the current principal
 	// (GET /api/v1/auth/api-keys)
 	ListAPIKeys(ctx context.Context, request ListAPIKeysRequestObject) (ListAPIKeysResponseObject, error)
@@ -31788,6 +32526,32 @@ func (sh *strictHandler) DownloadArtifact(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DownloadArtifactResponseObject); ok {
 		if err := validResponse.VisitDownloadArtifactResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetArtifactReport operation middleware
+func (sh *strictHandler) GetArtifactReport(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID) {
+	var request GetArtifactReportRequestObject
+
+	request.ArtifactID = artifactID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactReport(ctx, request.(GetArtifactReportRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactReport")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactReportResponseObject); ok {
+		if err := validResponse.VisitGetArtifactReportResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

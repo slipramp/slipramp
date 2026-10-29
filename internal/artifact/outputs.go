@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/objectstore"
+	"github.com/slipramp/slipramp/internal/runreport"
 )
 
 type UploadRequest struct {
@@ -22,7 +24,7 @@ type UploadRequest struct {
 	SHA256    string
 }
 
-func (s *Service) Upload(ctx context.Context, request UploadRequest) error {
+func (s *Service) Upload(ctx context.Context, request UploadRequest) (resultErr error) {
 	if request.RunID == uuid.Nil || request.Body == nil || request.SizeBytes < 0 ||
 		!sha256Pattern.MatchString(request.SHA256) {
 		return invalid("Run ID, body, nonnegative size, and SHA-256 digest are required")
@@ -35,6 +37,27 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest) error {
 	declaration, found := runContext.Artifacts[request.Name]
 	if !found {
 		return ErrNotFound
+	}
+	adapter, recognizedReport := runreport.AdapterForMediaType(declaration.MediaType)
+	if recognizedReport {
+		startedAt := time.Now()
+		defer func() {
+			s.reportObserver.ObserveReportIngestion(
+				ctx,
+				adapter.Kind(),
+				reportIngestionOutcome(resultErr),
+				time.Since(startedAt),
+			)
+		}()
+		if !declaration.Sensitive {
+			return invalid("recognized Run report artifact declarations must be sensitive")
+		}
+		if request.SizeBytes > adapter.MaximumSourceSizeBytes() {
+			return invalid(
+				"recognized Run report artifact exceeds the %d-byte source limit",
+				adapter.MaximumSourceSizeBytes(),
+			)
+		}
 	}
 
 	existing, err := s.artifacts.GetArtifactByRunAndName(ctx, request.RunID, request.Name)
@@ -82,7 +105,15 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest) error {
 		CreatedAt:      sealedAt,
 		SealedAt:       &sealedAt,
 	}
-	_, err = s.artifacts.CreateArtifact(ctx, record)
+	if recognizedReport {
+		report, reportErr := s.projectReport(ctx, adapter, record)
+		if reportErr != nil {
+			return reportErr
+		}
+		_, err = s.artifacts.CreateArtifactWithReport(ctx, record, report)
+	} else {
+		_, err = s.artifacts.CreateArtifact(ctx, record)
+	}
 	if errors.Is(err, ErrAlreadyExists) {
 		existing, getErr := s.artifacts.GetArtifactByRunAndName(ctx, request.RunID, request.Name)
 		if getErr != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
+	"github.com/slipramp/slipramp/internal/runreport"
 )
 
 type operationInstruments struct {
@@ -24,6 +25,8 @@ type operationInstruments struct {
 	artifactReconciliationRuns     metric.Int64Counter
 	artifactReconciliationDuration metric.Float64Histogram
 	artifactReconciliationItems    metric.Int64Counter
+	artifactReportIngestions       metric.Int64Counter
+	artifactReportDuration         metric.Float64Histogram
 }
 
 func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
@@ -102,8 +105,38 @@ func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
 	if err != nil {
 		return operationInstruments{}, fmt.Errorf("create Artifact reconciliation items metric: %w", err)
 	}
+	instruments.artifactReportIngestions, err = meter.Int64Counter(
+		"slipramp.artifact.report.ingestions",
+		metric.WithUnit("{report}"),
+		metric.WithDescription("Run report ingestion attempts by report kind and result."),
+	)
+	if err != nil {
+		return operationInstruments{}, fmt.Errorf("create Artifact report ingestions metric: %w", err)
+	}
+	instruments.artifactReportDuration, err = meter.Float64Histogram(
+		"slipramp.artifact.report.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of Run report ingestion attempts."),
+	)
+	if err != nil {
+		return operationInstruments{}, fmt.Errorf("create Artifact report duration metric: %w", err)
+	}
 
 	return instruments, nil
+}
+
+func (t *Telemetry) ObserveReportIngestion(
+	ctx context.Context,
+	kind runreport.ReportKind,
+	result artifact.ReportIngestionOutcome,
+	duration time.Duration,
+) {
+	options := metric.WithAttributes(
+		attribute.String("report_kind", string(kind)),
+		attribute.String("result", string(result)),
+	)
+	t.operations.artifactReportIngestions.Add(ctx, 1, options)
+	t.operations.artifactReportDuration.Record(ctx, duration.Seconds(), options)
 }
 
 func (t *Telemetry) ObserveRepositoryRefresh(

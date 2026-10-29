@@ -111,6 +111,7 @@ func TestReconcilerExpiresDeletesAndRemovesOldOrphans(t *testing.T) {
 	oldArtifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1600")
 	recentArtifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1601")
 	oldObjectKey := "runs/old/artifacts/plan/content"
+	oldReportKey := "runs/old/artifacts/plan/reports/terraform-plan-v1-a.json"
 	recentObjectKey := "runs/recent/artifacts/plan/content"
 	oldOrphanKey := "runs/orphan/artifacts/plan/content"
 	recentOrphanKey := "runs/uploading/artifacts/plan/content"
@@ -125,7 +126,7 @@ func TestReconcilerExpiresDeletesAndRemovesOldOrphans(t *testing.T) {
 				RetentionState: RetentionRetained, SealedAt: &recentSeal,
 			},
 		},
-		objectKeys: map[uuid.UUID][]string{oldArtifactID: {oldObjectKey}},
+		objectKeys: map[uuid.UUID][]string{oldArtifactID: {oldObjectKey, oldReportKey}},
 		references: map[string]bool{
 			recentObjectKey: true,
 		},
@@ -133,6 +134,9 @@ func TestReconcilerExpiresDeletesAndRemovesOldOrphans(t *testing.T) {
 	contents := &retentionContentStore{objects: map[string]objectstore.ObjectInfo{
 		oldObjectKey: {
 			Key: oldObjectKey, LastModified: oldSeal,
+		},
+		oldReportKey: {
+			Key: oldReportKey, LastModified: oldSeal,
 		},
 		recentObjectKey: {
 			Key: recentObjectKey, LastModified: recentSeal,
@@ -163,7 +167,7 @@ func TestReconcilerExpiresDeletesAndRemovesOldOrphans(t *testing.T) {
 		t.Errorf("recent Artifact retention = %q, want retained", metadata.records[recentArtifactID].RetentionState)
 	}
 	slices.Sort(contents.deleted)
-	wantDeleted := []string{oldObjectKey, oldOrphanKey}
+	wantDeleted := []string{oldObjectKey, oldOrphanKey, oldReportKey}
 	slices.Sort(wantDeleted)
 	if !slices.Equal(contents.deleted, wantDeleted) {
 		t.Errorf("deleted objects = %v, want %v", contents.deleted, wantDeleted)
