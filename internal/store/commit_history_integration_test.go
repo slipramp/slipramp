@@ -173,6 +173,8 @@ func TestRepositoryCommitHistoryPersistenceIntegration(t *testing.T) {
 
 	failureReason := "catalog rejected"
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, repository.RefreshResult{
+		AttemptID:     uuid.New(),
+		Source:        repository.RefreshSourcePeriodic,
 		Commit:        &repository.Commit{SHA: commitE},
 		AttemptedAt:   baseTime.Add(7 * time.Minute),
 		FailureReason: &failureReason,

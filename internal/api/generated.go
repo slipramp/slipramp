@@ -685,6 +685,45 @@ func (e RepositoryRefreshStatus) Valid() bool {
 	}
 }
 
+// Defines values for RepositoryRefreshAttemptOutcome.
+const (
+	Accepted        RepositoryRefreshAttemptOutcome = "accepted"
+	CatalogRejected RepositoryRefreshAttemptOutcome = "catalog-rejected"
+	FetchFailed     RepositoryRefreshAttemptOutcome = "fetch-failed"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryRefreshAttemptOutcome enum.
+func (e RepositoryRefreshAttemptOutcome) Valid() bool {
+	switch e {
+	case Accepted:
+		return true
+	case CatalogRejected:
+		return true
+	case FetchFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryRefreshAttemptSource.
+const (
+	Periodic  RepositoryRefreshAttemptSource = "periodic"
+	Requested RepositoryRefreshAttemptSource = "requested"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryRefreshAttemptSource enum.
+func (e RepositoryRefreshAttemptSource) Valid() bool {
+	switch e {
+	case Periodic:
+		return true
+	case Requested:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunObservationState.
 const (
 	RunObservationStateCurrent RunObservationState = "current"
@@ -1271,6 +1310,15 @@ type ArtifactProvenance struct {
 	ProducerRunID     openapi_types.UUID `json:"producerRunId"`
 	RepositoryID      openapi_types.UUID `json:"repositoryId"`
 	Target            CatalogName        `json:"target"`
+}
+
+// ArtifactStorageUsage Aggregate logical artifact-content consumption recorded in PostgreSQL. Artifacts in retained or expired retention state are included across open, sealed, and failed content lifecycle states. Artifacts marked deleted are excluded.
+type ArtifactStorageUsage struct {
+	// ArtifactCount Number of included artifact metadata records.
+	ArtifactCount int64 `json:"artifactCount"`
+
+	// RecordedBytes Sum of the included records' sizeBytes values. For open or failed logs, this is the durable recorded prefix. Expired artifacts remain included until content deletion finishes and metadata is marked deleted.
+	RecordedBytes int64 `json:"recordedBytes"`
 }
 
 // CancelRunCommand defines model for CancelRunCommand.
@@ -2510,6 +2558,43 @@ type RepositoryRefresh struct {
 // RepositoryRefreshStatus Result of the most recent branch refresh attempt.
 type RepositoryRefreshStatus string
 
+// RepositoryRefreshAttempt defines model for RepositoryRefreshAttempt.
+type RepositoryRefreshAttempt struct {
+	// Commit Fetched branch head, present for accepted and catalog-rejected attempts.
+	Commit *GitCommit `json:"commit,omitempty"`
+
+	// Diagnostic Bounded non-sensitive diagnostic for an unsuccessful attempt.
+	Diagnostic *string `json:"diagnostic,omitempty"`
+
+	// DurationMilliseconds Elapsed fetch and catalog processing time in milliseconds.
+	DurationMilliseconds int64 `json:"durationMilliseconds"`
+
+	// ID Stable identity of this immutable refresh attempt.
+	ID openapi_types.UUID `json:"id"`
+
+	// Outcome Accepted catalogs become active. A catalog-rejected attempt fetched Git successfully but did not pass catalog loading and validation.
+	Outcome      RepositoryRefreshAttemptOutcome `json:"outcome"`
+	RepositoryID openapi_types.UUID              `json:"repositoryId"`
+
+	// Source Whether the Server interval or an operator request started the attempt.
+	Source    RepositoryRefreshAttemptSource `json:"source"`
+	StartedAt time.Time                      `json:"startedAt"`
+}
+
+// RepositoryRefreshAttemptOutcome Accepted catalogs become active. A catalog-rejected attempt fetched Git successfully but did not pass catalog loading and validation.
+type RepositoryRefreshAttemptOutcome string
+
+// RepositoryRefreshAttemptSource Whether the Server interval or an operator request started the attempt.
+type RepositoryRefreshAttemptSource string
+
+// RepositoryRefreshAttemptList defines model for RepositoryRefreshAttemptList.
+type RepositoryRefreshAttemptList struct {
+	Items  []RepositoryRefreshAttempt `json:"items"`
+	Limit  int                        `json:"limit"`
+	Offset int                        `json:"offset"`
+	Total  int                        `json:"total"`
+}
+
 // RepositoryUpdate defines model for RepositoryUpdate.
 type RepositoryUpdate struct {
 	// CommitIndexing Controls whether refresh records no presentation metadata, metadata only for observed branch heads, or metadata for the complete tracked branch history. Exact commit SHAs required by product records are retained in all modes.
@@ -3214,6 +3299,12 @@ type ListRepositoriesParams struct {
 // ListRepositoriesParamsRefreshStatus defines parameters for ListRepositories.
 type ListRepositoriesParamsRefreshStatus string
 
+// ListRepositoryRefreshAttemptsParams defines parameters for ListRepositoryRefreshAttempts.
+type ListRepositoryRefreshAttemptsParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	// RepositoryID Limit results to one repository.
@@ -3524,6 +3615,13 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// GetArtifactStorageUsage Get recorded artifact-content storage usage
+	//
+	// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+	//
+	// Corresponds with GET /api/v1/artifacts/storage-usage (the `GetArtifactStorageUsage` operationId).
+	GetArtifactStorageUsage(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DownloadArtifact Download a sealed artifact
 	//
@@ -3874,6 +3972,20 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/commits/{commitSha} (the `GetCommit` operationId).
 	GetCommit(ctx context.Context, repositoryID openapi_types.UUID, commitSha string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListRepositoryRefreshAttempts List repository refresh attempts
+	//
+	// Lists the retained immutable refresh attempts for one active repository, newest first.
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/refresh-attempts (the `ListRepositoryRefreshAttempts` operationId).
+	ListRepositoryRefreshAttempts(ctx context.Context, repositoryID openapi_types.UUID, params *ListRepositoryRefreshAttemptsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RefreshRepository Refresh a repository now
+	//
+	// Starts one requested repository refresh through the same serialized fetch, validation, catalog activation, and Git-trigger delivery path used by periodic refreshes. The response is the completed durable attempt.
+	//
+	// Corresponds with POST /api/v1/repositories/{repositoryId}/refresh-attempts (the `RefreshRepository` operationId).
+	RefreshRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListRuns List recent Runs
 	//
 	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
@@ -4147,6 +4259,23 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /readyz (the `GetReadiness` operationId).
 	GetReadiness(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// GetArtifactStorageUsage Get recorded artifact-content storage usage
+//
+// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+//
+// Corresponds with GET /api/v1/artifacts/storage-usage (the `GetArtifactStorageUsage` operationId).
+func (c *Client) GetArtifactStorageUsage(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetArtifactStorageUsageRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // DownloadArtifact Download a sealed artifact
@@ -4988,6 +5117,40 @@ func (c *Client) GetCommit(ctx context.Context, repositoryID openapi_types.UUID,
 	return c.Client.Do(req)
 }
 
+// ListRepositoryRefreshAttempts List repository refresh attempts
+//
+// Lists the retained immutable refresh attempts for one active repository, newest first.
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/refresh-attempts (the `ListRepositoryRefreshAttempts` operationId).
+func (c *Client) ListRepositoryRefreshAttempts(ctx context.Context, repositoryID openapi_types.UUID, params *ListRepositoryRefreshAttemptsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListRepositoryRefreshAttemptsRequest(c.Server, repositoryID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RefreshRepository Refresh a repository now
+//
+// Starts one requested repository refresh through the same serialized fetch, validation, catalog activation, and Git-trigger delivery path used by periodic refreshes. The response is the completed durable attempt.
+//
+// Corresponds with POST /api/v1/repositories/{repositoryId}/refresh-attempts (the `RefreshRepository` operationId).
+func (c *Client) RefreshRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRefreshRepositoryRequest(c.Server, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ListRuns List recent Runs
 //
 // Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
@@ -5620,6 +5783,33 @@ func (c *Client) GetReadiness(ctx context.Context, reqEditors ...RequestEditorFn
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetArtifactStorageUsageRequest constructs an http.Request for the GetArtifactStorageUsage method
+func NewGetArtifactStorageUsageRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/artifacts/storage-usage")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewDownloadArtifactRequest constructs an http.Request for the DownloadArtifact method
@@ -7975,6 +8165,113 @@ func NewGetCommitRequest(server string, repositoryID openapi_types.UUID, commitS
 	return req, nil
 }
 
+// NewListRepositoryRefreshAttemptsRequest constructs an http.Request for the ListRepositoryRefreshAttempts method
+func NewListRepositoryRefreshAttemptsRequest(server string, repositoryID openapi_types.UUID, params *ListRepositoryRefreshAttemptsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "repositoryId", repositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories/%s/refresh-attempts", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRefreshRepositoryRequest constructs an http.Request for the RefreshRepository method
+func NewRefreshRepositoryRequest(server string, repositoryID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "repositoryId", repositoryID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repositories/%s/refresh-attempts", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListRunsRequest constructs an http.Request for the ListRuns method
 func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, error) {
 	var err error
@@ -9347,6 +9644,15 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// GetArtifactStorageUsageWithResponse Get recorded artifact-content storage usage
+	//
+	// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/artifacts/storage-usage (the `GetArtifactStorageUsage` operationId).
+	GetArtifactStorageUsageWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetArtifactStorageUsageResponse, error)
+
 	// DownloadArtifactWithResponse Download a sealed artifact
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -9754,6 +10060,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/repositories/{repositoryId}/commits/{commitSha} (the `GetCommit` operationId).
 	GetCommitWithResponse(ctx context.Context, repositoryID openapi_types.UUID, commitSha string, reqEditors ...RequestEditorFn) (*GetCommitResponse, error)
 
+	// ListRepositoryRefreshAttemptsWithResponse List repository refresh attempts
+	//
+	// Lists the retained immutable refresh attempts for one active repository, newest first.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/repositories/{repositoryId}/refresh-attempts (the `ListRepositoryRefreshAttempts` operationId).
+	ListRepositoryRefreshAttemptsWithResponse(ctx context.Context, repositoryID openapi_types.UUID, params *ListRepositoryRefreshAttemptsParams, reqEditors ...RequestEditorFn) (*ListRepositoryRefreshAttemptsResponse, error)
+
+	// RefreshRepositoryWithResponse Refresh a repository now
+	//
+	// Starts one requested repository refresh through the same serialized fetch, validation, catalog activation, and Git-trigger delivery path used by periodic refreshes. The response is the completed durable attempt.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/repositories/{repositoryId}/refresh-attempts (the `RefreshRepository` operationId).
+	RefreshRepositoryWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RefreshRepositoryResponse, error)
+
 	// ListRunsWithResponse List recent Runs
 	//
 	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
@@ -10055,6 +10379,75 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /readyz (the `GetReadiness` operationId).
 	GetReadinessWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetReadinessResponse, error)
+}
+
+type GetArtifactStorageUsageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ArtifactStorageUsage
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetArtifactStorageUsageResponse) GetJSON200() *ArtifactStorageUsage {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetArtifactStorageUsageResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetArtifactStorageUsageResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetArtifactStorageUsageResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetArtifactStorageUsageResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetArtifactStorageUsageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetArtifactStorageUsageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetArtifactStorageUsageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetArtifactStorageUsageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 // DownloadArtifactResponse200Headers the declared response headers of an HTTP 200 response for DownloadArtifact
@@ -13048,6 +13441,179 @@ func (r GetCommitResponse) ContentType() string {
 	return ""
 }
 
+type ListRepositoryRefreshAttemptsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RepositoryRefreshAttemptList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListRepositoryRefreshAttemptsResponse) GetJSON200() *RepositoryRefreshAttemptList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListRepositoryRefreshAttemptsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListRepositoryRefreshAttemptsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListRepositoryRefreshAttemptsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListRepositoryRefreshAttemptsResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListRepositoryRefreshAttemptsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListRepositoryRefreshAttemptsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListRepositoryRefreshAttemptsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListRepositoryRefreshAttemptsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListRepositoryRefreshAttemptsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListRepositoryRefreshAttemptsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// RefreshRepositoryResponse201Headers the declared response headers of an HTTP 201 response for RefreshRepository
+type RefreshRepositoryResponse201Headers struct {
+	Location *string
+}
+
+type RefreshRepositoryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *RepositoryRefreshAttempt
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *RefreshRepositoryResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r RefreshRepositoryResponse) GetJSON201() *RepositoryRefreshAttempt {
+	return r.JSON201
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RefreshRepositoryResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RefreshRepositoryResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RefreshRepositoryResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RefreshRepositoryResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r RefreshRepositoryResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RefreshRepositoryResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RefreshRepositoryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RefreshRepositoryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RefreshRepositoryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RefreshRepositoryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListRunsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15010,6 +15576,21 @@ func (r GetReadinessResponse) ContentType() string {
 	return ""
 }
 
+// GetArtifactStorageUsageWithResponse Get recorded artifact-content storage usage
+//
+// Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/artifacts/storage-usage (the `GetArtifactStorageUsage` operationId).
+func (c *ClientWithResponses) GetArtifactStorageUsageWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetArtifactStorageUsageResponse, error) {
+	rsp, err := c.GetArtifactStorageUsage(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetArtifactStorageUsageResponse(rsp)
+}
+
 // DownloadArtifactWithResponse Download a sealed artifact
 //
 // Returns a wrapper object for the known response body format(s).
@@ -15711,6 +16292,36 @@ func (c *ClientWithResponses) GetCommitWithResponse(ctx context.Context, reposit
 	return ParseGetCommitResponse(rsp)
 }
 
+// ListRepositoryRefreshAttemptsWithResponse List repository refresh attempts
+//
+// Lists the retained immutable refresh attempts for one active repository, newest first.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/repositories/{repositoryId}/refresh-attempts (the `ListRepositoryRefreshAttempts` operationId).
+func (c *ClientWithResponses) ListRepositoryRefreshAttemptsWithResponse(ctx context.Context, repositoryID openapi_types.UUID, params *ListRepositoryRefreshAttemptsParams, reqEditors ...RequestEditorFn) (*ListRepositoryRefreshAttemptsResponse, error) {
+	rsp, err := c.ListRepositoryRefreshAttempts(ctx, repositoryID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListRepositoryRefreshAttemptsResponse(rsp)
+}
+
+// RefreshRepositoryWithResponse Refresh a repository now
+//
+// Starts one requested repository refresh through the same serialized fetch, validation, catalog activation, and Git-trigger delivery path used by periodic refreshes. The response is the completed durable attempt.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/repositories/{repositoryId}/refresh-attempts (the `RefreshRepository` operationId).
+func (c *ClientWithResponses) RefreshRepositoryWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RefreshRepositoryResponse, error) {
+	rsp, err := c.RefreshRepository(ctx, repositoryID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRefreshRepositoryResponse(rsp)
+}
+
 // ListRunsWithResponse List recent Runs
 //
 // Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
@@ -16227,6 +16838,60 @@ func (c *ClientWithResponses) GetReadinessWithResponse(ctx context.Context, reqE
 		return nil, err
 	}
 	return ParseGetReadinessResponse(rsp)
+}
+
+// ParseGetArtifactStorageUsageResponse parses an HTTP response from a GetArtifactStorageUsageWithResponse call
+func ParseGetArtifactStorageUsageResponse(rsp *http.Response) (*GetArtifactStorageUsageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetArtifactStorageUsageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ArtifactStorageUsage
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseDownloadArtifactResponse parses an HTTP response from a DownloadArtifactWithResponse call
@@ -18749,6 +19414,155 @@ func ParseGetCommitResponse(rsp *http.Response) (*GetCommitResponse, error) {
 	return response, nil
 }
 
+// ParseListRepositoryRefreshAttemptsResponse parses an HTTP response from a ListRepositoryRefreshAttemptsWithResponse call
+func ParseListRepositoryRefreshAttemptsResponse(rsp *http.Response) (*ListRepositoryRefreshAttemptsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListRepositoryRefreshAttemptsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RepositoryRefreshAttemptList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRefreshRepositoryResponse parses an HTTP response from a RefreshRepositoryWithResponse call
+func ParseRefreshRepositoryResponse(rsp *http.Response) (*RefreshRepositoryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RefreshRepositoryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RepositoryRefreshAttempt
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers RefreshRepositoryResponse201Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseListRunsResponse parses an HTTP response from a ListRunsWithResponse call
 func ParseListRunsResponse(rsp *http.Response) (*ListRunsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -20359,6 +21173,9 @@ func ParseGetReadinessResponse(rsp *http.Response) (*GetReadinessResponse, error
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetArtifactStorageUsage Get recorded artifact-content storage usage
+	// (GET /api/v1/artifacts/storage-usage)
+	GetArtifactStorageUsage(w http.ResponseWriter, r *http.Request)
 	// DownloadArtifact Download a sealed artifact
 	// (GET /api/v1/artifacts/{artifactId}/download)
 	DownloadArtifact(w http.ResponseWriter, r *http.Request, artifactID openapi_types.UUID)
@@ -20476,6 +21293,12 @@ type ServerInterface interface {
 	// GetCommit Get a known commit
 	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
 	GetCommit(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, commitSha string)
+	// ListRepositoryRefreshAttempts List repository refresh attempts
+	// (GET /api/v1/repositories/{repositoryId}/refresh-attempts)
+	ListRepositoryRefreshAttempts(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, params ListRepositoryRefreshAttemptsParams)
+	// RefreshRepository Refresh a repository now
+	// (POST /api/v1/repositories/{repositoryId}/refresh-attempts)
+	RefreshRepository(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
 	// ListRuns List recent Runs
 	// (GET /api/v1/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
@@ -20564,6 +21387,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetArtifactStorageUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactStorageUsage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactStorageUsage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // DownloadArtifact operation middleware
 func (siw *ServerInterfaceWrapper) DownloadArtifact(w http.ResponseWriter, r *http.Request) {
@@ -22324,6 +23161,87 @@ func (siw *ServerInterfaceWrapper) GetCommit(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositoryRefreshAttempts operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryRefreshAttempts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRepositoryRefreshAttemptsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryRefreshAttempts(w, r, repositoryID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RefreshRepository operation middleware
+func (siw *ServerInterfaceWrapper) RefreshRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "repositoryId" -------------
+	var repositoryID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repositoryId", r.PathValue("repositoryId"), &repositoryID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RefreshRepository(w, r, repositoryID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -23418,6 +24336,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/notification-deliveries", wrapper.ListNotificationDeliveries)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.RemoveRepository)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}", wrapper.UpdateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/refresh-attempts", wrapper.ListRepositoryRefreshAttempts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/refresh-attempts", wrapper.RefreshRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/git-trigger-deliveries/failed", wrapper.ListFailedGitTriggerDeliveries)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories/{repositoryId}/commits/{commitSha}", wrapper.GetCommit)
@@ -23446,6 +24366,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/rerun", wrapper.RerunRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/runs/{runId}/review", wrapper.DecideRunReview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/artifacts", wrapper.ListRunArtifacts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/storage-usage", wrapper.GetArtifactStorageUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/runs/{runId}/logs", wrapper.StreamRunLog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/download", wrapper.DownloadArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/login", wrapper.BeginOIDCLogin)
@@ -23501,6 +24422,83 @@ type KargoServiceUnavailableApplicationProblemPlusJSONResponse Problem
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
+
+type GetArtifactStorageUsageRequestObject struct {
+}
+
+type GetArtifactStorageUsageResponseObject interface {
+	VisitGetArtifactStorageUsageResponse(w http.ResponseWriter) error
+}
+
+type GetArtifactStorageUsage200JSONResponse ArtifactStorageUsage
+
+func (response GetArtifactStorageUsage200JSONResponse) VisitGetArtifactStorageUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactStorageUsage401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactStorageUsage401ApplicationProblemPlusJSONResponse) VisitGetArtifactStorageUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactStorageUsage403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactStorageUsage403ApplicationProblemPlusJSONResponse) VisitGetArtifactStorageUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactStorageUsage405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactStorageUsage405ApplicationProblemPlusJSONResponse) VisitGetArtifactStorageUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetArtifactStorageUsage500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetArtifactStorageUsage500ApplicationProblemPlusJSONResponse) VisitGetArtifactStorageUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type DownloadArtifactRequestObject struct {
 	ArtifactID openapi_types.UUID `json:"artifactId"`
@@ -27297,6 +28295,229 @@ func (response GetCommit500ApplicationProblemPlusJSONResponse) VisitGetCommitRes
 	return err
 }
 
+type ListRepositoryRefreshAttemptsRequestObject struct {
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+	Params       ListRepositoryRefreshAttemptsParams
+}
+
+type ListRepositoryRefreshAttemptsResponseObject interface {
+	VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryRefreshAttempts200JSONResponse RepositoryRefreshAttemptList
+
+func (response ListRepositoryRefreshAttempts200JSONResponse) VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRefreshAttempts400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryRefreshAttempts400ApplicationProblemPlusJSONResponse) VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRefreshAttempts401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryRefreshAttempts401ApplicationProblemPlusJSONResponse) VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRefreshAttempts403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryRefreshAttempts403ApplicationProblemPlusJSONResponse) VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRefreshAttempts404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryRefreshAttempts404ApplicationProblemPlusJSONResponse) VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRefreshAttempts405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryRefreshAttempts405ApplicationProblemPlusJSONResponse) VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRefreshAttempts500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryRefreshAttempts500ApplicationProblemPlusJSONResponse) VisitListRepositoryRefreshAttemptsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshRepositoryRequestObject struct {
+	RepositoryID openapi_types.UUID `json:"repositoryId"`
+}
+
+type RefreshRepositoryResponseObject interface {
+	VisitRefreshRepositoryResponse(w http.ResponseWriter) error
+}
+
+type RefreshRepository201ResponseHeaders struct {
+	Location *string
+}
+
+type RefreshRepository201JSONResponse struct {
+	Body    RepositoryRefreshAttempt
+	Headers RefreshRepository201ResponseHeaders
+}
+
+func (response RefreshRepository201JSONResponse) VisitRefreshRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshRepository400ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshRepository400ApplicationProblemPlusJSONResponse) VisitRefreshRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshRepository401ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshRepository401ApplicationProblemPlusJSONResponse) VisitRefreshRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshRepository403ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshRepository403ApplicationProblemPlusJSONResponse) VisitRefreshRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshRepository404ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshRepository404ApplicationProblemPlusJSONResponse) VisitRefreshRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshRepository405ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshRepository405ApplicationProblemPlusJSONResponse) VisitRefreshRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RefreshRepository500ApplicationProblemPlusJSONResponse Problem
+
+func (response RefreshRepository500ApplicationProblemPlusJSONResponse) VisitRefreshRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRunsRequestObject struct {
 	Params ListRunsParams
 }
@@ -29827,6 +31048,9 @@ func (response GetReadiness503JSONResponse) VisitGetReadinessResponse(w http.Res
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// GetArtifactStorageUsage Get recorded artifact-content storage usage
+	// (GET /api/v1/artifacts/storage-usage)
+	GetArtifactStorageUsage(ctx context.Context, request GetArtifactStorageUsageRequestObject) (GetArtifactStorageUsageResponseObject, error)
 	// DownloadArtifact Download a sealed artifact
 	// (GET /api/v1/artifacts/{artifactId}/download)
 	DownloadArtifact(ctx context.Context, request DownloadArtifactRequestObject) (DownloadArtifactResponseObject, error)
@@ -29944,6 +31168,12 @@ type StrictServerInterface interface {
 	// GetCommit Get a known commit
 	// (GET /api/v1/repositories/{repositoryId}/commits/{commitSha})
 	GetCommit(ctx context.Context, request GetCommitRequestObject) (GetCommitResponseObject, error)
+	// ListRepositoryRefreshAttempts List repository refresh attempts
+	// (GET /api/v1/repositories/{repositoryId}/refresh-attempts)
+	ListRepositoryRefreshAttempts(ctx context.Context, request ListRepositoryRefreshAttemptsRequestObject) (ListRepositoryRefreshAttemptsResponseObject, error)
+	// RefreshRepository Refresh a repository now
+	// (POST /api/v1/repositories/{repositoryId}/refresh-attempts)
+	RefreshRepository(ctx context.Context, request RefreshRepositoryRequestObject) (RefreshRepositoryResponseObject, error)
 	// ListRuns List recent Runs
 	// (GET /api/v1/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
@@ -30061,6 +31291,30 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetArtifactStorageUsage operation middleware
+func (sh *strictHandler) GetArtifactStorageUsage(w http.ResponseWriter, r *http.Request) {
+	var request GetArtifactStorageUsageRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetArtifactStorageUsage(ctx, request.(GetArtifactStorageUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetArtifactStorageUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetArtifactStorageUsageResponseObject); ok {
+		if err := validResponse.VisitGetArtifactStorageUsageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // DownloadArtifact operation middleware
@@ -31132,6 +32386,59 @@ func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, repos
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCommitResponseObject); ok {
 		if err := validResponse.VisitGetCommitResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryRefreshAttempts operation middleware
+func (sh *strictHandler) ListRepositoryRefreshAttempts(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID, params ListRepositoryRefreshAttemptsParams) {
+	var request ListRepositoryRefreshAttemptsRequestObject
+
+	request.RepositoryID = repositoryID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryRefreshAttempts(ctx, request.(ListRepositoryRefreshAttemptsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryRefreshAttempts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryRefreshAttemptsResponseObject); ok {
+		if err := validResponse.VisitListRepositoryRefreshAttemptsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RefreshRepository operation middleware
+func (sh *strictHandler) RefreshRepository(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID) {
+	var request RefreshRepositoryRequestObject
+
+	request.RepositoryID = repositoryID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RefreshRepository(ctx, request.(RefreshRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RefreshRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RefreshRepositoryResponseObject); ok {
+		if err := validResponse.VisitRefreshRepositoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

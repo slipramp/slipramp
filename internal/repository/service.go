@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +13,12 @@ type Store interface {
 	CreateRepository(ctx context.Context, repository Repository) (Repository, error)
 	ListRepositories(ctx context.Context) ([]Repository, error)
 	GetRepository(ctx context.Context, repositoryID uuid.UUID) (Repository, error)
+	ListRepositoryRefreshAttempts(
+		ctx context.Context,
+		repositoryID uuid.UUID,
+		limit int,
+		offset int,
+	) (RefreshAttemptPage, error)
 	UpdateRepositoryCommitIndexing(
 		ctx context.Context,
 		repositoryID uuid.UUID,
@@ -20,20 +27,59 @@ type Store interface {
 	RemoveRepository(ctx context.Context, repositoryID uuid.UUID, removedAt time.Time) error
 }
 
+type RefreshRunner interface {
+	RefreshRepository(ctx context.Context, repositoryID RepositoryID) (RefreshAttempt, error)
+}
+
+type ServiceOption func(*Service)
+
+func WithRefresher(refresher RefreshRunner) ServiceOption {
+	return func(service *Service) {
+		service.refresher = refresher
+	}
+}
+
 type Service struct {
 	repositories Store
 	credentials  RefreshCredentials
+	refresher    RefreshRunner
 	newID        func() uuid.UUID
 	now          func() time.Time
 }
 
-func NewService(repositories Store, credentials RefreshCredentials) *Service {
-	return &Service{
+func NewService(repositories Store, credentials RefreshCredentials, options ...ServiceOption) *Service {
+	service := &Service{
 		repositories: repositories,
 		credentials:  credentials,
 		newID:        uuid.New,
 		now:          time.Now,
 	}
+	for _, option := range options {
+		option(service)
+	}
+
+	return service
+}
+
+func (s *Service) RequestRefresh(ctx context.Context, repositoryID RepositoryID) (RefreshAttempt, error) {
+	if s.refresher == nil {
+		return RefreshAttempt{}, errors.New("repository refresher is unavailable")
+	}
+
+	return s.refresher.RefreshRepository(ctx, repositoryID)
+}
+
+func (s *Service) ListRefreshAttempts(
+	ctx context.Context,
+	repositoryID RepositoryID,
+	limit int,
+	offset int,
+) (RefreshAttemptPage, error) {
+	if _, err := s.repositories.GetRepository(ctx, repositoryID); err != nil {
+		return RefreshAttemptPage{}, err
+	}
+
+	return s.repositories.ListRepositoryRefreshAttempts(ctx, repositoryID, limit, offset)
 }
 
 func (s *Service) CreateRepository(ctx context.Context, cfg Config) (Repository, error) {

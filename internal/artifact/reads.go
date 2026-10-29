@@ -13,6 +13,15 @@ type Content struct {
 	Body     io.ReadCloser
 }
 
+func (s *Service) GetStorageUsage(ctx context.Context) (StorageUsage, error) {
+	usage, err := s.artifacts.GetArtifactStorageUsage(ctx)
+	if err != nil {
+		return StorageUsage{}, fmt.Errorf("get artifact storage usage: %w", err)
+	}
+
+	return usage, nil
+}
+
 func (s *Service) List(ctx context.Context, runID uuid.UUID) ([]Record, error) {
 	runContext, err := s.runs.GetRunArtifactContext(ctx, runID)
 	if err != nil {

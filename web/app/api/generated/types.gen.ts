@@ -315,6 +315,42 @@ export type RepositoryUpdate = {
   commitIndexing: RepositoryCommitIndexingMode;
 };
 
+export type RepositoryRefreshAttempt = {
+  /**
+   * Stable identity of this immutable refresh attempt.
+   */
+  id: string;
+  repositoryId: string;
+  /**
+   * Whether the Server interval or an operator request started the attempt.
+   */
+  source: "periodic" | "requested";
+  /**
+   * Accepted catalogs become active. A catalog-rejected attempt fetched Git successfully but did not pass catalog loading and validation.
+   */
+  outcome: "accepted" | "fetch-failed" | "catalog-rejected";
+  startedAt: string;
+  /**
+   * Elapsed fetch and catalog processing time in milliseconds.
+   */
+  durationMilliseconds: number;
+  /**
+   * Fetched branch head, present for accepted and catalog-rejected attempts.
+   */
+  commit?: GitCommit;
+  /**
+   * Bounded non-sensitive diagnostic for an unsuccessful attempt.
+   */
+  diagnostic?: string;
+};
+
+export type RepositoryRefreshAttemptList = {
+  items: Array<RepositoryRefreshAttempt>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type CatalogRevision = {
   /**
    * Stable identity of the immutable catalog revision.
@@ -769,6 +805,20 @@ export type Artifact = {
 
 export type ArtifactList = {
   items: Array<Artifact>;
+};
+
+/**
+ * Aggregate logical artifact-content consumption recorded in PostgreSQL. Artifacts in retained or expired retention state are included across open, sealed, and failed content lifecycle states. Artifacts marked deleted are excluded.
+ */
+export type ArtifactStorageUsage = {
+  /**
+   * Number of included artifact metadata records.
+   */
+  artifactCount: number;
+  /**
+   * Sum of the included records' sizeBytes values. For open or failed logs, this is the durable recorded prefix. Expired artifacts remain included until content deletion finishes and metadata is marked deleted.
+   */
+  recordedBytes: number;
 };
 
 export type LogCursor = {
@@ -2256,6 +2306,106 @@ export type UpdateRepositoryResponses = {
 
 export type UpdateRepositoryResponse = UpdateRepositoryResponses[keyof UpdateRepositoryResponses];
 
+export type ListRepositoryRefreshAttemptsData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/repositories/{repositoryId}/refresh-attempts";
+};
+
+export type ListRepositoryRefreshAttemptsErrors = {
+  /**
+   * The list window or repository identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The active repository does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Refresh attempts could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListRepositoryRefreshAttemptsError =
+  ListRepositoryRefreshAttemptsErrors[keyof ListRepositoryRefreshAttemptsErrors];
+
+export type ListRepositoryRefreshAttemptsResponses = {
+  /**
+   * Retained refresh attempt history.
+   */
+  200: RepositoryRefreshAttemptList;
+};
+
+export type ListRepositoryRefreshAttemptsResponse =
+  ListRepositoryRefreshAttemptsResponses[keyof ListRepositoryRefreshAttemptsResponses];
+
+export type RefreshRepositoryData = {
+  body?: never;
+  path: {
+    repositoryId: string;
+  };
+  query?: never;
+  url: "/api/v1/repositories/{repositoryId}/refresh-attempts";
+};
+
+export type RefreshRepositoryErrors = {
+  /**
+   * The repository identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The active repository does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The repository refresh could not be completed or recorded.
+   */
+  500: Problem;
+};
+
+export type RefreshRepositoryError = RefreshRepositoryErrors[keyof RefreshRepositoryErrors];
+
+export type RefreshRepositoryResponses = {
+  /**
+   * Requested refresh completed and its attempt was recorded.
+   */
+  201: RepositoryRefreshAttempt;
+};
+
+export type RefreshRepositoryResponse =
+  RefreshRepositoryResponses[keyof RefreshRepositoryResponses];
+
 export type ListFailedGitTriggerDeliveriesData = {
   body?: never;
   path?: never;
@@ -3669,6 +3819,45 @@ export type ListRunArtifactsResponses = {
 };
 
 export type ListRunArtifactsResponse = ListRunArtifactsResponses[keyof ListRunArtifactsResponses];
+
+export type GetArtifactStorageUsageData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/artifacts/storage-usage";
+};
+
+export type GetArtifactStorageUsageErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read artifact metadata.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported.
+   */
+  405: Problem;
+  /**
+   * Artifact storage usage could not be read.
+   */
+  500: Problem;
+};
+
+export type GetArtifactStorageUsageError =
+  GetArtifactStorageUsageErrors[keyof GetArtifactStorageUsageErrors];
+
+export type GetArtifactStorageUsageResponses = {
+  /**
+   * Current aggregate usage from authoritative artifact metadata.
+   */
+  200: ArtifactStorageUsage;
+};
+
+export type GetArtifactStorageUsageResponse =
+  GetArtifactStorageUsageResponses[keyof GetArtifactStorageUsageResponses];
 
 export type StreamRunLogData = {
   body?: never;

@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -30,16 +33,56 @@ type RefreshState struct {
 	FailureReason    *string
 }
 
+const (
+	MaximumRefreshDiagnosticLength = 4096
+	RefreshAttemptRetentionLimit   = 50
+)
+
+type RefreshSource string
+
+const (
+	RefreshSourcePeriodic  RefreshSource = "periodic"
+	RefreshSourceRequested RefreshSource = "requested"
+)
+
+type RefreshOutcome string
+
+const (
+	RefreshOutcomeAccepted        RefreshOutcome = "accepted"
+	RefreshOutcomeFetchFailed     RefreshOutcome = "fetch-failed"
+	RefreshOutcomeCatalogRejected RefreshOutcome = "catalog-rejected"
+)
+
+type RefreshAttempt struct {
+	ID           uuid.UUID
+	RepositoryID RepositoryID
+	Source       RefreshSource
+	Outcome      RefreshOutcome
+	StartedAt    time.Time
+	Duration     time.Duration
+	CommitSHA    *string
+	Diagnostic   *string
+}
+
+type RefreshAttemptPage struct {
+	Items []RefreshAttempt
+	Total int
+}
+
 type RefreshResult struct {
+	AttemptID     uuid.UUID
+	Source        RefreshSource
 	Commit        *Commit
 	ChangedPaths  []string
 	AttemptedAt   time.Time
+	Duration      time.Duration
 	FailureReason *string
 	Revision      *catalog.Revision
 }
 
 type RefreshStore interface {
 	ListRepositories(ctx context.Context) ([]Repository, error)
+	GetRepository(ctx context.Context, repositoryID uuid.UUID) (Repository, error)
 	RecordRepositoryRefresh(ctx context.Context, repositoryID RepositoryID, result RefreshResult) error
 }
 
@@ -85,7 +128,10 @@ type Refresher struct {
 	newID        func() uuid.UUID
 	now          func() time.Time
 	observer     RefreshObserver
+	locks        sync.Map
 }
+
+type refreshSemaphore chan struct{}
 
 func NewRefresher(
 	repositories RefreshStore,
@@ -145,11 +191,38 @@ func (r *Refresher) refreshAll(ctx context.Context) {
 			return
 		}
 
-		r.refresh(ctx, item)
+		_, _ = r.refresh(ctx, item, RefreshSourcePeriodic)
 	}
 }
 
-func (r *Refresher) refresh(ctx context.Context, item Repository) {
+func (r *Refresher) RefreshRepository(ctx context.Context, repositoryID RepositoryID) (RefreshAttempt, error) {
+	item, err := r.repositories.GetRepository(ctx, repositoryID)
+	if err != nil {
+		return RefreshAttempt{}, err
+	}
+
+	return r.refresh(ctx, item, RefreshSourceRequested)
+}
+
+func (r *Refresher) refresh(
+	ctx context.Context,
+	item Repository,
+	source RefreshSource,
+) (RefreshAttempt, error) {
+	unlock, err := r.lockRepository(ctx, item.ID)
+	if err != nil {
+		return RefreshAttempt{}, err
+	}
+	defer unlock()
+
+	// A requested refresh may have completed while this attempt waited for the
+	// per-Repository lock. Reload the accepted head so changed-path calculation
+	// always compares against the latest durable catalog state.
+	item, err = r.repositories.GetRepository(ctx, item.ID)
+	if err != nil {
+		return RefreshAttempt{}, err
+	}
+
 	startedAt := time.Now()
 	attemptedAt := r.now().UTC()
 	fetchContext, cancel := context.WithTimeout(ctx, r.fetchTimeout)
@@ -168,10 +241,14 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 	}
 
 	if ctx.Err() != nil {
-		return
+		return RefreshAttempt{}, ctx.Err()
 	}
 
-	result := RefreshResult{AttemptedAt: attemptedAt}
+	result := RefreshResult{
+		AttemptID:   r.newID(),
+		Source:      source,
+		AttemptedAt: attemptedAt,
+	}
 	if fetchErr == nil {
 		result.Commit = &fetched.Commit
 
@@ -185,28 +262,34 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 				Catalog:   validation.Catalog,
 			}
 		} else {
-			failureReason := ""
+			failureReason := "The fetched repository could not be read as a catalog."
 			if loadErr != nil {
-				failureReason = loadErr.Error()
+				r.logger.Warn(
+					"load repository catalog",
+					"repository", item.Name,
+					"commit", fetched.Commit.SHA,
+					"error", loadErr,
+				)
 			} else {
-				failureReason = validation.Diagnostics.ErrorSummary()
+				failureReason = boundedRefreshDiagnostic(validation.Diagnostics.ErrorSummary())
 			}
 			result.FailureReason = &failureReason
 		}
 	} else {
-		failureReason := fetchErr.Error()
+		failureReason := "Git fetch failed. Check repository access, branch, and refresh credentials."
 		result.FailureReason = &failureReason
 	}
+	result.Duration = time.Since(startedAt)
 
-	err := r.repositories.RecordRepositoryRefresh(ctx, item.ID, result)
+	err = r.repositories.RecordRepositoryRefresh(ctx, item.ID, result)
 	if err != nil {
 		if ctx.Err() != nil {
-			return
+			return RefreshAttempt{}, ctx.Err()
 		}
 
 		r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptPersistFailed, time.Since(startedAt))
 		if errors.Is(err, ErrNotFound) {
-			return
+			return RefreshAttempt{}, err
 		}
 
 		r.logger.Error(
@@ -215,8 +298,9 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 			"error", err,
 		)
 
-		return
+		return RefreshAttempt{}, err
 	}
+	attempt := result.Attempt(item.ID)
 
 	if fetchErr != nil {
 		r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptFetchFailed, time.Since(startedAt))
@@ -226,7 +310,7 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 			"error", fetchErr,
 		)
 
-		return
+		return attempt, nil
 	}
 	if result.FailureReason != nil {
 		r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptCatalogRejected, time.Since(startedAt))
@@ -237,7 +321,7 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 			"error", *result.FailureReason,
 		)
 
-		return
+		return attempt, nil
 	}
 
 	r.observer.ObserveRepositoryRefresh(ctx, RefreshAttemptSucceeded, time.Since(startedAt))
@@ -246,11 +330,85 @@ func (r *Refresher) refresh(ctx context.Context, item Repository) {
 		"repository", item.Name,
 		"commit", fetched.Commit.SHA,
 	)
+
+	return attempt, nil
+}
+
+func (r *Refresher) lockRepository(ctx context.Context, repositoryID RepositoryID) (func(), error) {
+	semaphoreValue, _ := r.locks.LoadOrStore(repositoryID, newRefreshSemaphore())
+	semaphore := semaphoreValue.(refreshSemaphore)
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-semaphore:
+		return func() { semaphore <- struct{}{} }, nil
+	}
+}
+
+func newRefreshSemaphore() refreshSemaphore {
+	semaphore := make(refreshSemaphore, 1)
+	semaphore <- struct{}{}
+
+	return semaphore
+}
+
+func (r RefreshResult) Attempt(repositoryID RepositoryID) RefreshAttempt {
+	outcome := RefreshOutcomeAccepted
+	if r.FailureReason != nil {
+		if r.Commit == nil {
+			outcome = RefreshOutcomeFetchFailed
+		} else {
+			outcome = RefreshOutcomeCatalogRejected
+		}
+	}
+
+	return RefreshAttempt{
+		ID:           r.AttemptID,
+		RepositoryID: repositoryID,
+		Source:       r.Source,
+		Outcome:      outcome,
+		StartedAt:    r.AttemptedAt,
+		Duration:     r.Duration,
+		CommitSHA:    optionalRefreshCommitSHA(r.Commit),
+		Diagnostic:   r.FailureReason,
+	}
+}
+
+func optionalRefreshCommitSHA(commit *Commit) *string {
+	if commit == nil {
+		return nil
+	}
+
+	return &commit.SHA
+}
+
+func boundedRefreshDiagnostic(value string) string {
+	value = strings.ToValidUTF8(strings.TrimSpace(value), "�")
+	if len(value) <= MaximumRefreshDiagnosticLength {
+		return value
+	}
+
+	value = value[:MaximumRefreshDiagnosticLength]
+	for !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+
+	return value
 }
 
 func ValidateRefreshResult(result RefreshResult) error {
+	if result.AttemptID == uuid.Nil {
+		return errors.New("refresh attempt ID is required")
+	}
+	if result.Source != RefreshSourcePeriodic && result.Source != RefreshSourceRequested {
+		return fmt.Errorf("refresh source %q is invalid", result.Source)
+	}
 	if result.AttemptedAt.IsZero() {
 		return errors.New("refresh attempted time is required")
+	}
+	if result.Duration < 0 {
+		return errors.New("refresh duration must not be negative")
 	}
 
 	if result.Commit == nil && result.FailureReason == nil {
@@ -261,8 +419,16 @@ func ValidateRefreshResult(result RefreshResult) error {
 		return fmt.Errorf("invalid fetched Git commit %q", result.Commit.SHA)
 	}
 
-	if result.FailureReason != nil && *result.FailureReason == "" {
-		return errors.New("refresh failure reason must not be empty")
+	if result.FailureReason != nil {
+		if *result.FailureReason == "" {
+			return errors.New("refresh failure reason must not be empty")
+		}
+		if !utf8.ValidString(*result.FailureReason) || len(*result.FailureReason) > MaximumRefreshDiagnosticLength {
+			return fmt.Errorf(
+				"refresh failure reason must contain valid UTF-8 and at most %d bytes",
+				MaximumRefreshDiagnosticLength,
+			)
+		}
 	}
 	if result.Revision == nil {
 		if result.FailureReason == nil {

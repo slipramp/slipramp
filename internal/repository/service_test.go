@@ -119,11 +119,38 @@ func TestServiceUpdatesCommitIndexing(t *testing.T) {
 	}
 }
 
+func TestServiceRequestsAndListsRefreshAttempts(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.New()
+	attempt := RefreshAttempt{ID: uuid.New(), RepositoryID: repositoryID, Source: RefreshSourceRequested}
+	repositories := &recordingStore{attempts: RefreshAttemptPage{Items: []RefreshAttempt{attempt}, Total: 1}}
+	refresher := &recordingRefreshRunner{attempt: attempt}
+	service := NewService(repositories, nil, WithRefresher(refresher))
+
+	requested, err := service.RequestRefresh(t.Context(), repositoryID)
+	if err != nil {
+		t.Fatalf("RequestRefresh() error = %v", err)
+	}
+	if requested.ID != attempt.ID || refresher.repositoryID != repositoryID {
+		t.Errorf("requested attempt = %#v, repository ID = %s", requested, refresher.repositoryID)
+	}
+
+	page, err := service.ListRefreshAttempts(t.Context(), repositoryID, 25, 0)
+	if err != nil {
+		t.Fatalf("ListRefreshAttempts() error = %v", err)
+	}
+	if page.Total != 1 || len(page.Items) != 1 || page.Items[0].ID != attempt.ID {
+		t.Errorf("refresh attempt page = %#v", page)
+	}
+}
+
 type recordingStore struct {
 	created     Repository
 	createCalls int
 	updatedID   uuid.UUID
 	updatedMode CommitIndexingMode
+	attempts    RefreshAttemptPage
 }
 
 func (s *recordingStore) CreateRepository(_ context.Context, repository Repository) (Repository, error) {
@@ -141,6 +168,15 @@ func (*recordingStore) GetRepository(context.Context, uuid.UUID) (Repository, er
 	return Repository{}, nil
 }
 
+func (s *recordingStore) ListRepositoryRefreshAttempts(
+	context.Context,
+	uuid.UUID,
+	int,
+	int,
+) (RefreshAttemptPage, error) {
+	return s.attempts, nil
+}
+
 func (s *recordingStore) UpdateRepositoryCommitIndexing(
 	_ context.Context,
 	repositoryID uuid.UUID,
@@ -156,4 +192,18 @@ func (s *recordingStore) UpdateRepositoryCommitIndexing(
 
 func (*recordingStore) RemoveRepository(context.Context, uuid.UUID, time.Time) error {
 	return nil
+}
+
+type recordingRefreshRunner struct {
+	repositoryID uuid.UUID
+	attempt      RefreshAttempt
+}
+
+func (r *recordingRefreshRunner) RefreshRepository(
+	_ context.Context,
+	repositoryID RepositoryID,
+) (RefreshAttempt, error) {
+	r.repositoryID = repositoryID
+
+	return r.attempt, nil
 }

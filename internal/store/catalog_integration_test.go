@@ -83,6 +83,8 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 	rejectionReason := "load catalog: placement \"missing\" is not defined"
 	rejectedAt := acceptedAt.Add(time.Minute)
 	rejected := repository.RefreshResult{
+		AttemptID:     uuid.New(),
+		Source:        repository.RefreshSourcePeriodic,
 		Commit:        &repository.Commit{SHA: commitB},
 		AttemptedAt:   rejectedAt,
 		FailureReason: &rejectionReason,
@@ -114,7 +116,9 @@ func TestCatalogRevisionPersistenceIntegration(t *testing.T) {
 		t.Errorf("refresh state after catalog rejection = %#v", refresh)
 	}
 
-	if err := database.RecordRepositoryRefresh(ctx, repositoryID, rejected); err != nil {
+	repeatedRejection := rejected
+	repeatedRejection.AttemptID = uuid.New()
+	if err := database.RecordRepositoryRefresh(ctx, repositoryID, repeatedRejection); err != nil {
 		t.Fatalf("repeat rejected catalog: %v", err)
 	}
 	assertValidationFailureCount(t, database, repositoryID, 1)

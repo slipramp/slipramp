@@ -11,6 +11,16 @@ operator-started Promotions, and Promotion reviews with Git and Argo CD diffs.
 Its Server has no Kubernetes access; in-cluster Controllers manage execution
 through outbound HTTP.
 
+Repository refresh runs at Server startup and on the configured interval.
+Administrators can also choose **Refresh now** from Repository detail. Both
+sources use the same serialized path and retain the newest 50 durable attempts,
+including source, duration, fetched commit when available, result, and a bounded
+safe diagnostic. The UI and generated API distinguish a Git fetch failure from
+a successful fetch whose catalog was rejected. Rechecking an already accepted
+head is harmless and does not recreate Git-trigger deliveries. The read endpoint
+is `GET /api/v1/repositories/{repositoryId}/refresh-attempts`; administrators
+start a requested attempt with `POST` to the same path.
+
 Named Git-trigger deliveries retry Run creation with durable exponential backoff:
 five seconds initially, doubling to a five-minute cap, with terminal failure on
 the eighth failed attempt. Other eligible deliveries continue during backoff,

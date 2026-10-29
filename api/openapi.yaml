@@ -20,6 +20,8 @@ paths:
     $ref: ./paths/notifications.yaml#/notificationDeliveries
   /api/v1/repositories/{repositoryId}:
     $ref: ./paths/repositories.yaml#/repository
+  /api/v1/repositories/{repositoryId}/refresh-attempts:
+    $ref: ./paths/repositories.yaml#/repositoryRefreshAttempts
   /api/v1/git-trigger-deliveries/failed:
     $ref: ./paths/repositories.yaml#/failedGitTriggerDeliveries
   /api/v1/commits:
@@ -72,6 +74,8 @@ paths:
     $ref: ./paths/runs.yaml#/decideRunReview
   /api/v1/runs/{runId}/artifacts:
     $ref: ./paths/artifacts.yaml#/runArtifacts
+  /api/v1/artifacts/storage-usage:
+    $ref: ./paths/artifacts.yaml#/artifactStorageUsage
   /api/v1/runs/{runId}/logs:
     $ref: ./paths/artifacts.yaml#/runLogs
   /api/v1/artifacts/{artifactId}/download:
@@ -201,6 +205,10 @@ components:
       $ref: ./components/repositories.yaml#/RepositoryCommitIndexingMode
     RepositoryUpdate:
       $ref: ./components/repositories.yaml#/RepositoryUpdate
+    RepositoryRefreshAttempt:
+      $ref: ./components/repositories.yaml#/RepositoryRefreshAttempt
+    RepositoryRefreshAttemptList:
+      $ref: ./components/repositories.yaml#/RepositoryRefreshAttemptList
     CatalogRevision:
       $ref: ./components/catalog.yaml#/CatalogRevision
     CatalogExplanation:
@@ -249,6 +257,8 @@ components:
       $ref: ./components/artifacts.yaml#/Artifact
     ArtifactList:
       $ref: ./components/artifacts.yaml#/ArtifactList
+    ArtifactStorageUsage:
+      $ref: ./components/artifacts.yaml#/ArtifactStorageUsage
     LogCursor:
       $ref: ./components/artifacts.yaml#/LogCursor
     LogEvent:

@@ -432,6 +432,26 @@ func (q *Queries) GetArtifactRunClusterName(ctx context.Context, runID pgtype.UU
 	return cluster_name, err
 }
 
+const getArtifactStorageUsage = `-- name: GetArtifactStorageUsage :one
+SELECT
+    COUNT(*)::bigint AS artifact_count,
+    COALESCE(SUM(size_bytes), 0)::bigint AS recorded_bytes
+FROM artifacts
+WHERE retention_state <> 'deleted'
+`
+
+type GetArtifactStorageUsageRow struct {
+	ArtifactCount int64
+	RecordedBytes int64
+}
+
+func (q *Queries) GetArtifactStorageUsage(ctx context.Context) (GetArtifactStorageUsageRow, error) {
+	row := q.db.QueryRow(ctx, getArtifactStorageUsage)
+	var i GetArtifactStorageUsageRow
+	err := row.Scan(&i.ArtifactCount, &i.RecordedBytes)
+	return i, err
+}
+
 const getRunArtifactContext = `-- name: GetRunArtifactContext :one
 SELECT cluster_name, snapshot
 FROM runs

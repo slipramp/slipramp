@@ -58,10 +58,20 @@ func TestGitTriggerDeliveryLifecycleIntegration(t *testing.T) {
 		t.Fatalf("record unchanged catalog: %v", err)
 	}
 	assertGitTriggerDeliveryCount(t, database, 0)
+	attempts, err := database.ListRepositoryRefreshAttempts(ctx, repositoryID, 10, 0)
+	if err != nil {
+		t.Fatalf("list unchanged-head refresh attempts: %v", err)
+	}
+	if attempts.Total != 2 || attempts.Items[0].Outcome != repository.RefreshOutcomeAccepted ||
+		attempts.Items[0].CommitSHA == nil || *attempts.Items[0].CommitSHA != commitA {
+		t.Errorf("unchanged-head refresh attempts = %#v", attempts)
+	}
 
 	commitB := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	rejectionReason := "catalog is invalid"
 	if err := database.RecordRepositoryRefresh(ctx, repositoryID, repository.RefreshResult{
+		AttemptID:     uuid.New(),
+		Source:        repository.RefreshSourcePeriodic,
 		Commit:        &repository.Commit{SHA: commitB},
 		AttemptedAt:   createdAt.Add(3 * time.Minute),
 		FailureReason: &rejectionReason,

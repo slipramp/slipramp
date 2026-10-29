@@ -20,6 +20,8 @@ type serviceMetadataStore struct {
 	chunks     map[int64]LogChunk
 	events     *[]string
 	context    RunContext
+	usage      StorageUsage
+	usageErr   error
 }
 
 func (s *serviceMetadataStore) GetRunClusterName(_ context.Context, _ uuid.UUID) (string, error) {
@@ -63,6 +65,10 @@ func (s *serviceMetadataStore) ListArtifactsForRun(context.Context, uuid.UUID) (
 	}
 
 	return []Artifact{*s.record}, nil
+}
+
+func (s *serviceMetadataStore) GetArtifactStorageUsage(context.Context) (StorageUsage, error) {
+	return s.usage, s.usageErr
 }
 
 func (s *serviceMetadataStore) GetArtifactProvenance(context.Context, uuid.UUID) (Provenance, error) {
@@ -186,6 +192,34 @@ func TestServiceListsArtifactDescriptionsFromFrozenDeclarations(t *testing.T) {
 	}
 	if len(records) != 1 || records[0].Description != "Binary execution plan." {
 		t.Errorf("List() = %#v", records)
+	}
+}
+
+func TestServiceGetsStorageUsageFromMetadata(t *testing.T) {
+	t.Parallel()
+
+	want := StorageUsage{ArtifactCount: 12, RecordedBytes: 3_221_225_472}
+	metadata := &serviceMetadataStore{usage: want}
+	service := newTestService(metadata, &serviceContentStore{})
+
+	got, err := service.GetStorageUsage(context.Background())
+	if err != nil {
+		t.Fatalf("GetStorageUsage() error = %v", err)
+	}
+	if got != want {
+		t.Errorf("GetStorageUsage() = %#v, want %#v", got, want)
+	}
+}
+
+func TestServiceWrapsStorageUsageFailure(t *testing.T) {
+	t.Parallel()
+
+	want := errors.New("database unavailable")
+	service := newTestService(&serviceMetadataStore{usageErr: want}, &serviceContentStore{})
+
+	_, err := service.GetStorageUsage(context.Background())
+	if !errors.Is(err, want) || !strings.Contains(err.Error(), "get artifact storage usage") {
+		t.Fatalf("GetStorageUsage() error = %v, want wrapped %v", err, want)
 	}
 }
 

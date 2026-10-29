@@ -52,6 +52,13 @@ FROM artifacts
 WHERE run_id = sqlc.arg(run_id)
 ORDER BY created_at, id;
 
+-- name: GetArtifactStorageUsage :one
+SELECT
+    COUNT(*)::bigint AS artifact_count,
+    COALESCE(SUM(size_bytes), 0)::bigint AS recorded_bytes
+FROM artifacts
+WHERE retention_state <> 'deleted';
+
 -- name: GetArtifactProvenance :one
 SELECT
     repository_id,

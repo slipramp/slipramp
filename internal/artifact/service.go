@@ -30,6 +30,7 @@ type ArtifactStore interface {
 	CreateArtifact(ctx context.Context, record Artifact) (Artifact, error)
 	GetArtifact(ctx context.Context, artifactID uuid.UUID) (Artifact, error)
 	GetArtifactByRunAndName(ctx context.Context, runID uuid.UUID, name string) (Artifact, error)
+	GetArtifactStorageUsage(ctx context.Context) (StorageUsage, error)
 	ListArtifactsForRun(ctx context.Context, runID uuid.UUID) ([]Artifact, error)
 	FailArtifact(ctx context.Context, artifactID uuid.UUID) (Artifact, error)
 	SealArtifact(

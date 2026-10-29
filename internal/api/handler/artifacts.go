@@ -24,6 +24,7 @@ type ArtifactService interface {
 	AuthenticateRunToken(uuid.UUID, string) bool
 	Upload(context.Context, artifact.UploadRequest) error
 	List(context.Context, uuid.UUID) ([]artifact.Record, error)
+	GetStorageUsage(context.Context) (artifact.StorageUsage, error)
 	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
 	OpenInput(context.Context, uuid.UUID, string) (artifact.Content, error)
 	StreamLog(context.Context, uuid.UUID, int64) (artifact.LogStream, error)
@@ -245,6 +246,21 @@ func (h *Handler) ListRunArtifacts(
 	}
 
 	return api.ListRunArtifacts200JSONResponse{Items: items}, nil
+}
+
+func (h *Handler) GetArtifactStorageUsage(
+	ctx context.Context,
+	_ api.GetArtifactStorageUsageRequestObject,
+) (api.GetArtifactStorageUsageResponseObject, error) {
+	usage, err := h.artifacts.GetStorageUsage(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return api.GetArtifactStorageUsage200JSONResponse{
+		ArtifactCount: usage.ArtifactCount,
+		RecordedBytes: usage.RecordedBytes,
+	}, nil
 }
 
 func (h *Handler) DownloadArtifact(

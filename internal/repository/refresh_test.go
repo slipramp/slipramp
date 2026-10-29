@@ -75,6 +75,7 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	succeeded := repositories.results[succeededID]
 	if succeeded.Commit == nil ||
 		succeeded.Commit.SHA != fetcher.commits[succeededID].Commit.SHA ||
+		succeeded.Source != RefreshSourcePeriodic ||
 		succeeded.FailureReason != nil ||
 		!succeeded.AttemptedAt.Equal(attemptedAt) ||
 		succeeded.Revision == nil {
@@ -96,8 +97,8 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 	}
 
 	failed := repositories.results[failedID]
-	if failed.Commit != nil || failed.FailureReason == nil ||
-		*failed.FailureReason != "remote branch does not exist" ||
+	if failed.Source != RefreshSourcePeriodic || failed.Commit != nil || failed.FailureReason == nil ||
+		*failed.FailureReason != "Git fetch failed. Check repository access, branch, and refresh credentials." ||
 		!failed.AttemptedAt.Equal(attemptedAt) {
 		t.Errorf("failed refresh = %#v", failed)
 	}
@@ -106,6 +107,39 @@ func TestRefresherRecordsSuccessesAndFailures(t *testing.T) {
 		RefreshAttemptFetchFailed,
 	}; !slices.Equal(got, want) {
 		t.Errorf("refresh metric results = %v, want %v", got, want)
+	}
+}
+
+func TestRefresherRecordsRequestedAttempt(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.New()
+	repositories := &recordingRefreshStore{items: []Repository{{ID: repositoryID, Name: "infrastructure"}}}
+	fetcher := &recordingFetcher{commits: map[RepositoryID]FetchedCommit{
+		repositoryID: {
+			Commit: Commit{RepositoryID: repositoryID, SHA: strings.Repeat("a", 40)},
+			Files:  validCatalogFiles(),
+		},
+	}}
+	refresher := NewRefresher(
+		repositories,
+		fetcher,
+		testRepositoryPlacements(t),
+		time.Minute,
+		10*time.Second,
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
+	)
+
+	attempt, err := refresher.RefreshRepository(t.Context(), repositoryID)
+	if err != nil {
+		t.Fatalf("RefreshRepository() error = %v", err)
+	}
+	if attempt.Source != RefreshSourceRequested || attempt.Outcome != RefreshOutcomeAccepted ||
+		attempt.RepositoryID != repositoryID || attempt.CommitSHA == nil {
+		t.Errorf("requested refresh attempt = %#v", attempt)
+	}
+	if repositories.results[repositoryID].Source != RefreshSourceRequested {
+		t.Errorf("persisted refresh source = %q", repositories.results[repositoryID].Source)
 	}
 }
 
@@ -332,7 +366,7 @@ func TestRefresherBoundsEachFetch(t *testing.T) {
 
 	result := repositories.results[repositoryID]
 	if result.FailureReason == nil ||
-		*result.FailureReason != context.DeadlineExceeded.Error() {
+		*result.FailureReason != "Git fetch failed. Check repository access, branch, and refresh credentials." {
 		t.Errorf("timeout result = %#v", result)
 	}
 }
@@ -343,6 +377,7 @@ func TestValidateRefreshResult(t *testing.T) {
 	attemptedAt := time.Date(2026, time.October, 16, 12, 0, 0, 0, time.UTC)
 	commitSHA := "0123456789abcdef0123456789abcdef01234567"
 	failureReason := "catalog is invalid"
+	oversizedFailure := strings.Repeat("x", MaximumRefreshDiagnosticLength+1)
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1200")
 	validRevision := &catalog.Revision{
 		ID:        revisionID,
@@ -359,6 +394,8 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "accepted catalog",
 			result: RefreshResult{
+				AttemptID:   revisionID,
+				Source:      RefreshSourcePeriodic,
 				Commit:      validCommit,
 				AttemptedAt: attemptedAt,
 				Revision:    validRevision,
@@ -367,6 +404,8 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "fetch failure",
 			result: RefreshResult{
+				AttemptID:     revisionID,
+				Source:        RefreshSourcePeriodic,
 				AttemptedAt:   attemptedAt,
 				FailureReason: &failureReason,
 			},
@@ -374,14 +413,28 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "catalog rejection",
 			result: RefreshResult{
+				AttemptID:     revisionID,
+				Source:        RefreshSourcePeriodic,
 				Commit:        validCommit,
 				AttemptedAt:   attemptedAt,
 				FailureReason: &failureReason,
 			},
 		},
 		{
+			name: "oversized failure diagnostic",
+			result: RefreshResult{
+				AttemptID:     revisionID,
+				Source:        RefreshSourcePeriodic,
+				AttemptedAt:   attemptedAt,
+				FailureReason: &oversizedFailure,
+			},
+			wantError: "at most",
+		},
+		{
 			name: "success without revision",
 			result: RefreshResult{
+				AttemptID:   revisionID,
+				Source:      RefreshSourcePeriodic,
 				Commit:      validCommit,
 				AttemptedAt: attemptedAt,
 			},
@@ -390,6 +443,8 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "failure with revision",
 			result: RefreshResult{
+				AttemptID:     revisionID,
+				Source:        RefreshSourcePeriodic,
 				Commit:        validCommit,
 				AttemptedAt:   attemptedAt,
 				FailureReason: &failureReason,
@@ -400,6 +455,8 @@ func TestValidateRefreshResult(t *testing.T) {
 		{
 			name: "mismatched revision commit",
 			result: RefreshResult{
+				AttemptID:   revisionID,
+				Source:      RefreshSourcePeriodic,
 				Commit:      validCommit,
 				AttemptedAt: attemptedAt,
 				Revision: &catalog.Revision{
@@ -441,6 +498,16 @@ func (o *recordingRefreshObserver) ObserveRepositoryRefresh(
 
 func (s *recordingRefreshStore) ListRepositories(context.Context) ([]Repository, error) {
 	return s.items, nil
+}
+
+func (s *recordingRefreshStore) GetRepository(_ context.Context, repositoryID uuid.UUID) (Repository, error) {
+	for _, item := range s.items {
+		if item.ID == repositoryID {
+			return item, nil
+		}
+	}
+
+	return Repository{}, ErrNotFound
 }
 
 func (s *recordingRefreshStore) RecordRepositoryRefresh(

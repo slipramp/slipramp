@@ -79,6 +79,13 @@ type Record struct {
 	Provenance  Provenance
 }
 
+// StorageUsage is the aggregate artifact-content consumption recorded in
+// authoritative metadata for artifacts whose content has not finished deletion.
+type StorageUsage struct {
+	ArtifactCount int64
+	RecordedBytes int64
+}
+
 type Declaration struct {
 	Description string
 	MediaType   string

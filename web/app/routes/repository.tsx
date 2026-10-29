@@ -12,19 +12,23 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconGitCommit, IconListDetails, IconTrash } from "@tabler/icons-react";
+import { IconGitCommit, IconListDetails, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { Form, Link, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
   getRepositoryCatalog,
+  getCurrentPrincipal,
   listCommits,
+  listRepositoryRefreshAttempts,
   listRepositories,
   listRuns,
+  refreshRepository,
   type CatalogRevision,
   type Repository,
   type RepositoryCommit,
   type RepositoryCommitIndexingMode,
+  type RepositoryRefreshAttempt,
   updateRepository,
 } from "~/api/generated";
 import { Timestamp } from "~/components/display";
@@ -34,6 +38,11 @@ import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/co
 import { RecentRuns, recentRunLimit } from "~/components/recent-runs";
 import { pageTitle } from "~/page-title";
 import { formValue, problemDetail } from "~/form-data";
+import {
+  formatRefreshDuration,
+  refreshFailureTitle,
+  refreshOutcomePresentation,
+} from "~/repository-refresh";
 
 import type { Route } from "./+types/repository";
 
@@ -43,7 +52,14 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [repositoriesResult, catalogResult, runsResult, commitsResult] = await Promise.all([
+  const [
+    repositoriesResult,
+    catalogResult,
+    runsResult,
+    commitsResult,
+    attemptsResult,
+    principalResult,
+  ] = await Promise.all([
     listRepositories({ client, query: { limit: 200 } }),
     getRepositoryCatalog({ client, path: { repositoryId: params.repositoryId } }),
     listRuns({
@@ -54,6 +70,12 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       client,
       query: { limit: 5, repositoryId: params.repositoryId },
     }),
+    listRepositoryRefreshAttempts({
+      client,
+      path: { repositoryId: params.repositoryId },
+      query: { limit: 50 },
+    }),
+    getCurrentPrincipal({ client }),
   ]);
   const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
 
@@ -65,28 +87,62 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     repositoryListAvailable: repositoriesResult.data !== undefined,
     recentRuns: runsResult.data?.items ?? [],
     recentCommits: commitsResult.data?.items ?? [],
+    refreshAttempts: attemptsResult.data?.items ?? [],
+    refreshAttemptsAvailable: attemptsResult.data !== undefined,
+    principal: principalResult.data,
     runsAvailable: runsResult.data !== undefined,
   };
 }
 
 export async function action({ context, params, request }: Route.ActionArgs) {
   const formData = await request.formData();
+  const intent = formValue(formData, "intent");
+  const client = createServerAPIClient(request, context);
+  if (intent === "refresh") {
+    const result = await refreshRepository({
+      client,
+      path: { repositoryId: params.repositoryId },
+    });
+    if (result.data) {
+      return {
+        intent,
+        message:
+          result.data.outcome === "accepted"
+            ? "The repository catalog was accepted."
+            : result.data.outcome === "catalog-rejected"
+              ? "Git was fetched, but the catalog was rejected."
+              : "The Git fetch failed.",
+        status: result.data.outcome,
+      };
+    }
+
+    return {
+      error: problemDetail(result.error, "The repository could not be refreshed."),
+      intent,
+    };
+  }
+  if (intent !== "update-indexing") {
+    return { error: "The requested repository operation is not supported.", intent };
+  }
+
   const result = await updateRepository({
     body: {
       commitIndexing: formValue(formData, "commitIndexing") as RepositoryCommitIndexingMode,
     },
-    client: createServerAPIClient(request, context),
+    client,
     path: { repositoryId: params.repositoryId },
   });
 
-  if (result.data) return { updated: true };
+  if (result.data) return { intent, message: "Commit indexing was updated.", status: "updated" };
 
   return {
     error: problemDetail(result.error, "The repository could not be updated."),
+    intent,
   };
 }
 
 export default function RepositoryCatalog({ actionData, loaderData }: Route.ComponentProps) {
+  const navigation = useNavigation();
   if (!loaderData.apiAvailable) {
     return (
       <Stack gap="md">
@@ -111,22 +167,39 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
 
   const repository = loaderData.repository;
   const catalog = loaderData.catalog;
+  const isAdmin = loaderData.principal?.role === "admin";
+  const refreshSubmitting =
+    navigation.state === "submitting" && navigation.formData?.get("intent") === "refresh";
 
   return (
     <Stack gap="lg">
       <PageHeader
         actions={
-          repository ? (
-            <Button
-              color="red"
-              component={Link}
-              leftSection={<IconTrash size={16} />}
-              size="compact-md"
-              to={`/repositories/${repository.id}/delete`}
-              variant="subtle"
-            >
-              Remove
-            </Button>
+          repository && isAdmin ? (
+            <Group gap="xs" wrap="wrap">
+              <Form method="post">
+                <input name="intent" type="hidden" value="refresh" />
+                <Button
+                  leftSection={<IconRefresh size={16} />}
+                  loading={refreshSubmitting}
+                  size="compact-md"
+                  type="submit"
+                  variant="light"
+                >
+                  Refresh now
+                </Button>
+              </Form>
+              <Button
+                color="red"
+                component={Link}
+                leftSection={<IconTrash size={16} />}
+                size="compact-md"
+                to={`/repositories/${repository.id}/delete`}
+                variant="subtle"
+              >
+                Remove
+              </Button>
+            </Group>
           ) : null
         }
         back={<PageBackLink label="Back to repositories" to="/repositories" />}
@@ -146,8 +219,31 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         title={repository?.name ?? "Repository"}
       />
 
+      {actionData?.error ? (
+        <Alert color="red" title="Repository operation failed">
+          {actionData.error}
+        </Alert>
+      ) : null}
+      {actionData?.message ? (
+        <Alert
+          color={
+            actionData.status === "accepted" || actionData.status === "updated"
+              ? "green"
+              : actionData.status === "catalog-rejected"
+                ? "orange"
+                : "red"
+          }
+          title={actionResultTitle(actionData.status)}
+        >
+          {actionData.message}
+        </Alert>
+      ) : null}
+
       {repository?.refresh.failureReason ? (
-        <Alert color="red" title="Latest refresh failed">
+        <Alert
+          color={loaderData.refreshAttempts[0]?.outcome === "catalog-rejected" ? "orange" : "red"}
+          title={refreshFailureTitle(loaderData.refreshAttempts[0]?.outcome)}
+        >
           {repository.refresh.failureReason}
         </Alert>
       ) : null}
@@ -199,10 +295,16 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
         </>
       )}
 
+      <RefreshAttemptsSection
+        attempts={loaderData.refreshAttempts}
+        available={loaderData.refreshAttemptsAvailable}
+        repositoryId={loaderData.repositoryId}
+      />
+
       {repository ? (
         <CommitHistorySection
-          actionData={actionData}
           commits={loaderData.recentCommits}
+          editable={isAdmin}
           repository={repository}
         />
       ) : null}
@@ -218,13 +320,109 @@ export default function RepositoryCatalog({ actionData, loaderData }: Route.Comp
   );
 }
 
+function RefreshAttemptsSection({
+  attempts,
+  available,
+  repositoryId,
+}: Readonly<{
+  attempts: RepositoryRefreshAttempt[];
+  available: boolean;
+  repositoryId: string;
+}>) {
+  return (
+    <Stack gap="md">
+      <SectionHeader
+        description="Up to 50 retained periodic and requested attempts, newest first."
+        title="Refresh attempts"
+      />
+      <Paper withBorder>
+        {!available ? (
+          <Text c="dimmed" p="md">
+            Refresh attempt history could not be loaded.
+          </Text>
+        ) : attempts.length === 0 ? (
+          <Text c="dimmed" p="md">
+            No repository refresh has completed yet.
+          </Text>
+        ) : (
+          <Table.ScrollContainer minWidth={760} type="native">
+            <Table verticalSpacing="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Result</Table.Th>
+                  <Table.Th>Source</Table.Th>
+                  <Table.Th>Commit</Table.Th>
+                  <Table.Th>Started</Table.Th>
+                  <Table.Th>Duration</Table.Th>
+                  <Table.Th>Diagnostic</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {attempts.map((attempt) => (
+                  <Table.Tr key={attempt.id}>
+                    <Table.Td>
+                      <RefreshOutcomeBadge attempt={attempt} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge variant="default">
+                        {attempt.source === "requested" ? "Requested" : "Periodic"}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      {attempt.commit ? (
+                        <CommitReference commit={attempt.commit} repositoryId={repositoryId} />
+                      ) : (
+                        <Text c="dimmed" size="sm">
+                          Not fetched
+                        </Text>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      <Timestamp size="sm" value={attempt.startedAt} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{formatRefreshDuration(attempt.durationMilliseconds)}</Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text c={attempt.diagnostic ? undefined : "dimmed"} maw={420} size="sm">
+                        {attempt.diagnostic ?? "—"}
+                      </Text>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+      </Paper>
+    </Stack>
+  );
+}
+
+function RefreshOutcomeBadge({ attempt }: Readonly<{ attempt: RepositoryRefreshAttempt }>) {
+  const result = refreshOutcomePresentation(attempt.outcome);
+
+  return (
+    <Badge color={result.color} variant="light">
+      {result.label}
+    </Badge>
+  );
+}
+
+function actionResultTitle(status: string) {
+  if (status === "accepted") return "Repository refreshed";
+  if (status === "catalog-rejected") return "Catalog rejected";
+  if (status === "fetch-failed") return "Git fetch failed";
+  return "Repository updated";
+}
+
 function CommitHistorySection({
-  actionData,
   commits,
+  editable,
   repository,
 }: Readonly<{
-  actionData: Route.ComponentProps["actionData"];
   commits: RepositoryCommit[];
+  editable: boolean;
   repository: Repository;
 }>) {
   const index = repository.commitHistoryIndex;
@@ -252,35 +450,34 @@ function CommitHistorySection({
       />
       <Paper p="md" withBorder>
         <Stack gap="md">
-          {actionData?.error ? (
-            <Alert color="red" title="Commit indexing was not updated">
-              {actionData.error}
-            </Alert>
+          {editable ? (
+            <Form method="post">
+              <input name="intent" type="hidden" value="update-indexing" />
+              <Group align="flex-end" wrap="wrap">
+                <NativeSelect
+                  data={[
+                    { label: "Disabled", value: "disabled" },
+                    { label: "Observed branch heads", value: "observedHeads" },
+                    { label: "Complete tracked branch history", value: "trackedBranchHistory" },
+                  ]}
+                  defaultValue={repository.commitIndexing}
+                  description="Exact SHAs used by Runs and catalogs are retained in every mode. Disabling indexing does not erase metadata already collected."
+                  label="Indexing mode"
+                  name="commitIndexing"
+                  style={{ flex: "1 1 28rem" }}
+                />
+                <Button
+                  loading={
+                    navigation.state === "submitting" &&
+                    navigation.formData?.get("intent") === "update-indexing"
+                  }
+                  type="submit"
+                >
+                  Save
+                </Button>
+              </Group>
+            </Form>
           ) : null}
-          {actionData?.updated ? (
-            <Alert color="green" title="Commit indexing updated">
-              The new mode will be used by subsequent repository refreshes.
-            </Alert>
-          ) : null}
-          <Form method="post">
-            <Group align="flex-end" wrap="wrap">
-              <NativeSelect
-                data={[
-                  { label: "Disabled", value: "disabled" },
-                  { label: "Observed branch heads", value: "observedHeads" },
-                  { label: "Complete tracked branch history", value: "trackedBranchHistory" },
-                ]}
-                defaultValue={repository.commitIndexing}
-                description="Exact SHAs used by Runs and catalogs are retained in every mode. Disabling indexing does not erase metadata already collected."
-                label="Indexing mode"
-                name="commitIndexing"
-                style={{ flex: "1 1 28rem" }}
-              />
-              <Button loading={navigation.state === "submitting"} type="submit">
-                Save
-              </Button>
-            </Group>
-          </Form>
 
           {tracksHistory ? (
             <>

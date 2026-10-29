@@ -49,6 +49,52 @@ runArtifacts:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+artifactStorageUsage:
+  get:
+    operationId: getArtifactStorageUsage
+    summary: Get recorded artifact-content storage usage
+    description: >-
+      Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact
+      whose retention state is retained or expired. Open, sealed, and failed
+      artifacts are included; deleted artifacts are excluded. This is recorded
+      content consumption, not object-store capacity, free space, physical
+      allocation, replication, or billing.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Artifacts]
+    responses:
+      "200":
+        description: Current aggregate usage from authoritative artifact metadata.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/artifacts.yaml#/ArtifactStorageUsage
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read artifact metadata.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Artifact storage usage could not be read.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 artifactDownload:
   get:
     operationId: downloadArtifact

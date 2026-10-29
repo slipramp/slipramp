@@ -308,6 +308,17 @@ type RepositoryCommitHistoryIndex struct {
 	FailureReason   *string
 }
 
+type RepositoryRefreshAttempt struct {
+	ID                   pgtype.UUID
+	RepositoryID         pgtype.UUID
+	Source               string
+	Outcome              string
+	StartedAt            pgtype.Timestamptz
+	DurationMilliseconds int64
+	CommitSha            *string
+	Diagnostic           *string
+}
+
 type RepositoryTrackedBranchCommit struct {
 	RepositoryID pgtype.UUID
 	CommitSha    string

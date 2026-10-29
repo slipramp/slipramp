@@ -132,6 +132,59 @@ SET refresh_status = 'failed',
 WHERE id = sqlc.arg(id)
   AND removed_at IS NULL;
 
+-- name: CreateRepositoryRefreshAttempt :exec
+INSERT INTO repository_refresh_attempts (
+    id,
+    repository_id,
+    source,
+    outcome,
+    started_at,
+    duration_milliseconds,
+    commit_sha,
+    diagnostic
+) VALUES (
+    sqlc.arg(id),
+    sqlc.arg(repository_id),
+    sqlc.arg(source),
+    sqlc.arg(outcome),
+    sqlc.arg(started_at),
+    sqlc.arg(duration_milliseconds),
+    sqlc.narg(commit_sha),
+    sqlc.narg(diagnostic)
+);
+
+-- name: PruneRepositoryRefreshAttempts :exec
+DELETE FROM repository_refresh_attempts AS attempt
+WHERE attempt.repository_id = sqlc.arg(repository_id)
+  AND attempt.id IN (
+      SELECT retained.id
+      FROM repository_refresh_attempts AS retained
+      WHERE retained.repository_id = sqlc.arg(repository_id)
+      ORDER BY retained.started_at DESC, retained.id DESC
+      OFFSET sqlc.arg(retain_count)
+  );
+
+-- name: CountRepositoryRefreshAttempts :one
+SELECT count(*)::bigint
+FROM repository_refresh_attempts
+WHERE repository_id = sqlc.arg(repository_id);
+
+-- name: ListRepositoryRefreshAttempts :many
+SELECT
+    id,
+    repository_id,
+    source,
+    outcome,
+    started_at,
+    duration_milliseconds,
+    commit_sha,
+    diagnostic
+FROM repository_refresh_attempts
+WHERE repository_id = sqlc.arg(repository_id)
+ORDER BY started_at DESC, id DESC
+LIMIT sqlc.arg(result_limit)
+OFFSET sqlc.arg(result_offset);
+
 -- name: RemoveRepository :execrows
 UPDATE repositories
 SET removed_at = sqlc.arg(removed_at)

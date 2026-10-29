@@ -20,6 +20,7 @@ import {
 import {
   IconArrowsDiff,
   IconCheck,
+  IconDatabase,
   IconDeviceDesktop,
   IconFolder,
   IconGitBranch,
@@ -90,6 +91,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
       { icon: IconGitBranch, label: "Repositories", to: "/repositories" },
       { icon: IconServer2, label: "Clusters", to: "/clusters" },
       { icon: IconMapPin, label: "Placements", to: "/placements" },
+      { icon: IconDatabase, label: "Artifact storage", to: "/artifact-storage" },
     ],
     label: "Inventory",
   },

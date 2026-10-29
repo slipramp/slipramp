@@ -167,6 +167,78 @@ RepositoryRefresh:
       minLength: 1
       description: Diagnostic from the most recent failed refresh attempt.
 
+RepositoryRefreshAttempt:
+  type: object
+  required:
+    - id
+    - repositoryId
+    - source
+    - outcome
+    - startedAt
+    - durationMilliseconds
+  properties:
+    id:
+      type: string
+      format: uuid
+      description: Stable identity of this immutable refresh attempt.
+    repositoryId:
+      type: string
+      format: uuid
+    source:
+      type: string
+      enum:
+        - periodic
+        - requested
+      description: Whether the Server interval or an operator request started the attempt.
+    outcome:
+      type: string
+      enum:
+        - accepted
+        - fetch-failed
+        - catalog-rejected
+      description: >-
+        Accepted catalogs become active. A catalog-rejected attempt fetched Git
+        successfully but did not pass catalog loading and validation.
+    startedAt:
+      type: string
+      format: date-time
+    durationMilliseconds:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Elapsed fetch and catalog processing time in milliseconds.
+    commit:
+      allOf:
+        - $ref: ./common.yaml#/GitCommit
+      description: Fetched branch head, present for accepted and catalog-rejected attempts.
+    diagnostic:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Bounded non-sensitive diagnostic for an unsuccessful attempt.
+
+RepositoryRefreshAttemptList:
+  type: object
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/RepositoryRefreshAttempt"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0
+
 RepositoryList:
   type: object
   required:

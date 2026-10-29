@@ -264,6 +264,148 @@ repository:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+repositoryRefreshAttempts:
+  get:
+    operationId: listRepositoryRefreshAttempts
+    summary: List repository refresh attempts
+    description: Lists the retained immutable refresh attempts for one active repository, newest first.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Repositories
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 25
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Retained refresh attempt history.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/RepositoryRefreshAttemptList
+      "400":
+        description: The list window or repository identity is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The active repository does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Refresh attempts could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
+    operationId: refreshRepository
+    summary: Refresh a repository now
+    description: >-
+      Starts one requested repository refresh through the same serialized fetch,
+      validation, catalog activation, and Git-trigger delivery path used by
+      periodic refreshes. The response is the completed durable attempt.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Repositories
+    parameters:
+      - name: repositoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "201":
+        description: Requested refresh completed and its attempt was recorded.
+        headers:
+          Location:
+            description: API collection containing the retained attempt history.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/RepositoryRefreshAttempt
+      "400":
+        description: The repository identity is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The active repository does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The repository refresh could not be completed or recorded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 repositoryCommits:
   get:
     operationId: listCommits

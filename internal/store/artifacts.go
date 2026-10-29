@@ -130,6 +130,18 @@ func (d *Database) ListArtifactsForRun(ctx context.Context, runID uuid.UUID) ([]
 	return result, nil
 }
 
+func (d *Database) GetArtifactStorageUsage(ctx context.Context) (artifact.StorageUsage, error) {
+	row, err := d.queries.GetArtifactStorageUsage(ctx)
+	if err != nil {
+		return artifact.StorageUsage{}, fmt.Errorf("get artifact storage usage: %w", err)
+	}
+
+	return artifact.StorageUsage{
+		ArtifactCount: row.ArtifactCount,
+		RecordedBytes: row.RecordedBytes,
+	}, nil
+}
+
 func (d *Database) GetArtifactProvenance(ctx context.Context, runID uuid.UUID) (artifact.Provenance, error) {
 	row, err := d.queries.GetArtifactProvenance(ctx, databaseUUID(runID))
 	if errors.Is(err, pgx.ErrNoRows) {

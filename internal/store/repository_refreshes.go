@@ -85,6 +85,9 @@ func (d *Database) RecordRepositoryRefresh(
 			return err
 		}
 	}
+	if err := recordRepositoryRefreshAttempt(ctx, queries, identifier, result); err != nil {
+		return err
+	}
 
 	if err := transaction.Commit(ctx); err != nil {
 		return fmt.Errorf("commit repository refresh: %w", err)

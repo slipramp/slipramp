@@ -100,6 +100,31 @@ ArtifactList:
       items:
         $ref: "#/Artifact"
 
+ArtifactStorageUsage:
+  type: object
+  description: >-
+    Aggregate logical artifact-content consumption recorded in PostgreSQL.
+    Artifacts in retained or expired retention state are included across open,
+    sealed, and failed content lifecycle states. Artifacts marked deleted are
+    excluded.
+  required:
+    - artifactCount
+    - recordedBytes
+  properties:
+    artifactCount:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Number of included artifact metadata records.
+    recordedBytes:
+      type: integer
+      format: int64
+      minimum: 0
+      description: >-
+        Sum of the included records' sizeBytes values. For open or failed logs,
+        this is the durable recorded prefix. Expired artifacts remain included
+        until content deletion finishes and metadata is marked deleted.
+
 LogCursor:
   type: object
   required:

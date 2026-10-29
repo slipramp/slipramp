@@ -62,6 +62,9 @@ import type {
   FailRunLogData,
   FailRunLogErrors,
   FailRunLogResponses,
+  GetArtifactStorageUsageData,
+  GetArtifactStorageUsageErrors,
+  GetArtifactStorageUsageResponses,
   GetCommitData,
   GetCommitErrors,
   GetCommitResponses,
@@ -140,6 +143,9 @@ import type {
   ListRepositoriesData,
   ListRepositoriesErrors,
   ListRepositoriesResponses,
+  ListRepositoryRefreshAttemptsData,
+  ListRepositoryRefreshAttemptsErrors,
+  ListRepositoryRefreshAttemptsResponses,
   ListRunArtifactsData,
   ListRunArtifactsErrors,
   ListRunArtifactsResponses,
@@ -155,6 +161,9 @@ import type {
   PollForControllerCommandData,
   PollForControllerCommandErrors,
   PollForControllerCommandResponses,
+  RefreshRepositoryData,
+  RefreshRepositoryErrors,
+  RefreshRepositoryResponses,
   RemoveRepositoryData,
   RemoveRepositoryErrors,
   RemoveRepositoryResponses,
@@ -454,6 +463,68 @@ export const updateRepository = <ThrowOnError extends boolean = false>(
       },
     },
   );
+
+/**
+ * List repository refresh attempts
+ *
+ * Lists the retained immutable refresh attempts for one active repository, newest first.
+ */
+export const listRepositoryRefreshAttempts = <ThrowOnError extends boolean = false>(
+  options: Options<ListRepositoryRefreshAttemptsData, ThrowOnError>,
+): RequestResult<
+  ListRepositoryRefreshAttemptsResponses,
+  ListRepositoryRefreshAttemptsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).get<
+    ListRepositoryRefreshAttemptsResponses,
+    ListRepositoryRefreshAttemptsErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/repositories/{repositoryId}/refresh-attempts",
+    ...options,
+  });
+
+/**
+ * Refresh a repository now
+ *
+ * Starts one requested repository refresh through the same serialized fetch, validation, catalog activation, and Git-trigger delivery path used by periodic refreshes. The response is the completed durable attempt.
+ */
+export const refreshRepository = <ThrowOnError extends boolean = false>(
+  options: Options<RefreshRepositoryData, ThrowOnError>,
+): RequestResult<RefreshRepositoryResponses, RefreshRepositoryErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    RefreshRepositoryResponses,
+    RefreshRepositoryErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/repositories/{repositoryId}/refresh-attempts",
+    ...options,
+  });
 
 /**
  * List failed Git-trigger deliveries
@@ -1173,6 +1244,35 @@ export const listRunArtifacts = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/runs/{runId}/artifacts",
+    ...options,
+  });
+
+/**
+ * Get recorded artifact-content storage usage
+ *
+ * Aggregates sizeBytes from PostgreSQL artifact metadata for every artifact whose retention state is retained or expired. Open, sealed, and failed artifacts are included; deleted artifacts are excluded. This is recorded content consumption, not object-store capacity, free space, physical allocation, replication, or billing.
+ */
+export const getArtifactStorageUsage = <ThrowOnError extends boolean = false>(
+  options?: Options<GetArtifactStorageUsageData, ThrowOnError>,
+): RequestResult<GetArtifactStorageUsageResponses, GetArtifactStorageUsageErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetArtifactStorageUsageResponses,
+    GetArtifactStorageUsageErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/artifacts/storage-usage",
     ...options,
   });
 

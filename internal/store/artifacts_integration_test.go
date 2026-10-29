@@ -377,6 +377,62 @@ func TestArtifactPersistenceIntegration(t *testing.T) {
 	}
 }
 
+func TestArtifactStorageUsagePersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	usage, err := database.GetArtifactStorageUsage(ctx)
+	if err != nil {
+		t.Fatalf("GetArtifactStorageUsage() empty error = %v", err)
+	}
+	if usage != (artifact.StorageUsage{}) {
+		t.Fatalf("GetArtifactStorageUsage() empty = %#v", usage)
+	}
+
+	createdAt := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	digest := strings.Repeat("a", 64)
+	sealedAt := createdAt.Add(time.Minute)
+	records := []artifact.Artifact{
+		{
+			ID: uuid.New(), RunID: runID, Name: "live-log", Kind: artifact.KindLog,
+			State: artifact.StateOpen, MediaType: "text/plain", SizeBytes: 25,
+			RetentionState: artifact.RetentionRetained, CreatedAt: createdAt,
+		},
+		{
+			ID: uuid.New(), RunID: runID, Name: "plan", Kind: artifact.KindOutput,
+			State: artifact.StateSealed, MediaType: "application/octet-stream", SizeBytes: 128,
+			SHA256: &digest, RetentionState: artifact.RetentionRetained,
+			CreatedAt: createdAt, SealedAt: &sealedAt,
+		},
+		{
+			ID: uuid.New(), RunID: runID, Name: "partial-log", Kind: artifact.KindLog,
+			State: artifact.StateFailed, MediaType: "text/plain", SizeBytes: 32,
+			RetentionState: artifact.RetentionExpired, CreatedAt: createdAt,
+		},
+		{
+			ID: uuid.New(), RunID: runID, Name: "deleted-plan", Kind: artifact.KindOutput,
+			State: artifact.StateSealed, MediaType: "application/octet-stream", SizeBytes: 512,
+			SHA256: &digest, RetentionState: artifact.RetentionDeleted,
+			CreatedAt: createdAt, SealedAt: &sealedAt,
+		},
+	}
+	for _, record := range records {
+		if _, err := database.CreateArtifact(ctx, record); err != nil {
+			t.Fatalf("CreateArtifact(%q) error = %v", record.Name, err)
+		}
+	}
+
+	usage, err = database.GetArtifactStorageUsage(ctx)
+	if err != nil {
+		t.Fatalf("GetArtifactStorageUsage() error = %v", err)
+	}
+	want := artifact.StorageUsage{ArtifactCount: 3, RecordedBytes: 185}
+	if usage != want {
+		t.Errorf("GetArtifactStorageUsage() = %#v, want %#v", usage, want)
+	}
+}
+
 func TestArtifactFailurePersistenceIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()

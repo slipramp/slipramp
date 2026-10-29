@@ -114,10 +114,24 @@ and optional logical refresh and checkout credential names. URL-embedded HTTPS
 credentials are rejected. Removing a Repository hides its registration while
 preserving its identity and history.
 
-The Server fetches active Repositories at startup and on an interval. It checks
-out the exact commit in temporary storage, validates the whole catalog, then
-removes the checkout. Repository contents, source bundles, and Git archives are
-never persisted in PostgreSQL or S3. Jobs clone their exact commits directly.
+The Server fetches active Repositories at startup and on an interval. An
+administrator may also request **Refresh now** from Repository detail; requested
+and periodic work use the same per-Repository serialized fetch, validation,
+activation, and Git-trigger delivery path. It checks out the exact commit in
+temporary storage, validates the whole catalog, then removes the checkout.
+Repository contents, source bundles, and Git archives are never persisted in
+PostgreSQL or S3. Jobs clone their exact commits directly.
+
+Each completed refresh atomically records an immutable attempt with `periodic`
+or `requested` source, elapsed fetch and catalog-processing duration, fetched
+head when available, and `accepted`, `fetch-failed`, or `catalog-rejected`
+outcome. Unsuccessful attempts retain only a bounded non-sensitive diagnostic.
+PostgreSQL keeps the newest 50 attempts per Repository; the authenticated read
+API and Repository detail expose the newest history first. Git fetch failure is
+presented separately from a successfully fetched catalog that validation
+rejected. Refreshing an already accepted head records another factual attempt
+but reuses the immutable catalog revision, leaves Target relevance unchanged,
+and does not create Git-trigger deliveries.
 
 Catalog resources use `slipramp.com/v1alpha1`. Files ending in `.yaml` or `.yml`
 are discovered recursively below `.slipramp` in lexical path order. Each file
@@ -672,6 +686,16 @@ unfinished Runs, and protected by nonterminal Promotions, cannot expire.
 Metadata and provenance survive deletion. The same reconciler removes orphaned
 objects in the owned `runs/` prefix after a grace period and an immediate
 PostgreSQL recheck. S3 lifecycle rules do not independently expire contents.
+
+The authenticated artifact-storage usage API and Web view report aggregate
+logical content consumption from authoritative PostgreSQL metadata. They sum
+`size_bytes` for every Artifact whose retention state is `retained` or
+`expired`, across `open`, `sealed`, and `failed` content states. Open and failed
+logs therefore contribute their durable recorded prefix, and expired Artifacts
+remain counted until object deletion completes and metadata becomes `deleted`.
+The result is recorded content consumption, not object-store capacity, free
+space, physical allocation, replication overhead, or provider billing. It does
+not inspect the bucket or establish a quota or enforcement policy.
 
 ## Product identity and authorization
 

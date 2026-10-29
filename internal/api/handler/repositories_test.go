@@ -141,6 +141,24 @@ func TestRepositoryHandlersMapExpectedFailures(t *testing.T) {
 			wantStatus: http.StatusNotFound,
 		},
 		{
+			name:   "refresh missing repository",
+			method: http.MethodPost,
+			path:   "/api/v1/repositories/" + repositoryID.String() + "/refresh-attempts",
+			repositories: &recordingRepositoryService{
+				refreshErr: repository.ErrNotFound,
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:   "list refresh attempts for missing repository",
+			method: http.MethodGet,
+			path:   "/api/v1/repositories/" + repositoryID.String() + "/refresh-attempts",
+			repositories: &recordingRepositoryService{
+				refreshErr: repository.ErrNotFound,
+			},
+			wantStatus: http.StatusNotFound,
+		},
+		{
 			name:   "list persistence failure",
 			method: http.MethodGet,
 			path:   "/api/v1/repositories",
@@ -324,6 +342,75 @@ func TestRepositoryHandlersListAndRemove(t *testing.T) {
 	}
 }
 
+func TestRepositoryRefreshAttemptHandlers(t *testing.T) {
+	t.Parallel()
+
+	repositoryID := uuid.New()
+	attemptID := uuid.New()
+	commitSHA := strings.Repeat("a", 40)
+	startedAt := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	diagnostic := ".slipramp/catalog.yaml: deployment placement is missing"
+	attempt := repository.RefreshAttempt{
+		ID:           attemptID,
+		RepositoryID: repositoryID,
+		Source:       repository.RefreshSourceRequested,
+		Outcome:      repository.RefreshOutcomeCatalogRejected,
+		StartedAt:    startedAt,
+		Duration:     1250 * time.Millisecond,
+		CommitSHA:    &commitSHA,
+		Diagnostic:   &diagnostic,
+	}
+	repositories := &recordingRepositoryService{
+		attempt:  attempt,
+		attempts: repository.RefreshAttemptPage{Items: []repository.RefreshAttempt{attempt}, Total: 1},
+	}
+	httpHandler := newAdminTestHandler(&recordingClusterService{}, nil, repositories, nil, nil, nil, nil)
+
+	refreshRequest := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodPost,
+		"/api/v1/repositories/"+repositoryID.String()+"/refresh-attempts",
+		nil,
+	)
+	refreshResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(refreshResponse, refreshRequest)
+	if refreshResponse.Code != http.StatusCreated {
+		t.Fatalf("refresh status = %d, want %d: %s", refreshResponse.Code, http.StatusCreated, refreshResponse.Body)
+	}
+	if repositories.refreshID != repositoryID {
+		t.Errorf("requested repository ID = %s, want %s", repositories.refreshID, repositoryID)
+	}
+	var refreshed api.RepositoryRefreshAttempt
+	if err := json.NewDecoder(refreshResponse.Body).Decode(&refreshed); err != nil {
+		t.Fatalf("decode refresh response: %v", err)
+	}
+	if refreshed.ID != attemptID || refreshed.Outcome != api.RepositoryRefreshAttemptOutcome("catalog-rejected") ||
+		refreshed.Source != api.RepositoryRefreshAttemptSource("requested") ||
+		refreshed.DurationMilliseconds != 1250 || refreshed.Commit == nil ||
+		refreshed.Commit.Sha != commitSHA || refreshed.Diagnostic == nil || *refreshed.Diagnostic != diagnostic {
+		t.Errorf("refresh response = %#v", refreshed)
+	}
+
+	listRequest := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		"/api/v1/repositories/"+repositoryID.String()+"/refresh-attempts?limit=10",
+		nil,
+	)
+	listResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(listResponse, listRequest)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("list status = %d, want %d: %s", listResponse.Code, http.StatusOK, listResponse.Body)
+	}
+	var page api.RepositoryRefreshAttemptList
+	if err := json.NewDecoder(listResponse.Body).Decode(&page); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if page.Total != 1 || page.Limit != 10 || len(page.Items) != 1 || page.Items[0].ID != attemptID {
+		t.Errorf("refresh attempt list = %#v", page)
+	}
+}
+
 type recordingRepositoryService struct {
 	cfg         repository.Config
 	created     repository.Repository
@@ -335,6 +422,10 @@ type recordingRepositoryService struct {
 	createError error
 	listError   error
 	removeError error
+	attempt     repository.RefreshAttempt
+	attempts    repository.RefreshAttemptPage
+	refreshID   uuid.UUID
+	refreshErr  error
 }
 
 func (r *recordingRepositoryService) CreateRepository(
@@ -349,6 +440,26 @@ func (r *recordingRepositoryService) CreateRepository(
 
 func (r *recordingRepositoryService) ListRepositories(context.Context) ([]repository.Repository, error) {
 	return r.items, r.listError
+}
+
+func (r *recordingRepositoryService) RequestRefresh(
+	_ context.Context,
+	repositoryID repository.RepositoryID,
+) (repository.RefreshAttempt, error) {
+	r.refreshID = repositoryID
+
+	return r.attempt, r.refreshErr
+}
+
+func (r *recordingRepositoryService) ListRefreshAttempts(
+	_ context.Context,
+	repositoryID repository.RepositoryID,
+	_ int,
+	_ int,
+) (repository.RefreshAttemptPage, error) {
+	r.refreshID = repositoryID
+
+	return r.attempts, r.refreshErr
 }
 
 func (r *recordingRepositoryService) UpdateRepositoryCommitIndexing(

@@ -142,6 +142,8 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		ctx,
 		first.ID,
 		repository.RefreshResult{
+			AttemptID:     uuid.New(),
+			Source:        repository.RefreshSourcePeriodic,
 			AttemptedAt:   failedAt,
 			FailureReason: &failureReason,
 		},
@@ -169,6 +171,8 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		ctx,
 		first.ID,
 		repository.RefreshResult{
+			AttemptID:     uuid.New(),
+			Source:        repository.RefreshSourcePeriodic,
 			AttemptedAt:   repeatedFailureAt,
 			FailureReason: &failureReason,
 		},

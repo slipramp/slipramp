@@ -340,6 +340,8 @@ func createRecoveryRuns(t *testing.T, ctx context.Context, database *store.Datab
 		ctx,
 		repositoryID,
 		repository.RefreshResult{
+			AttemptID:   uuid.New(),
+			Source:      repository.RefreshSourcePeriodic,
 			Commit:      &repository.Commit{SHA: commitSHA},
 			AttemptedAt: revision.CreatedAt,
 			Revision:    &revision,

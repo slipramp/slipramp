@@ -11,6 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRepositoryRefreshAttempts = `-- name: CountRepositoryRefreshAttempts :one
+SELECT count(*)::bigint
+FROM repository_refresh_attempts
+WHERE repository_id = $1
+`
+
+func (q *Queries) CountRepositoryRefreshAttempts(ctx context.Context, repositoryID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countRepositoryRefreshAttempts, repositoryID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countRepositoryRefreshStates = `-- name: CountRepositoryRefreshStates :many
 SELECT refresh_status, count(*)::bigint AS repository_count
 FROM repositories
@@ -145,6 +158,53 @@ func (q *Queries) CreateRepository(ctx context.Context, arg CreateRepositoryPara
 		&i.RefreshFailureStartedAt,
 	)
 	return i, err
+}
+
+const createRepositoryRefreshAttempt = `-- name: CreateRepositoryRefreshAttempt :exec
+INSERT INTO repository_refresh_attempts (
+    id,
+    repository_id,
+    source,
+    outcome,
+    started_at,
+    duration_milliseconds,
+    commit_sha,
+    diagnostic
+) VALUES (
+    $1,
+    $2,
+    $3,
+    $4,
+    $5,
+    $6,
+    $7,
+    $8
+)
+`
+
+type CreateRepositoryRefreshAttemptParams struct {
+	ID                   pgtype.UUID
+	RepositoryID         pgtype.UUID
+	Source               string
+	Outcome              string
+	StartedAt            pgtype.Timestamptz
+	DurationMilliseconds int64
+	CommitSha            *string
+	Diagnostic           *string
+}
+
+func (q *Queries) CreateRepositoryRefreshAttempt(ctx context.Context, arg CreateRepositoryRefreshAttemptParams) error {
+	_, err := q.db.Exec(ctx, createRepositoryRefreshAttempt,
+		arg.ID,
+		arg.RepositoryID,
+		arg.Source,
+		arg.Outcome,
+		arg.StartedAt,
+		arg.DurationMilliseconds,
+		arg.CommitSha,
+		arg.Diagnostic,
+	)
+	return err
 }
 
 const getActiveRepository = `-- name: GetActiveRepository :one
@@ -340,6 +400,80 @@ func (q *Queries) ListRepositories(ctx context.Context) ([]ListRepositoriesRow, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const listRepositoryRefreshAttempts = `-- name: ListRepositoryRefreshAttempts :many
+SELECT
+    id,
+    repository_id,
+    source,
+    outcome,
+    started_at,
+    duration_milliseconds,
+    commit_sha,
+    diagnostic
+FROM repository_refresh_attempts
+WHERE repository_id = $1
+ORDER BY started_at DESC, id DESC
+LIMIT $3
+OFFSET $2
+`
+
+type ListRepositoryRefreshAttemptsParams struct {
+	RepositoryID pgtype.UUID
+	ResultOffset int32
+	ResultLimit  int32
+}
+
+func (q *Queries) ListRepositoryRefreshAttempts(ctx context.Context, arg ListRepositoryRefreshAttemptsParams) ([]RepositoryRefreshAttempt, error) {
+	rows, err := q.db.Query(ctx, listRepositoryRefreshAttempts, arg.RepositoryID, arg.ResultOffset, arg.ResultLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RepositoryRefreshAttempt
+	for rows.Next() {
+		var i RepositoryRefreshAttempt
+		if err := rows.Scan(
+			&i.ID,
+			&i.RepositoryID,
+			&i.Source,
+			&i.Outcome,
+			&i.StartedAt,
+			&i.DurationMilliseconds,
+			&i.CommitSha,
+			&i.Diagnostic,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const pruneRepositoryRefreshAttempts = `-- name: PruneRepositoryRefreshAttempts :exec
+DELETE FROM repository_refresh_attempts AS attempt
+WHERE attempt.repository_id = $1
+  AND attempt.id IN (
+      SELECT retained.id
+      FROM repository_refresh_attempts AS retained
+      WHERE retained.repository_id = $1
+      ORDER BY retained.started_at DESC, retained.id DESC
+      OFFSET $2
+  )
+`
+
+type PruneRepositoryRefreshAttemptsParams struct {
+	RepositoryID pgtype.UUID
+	RetainCount  int32
+}
+
+func (q *Queries) PruneRepositoryRefreshAttempts(ctx context.Context, arg PruneRepositoryRefreshAttemptsParams) error {
+	_, err := q.db.Exec(ctx, pruneRepositoryRefreshAttempts, arg.RepositoryID, arg.RetainCount)
+	return err
 }
 
 const recordRepositoryRefreshFailure = `-- name: RecordRepositoryRefreshFailure :exec

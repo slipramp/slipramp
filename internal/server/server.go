@@ -83,7 +83,20 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	clusters := cluster.NewService(persistence.database)
 	identities := controlleridentity.NewService(persistence.database)
 	catalogs := catalog.NewService(persistence.database, cfg.Placements)
-	repositories := repository.NewService(persistence.database, cfg.RepositoryRefreshCredentials)
+	repositoryRefresher := repository.NewRefresher(
+		persistence.database,
+		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
+		cfg.Placements,
+		cfg.RepositoryRefreshInterval,
+		cfg.RepositoryFetchTimeout,
+		logger,
+		repository.WithRefreshObserver(metrics),
+	)
+	repositories := repository.NewService(
+		persistence.database,
+		cfg.RepositoryRefreshCredentials,
+		repository.WithRefresher(repositoryRefresher),
+	)
 	notificationService, err := notification.NewService(cfg.Notifications, persistence.database)
 	if err != nil {
 		closeInitialization()
@@ -127,15 +140,6 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 
 		return nil, fmt.Errorf("initialize product authentication: %w", err)
 	}
-	repositoryRefresher := repository.NewRefresher(
-		persistence.database,
-		repository.NewGitFetcher(cfg.RepositoryRefreshCredentials),
-		cfg.Placements,
-		cfg.RepositoryRefreshInterval,
-		cfg.RepositoryFetchTimeout,
-		logger,
-		repository.WithRefreshObserver(metrics),
-	)
 	commitHistoryIndexer := repository.NewCommitHistoryIndexer(
 		persistence.database,
 		repository.NewGitCommitHistoryFetcher(cfg.RepositoryRefreshCredentials),

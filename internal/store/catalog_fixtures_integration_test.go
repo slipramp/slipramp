@@ -13,6 +13,8 @@ import (
 
 func successfulCatalogRefresh(commitSHA string, attemptedAt time.Time, revisionID uuid.UUID) repository.RefreshResult {
 	return repository.RefreshResult{
+		AttemptID:   uuid.New(),
+		Source:      repository.RefreshSourcePeriodic,
 		Commit:      &repository.Commit{SHA: commitSHA},
 		AttemptedAt: attemptedAt,
 		Revision: &catalog.Revision{
