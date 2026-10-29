@@ -89,6 +89,7 @@ The delegation unit is one pull request, not necessarily one card.
 - Prefer one pull request when the card is cohesive.
 - Split a complex card only into independently reviewable outcomes with clear acceptance criteria.
 - Record the complete work-unit plan on the card before starting the first worker.
+- Give every unit in a multi-pull-request card a stable ordinal and total, such as `1 of 2`.
 - Dispatch independent units concurrently only when they do not overlap.
 - Dispatch dependent units sequentially. Record the prerequisite pull request and intended base explicitly.
 - Never create speculative cleanup or refactor units that are not required by the card.
@@ -114,11 +115,15 @@ The worker prompt must include:
 - the instruction to update OpenAPI sources and regenerate instead of editing generated files
 - the requirement to implement, format, test, review its diff, commit, push, and open a pull request
 - the requirement to keep the pull request limited to its assigned unit and explain verification
+- for a multi-pull-request card, the unit ordinal and total plus a requirement that the pull request body clearly state:
+  - the current unit name and `X of N` position
+  - prerequisite or already completed units with pull request links
+  - every remaining planned unit and whether it is blocked, sequential, or independently eligible
 - the requirement to attach the created pull request to the worker task
 - the instruction not to merge, close unrelated pull requests, rewrite shared branches, or start additional work
 - the card's coordination details so the pull request can be traced back to Trello
 
-After dispatch, record the worker chat identity and branch on the card. When the worker opens a pull request, record its URL and attach it to the worker task.
+After dispatch, record the worker chat identity and branch on the card. When the worker opens a pull request, verify that any required multi-unit progress summary is present, record its URL, and attach it to the worker task. A missing progress summary is incomplete coordination metadata; send the same worker a scoped follow-up to add it before treating the pull request as ready for human review.
 
 ## Backlog proposals
 

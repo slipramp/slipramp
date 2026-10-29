@@ -115,10 +115,21 @@ func (s *suite) createCluster(t *testing.T) {
 		"slipramp-web:acceptance",
 	}
 	images = append(images, dependencyImages()...)
-	arguments := []string{"load", "docker-image", "--name", s.clusterName}
-	arguments = append(arguments, images...)
+
+	// Docker's containerd image store may retain a multi-platform index while pulling only the native image.
+	// Export one complete platform so kind's all-platforms importer never follows descriptors with missing content.
+	imagePlatform := strings.TrimSpace(string(s.mustRun(t, "docker", "image", "inspect",
+		"--format", "{{.Os}}/{{.Architecture}}{{if .Variant}}/{{.Variant}}{{end}}",
+		"slipramp-server:acceptance",
+	)))
+	imageArchive := filepath.Join(s.temporaryDirectory, "images.tar")
+	exportArguments := []string{"image", "save", "--platform", imagePlatform, "--output", imageArchive}
+	exportArguments = append(exportArguments, images...)
+	t.Logf("exporting %s acceptance images", imagePlatform)
+	s.mustRunVisible(t, "docker", exportArguments...)
+
 	t.Log("loading images into kind")
-	s.mustRunVisible(t, s.kindBin, arguments...)
+	s.mustRunVisible(t, s.kindBin, "load", "image-archive", "--name", s.clusterName, imageArchive)
 }
 
 func (s *suite) createFixture(t *testing.T) {
