@@ -110,9 +110,12 @@ WHERE removed_at IS NULL
 GROUP BY refresh_status
 ORDER BY refresh_status;
 
--- name: UpdateRepositoryCommitIndexing :execrows
+-- name: UpdateRepository :execrows
 UPDATE repositories
-SET commit_indexing_mode = sqlc.arg(commit_indexing_mode)
+SET commit_indexing_mode = sqlc.arg(commit_indexing_mode),
+    commit_url_template = sqlc.narg(commit_url_template),
+    refresh_credential_name = sqlc.narg(refresh_credential_name),
+    checkout_credential_name = sqlc.narg(checkout_credential_name)
 WHERE id = sqlc.arg(id)
   AND removed_at IS NULL;
 

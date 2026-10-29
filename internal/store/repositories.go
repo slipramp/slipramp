@@ -159,10 +159,10 @@ func (d *Database) GetRepository(ctx context.Context, repositoryID uuid.UUID) (r
 	}, nil
 }
 
-func (d *Database) UpdateRepositoryCommitIndexing(
+func (d *Database) UpdateRepository(
 	ctx context.Context,
 	repositoryID uuid.UUID,
-	mode repository.CommitIndexingMode,
+	cfg repository.Config,
 ) (repository.Repository, error) {
 	transaction, err := d.pool.Begin(ctx)
 	if err != nil {
@@ -173,11 +173,14 @@ func (d *Database) UpdateRepositoryCommitIndexing(
 	}()
 	queries := d.queries.WithTx(transaction)
 
-	rowsAffected, err := queries.UpdateRepositoryCommitIndexing(
+	rowsAffected, err := queries.UpdateRepository(
 		ctx,
-		storedb.UpdateRepositoryCommitIndexingParams{
-			CommitIndexingMode: string(mode),
-			ID:                 databaseUUID(repositoryID),
+		storedb.UpdateRepositoryParams{
+			CommitIndexingMode:     string(cfg.CommitIndexing),
+			CommitUrlTemplate:      cfg.CommitURLTemplate,
+			RefreshCredentialName:  cfg.RefreshCredentialName,
+			CheckoutCredentialName: cfg.CheckoutCredentialName,
+			ID:                     databaseUUID(repositoryID),
 		},
 	)
 	if err != nil {
@@ -186,7 +189,7 @@ func (d *Database) UpdateRepositoryCommitIndexing(
 	if rowsAffected == 0 {
 		return repository.Repository{}, repository.ErrNotFound
 	}
-	if mode == repository.CommitIndexingTrackedBranchHistory {
+	if cfg.CommitIndexing == repository.CommitIndexingTrackedBranchHistory {
 		if err := queries.InitializeRepositoryCommitHistory(ctx, databaseUUID(repositoryID)); err != nil {
 			return repository.Repository{}, fmt.Errorf("initialize repository commit history: %w", err)
 		}

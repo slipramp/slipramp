@@ -530,20 +530,32 @@ func (q *Queries) RemoveRepository(ctx context.Context, arg RemoveRepositoryPara
 	return result.RowsAffected(), nil
 }
 
-const updateRepositoryCommitIndexing = `-- name: UpdateRepositoryCommitIndexing :execrows
+const updateRepository = `-- name: UpdateRepository :execrows
 UPDATE repositories
-SET commit_indexing_mode = $1
-WHERE id = $2
+SET commit_indexing_mode = $1,
+    commit_url_template = $2,
+    refresh_credential_name = $3,
+    checkout_credential_name = $4
+WHERE id = $5
   AND removed_at IS NULL
 `
 
-type UpdateRepositoryCommitIndexingParams struct {
-	CommitIndexingMode string
-	ID                 pgtype.UUID
+type UpdateRepositoryParams struct {
+	CommitIndexingMode     string
+	CommitUrlTemplate      *string
+	RefreshCredentialName  *string
+	CheckoutCredentialName *string
+	ID                     pgtype.UUID
 }
 
-func (q *Queries) UpdateRepositoryCommitIndexing(ctx context.Context, arg UpdateRepositoryCommitIndexingParams) (int64, error) {
-	result, err := q.db.Exec(ctx, updateRepositoryCommitIndexing, arg.CommitIndexingMode, arg.ID)
+func (q *Queries) UpdateRepository(ctx context.Context, arg UpdateRepositoryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateRepository,
+		arg.CommitIndexingMode,
+		arg.CommitUrlTemplate,
+		arg.RefreshCredentialName,
+		arg.CheckoutCredentialName,
+		arg.ID,
+	)
 	if err != nil {
 		return 0, err
 	}

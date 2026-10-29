@@ -89,16 +89,25 @@ func TestRepositoryPersistenceIntegration(t *testing.T) {
 		)
 	}
 
-	updated, err := database.UpdateRepositoryCommitIndexing(
+	commitURLTemplate := "https://git.example.com/applications/commit/{sha}"
+	updatedRefreshCredential := "github-server"
+	updated, err := database.UpdateRepository(
 		ctx,
 		second.ID,
-		repository.CommitIndexingTrackedBranchHistory,
+		repository.Config{
+			CommitIndexing:        repository.CommitIndexingTrackedBranchHistory,
+			CommitURLTemplate:     &commitURLTemplate,
+			RefreshCredentialName: &updatedRefreshCredential,
+		},
 	)
 	if err != nil {
-		t.Fatalf("UpdateRepositoryCommitIndexing() error = %v", err)
+		t.Fatalf("UpdateRepository() error = %v", err)
 	}
-	if updated.CommitIndexing != repository.CommitIndexingTrackedBranchHistory {
-		t.Errorf("updated commit indexing = %q", updated.CommitIndexing)
+	if updated.CommitIndexing != repository.CommitIndexingTrackedBranchHistory ||
+		updated.CommitURLTemplate == nil || *updated.CommitURLTemplate != commitURLTemplate ||
+		updated.RefreshCredentialName == nil || *updated.RefreshCredentialName != updatedRefreshCredential ||
+		updated.CheckoutCredentialName != nil {
+		t.Errorf("updated repository = %#v", updated)
 	}
 
 	commitSHA := "0123456789abcdef0123456789abcdef01234567"

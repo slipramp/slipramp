@@ -12,11 +12,12 @@ import {
 import { Form, redirect, useNavigation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { createRepository } from "~/api/generated";
+import { createRepository, testRepositoryConnection } from "~/api/generated";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader } from "~/components/page";
 import { formValue, optionalFormValue, problemDetail } from "~/form-data";
 import { pageTitle } from "~/page-title";
+import { repositoryConnectionTestRequest } from "~/repository-controls";
 
 import type { Route } from "./+types/repository-new";
 
@@ -26,6 +27,22 @@ export function meta() {
 
 export async function action({ context, request }: Route.ActionArgs) {
   const formData = await request.formData();
+  const intent = formValue(formData, "intent");
+  const client = createServerAPIClient(request, context);
+  if (intent === "test") {
+    const result = await testRepositoryConnection({
+      body: repositoryConnectionTestRequest(formData),
+      client,
+    });
+
+    if (result.data) return { intent, test: result.data };
+
+    return {
+      error: problemDetail(result.error, "The repository connection could not be tested."),
+      intent,
+    };
+  }
+
   const result = await createRepository({
     body: {
       branch: formValue(formData, "branch"),
@@ -39,7 +56,7 @@ export async function action({ context, request }: Route.ActionArgs) {
       name: formValue(formData, "name"),
       refreshCredentialName: optionalFormValue(formData, "refreshCredentialName"),
     },
-    client: createServerAPIClient(request, context),
+    client,
   });
 
   if (result.data) return redirect(`/repositories/${result.data.id}`);
@@ -51,6 +68,10 @@ export async function action({ context, request }: Route.ActionArgs) {
 
 export default function ConnectRepository({ actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
+  const testing =
+    navigation.state === "submitting" && navigation.formData?.get("intent") === "test";
+  const connecting =
+    navigation.state === "submitting" && navigation.formData?.get("intent") === "create";
 
   return (
     <Stack gap="lg">
@@ -69,8 +90,31 @@ export default function ConnectRepository({ actionData }: Route.ComponentProps) 
             </Text>
 
             {actionData?.error ? (
-              <Alert color="red" title="Repository not connected">
+              <Alert
+                color="red"
+                title={
+                  actionData.intent === "test"
+                    ? "Connection test failed"
+                    : "Repository not connected"
+                }
+              >
                 {actionData.error}
+              </Alert>
+            ) : null}
+            {actionData?.test ? (
+              <Alert
+                color={actionData.test.status === "succeeded" ? "green" : "red"}
+                title={
+                  actionData.test.status === "succeeded"
+                    ? "Connection succeeded"
+                    : "Connection failed"
+                }
+              >
+                {actionData.test.status === "succeeded"
+                  ? actionData.test.commitSha
+                    ? `The tracked branch is reachable at ${actionData.test.commitSha.slice(0, 12)}.`
+                    : "The tracked branch is reachable."
+                  : actionData.test.diagnostic}
               </Alert>
             ) : null}
 
@@ -137,7 +181,17 @@ export default function ConnectRepository({ actionData }: Route.ComponentProps) 
             </SimpleGrid>
 
             <Group justify="flex-end">
-              <Button loading={navigation.state === "submitting"} type="submit">
+              <Button
+                formNoValidate
+                loading={testing}
+                name="intent"
+                type="submit"
+                value="test"
+                variant="default"
+              >
+                Test connection
+              </Button>
+              <Button loading={connecting} name="intent" type="submit" value="create">
                 Connect repository
               </Button>
             </Group>

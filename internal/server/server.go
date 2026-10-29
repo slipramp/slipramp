@@ -96,6 +96,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		persistence.database,
 		cfg.RepositoryRefreshCredentials,
 		repository.WithRefresher(repositoryRefresher),
+		repository.WithConnectionTester(
+			repository.NewGitConnectionTester(cfg.RepositoryRefreshCredentials),
+			cfg.RepositoryFetchTimeout,
+		),
 	)
 	notificationService, err := notification.NewService(cfg.Notifications, persistence.database)
 	if err != nil {

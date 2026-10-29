@@ -70,9 +70,94 @@ RepositoryUpdate:
   type: object
   required:
     - commitIndexing
+    - commitUrlTemplate
+    - refreshCredentialName
+    - checkoutCredentialName
   properties:
     commitIndexing:
       $ref: "#/RepositoryCommitIndexingMode"
+    commitUrlTemplate:
+      type:
+        - string
+        - "null"
+      minLength: 1
+      maxLength: 2048
+      description: >-
+        Replacement commit-page template, or null to use provider inference.
+    refreshCredentialName:
+      type:
+        - string
+        - "null"
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: >-
+        Replacement Server refresh credential reference, or null for no
+        credential. Secret values are not accepted or persisted.
+    checkoutCredentialName:
+      type:
+        - string
+        - "null"
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: >-
+        Replacement logical execution checkout credential reference, or null
+        for no credential.
+
+RepositoryConnectionTestRequest:
+  type: object
+  required:
+    - cloneUrl
+    - branch
+  properties:
+    cloneUrl:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: Proposed HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
+    branch:
+      type: string
+      minLength: 1
+      maxLength: 255
+      description: Proposed Git branch to probe without fetching repository contents.
+    refreshCredentialName:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: >-
+        Optional Server refresh credential reference. The referenced secret is
+        resolved only for the probe and is never returned or persisted.
+
+RepositoryConnectionTestResult:
+  type: object
+  required:
+    - status
+    - durationMilliseconds
+  properties:
+    status:
+      type: string
+      enum:
+        - succeeded
+        - failed
+      x-enum-varnames:
+        - RepositoryConnectionTestSucceeded
+        - RepositoryConnectionTestFailed
+    durationMilliseconds:
+      type: integer
+      format: int64
+      minimum: 0
+      description: Elapsed Git probe time in milliseconds.
+    commitSha:
+      type: string
+      pattern: ^(?:[0-9a-f]{40}|[0-9a-f]{64})$
+      description: Exact tracked branch head returned by a successful probe.
+    diagnostic:
+      type: string
+      minLength: 1
+      maxLength: 512
+      description: Bounded non-sensitive explanation for a failed probe.
 
 Repository:
   allOf:

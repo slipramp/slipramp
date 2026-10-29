@@ -114,6 +114,23 @@ and optional logical refresh and checkout credential names. URL-embedded HTTPS
 credentials are rejected. Removing a Repository hides its registration while
 preserving its identity and history.
 
+Before registration or before saving a changed refresh credential reference,
+an administrator may run a bounded **Test connection** probe against the
+proposed clone URL and branch. The probe uses the same URL, branch, configured
+Server credential resolution, isolated Git environment, and fetch timeout as
+repository refresh, but only resolves the exact remote branch head. It does not
+register, update, refresh, validate a catalog, or otherwise persist a
+Repository. Success returns the observed head SHA; failure returns only a
+bounded fixed diagnostic that excludes Git standard error and credential
+values. The Server cannot test the checkout credential reference because that
+logical name resolves independently inside each execution Cluster.
+
+Administrators may atomically update a Repository's optional refresh credential
+reference, optional checkout credential reference, optional commit URL
+template, and commit-indexing mode. Repository identity, clone URL, and tracked
+branch remain fixed by the registration. These updates persist references only;
+secret values remain outside PostgreSQL.
+
 The Server fetches active Repositories at startup and on an interval. An
 administrator may also request **Refresh now** from Repository detail; requested
 and periodic work use the same per-Repository serialized fetch, validation,

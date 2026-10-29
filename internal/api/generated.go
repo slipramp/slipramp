@@ -664,6 +664,24 @@ func (e RepositoryCommitIndexingMode) Valid() bool {
 	}
 }
 
+// Defines values for RepositoryConnectionTestResultStatus.
+const (
+	RepositoryConnectionTestFailed    RepositoryConnectionTestResultStatus = "failed"
+	RepositoryConnectionTestSucceeded RepositoryConnectionTestResultStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryConnectionTestResultStatus enum.
+func (e RepositoryConnectionTestResultStatus) Valid() bool {
+	switch e {
+	case RepositoryConnectionTestFailed:
+		return true
+	case RepositoryConnectionTestSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RepositoryRefreshStatus.
 const (
 	RepositoryRefreshStatusFailed    RepositoryRefreshStatus = "failed"
@@ -2529,6 +2547,34 @@ type RepositoryConfig struct {
 	RefreshCredentialName *string `json:"refreshCredentialName,omitempty"`
 }
 
+// RepositoryConnectionTestRequest defines model for RepositoryConnectionTestRequest.
+type RepositoryConnectionTestRequest struct {
+	// Branch Proposed Git branch to probe without fetching repository contents.
+	Branch string `json:"branch"`
+
+	// CloneURL Proposed HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
+	CloneURL string `json:"cloneUrl"`
+
+	// RefreshCredentialName Optional Server refresh credential reference. The referenced secret is resolved only for the probe and is never returned or persisted.
+	RefreshCredentialName *string `json:"refreshCredentialName,omitempty"`
+}
+
+// RepositoryConnectionTestResult defines model for RepositoryConnectionTestResult.
+type RepositoryConnectionTestResult struct {
+	// CommitSha Exact tracked branch head returned by a successful probe.
+	CommitSha *string `json:"commitSha,omitempty"`
+
+	// Diagnostic Bounded non-sensitive explanation for a failed probe.
+	Diagnostic *string `json:"diagnostic,omitempty"`
+
+	// DurationMilliseconds Elapsed Git probe time in milliseconds.
+	DurationMilliseconds int64                                `json:"durationMilliseconds"`
+	Status               RepositoryConnectionTestResultStatus `json:"status"`
+}
+
+// RepositoryConnectionTestResultStatus defines model for RepositoryConnectionTestResult.Status.
+type RepositoryConnectionTestResultStatus string
+
 // RepositoryList defines model for RepositoryList.
 type RepositoryList struct {
 	Items  []Repository `json:"items"`
@@ -2597,8 +2643,17 @@ type RepositoryRefreshAttemptList struct {
 
 // RepositoryUpdate defines model for RepositoryUpdate.
 type RepositoryUpdate struct {
+	// CheckoutCredentialName Replacement logical execution checkout credential reference, or null for no credential.
+	CheckoutCredentialName *string `json:"checkoutCredentialName"`
+
 	// CommitIndexing Controls whether refresh records no presentation metadata, metadata only for observed branch heads, or metadata for the complete tracked branch history. Exact commit SHAs required by product records are retained in all modes.
 	CommitIndexing RepositoryCommitIndexingMode `json:"commitIndexing"`
+
+	// CommitURLTemplate Replacement commit-page template, or null to use provider inference.
+	CommitURLTemplate *string `json:"commitUrlTemplate"`
+
+	// RefreshCredentialName Replacement Server refresh credential reference, or null for no credential. Secret values are not accepted or persisted.
+	RefreshCredentialName *string `json:"refreshCredentialName"`
 }
 
 // ResourceMetadata defines model for ResourceMetadata.
@@ -3424,6 +3479,9 @@ type CreateRepositoryJSONRequestBody = RepositoryConfig
 // UpdateRepositoryJSONRequestBody defines body for UpdateRepository for application/json ContentType.
 type UpdateRepositoryJSONRequestBody = RepositoryUpdate
 
+// TestRepositoryConnectionJSONRequestBody defines body for TestRepositoryConnection for application/json ContentType.
+type TestRepositoryConnectionJSONRequestBody = RepositoryConnectionTestRequest
+
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = RunCreate
 
@@ -3942,7 +4000,7 @@ type ClientInterface interface {
 
 	// UpdateRepositoryWithBody Update a repository
 	//
-	// Updates mutable indexing behavior for an active repository registration.
+	// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3951,7 +4009,7 @@ type ClientInterface interface {
 
 	// UpdateRepository Update a repository
 	//
-	// Updates mutable indexing behavior for an active repository registration.
+	// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3985,6 +4043,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/repositories/{repositoryId}/refresh-attempts (the `RefreshRepository` operationId).
 	RefreshRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TestRepositoryConnectionWithBody Test a repository connection
+	//
+	// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+	TestRepositoryConnectionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// TestRepositoryConnection Test a repository connection
+	//
+	// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+	TestRepositoryConnection(ctx context.Context, body TestRepositoryConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListRuns List recent Runs
 	//
@@ -5047,7 +5123,7 @@ func (c *Client) RemoveRepository(ctx context.Context, repositoryID openapi_type
 
 // UpdateRepositoryWithBody Update a repository
 //
-// Updates mutable indexing behavior for an active repository registration.
+// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 //
 // Takes any type of body and a specified content type.
 //
@@ -5066,7 +5142,7 @@ func (c *Client) UpdateRepositoryWithBody(ctx context.Context, repositoryID open
 
 // UpdateRepository Update a repository
 //
-// Updates mutable indexing behavior for an active repository registration.
+// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5141,6 +5217,44 @@ func (c *Client) ListRepositoryRefreshAttempts(ctx context.Context, repositoryID
 // Corresponds with POST /api/v1/repositories/{repositoryId}/refresh-attempts (the `RefreshRepository` operationId).
 func (c *Client) RefreshRepository(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRefreshRepositoryRequest(c.Server, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// TestRepositoryConnectionWithBody Test a repository connection
+//
+// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+func (c *Client) TestRepositoryConnectionWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestRepositoryConnectionRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// TestRepositoryConnection Test a repository connection
+//
+// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+func (c *Client) TestRepositoryConnection(ctx context.Context, body TestRepositoryConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewTestRepositoryConnectionRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8272,6 +8386,46 @@ func NewRefreshRepositoryRequest(server string, repositoryID openapi_types.UUID)
 	return req, nil
 }
 
+// NewTestRepositoryConnectionRequest calls the generic TestRepositoryConnection builder with application/json body
+func NewTestRepositoryConnectionRequest(server string, body TestRepositoryConnectionJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewTestRepositoryConnectionRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewTestRepositoryConnectionRequestWithBody constructs an http.Request for the TestRepositoryConnection method, with any body, and a specified content type
+func NewTestRepositoryConnectionRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/repository-connection-tests")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListRunsRequest constructs an http.Request for the ListRuns method
 func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, error) {
 	var err error
@@ -10026,7 +10180,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateRepositoryWithBodyWithResponse Update a repository
 	//
-	// Updates mutable indexing behavior for an active repository registration.
+	// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10035,7 +10189,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateRepositoryWithResponse Update a repository
 	//
-	// Updates mutable indexing behavior for an active repository registration.
+	// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10077,6 +10231,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/repositories/{repositoryId}/refresh-attempts (the `RefreshRepository` operationId).
 	RefreshRepositoryWithResponse(ctx context.Context, repositoryID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RefreshRepositoryResponse, error)
+
+	// TestRepositoryConnectionWithBodyWithResponse Test a repository connection
+	//
+	// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+	TestRepositoryConnectionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestRepositoryConnectionResponse, error)
+
+	// TestRepositoryConnectionWithResponse Test a repository connection
+	//
+	// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+	TestRepositoryConnectionWithResponse(ctx context.Context, body TestRepositoryConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*TestRepositoryConnectionResponse, error)
 
 	// ListRunsWithResponse List recent Runs
 	//
@@ -13614,6 +13786,82 @@ func (r RefreshRepositoryResponse) ContentType() string {
 	return ""
 }
 
+type TestRepositoryConnectionResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RepositoryConnectionTestResult
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r TestRepositoryConnectionResponse) GetJSON200() *RepositoryConnectionTestResult {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r TestRepositoryConnectionResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r TestRepositoryConnectionResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r TestRepositoryConnectionResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r TestRepositoryConnectionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListRunsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -16234,7 +16482,7 @@ func (c *ClientWithResponses) RemoveRepositoryWithResponse(ctx context.Context, 
 
 // UpdateRepositoryWithBodyWithResponse Update a repository
 //
-// Updates mutable indexing behavior for an active repository registration.
+// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16249,7 +16497,7 @@ func (c *ClientWithResponses) UpdateRepositoryWithBodyWithResponse(ctx context.C
 
 // UpdateRepositoryWithResponse Update a repository
 //
-// Updates mutable indexing behavior for an active repository registration.
+// Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16320,6 +16568,36 @@ func (c *ClientWithResponses) RefreshRepositoryWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseRefreshRepositoryResponse(rsp)
+}
+
+// TestRepositoryConnectionWithBodyWithResponse Test a repository connection
+//
+// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+func (c *ClientWithResponses) TestRepositoryConnectionWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestRepositoryConnectionResponse, error) {
+	rsp, err := c.TestRepositoryConnectionWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestRepositoryConnectionResponse(rsp)
+}
+
+// TestRepositoryConnectionWithResponse Test a repository connection
+//
+// Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/repository-connection-tests (the `TestRepositoryConnection` operationId).
+func (c *ClientWithResponses) TestRepositoryConnectionWithResponse(ctx context.Context, body TestRepositoryConnectionJSONRequestBody, reqEditors ...RequestEditorFn) (*TestRepositoryConnectionResponse, error) {
+	rsp, err := c.TestRepositoryConnection(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseTestRepositoryConnectionResponse(rsp)
 }
 
 // ListRunsWithResponse List recent Runs
@@ -19563,6 +19841,67 @@ func ParseRefreshRepositoryResponse(rsp *http.Response) (*RefreshRepositoryRespo
 	return response, nil
 }
 
+// ParseTestRepositoryConnectionResponse parses an HTTP response from a TestRepositoryConnectionWithResponse call
+func ParseTestRepositoryConnectionResponse(rsp *http.Response) (*TestRepositoryConnectionResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &TestRepositoryConnectionResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RepositoryConnectionTestResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListRunsResponse parses an HTTP response from a ListRunsWithResponse call
 func ParseListRunsResponse(rsp *http.Response) (*ListRunsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -21299,6 +21638,9 @@ type ServerInterface interface {
 	// RefreshRepository Refresh a repository now
 	// (POST /api/v1/repositories/{repositoryId}/refresh-attempts)
 	RefreshRepository(w http.ResponseWriter, r *http.Request, repositoryID openapi_types.UUID)
+	// TestRepositoryConnection Test a repository connection
+	// (POST /api/v1/repository-connection-tests)
+	TestRepositoryConnection(w http.ResponseWriter, r *http.Request)
 	// ListRuns List recent Runs
 	// (GET /api/v1/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, params ListRunsParams)
@@ -23242,6 +23584,20 @@ func (siw *ServerInterfaceWrapper) RefreshRepository(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// TestRepositoryConnection operation middleware
+func (siw *ServerInterfaceWrapper) TestRepositoryConnection(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestRepositoryConnection(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRuns operation middleware
 func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
 
@@ -24331,6 +24687,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/readyz", wrapper.GetReadiness)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repository-connection-tests", wrapper.TestRepositoryConnection)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/inbox", wrapper.GetInbox)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/inbox/problem-acknowledgements", wrapper.AcknowledgeInboxProblems)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/notification-deliveries", wrapper.ListNotificationDeliveries)
@@ -28518,6 +28875,98 @@ func (response RefreshRepository500ApplicationProblemPlusJSONResponse) VisitRefr
 	return err
 }
 
+type TestRepositoryConnectionRequestObject struct {
+	Body *TestRepositoryConnectionJSONRequestBody
+}
+
+type TestRepositoryConnectionResponseObject interface {
+	VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error
+}
+
+type TestRepositoryConnection200JSONResponse RepositoryConnectionTestResult
+
+func (response TestRepositoryConnection200JSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestRepositoryConnection400ApplicationProblemPlusJSONResponse Problem
+
+func (response TestRepositoryConnection400ApplicationProblemPlusJSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestRepositoryConnection401ApplicationProblemPlusJSONResponse Problem
+
+func (response TestRepositoryConnection401ApplicationProblemPlusJSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestRepositoryConnection403ApplicationProblemPlusJSONResponse Problem
+
+func (response TestRepositoryConnection403ApplicationProblemPlusJSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestRepositoryConnection405ApplicationProblemPlusJSONResponse Problem
+
+func (response TestRepositoryConnection405ApplicationProblemPlusJSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestRepositoryConnection500ApplicationProblemPlusJSONResponse Problem
+
+func (response TestRepositoryConnection500ApplicationProblemPlusJSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRunsRequestObject struct {
 	Params ListRunsParams
 }
@@ -31174,6 +31623,9 @@ type StrictServerInterface interface {
 	// RefreshRepository Refresh a repository now
 	// (POST /api/v1/repositories/{repositoryId}/refresh-attempts)
 	RefreshRepository(ctx context.Context, request RefreshRepositoryRequestObject) (RefreshRepositoryResponseObject, error)
+	// TestRepositoryConnection Test a repository connection
+	// (POST /api/v1/repository-connection-tests)
+	TestRepositoryConnection(ctx context.Context, request TestRepositoryConnectionRequestObject) (TestRepositoryConnectionResponseObject, error)
 	// ListRuns List recent Runs
 	// (GET /api/v1/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
@@ -32439,6 +32891,37 @@ func (sh *strictHandler) RefreshRepository(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RefreshRepositoryResponseObject); ok {
 		if err := validResponse.VisitRefreshRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestRepositoryConnection operation middleware
+func (sh *strictHandler) TestRepositoryConnection(w http.ResponseWriter, r *http.Request) {
+	var request TestRepositoryConnectionRequestObject
+
+	var body TestRepositoryConnectionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestRepositoryConnection(ctx, request.(TestRepositoryConnectionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestRepositoryConnection")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestRepositoryConnectionResponseObject); ok {
+		if err := validResponse.VisitTestRepositoryConnectionResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

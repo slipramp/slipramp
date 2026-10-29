@@ -92,30 +92,113 @@ func TestServiceRejectsInvalidConfigBeforePersistence(t *testing.T) {
 	}
 }
 
-func TestServiceUpdatesCommitIndexing(t *testing.T) {
+func TestServiceTestsConnectionWithoutPersistence(t *testing.T) {
+	t.Parallel()
+
+	credentialName := "github-server"
+	tester := &recordingConnectionTester{commitSHA: "0123456789abcdef0123456789abcdef01234567"}
+	repositories := &recordingStore{}
+	service := NewService(
+		repositories,
+		RefreshCredentials{credentialName: "/credentials/github.gitconfig"},
+		WithConnectionTester(tester, time.Second),
+	)
+	cfg := ConnectionConfig{
+		CloneURL:              "https://github.com/example/infrastructure.git",
+		Branch:                "main",
+		RefreshCredentialName: &credentialName,
+	}
+
+	result, err := service.TestConnection(t.Context(), cfg)
+	if err != nil {
+		t.Fatalf("TestConnection() error = %v", err)
+	}
+	if result.Status != ConnectionTestSucceeded || result.CommitSHA == nil ||
+		*result.CommitSHA != tester.commitSHA || tester.cfg.CloneURL != cfg.CloneURL {
+		t.Errorf("connection result = %#v, tester config = %#v", result, tester.cfg)
+	}
+	if repositories.createCalls != 0 || repositories.updateCalls != 0 {
+		t.Errorf("persistence calls = create %d, update %d", repositories.createCalls, repositories.updateCalls)
+	}
+}
+
+func TestServiceReturnsSafeConnectionFailure(t *testing.T) {
+	t.Parallel()
+
+	tester := &recordingConnectionTester{err: errors.New("credential-secret-marker")}
+	service := NewService(
+		&recordingStore{},
+		nil,
+		WithConnectionTester(tester, time.Second),
+	)
+	result, err := service.TestConnection(t.Context(), ConnectionConfig{
+		CloneURL: "https://github.com/example/infrastructure.git",
+		Branch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("TestConnection() error = %v", err)
+	}
+	if result.Status != ConnectionTestFailed || result.Diagnostic == nil ||
+		*result.Diagnostic != "Git could not reach the tracked branch with the selected refresh credential." {
+		t.Errorf("connection result = %#v", result)
+	}
+}
+
+func TestServiceRejectsUnknownConnectionCredentialBeforeProbe(t *testing.T) {
+	t.Parallel()
+
+	credentialName := "missing"
+	tester := &recordingConnectionTester{}
+	service := NewService(
+		&recordingStore{},
+		nil,
+		WithConnectionTester(tester, time.Second),
+	)
+	_, err := service.TestConnection(t.Context(), ConnectionConfig{
+		CloneURL:              "https://github.com/example/infrastructure.git",
+		Branch:                "main",
+		RefreshCredentialName: &credentialName,
+	})
+	if !errors.Is(err, ErrInvalidConfig) || !errors.Is(err, ErrUnknownRefreshCredential) {
+		t.Errorf("TestConnection() error = %v", err)
+	}
+	if tester.calls != 0 {
+		t.Errorf("connection probe calls = %d, want 0", tester.calls)
+	}
+}
+
+func TestServiceUpdatesRepositoryConfiguration(t *testing.T) {
 	t.Parallel()
 
 	repositoryID := uuid.New()
-	repositories := &recordingStore{}
-	service := NewService(repositories, nil)
-
-	updated, err := service.UpdateRepositoryCommitIndexing(
-		context.Background(),
-		repositoryID,
-		CommitIndexingTrackedBranchHistory,
-	)
-	if err != nil {
-		t.Fatalf("UpdateRepositoryCommitIndexing() error = %v", err)
+	repositories := &recordingStore{current: Repository{Config: validRepositoryConfig()}}
+	credentialName := "github-server"
+	service := NewService(repositories, RefreshCredentials{credentialName: "/credentials/github.gitconfig"})
+	commitURLTemplate := "https://github.com/example/infrastructure/commit/{sha}"
+	update := Config{
+		CommitIndexing:        CommitIndexingTrackedBranchHistory,
+		CommitURLTemplate:     &commitURLTemplate,
+		RefreshCredentialName: &credentialName,
 	}
-	if repositories.updatedID != repositoryID ||
-		repositories.updatedMode != CommitIndexingTrackedBranchHistory ||
+
+	updated, err := service.UpdateRepository(context.Background(), repositoryID, update)
+	if err != nil {
+		t.Fatalf("UpdateRepository() error = %v", err)
+	}
+	if repositories.updatedID != repositoryID || repositories.updatedConfig.Name != "infrastructure" ||
+		repositories.updatedConfig.RefreshCredentialName == nil ||
+		*repositories.updatedConfig.RefreshCredentialName != credentialName ||
 		updated.CommitIndexing != CommitIndexingTrackedBranchHistory {
 		t.Errorf("updated repository = %#v", updated)
 	}
 
-	_, err = service.UpdateRepositoryCommitIndexing(context.Background(), repositoryID, "everything")
+	update.CommitIndexing = "everything"
+	_, err = service.UpdateRepository(context.Background(), repositoryID, update)
 	if !errors.Is(err, ErrInvalidConfig) {
-		t.Errorf("invalid UpdateRepositoryCommitIndexing() error = %v, want %v", err, ErrInvalidConfig)
+		t.Errorf("invalid UpdateRepository() error = %v, want %v", err, ErrInvalidConfig)
+	}
+	if repositories.updateCalls != 1 {
+		t.Errorf("persistence update calls = %d, want 1", repositories.updateCalls)
 	}
 }
 
@@ -146,11 +229,13 @@ func TestServiceRequestsAndListsRefreshAttempts(t *testing.T) {
 }
 
 type recordingStore struct {
-	created     Repository
-	createCalls int
-	updatedID   uuid.UUID
-	updatedMode CommitIndexingMode
-	attempts    RefreshAttemptPage
+	created       Repository
+	current       Repository
+	createCalls   int
+	updateCalls   int
+	updatedID     uuid.UUID
+	updatedConfig Config
+	attempts      RefreshAttemptPage
 }
 
 func (s *recordingStore) CreateRepository(_ context.Context, repository Repository) (Repository, error) {
@@ -164,8 +249,8 @@ func (*recordingStore) ListRepositories(context.Context) ([]Repository, error) {
 	return nil, nil
 }
 
-func (*recordingStore) GetRepository(context.Context, uuid.UUID) (Repository, error) {
-	return Repository{}, nil
+func (s *recordingStore) GetRepository(context.Context, uuid.UUID) (Repository, error) {
+	return s.current, nil
 }
 
 func (s *recordingStore) ListRepositoryRefreshAttempts(
@@ -177,17 +262,16 @@ func (s *recordingStore) ListRepositoryRefreshAttempts(
 	return s.attempts, nil
 }
 
-func (s *recordingStore) UpdateRepositoryCommitIndexing(
+func (s *recordingStore) UpdateRepository(
 	_ context.Context,
 	repositoryID uuid.UUID,
-	mode CommitIndexingMode,
+	cfg Config,
 ) (Repository, error) {
+	s.updateCalls++
 	s.updatedID = repositoryID
-	s.updatedMode = mode
+	s.updatedConfig = cfg
 
-	config := Config{CommitIndexing: mode}
-
-	return Repository{Config: config}, nil
+	return Repository{Config: cfg}, nil
 }
 
 func (*recordingStore) RemoveRepository(context.Context, uuid.UUID, time.Time) error {
@@ -197,6 +281,23 @@ func (*recordingStore) RemoveRepository(context.Context, uuid.UUID, time.Time) e
 type recordingRefreshRunner struct {
 	repositoryID uuid.UUID
 	attempt      RefreshAttempt
+}
+
+type recordingConnectionTester struct {
+	cfg       ConnectionConfig
+	commitSHA string
+	err       error
+	calls     int
+}
+
+func (t *recordingConnectionTester) TestConnection(
+	_ context.Context,
+	cfg ConnectionConfig,
+) (string, error) {
+	t.calls++
+	t.cfg = cfg
+
+	return t.commitSHA, t.err
 }
 
 func (r *recordingRefreshRunner) RefreshRepository(

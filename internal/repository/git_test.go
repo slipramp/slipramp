@@ -99,6 +99,45 @@ func TestGitFetcherFetchesExactTrackedBranch(t *testing.T) {
 	}
 }
 
+func TestGitConnectionTesterResolvesExactTrackedBranch(t *testing.T) {
+	t.Parallel()
+
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("Git is not installed")
+	}
+
+	workingDirectory := filepath.Join(t.TempDir(), "working")
+	remoteDirectory := filepath.Join(t.TempDir(), "remote.git")
+	runTestGit(t, "init", "--initial-branch=main", workingDirectory)
+	runTestGit(t, "-C", workingDirectory, "config", "user.name", "Slipramp Test")
+	runTestGit(t, "-C", workingDirectory, "config", "user.email", "slipramp@example.com")
+	writeTestFile(t, workingDirectory, "README.md", "test\n")
+	runTestGit(t, "-C", workingDirectory, "add", "README.md")
+	runTestGit(t, "-C", workingDirectory, "commit", "--quiet", "-m", "initial")
+	wantCommit := strings.TrimSpace(runTestGit(t, "-C", workingDirectory, "rev-parse", "HEAD"))
+	runTestGit(t, "clone", "--quiet", "--bare", workingDirectory, remoteDirectory)
+
+	tester := NewGitConnectionTester(nil)
+	commitSHA, err := tester.TestConnection(t.Context(), ConnectionConfig{
+		CloneURL: remoteDirectory,
+		Branch:   "main",
+	})
+	if err != nil {
+		t.Fatalf("TestConnection() error = %v", err)
+	}
+	if commitSHA != wantCommit {
+		t.Errorf("commit SHA = %q, want %q", commitSHA, wantCommit)
+	}
+
+	_, err = tester.TestConnection(t.Context(), ConnectionConfig{
+		CloneURL: remoteDirectory,
+		Branch:   "missing",
+	})
+	if !errors.Is(err, ErrBranchNotFound) {
+		t.Errorf("missing branch error = %v, want %v", err, ErrBranchNotFound)
+	}
+}
+
 func TestGitFetcherComputesChangedPathsFromAcceptedCommit(t *testing.T) {
 	t.Parallel()
 

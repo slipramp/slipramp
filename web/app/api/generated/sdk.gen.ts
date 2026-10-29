@@ -201,6 +201,9 @@ import type {
   SubmitKargoPromotionData,
   SubmitKargoPromotionErrors,
   SubmitKargoPromotionResponses,
+  TestRepositoryConnectionData,
+  TestRepositoryConnectionErrors,
+  TestRepositoryConnectionResponses,
   UpdatePrincipalData,
   UpdatePrincipalErrors,
   UpdatePrincipalResponses,
@@ -306,6 +309,39 @@ export const createRepository = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/repositories",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Test a repository connection
+ *
+ * Probes a proposed clone URL and branch with an optional configured Server refresh credential. The bounded probe does not register, update, refresh, or otherwise persist a Repository, and it never returns credential values.
+ */
+export const testRepositoryConnection = <ThrowOnError extends boolean = false>(
+  options: Options<TestRepositoryConnectionData, ThrowOnError>,
+): RequestResult<TestRepositoryConnectionResponses, TestRepositoryConnectionErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    TestRepositoryConnectionResponses,
+    TestRepositoryConnectionErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/repository-connection-tests",
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -436,7 +472,7 @@ export const removeRepository = <ThrowOnError extends boolean = false>(
 /**
  * Update a repository
  *
- * Updates mutable indexing behavior for an active repository registration.
+ * Atomically updates mutable presentation, credential-reference, and commit indexing settings for an active repository registration. Secret values are not accepted.
  */
 export const updateRepository = <ThrowOnError extends boolean = false>(
   options: Options<UpdateRepositoryData, ThrowOnError>,

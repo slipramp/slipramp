@@ -14,6 +14,10 @@ import (
 
 type RepositoryService interface {
 	CreateRepository(ctx context.Context, cfg repository.Config) (repository.Repository, error)
+	TestConnection(
+		ctx context.Context,
+		cfg repository.ConnectionConfig,
+	) (repository.ConnectionTestResult, error)
 	ListRepositories(ctx context.Context) ([]repository.Repository, error)
 	RequestRefresh(ctx context.Context, repositoryID repository.RepositoryID) (repository.RefreshAttempt, error)
 	ListRefreshAttempts(
@@ -22,12 +26,38 @@ type RepositoryService interface {
 		limit int,
 		offset int,
 	) (repository.RefreshAttemptPage, error)
-	UpdateRepositoryCommitIndexing(
+	UpdateRepository(
 		ctx context.Context,
 		repositoryID uuid.UUID,
-		mode repository.CommitIndexingMode,
+		cfg repository.Config,
 	) (repository.Repository, error)
 	RemoveRepository(ctx context.Context, repositoryID uuid.UUID) error
+}
+
+func (h *Handler) TestRepositoryConnection(
+	ctx context.Context,
+	request api.TestRepositoryConnectionRequestObject,
+) (api.TestRepositoryConnectionResponseObject, error) {
+	result, err := h.repositories.TestConnection(ctx, repository.ConnectionConfig{
+		CloneURL:              request.Body.CloneURL,
+		Branch:                request.Body.Branch,
+		RefreshCredentialName: request.Body.RefreshCredentialName,
+	})
+	if errors.Is(err, repository.ErrInvalidConfig) {
+		return api.TestRepositoryConnection400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, err.Error()),
+		), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.TestRepositoryConnection200JSONResponse{
+		Status:               api.RepositoryConnectionTestResultStatus(result.Status),
+		DurationMilliseconds: result.Duration.Milliseconds(),
+		CommitSha:            result.CommitSHA,
+		Diagnostic:           result.Diagnostic,
+	}, nil
 }
 
 func (h *Handler) ListRepositoryRefreshAttempts(
@@ -189,10 +219,15 @@ func (h *Handler) UpdateRepository(
 	ctx context.Context,
 	request api.UpdateRepositoryRequestObject,
 ) (api.UpdateRepositoryResponseObject, error) {
-	updated, err := h.repositories.UpdateRepositoryCommitIndexing(
+	updated, err := h.repositories.UpdateRepository(
 		ctx,
 		request.RepositoryID,
-		repository.CommitIndexingMode(request.Body.CommitIndexing),
+		repository.Config{
+			CommitIndexing:         repository.CommitIndexingMode(request.Body.CommitIndexing),
+			CommitURLTemplate:      request.Body.CommitURLTemplate,
+			RefreshCredentialName:  request.Body.RefreshCredentialName,
+			CheckoutCredentialName: request.Body.CheckoutCredentialName,
+		},
 	)
 	if err != nil {
 		switch {

@@ -21,6 +21,18 @@ head is harmless and does not recreate Git-trigger deliveries. The read endpoint
 is `GET /api/v1/repositories/{repositoryId}/refresh-attempts`; administrators
 start a requested attempt with `POST` to the same path.
 
+The Connect and Edit repository screens also provide **Test connection**. The
+operator-started probe checks the proposed clone URL, tracked branch, and
+optional Server refresh credential before registration or before changed
+settings are saved. It uses the configured repository fetch timeout, does not
+create or mutate a Repository, and returns only the observed head SHA or a
+bounded non-sensitive diagnostic. Repository editing atomically updates the
+optional refresh credential reference, checkout credential reference, commit
+URL template, and commit-indexing mode. Credential fields contain configured
+names only; Slipramp never accepts or persists their secret values through this
+API. Checkout credentials resolve in execution Clusters and therefore are not
+covered by the Server-side connection probe.
+
 Named Git-trigger deliveries retry Run creation with durable exponential backoff:
 five seconds initially, doubling to a five-minute cap, with terminal failure on
 the eighth failed attempt. Other eligible deliveries continue during backoff,

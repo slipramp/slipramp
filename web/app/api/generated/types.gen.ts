@@ -313,6 +313,49 @@ export type RepositoryCommitIndexingMode = "disabled" | "observedHeads" | "track
 
 export type RepositoryUpdate = {
   commitIndexing: RepositoryCommitIndexingMode;
+  /**
+   * Replacement commit-page template, or null to use provider inference.
+   */
+  commitUrlTemplate: string | null;
+  /**
+   * Replacement Server refresh credential reference, or null for no credential. Secret values are not accepted or persisted.
+   */
+  refreshCredentialName: string | null;
+  /**
+   * Replacement logical execution checkout credential reference, or null for no credential.
+   */
+  checkoutCredentialName: string | null;
+};
+
+export type RepositoryConnectionTestRequest = {
+  /**
+   * Proposed HTTPS, SSH, or SCP-style Git clone URL without embedded secrets.
+   */
+  cloneUrl: string;
+  /**
+   * Proposed Git branch to probe without fetching repository contents.
+   */
+  branch: string;
+  /**
+   * Optional Server refresh credential reference. The referenced secret is resolved only for the probe and is never returned or persisted.
+   */
+  refreshCredentialName?: string;
+};
+
+export type RepositoryConnectionTestResult = {
+  status: "succeeded" | "failed";
+  /**
+   * Elapsed Git probe time in milliseconds.
+   */
+  durationMilliseconds: number;
+  /**
+   * Exact tracked branch head returned by a successful probe.
+   */
+  commitSha?: string;
+  /**
+   * Bounded non-sensitive explanation for a failed probe.
+   */
+  diagnostic?: string;
 };
 
 export type RepositoryRefreshAttempt = {
@@ -2079,6 +2122,49 @@ export type CreateRepositoryResponses = {
 };
 
 export type CreateRepositoryResponse = CreateRepositoryResponses[keyof CreateRepositoryResponses];
+
+export type TestRepositoryConnectionData = {
+  body: RepositoryConnectionTestRequest;
+  path?: never;
+  query?: never;
+  url: "/api/v1/repository-connection-tests";
+};
+
+export type TestRepositoryConnectionErrors = {
+  /**
+   * The proposed connection configuration is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The repository connection could not be tested.
+   */
+  500: Problem;
+};
+
+export type TestRepositoryConnectionError =
+  TestRepositoryConnectionErrors[keyof TestRepositoryConnectionErrors];
+
+export type TestRepositoryConnectionResponses = {
+  /**
+   * Completed connection probe, whether successful or failed.
+   */
+  200: RepositoryConnectionTestResult;
+};
+
+export type TestRepositoryConnectionResponse =
+  TestRepositoryConnectionResponses[keyof TestRepositoryConnectionResponses];
 
 export type GetInboxData = {
   body?: never;

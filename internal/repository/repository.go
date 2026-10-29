@@ -53,6 +53,24 @@ type Config struct {
 	CheckoutCredentialName *string
 }
 
+type ConnectionConfig struct {
+	CloneURL              string
+	Branch                string
+	RefreshCredentialName *string
+}
+
+func (c ConnectionConfig) Validate() error {
+	if err := validateCloneURL(c.CloneURL); err != nil {
+		return fmt.Errorf("clone URL: %w", err)
+	}
+
+	if err := validateBranch(c.Branch); err != nil {
+		return fmt.Errorf("branch: %w", err)
+	}
+
+	return validateCredential("refresh credential name", c.RefreshCredentialName)
+}
+
 func (c Config) Validate() error {
 	if err := kubevalidate.DNSLabel("repository name", c.Name); err != nil {
 		return err

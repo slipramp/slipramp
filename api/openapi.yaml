@@ -12,6 +12,8 @@ paths:
     $ref: ./paths/system.yaml#/readiness
   /api/v1/repositories:
     $ref: ./paths/repositories.yaml#/repositories
+  /api/v1/repository-connection-tests:
+    $ref: ./paths/repositories.yaml#/repositoryConnectionTests
   /api/v1/inbox:
     $ref: ./paths/inbox.yaml#/inbox
   /api/v1/inbox/problem-acknowledgements:
@@ -205,6 +207,10 @@ components:
       $ref: ./components/repositories.yaml#/RepositoryCommitIndexingMode
     RepositoryUpdate:
       $ref: ./components/repositories.yaml#/RepositoryUpdate
+    RepositoryConnectionTestRequest:
+      $ref: ./components/repositories.yaml#/RepositoryConnectionTestRequest
+    RepositoryConnectionTestResult:
+      $ref: ./components/repositories.yaml#/RepositoryConnectionTestResult
     RepositoryRefreshAttempt:
       $ref: ./components/repositories.yaml#/RepositoryRefreshAttempt
     RepositoryRefreshAttemptList:

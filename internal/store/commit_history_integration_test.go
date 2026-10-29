@@ -202,10 +202,10 @@ func TestRepositoryCommitHistoryPersistenceIntegration(t *testing.T) {
 		t.Errorf("failed commit history index = %#v", loaded.CommitHistoryIndex)
 	}
 
-	_, err = database.UpdateRepositoryCommitIndexing(
+	_, err = database.UpdateRepository(
 		ctx,
 		repositoryID,
-		repository.CommitIndexingDisabled,
+		repository.Config{CommitIndexing: repository.CommitIndexingDisabled},
 	)
 	if err != nil {
 		t.Fatalf("disable commit indexing: %v", err)

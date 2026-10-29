@@ -138,11 +138,71 @@ repositories:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+repositoryConnectionTests:
+  post:
+    operationId: testRepositoryConnection
+    summary: Test a repository connection
+    description: >-
+      Probes a proposed clone URL and branch with an optional configured Server
+      refresh credential. The bounded probe does not register, update, refresh,
+      or otherwise persist a Repository, and it never returns credential values.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Repositories
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/repositories.yaml#/RepositoryConnectionTestRequest
+    responses:
+      "200":
+        description: Completed connection probe, whether successful or failed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/repositories.yaml#/RepositoryConnectionTestResult
+      "400":
+        description: The proposed connection configuration is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The repository connection could not be tested.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 repository:
   patch:
     operationId: updateRepository
     summary: Update a repository
-    description: Updates mutable indexing behavior for an active repository registration.
+    description: >-
+      Atomically updates mutable presentation, credential-reference, and commit
+      indexing settings for an active repository registration. Secret values
+      are not accepted.
     security:
       - ProductSession: []
       - ProductBearer: []

@@ -136,6 +136,15 @@ func TestProductAuthenticationRejectsInsufficientRoleOrScope(t *testing.T) {
 			operationID: "RefreshRepository",
 		},
 		{
+			name: "read key cannot test a repository connection",
+			authentication: productAuthentication(
+				productidentity.RoleAdmin,
+				productidentity.AuthenticationMethodAPIKey,
+				[]productidentity.Scope{productidentity.ScopeRead},
+			),
+			operationID: "TestRepositoryConnection",
+		},
+		{
 			name: "Run write key cannot decide reviews",
 			authentication: productAuthentication(
 				productidentity.RoleOperator,
