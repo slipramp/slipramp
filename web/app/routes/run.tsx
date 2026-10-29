@@ -7,11 +7,9 @@ import {
   Code,
   Group,
   Menu,
-  Modal,
   Paper,
   SimpleGrid,
   Stack,
-  Switch,
   Table,
   Text,
   Textarea,
@@ -26,7 +24,6 @@ import {
   IconClockExclamation,
   IconExternalLink,
   IconLoader2,
-  IconMaximize,
   IconOctagon,
   IconPlayerPlay,
   IconRefresh,
@@ -34,15 +31,9 @@ import {
   IconX,
   type TablerIcon,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Form, Link, redirect, useNavigation } from "react-router";
 
-import {
-  ANSI_DEFAULT_BACKGROUND,
-  ANSI_DEFAULT_FOREGROUND,
-  parseAnsi,
-  type AnsiTextSegment,
-} from "~/ansi";
 import { actionRunPath, otherTargetActions } from "~/action-run";
 import { createServerAPIClient } from "~/api/client.server";
 import {
@@ -56,7 +47,6 @@ import {
   listRuns,
   rerunRun,
   type Artifact,
-  type LogEvent,
   type Run,
   type RunArtifactConsumer,
   type RunArtifactInput,
@@ -69,6 +59,7 @@ import { Identity } from "~/components/identity";
 import { KawaiiActivity } from "~/components/kawaii-activity";
 import { PageBackLink } from "~/components/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/components/page";
+import { RunLogViewer } from "~/components/run-log-viewer";
 import {
   formatBinarySize,
   formatDuration,
@@ -243,6 +234,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
   const run = loaderData.run;
   const planArtifact = loaderData.artifacts?.find((artifact) => artifact.name === "plan");
+  const logArtifact = loaderData.artifacts?.find((artifact) => artifact.kind === "log");
   const applyConsumer = run.artifactConsumers.plan?.find((consumer) => consumer.action === "apply");
   const planCanBeApplied =
     run.outcome === "succeeded" &&
@@ -481,7 +473,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
       ) : null}
 
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
-      <LiveLog key={run.id} runId={run.id} />
+      <RunLogViewer artifact={logArtifact} key={run.id} runId={run.id} />
       {planArtifact ? (
         <PlanLineage
           available={loaderData.planRunsAvailable}
@@ -1244,226 +1236,6 @@ function InputTable({
         </Table.ScrollContainer>
       </Stack>
     </Paper>
-  );
-}
-
-function LiveLog({ runId }: Readonly<{ runId: string }>) {
-  const [contents, setContents] = useState("");
-  const [fullscreenOpened, setFullscreenOpened] = useState(false);
-  const [receivedBytes, setReceivedBytes] = useState(0);
-  const [status, setStatus] = useState("Connecting");
-  const [wrapLines, setWrapLines] = useState(true);
-  const fullscreenOutputRef = useRef<HTMLElement>(null);
-  const outputRef = useRef<HTMLElement>(null);
-  const logSegments = useMemo(() => parseAnsi(contents), [contents]);
-
-  useEffect(() => {
-    if (contents.length === 0) return;
-
-    const outputs = fullscreenOpened
-      ? [outputRef.current, fullscreenOutputRef.current]
-      : [outputRef.current];
-    for (const output of outputs) {
-      if (output !== null) {
-        output.scrollTop = output.scrollHeight;
-      }
-    }
-  }, [contents, fullscreenOpened]);
-
-  useEffect(() => {
-    const decoder = new TextDecoder();
-    let nextOffsetBytes = 0;
-    let pendingContents = "";
-    let pendingOffsetBytes = 0;
-    let renderFrame: number | undefined;
-    let reconnectTimer: number | undefined;
-    let source: EventSource | undefined;
-    let stopped = false;
-
-    const flushPendingContents = () => {
-      renderFrame = undefined;
-      if (pendingContents.length === 0) return;
-
-      const appendedContents = pendingContents;
-      pendingContents = "";
-      setContents((current) => current + appendedContents);
-      setReceivedBytes(pendingOffsetBytes);
-    };
-
-    const scheduleRender = () => {
-      if (renderFrame === undefined) {
-        renderFrame = window.requestAnimationFrame(flushPendingContents);
-      }
-    };
-
-    const finishRendering = () => {
-      if (renderFrame !== undefined) {
-        window.cancelAnimationFrame(renderFrame);
-      }
-      flushPendingContents();
-    };
-
-    const connect = () => {
-      const streamURL = new URL(`/api/v1/runs/${runId}/logs`, window.location.origin);
-      streamURL.searchParams.set("offsetBytes", String(nextOffsetBytes));
-      source = new EventSource(streamURL);
-      source.addEventListener("open", () => setStatus("Live"));
-      source.addEventListener("chunk", (event) => {
-        const payload = JSON.parse((event as MessageEvent<string>).data) as LogEvent;
-        const binary = atob(payload.contentsBase64);
-        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-        nextOffsetBytes = payload.nextOffsetBytes;
-        pendingOffsetBytes = nextOffsetBytes;
-        pendingContents += decoder.decode(bytes, { stream: true });
-        scheduleRender();
-      });
-      source.addEventListener("sealed", () => {
-        stopped = true;
-        pendingContents += decoder.decode();
-        finishRendering();
-        setStatus("Retained");
-        source?.close();
-      });
-      source.addEventListener("failed", () => {
-        stopped = true;
-        pendingContents += decoder.decode();
-        finishRendering();
-        setStatus("Incomplete");
-        source?.close();
-      });
-      source.addEventListener("error", () => {
-        source?.close();
-        if (stopped || reconnectTimer !== undefined) return;
-
-        setStatus("Reconnecting");
-        reconnectTimer = window.setTimeout(() => {
-          reconnectTimer = undefined;
-          connect();
-        }, 1000);
-      });
-    };
-
-    connect();
-
-    return () => {
-      stopped = true;
-      source?.close();
-      if (reconnectTimer !== undefined) {
-        window.clearTimeout(reconnectTimer);
-      }
-      if (renderFrame !== undefined) {
-        window.cancelAnimationFrame(renderFrame);
-      }
-    };
-  }, [runId]);
-
-  return (
-    <>
-      <Paper p="md" withBorder>
-        <Stack gap="sm">
-          <Group justify="space-between">
-            <Title order={2}>Logs</Title>
-            <Group gap="xs">
-              <Text c="dimmed" size="xs">
-                {formatBinarySize(receivedBytes)} received
-              </Text>
-              <Badge variant="light">{status}</Badge>
-              <Switch
-                checked={wrapLines}
-                label="Wrap lines"
-                onChange={(event) => setWrapLines(event.currentTarget.checked)}
-                size="sm"
-              />
-              <Button
-                leftSection={<IconMaximize aria-hidden size={15} />}
-                onClick={() => setFullscreenOpened(true)}
-                size="compact-sm"
-                variant="subtle"
-              >
-                Full screen
-              </Button>
-            </Group>
-          </Group>
-          <LogOutput
-            contents={contents}
-            logSegments={logSegments}
-            outputRef={outputRef}
-            wrapLines={wrapLines}
-          />
-        </Stack>
-      </Paper>
-
-      <Modal
-        classNames={{ body: "run-log-modal-body", content: "run-log-modal-content" }}
-        fullScreen
-        onClose={() => setFullscreenOpened(false)}
-        opened={fullscreenOpened}
-        title="Run logs"
-      >
-        <Stack className="run-log-fullscreen-layout" gap="sm">
-          <Group justify="space-between" wrap="wrap">
-            <Group gap="xs">
-              <Text c="dimmed" size="xs">
-                {formatBinarySize(receivedBytes)} received
-              </Text>
-              <Badge variant="light">{status}</Badge>
-            </Group>
-            <Switch
-              checked={wrapLines}
-              label="Wrap lines"
-              onChange={(event) => setWrapLines(event.currentTarget.checked)}
-              size="sm"
-            />
-          </Group>
-          <LogOutput
-            contents={contents}
-            fullscreen
-            logSegments={logSegments}
-            outputRef={fullscreenOutputRef}
-            wrapLines={wrapLines}
-          />
-        </Stack>
-      </Modal>
-    </>
-  );
-}
-
-function LogOutput({
-  contents,
-  fullscreen = false,
-  logSegments,
-  outputRef,
-  wrapLines,
-}: Readonly<{
-  contents: string;
-  fullscreen?: boolean;
-  logSegments: AnsiTextSegment[];
-  outputRef: RefObject<HTMLElement | null>;
-  wrapLines: boolean;
-}>) {
-  return (
-    <Code
-      className={fullscreen ? "run-log run-log-fullscreen" : "run-log"}
-      ref={outputRef}
-      block
-      mah={fullscreen ? undefined : 480}
-      style={{
-        backgroundColor: ANSI_DEFAULT_BACKGROUND,
-        color: ANSI_DEFAULT_FOREGROUND,
-        overflow: "auto",
-        overflowWrap: wrapLines ? "anywhere" : "normal",
-        tabSize: 4,
-        whiteSpace: wrapLines ? "pre-wrap" : "pre",
-      }}
-    >
-      {contents.length === 0
-        ? "Waiting for durable log output…"
-        : logSegments.map((segment, index) => (
-            <span key={index} style={segment.style}>
-              {segment.text}
-            </span>
-          ))}
-    </Code>
   );
 }
 

@@ -128,6 +128,33 @@ func TestNormalizeKargoStage(t *testing.T) {
 	}
 }
 
+func TestNormalizeKargoStageExcludesFailedPromotionAcknowledgement(t *testing.T) {
+	t.Parallel()
+
+	stage := minimalUnstructuredStage(t, "kargo-security", "falco-prod")
+	stage.Object["status"] = map[string]any{
+		"lastPromotion": map[string]any{
+			"status": map[string]any{
+				"phase": "Failed",
+				"state": map[string]any{
+					"promo-process::clone": map[string]any{
+						"commits": map[string]any{"./src": "source-sha", "target": "target-sha"},
+					},
+					"promo-process::commit": map[string]any{"commit": "result-sha"},
+				},
+			},
+		},
+	}
+
+	observed, err := normalizeKargoStage(stage)
+	if err != nil {
+		t.Fatalf("normalizeKargoStage() error = %v", err)
+	}
+	if observed.SuccessfulRenderAcknowledgement != nil {
+		t.Errorf("failed Promotion acknowledgement = %#v", observed.SuccessfulRenderAcknowledgement)
+	}
+}
+
 func TestKargoStageObserverPaginatesConfiguredNamespaces(t *testing.T) {
 	t.Parallel()
 

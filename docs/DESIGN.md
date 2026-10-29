@@ -1039,8 +1039,11 @@ Repository or Stage changes make the group unknown until its replacement scan
 completes; expired evidence remains readable while it refreshes. Watched
 source-path changes and unexpected target movement are independent. Missing
 render acknowledgement is unknown; equal target/result revisions acknowledge a
-successful no-op. Repository and Stage scan failures remain visible. This cache
-is derived state rebuilt after restart and removed during clean shutdown.
+successful no-op. Stage snapshots retain the latest successful render
+acknowledgement when a later Kargo Promotion is unsuccessful, so a failed
+Promotion cannot erase the last factual comparison point or hide continuing
+drift. Repository and Stage scan failures remain visible. This cache is derived
+state rebuilt after restart and removed during clean shutdown.
 
 Branch drift pagination counts matching Stages after all filters, with 25 rows
 per Web page. Results retain Repository groups, which may continue across pages,
@@ -1229,6 +1232,17 @@ the same authenticated contract. The administrator Principal inventory includes
 users and service accounts. Principal detail exposes the disabled state, API-key
 history and service-account key creation, plus the independent emergency
 disable/enable, revoke-all-API-keys, and revoke-all-sessions operations.
+
+The Run log viewer starts from the current Artifact byte size and requests only
+the latest two MiB instead of replaying from byte zero. It retains at most that
+byte window and 20,000 lines, keeps the absolute durable SSE cursor separately
+for exact overlap suppression and reconnection, and virtualizes the visible
+lines so ANSI parsing is limited to rendered or searched tail content. Pausing
+closes the live stream without discarding the cursor; following reconnects from
+that byte. Search is explicitly local to the visible tail. A sealed retained log
+uses the ordinary authenticated Artifact download for complete raw bytes, while
+a failed durable prefix remains visibly incomplete and is not offered as a
+complete download.
 
 The authenticated Placement inventory exposes the validated effective
 configuration currently held by the Server through `/api/v1/placements`,

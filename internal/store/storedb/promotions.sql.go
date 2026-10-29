@@ -2556,7 +2556,10 @@ SET cluster_name = EXCLUDED.cluster_name,
     source_paths = EXCLUDED.source_paths,
     requested_freight_json = EXCLUDED.requested_freight_json,
     freight_json = EXCLUDED.freight_json,
-    successful_render_acknowledgement = EXCLUDED.successful_render_acknowledgement,
+    successful_render_acknowledgement = COALESCE(
+        EXCLUDED.successful_render_acknowledgement,
+        promotion_stages.successful_render_acknowledgement
+    ),
     last_observed_at = EXCLUDED.last_observed_at,
     archived_at = EXCLUDED.archived_at
 WHERE promotion_stages.cluster_name = EXCLUDED.cluster_name
