@@ -200,18 +200,25 @@ export type ApiKeyCredential = ApiKey & {
   token: string;
 };
 
-export type ServiceAccount = {
+export type Principal = {
   principalId: string;
+  kind: "user" | "service-account";
   displayName: string;
   role: "admin" | "operator" | "viewer";
   createdAt: string;
+  updatedAt: string;
+  disabledAt?: string;
 };
 
-export type ServiceAccountList = {
-  items: Array<ServiceAccount>;
+export type PrincipalList = {
+  items: Array<Principal>;
   total: number;
   limit: number;
   offset: number;
+};
+
+export type PrincipalUpdate = {
+  disabled: boolean;
 };
 
 export type ServiceAccountCreate = {
@@ -4027,17 +4034,17 @@ export type RevokeApiKeyResponses = {
 
 export type RevokeApiKeyResponse = RevokeApiKeyResponses[keyof RevokeApiKeyResponses];
 
-export type ListServiceAccountsData = {
+export type ListPrincipalsData = {
   body?: never;
   path?: never;
   query?: {
     limit?: number;
     offset?: number;
   };
-  url: "/api/v1/service-accounts";
+  url: "/api/v1/principals";
 };
 
-export type ListServiceAccountsErrors = {
+export type ListPrincipalsErrors = {
   /**
    * The list window is invalid.
    */
@@ -4055,22 +4062,302 @@ export type ListServiceAccountsErrors = {
    */
   405: Problem;
   /**
-   * Service accounts could not be loaded.
+   * Product principals could not be loaded.
    */
   500: Problem;
 };
 
-export type ListServiceAccountsError = ListServiceAccountsErrors[keyof ListServiceAccountsErrors];
+export type ListPrincipalsError = ListPrincipalsErrors[keyof ListPrincipalsErrors];
 
-export type ListServiceAccountsResponses = {
+export type ListPrincipalsResponses = {
   /**
-   * Service accounts ordered by display name.
+   * Product principals ordered by display name and identity.
    */
-  200: ServiceAccountList;
+  200: PrincipalList;
 };
 
-export type ListServiceAccountsResponse =
-  ListServiceAccountsResponses[keyof ListServiceAccountsResponses];
+export type ListPrincipalsResponse = ListPrincipalsResponses[keyof ListPrincipalsResponses];
+
+export type GetPrincipalData = {
+  body?: never;
+  path: {
+    principalId: string;
+  };
+  query?: never;
+  url: "/api/v1/principals/{principalId}";
+};
+
+export type GetPrincipalErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The principal does not exist.
+   */
+  404: Problem;
+  /**
+   * The principal could not be loaded.
+   */
+  500: Problem;
+};
+
+export type GetPrincipalError = GetPrincipalErrors[keyof GetPrincipalErrors];
+
+export type GetPrincipalResponses = {
+  /**
+   * Product principal identity and state.
+   */
+  200: Principal;
+};
+
+export type GetPrincipalResponse = GetPrincipalResponses[keyof GetPrincipalResponses];
+
+export type UpdatePrincipalData = {
+  body: PrincipalUpdate;
+  path: {
+    principalId: string;
+  };
+  query?: never;
+  url: "/api/v1/principals/{principalId}";
+};
+
+export type UpdatePrincipalErrors = {
+  /**
+   * The principal state update is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The principal does not exist.
+   */
+  404: Problem;
+  /**
+   * The principal state could not be changed.
+   */
+  500: Problem;
+};
+
+export type UpdatePrincipalError = UpdatePrincipalErrors[keyof UpdatePrincipalErrors];
+
+export type UpdatePrincipalResponses = {
+  /**
+   * The updated product principal.
+   */
+  200: Principal;
+};
+
+export type UpdatePrincipalResponse = UpdatePrincipalResponses[keyof UpdatePrincipalResponses];
+
+export type RevokePrincipalApiKeysData = {
+  body?: never;
+  path: {
+    principalId: string;
+  };
+  query?: never;
+  url: "/api/v1/principals/{principalId}/api-keys";
+};
+
+export type RevokePrincipalApiKeysErrors = {
+  /**
+   * The principal identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The principal does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The API keys could not be revoked.
+   */
+  500: Problem;
+};
+
+export type RevokePrincipalApiKeysError =
+  RevokePrincipalApiKeysErrors[keyof RevokePrincipalApiKeysErrors];
+
+export type RevokePrincipalApiKeysResponses = {
+  /**
+   * Every API key for the Principal is revoked.
+   */
+  204: void;
+};
+
+export type RevokePrincipalApiKeysResponse =
+  RevokePrincipalApiKeysResponses[keyof RevokePrincipalApiKeysResponses];
+
+export type ListPrincipalApiKeysData = {
+  body?: never;
+  path: {
+    principalId: string;
+  };
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/principals/{principalId}/api-keys";
+};
+
+export type ListPrincipalApiKeysErrors = {
+  /**
+   * The principal identity or list window is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The principal does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * API key metadata could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListPrincipalApiKeysError =
+  ListPrincipalApiKeysErrors[keyof ListPrincipalApiKeysErrors];
+
+export type ListPrincipalApiKeysResponses = {
+  /**
+   * API key metadata ordered from newest to oldest.
+   */
+  200: ApiKeyList;
+};
+
+export type ListPrincipalApiKeysResponse =
+  ListPrincipalApiKeysResponses[keyof ListPrincipalApiKeysResponses];
+
+export type CreatePrincipalApiKeyData = {
+  body: ApiKeyCreate;
+  path: {
+    principalId: string;
+  };
+  query?: never;
+  url: "/api/v1/principals/{principalId}/api-keys";
+};
+
+export type CreatePrincipalApiKeyErrors = {
+  /**
+   * The API key or principal identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and a service-account Principal are required.
+   */
+  403: Problem;
+  /**
+   * The principal does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The API key could not be created.
+   */
+  500: Problem;
+};
+
+export type CreatePrincipalApiKeyError =
+  CreatePrincipalApiKeyErrors[keyof CreatePrincipalApiKeyErrors];
+
+export type CreatePrincipalApiKeyResponses = {
+  /**
+   * API key created.
+   */
+  201: ApiKeyCredential;
+};
+
+export type CreatePrincipalApiKeyResponse =
+  CreatePrincipalApiKeyResponses[keyof CreatePrincipalApiKeyResponses];
+
+export type RevokePrincipalSessionsData = {
+  body?: never;
+  path: {
+    principalId: string;
+  };
+  query?: never;
+  url: "/api/v1/principals/{principalId}/sessions";
+};
+
+export type RevokePrincipalSessionsErrors = {
+  /**
+   * The principal identity is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * Administrator permission and scope are required.
+   */
+  403: Problem;
+  /**
+   * The principal does not exist.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The browser sessions could not be revoked.
+   */
+  500: Problem;
+};
+
+export type RevokePrincipalSessionsError =
+  RevokePrincipalSessionsErrors[keyof RevokePrincipalSessionsErrors];
+
+export type RevokePrincipalSessionsResponses = {
+  /**
+   * Every browser session for the Principal is revoked.
+   */
+  204: void;
+};
+
+export type RevokePrincipalSessionsResponse =
+  RevokePrincipalSessionsResponses[keyof RevokePrincipalSessionsResponses];
 
 export type CreateServiceAccountData = {
   body: ServiceAccountCreate;
@@ -4109,152 +4396,11 @@ export type CreateServiceAccountResponses = {
   /**
    * Service account created.
    */
-  201: ServiceAccount;
+  201: Principal;
 };
 
 export type CreateServiceAccountResponse =
   CreateServiceAccountResponses[keyof CreateServiceAccountResponses];
-
-export type GetServiceAccountData = {
-  body?: never;
-  path: {
-    principalId: string;
-  };
-  query?: never;
-  url: "/api/v1/service-accounts/{principalId}";
-};
-
-export type GetServiceAccountErrors = {
-  /**
-   * A valid product session or bearer credential is required.
-   */
-  401: Problem;
-  /**
-   * Administrator permission and scope are required.
-   */
-  403: Problem;
-  /**
-   * The service account does not exist.
-   */
-  404: Problem;
-  /**
-   * The service account could not be loaded.
-   */
-  500: Problem;
-};
-
-export type GetServiceAccountError = GetServiceAccountErrors[keyof GetServiceAccountErrors];
-
-export type GetServiceAccountResponses = {
-  /**
-   * Service-account identity.
-   */
-  200: ServiceAccount;
-};
-
-export type GetServiceAccountResponse =
-  GetServiceAccountResponses[keyof GetServiceAccountResponses];
-
-export type ListServiceAccountApiKeysData = {
-  body?: never;
-  path: {
-    principalId: string;
-  };
-  query?: {
-    limit?: number;
-    offset?: number;
-  };
-  url: "/api/v1/service-accounts/{principalId}/api-keys";
-};
-
-export type ListServiceAccountApiKeysErrors = {
-  /**
-   * The service-account identity is invalid.
-   */
-  400: Problem;
-  /**
-   * A valid product session or bearer credential is required.
-   */
-  401: Problem;
-  /**
-   * Administrator permission and scope are required.
-   */
-  403: Problem;
-  /**
-   * The service account does not exist.
-   */
-  404: Problem;
-  /**
-   * The HTTP method is not supported for this resource.
-   */
-  405: Problem;
-  /**
-   * API key metadata could not be loaded.
-   */
-  500: Problem;
-};
-
-export type ListServiceAccountApiKeysError =
-  ListServiceAccountApiKeysErrors[keyof ListServiceAccountApiKeysErrors];
-
-export type ListServiceAccountApiKeysResponses = {
-  /**
-   * API key metadata ordered from newest to oldest.
-   */
-  200: ApiKeyList;
-};
-
-export type ListServiceAccountApiKeysResponse =
-  ListServiceAccountApiKeysResponses[keyof ListServiceAccountApiKeysResponses];
-
-export type CreateServiceAccountApiKeyData = {
-  body: ApiKeyCreate;
-  path: {
-    principalId: string;
-  };
-  query?: never;
-  url: "/api/v1/service-accounts/{principalId}/api-keys";
-};
-
-export type CreateServiceAccountApiKeyErrors = {
-  /**
-   * The API key or service-account identity is invalid.
-   */
-  400: Problem;
-  /**
-   * A valid product session or bearer credential is required.
-   */
-  401: Problem;
-  /**
-   * Administrator permission and scope are required.
-   */
-  403: Problem;
-  /**
-   * The service account does not exist.
-   */
-  404: Problem;
-  /**
-   * The HTTP method is not supported for this resource.
-   */
-  405: Problem;
-  /**
-   * The API key could not be created.
-   */
-  500: Problem;
-};
-
-export type CreateServiceAccountApiKeyError =
-  CreateServiceAccountApiKeyErrors[keyof CreateServiceAccountApiKeyErrors];
-
-export type CreateServiceAccountApiKeyResponses = {
-  /**
-   * API key created.
-   */
-  201: ApiKeyCredential;
-};
-
-export type CreateServiceAccountApiKeyResponse =
-  CreateServiceAccountApiKeyResponses[keyof CreateServiceAccountApiKeyResponses];
 
 export type SubmitKargoPromotionData = {
   body: KargoPromotionRequest;

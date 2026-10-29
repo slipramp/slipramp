@@ -735,16 +735,16 @@ func (e RunSchedulingState) Valid() bool {
 
 // Defines values for RunActorKind.
 const (
-	RunActorKindServiceAccount RunActorKind = "service-account"
-	RunActorKindUser           RunActorKind = "user"
+	ServiceAccount RunActorKind = "service-account"
+	User           RunActorKind = "user"
 )
 
 // Valid indicates whether the value is a known member of the RunActorKind enum.
 func (e RunActorKind) Valid() bool {
 	switch e {
-	case RunActorKindServiceAccount:
+	case ServiceAccount:
 		return true
-	case RunActorKindUser:
+	case User:
 		return true
 	default:
 		return false
@@ -1974,6 +1974,30 @@ type PlacementResourceRequirements struct {
 	Requests map[string]string `json:"requests"`
 }
 
+// Principal defines model for Principal.
+type Principal struct {
+	CreatedAt   time.Time          `json:"createdAt"`
+	DisabledAt  *time.Time         `json:"disabledAt,omitempty"`
+	DisplayName string             `json:"displayName"`
+	Kind        string             `json:"kind"`
+	PrincipalID openapi_types.UUID `json:"principalId"`
+	Role        string             `json:"role"`
+	UpdatedAt   time.Time          `json:"updatedAt"`
+}
+
+// PrincipalList defines model for PrincipalList.
+type PrincipalList struct {
+	Items  []Principal `json:"items"`
+	Limit  int         `json:"limit"`
+	Offset int         `json:"offset"`
+	Total  int         `json:"total"`
+}
+
+// PrincipalUpdate defines model for PrincipalUpdate.
+type PrincipalUpdate struct {
+	Disabled bool `json:"disabled"`
+}
+
 // Problem An RFC 9457 problem detail.
 type Problem struct {
 	// Detail Human-readable explanation specific to this occurrence.
@@ -2868,26 +2892,10 @@ type RuntimeSpec struct {
 	WorkingDirectory *string                       `json:"workingDirectory,omitempty"`
 }
 
-// ServiceAccount defines model for ServiceAccount.
-type ServiceAccount struct {
-	CreatedAt   time.Time          `json:"createdAt"`
-	DisplayName string             `json:"displayName"`
-	PrincipalID openapi_types.UUID `json:"principalId"`
-	Role        string             `json:"role"`
-}
-
 // ServiceAccountCreate defines model for ServiceAccountCreate.
 type ServiceAccountCreate struct {
 	DisplayName string `json:"displayName"`
 	Role        string `json:"role"`
-}
-
-// ServiceAccountList defines model for ServiceAccountList.
-type ServiceAccountList struct {
-	Items  []ServiceAccount `json:"items"`
-	Limit  int              `json:"limit"`
-	Offset int              `json:"offset"`
-	Total  int              `json:"total"`
 }
 
 // SuccessfulRenderAcknowledgement defines model for SuccessfulRenderAcknowledgement.
@@ -3119,6 +3127,18 @@ type ListPlacementsParams struct {
 	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListPrincipalsParams defines parameters for ListPrincipals.
+type ListPrincipalsParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListPrincipalAPIKeysParams defines parameters for ListPrincipalAPIKeys.
+type ListPrincipalAPIKeysParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListPromotionBranchDriftParams defines parameters for ListPromotionBranchDrift.
 type ListPromotionBranchDriftParams struct {
 	Integration *CatalogName                `form:"integration,omitempty" json:"integration,omitempty"`
@@ -3245,18 +3265,6 @@ type RerunRunParams struct {
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 
-// ListServiceAccountsParams defines parameters for ListServiceAccounts.
-type ListServiceAccountsParams struct {
-	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
-}
-
-// ListServiceAccountAPIKeysParams defines parameters for ListServiceAccountAPIKeys.
-type ListServiceAccountAPIKeysParams struct {
-	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
-}
-
 // ListTargetsParams defines parameters for ListTargets.
 type ListTargetsParams struct {
 	// RepositoryID Limit targets to one active repository.
@@ -3304,6 +3312,12 @@ type AcknowledgeInboxProblemsJSONRequestBody = InboxProblemAcknowledgements
 // SubmitKargoPromotionJSONRequestBody defines body for SubmitKargoPromotion for application/json ContentType.
 type SubmitKargoPromotionJSONRequestBody = KargoPromotionRequest
 
+// UpdatePrincipalJSONRequestBody defines body for UpdatePrincipal for application/json ContentType.
+type UpdatePrincipalJSONRequestBody = PrincipalUpdate
+
+// CreatePrincipalAPIKeyJSONRequestBody defines body for CreatePrincipalAPIKey for application/json ContentType.
+type CreatePrincipalAPIKeyJSONRequestBody = APIKeyCreate
+
 // UpdatePromotionStagePolicyJSONRequestBody defines body for UpdatePromotionStagePolicy for application/json ContentType.
 type UpdatePromotionStagePolicyJSONRequestBody = PromotionStagePolicyUpdate
 
@@ -3330,9 +3344,6 @@ type DecideRunReviewJSONRequestBody = RunReviewDecisionRequest
 
 // CreateServiceAccountJSONRequestBody defines body for CreateServiceAccount for application/json ContentType.
 type CreateServiceAccountJSONRequestBody = ServiceAccountCreate
-
-// CreateServiceAccountAPIKeyJSONRequestBody defines body for CreateServiceAccountAPIKey for application/json ContentType.
-type CreateServiceAccountAPIKeyJSONRequestBody = APIKeyCreate
 
 // EnrollControllerJSONRequestBody defines body for EnrollController for application/json ContentType.
 type EnrollControllerJSONRequestBody = ControllerEnrollment
@@ -3658,6 +3669,71 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 	GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListPrincipals List product principals
+	//
+	// Corresponds with GET /api/v1/principals (the `ListPrincipals` operationId).
+	ListPrincipals(ctx context.Context, params *ListPrincipalsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPrincipal Get a product principal
+	//
+	// Corresponds with GET /api/v1/principals/{principalId} (the `GetPrincipal` operationId).
+	GetPrincipal(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdatePrincipalWithBody Enable or disable a product principal
+	//
+	// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+	UpdatePrincipalWithBody(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdatePrincipal Enable or disable a product principal
+	//
+	// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+	UpdatePrincipal(ctx context.Context, principalID openapi_types.UUID, body UpdatePrincipalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokePrincipalAPIKeys Revoke every API key for a product principal
+	//
+	// Idempotently revokes every API key for the Principal while retaining its credential metadata and original revocation timestamps.
+	//
+	// Corresponds with DELETE /api/v1/principals/{principalId}/api-keys (the `RevokePrincipalAPIKeys` operationId).
+	RevokePrincipalAPIKeys(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListPrincipalAPIKeys List API keys for a product principal
+	//
+	// Corresponds with GET /api/v1/principals/{principalId}/api-keys (the `ListPrincipalAPIKeys` operationId).
+	ListPrincipalAPIKeys(ctx context.Context, principalID openapi_types.UUID, params *ListPrincipalAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePrincipalAPIKeyWithBody Create an API key for a service-account Principal
+	//
+	// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+	CreatePrincipalAPIKeyWithBody(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePrincipalAPIKey Create an API key for a service-account Principal
+	//
+	// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+	CreatePrincipalAPIKey(ctx context.Context, principalID openapi_types.UUID, body CreatePrincipalAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokePrincipalSessions Revoke every browser session for a product principal
+	//
+	// Idempotently removes every local browser session for the Principal. Removing an OIDC subject mapping alone does not perform this operation.
+	//
+	// Corresponds with DELETE /api/v1/principals/{principalId}/sessions (the `RevokePrincipalSessions` operationId).
+	RevokePrincipalSessions(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	//
 	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -3883,11 +3959,6 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
 	DecideRunReview(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListServiceAccounts List service accounts
-	//
-	// Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-	ListServiceAccounts(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// CreateServiceAccountWithBody Create a service account
 	//
 	// Takes any type of body and a specified content type.
@@ -3901,34 +3972,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /api/v1/service-accounts (the `CreateServiceAccount` operationId).
 	CreateServiceAccount(ctx context.Context, body CreateServiceAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetServiceAccount Get a service account
-	//
-	// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
-	GetServiceAccount(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListServiceAccountAPIKeys List API keys for a service account
-	//
-	// Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-	ListServiceAccountAPIKeys(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateServiceAccountAPIKeyWithBody Create an API key for a service account
-	//
-	// The complete token is returned once and is never available from later reads.
-	//
-	// Takes any type of body and a specified content type.
-	//
-	// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-	CreateServiceAccountAPIKeyWithBody(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateServiceAccountAPIKey Create an API key for a service account
-	//
-	// The complete token is returned once and is never available from later reads.
-	//
-	// Takes a body of the `application/json` content type.
-	//
-	// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-	CreateServiceAccountAPIKey(ctx context.Context, principalID openapi_types.UUID, body CreateServiceAccountAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTargets List active targets
 	//
@@ -4440,6 +4483,161 @@ func (c *Client) ListPlacements(ctx context.Context, params *ListPlacementsParam
 // Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 func (c *Client) GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetPlacementRequest(c.Server, placementName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListPrincipals List product principals
+//
+// Corresponds with GET /api/v1/principals (the `ListPrincipals` operationId).
+func (c *Client) ListPrincipals(ctx context.Context, params *ListPrincipalsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPrincipalsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetPrincipal Get a product principal
+//
+// Corresponds with GET /api/v1/principals/{principalId} (the `GetPrincipal` operationId).
+func (c *Client) GetPrincipal(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPrincipalRequest(c.Server, principalID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdatePrincipalWithBody Enable or disable a product principal
+//
+// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+func (c *Client) UpdatePrincipalWithBody(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePrincipalRequestWithBody(c.Server, principalID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// UpdatePrincipal Enable or disable a product principal
+//
+// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+func (c *Client) UpdatePrincipal(ctx context.Context, principalID openapi_types.UUID, body UpdatePrincipalJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdatePrincipalRequest(c.Server, principalID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokePrincipalAPIKeys Revoke every API key for a product principal
+//
+// Idempotently revokes every API key for the Principal while retaining its credential metadata and original revocation timestamps.
+//
+// Corresponds with DELETE /api/v1/principals/{principalId}/api-keys (the `RevokePrincipalAPIKeys` operationId).
+func (c *Client) RevokePrincipalAPIKeys(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokePrincipalAPIKeysRequest(c.Server, principalID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListPrincipalAPIKeys List API keys for a product principal
+//
+// Corresponds with GET /api/v1/principals/{principalId}/api-keys (the `ListPrincipalAPIKeys` operationId).
+func (c *Client) ListPrincipalAPIKeys(ctx context.Context, principalID openapi_types.UUID, params *ListPrincipalAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPrincipalAPIKeysRequest(c.Server, principalID, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePrincipalAPIKeyWithBody Create an API key for a service-account Principal
+//
+// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+func (c *Client) CreatePrincipalAPIKeyWithBody(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePrincipalAPIKeyRequestWithBody(c.Server, principalID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePrincipalAPIKey Create an API key for a service-account Principal
+//
+// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+func (c *Client) CreatePrincipalAPIKey(ctx context.Context, principalID openapi_types.UUID, body CreatePrincipalAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePrincipalAPIKeyRequest(c.Server, principalID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokePrincipalSessions Revoke every browser session for a product principal
+//
+// Idempotently removes every local browser session for the Principal. Removing an OIDC subject mapping alone does not perform this operation.
+//
+// Corresponds with DELETE /api/v1/principals/{principalId}/sessions (the `RevokePrincipalSessions` operationId).
+func (c *Client) RevokePrincipalSessions(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokePrincipalSessionsRequest(c.Server, principalID)
 	if err != nil {
 		return nil, err
 	}
@@ -4985,21 +5183,6 @@ func (c *Client) DecideRunReview(ctx context.Context, runID openapi_types.UUID, 
 	return c.Client.Do(req)
 }
 
-// ListServiceAccounts List service accounts
-//
-// Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-func (c *Client) ListServiceAccounts(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServiceAccountsRequest(c.Server, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 // CreateServiceAccountWithBody Create a service account
 //
 // Takes any type of body and a specified content type.
@@ -5024,74 +5207,6 @@ func (c *Client) CreateServiceAccountWithBody(ctx context.Context, contentType s
 // Corresponds with POST /api/v1/service-accounts (the `CreateServiceAccount` operationId).
 func (c *Client) CreateServiceAccount(ctx context.Context, body CreateServiceAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateServiceAccountRequest(c.Server, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetServiceAccount Get a service account
-//
-// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
-func (c *Client) GetServiceAccount(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetServiceAccountRequest(c.Server, principalID)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// ListServiceAccountAPIKeys List API keys for a service account
-//
-// Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-func (c *Client) ListServiceAccountAPIKeys(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListServiceAccountAPIKeysRequest(c.Server, principalID, params)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateServiceAccountAPIKeyWithBody Create an API key for a service account
-//
-// The complete token is returned once and is never available from later reads.
-//
-// Takes any type of body and a specified content type.
-//
-// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-func (c *Client) CreateServiceAccountAPIKeyWithBody(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateServiceAccountAPIKeyRequestWithBody(c.Server, principalID, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// CreateServiceAccountAPIKey Create an API key for a service account
-//
-// The complete token is returned once and is never available from later reads.
-//
-// Takes a body of the `application/json` content type.
-//
-// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-func (c *Client) CreateServiceAccountAPIKey(ctx context.Context, principalID openapi_types.UUID, body CreateServiceAccountAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateServiceAccountAPIKeyRequest(c.Server, principalID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6403,6 +6518,341 @@ func NewGetPlacementRequest(server string, placementName CatalogName) (*http.Req
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListPrincipalsRequest constructs an http.Request for the ListPrincipals method
+func NewListPrincipalsRequest(server string, params *ListPrincipalsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/principals")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetPrincipalRequest constructs an http.Request for the GetPrincipal method
+func NewGetPrincipalRequest(server string, principalID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/principals/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdatePrincipalRequest calls the generic UpdatePrincipal builder with application/json body
+func NewUpdatePrincipalRequest(server string, principalID openapi_types.UUID, body UpdatePrincipalJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdatePrincipalRequestWithBody(server, principalID, "application/json", bodyReader)
+}
+
+// NewUpdatePrincipalRequestWithBody constructs an http.Request for the UpdatePrincipal method, with any body, and a specified content type
+func NewUpdatePrincipalRequestWithBody(server string, principalID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/principals/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokePrincipalAPIKeysRequest constructs an http.Request for the RevokePrincipalAPIKeys method
+func NewRevokePrincipalAPIKeysRequest(server string, principalID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/principals/%s/api-keys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListPrincipalAPIKeysRequest constructs an http.Request for the ListPrincipalAPIKeys method
+func NewListPrincipalAPIKeysRequest(server string, principalID openapi_types.UUID, params *ListPrincipalAPIKeysParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/principals/%s/api-keys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreatePrincipalAPIKeyRequest calls the generic CreatePrincipalAPIKey builder with application/json body
+func NewCreatePrincipalAPIKeyRequest(server string, principalID openapi_types.UUID, body CreatePrincipalAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreatePrincipalAPIKeyRequestWithBody(server, principalID, "application/json", bodyReader)
+}
+
+// NewCreatePrincipalAPIKeyRequestWithBody constructs an http.Request for the CreatePrincipalAPIKey method, with any body, and a specified content type
+func NewCreatePrincipalAPIKeyRequestWithBody(server string, principalID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/principals/%s/api-keys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokePrincipalSessionsRequest constructs an http.Request for the RevokePrincipalSessions method
+func NewRevokePrincipalSessionsRequest(server string, principalID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/principals/%s/sessions", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -8017,72 +8467,6 @@ func NewDecideRunReviewRequestWithBody(server string, runID openapi_types.UUID, 
 	return req, nil
 }
 
-// NewListServiceAccountsRequest constructs an http.Request for the ListServiceAccounts method
-func NewListServiceAccountsRequest(server string, params *ListServiceAccountsParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/service-accounts")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Offset != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewCreateServiceAccountRequest calls the generic CreateServiceAccount builder with application/json body
 func NewCreateServiceAccountRequest(server string, body CreateServiceAccountJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -8104,160 +8488,6 @@ func NewCreateServiceAccountRequestWithBody(server string, contentType string, b
 	}
 
 	operationPath := fmt.Sprintf("/api/v1/service-accounts")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewGetServiceAccountRequest constructs an http.Request for the GetServiceAccount method
-func NewGetServiceAccountRequest(server string, principalID openapi_types.UUID) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/service-accounts/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewListServiceAccountAPIKeysRequest constructs an http.Request for the ListServiceAccountAPIKeys method
-func NewListServiceAccountAPIKeysRequest(server string, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/service-accounts/%s/api-keys", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Offset != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreateServiceAccountAPIKeyRequest calls the generic CreateServiceAccountAPIKey builder with application/json body
-func NewCreateServiceAccountAPIKeyRequest(server string, principalID openapi_types.UUID, body CreateServiceAccountAPIKeyJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateServiceAccountAPIKeyRequestWithBody(server, principalID, "application/json", bodyReader)
-}
-
-// NewCreateServiceAccountAPIKeyRequestWithBody constructs an http.Request for the CreateServiceAccountAPIKey method, with any body, and a specified content type
-func NewCreateServiceAccountAPIKeyRequestWithBody(server string, principalID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "principalId", principalID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/service-accounts/%s/api-keys", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9289,6 +9519,81 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 	GetPlacementWithResponse(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*GetPlacementResponse, error)
 
+	// ListPrincipalsWithResponse List product principals
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/principals (the `ListPrincipals` operationId).
+	ListPrincipalsWithResponse(ctx context.Context, params *ListPrincipalsParams, reqEditors ...RequestEditorFn) (*ListPrincipalsResponse, error)
+
+	// GetPrincipalWithResponse Get a product principal
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/principals/{principalId} (the `GetPrincipal` operationId).
+	GetPrincipalWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetPrincipalResponse, error)
+
+	// UpdatePrincipalWithBodyWithResponse Enable or disable a product principal
+	//
+	// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+	UpdatePrincipalWithBodyWithResponse(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePrincipalResponse, error)
+
+	// UpdatePrincipalWithResponse Enable or disable a product principal
+	//
+	// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+	UpdatePrincipalWithResponse(ctx context.Context, principalID openapi_types.UUID, body UpdatePrincipalJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePrincipalResponse, error)
+
+	// RevokePrincipalAPIKeysWithResponse Revoke every API key for a product principal
+	//
+	// Idempotently revokes every API key for the Principal while retaining its credential metadata and original revocation timestamps.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/principals/{principalId}/api-keys (the `RevokePrincipalAPIKeys` operationId).
+	RevokePrincipalAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokePrincipalAPIKeysResponse, error)
+
+	// ListPrincipalAPIKeysWithResponse List API keys for a product principal
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/principals/{principalId}/api-keys (the `ListPrincipalAPIKeys` operationId).
+	ListPrincipalAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, params *ListPrincipalAPIKeysParams, reqEditors ...RequestEditorFn) (*ListPrincipalAPIKeysResponse, error)
+
+	// CreatePrincipalAPIKeyWithBodyWithResponse Create an API key for a service-account Principal
+	//
+	// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+	CreatePrincipalAPIKeyWithBodyWithResponse(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePrincipalAPIKeyResponse, error)
+
+	// CreatePrincipalAPIKeyWithResponse Create an API key for a service-account Principal
+	//
+	// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+	CreatePrincipalAPIKeyWithResponse(ctx context.Context, principalID openapi_types.UUID, body CreatePrincipalAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePrincipalAPIKeyResponse, error)
+
+	// RevokePrincipalSessionsWithResponse Revoke every browser session for a product principal
+	//
+	// Idempotently removes every local browser session for the Principal. Removing an OIDC subject mapping alone does not perform this operation.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/principals/{principalId}/sessions (the `RevokePrincipalSessions` operationId).
+	RevokePrincipalSessionsWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokePrincipalSessionsResponse, error)
+
 	// ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 	//
 	// Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -9544,13 +9849,6 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/runs/{runId}/review (the `DecideRunReview` operationId).
 	DecideRunReviewWithResponse(ctx context.Context, runID openapi_types.UUID, body DecideRunReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*DecideRunReviewResponse, error)
 
-	// ListServiceAccountsWithResponse List service accounts
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-	ListServiceAccountsWithResponse(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*ListServiceAccountsResponse, error)
-
 	// CreateServiceAccountWithBodyWithResponse Create a service account
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -9564,38 +9862,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /api/v1/service-accounts (the `CreateServiceAccount` operationId).
 	CreateServiceAccountWithResponse(ctx context.Context, body CreateServiceAccountJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateServiceAccountResponse, error)
-
-	// GetServiceAccountWithResponse Get a service account
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
-	GetServiceAccountWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetServiceAccountResponse, error)
-
-	// ListServiceAccountAPIKeysWithResponse List API keys for a service account
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-	ListServiceAccountAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*ListServiceAccountAPIKeysResponse, error)
-
-	// CreateServiceAccountAPIKeyWithBodyWithResponse Create an API key for a service account
-	//
-	// The complete token is returned once and is never available from later reads.
-	//
-	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-	CreateServiceAccountAPIKeyWithBodyWithResponse(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateServiceAccountAPIKeyResponse, error)
-
-	// CreateServiceAccountAPIKeyWithResponse Create an API key for a service account
-	//
-	// The complete token is returned once and is never available from later reads.
-	//
-	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-	CreateServiceAccountAPIKeyWithResponse(ctx context.Context, principalID openapi_types.UUID, body CreateServiceAccountAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateServiceAccountAPIKeyResponse, error)
 
 	// ListTargetsWithResponse List active targets
 	//
@@ -11069,6 +11335,552 @@ func (r GetPlacementResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetPlacementResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListPrincipalsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PrincipalList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPrincipalsResponse) GetJSON200() *PrincipalList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListPrincipalsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListPrincipalsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListPrincipalsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListPrincipalsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListPrincipalsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPrincipalsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPrincipalsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPrincipalsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPrincipalsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetPrincipalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Principal
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetPrincipalResponse) GetJSON200() *Principal {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetPrincipalResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetPrincipalResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetPrincipalResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetPrincipalResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetPrincipalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPrincipalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPrincipalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetPrincipalResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type UpdatePrincipalResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Principal
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r UpdatePrincipalResponse) GetJSON200() *Principal {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r UpdatePrincipalResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r UpdatePrincipalResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r UpdatePrincipalResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r UpdatePrincipalResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r UpdatePrincipalResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r UpdatePrincipalResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdatePrincipalResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdatePrincipalResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r UpdatePrincipalResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokePrincipalAPIKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RevokePrincipalAPIKeysResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RevokePrincipalAPIKeysResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RevokePrincipalAPIKeysResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RevokePrincipalAPIKeysResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r RevokePrincipalAPIKeysResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RevokePrincipalAPIKeysResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokePrincipalAPIKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokePrincipalAPIKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokePrincipalAPIKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokePrincipalAPIKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListPrincipalAPIKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *APIKeyList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPrincipalAPIKeysResponse) GetJSON200() *APIKeyList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListPrincipalAPIKeysResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListPrincipalAPIKeysResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListPrincipalAPIKeysResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListPrincipalAPIKeysResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListPrincipalAPIKeysResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListPrincipalAPIKeysResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPrincipalAPIKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPrincipalAPIKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPrincipalAPIKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPrincipalAPIKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// CreatePrincipalAPIKeyResponse201Headers the declared response headers of an HTTP 201 response for CreatePrincipalAPIKey
+type CreatePrincipalAPIKeyResponse201Headers struct {
+	Location string
+}
+
+type CreatePrincipalAPIKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *APIKeyCredential
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *CreatePrincipalAPIKeyResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreatePrincipalAPIKeyResponse) GetJSON201() *APIKeyCredential {
+	return r.JSON201
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CreatePrincipalAPIKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePrincipalAPIKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePrincipalAPIKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreatePrincipalAPIKeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokePrincipalSessionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RevokePrincipalSessionsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RevokePrincipalSessionsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RevokePrincipalSessionsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RevokePrincipalSessionsResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r RevokePrincipalSessionsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RevokePrincipalSessionsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokePrincipalSessionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokePrincipalSessionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokePrincipalSessionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokePrincipalSessionsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12893,87 +13705,11 @@ func (r DecideRunReviewResponse) ContentType() string {
 	return ""
 }
 
-type ListServiceAccountsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ServiceAccountList
-	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationProblemJSON400 *Problem
-	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationProblemJSON401 *Problem
-	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationProblemJSON403 *Problem
-	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
-	ApplicationProblemJSON405 *Problem
-	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationProblemJSON500 *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListServiceAccountsResponse) GetJSON200() *ServiceAccountList {
-	return r.JSON200
-}
-
-// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r ListServiceAccountsResponse) GetApplicationProblemJSON400() *Problem {
-	return r.ApplicationProblemJSON400
-}
-
-// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r ListServiceAccountsResponse) GetApplicationProblemJSON401() *Problem {
-	return r.ApplicationProblemJSON401
-}
-
-// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r ListServiceAccountsResponse) GetApplicationProblemJSON403() *Problem {
-	return r.ApplicationProblemJSON403
-}
-
-// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
-func (r ListServiceAccountsResponse) GetApplicationProblemJSON405() *Problem {
-	return r.ApplicationProblemJSON405
-}
-
-// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r ListServiceAccountsResponse) GetApplicationProblemJSON500() *Problem {
-	return r.ApplicationProblemJSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r ListServiceAccountsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListServiceAccountsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListServiceAccountsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListServiceAccountsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type CreateServiceAccountResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *ServiceAccount
+	JSON201 *Principal
 	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
@@ -12987,7 +13723,7 @@ type CreateServiceAccountResponse struct {
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateServiceAccountResponse) GetJSON201() *ServiceAccount {
+func (r CreateServiceAccountResponse) GetJSON201() *Principal {
 	return r.JSON201
 }
 
@@ -13039,248 +13775,6 @@ func (r CreateServiceAccountResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateServiceAccountResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type GetServiceAccountResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *ServiceAccount
-	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationProblemJSON401 *Problem
-	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationProblemJSON403 *Problem
-	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
-	ApplicationProblemJSON404 *Problem
-	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationProblemJSON500 *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetServiceAccountResponse) GetJSON200() *ServiceAccount {
-	return r.JSON200
-}
-
-// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r GetServiceAccountResponse) GetApplicationProblemJSON401() *Problem {
-	return r.ApplicationProblemJSON401
-}
-
-// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r GetServiceAccountResponse) GetApplicationProblemJSON403() *Problem {
-	return r.ApplicationProblemJSON403
-}
-
-// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r GetServiceAccountResponse) GetApplicationProblemJSON404() *Problem {
-	return r.ApplicationProblemJSON404
-}
-
-// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r GetServiceAccountResponse) GetApplicationProblemJSON500() *Problem {
-	return r.ApplicationProblemJSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r GetServiceAccountResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetServiceAccountResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetServiceAccountResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetServiceAccountResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-type ListServiceAccountAPIKeysResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *APIKeyList
-	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationProblemJSON400 *Problem
-	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationProblemJSON401 *Problem
-	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationProblemJSON403 *Problem
-	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
-	ApplicationProblemJSON404 *Problem
-	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
-	ApplicationProblemJSON405 *Problem
-	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationProblemJSON500 *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListServiceAccountAPIKeysResponse) GetJSON200() *APIKeyList {
-	return r.JSON200
-}
-
-// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r ListServiceAccountAPIKeysResponse) GetApplicationProblemJSON400() *Problem {
-	return r.ApplicationProblemJSON400
-}
-
-// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r ListServiceAccountAPIKeysResponse) GetApplicationProblemJSON401() *Problem {
-	return r.ApplicationProblemJSON401
-}
-
-// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r ListServiceAccountAPIKeysResponse) GetApplicationProblemJSON403() *Problem {
-	return r.ApplicationProblemJSON403
-}
-
-// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r ListServiceAccountAPIKeysResponse) GetApplicationProblemJSON404() *Problem {
-	return r.ApplicationProblemJSON404
-}
-
-// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
-func (r ListServiceAccountAPIKeysResponse) GetApplicationProblemJSON405() *Problem {
-	return r.ApplicationProblemJSON405
-}
-
-// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r ListServiceAccountAPIKeysResponse) GetApplicationProblemJSON500() *Problem {
-	return r.ApplicationProblemJSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r ListServiceAccountAPIKeysResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListServiceAccountAPIKeysResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListServiceAccountAPIKeysResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListServiceAccountAPIKeysResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
-// CreateServiceAccountAPIKeyResponse201Headers the declared response headers of an HTTP 201 response for CreateServiceAccountAPIKey
-type CreateServiceAccountAPIKeyResponse201Headers struct {
-	Location string
-}
-
-type CreateServiceAccountAPIKeyResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *APIKeyCredential
-	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationProblemJSON400 *Problem
-	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationProblemJSON401 *Problem
-	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationProblemJSON403 *Problem
-	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
-	ApplicationProblemJSON404 *Problem
-	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
-	ApplicationProblemJSON405 *Problem
-	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationProblemJSON500 *Problem
-	// Headers201 the parsed response headers for an HTTP 201 response
-	Headers201 *CreateServiceAccountAPIKeyResponse201Headers
-}
-
-// GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r CreateServiceAccountAPIKeyResponse) GetJSON201() *APIKeyCredential {
-	return r.JSON201
-}
-
-// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r CreateServiceAccountAPIKeyResponse) GetApplicationProblemJSON400() *Problem {
-	return r.ApplicationProblemJSON400
-}
-
-// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r CreateServiceAccountAPIKeyResponse) GetApplicationProblemJSON401() *Problem {
-	return r.ApplicationProblemJSON401
-}
-
-// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r CreateServiceAccountAPIKeyResponse) GetApplicationProblemJSON403() *Problem {
-	return r.ApplicationProblemJSON403
-}
-
-// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r CreateServiceAccountAPIKeyResponse) GetApplicationProblemJSON404() *Problem {
-	return r.ApplicationProblemJSON404
-}
-
-// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
-func (r CreateServiceAccountAPIKeyResponse) GetApplicationProblemJSON405() *Problem {
-	return r.ApplicationProblemJSON405
-}
-
-// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r CreateServiceAccountAPIKeyResponse) GetApplicationProblemJSON500() *Problem {
-	return r.ApplicationProblemJSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r CreateServiceAccountAPIKeyResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateServiceAccountAPIKeyResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateServiceAccountAPIKeyResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r CreateServiceAccountAPIKeyResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -14808,6 +15302,135 @@ func (c *ClientWithResponses) GetPlacementWithResponse(ctx context.Context, plac
 	return ParseGetPlacementResponse(rsp)
 }
 
+// ListPrincipalsWithResponse List product principals
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/principals (the `ListPrincipals` operationId).
+func (c *ClientWithResponses) ListPrincipalsWithResponse(ctx context.Context, params *ListPrincipalsParams, reqEditors ...RequestEditorFn) (*ListPrincipalsResponse, error) {
+	rsp, err := c.ListPrincipals(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPrincipalsResponse(rsp)
+}
+
+// GetPrincipalWithResponse Get a product principal
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/principals/{principalId} (the `GetPrincipal` operationId).
+func (c *ClientWithResponses) GetPrincipalWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetPrincipalResponse, error) {
+	rsp, err := c.GetPrincipal(ctx, principalID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPrincipalResponse(rsp)
+}
+
+// UpdatePrincipalWithBodyWithResponse Enable or disable a product principal
+//
+// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+func (c *ClientWithResponses) UpdatePrincipalWithBodyWithResponse(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdatePrincipalResponse, error) {
+	rsp, err := c.UpdatePrincipalWithBody(ctx, principalID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePrincipalResponse(rsp)
+}
+
+// UpdatePrincipalWithResponse Enable or disable a product principal
+//
+// Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /api/v1/principals/{principalId} (the `UpdatePrincipal` operationId).
+func (c *ClientWithResponses) UpdatePrincipalWithResponse(ctx context.Context, principalID openapi_types.UUID, body UpdatePrincipalJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdatePrincipalResponse, error) {
+	rsp, err := c.UpdatePrincipal(ctx, principalID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdatePrincipalResponse(rsp)
+}
+
+// RevokePrincipalAPIKeysWithResponse Revoke every API key for a product principal
+//
+// Idempotently revokes every API key for the Principal while retaining its credential metadata and original revocation timestamps.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/principals/{principalId}/api-keys (the `RevokePrincipalAPIKeys` operationId).
+func (c *ClientWithResponses) RevokePrincipalAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokePrincipalAPIKeysResponse, error) {
+	rsp, err := c.RevokePrincipalAPIKeys(ctx, principalID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokePrincipalAPIKeysResponse(rsp)
+}
+
+// ListPrincipalAPIKeysWithResponse List API keys for a product principal
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/principals/{principalId}/api-keys (the `ListPrincipalAPIKeys` operationId).
+func (c *ClientWithResponses) ListPrincipalAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, params *ListPrincipalAPIKeysParams, reqEditors ...RequestEditorFn) (*ListPrincipalAPIKeysResponse, error) {
+	rsp, err := c.ListPrincipalAPIKeys(ctx, principalID, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPrincipalAPIKeysResponse(rsp)
+}
+
+// CreatePrincipalAPIKeyWithBodyWithResponse Create an API key for a service-account Principal
+//
+// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+func (c *ClientWithResponses) CreatePrincipalAPIKeyWithBodyWithResponse(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreatePrincipalAPIKeyResponse, error) {
+	rsp, err := c.CreatePrincipalAPIKeyWithBody(ctx, principalID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePrincipalAPIKeyResponse(rsp)
+}
+
+// CreatePrincipalAPIKeyWithResponse Create an API key for a service-account Principal
+//
+// Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/principals/{principalId}/api-keys (the `CreatePrincipalAPIKey` operationId).
+func (c *ClientWithResponses) CreatePrincipalAPIKeyWithResponse(ctx context.Context, principalID openapi_types.UUID, body CreatePrincipalAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreatePrincipalAPIKeyResponse, error) {
+	rsp, err := c.CreatePrincipalAPIKey(ctx, principalID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePrincipalAPIKeyResponse(rsp)
+}
+
+// RevokePrincipalSessionsWithResponse Revoke every browser session for a product principal
+//
+// Idempotently removes every local browser session for the Principal. Removing an OIDC subject mapping alone does not perform this operation.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/principals/{principalId}/sessions (the `RevokePrincipalSessions` operationId).
+func (c *ClientWithResponses) RevokePrincipalSessionsWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokePrincipalSessionsResponse, error) {
+	rsp, err := c.RevokePrincipalSessions(ctx, principalID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokePrincipalSessionsResponse(rsp)
+}
+
 // ListPromotionBranchDriftWithResponse Inspect cached Kargo Stage branch drift grouped by Repository
 //
 // Pagination counts matching Stages after all filters, ordered by Repository name, integration, project, application, environment, Stage name, and Stage ID. Each page groups its Stages by Repository and may contain part of a Repository's Stages.
@@ -15249,19 +15872,6 @@ func (c *ClientWithResponses) DecideRunReviewWithResponse(ctx context.Context, r
 	return ParseDecideRunReviewResponse(rsp)
 }
 
-// ListServiceAccountsWithResponse List service accounts
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /api/v1/service-accounts (the `ListServiceAccounts` operationId).
-func (c *ClientWithResponses) ListServiceAccountsWithResponse(ctx context.Context, params *ListServiceAccountsParams, reqEditors ...RequestEditorFn) (*ListServiceAccountsResponse, error) {
-	rsp, err := c.ListServiceAccounts(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListServiceAccountsResponse(rsp)
-}
-
 // CreateServiceAccountWithBodyWithResponse Create a service account
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -15286,62 +15896,6 @@ func (c *ClientWithResponses) CreateServiceAccountWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseCreateServiceAccountResponse(rsp)
-}
-
-// GetServiceAccountWithResponse Get a service account
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /api/v1/service-accounts/{principalId} (the `GetServiceAccount` operationId).
-func (c *ClientWithResponses) GetServiceAccountWithResponse(ctx context.Context, principalID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetServiceAccountResponse, error) {
-	rsp, err := c.GetServiceAccount(ctx, principalID, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetServiceAccountResponse(rsp)
-}
-
-// ListServiceAccountAPIKeysWithResponse List API keys for a service account
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /api/v1/service-accounts/{principalId}/api-keys (the `ListServiceAccountAPIKeys` operationId).
-func (c *ClientWithResponses) ListServiceAccountAPIKeysWithResponse(ctx context.Context, principalID openapi_types.UUID, params *ListServiceAccountAPIKeysParams, reqEditors ...RequestEditorFn) (*ListServiceAccountAPIKeysResponse, error) {
-	rsp, err := c.ListServiceAccountAPIKeys(ctx, principalID, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListServiceAccountAPIKeysResponse(rsp)
-}
-
-// CreateServiceAccountAPIKeyWithBodyWithResponse Create an API key for a service account
-//
-// The complete token is returned once and is never available from later reads.
-//
-// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-func (c *ClientWithResponses) CreateServiceAccountAPIKeyWithBodyWithResponse(ctx context.Context, principalID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateServiceAccountAPIKeyResponse, error) {
-	rsp, err := c.CreateServiceAccountAPIKeyWithBody(ctx, principalID, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateServiceAccountAPIKeyResponse(rsp)
-}
-
-// CreateServiceAccountAPIKeyWithResponse Create an API key for a service account
-//
-// The complete token is returned once and is never available from later reads.
-//
-// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
-//
-// Corresponds with POST /api/v1/service-accounts/{principalId}/api-keys (the `CreateServiceAccountAPIKey` operationId).
-func (c *ClientWithResponses) CreateServiceAccountAPIKeyWithResponse(ctx context.Context, principalID openapi_types.UUID, body CreateServiceAccountAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateServiceAccountAPIKeyResponse, error) {
-	rsp, err := c.CreateServiceAccountAPIKey(ctx, principalID, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateServiceAccountAPIKeyResponse(rsp)
 }
 
 // ListTargetsWithResponse List active targets
@@ -16750,6 +17304,459 @@ func ParseGetPlacementResponse(rsp *http.Response) (*GetPlacementResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPrincipalsResponse parses an HTTP response from a ListPrincipalsWithResponse call
+func ParseListPrincipalsResponse(rsp *http.Response) (*ListPrincipalsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPrincipalsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PrincipalList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPrincipalResponse parses an HTTP response from a GetPrincipalWithResponse call
+func ParseGetPrincipalResponse(rsp *http.Response) (*GetPrincipalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPrincipalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Principal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdatePrincipalResponse parses an HTTP response from a UpdatePrincipalWithResponse call
+func ParseUpdatePrincipalResponse(rsp *http.Response) (*UpdatePrincipalResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdatePrincipalResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Principal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokePrincipalAPIKeysResponse parses an HTTP response from a RevokePrincipalAPIKeysWithResponse call
+func ParseRevokePrincipalAPIKeysResponse(rsp *http.Response) (*RevokePrincipalAPIKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokePrincipalAPIKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPrincipalAPIKeysResponse parses an HTTP response from a ListPrincipalAPIKeysWithResponse call
+func ParseListPrincipalAPIKeysResponse(rsp *http.Response) (*ListPrincipalAPIKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPrincipalAPIKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest APIKeyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreatePrincipalAPIKeyResponse parses an HTTP response from a CreatePrincipalAPIKeyWithResponse call
+func ParseCreatePrincipalAPIKeyResponse(rsp *http.Response) (*CreatePrincipalAPIKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePrincipalAPIKeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest APIKeyCredential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers CreatePrincipalAPIKeyResponse201Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseRevokePrincipalSessionsResponse parses an HTTP response from a RevokePrincipalSessionsWithResponse call
+func ParseRevokePrincipalSessionsResponse(rsp *http.Response) (*RevokePrincipalSessionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokePrincipalSessionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
@@ -18279,67 +19286,6 @@ func ParseDecideRunReviewResponse(rsp *http.Response) (*DecideRunReviewResponse,
 	return response, nil
 }
 
-// ParseListServiceAccountsResponse parses an HTTP response from a ListServiceAccountsWithResponse call
-func ParseListServiceAccountsResponse(rsp *http.Response) (*ListServiceAccountsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListServiceAccountsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ServiceAccountList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON405 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseCreateServiceAccountResponse parses an HTTP response from a CreateServiceAccountWithResponse call
 func ParseCreateServiceAccountResponse(rsp *http.Response) (*CreateServiceAccountResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18355,7 +19301,7 @@ func ParseCreateServiceAccountResponse(rsp *http.Response) (*CreateServiceAccoun
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ServiceAccount
+		var dest Principal
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -18396,209 +19342,6 @@ func ParseCreateServiceAccountResponse(rsp *http.Response) (*CreateServiceAccoun
 		}
 		response.ApplicationProblemJSON500 = &dest
 
-	}
-
-	return response, nil
-}
-
-// ParseGetServiceAccountResponse parses an HTTP response from a GetServiceAccountWithResponse call
-func ParseGetServiceAccountResponse(rsp *http.Response) (*GetServiceAccountResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetServiceAccountResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ServiceAccount
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListServiceAccountAPIKeysResponse parses an HTTP response from a ListServiceAccountAPIKeysWithResponse call
-func ParseListServiceAccountAPIKeysResponse(rsp *http.Response) (*ListServiceAccountAPIKeysResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListServiceAccountAPIKeysResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest APIKeyList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON405 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateServiceAccountAPIKeyResponse parses an HTTP response from a CreateServiceAccountAPIKeyWithResponse call
-func ParseCreateServiceAccountAPIKeyResponse(rsp *http.Response) (*CreateServiceAccountAPIKeyResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateServiceAccountAPIKeyResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest APIKeyCredential
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON405 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	switch {
-	case rsp.StatusCode == 201:
-		var headers CreateServiceAccountAPIKeyResponse201Headers
-		if values := rsp.Header.Values("Location"); len(values) > 0 {
-			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			}
-			headers.Location = value
-		}
-		response.Headers201 = &headers
 	}
 
 	return response, nil
@@ -19667,6 +20410,27 @@ type ServerInterface interface {
 	// GetPlacement Get a configured execution Placement
 	// (GET /api/v1/placements/{placementName})
 	GetPlacement(w http.ResponseWriter, r *http.Request, placementName CatalogName)
+	// ListPrincipals List product principals
+	// (GET /api/v1/principals)
+	ListPrincipals(w http.ResponseWriter, r *http.Request, params ListPrincipalsParams)
+	// GetPrincipal Get a product principal
+	// (GET /api/v1/principals/{principalId})
+	GetPrincipal(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
+	// UpdatePrincipal Enable or disable a product principal
+	// (PATCH /api/v1/principals/{principalId})
+	UpdatePrincipal(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
+	// RevokePrincipalAPIKeys Revoke every API key for a product principal
+	// (DELETE /api/v1/principals/{principalId}/api-keys)
+	RevokePrincipalAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
+	// ListPrincipalAPIKeys List API keys for a product principal
+	// (GET /api/v1/principals/{principalId}/api-keys)
+	ListPrincipalAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID, params ListPrincipalAPIKeysParams)
+	// CreatePrincipalAPIKey Create an API key for a service-account Principal
+	// (POST /api/v1/principals/{principalId}/api-keys)
+	CreatePrincipalAPIKey(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
+	// RevokePrincipalSessions Revoke every browser session for a product principal
+	// (DELETE /api/v1/principals/{principalId}/sessions)
+	RevokePrincipalSessions(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(w http.ResponseWriter, r *http.Request, params ListPromotionBranchDriftParams)
@@ -19736,21 +20500,9 @@ type ServerInterface interface {
 	// DecideRunReview Decide a Run review
 	// (POST /api/v1/runs/{runId}/review)
 	DecideRunReview(w http.ResponseWriter, r *http.Request, runID openapi_types.UUID)
-	// ListServiceAccounts List service accounts
-	// (GET /api/v1/service-accounts)
-	ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams)
 	// CreateServiceAccount Create a service account
 	// (POST /api/v1/service-accounts)
 	CreateServiceAccount(w http.ResponseWriter, r *http.Request)
-	// GetServiceAccount Get a service account
-	// (GET /api/v1/service-accounts/{principalId})
-	GetServiceAccount(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
-	// ListServiceAccountAPIKeys List API keys for a service account
-	// (GET /api/v1/service-accounts/{principalId}/api-keys)
-	ListServiceAccountAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID, params ListServiceAccountAPIKeysParams)
-	// CreateServiceAccountAPIKey Create an API key for a service account
-	// (POST /api/v1/service-accounts/{principalId}/api-keys)
-	CreateServiceAccountAPIKey(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID)
 	// ListTargets List active targets
 	// (GET /api/v1/targets)
 	ListTargets(w http.ResponseWriter, r *http.Request, params ListTargetsParams)
@@ -20448,6 +21200,237 @@ func (siw *ServerInterfaceWrapper) GetPlacement(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPlacement(w, r, placementName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPrincipals operation middleware
+func (siw *ServerInterfaceWrapper) ListPrincipals(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPrincipalsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPrincipals(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPrincipal operation middleware
+func (siw *ServerInterfaceWrapper) GetPrincipal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principalId" -------------
+	var principalID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPrincipal(w, r, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdatePrincipal operation middleware
+func (siw *ServerInterfaceWrapper) UpdatePrincipal(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principalId" -------------
+	var principalID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdatePrincipal(w, r, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokePrincipalAPIKeys operation middleware
+func (siw *ServerInterfaceWrapper) RevokePrincipalAPIKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principalId" -------------
+	var principalID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokePrincipalAPIKeys(w, r, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPrincipalAPIKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListPrincipalAPIKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principalId" -------------
+	var principalID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPrincipalAPIKeysParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPrincipalAPIKeys(w, r, principalID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePrincipalAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) CreatePrincipalAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principalId" -------------
+	var principalID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePrincipalAPIKey(w, r, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokePrincipalSessions operation middleware
+func (siw *ServerInterfaceWrapper) RevokePrincipalSessions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "principalId" -------------
+	var principalID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokePrincipalSessions(w, r, principalID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -21736,164 +22719,11 @@ func (siw *ServerInterfaceWrapper) DecideRunReview(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// ListServiceAccounts operation middleware
-func (siw *ServerInterfaceWrapper) ListServiceAccounts(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListServiceAccountsParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "offset" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListServiceAccounts(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // CreateServiceAccount operation middleware
 func (siw *ServerInterfaceWrapper) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateServiceAccount(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetServiceAccount operation middleware
-func (siw *ServerInterfaceWrapper) GetServiceAccount(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "principalId" -------------
-	var principalID openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetServiceAccount(w, r, principalID)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListServiceAccountAPIKeys operation middleware
-func (siw *ServerInterfaceWrapper) ListServiceAccountAPIKeys(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "principalId" -------------
-	var principalID openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListServiceAccountAPIKeysParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "offset" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListServiceAccountAPIKeys(w, r, principalID, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// CreateServiceAccountAPIKey operation middleware
-func (siw *ServerInterfaceWrapper) CreateServiceAccountAPIKey(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "principalId" -------------
-	var principalID openapi_types.UUID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "principalId", r.PathValue("principalId"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principalId", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateServiceAccountAPIKey(w, r, principalID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -22625,11 +23455,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/api-keys", wrapper.ListAPIKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/auth/api-keys", wrapper.CreateAPIKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/auth/api-keys/{apiKeyId}", wrapper.RevokeAPIKey)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/service-accounts", wrapper.ListServiceAccounts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/principals", wrapper.ListPrincipals)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/principals/{principalId}", wrapper.GetPrincipal)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/principals/{principalId}", wrapper.UpdatePrincipal)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/principals/{principalId}/api-keys", wrapper.RevokePrincipalAPIKeys)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/principals/{principalId}/api-keys", wrapper.ListPrincipalAPIKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/principals/{principalId}/api-keys", wrapper.CreatePrincipalAPIKey)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/principals/{principalId}/sessions", wrapper.RevokePrincipalSessions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/service-accounts", wrapper.CreateServiceAccount)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/service-accounts/{principalId}", wrapper.GetServiceAccount)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/service-accounts/{principalId}/api-keys", wrapper.ListServiceAccountAPIKeys)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/service-accounts/{principalId}/api-keys", wrapper.CreateServiceAccountAPIKey)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/kargo/{integration}/promotions", wrapper.SubmitKargoPromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions", wrapper.ListPromotions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions/{promotionId}", wrapper.GetPromotion)
@@ -24257,6 +25090,691 @@ func (response GetPlacement405ApplicationProblemPlusJSONResponse) VisitGetPlacem
 type GetPlacement500ApplicationProblemPlusJSONResponse Problem
 
 func (response GetPlacement500ApplicationProblemPlusJSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalsRequestObject struct {
+	Params ListPrincipalsParams
+}
+
+type ListPrincipalsResponseObject interface {
+	VisitListPrincipalsResponse(w http.ResponseWriter) error
+}
+
+type ListPrincipals200JSONResponse PrincipalList
+
+func (response ListPrincipals200JSONResponse) VisitListPrincipalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipals400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipals400ApplicationProblemPlusJSONResponse) VisitListPrincipalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipals401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipals401ApplicationProblemPlusJSONResponse) VisitListPrincipalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipals403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipals403ApplicationProblemPlusJSONResponse) VisitListPrincipalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipals405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipals405ApplicationProblemPlusJSONResponse) VisitListPrincipalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipals500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipals500ApplicationProblemPlusJSONResponse) VisitListPrincipalsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPrincipalRequestObject struct {
+	PrincipalID openapi_types.UUID `json:"principalId"`
+}
+
+type GetPrincipalResponseObject interface {
+	VisitGetPrincipalResponse(w http.ResponseWriter) error
+}
+
+type GetPrincipal200JSONResponse Principal
+
+func (response GetPrincipal200JSONResponse) VisitGetPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPrincipal401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPrincipal401ApplicationProblemPlusJSONResponse) VisitGetPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPrincipal403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPrincipal403ApplicationProblemPlusJSONResponse) VisitGetPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPrincipal404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPrincipal404ApplicationProblemPlusJSONResponse) VisitGetPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPrincipal500ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPrincipal500ApplicationProblemPlusJSONResponse) VisitGetPrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePrincipalRequestObject struct {
+	PrincipalID openapi_types.UUID `json:"principalId"`
+	Body        *UpdatePrincipalJSONRequestBody
+}
+
+type UpdatePrincipalResponseObject interface {
+	VisitUpdatePrincipalResponse(w http.ResponseWriter) error
+}
+
+type UpdatePrincipal200JSONResponse Principal
+
+func (response UpdatePrincipal200JSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePrincipal400ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePrincipal400ApplicationProblemPlusJSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePrincipal401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePrincipal401ApplicationProblemPlusJSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePrincipal403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePrincipal403ApplicationProblemPlusJSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePrincipal404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePrincipal404ApplicationProblemPlusJSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdatePrincipal500ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdatePrincipal500ApplicationProblemPlusJSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalAPIKeysRequestObject struct {
+	PrincipalID openapi_types.UUID `json:"principalId"`
+}
+
+type RevokePrincipalAPIKeysResponseObject interface {
+	VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error
+}
+
+type RevokePrincipalAPIKeys204Response struct {
+}
+
+func (response RevokePrincipalAPIKeys204Response) VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokePrincipalAPIKeys400ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalAPIKeys400ApplicationProblemPlusJSONResponse) VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalAPIKeys401ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalAPIKeys401ApplicationProblemPlusJSONResponse) VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalAPIKeys403ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalAPIKeys403ApplicationProblemPlusJSONResponse) VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalAPIKeys404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalAPIKeys404ApplicationProblemPlusJSONResponse) VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalAPIKeys405ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalAPIKeys405ApplicationProblemPlusJSONResponse) VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalAPIKeys500ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalAPIKeys500ApplicationProblemPlusJSONResponse) VisitRevokePrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalAPIKeysRequestObject struct {
+	PrincipalID openapi_types.UUID `json:"principalId"`
+	Params      ListPrincipalAPIKeysParams
+}
+
+type ListPrincipalAPIKeysResponseObject interface {
+	VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error
+}
+
+type ListPrincipalAPIKeys200JSONResponse APIKeyList
+
+func (response ListPrincipalAPIKeys200JSONResponse) VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalAPIKeys400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipalAPIKeys400ApplicationProblemPlusJSONResponse) VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalAPIKeys401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipalAPIKeys401ApplicationProblemPlusJSONResponse) VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalAPIKeys403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipalAPIKeys403ApplicationProblemPlusJSONResponse) VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalAPIKeys404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipalAPIKeys404ApplicationProblemPlusJSONResponse) VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalAPIKeys405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipalAPIKeys405ApplicationProblemPlusJSONResponse) VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPrincipalAPIKeys500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPrincipalAPIKeys500ApplicationProblemPlusJSONResponse) VisitListPrincipalAPIKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKeyRequestObject struct {
+	PrincipalID openapi_types.UUID `json:"principalId"`
+	Body        *CreatePrincipalAPIKeyJSONRequestBody
+}
+
+type CreatePrincipalAPIKeyResponseObject interface {
+	VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error
+}
+
+type CreatePrincipalAPIKey201ResponseHeaders struct {
+	Location string
+}
+
+type CreatePrincipalAPIKey201JSONResponse struct {
+	Body    APIKeyCredential
+	Headers CreatePrincipalAPIKey201ResponseHeaders
+}
+
+func (response CreatePrincipalAPIKey201JSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKey400ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePrincipalAPIKey400ApplicationProblemPlusJSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKey401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePrincipalAPIKey401ApplicationProblemPlusJSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKey403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePrincipalAPIKey403ApplicationProblemPlusJSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKey404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePrincipalAPIKey404ApplicationProblemPlusJSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKey405ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePrincipalAPIKey405ApplicationProblemPlusJSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKey500ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePrincipalAPIKey500ApplicationProblemPlusJSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalSessionsRequestObject struct {
+	PrincipalID openapi_types.UUID `json:"principalId"`
+}
+
+type RevokePrincipalSessionsResponseObject interface {
+	VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error
+}
+
+type RevokePrincipalSessions204Response struct {
+}
+
+func (response RevokePrincipalSessions204Response) VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokePrincipalSessions400ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalSessions400ApplicationProblemPlusJSONResponse) VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalSessions401ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalSessions401ApplicationProblemPlusJSONResponse) VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalSessions403ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalSessions403ApplicationProblemPlusJSONResponse) VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalSessions404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalSessions404ApplicationProblemPlusJSONResponse) VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalSessions405ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalSessions405ApplicationProblemPlusJSONResponse) VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokePrincipalSessions500ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokePrincipalSessions500ApplicationProblemPlusJSONResponse) VisitRevokePrincipalSessionsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -26661,98 +28179,6 @@ func (response DecideRunReview500ApplicationProblemPlusJSONResponse) VisitDecide
 	return err
 }
 
-type ListServiceAccountsRequestObject struct {
-	Params ListServiceAccountsParams
-}
-
-type ListServiceAccountsResponseObject interface {
-	VisitListServiceAccountsResponse(w http.ResponseWriter) error
-}
-
-type ListServiceAccounts200JSONResponse ServiceAccountList
-
-func (response ListServiceAccounts200JSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccounts400ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccounts400ApplicationProblemPlusJSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccounts401ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccounts401ApplicationProblemPlusJSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccounts403ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccounts403ApplicationProblemPlusJSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccounts405ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccounts405ApplicationProblemPlusJSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(405)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccounts500ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccounts500ApplicationProblemPlusJSONResponse) VisitListServiceAccountsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type CreateServiceAccountRequestObject struct {
 	Body *CreateServiceAccountJSONRequestBody
 }
@@ -26761,7 +28187,7 @@ type CreateServiceAccountResponseObject interface {
 	VisitCreateServiceAccountResponse(w http.ResponseWriter) error
 }
 
-type CreateServiceAccount201JSONResponse ServiceAccount
+type CreateServiceAccount201JSONResponse Principal
 
 func (response CreateServiceAccount201JSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
 
@@ -26834,306 +28260,6 @@ func (response CreateServiceAccount405ApplicationProblemPlusJSONResponse) VisitC
 type CreateServiceAccount500ApplicationProblemPlusJSONResponse Problem
 
 func (response CreateServiceAccount500ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetServiceAccountRequestObject struct {
-	PrincipalID openapi_types.UUID `json:"principalId"`
-}
-
-type GetServiceAccountResponseObject interface {
-	VisitGetServiceAccountResponse(w http.ResponseWriter) error
-}
-
-type GetServiceAccount200JSONResponse ServiceAccount
-
-func (response GetServiceAccount200JSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetServiceAccount401ApplicationProblemPlusJSONResponse Problem
-
-func (response GetServiceAccount401ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetServiceAccount403ApplicationProblemPlusJSONResponse Problem
-
-func (response GetServiceAccount403ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetServiceAccount404ApplicationProblemPlusJSONResponse Problem
-
-func (response GetServiceAccount404ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetServiceAccount500ApplicationProblemPlusJSONResponse Problem
-
-func (response GetServiceAccount500ApplicationProblemPlusJSONResponse) VisitGetServiceAccountResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccountAPIKeysRequestObject struct {
-	PrincipalID openapi_types.UUID `json:"principalId"`
-	Params      ListServiceAccountAPIKeysParams
-}
-
-type ListServiceAccountAPIKeysResponseObject interface {
-	VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error
-}
-
-type ListServiceAccountAPIKeys200JSONResponse APIKeyList
-
-func (response ListServiceAccountAPIKeys200JSONResponse) VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccountAPIKeys400ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccountAPIKeys400ApplicationProblemPlusJSONResponse) VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccountAPIKeys401ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccountAPIKeys401ApplicationProblemPlusJSONResponse) VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccountAPIKeys403ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccountAPIKeys403ApplicationProblemPlusJSONResponse) VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccountAPIKeys404ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccountAPIKeys404ApplicationProblemPlusJSONResponse) VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccountAPIKeys405ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccountAPIKeys405ApplicationProblemPlusJSONResponse) VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(405)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListServiceAccountAPIKeys500ApplicationProblemPlusJSONResponse Problem
-
-func (response ListServiceAccountAPIKeys500ApplicationProblemPlusJSONResponse) VisitListServiceAccountAPIKeysResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateServiceAccountAPIKeyRequestObject struct {
-	PrincipalID openapi_types.UUID `json:"principalId"`
-	Body        *CreateServiceAccountAPIKeyJSONRequestBody
-}
-
-type CreateServiceAccountAPIKeyResponseObject interface {
-	VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error
-}
-
-type CreateServiceAccountAPIKey201ResponseHeaders struct {
-	Location string
-}
-
-type CreateServiceAccountAPIKey201JSONResponse struct {
-	Body    APIKeyCredential
-	Headers CreateServiceAccountAPIKey201ResponseHeaders
-}
-
-func (response CreateServiceAccountAPIKey201JSONResponse) VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.WriteHeader(201)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateServiceAccountAPIKey400ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateServiceAccountAPIKey400ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateServiceAccountAPIKey401ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateServiceAccountAPIKey401ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateServiceAccountAPIKey403ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateServiceAccountAPIKey403ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateServiceAccountAPIKey404ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateServiceAccountAPIKey404ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateServiceAccountAPIKey405ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateServiceAccountAPIKey405ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(405)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateServiceAccountAPIKey500ApplicationProblemPlusJSONResponse Problem
-
-func (response CreateServiceAccountAPIKey500ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountAPIKeyResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -28752,6 +29878,27 @@ type StrictServerInterface interface {
 	// GetPlacement Get a configured execution Placement
 	// (GET /api/v1/placements/{placementName})
 	GetPlacement(ctx context.Context, request GetPlacementRequestObject) (GetPlacementResponseObject, error)
+	// ListPrincipals List product principals
+	// (GET /api/v1/principals)
+	ListPrincipals(ctx context.Context, request ListPrincipalsRequestObject) (ListPrincipalsResponseObject, error)
+	// GetPrincipal Get a product principal
+	// (GET /api/v1/principals/{principalId})
+	GetPrincipal(ctx context.Context, request GetPrincipalRequestObject) (GetPrincipalResponseObject, error)
+	// UpdatePrincipal Enable or disable a product principal
+	// (PATCH /api/v1/principals/{principalId})
+	UpdatePrincipal(ctx context.Context, request UpdatePrincipalRequestObject) (UpdatePrincipalResponseObject, error)
+	// RevokePrincipalAPIKeys Revoke every API key for a product principal
+	// (DELETE /api/v1/principals/{principalId}/api-keys)
+	RevokePrincipalAPIKeys(ctx context.Context, request RevokePrincipalAPIKeysRequestObject) (RevokePrincipalAPIKeysResponseObject, error)
+	// ListPrincipalAPIKeys List API keys for a product principal
+	// (GET /api/v1/principals/{principalId}/api-keys)
+	ListPrincipalAPIKeys(ctx context.Context, request ListPrincipalAPIKeysRequestObject) (ListPrincipalAPIKeysResponseObject, error)
+	// CreatePrincipalAPIKey Create an API key for a service-account Principal
+	// (POST /api/v1/principals/{principalId}/api-keys)
+	CreatePrincipalAPIKey(ctx context.Context, request CreatePrincipalAPIKeyRequestObject) (CreatePrincipalAPIKeyResponseObject, error)
+	// RevokePrincipalSessions Revoke every browser session for a product principal
+	// (DELETE /api/v1/principals/{principalId}/sessions)
+	RevokePrincipalSessions(ctx context.Context, request RevokePrincipalSessionsRequestObject) (RevokePrincipalSessionsResponseObject, error)
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(ctx context.Context, request ListPromotionBranchDriftRequestObject) (ListPromotionBranchDriftResponseObject, error)
@@ -28821,21 +29968,9 @@ type StrictServerInterface interface {
 	// DecideRunReview Decide a Run review
 	// (POST /api/v1/runs/{runId}/review)
 	DecideRunReview(ctx context.Context, request DecideRunReviewRequestObject) (DecideRunReviewResponseObject, error)
-	// ListServiceAccounts List service accounts
-	// (GET /api/v1/service-accounts)
-	ListServiceAccounts(ctx context.Context, request ListServiceAccountsRequestObject) (ListServiceAccountsResponseObject, error)
 	// CreateServiceAccount Create a service account
 	// (POST /api/v1/service-accounts)
 	CreateServiceAccount(ctx context.Context, request CreateServiceAccountRequestObject) (CreateServiceAccountResponseObject, error)
-	// GetServiceAccount Get a service account
-	// (GET /api/v1/service-accounts/{principalId})
-	GetServiceAccount(ctx context.Context, request GetServiceAccountRequestObject) (GetServiceAccountResponseObject, error)
-	// ListServiceAccountAPIKeys List API keys for a service account
-	// (GET /api/v1/service-accounts/{principalId}/api-keys)
-	ListServiceAccountAPIKeys(ctx context.Context, request ListServiceAccountAPIKeysRequestObject) (ListServiceAccountAPIKeysResponseObject, error)
-	// CreateServiceAccountAPIKey Create an API key for a service account
-	// (POST /api/v1/service-accounts/{principalId}/api-keys)
-	CreateServiceAccountAPIKey(ctx context.Context, request CreateServiceAccountAPIKeyRequestObject) (CreateServiceAccountAPIKeyResponseObject, error)
 	// ListTargets List active targets
 	// (GET /api/v1/targets)
 	ListTargets(ctx context.Context, request ListTargetsRequestObject) (ListTargetsResponseObject, error)
@@ -29376,6 +30511,203 @@ func (sh *strictHandler) GetPlacement(w http.ResponseWriter, r *http.Request, pl
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetPlacementResponseObject); ok {
 		if err := validResponse.VisitGetPlacementResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPrincipals operation middleware
+func (sh *strictHandler) ListPrincipals(w http.ResponseWriter, r *http.Request, params ListPrincipalsParams) {
+	var request ListPrincipalsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPrincipals(ctx, request.(ListPrincipalsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPrincipals")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPrincipalsResponseObject); ok {
+		if err := validResponse.VisitListPrincipalsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPrincipal operation middleware
+func (sh *strictHandler) GetPrincipal(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
+	var request GetPrincipalRequestObject
+
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPrincipal(ctx, request.(GetPrincipalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPrincipal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPrincipalResponseObject); ok {
+		if err := validResponse.VisitGetPrincipalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdatePrincipal operation middleware
+func (sh *strictHandler) UpdatePrincipal(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
+	var request UpdatePrincipalRequestObject
+
+	request.PrincipalID = principalID
+
+	var body UpdatePrincipalJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdatePrincipal(ctx, request.(UpdatePrincipalRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdatePrincipal")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdatePrincipalResponseObject); ok {
+		if err := validResponse.VisitUpdatePrincipalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokePrincipalAPIKeys operation middleware
+func (sh *strictHandler) RevokePrincipalAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
+	var request RevokePrincipalAPIKeysRequestObject
+
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokePrincipalAPIKeys(ctx, request.(RevokePrincipalAPIKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokePrincipalAPIKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokePrincipalAPIKeysResponseObject); ok {
+		if err := validResponse.VisitRevokePrincipalAPIKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPrincipalAPIKeys operation middleware
+func (sh *strictHandler) ListPrincipalAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID, params ListPrincipalAPIKeysParams) {
+	var request ListPrincipalAPIKeysRequestObject
+
+	request.PrincipalID = principalID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPrincipalAPIKeys(ctx, request.(ListPrincipalAPIKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPrincipalAPIKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPrincipalAPIKeysResponseObject); ok {
+		if err := validResponse.VisitListPrincipalAPIKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePrincipalAPIKey operation middleware
+func (sh *strictHandler) CreatePrincipalAPIKey(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
+	var request CreatePrincipalAPIKeyRequestObject
+
+	request.PrincipalID = principalID
+
+	var body CreatePrincipalAPIKeyJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePrincipalAPIKey(ctx, request.(CreatePrincipalAPIKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePrincipalAPIKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePrincipalAPIKeyResponseObject); ok {
+		if err := validResponse.VisitCreatePrincipalAPIKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokePrincipalSessions operation middleware
+func (sh *strictHandler) RevokePrincipalSessions(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
+	var request RevokePrincipalSessionsRequestObject
+
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokePrincipalSessions(ctx, request.(RevokePrincipalSessionsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokePrincipalSessions")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokePrincipalSessionsResponseObject); ok {
+		if err := validResponse.VisitRevokePrincipalSessionsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -30038,32 +31370,6 @@ func (sh *strictHandler) DecideRunReview(w http.ResponseWriter, r *http.Request,
 	}
 }
 
-// ListServiceAccounts operation middleware
-func (sh *strictHandler) ListServiceAccounts(w http.ResponseWriter, r *http.Request, params ListServiceAccountsParams) {
-	var request ListServiceAccountsRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListServiceAccounts(ctx, request.(ListServiceAccountsRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListServiceAccounts")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListServiceAccountsResponseObject); ok {
-		if err := validResponse.VisitListServiceAccountsResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // CreateServiceAccount operation middleware
 func (sh *strictHandler) CreateServiceAccount(w http.ResponseWriter, r *http.Request) {
 	var request CreateServiceAccountRequestObject
@@ -30088,92 +31394,6 @@ func (sh *strictHandler) CreateServiceAccount(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CreateServiceAccountResponseObject); ok {
 		if err := validResponse.VisitCreateServiceAccountResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetServiceAccount operation middleware
-func (sh *strictHandler) GetServiceAccount(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
-	var request GetServiceAccountRequestObject
-
-	request.PrincipalID = principalID
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetServiceAccount(ctx, request.(GetServiceAccountRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetServiceAccount")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetServiceAccountResponseObject); ok {
-		if err := validResponse.VisitGetServiceAccountResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// ListServiceAccountAPIKeys operation middleware
-func (sh *strictHandler) ListServiceAccountAPIKeys(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID, params ListServiceAccountAPIKeysParams) {
-	var request ListServiceAccountAPIKeysRequestObject
-
-	request.PrincipalID = principalID
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListServiceAccountAPIKeys(ctx, request.(ListServiceAccountAPIKeysRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListServiceAccountAPIKeys")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListServiceAccountAPIKeysResponseObject); ok {
-		if err := validResponse.VisitListServiceAccountAPIKeysResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// CreateServiceAccountAPIKey operation middleware
-func (sh *strictHandler) CreateServiceAccountAPIKey(w http.ResponseWriter, r *http.Request, principalID openapi_types.UUID) {
-	var request CreateServiceAccountAPIKeyRequestObject
-
-	request.PrincipalID = principalID
-
-	var body CreateServiceAccountAPIKeyJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.CreateServiceAccountAPIKey(ctx, request.(CreateServiceAccountAPIKeyRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "CreateServiceAccountAPIKey")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(CreateServiceAccountAPIKeyResponseObject); ok {
-		if err := validResponse.VisitCreateServiceAccountAPIKeyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

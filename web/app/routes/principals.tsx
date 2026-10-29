@@ -2,7 +2,7 @@ import { Alert, Anchor, Badge, Paper, Stack, Table, Text, Title } from "@mantine
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { createServiceAccount, getCurrentPrincipal, listServiceAccounts } from "~/api/generated";
+import { createServiceAccount, getCurrentPrincipal, listPrincipals } from "~/api/generated";
 import { ServiceAccountForm } from "~/components/access";
 import { useActionSuccessToast } from "~/components/action-notifications";
 import { Datestamp } from "~/components/display";
@@ -13,12 +13,12 @@ import { formValue, problemDetail } from "~/form-data";
 import { pageTitle } from "~/page-title";
 import { pageFromSearchParam } from "~/search-params";
 
-import type { Route } from "./+types/service-accounts";
+import type { Route } from "./+types/principals";
 
 const pageSize = 25;
 
 export function meta() {
-  return [{ title: pageTitle("Service accounts") }];
+  return [{ title: pageTitle("Principals") }];
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {
@@ -26,12 +26,12 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
   const principalResult = await getCurrentPrincipal({ client });
-  const principal = principalResult.data;
-  if (principal?.role !== "admin") {
-    return { available: true, page, principal, serviceAccounts: [], total: 0 };
+  const currentPrincipal = principalResult.data;
+  if (currentPrincipal?.role !== "admin") {
+    return { available: true, currentPrincipal, page, principals: [], total: 0 };
   }
 
-  const result = await listServiceAccounts({
+  const result = await listPrincipals({
     client,
     query: { limit: pageSize, offset: (page - 1) * pageSize },
   });
@@ -43,11 +43,12 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       return redirect(`${url.pathname}${url.search}`);
     }
   }
+
   return {
     available: result.data !== undefined,
+    currentPrincipal,
     page,
-    principal,
-    serviceAccounts: result.data?.items ?? [],
+    principals: result.data?.items ?? [],
     total: result.data?.total ?? 0,
   };
 }
@@ -55,8 +56,9 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 export async function action({ context, request }: Route.ActionArgs) {
   const formData = await request.formData();
   if (formValue(formData, "intent") !== "create-service-account") {
-    return { error: "The requested service-account operation is not supported." };
+    return { error: "The requested Principal operation is not supported." };
   }
+
   const result = await createServiceAccount({
     body: {
       displayName: formValue(formData, "displayName"),
@@ -64,17 +66,18 @@ export async function action({ context, request }: Route.ActionArgs) {
     },
     client: createServerAPIClient(request, context),
   });
+
   return result.data
     ? { message: `Service account ${result.data.displayName} was created.` }
     : { error: problemDetail(result.error, "The service account could not be created.") };
 }
 
-export default function ServiceAccounts({ actionData, loaderData }: Route.ComponentProps) {
-  useActionSuccessToast(actionData, "Service accounts updated", actionData?.message);
-  if (loaderData.principal?.role !== "admin") {
+export default function Principals({ actionData, loaderData }: Route.ComponentProps) {
+  useActionSuccessToast(actionData, "Principals updated", actionData?.message);
+  if (loaderData.currentPrincipal?.role !== "admin") {
     return (
       <Alert color="yellow" title="Administrator access required">
-        Only administrators can manage shared automation identities.
+        Only administrators can manage product Principals and shared automation identities.
       </Alert>
     );
   }
@@ -82,11 +85,11 @@ export default function ServiceAccounts({ actionData, loaderData }: Route.Compon
   return (
     <Stack gap="lg">
       <PageHeader
-        description="Durable identities for shared automation. Manage credentials from each account."
-        title="Service accounts"
+        description="Users and service accounts that can authenticate to Slipramp."
+        title="Principals"
       />
       {actionData?.error ? (
-        <Alert color="red" title="Service account change failed">
+        <Alert color="red" title="Principal change failed">
           {actionData.error}
         </Alert>
       ) : null}
@@ -99,44 +102,56 @@ export default function ServiceAccounts({ actionData, loaderData }: Route.Compon
       <Paper withBorder>
         {!loaderData.available ? (
           <Text c="dimmed" p="md">
-            The service-account inventory could not be loaded.
+            The Principal inventory could not be loaded.
           </Text>
-        ) : loaderData.serviceAccounts.length === 0 ? (
+        ) : loaderData.principals.length === 0 ? (
           <Text c="dimmed" p="md">
-            No service accounts have been created.
+            No Principals have been created.
           </Text>
         ) : (
-          <Table.ScrollContainer minWidth={680} type="native">
+          <Table.ScrollContainer minWidth={780} type="native">
             <Table verticalSpacing="sm">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Service account</Table.Th>
+                  <Table.Th>Principal</Table.Th>
+                  <Table.Th>Kind</Table.Th>
                   <Table.Th>Role</Table.Th>
+                  <Table.Th>Status</Table.Th>
                   <Table.Th>Created</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {loaderData.serviceAccounts.map((account) => (
-                  <Table.Tr key={account.principalId}>
+                {loaderData.principals.map((principal) => (
+                  <Table.Tr key={principal.principalId}>
                     <Table.Td>
                       <Identity
                         detail={
                           <Text c="dimmed" size="xs">
-                            {account.principalId}
+                            {principal.principalId}
                           </Text>
                         }
-                        name={account.displayName}
+                        name={principal.displayName}
                       />
                     </Table.Td>
                     <Table.Td>
-                      <Badge variant="light">{account.role}</Badge>
+                      <Badge variant="light">
+                        {principal.kind === "service-account" ? "Service account" : "User"}
+                      </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Datestamp value={account.createdAt} />
+                      <Badge variant="light">{principal.role}</Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Anchor component={Link} to={`/service-accounts/${account.principalId}`}>
+                      <Badge color={principal.disabledAt ? "red" : "green"} variant="light">
+                        {principal.disabledAt ? "Disabled" : "Enabled"}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Datestamp value={principal.createdAt} />
+                    </Table.Td>
+                    <Table.Td>
+                      <Anchor component={Link} to={`/principals/${principal.principalId}`}>
                         Manage
                       </Anchor>
                     </Table.Td>
@@ -149,8 +164,8 @@ export default function ServiceAccounts({ actionData, loaderData }: Route.Compon
       </Paper>
       {loaderData.available && loaderData.total > 0 ? (
         <ListPagination
-          itemCount={loaderData.serviceAccounts.length}
-          noun="service accounts"
+          itemCount={loaderData.principals.length}
+          noun="Principals"
           page={loaderData.page}
           pageSize={pageSize}
           total={loaderData.total}

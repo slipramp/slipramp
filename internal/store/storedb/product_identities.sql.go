@@ -258,6 +258,19 @@ func (q *Queries) DeleteWebSession(ctx context.Context, id pgtype.UUID) (int64, 
 	return result.RowsAffected(), nil
 }
 
+const deleteWebSessionsByPrincipal = `-- name: DeleteWebSessionsByPrincipal :execrows
+DELETE FROM web_sessions
+WHERE principal_id = $1
+`
+
+func (q *Queries) DeleteWebSessionsByPrincipal(ctx context.Context, principalID pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteWebSessionsByPrincipal, principalID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getAPIKey = `-- name: GetAPIKey :one
 SELECT id, principal_id, created_by_principal_id, name, token_prefix, token_digest, scopes, created_at, expires_at, last_used_at, revoked_at
 FROM api_keys
@@ -418,15 +431,14 @@ func (q *Queries) ListAPIKeysByPrincipal(ctx context.Context, principalID pgtype
 	return items, nil
 }
 
-const listServiceAccounts = `-- name: ListServiceAccounts :many
+const listPrincipals = `-- name: ListPrincipals :many
 SELECT id, kind, display_name, role, disabled_at, created_at, updated_at
 FROM principals
-WHERE kind = 'service-account'
 ORDER BY display_name, id
 `
 
-func (q *Queries) ListServiceAccounts(ctx context.Context) ([]Principal, error) {
-	rows, err := q.db.Query(ctx, listServiceAccounts)
+func (q *Queries) ListPrincipals(ctx context.Context) ([]Principal, error) {
+	rows, err := q.db.Query(ctx, listPrincipals)
 	if err != nil {
 		return nil, err
 	}
@@ -466,6 +478,26 @@ type RevokeAPIKeyParams struct {
 
 func (q *Queries) RevokeAPIKey(ctx context.Context, arg RevokeAPIKeyParams) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeAPIKey, arg.RevokedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeAPIKeysByPrincipal = `-- name: RevokeAPIKeysByPrincipal :execrows
+UPDATE api_keys
+SET revoked_at = $1
+WHERE principal_id = $2
+  AND revoked_at IS NULL
+`
+
+type RevokeAPIKeysByPrincipalParams struct {
+	RevokedAt   pgtype.Timestamptz
+	PrincipalID pgtype.UUID
+}
+
+func (q *Queries) RevokeAPIKeysByPrincipal(ctx context.Context, arg RevokeAPIKeysByPrincipalParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAPIKeysByPrincipal, arg.RevokedAt, arg.PrincipalID)
 	if err != nil {
 		return 0, err
 	}
@@ -584,6 +616,43 @@ func (q *Queries) UpdateOIDCPrincipal(ctx context.Context, arg UpdateOIDCPrincip
 		arg.UpdatedAt,
 		arg.ID,
 	)
+	var i Principal
+	err := row.Scan(
+		&i.ID,
+		&i.Kind,
+		&i.DisplayName,
+		&i.Role,
+		&i.DisabledAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updatePrincipalDisabled = `-- name: UpdatePrincipalDisabled :one
+UPDATE principals
+SET disabled_at = CASE
+        WHEN $1::boolean THEN COALESCE(disabled_at, $2)
+        ELSE NULL
+    END,
+    updated_at = CASE
+        WHEN ($1::boolean AND disabled_at IS NULL)
+          OR (NOT $1::boolean AND disabled_at IS NOT NULL)
+        THEN GREATEST(updated_at, $2)
+        ELSE updated_at
+    END
+WHERE id = $3
+RETURNING id, kind, display_name, role, disabled_at, created_at, updated_at
+`
+
+type UpdatePrincipalDisabledParams struct {
+	Disabled  bool
+	ChangedAt pgtype.Timestamptz
+	ID        pgtype.UUID
+}
+
+func (q *Queries) UpdatePrincipalDisabled(ctx context.Context, arg UpdatePrincipalDisabledParams) (Principal, error) {
+	row := q.db.QueryRow(ctx, updatePrincipalDisabled, arg.Disabled, arg.ChangedAt, arg.ID)
 	var i Principal
 	err := row.Scan(
 		&i.ID,

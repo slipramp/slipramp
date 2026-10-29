@@ -687,6 +687,16 @@ email and profile names never link identities. Credentials authenticate a
 Principal and restrict its role; they do not own grants. Domain services
 consume the authentication result rather than parsing cookies or claims.
 
+Administrators can inventory every Principal and idempotently disable or enable
+one. Disabling immediately prevents all of that Principal's sessions and API
+keys from authenticating, but it does not revoke or delete them; enabling later
+restores any credential that remains unexpired and unrevoked. Separate bulk
+operations permanently revoke every active API key while preserving credential
+metadata and earlier revocation timestamps, or remove every local browser
+session. These operations apply to both users and service accounts, including
+the currently authenticated administrator, and do not create a general
+administrative audit model.
+
 ### OIDC and sessions
 
 One configured OIDC provider is required at startup. The Server uses code flow
@@ -728,15 +738,15 @@ signs in through OIDC.
 | Acknowledge Inbox problems                                                       | operator                 | `slipramp:inbox:write`       |
 | Submit or poll Kargo Promotions                                                  | operator service account | `slipramp:promotions:submit` |
 | Create or decide Promotions, or change Stage policy                              | operator                 | `slipramp:promotions:write`  |
-| Administer Repositories, service accounts, and their keys                        | admin                    | `slipramp:admin`             |
+| Administer Repositories, Principals, credentials, and sessions                   | admin                    | `slipramp:admin`             |
 
 Scope restrictions intersect with the Principal's role. `slipramp:admin` grants
 all permissions subject to role; other scopes do not imply one another.
 Sensitive metadata is readable by viewers, but contents require operator or
 admin and, for API keys, read scope. Owners can revoke their keys; administrator
 revocation requires the administrator role and scope. Historical Principals
-and keys are disabled/revoked rather than deleted; expired sessions may be
-removed.
+and keys are disabled/revoked rather than deleted; sessions are revocable and
+expired sessions may be removed.
 
 Run source and actor are distinct. The Server derives `manual` for session
 requests and `api` for API-key requests. Git sources have no human actor;
@@ -1215,7 +1225,10 @@ override before the Target default. A Target therefore matches every Placement
 used by at least one of its Actions and appears at most once in each filtered
 result.
 Repository, commit, Cluster, Run/log/artifact, Promotion, and Access screens use
-the same authenticated contract.
+the same authenticated contract. The administrator Principal inventory includes
+users and service accounts. Principal detail exposes the disabled state, API-key
+history and service-account key creation, plus the independent emergency
+disable/enable, revoke-all-API-keys, and revoke-all-sessions operations.
 
 The authenticated Placement inventory exposes the validated effective
 configuration currently held by the Server through `/api/v1/placements`,

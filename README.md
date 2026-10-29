@@ -287,6 +287,13 @@ the principal's global role and, for a key, its scopes. The web process forwards
 only the session to SSR API calls, live-log streams, and artifact downloads; it
 also passes same-origin login and callback requests to the Server.
 
+Administrators can inspect users and service accounts in the Principal
+inventory, disable or enable a Principal, revoke all of its API keys, and revoke
+all of its local browser sessions. These controls are independent: disabling
+does not revoke credentials, and removing a subject from the OIDC role map
+prevents new logins but does not revoke an existing session. Use the explicit
+session-revocation operation when immediate browser logout is required.
+
 Back up the PostgreSQL database and OIDC deployment configuration together.
 PostgreSQL contains principals, OIDC identity mappings, API-key digests, and
 session digests, while API-key plaintext is never stored and must remain with

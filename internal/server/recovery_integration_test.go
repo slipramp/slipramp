@@ -470,7 +470,7 @@ func createRecoveryProductAPIKey(t *testing.T, ctx context.Context, database *st
 	if err != nil {
 		t.Fatalf("create recovery service account: %v", err)
 	}
-	credential, err := service.CreateServiceAccountAPIKey(
+	credential, err := service.CreatePrincipalAPIKey(
 		ctx,
 		principal.ID,
 		principal.ID,

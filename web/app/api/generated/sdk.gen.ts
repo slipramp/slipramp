@@ -26,6 +26,9 @@ import type {
   CreateApiKeyData,
   CreateApiKeyErrors,
   CreateApiKeyResponses,
+  CreatePrincipalApiKeyData,
+  CreatePrincipalApiKeyErrors,
+  CreatePrincipalApiKeyResponses,
   CreatePromotionData,
   CreatePromotionErrors,
   CreatePromotionResponses,
@@ -35,9 +38,6 @@ import type {
   CreateRunData,
   CreateRunErrors,
   CreateRunResponses,
-  CreateServiceAccountApiKeyData,
-  CreateServiceAccountApiKeyErrors,
-  CreateServiceAccountApiKeyResponses,
   CreateServiceAccountData,
   CreateServiceAccountErrors,
   CreateServiceAccountResponses,
@@ -77,6 +77,9 @@ import type {
   GetPlacementData,
   GetPlacementErrors,
   GetPlacementResponses,
+  GetPrincipalData,
+  GetPrincipalErrors,
+  GetPrincipalResponses,
   GetPromotionData,
   GetPromotionErrors,
   GetPromotionResponses,
@@ -92,9 +95,6 @@ import type {
   GetRunLogCursorErrors,
   GetRunLogCursorResponses,
   GetRunResponses,
-  GetServiceAccountData,
-  GetServiceAccountErrors,
-  GetServiceAccountResponses,
   GetTargetData,
   GetTargetErrors,
   GetTargetResponses,
@@ -116,6 +116,12 @@ import type {
   ListPlacementsData,
   ListPlacementsErrors,
   ListPlacementsResponses,
+  ListPrincipalApiKeysData,
+  ListPrincipalApiKeysErrors,
+  ListPrincipalApiKeysResponses,
+  ListPrincipalsData,
+  ListPrincipalsErrors,
+  ListPrincipalsResponses,
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
@@ -140,12 +146,6 @@ import type {
   ListRunsData,
   ListRunsErrors,
   ListRunsResponses,
-  ListServiceAccountApiKeysData,
-  ListServiceAccountApiKeysErrors,
-  ListServiceAccountApiKeysResponses,
-  ListServiceAccountsData,
-  ListServiceAccountsErrors,
-  ListServiceAccountsResponses,
   ListTargetsData,
   ListTargetsErrors,
   ListTargetsResponses,
@@ -176,6 +176,12 @@ import type {
   RevokeApiKeyData,
   RevokeApiKeyErrors,
   RevokeApiKeyResponses,
+  RevokePrincipalApiKeysData,
+  RevokePrincipalApiKeysErrors,
+  RevokePrincipalApiKeysResponses,
+  RevokePrincipalSessionsData,
+  RevokePrincipalSessionsErrors,
+  RevokePrincipalSessionsResponses,
   SealRunLogData,
   SealRunLogErrors,
   SealRunLogResponses,
@@ -186,6 +192,9 @@ import type {
   SubmitKargoPromotionData,
   SubmitKargoPromotionErrors,
   SubmitKargoPromotionResponses,
+  UpdatePrincipalData,
+  UpdatePrincipalErrors,
+  UpdatePrincipalResponses,
   UpdatePromotionStagePolicyData,
   UpdatePromotionStagePolicyErrors,
   UpdatePromotionStagePolicyResponses,
@@ -1358,14 +1367,91 @@ export const revokeApiKey = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * List service accounts
+ * List product principals
  */
-export const listServiceAccounts = <ThrowOnError extends boolean = false>(
-  options?: Options<ListServiceAccountsData, ThrowOnError>,
-): RequestResult<ListServiceAccountsResponses, ListServiceAccountsErrors, ThrowOnError> =>
-  (options?.client ?? client).get<
-    ListServiceAccountsResponses,
-    ListServiceAccountsErrors,
+export const listPrincipals = <ThrowOnError extends boolean = false>(
+  options?: Options<ListPrincipalsData, ThrowOnError>,
+): RequestResult<ListPrincipalsResponses, ListPrincipalsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<ListPrincipalsResponses, ListPrincipalsErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/principals",
+    ...options,
+  });
+
+/**
+ * Get a product principal
+ */
+export const getPrincipal = <ThrowOnError extends boolean = false>(
+  options: Options<GetPrincipalData, ThrowOnError>,
+): RequestResult<GetPrincipalResponses, GetPrincipalErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetPrincipalResponses, GetPrincipalErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/principals/{principalId}",
+    ...options,
+  });
+
+/**
+ * Enable or disable a product principal
+ *
+ * Idempotently changes the Principal disabled state. Disabling immediately prevents its existing sessions and API keys from authenticating without revoking those credentials.
+ */
+export const updatePrincipal = <ThrowOnError extends boolean = false>(
+  options: Options<UpdatePrincipalData, ThrowOnError>,
+): RequestResult<UpdatePrincipalResponses, UpdatePrincipalErrors, ThrowOnError> =>
+  (options.client ?? client).patch<UpdatePrincipalResponses, UpdatePrincipalErrors, ThrowOnError>({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/principals/{principalId}",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Revoke every API key for a product principal
+ *
+ * Idempotently revokes every API key for the Principal while retaining its credential metadata and original revocation timestamps.
+ */
+export const revokePrincipalApiKeys = <ThrowOnError extends boolean = false>(
+  options: Options<RevokePrincipalApiKeysData, ThrowOnError>,
+): RequestResult<RevokePrincipalApiKeysResponses, RevokePrincipalApiKeysErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RevokePrincipalApiKeysResponses,
+    RevokePrincipalApiKeysErrors,
     ThrowOnError
   >({
     security: [
@@ -1380,7 +1466,96 @@ export const listServiceAccounts = <ThrowOnError extends boolean = false>(
         type: "http",
       },
     ],
-    url: "/api/v1/service-accounts",
+    url: "/api/v1/principals/{principalId}/api-keys",
+    ...options,
+  });
+
+/**
+ * List API keys for a product principal
+ */
+export const listPrincipalApiKeys = <ThrowOnError extends boolean = false>(
+  options: Options<ListPrincipalApiKeysData, ThrowOnError>,
+): RequestResult<ListPrincipalApiKeysResponses, ListPrincipalApiKeysErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListPrincipalApiKeysResponses,
+    ListPrincipalApiKeysErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/principals/{principalId}/api-keys",
+    ...options,
+  });
+
+/**
+ * Create an API key for a service-account Principal
+ *
+ * Creates a credential only when the selected Principal is a service account. The complete token is returned once and is never available from later reads.
+ */
+export const createPrincipalApiKey = <ThrowOnError extends boolean = false>(
+  options: Options<CreatePrincipalApiKeyData, ThrowOnError>,
+): RequestResult<CreatePrincipalApiKeyResponses, CreatePrincipalApiKeyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreatePrincipalApiKeyResponses,
+    CreatePrincipalApiKeyErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/principals/{principalId}/api-keys",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Revoke every browser session for a product principal
+ *
+ * Idempotently removes every local browser session for the Principal. Removing an OIDC subject mapping alone does not perform this operation.
+ */
+export const revokePrincipalSessions = <ThrowOnError extends boolean = false>(
+  options: Options<RevokePrincipalSessionsData, ThrowOnError>,
+): RequestResult<RevokePrincipalSessionsResponses, RevokePrincipalSessionsErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RevokePrincipalSessionsResponses,
+    RevokePrincipalSessionsErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/principals/{principalId}/sessions",
     ...options,
   });
 
@@ -1408,99 +1583,6 @@ export const createServiceAccount = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/api/v1/service-accounts",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
-
-/**
- * Get a service account
- */
-export const getServiceAccount = <ThrowOnError extends boolean = false>(
-  options: Options<GetServiceAccountData, ThrowOnError>,
-): RequestResult<GetServiceAccountResponses, GetServiceAccountErrors, ThrowOnError> =>
-  (options.client ?? client).get<GetServiceAccountResponses, GetServiceAccountErrors, ThrowOnError>(
-    {
-      security: [
-        {
-          in: "cookie",
-          name: "slipramp_session",
-          type: "apiKey",
-        },
-        {
-          key: "ProductBearer",
-          scheme: "bearer",
-          type: "http",
-        },
-      ],
-      url: "/api/v1/service-accounts/{principalId}",
-      ...options,
-    },
-  );
-
-/**
- * List API keys for a service account
- */
-export const listServiceAccountApiKeys = <ThrowOnError extends boolean = false>(
-  options: Options<ListServiceAccountApiKeysData, ThrowOnError>,
-): RequestResult<
-  ListServiceAccountApiKeysResponses,
-  ListServiceAccountApiKeysErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).get<
-    ListServiceAccountApiKeysResponses,
-    ListServiceAccountApiKeysErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        in: "cookie",
-        name: "slipramp_session",
-        type: "apiKey",
-      },
-      {
-        key: "ProductBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/api/v1/service-accounts/{principalId}/api-keys",
-    ...options,
-  });
-
-/**
- * Create an API key for a service account
- *
- * The complete token is returned once and is never available from later reads.
- */
-export const createServiceAccountApiKey = <ThrowOnError extends boolean = false>(
-  options: Options<CreateServiceAccountApiKeyData, ThrowOnError>,
-): RequestResult<
-  CreateServiceAccountApiKeyResponses,
-  CreateServiceAccountApiKeyErrors,
-  ThrowOnError
-> =>
-  (options.client ?? client).post<
-    CreateServiceAccountApiKeyResponses,
-    CreateServiceAccountApiKeyErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        in: "cookie",
-        name: "slipramp_session",
-        type: "apiKey",
-      },
-      {
-        key: "ProductBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/api/v1/service-accounts/{principalId}/api-keys",
     ...options,
     headers: {
       "Content-Type": "application/json",

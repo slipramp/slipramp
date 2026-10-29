@@ -41,7 +41,7 @@ export function APIKeyForm({
   intent,
   principalId,
 }: Readonly<{
-  intent: "create-api-key" | "create-service-account-api-key";
+  intent: "create-api-key" | "create-principal-api-key";
   principalId?: string;
 }>) {
   const navigation = useNavigation();

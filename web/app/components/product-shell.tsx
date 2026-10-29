@@ -34,7 +34,6 @@ import {
   IconMoon,
   IconNotification,
   IconPalette,
-  IconRobot,
   IconRocket,
   IconRoute,
   IconServer2,
@@ -42,6 +41,7 @@ import {
   IconSparkles,
   IconSun,
   IconTargetArrow,
+  IconUsers,
   type TablerIcon,
 } from "@tabler/icons-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -201,9 +201,9 @@ function ProductShellLayout({
                     ...(principal.role === "admin"
                       ? [
                           {
-                            icon: IconRobot,
-                            label: "Service accounts",
-                            to: "/service-accounts",
+                            icon: IconUsers,
+                            label: "Principals",
+                            to: "/principals",
                           },
                         ]
                       : []),

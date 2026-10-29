@@ -15,7 +15,7 @@ Coordinate authorized Slipramp work without implementing product changes in the 
 - Workflow lists, in order: `Backlog`, `Ready for Agent`, `In Progress`, `In Review`, `Complete`
 - Maximum concurrent implementation workers: 2
 
-The user has authorized this workflow to create Codex worktree chats for cards in `Ready for Agent` and to send those chats scoped follow-up instructions needed to finish their pull requests or respond to explicit review feedback. This authorization does not include merging or closing pull requests, force-pushing, rewriting `main`, deleting branches, or executing cards from any other list.
+The user has authorized this workflow to create Codex worktree chats for cards in `Ready for Agent` and to send those chats scoped follow-up instructions needed to finish their pull requests or respond to explicit review feedback. Routine preflight may fast-forward the local `main` ref to its fetched `origin/main` descendant. This authorization does not include merging or closing pull requests, force-pushing, resetting or otherwise rewriting `main`, deleting branches, or executing cards from any other list.
 
 ## Authority boundaries
 
@@ -31,11 +31,16 @@ The user has authorized this workflow to create Codex worktree chats for cards i
 
 Before changing Trello or dispatching work:
 
-1. Read `AGENTS.md`, `docs/DESIGN.md`, and `docs/ROADMAP.md` from the current base.
-2. Fetch `origin` and require local `main`, `origin/main`, and the coordinator's understood base to identify the same commit. If they diverge, do not claim or dispatch cards.
-3. Confirm that Trello can be read and written.
-4. Confirm that GitHub pull requests and their changed files, reviews, checks, and merge state can be read, and that a worker can push a branch and open a pull request without interactive approval.
-5. List existing Slipramp worker chats and open pull requests before creating anything.
+1. Fetch `origin` and compare local `main` with `origin/main`.
+   - If they already identify the same commit, continue.
+   - If local `main` is an ancestor of `origin/main`, fast-forward local `main` to `origin/main` in the same cycle. A stale, fast-forwardable local ref is routine maintenance, not a blocker and not a reportable event.
+   - If `main` is checked out in another worktree, update it only when that worktree is clean and the operation remains fast-forward-only. Otherwise stop rather than disturbing user changes.
+   - If local `main` is ahead of or has diverged from `origin/main`, do not reset, force-move, or rewrite it. Stop before external mutations and report the divergence.
+2. Adopt the resulting exact `origin/main` commit as the coordinator's understood base and require all three identities to match.
+3. Read `AGENTS.md`, `docs/DESIGN.md`, and `docs/ROADMAP.md` from that exact base commit.
+4. Confirm that Trello can be read and written.
+5. Confirm that GitHub pull requests and their changed files, reviews, checks, and merge state can be read, and that a worker can push a branch and open a pull request without interactive approval.
+6. List existing Slipramp worker chats and open pull requests before creating anything.
 
 If any preflight fails, make no board mutation, start no worker, and report the single actionable blocker. Do not repeat an unchanged blocker on every scheduled run.
 

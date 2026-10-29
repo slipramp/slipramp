@@ -110,9 +110,30 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 	if err != nil || len(keys) != 1 || keys[0].ID != key.ID {
 		t.Errorf("ListAPIKeys() keys = %#v, error = %v", keys, err)
 	}
-	serviceAccounts, err := database.ListServiceAccounts(ctx)
-	if err != nil || len(serviceAccounts) != 1 || serviceAccounts[0].ID != serviceAccount.ID {
-		t.Errorf("ListServiceAccounts() principals = %#v, error = %v", serviceAccounts, err)
+	principals, err := database.ListPrincipals(ctx)
+	if err != nil || len(principals) != 2 {
+		t.Errorf("ListPrincipals() principals = %#v, error = %v", principals, err)
+	}
+	disabledAt := now.Add(time.Minute)
+	disabledUser, err := database.UpdatePrincipalDisabled(ctx, user.ID, true, disabledAt)
+	if err != nil {
+		t.Fatalf("UpdatePrincipalDisabled(true) error = %v", err)
+	}
+	if disabledUser.DisabledAt == nil || !disabledUser.DisabledAt.Equal(disabledAt.Truncate(time.Microsecond)) {
+		t.Errorf("disabled Principal = %#v", disabledUser)
+	}
+	disabledAgain, err := database.UpdatePrincipalDisabled(ctx, user.ID, true, disabledAt.Add(time.Minute))
+	if err != nil {
+		t.Fatalf("second UpdatePrincipalDisabled(true) error = %v", err)
+	}
+	if disabledAgain.DisabledAt == nil ||
+		!disabledAgain.DisabledAt.Equal(*disabledUser.DisabledAt) ||
+		!disabledAgain.UpdatedAt.Equal(disabledUser.UpdatedAt) {
+		t.Errorf("idempotent disable changed timestamps: %#v", disabledAgain)
+	}
+	enabledUser, err := database.UpdatePrincipalDisabled(ctx, user.ID, false, disabledAt.Add(2*time.Minute))
+	if err != nil || enabledUser.DisabledAt != nil {
+		t.Errorf("UpdatePrincipalDisabled(false) principal = %#v, error = %v", enabledUser, err)
 	}
 	keyUsedAt := key.CreatedAt.Add(time.Minute)
 	if err := database.TouchAPIKey(ctx, key.ID, keyUsedAt); err != nil {
@@ -126,8 +147,8 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 		t.Errorf("LastUsedAt = %v, want %s", loadedKey.LastUsedAt, keyUsedAt)
 	}
 	revokedAt := keyUsedAt.Add(time.Minute)
-	if err := database.RevokeAPIKey(ctx, key.ID, revokedAt); err != nil {
-		t.Fatalf("RevokeAPIKey() error = %v", err)
+	if err := database.RevokeAPIKeysByPrincipal(ctx, serviceAccount.ID, revokedAt); err != nil {
+		t.Fatalf("RevokeAPIKeysByPrincipal() error = %v", err)
 	}
 	if err := database.RevokeAPIKey(ctx, key.ID, revokedAt.Add(time.Minute)); err != nil {
 		t.Fatalf("second RevokeAPIKey() error = %v", err)
@@ -177,8 +198,8 @@ func TestProductIdentityPersistenceIntegration(t *testing.T) {
 	if !loadedSession.LastSeenAt.Equal(touchedAt) {
 		t.Errorf("LastSeenAt = %s, want %s", loadedSession.LastSeenAt, touchedAt)
 	}
-	if err := database.DeleteWebSession(ctx, session.ID); err != nil {
-		t.Fatalf("DeleteWebSession() error = %v", err)
+	if err := database.DeleteWebSessionsByPrincipal(ctx, user.ID); err != nil {
+		t.Fatalf("DeleteWebSessionsByPrincipal() error = %v", err)
 	}
 	_, _, err = database.GetWebSessionPrincipal(ctx, sessionDigest)
 	if !errors.Is(err, productidentity.ErrCredentialNotFound) {

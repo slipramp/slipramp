@@ -141,12 +141,10 @@ Kubernetes API access:
 
 ## Identity and MCP
 
-OIDC, local sessions, API keys, service accounts, role/scope enforcement, and Run
-attribution are implemented.
+OIDC, local sessions, API keys, service accounts, role/scope enforcement,
+emergency Principal disable/enable and bulk credential/session revocation, and
+Run attribution are implemented.
 
-- [ ] Add further identity-administration capabilities when concrete operations
-      require them; introduce a general administrative audit model only with a
-      coherent set of events.
 - [ ] Design a remote MCP adapter against the current transport and authorization
       specification at implementation time. Verify issuer, resource/audience,
       scopes, and client-registration support with the chosen authorization server.
@@ -159,6 +157,8 @@ Browser OIDC support alone does not establish suitable MCP token issuance.
 Static-header clients may use a Slipramp API key, but that does not replace
 standard OAuth discovery for general remote clients. Avoid separate MCP users,
 resource ACL frameworks, or an identity platform without a product requirement.
+Introduce a general administrative audit model only with a coherent set of
+events rather than treating emergency revocation alone as a general audit log.
 
 ## Optional Run review
 

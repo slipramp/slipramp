@@ -420,15 +420,36 @@ func (s *productAuthStore) GetPrincipal(_ context.Context, principalID uuid.UUID
 	return principal, nil
 }
 
-func (s *productAuthStore) ListServiceAccounts(context.Context) ([]productidentity.Principal, error) {
+func (s *productAuthStore) ListPrincipals(context.Context) ([]productidentity.Principal, error) {
 	principals := make([]productidentity.Principal, 0)
 	for _, principal := range s.principals {
-		if principal.Kind == productidentity.KindServiceAccount {
-			principals = append(principals, principal)
-		}
+		principals = append(principals, principal)
 	}
 
 	return principals, nil
+}
+
+func (s *productAuthStore) UpdatePrincipalDisabled(
+	_ context.Context,
+	principalID uuid.UUID,
+	disabled bool,
+	changedAt time.Time,
+) (productidentity.Principal, error) {
+	principal, found := s.principals[principalID]
+	if !found {
+		return productidentity.Principal{}, productidentity.ErrPrincipalNotFound
+	}
+	if disabled && principal.DisabledAt == nil {
+		principal.DisabledAt = &changedAt
+		principal.UpdatedAt = changedAt
+	}
+	if !disabled && principal.DisabledAt != nil {
+		principal.DisabledAt = nil
+		principal.UpdatedAt = changedAt
+	}
+	s.principals[principalID] = principal
+
+	return principal, nil
 }
 
 func (s *productAuthStore) GetOIDCUser(
@@ -555,6 +576,21 @@ func (s *productAuthStore) RevokeAPIKey(_ context.Context, keyID uuid.UUID, revo
 	return productidentity.ErrCredentialNotFound
 }
 
+func (s *productAuthStore) RevokeAPIKeysByPrincipal(
+	_ context.Context,
+	principalID uuid.UUID,
+	revokedAt time.Time,
+) error {
+	for digest, key := range s.apiKeys {
+		if key.PrincipalID == principalID && key.RevokedAt == nil {
+			key.RevokedAt = &revokedAt
+			s.apiKeys[digest] = key
+		}
+	}
+
+	return nil
+}
+
 func (s *productAuthStore) CreateWebSession(
 	_ context.Context,
 	session productidentity.WebSession,
@@ -605,6 +641,16 @@ func (s *productAuthStore) DeleteWebSession(_ context.Context, sessionID uuid.UU
 	}
 
 	return productidentity.ErrCredentialNotFound
+}
+
+func (s *productAuthStore) DeleteWebSessionsByPrincipal(_ context.Context, principalID uuid.UUID) error {
+	for digest, session := range s.sessions {
+		if session.PrincipalID == principalID {
+			delete(s.sessions, digest)
+		}
+	}
+
+	return nil
 }
 
 func oidcIdentityKey(issuer, subject string) string {

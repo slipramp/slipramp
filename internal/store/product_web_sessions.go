@@ -96,6 +96,14 @@ func (d *Database) DeleteWebSession(ctx context.Context, sessionID uuid.UUID) er
 	return nil
 }
 
+func (d *Database) DeleteWebSessionsByPrincipal(ctx context.Context, principalID uuid.UUID) error {
+	if _, err := d.queries.DeleteWebSessionsByPrincipal(ctx, databaseUUID(principalID)); err != nil {
+		return fmt.Errorf("delete principal web sessions: %w", err)
+	}
+
+	return nil
+}
+
 func webSessionFromRow(row storedb.WebSession) (productidentity.WebSession, error) {
 	digest, err := credentialDigest(row.TokenDigest)
 	if err != nil {

@@ -413,10 +413,10 @@ apiKey:
             schema:
               $ref: ../components/common.yaml#/Problem
 
-serviceAccounts:
+principals:
   get:
-    operationId: listServiceAccounts
-    summary: List service accounts
+    operationId: listPrincipals
+    summary: List product principals
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -439,11 +439,11 @@ serviceAccounts:
           default: 0
     responses:
       "200":
-        description: Service accounts ordered by display name.
+        description: Product principals ordered by display name and identity.
         content:
           application/json:
             schema:
-              $ref: ../components/authentication.yaml#/ServiceAccountList
+              $ref: ../components/authentication.yaml#/PrincipalList
       "401":
         description: A valid product session or bearer credential is required.
         content:
@@ -469,64 +469,13 @@ serviceAccounts:
             schema:
               $ref: ../components/common.yaml#/Problem
       "500":
-        description: Service accounts could not be loaded.
-        content:
-          application/problem+json:
-            schema:
-              $ref: ../components/common.yaml#/Problem
-  post:
-    operationId: createServiceAccount
-    summary: Create a service account
-    security:
-      - ProductSession: []
-      - ProductBearer: []
-    tags:
-      - Authentication
-    requestBody:
-      required: true
-      content:
-        application/json:
-          schema:
-            $ref: ../components/authentication.yaml#/ServiceAccountCreate
-    responses:
-      "201":
-        description: Service account created.
-        content:
-          application/json:
-            schema:
-              $ref: ../components/authentication.yaml#/ServiceAccount
-      "400":
-        description: The service-account configuration is invalid.
-        content:
-          application/problem+json:
-            schema:
-              $ref: ../components/common.yaml#/Problem
-      "401":
-        description: A valid product session or bearer credential is required.
-        content:
-          application/problem+json:
-            schema:
-              $ref: ../components/common.yaml#/Problem
-      "403":
-        description: Administrator permission and scope are required.
-        content:
-          application/problem+json:
-            schema:
-              $ref: ../components/common.yaml#/Problem
-      "405":
-        description: The HTTP method is not supported for this resource.
-        content:
-          application/problem+json:
-            schema:
-              $ref: ../components/common.yaml#/Problem
-      "500":
-        description: The service account could not be created.
+        description: Product principals could not be loaded.
         content:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
 
-serviceAccount:
+principal:
   parameters:
     - name: principalId
       in: path
@@ -535,8 +484,8 @@ serviceAccount:
         type: string
         format: uuid
   get:
-    operationId: getServiceAccount
-    summary: Get a service account
+    operationId: getPrincipal
+    summary: Get a product principal
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -544,11 +493,11 @@ serviceAccount:
       - Authentication
     responses:
       "200":
-        description: Service-account identity.
+        description: Product principal identity and state.
         content:
           application/json:
             schema:
-              $ref: ../components/authentication.yaml#/ServiceAccount
+              $ref: ../components/authentication.yaml#/Principal
       "401":
         description: A valid product session or bearer credential is required.
         content:
@@ -562,19 +511,74 @@ serviceAccount:
             schema:
               $ref: ../components/common.yaml#/Problem
       "404":
-        description: The service account does not exist.
+        description: The principal does not exist.
         content:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
       "500":
-        description: The service account could not be loaded.
+        description: The principal could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  patch:
+    operationId: updatePrincipal
+    summary: Enable or disable a product principal
+    description: >-
+      Idempotently changes the Principal disabled state. Disabling immediately
+      prevents its existing sessions and API keys from authenticating without
+      revoking those credentials.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/authentication.yaml#/PrincipalUpdate
+    responses:
+      "200":
+        description: The updated product principal.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/Principal
+      "400":
+        description: The principal state update is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The principal does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The principal state could not be changed.
         content:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
 
-serviceAccountAPIKeys:
+principalAPIKeys:
   parameters:
     - name: principalId
       in: path
@@ -583,8 +587,8 @@ serviceAccountAPIKeys:
         type: string
         format: uuid
   get:
-    operationId: listServiceAccountAPIKeys
-    summary: List API keys for a service account
+    operationId: listPrincipalAPIKeys
+    summary: List API keys for a product principal
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -613,7 +617,7 @@ serviceAccountAPIKeys:
             schema:
               $ref: ../components/authentication.yaml#/APIKeyList
       "400":
-        description: The service-account identity is invalid.
+        description: The principal identity or list window is invalid.
         content:
           application/problem+json:
             schema:
@@ -631,7 +635,7 @@ serviceAccountAPIKeys:
             schema:
               $ref: ../components/common.yaml#/Problem
       "404":
-        description: The service account does not exist.
+        description: The principal does not exist.
         content:
           application/problem+json:
             schema:
@@ -649,9 +653,12 @@ serviceAccountAPIKeys:
             schema:
               $ref: ../components/common.yaml#/Problem
   post:
-    operationId: createServiceAccountAPIKey
-    summary: Create an API key for a service account
-    description: The complete token is returned once and is never available from later reads.
+    operationId: createPrincipalAPIKey
+    summary: Create an API key for a service-account Principal
+    description: >-
+      Creates a credential only when the selected Principal is a service
+      account. The complete token is returned once and is never available from
+      later reads.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -676,7 +683,57 @@ serviceAccountAPIKeys:
             schema:
               $ref: ../components/authentication.yaml#/APIKeyCredential
       "400":
-        description: The API key or service-account identity is invalid.
+        description: The API key or principal identity is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and a service-account Principal are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The principal does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The API key could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  delete:
+    operationId: revokePrincipalAPIKeys
+    summary: Revoke every API key for a product principal
+    description: >-
+      Idempotently revokes every API key for the Principal while retaining its
+      credential metadata and original revocation timestamps.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    responses:
+      "204":
+        description: Every API key for the Principal is revoked.
+      "400":
+        description: The principal identity is invalid.
         content:
           application/problem+json:
             schema:
@@ -694,7 +751,7 @@ serviceAccountAPIKeys:
             schema:
               $ref: ../components/common.yaml#/Problem
       "404":
-        description: The service account does not exist.
+        description: The principal does not exist.
         content:
           application/problem+json:
             schema:
@@ -706,7 +763,119 @@ serviceAccountAPIKeys:
             schema:
               $ref: ../components/common.yaml#/Problem
       "500":
-        description: The API key could not be created.
+        description: The API keys could not be revoked.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+principalSessions:
+  parameters:
+    - name: principalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  delete:
+    operationId: revokePrincipalSessions
+    summary: Revoke every browser session for a product principal
+    description: >-
+      Idempotently removes every local browser session for the Principal.
+      Removing an OIDC subject mapping alone does not perform this operation.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    responses:
+      "204":
+        description: Every browser session for the Principal is revoked.
+      "400":
+        description: The principal identity is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The principal does not exist.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The browser sessions could not be revoked.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+serviceAccounts:
+  post:
+    operationId: createServiceAccount
+    summary: Create a service account
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/authentication.yaml#/ServiceAccountCreate
+    responses:
+      "201":
+        description: Service account created.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/Principal
+      "400":
+        description: The service-account configuration is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: Administrator permission and scope are required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The service account could not be created.
         content:
           application/problem+json:
             schema:

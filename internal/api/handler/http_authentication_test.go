@@ -267,8 +267,9 @@ func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
 		createdAPIKey: productauth.APIKeyCredential{
 			Key: key, Token: "slipramp_key_complete-secret",
 		},
-		serviceAccounts:       []productidentity.Principal{serviceAccount},
+		principals:            []productidentity.Principal{principal, serviceAccount},
 		createdServiceAccount: serviceAccount,
+		updatedPrincipal:      serviceAccount,
 	}
 	httpHandler := newAuthenticationHandler(service)
 
@@ -298,12 +299,43 @@ func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
 		t.Errorf("create API key request = %#v", service)
 	}
 
-	accountsRequest := authenticatedProductRequest(http.MethodGet, "/api/v1/service-accounts", "")
+	accountsRequest := authenticatedProductRequest(http.MethodGet, "/api/v1/principals", "")
 	accountsResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(accountsResponse, accountsRequest)
 	if accountsResponse.Code != http.StatusOK ||
 		!strings.Contains(accountsResponse.Body.String(), serviceAccount.DisplayName) {
 		t.Fatalf("accounts status=%d body=%s", accountsResponse.Code, accountsResponse.Body.String())
+	}
+
+	principalRequest := authenticatedProductRequest(
+		http.MethodGet,
+		fmt.Sprintf("/api/v1/principals/%s", serviceAccount.ID),
+		"",
+	)
+	principalResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(principalResponse, principalRequest)
+	if principalResponse.Code != http.StatusOK ||
+		!strings.Contains(principalResponse.Body.String(), serviceAccount.DisplayName) {
+		t.Fatalf("principal status=%d body=%s", principalResponse.Code, principalResponse.Body.String())
+	}
+
+	updatePrincipalRequest := authenticatedProductRequest(
+		http.MethodPatch,
+		fmt.Sprintf("/api/v1/principals/%s", serviceAccount.ID),
+		`{"disabled":true}`,
+	)
+	updatePrincipalRequest.Header.Set("Content-Type", "application/json")
+	updatePrincipalResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(updatePrincipalResponse, updatePrincipalRequest)
+	if updatePrincipalResponse.Code != http.StatusOK ||
+		service.updatedPrincipalID != serviceAccount.ID || !service.principalDisabled {
+		t.Fatalf(
+			"update principal status=%d target=%s disabled=%t body=%s",
+			updatePrincipalResponse.Code,
+			service.updatedPrincipalID,
+			service.principalDisabled,
+			updatePrincipalResponse.Body.String(),
+		)
 	}
 
 	createAccountRequest := authenticatedProductRequest(
@@ -328,7 +360,7 @@ func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
 
 	createServiceKeyRequest := authenticatedProductRequest(
 		http.MethodPost,
-		fmt.Sprintf("/api/v1/service-accounts/%s/api-keys", serviceAccount.ID),
+		fmt.Sprintf("/api/v1/principals/%s/api-keys", serviceAccount.ID),
 		`{"name":"deployment key","scopes":["slipramp:runs:write"]}`,
 	)
 	createServiceKeyRequest.Header.Set("Content-Type", "application/json")
@@ -343,6 +375,38 @@ func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
 			service.serviceAccountKeyPrincipalID,
 			service.serviceAccountKeyCreatorID,
 			createServiceKeyResponse.Body.String(),
+		)
+	}
+
+	revokePrincipalKeysRequest := authenticatedProductRequest(
+		http.MethodDelete,
+		fmt.Sprintf("/api/v1/principals/%s/api-keys", serviceAccount.ID),
+		"",
+	)
+	revokePrincipalKeysResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(revokePrincipalKeysResponse, revokePrincipalKeysRequest)
+	if revokePrincipalKeysResponse.Code != http.StatusNoContent ||
+		service.revokedPrincipalAPIKeysID != serviceAccount.ID {
+		t.Fatalf(
+			"revoke principal keys status=%d target=%s",
+			revokePrincipalKeysResponse.Code,
+			service.revokedPrincipalAPIKeysID,
+		)
+	}
+
+	revokePrincipalSessionsRequest := authenticatedProductRequest(
+		http.MethodDelete,
+		fmt.Sprintf("/api/v1/principals/%s/sessions", serviceAccount.ID),
+		"",
+	)
+	revokePrincipalSessionsResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(revokePrincipalSessionsResponse, revokePrincipalSessionsRequest)
+	if revokePrincipalSessionsResponse.Code != http.StatusNoContent ||
+		service.revokedPrincipalSessionsID != serviceAccount.ID {
+		t.Fatalf(
+			"revoke principal sessions status=%d target=%s",
+			revokePrincipalSessionsResponse.Code,
+			service.revokedPrincipalSessionsID,
 		)
 	}
 
@@ -388,12 +452,17 @@ type recordingProductAuthenticationService struct {
 	createAPIKeyName             string
 	createAPIKeyScopes           []productidentity.Scope
 	revokedAPIKeyID              uuid.UUID
-	serviceAccounts              []productidentity.Principal
+	principals                   []productidentity.Principal
 	createdServiceAccount        productidentity.Principal
+	updatedPrincipal             productidentity.Principal
 	serviceAccountName           string
 	serviceAccountRole           productidentity.Role
 	serviceAccountKeyPrincipalID uuid.UUID
 	serviceAccountKeyCreatorID   uuid.UUID
+	updatedPrincipalID           uuid.UUID
+	principalDisabled            bool
+	revokedPrincipalAPIKeysID    uuid.UUID
+	revokedPrincipalSessionsID   uuid.UUID
 }
 
 func (s *recordingProductAuthenticationService) BeginLogin() (productauth.LoginStart, error) {
@@ -462,23 +531,34 @@ func (s *recordingProductAuthenticationService) RevokeAPIKey(
 	return nil
 }
 
-func (s *recordingProductAuthenticationService) ListServiceAccounts(
+func (s *recordingProductAuthenticationService) ListPrincipals(
 	context.Context,
 ) ([]productidentity.Principal, error) {
-	return s.serviceAccounts, nil
+	return s.principals, nil
 }
 
-func (s *recordingProductAuthenticationService) GetServiceAccount(
+func (s *recordingProductAuthenticationService) GetPrincipal(
 	_ context.Context,
 	principalID uuid.UUID,
 ) (productidentity.Principal, error) {
-	for _, principal := range s.serviceAccounts {
+	for _, principal := range s.principals {
 		if principal.ID == principalID {
 			return principal, nil
 		}
 	}
 
 	return productidentity.Principal{}, productidentity.ErrPrincipalNotFound
+}
+
+func (s *recordingProductAuthenticationService) UpdatePrincipalDisabled(
+	_ context.Context,
+	principalID uuid.UUID,
+	disabled bool,
+) (productidentity.Principal, error) {
+	s.updatedPrincipalID = principalID
+	s.principalDisabled = disabled
+
+	return s.updatedPrincipal, nil
 }
 
 func (s *recordingProductAuthenticationService) CreateServiceAccount(
@@ -492,14 +572,14 @@ func (s *recordingProductAuthenticationService) CreateServiceAccount(
 	return s.createdServiceAccount, nil
 }
 
-func (s *recordingProductAuthenticationService) ListServiceAccountAPIKeys(
+func (s *recordingProductAuthenticationService) ListPrincipalAPIKeys(
 	context.Context,
 	uuid.UUID,
 ) ([]productidentity.APIKey, error) {
 	return s.apiKeys, nil
 }
 
-func (s *recordingProductAuthenticationService) CreateServiceAccountAPIKey(
+func (s *recordingProductAuthenticationService) CreatePrincipalAPIKey(
 	_ context.Context,
 	principalID uuid.UUID,
 	createdByPrincipalID uuid.UUID,
@@ -513,6 +593,24 @@ func (s *recordingProductAuthenticationService) CreateServiceAccountAPIKey(
 	s.createAPIKeyScopes = scopes
 
 	return s.createdAPIKey, nil
+}
+
+func (s *recordingProductAuthenticationService) RevokePrincipalAPIKeys(
+	_ context.Context,
+	principalID uuid.UUID,
+) error {
+	s.revokedPrincipalAPIKeysID = principalID
+
+	return nil
+}
+
+func (s *recordingProductAuthenticationService) RevokePrincipalSessions(
+	_ context.Context,
+	principalID uuid.UUID,
+) error {
+	s.revokedPrincipalSessionsID = principalID
+
+	return nil
 }
 
 func (s *recordingProductAuthenticationService) RevokeSession(_ context.Context, token string) error {

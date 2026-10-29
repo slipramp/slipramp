@@ -206,7 +206,7 @@ func TestServiceManagesUserAndServiceAccountAPIKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateServiceAccount() error = %v", err)
 	}
-	serviceCredential, err := service.CreateServiceAccountAPIKey(
+	serviceCredential, err := service.CreatePrincipalAPIKey(
 		context.Background(),
 		serviceAccount.ID,
 		user.ID,
@@ -215,11 +215,11 @@ func TestServiceManagesUserAndServiceAccountAPIKeys(t *testing.T) {
 		nil,
 	)
 	if err != nil {
-		t.Fatalf("CreateServiceAccountAPIKey() error = %v", err)
+		t.Fatalf("CreatePrincipalAPIKey() error = %v", err)
 	}
-	serviceKeys, err := service.ListServiceAccountAPIKeys(context.Background(), serviceAccount.ID)
+	serviceKeys, err := service.ListPrincipalAPIKeys(context.Background(), serviceAccount.ID)
 	if err != nil || len(serviceKeys) != 1 || serviceKeys[0].ID != serviceCredential.Key.ID {
-		t.Fatalf("ListServiceAccountAPIKeys() keys=%#v error=%v", serviceKeys, err)
+		t.Fatalf("ListPrincipalAPIKeys() keys=%#v error=%v", serviceKeys, err)
 	}
 
 	inboxOnlyUserKey := productidentity.Authentication{
@@ -262,6 +262,141 @@ func TestServiceRejectsAPIKeyCredentialMintingAnotherUserKey(t *testing.T) {
 	)
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatalf("CreateUserAPIKey() error = %v, want forbidden", err)
+	}
+}
+
+func TestServiceAdministersPrincipalStateAndCredentials(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 28, 12, 0, 0, 0, time.UTC)
+	store := newProductAuthStore()
+	service := newTestService(t, store, &recordingOIDCProvider{}, now)
+	user := productidentity.Principal{
+		ID: uuid.New(), Kind: productidentity.KindUser, DisplayName: "Ada Lovelace",
+		Role: productidentity.RoleAdmin, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour),
+	}
+	otherUser := productidentity.Principal{
+		ID: uuid.New(), Kind: productidentity.KindUser, DisplayName: "Grace Hopper",
+		Role: productidentity.RoleViewer, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour),
+	}
+	store.principals[user.ID] = user
+	store.principals[otherUser.ID] = otherUser
+
+	serviceAccount, err := service.CreateServiceAccount(
+		context.Background(),
+		"Deployment automation",
+		productidentity.RoleOperator,
+	)
+	if err != nil {
+		t.Fatalf("CreateServiceAccount() error = %v", err)
+	}
+	principals, err := service.ListPrincipals(context.Background())
+	if err != nil || len(principals) != 3 {
+		t.Fatalf("ListPrincipals() principals=%#v error=%v", principals, err)
+	}
+	loaded, err := service.GetPrincipal(context.Background(), user.ID)
+	if err != nil || loaded.ID != user.ID {
+		t.Fatalf("GetPrincipal() principal=%#v error=%v", loaded, err)
+	}
+
+	disabled, err := service.UpdatePrincipalDisabled(context.Background(), user.ID, true)
+	if err != nil {
+		t.Fatalf("UpdatePrincipalDisabled(true) error = %v", err)
+	}
+	if disabled.DisabledAt == nil || !disabled.DisabledAt.Equal(now) || !disabled.UpdatedAt.Equal(now) {
+		t.Fatalf("disabled principal = %#v", disabled)
+	}
+	later := now.Add(time.Hour)
+	service.now = func() time.Time { return later }
+	disabledAgain, err := service.UpdatePrincipalDisabled(context.Background(), user.ID, true)
+	if err != nil {
+		t.Fatalf("second UpdatePrincipalDisabled(true) error = %v", err)
+	}
+	if !disabledAgain.DisabledAt.Equal(now) || !disabledAgain.UpdatedAt.Equal(now) {
+		t.Errorf("idempotent disable changed timestamps: %#v", disabledAgain)
+	}
+	enabled, err := service.UpdatePrincipalDisabled(context.Background(), user.ID, false)
+	if err != nil {
+		t.Fatalf("UpdatePrincipalDisabled(false) error = %v", err)
+	}
+	if enabled.DisabledAt != nil || !enabled.UpdatedAt.Equal(later) {
+		t.Errorf("enabled principal = %#v", enabled)
+	}
+
+	userSession := productidentity.Authentication{
+		Principal: enabled, Method: productidentity.AuthenticationMethodWebSession, CredentialID: uuid.New(),
+	}
+	userKey, err := service.CreateUserAPIKey(
+		context.Background(),
+		userSession,
+		"personal automation",
+		[]productidentity.Scope{productidentity.ScopeRead},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("CreateUserAPIKey() error = %v", err)
+	}
+	serviceKey, err := service.CreatePrincipalAPIKey(
+		context.Background(),
+		serviceAccount.ID,
+		user.ID,
+		"deployment",
+		[]productidentity.Scope{productidentity.ScopeRunsWrite},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("CreatePrincipalAPIKey() error = %v", err)
+	}
+	_, err = service.CreatePrincipalAPIKey(
+		context.Background(),
+		otherUser.ID,
+		user.ID,
+		"forbidden",
+		[]productidentity.Scope{productidentity.ScopeRead},
+		nil,
+	)
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("user Principal key creation error = %v, want forbidden", err)
+	}
+
+	if err := service.RevokePrincipalAPIKeys(context.Background(), user.ID); err != nil {
+		t.Fatalf("RevokePrincipalAPIKeys() error = %v", err)
+	}
+	if revokedAt := store.apiKeys[userKey.Key.TokenDigest].RevokedAt; revokedAt == nil || !revokedAt.Equal(later) {
+		t.Errorf("user key revoked at = %v, want %v", revokedAt, later)
+	}
+	if store.apiKeys[serviceKey.Key.TokenDigest].RevokedAt != nil {
+		t.Error("bulk revocation changed another Principal's API key")
+	}
+	service.now = func() time.Time { return later.Add(time.Hour) }
+	if err := service.RevokePrincipalAPIKeys(context.Background(), user.ID); err != nil {
+		t.Fatalf("second RevokePrincipalAPIKeys() error = %v", err)
+	}
+	if revokedAt := store.apiKeys[userKey.Key.TokenDigest].RevokedAt; revokedAt == nil || !revokedAt.Equal(later) {
+		t.Errorf("idempotent bulk revocation changed timestamp to %v", revokedAt)
+	}
+
+	userSessionDigest := productidentity.CredentialDigest{1}
+	otherSessionDigest := productidentity.CredentialDigest{2}
+	store.sessions[userSessionDigest] = productidentity.WebSession{
+		ID: uuid.New(), PrincipalID: user.ID, TokenDigest: userSessionDigest,
+		CreatedAt: now, ExpiresAt: later.Add(time.Hour), LastSeenAt: now,
+	}
+	store.sessions[otherSessionDigest] = productidentity.WebSession{
+		ID: uuid.New(), PrincipalID: otherUser.ID, TokenDigest: otherSessionDigest,
+		CreatedAt: now, ExpiresAt: later.Add(time.Hour), LastSeenAt: now,
+	}
+	if err := service.RevokePrincipalSessions(context.Background(), user.ID); err != nil {
+		t.Fatalf("RevokePrincipalSessions() error = %v", err)
+	}
+	if _, found := store.sessions[userSessionDigest]; found {
+		t.Error("target Principal session was retained")
+	}
+	if _, found := store.sessions[otherSessionDigest]; !found {
+		t.Error("another Principal's session was revoked")
+	}
+	if err := service.RevokePrincipalSessions(context.Background(), user.ID); err != nil {
+		t.Fatalf("second RevokePrincipalSessions() error = %v", err)
 	}
 }
 

@@ -135,6 +135,25 @@ func (d *Database) RevokeAPIKey(ctx context.Context, keyID uuid.UUID, revokedAt 
 	return nil
 }
 
+func (d *Database) RevokeAPIKeysByPrincipal(
+	ctx context.Context,
+	principalID uuid.UUID,
+	revokedAt time.Time,
+) error {
+	_, err := d.queries.RevokeAPIKeysByPrincipal(
+		ctx,
+		storedb.RevokeAPIKeysByPrincipalParams{
+			RevokedAt:   databaseTime(revokedAt),
+			PrincipalID: databaseUUID(principalID),
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("revoke principal API keys: %w", err)
+	}
+
+	return nil
+}
+
 func apiKeyFromRow(row storedb.ApiKey) (productidentity.APIKey, error) {
 	digest, err := credentialDigest(row.TokenDigest)
 	if err != nil {

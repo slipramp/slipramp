@@ -25,11 +25,12 @@ type AccessService interface {
 		*time.Time,
 	) (productauth.APIKeyCredential, error)
 	RevokeAPIKey(context.Context, productidentity.Authentication, uuid.UUID) error
-	ListServiceAccounts(context.Context) ([]productidentity.Principal, error)
-	GetServiceAccount(context.Context, uuid.UUID) (productidentity.Principal, error)
+	ListPrincipals(context.Context) ([]productidentity.Principal, error)
+	GetPrincipal(context.Context, uuid.UUID) (productidentity.Principal, error)
+	UpdatePrincipalDisabled(context.Context, uuid.UUID, bool) (productidentity.Principal, error)
 	CreateServiceAccount(context.Context, string, productidentity.Role) (productidentity.Principal, error)
-	ListServiceAccountAPIKeys(context.Context, uuid.UUID) ([]productidentity.APIKey, error)
-	CreateServiceAccountAPIKey(
+	ListPrincipalAPIKeys(context.Context, uuid.UUID) ([]productidentity.APIKey, error)
+	CreatePrincipalAPIKey(
 		context.Context,
 		uuid.UUID,
 		uuid.UUID,
@@ -37,6 +38,8 @@ type AccessService interface {
 		[]productidentity.Scope,
 		*time.Time,
 	) (productauth.APIKeyCredential, error)
+	RevokePrincipalAPIKeys(context.Context, uuid.UUID) error
+	RevokePrincipalSessions(context.Context, uuid.UUID) error
 }
 
 func (h *Handler) ListAPIKeys(
@@ -146,46 +149,79 @@ func (h *Handler) RevokeAPIKey(
 	return api.RevokeAPIKey204Response{}, nil
 }
 
-func (h *Handler) ListServiceAccounts(
+func (h *Handler) ListPrincipals(
 	ctx context.Context,
-	request api.ListServiceAccountsRequestObject,
-) (api.ListServiceAccountsResponseObject, error) {
+	request api.ListPrincipalsRequestObject,
+) (api.ListPrincipalsResponseObject, error) {
 	limit, offset, windowErr := listWindow(request.Params.Limit, request.Params.Offset)
 	if windowErr != nil {
-		return api.ListServiceAccounts400ApplicationProblemPlusJSONResponse(
+		return api.ListPrincipals400ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusBadRequest, windowErr.Error()),
 		), nil
 	}
-	principals, err := h.productAuth.ListServiceAccounts(ctx)
+	principals, err := h.productAuth.ListPrincipals(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	total := len(principals)
 	principals = listPage(principals, offset, limit)
-	items := make([]api.ServiceAccount, 0, len(principals))
+	items := make([]api.Principal, 0, len(principals))
 	for _, principal := range principals {
-		items = append(items, serviceAccountResponse(principal))
+		items = append(items, principalResponse(principal))
 	}
 
-	return api.ListServiceAccounts200JSONResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
+	return api.ListPrincipals200JSONResponse{Items: items, Total: total, Limit: limit, Offset: offset}, nil
 }
 
-func (h *Handler) GetServiceAccount(
+func (h *Handler) GetPrincipal(
 	ctx context.Context,
-	request api.GetServiceAccountRequestObject,
-) (api.GetServiceAccountResponseObject, error) {
-	principal, err := h.productAuth.GetServiceAccount(ctx, request.PrincipalID)
+	request api.GetPrincipalRequestObject,
+) (api.GetPrincipalResponseObject, error) {
+	principal, err := h.productAuth.GetPrincipal(ctx, request.PrincipalID)
 	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
-		return api.GetServiceAccount404ApplicationProblemPlusJSONResponse(
-			NewProblem(http.StatusNotFound, "The service account does not exist."),
+		return api.GetPrincipal404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The principal does not exist."),
+		), nil
+	}
+	if errors.Is(err, productidentity.ErrInvalid) {
+		return api.GetPrincipal404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The principal does not exist."),
 		), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return api.GetServiceAccount200JSONResponse(serviceAccountResponse(principal)), nil
+	return api.GetPrincipal200JSONResponse(principalResponse(principal)), nil
+}
+
+func (h *Handler) UpdatePrincipal(
+	ctx context.Context,
+	request api.UpdatePrincipalRequestObject,
+) (api.UpdatePrincipalResponseObject, error) {
+	if request.Body == nil {
+		return api.UpdatePrincipal400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, "A principal state update is required."),
+		), nil
+	}
+
+	principal, err := h.productAuth.UpdatePrincipalDisabled(ctx, request.PrincipalID, request.Body.Disabled)
+	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
+		return api.UpdatePrincipal404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The principal does not exist."),
+		), nil
+	}
+	if errors.Is(err, productidentity.ErrInvalid) {
+		return api.UpdatePrincipal400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, err.Error()),
+		), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.UpdatePrincipal200JSONResponse(principalResponse(principal)), nil
 }
 
 func (h *Handler) CreateServiceAccount(
@@ -212,29 +248,29 @@ func (h *Handler) CreateServiceAccount(
 		return nil, err
 	}
 
-	return api.CreateServiceAccount201JSONResponse(serviceAccountResponse(principal)), nil
+	return api.CreateServiceAccount201JSONResponse(principalResponse(principal)), nil
 }
 
-func (h *Handler) ListServiceAccountAPIKeys(
+func (h *Handler) ListPrincipalAPIKeys(
 	ctx context.Context,
-	request api.ListServiceAccountAPIKeysRequestObject,
-) (api.ListServiceAccountAPIKeysResponseObject, error) {
+	request api.ListPrincipalAPIKeysRequestObject,
+) (api.ListPrincipalAPIKeysResponseObject, error) {
 	limit, offset, windowErr := listWindow(request.Params.Limit, request.Params.Offset)
 	if windowErr != nil {
-		return api.ListServiceAccountAPIKeys400ApplicationProblemPlusJSONResponse(
+		return api.ListPrincipalAPIKeys400ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusBadRequest, windowErr.Error()),
 		), nil
 	}
-	keys, err := h.productAuth.ListServiceAccountAPIKeys(ctx, request.PrincipalID)
+	keys, err := h.productAuth.ListPrincipalAPIKeys(ctx, request.PrincipalID)
 	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
-		problem := NewProblem(http.StatusNotFound, "The service account does not exist.")
+		problem := NewProblem(http.StatusNotFound, "The principal does not exist.")
 
-		return api.ListServiceAccountAPIKeys404ApplicationProblemPlusJSONResponse(problem), nil
+		return api.ListPrincipalAPIKeys404ApplicationProblemPlusJSONResponse(problem), nil
 	}
 	if errors.Is(err, productidentity.ErrInvalid) {
 		problem := NewProblem(http.StatusBadRequest, err.Error())
 
-		return api.ListServiceAccountAPIKeys400ApplicationProblemPlusJSONResponse(problem), nil
+		return api.ListPrincipalAPIKeys400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 	if err != nil {
 		return nil, err
@@ -243,26 +279,26 @@ func (h *Handler) ListServiceAccountAPIKeys(
 	total := len(keys)
 	keys = listPage(keys, offset, limit)
 
-	return api.ListServiceAccountAPIKeys200JSONResponse{
+	return api.ListPrincipalAPIKeys200JSONResponse{
 		Items: apiKeyResponses(keys), Total: total, Limit: limit, Offset: offset,
 	}, nil
 }
 
-func (h *Handler) CreateServiceAccountAPIKey(
+func (h *Handler) CreatePrincipalAPIKey(
 	ctx context.Context,
-	request api.CreateServiceAccountAPIKeyRequestObject,
-) (api.CreateServiceAccountAPIKeyResponseObject, error) {
+	request api.CreatePrincipalAPIKeyRequestObject,
+) (api.CreatePrincipalAPIKeyResponseObject, error) {
 	if request.Body == nil {
 		problem := NewProblem(http.StatusBadRequest, "An API key configuration is required.")
 
-		return api.CreateServiceAccountAPIKey400ApplicationProblemPlusJSONResponse(problem), nil
+		return api.CreatePrincipalAPIKey400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 	authentication, err := currentProductAuthentication(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	credential, err := h.productAuth.CreateServiceAccountAPIKey(
+	credential, err := h.productAuth.CreatePrincipalAPIKey(
 		ctx,
 		request.PrincipalID,
 		authentication.Principal.ID,
@@ -271,25 +307,74 @@ func (h *Handler) CreateServiceAccountAPIKey(
 		request.Body.ExpiresAt,
 	)
 	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
-		problem := NewProblem(http.StatusNotFound, "The service account does not exist.")
+		problem := NewProblem(http.StatusNotFound, "The principal does not exist.")
 
-		return api.CreateServiceAccountAPIKey404ApplicationProblemPlusJSONResponse(problem), nil
+		return api.CreatePrincipalAPIKey404ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if errors.Is(err, productauth.ErrForbidden) {
+		problem := NewProblem(http.StatusForbidden, "API keys can be created only for service accounts.")
+
+		return api.CreatePrincipalAPIKey403ApplicationProblemPlusJSONResponse(problem), nil
 	}
 	if errors.Is(err, productidentity.ErrInvalid) {
 		problem := NewProblem(http.StatusBadRequest, err.Error())
 
-		return api.CreateServiceAccountAPIKey400ApplicationProblemPlusJSONResponse(problem), nil
+		return api.CreatePrincipalAPIKey400ApplicationProblemPlusJSONResponse(problem), nil
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	return api.CreateServiceAccountAPIKey201JSONResponse{
+	return api.CreatePrincipalAPIKey201JSONResponse{
 		Body: apiKeyCredentialResponse(credential),
-		Headers: api.CreateServiceAccountAPIKey201ResponseHeaders{
+		Headers: api.CreatePrincipalAPIKey201ResponseHeaders{
 			Location: fmt.Sprintf("/api/v1/auth/api-keys/%s", credential.Key.ID),
 		},
 	}, nil
+}
+
+func (h *Handler) RevokePrincipalAPIKeys(
+	ctx context.Context,
+	request api.RevokePrincipalAPIKeysRequestObject,
+) (api.RevokePrincipalAPIKeysResponseObject, error) {
+	err := h.productAuth.RevokePrincipalAPIKeys(ctx, request.PrincipalID)
+	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
+		return api.RevokePrincipalAPIKeys404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The principal does not exist."),
+		), nil
+	}
+	if errors.Is(err, productidentity.ErrInvalid) {
+		return api.RevokePrincipalAPIKeys400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, err.Error()),
+		), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.RevokePrincipalAPIKeys204Response{}, nil
+}
+
+func (h *Handler) RevokePrincipalSessions(
+	ctx context.Context,
+	request api.RevokePrincipalSessionsRequestObject,
+) (api.RevokePrincipalSessionsResponseObject, error) {
+	err := h.productAuth.RevokePrincipalSessions(ctx, request.PrincipalID)
+	if errors.Is(err, productidentity.ErrPrincipalNotFound) {
+		return api.RevokePrincipalSessions404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The principal does not exist."),
+		), nil
+	}
+	if errors.Is(err, productidentity.ErrInvalid) {
+		return api.RevokePrincipalSessions400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, err.Error()),
+		), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.RevokePrincipalSessions204Response{}, nil
 }
 
 func apiKeyResponses(keys []productidentity.APIKey) []api.APIKey {
@@ -332,12 +417,15 @@ func apiKeyCredentialResponse(credential productauth.APIKeyCredential) api.APIKe
 	}
 }
 
-func serviceAccountResponse(principal productidentity.Principal) api.ServiceAccount {
-	return api.ServiceAccount{
+func principalResponse(principal productidentity.Principal) api.Principal {
+	return api.Principal{
 		PrincipalID: principal.ID,
+		Kind:        string(principal.Kind),
 		DisplayName: principal.DisplayName,
 		Role:        string(principal.Role),
+		DisabledAt:  cloneResponseTime(principal.DisabledAt),
 		CreatedAt:   principal.CreatedAt,
+		UpdatedAt:   principal.UpdatedAt,
 	}
 }
 

@@ -88,12 +88,16 @@ paths:
     $ref: ./paths/authentication.yaml#/apiKeys
   /api/v1/auth/api-keys/{apiKeyId}:
     $ref: ./paths/authentication.yaml#/apiKey
+  /api/v1/principals:
+    $ref: ./paths/authentication.yaml#/principals
+  /api/v1/principals/{principalId}:
+    $ref: ./paths/authentication.yaml#/principal
+  /api/v1/principals/{principalId}/api-keys:
+    $ref: ./paths/authentication.yaml#/principalAPIKeys
+  /api/v1/principals/{principalId}/sessions:
+    $ref: ./paths/authentication.yaml#/principalSessions
   /api/v1/service-accounts:
     $ref: ./paths/authentication.yaml#/serviceAccounts
-  /api/v1/service-accounts/{principalId}:
-    $ref: ./paths/authentication.yaml#/serviceAccount
-  /api/v1/service-accounts/{principalId}/api-keys:
-    $ref: ./paths/authentication.yaml#/serviceAccountAPIKeys
   /api/v1/kargo/{integration}/promotions:
     $ref: ./paths/promotions.yaml#/kargoPromotion
   /api/v1/promotions:
@@ -173,10 +177,12 @@ components:
       $ref: ./components/authentication.yaml#/APIKeyCreate
     APIKeyCredential:
       $ref: ./components/authentication.yaml#/APIKeyCredential
-    ServiceAccount:
-      $ref: ./components/authentication.yaml#/ServiceAccount
-    ServiceAccountList:
-      $ref: ./components/authentication.yaml#/ServiceAccountList
+    Principal:
+      $ref: ./components/authentication.yaml#/Principal
+    PrincipalList:
+      $ref: ./components/authentication.yaml#/PrincipalList
+    PrincipalUpdate:
+      $ref: ./components/authentication.yaml#/PrincipalUpdate
     ServiceAccountCreate:
       $ref: ./components/authentication.yaml#/ServiceAccountCreate
     Repository:

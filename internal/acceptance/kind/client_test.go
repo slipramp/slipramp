@@ -266,7 +266,7 @@ func (s *suite) createServiceAccount(t *testing.T, displayName, role string) uui
 func (s *suite) createServiceAccountAPIKey(t *testing.T, principalID uuid.UUID, name string, scopes []string) string {
 	t.Helper()
 
-	response, err := s.productClient.CreateServiceAccountAPIKeyWithResponse(t.Context(), principalID, api.APIKeyCreate{
+	response, err := s.productClient.CreatePrincipalAPIKeyWithResponse(t.Context(), principalID, api.APIKeyCreate{
 		Name:   name,
 		Scopes: scopes,
 	})

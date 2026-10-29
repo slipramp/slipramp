@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -46,10 +47,10 @@ func (d *Database) GetPrincipal(ctx context.Context, principalID uuid.UUID) (pro
 	return principalFromRow(row), nil
 }
 
-func (d *Database) ListServiceAccounts(ctx context.Context) ([]productidentity.Principal, error) {
-	rows, err := d.queries.ListServiceAccounts(ctx)
+func (d *Database) ListPrincipals(ctx context.Context) ([]productidentity.Principal, error) {
+	rows, err := d.queries.ListPrincipals(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list product service accounts: %w", err)
+		return nil, fmt.Errorf("list product principals: %w", err)
 	}
 
 	principals := make([]productidentity.Principal, 0, len(rows))
@@ -58,6 +59,30 @@ func (d *Database) ListServiceAccounts(ctx context.Context) ([]productidentity.P
 	}
 
 	return principals, nil
+}
+
+func (d *Database) UpdatePrincipalDisabled(
+	ctx context.Context,
+	principalID uuid.UUID,
+	disabled bool,
+	changedAt time.Time,
+) (productidentity.Principal, error) {
+	row, err := d.queries.UpdatePrincipalDisabled(
+		ctx,
+		storedb.UpdatePrincipalDisabledParams{
+			Disabled:  disabled,
+			ChangedAt: databaseTime(changedAt),
+			ID:        databaseUUID(principalID),
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return productidentity.Principal{}, productidentity.ErrPrincipalNotFound
+	}
+	if err != nil {
+		return productidentity.Principal{}, fmt.Errorf("update product principal state: %w", err)
+	}
+
+	return principalFromRow(row), nil
 }
 
 func (d *Database) GetOIDCUser(

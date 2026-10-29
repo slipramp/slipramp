@@ -28,7 +28,8 @@ type APIKeyCredential struct {
 type accessStore interface {
 	CreatePrincipal(context.Context, productidentity.Principal) (productidentity.Principal, error)
 	GetPrincipal(context.Context, uuid.UUID) (productidentity.Principal, error)
-	ListServiceAccounts(context.Context) ([]productidentity.Principal, error)
+	ListPrincipals(context.Context) ([]productidentity.Principal, error)
+	UpdatePrincipalDisabled(context.Context, uuid.UUID, bool, time.Time) (productidentity.Principal, error)
 	CreateAPIKey(context.Context, productidentity.APIKey) (productidentity.APIKey, error)
 	GetAPIKey(context.Context, uuid.UUID) (productidentity.APIKey, error)
 	GetAPIKeyPrincipal(
@@ -38,6 +39,8 @@ type accessStore interface {
 	ListAPIKeys(context.Context, uuid.UUID) ([]productidentity.APIKey, error)
 	TouchAPIKey(context.Context, uuid.UUID, time.Time) error
 	RevokeAPIKey(context.Context, uuid.UUID, time.Time) error
+	RevokeAPIKeysByPrincipal(context.Context, uuid.UUID, time.Time) error
+	DeleteWebSessionsByPrincipal(context.Context, uuid.UUID) error
 }
 
 func (s *Service) ListOwnAPIKeys(
@@ -82,20 +85,46 @@ func (s *Service) CreateUserAPIKey(
 	return s.createAPIKey(ctx, authentication.Principal.ID, authentication.Principal.ID, name, scopes, expiresAt)
 }
 
-func (s *Service) ListServiceAccounts(ctx context.Context) ([]productidentity.Principal, error) {
-	principals, err := s.store.ListServiceAccounts(ctx)
+func (s *Service) ListPrincipals(ctx context.Context) ([]productidentity.Principal, error) {
+	principals, err := s.store.ListPrincipals(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("list product service accounts: %w", err)
+		return nil, fmt.Errorf("list product principals: %w", err)
 	}
 
 	return principals, nil
 }
 
-func (s *Service) GetServiceAccount(
+func (s *Service) GetPrincipal(
 	ctx context.Context,
 	principalID uuid.UUID,
 ) (productidentity.Principal, error) {
-	return s.serviceAccount(ctx, principalID)
+	if principalID == uuid.Nil {
+		return productidentity.Principal{}, fmt.Errorf("%w: principal ID is required", productidentity.ErrInvalid)
+	}
+
+	principal, err := s.store.GetPrincipal(ctx, principalID)
+	if err != nil {
+		return productidentity.Principal{}, fmt.Errorf("get product principal: %w", err)
+	}
+
+	return principal, nil
+}
+
+func (s *Service) UpdatePrincipalDisabled(
+	ctx context.Context,
+	principalID uuid.UUID,
+	disabled bool,
+) (productidentity.Principal, error) {
+	if principalID == uuid.Nil {
+		return productidentity.Principal{}, fmt.Errorf("%w: principal ID is required", productidentity.ErrInvalid)
+	}
+
+	principal, err := s.store.UpdatePrincipalDisabled(ctx, principalID, disabled, s.now().UTC())
+	if err != nil {
+		return productidentity.Principal{}, fmt.Errorf("update product principal state: %w", err)
+	}
+
+	return principal, nil
 }
 
 func (s *Service) CreateServiceAccount(
@@ -124,18 +153,18 @@ func (s *Service) CreateServiceAccount(
 	return created, nil
 }
 
-func (s *Service) ListServiceAccountAPIKeys(
+func (s *Service) ListPrincipalAPIKeys(
 	ctx context.Context,
 	principalID uuid.UUID,
 ) ([]productidentity.APIKey, error) {
-	if _, err := s.serviceAccount(ctx, principalID); err != nil {
+	if _, err := s.GetPrincipal(ctx, principalID); err != nil {
 		return nil, err
 	}
 
 	return s.listAPIKeys(ctx, principalID)
 }
 
-func (s *Service) CreateServiceAccountAPIKey(
+func (s *Service) CreatePrincipalAPIKey(
 	ctx context.Context,
 	principalID uuid.UUID,
 	createdByPrincipalID uuid.UUID,
@@ -143,11 +172,37 @@ func (s *Service) CreateServiceAccountAPIKey(
 	scopes []productidentity.Scope,
 	expiresAt *time.Time,
 ) (APIKeyCredential, error) {
-	if _, err := s.serviceAccount(ctx, principalID); err != nil {
+	principal, err := s.GetPrincipal(ctx, principalID)
+	if err != nil {
 		return APIKeyCredential{}, err
+	}
+	if principal.Kind != productidentity.KindServiceAccount {
+		return APIKeyCredential{}, ErrForbidden
 	}
 
 	return s.createAPIKey(ctx, principalID, createdByPrincipalID, name, scopes, expiresAt)
+}
+
+func (s *Service) RevokePrincipalAPIKeys(ctx context.Context, principalID uuid.UUID) error {
+	if _, err := s.GetPrincipal(ctx, principalID); err != nil {
+		return err
+	}
+	if err := s.store.RevokeAPIKeysByPrincipal(ctx, principalID, s.now().UTC()); err != nil {
+		return fmt.Errorf("revoke product principal API keys: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) RevokePrincipalSessions(ctx context.Context, principalID uuid.UUID) error {
+	if _, err := s.GetPrincipal(ctx, principalID); err != nil {
+		return err
+	}
+	if err := s.store.DeleteWebSessionsByPrincipal(ctx, principalID); err != nil {
+		return fmt.Errorf("revoke product principal sessions: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Service) RevokeAPIKey(
@@ -268,22 +323,6 @@ func (s *Service) AuthenticateAPIKey(ctx context.Context, token string) (product
 	}
 
 	return authentication, nil
-}
-
-func (s *Service) serviceAccount(ctx context.Context, principalID uuid.UUID) (productidentity.Principal, error) {
-	if principalID == uuid.Nil {
-		return productidentity.Principal{}, fmt.Errorf("%w: principal ID is required", productidentity.ErrInvalid)
-	}
-
-	principal, err := s.store.GetPrincipal(ctx, principalID)
-	if err != nil {
-		return productidentity.Principal{}, fmt.Errorf("get product service account: %w", err)
-	}
-	if principal.Kind != productidentity.KindServiceAccount {
-		return productidentity.Principal{}, productidentity.ErrPrincipalNotFound
-	}
-
-	return principal, nil
 }
 
 func apiKeyDigest(token string) (productidentity.CredentialDigest, error) {
