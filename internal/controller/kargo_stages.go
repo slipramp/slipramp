@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/dynamic"
 
 	"github.com/slipramp/slipramp/internal/api"
@@ -26,6 +27,7 @@ const (
 	kargoStageListLimit            = 500
 	kargoFreightListLimit          = 500
 	kargoStageObservationPeriod    = 30 * time.Second
+	maximumKargoHealthStatusLength = 200
 	promotionSourcePathsAnnotation = "slipramp.com/promotion-source-paths"
 )
 
@@ -286,7 +288,16 @@ type kargoStage struct {
 	} `json:"spec"`
 	Status struct {
 		AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
-		FreightHistory       []struct {
+		Health               struct {
+			Status string `json:"status"`
+			Output []struct {
+				ApplicationStatuses []struct {
+					Name      string `json:"Name"`
+					Namespace string `json:"Namespace"`
+				} `json:"applicationStatuses"`
+			} `json:"output"`
+		} `json:"health"`
+		FreightHistory []struct {
 			Items map[string]kargoFreightReference `json:"items"`
 		} `json:"freightHistory"`
 		LastPromotion *struct {
@@ -359,6 +370,7 @@ func normalizeKargoStageWithDirectFreight(
 
 	variables := kargoVariables(raw)
 	application := firstNonempty(variables["argoApp"], variables["app"], item.GetLabels()["app"], item.GetName())
+	healthStatus, argoApplicationNamespace := kargoStageHealth(raw, application)
 	repositoryURL, targetBranch, sourcePaths := kargoBranchDetails(item, variables)
 	requestedFreight, err := requestedKargoFreight(raw)
 	if err != nil {
@@ -378,6 +390,10 @@ func normalizeKargoStageWithDirectFreight(
 		Freight:              currentKargoFreight(raw),
 		DirectFreight:        directKargoFreight(raw, directFreight),
 		AutoPromotionEnabled: raw.Status.AutoPromotionEnabled,
+		HealthStatus:         optionalNonemptyString(healthStatus),
+		ArgoApplicationNamespace: optionalNonemptyString(
+			argoApplicationNamespace,
+		),
 	}
 
 	observed.SuccessfulRenderAcknowledgement = kargoSuccessfulRenderAcknowledgement(raw)
@@ -401,6 +417,32 @@ func normalizeKargoStageWithDirectFreight(
 	}
 
 	return observed, nil
+}
+
+func kargoStageHealth(stage kargoStage, application string) (string, string) {
+	healthStatus := strings.TrimSpace(stage.Status.Health.Status)
+	if len(healthStatus) > maximumKargoHealthStatusLength {
+		healthStatus = ""
+	}
+
+	applicationNamespace := ""
+	for _, output := range stage.Status.Health.Output {
+		for _, status := range output.ApplicationStatuses {
+			if strings.TrimSpace(status.Name) != application {
+				continue
+			}
+			namespace := strings.TrimSpace(status.Namespace)
+			if namespace == "" || len(validation.IsDNS1123Label(namespace)) > 0 {
+				continue
+			}
+			if applicationNamespace != "" && applicationNamespace != namespace {
+				return healthStatus, ""
+			}
+			applicationNamespace = namespace
+		}
+	}
+
+	return healthStatus, applicationNamespace
 }
 
 func normalizeKargoFreight(item *unstructured.Unstructured) (observedKargoFreight, error) {

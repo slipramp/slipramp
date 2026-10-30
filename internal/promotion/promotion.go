@@ -101,6 +101,8 @@ type Stage struct {
 	Freight                         Freight
 	DirectFreight                   Freight
 	AutoPromotionEnabled            bool
+	HealthStatus                    *string
+	ArgoApplicationNamespace        *string
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 	FirstObservedAt                 time.Time
 	LastObservedAt                  time.Time
@@ -247,6 +249,16 @@ func (s Stage) Validate() error {
 	}
 	if err := kubevalidate.DNSLabel("repository name", s.RepositoryName); err != nil {
 		return invalid(err)
+	}
+	if s.HealthStatus != nil {
+		if err := validateText("Kargo Stage health status", *s.HealthStatus, maximumTextLength); err != nil {
+			return err
+		}
+	}
+	if s.ArgoApplicationNamespace != nil {
+		if err := kubevalidate.DNSLabel("Argo CD Application namespace", *s.ArgoApplicationNamespace); err != nil {
+			return invalid(err)
+		}
 	}
 	if len(s.SourcePaths) == 0 {
 		return fmt.Errorf("%w: at least one source path is required", ErrInvalid)

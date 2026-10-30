@@ -851,8 +851,9 @@ candidate-branch cleanup policy. The Server
 matches normalized observed repository URLs against that allowlist. The
 Controller derives application, environment, repository, target branch, source
 paths, typed current Freight, requested-Freight origin, direct-Warehouse
-allowance, declared source Stages, and successful-render acknowledgement from
-Stage data. The adapter recognizes `app`, `argoApp`, `overlay`, `gitopsRepo`,
+allowance, declared source Stages, aggregate health, the matching Argo CD
+Application namespace, and successful-render acknowledgement from Stage data.
+The adapter recognizes `app`, `argoApp`, `overlay`, `gitopsRepo`,
 `kustomizePath`, `stageBranchKustomization`, and
 `slipramp.com/promotion-source-paths` conventions. Environment order is only a
 presentation setting and never implies Freight topology.
@@ -1098,9 +1099,16 @@ toast. API errors remain in the dialog without losing page filters.
 Pipelines align typed Freight across configured environment order, preserve
 duplicate Stages and missing environments, and append unconfigured environments.
 Comparison reports equality or difference only when Stages exist in at least two
-environments; otherwise it reports absence. Status filters select pipelines with
-at least one matching Freight artifact before pagination. Comparisons do not
-infer version or Git ancestry ordering.
+environments; otherwise it reports absence. Pipeline attention filters select
+Stage drift, available Freight on manual Stages, or either condition before
+pagination. Comparisons do not infer version or Git ancestry ordering.
+
+Pipeline Stage cards show Kargo's most recently observed aggregate health. Once
+the observation exceeds the integration's existing maximum age, the card shows
+the observation as stale instead of presenting the old health as current. An
+optional environment-keyed Argo CD UI map on the Server integration constructs
+links from the observed Application name and namespace. The Server and Web do
+not query Argo CD, and missing health or link configuration remains explicit.
 
 The Controller also observes Kargo's effective auto-promotion state and the
 newest Freight from directly requested Warehouses. Pipeline Stages combine that

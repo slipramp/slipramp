@@ -72,6 +72,9 @@ server:
       prod:
         cluster: prod
         uiUrl: https://kargo.example.com
+        argoCdUiUrls:
+          homelab: https://argocd.homelab.example.com
+          prod: https://argocd.example.com
         repositories: [kcloud-ops]
         environmentOrder: [homelab, prod]
         preparation:
@@ -88,6 +91,9 @@ server:
 
 The selected Cluster must also be present in `controllerEnrollmentTokens`.
 The optional `uiUrl` enables direct Project, Stage, and Promotion links from the web UI.
+The optional `argoCdUiUrls` map enables direct Application links for observed
+Stages in each configured environment. Kargo supplies the Application identity;
+the Server uses this map only to construct browser links and never contacts Argo CD.
 `environmentOrder` is required and controls Freight comparison columns.
 Observed environments that are absent from the list remain visible after the
 configured columns. Changing Kargo integration configuration requires a Server

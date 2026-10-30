@@ -83,6 +83,33 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 	}
 }
 
+func TestFreightPipelineServiceReportsStageObservationFreshness(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 29, 12, 0, 0, 0, time.UTC)
+	fresh := pipelineStage("prod", "kargo-core", "fresh", "fresh-prod", "prod", now.Add(-5*time.Minute))
+	stale := pipelineStage("prod", "kargo-core", "stale", "stale-prod", "prod", now.Add(-5*time.Minute-time.Microsecond))
+	service := NewFreightPipelineService(
+		IntegrationSet{
+			"prod": {
+				EnvironmentOrder:           []string{"prod"},
+				MaximumStageObservationAge: 5 * time.Minute,
+			},
+		},
+		&reviewStore{stages: []Stage{stale, fresh}},
+	)
+	service.now = func() time.Time { return now }
+
+	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: DefaultListLimit})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	if len(result.Items) != 2 || result.Items[0].Stages[0].ObservationStale ||
+		!result.Items[1].Stages[0].ObservationStale {
+		t.Errorf("pipeline freshness = %#v", result.Items)
+	}
+}
+
 func TestFreightPipelineServiceFiltersAndPaginatesPipelines(t *testing.T) {
 	t.Parallel()
 
@@ -189,7 +216,7 @@ func TestFreightPipelineServiceReportsDirectFreightNotCurrentlyDeployed(t *testi
 	}
 }
 
-func TestFreightPipelineServiceFiltersComparisonStatusBeforePagination(t *testing.T) {
+func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
@@ -202,12 +229,19 @@ func TestFreightPipelineServiceFiltersComparisonStatusBeforePagination(t *testin
 	deltaProd := pipelineStage("prod", "kargo-core", "delta", "delta-prod", "prod", now)
 
 	alphaHomelab.Freight = pipelineFreight("1.0.0")
+	alphaHomelab.DirectFreight = pipelineFreight("2.0.0")
+	alphaHomelab.DirectFreight.Items[0].Name = "freight-alpha-new"
 	bravoHomelab.Freight = pipelineFreight("1.0.0")
 	bravoProd.Freight = pipelineFreight("1.0.0")
+	bravoProd.DirectFreight = pipelineFreight("2.0.0")
+	bravoProd.DirectFreight.Items[0].Name = "freight-bravo-new"
+	bravoProd.AutoPromotionEnabled = true
 	charlieHomelab.Freight = pipelineFreight("1.0.0")
 	charlieProd.Freight = pipelineFreight("2.0.0")
 	deltaHomelab.Freight = pipelineFreight("2.0.0")
 	deltaProd.Freight = pipelineFreight("3.0.0")
+	deltaProd.DirectFreight = pipelineFreight("4.0.0")
+	deltaProd.DirectFreight.Items[0].Name = "freight-delta-new"
 
 	store := &reviewStore{stages: []Stage{
 		alphaHomelab,
@@ -223,27 +257,40 @@ func TestFreightPipelineServiceFiltersComparisonStatusBeforePagination(t *testin
 		store,
 	)
 
-	equal, err := service.List(t.Context(), FreightPipelineListFilter{
-		Status: FreightComparisonStatusEqual,
-		Limit:  DefaultListLimit,
+	attention, err := service.List(t.Context(), FreightPipelineListFilter{
+		Attention: FreightPipelineAttentionAny,
+		Limit:     1,
+		Offset:    1,
 	})
 	if err != nil {
-		t.Fatalf("equal List() error = %v", err)
+		t.Fatalf("attention List() error = %v", err)
 	}
-	if equal.Total != 1 || len(equal.Items) != 1 || equal.Items[0].Application != "bravo" {
-		t.Errorf("equal List() = %#v", equal)
+	if attention.Total != 3 || len(attention.Items) != 1 || attention.Items[0].Application != "charlie" {
+		t.Errorf("attention List() = %#v", attention)
 	}
 
-	different, err := service.List(t.Context(), FreightPipelineListFilter{
-		Status: FreightComparisonStatusDifferent,
-		Limit:  1,
-		Offset: 1,
+	drifted, err := service.List(t.Context(), FreightPipelineListFilter{
+		Attention: FreightPipelineAttentionDrifted,
+		Limit:     DefaultListLimit,
 	})
 	if err != nil {
-		t.Fatalf("different List() error = %v", err)
+		t.Fatalf("drifted List() error = %v", err)
 	}
-	if different.Total != 2 || len(different.Items) != 1 || different.Items[0].Application != "delta" {
-		t.Errorf("different List() = %#v", different)
+	if drifted.Total != 2 || len(drifted.Items) != 2 || drifted.Items[0].Application != "charlie" ||
+		drifted.Items[1].Application != "delta" {
+		t.Errorf("drifted List() = %#v", drifted)
+	}
+
+	outdated, err := service.List(t.Context(), FreightPipelineListFilter{
+		Attention: FreightPipelineAttentionOutdated,
+		Limit:     DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("outdated List() error = %v", err)
+	}
+	if outdated.Total != 2 || len(outdated.Items) != 2 || outdated.Items[0].Application != "alpha" ||
+		outdated.Items[1].Application != "delta" {
+		t.Errorf("outdated List() = %#v", outdated)
 	}
 }
 
@@ -260,30 +307,25 @@ func TestFreightPipelineServiceRequiresStagesInTwoEnvironmentsForComparison(t *t
 		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
 		&reviewStore{stages: []Stage{homelabA, homelabB}},
 	)
-	for _, status := range []FreightComparisonStatus{
-		FreightComparisonStatusEqual,
-		FreightComparisonStatusDifferent,
-	} {
-		result, err := service.List(t.Context(), FreightPipelineListFilter{
-			Status: status,
-			Limit:  DefaultListLimit,
-		})
-		if err != nil {
-			t.Fatalf("%s List() error = %v", status, err)
-		}
-		if result.Total != 0 || len(result.Items) != 0 {
-			t.Errorf("%s List() = %#v", status, result)
-		}
+	result, err := service.List(t.Context(), FreightPipelineListFilter{
+		Attention: FreightPipelineAttentionDrifted,
+		Limit:     DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("drifted List() error = %v", err)
+	}
+	if result.Total != 0 || len(result.Items) != 0 {
+		t.Errorf("drifted List() = %#v", result)
 	}
 }
 
-func TestFreightPipelineServiceRejectsInvalidComparisonStatus(t *testing.T) {
+func TestFreightPipelineServiceRejectsInvalidAttention(t *testing.T) {
 	t.Parallel()
 
 	service := NewFreightPipelineService(IntegrationSet{}, &reviewStore{})
 	_, err := service.List(t.Context(), FreightPipelineListFilter{
-		Status: "drifted",
-		Limit:  DefaultListLimit,
+		Attention: "invalid",
+		Limit:     DefaultListLimit,
 	})
 	if !errors.Is(err, ErrInvalid) {
 		t.Fatalf("List() error = %v, want ErrInvalid", err)

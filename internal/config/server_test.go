@@ -74,6 +74,8 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		serverProductSessionLifetimeEnvironment:       "8h",
 		serverKargoIntegrationsEnvironment: `{"prod":{"cluster":"colo","repositories":["kcloud-ops"],` +
 			`"uiUrl":"https://kargo.example.com","environmentOrder":["homelab","prod"],` +
+			`"argoCdUiUrls":{"homelab":"https://argocd.homelab.example.com",` +
+			`"prod":"https://argocd.example.com"},` +
 			`"preparation":{"repository":"kcloud-ops","target":"kargo-promotions",` +
 			`"action":"prepare-review"},"candidateBranchCleanup":{"retention":"168h",` +
 			`"credentials":{"kcloud-ops":"github-server"}},"maximumStageObservationAge":"5m",` +
@@ -178,6 +180,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 	integration, ok := cfg.KargoIntegrations.Lookup("prod")
 	if !ok || integration.ClusterName != "colo" || integration.UIURL != "https://kargo.example.com" ||
 		integration.PendingReviewRetention != 192*time.Hour ||
+		integration.ArgoCDUIURLs["prod"] != "https://argocd.example.com" ||
 		len(integration.EnvironmentOrder) != 2 || integration.EnvironmentOrder[0] != "homelab" {
 		t.Errorf("KargoIntegrations[prod] = %#v, %t", integration, ok)
 	}

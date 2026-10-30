@@ -1,9 +1,10 @@
 import type {
-  PromotionFreightComparisonStatus,
   PromotionFreightArtifact,
   PromotionPipeline,
   PromotionPipelineStage,
 } from "~/api/generated";
+
+export type FreightComparisonStatus = "equal" | "different";
 
 export type FreightColumn = {
   key: string;
@@ -105,7 +106,7 @@ export function freightNames(stage: PromotionPipelineStage) {
 export function freightRowStatus(
   row: FreightComparisonRow,
   columns: FreightColumn[],
-): PromotionFreightComparisonStatus | undefined {
+): FreightComparisonStatus | undefined {
   const presentColumns = columns.filter((column) => column.stage);
   const environments = new Set(presentColumns.map((column) => column.environment));
   if (environments.size < 2) return undefined;
@@ -121,14 +122,4 @@ export function freightRowStatus(
     );
 
   return equal ? "equal" : "different";
-}
-
-export function filterFreightRows(
-  rows: FreightComparisonRow[],
-  columns: FreightColumn[],
-  status?: PromotionFreightComparisonStatus,
-) {
-  if (!status) return rows;
-
-  return rows.filter((row) => freightRowStatus(row, columns) === status);
 }

@@ -14,7 +14,11 @@ upstream Stages or directly requested Warehouses, Controller materialization,
 restart-safe pre-callback terminal reconciliation, callback hydration, ordinary
 preparation Runs, diff artifacts, decisions, expiry, Freight comparisons,
 manual-Stage Freight availability, promotion actions, and background-refreshed
-branch drift with Stage-level pagination are implemented. Opt-in candidate-branch
+branch drift with Stage-level pagination are implemented. The pipeline view
+combines Stage drift and manual Freight availability into one attention filter,
+shows freshness-aware Kargo health, and links observed Applications to configured
+Argo CD UIs.
+Opt-in candidate-branch
 cleanup scans remote inventory, protects nonterminal Promotions, exact-tip
 guards deletions after retention, and records the latest outcome per Repository.
 Live Kargo acceptance and the standalone Kargo Gate retirement are complete.

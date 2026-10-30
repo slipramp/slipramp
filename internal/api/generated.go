@@ -517,18 +517,21 @@ func (e PromotionFreightArtifactKind) Valid() bool {
 	}
 }
 
-// Defines values for PromotionFreightComparisonStatus.
+// Defines values for PromotionPipelineAttention.
 const (
-	PromotionFreightComparisonStatusDifferent PromotionFreightComparisonStatus = "different"
-	PromotionFreightComparisonStatusEqual     PromotionFreightComparisonStatus = "equal"
+	PromotionPipelineAttentionAny      PromotionPipelineAttention = "any"
+	PromotionPipelineAttentionDrifted  PromotionPipelineAttention = "drifted"
+	PromotionPipelineAttentionOutdated PromotionPipelineAttention = "outdated"
 )
 
-// Valid indicates whether the value is a known member of the PromotionFreightComparisonStatus enum.
-func (e PromotionFreightComparisonStatus) Valid() bool {
+// Valid indicates whether the value is a known member of the PromotionPipelineAttention enum.
+func (e PromotionPipelineAttention) Valid() bool {
 	switch e {
-	case PromotionFreightComparisonStatusDifferent:
+	case PromotionPipelineAttentionAny:
 		return true
-	case PromotionFreightComparisonStatusEqual:
+	case PromotionPipelineAttentionDrifted:
+		return true
+	case PromotionPipelineAttentionOutdated:
 		return true
 	default:
 		return false
@@ -2386,9 +2389,6 @@ type PromotionFreightArtifact struct {
 // PromotionFreightArtifactKind defines model for PromotionFreightArtifact.Kind.
 type PromotionFreightArtifactKind string
 
-// PromotionFreightComparisonStatus defines model for PromotionFreightComparisonStatus.
-type PromotionFreightComparisonStatus string
-
 // PromotionFreightItem defines model for PromotionFreightItem.
 type PromotionFreightItem struct {
 	Artifacts []PromotionFreightArtifact `json:"artifacts"`
@@ -2430,6 +2430,9 @@ type PromotionPipeline struct {
 	Stages           []PromotionPipelineStage `json:"stages"`
 }
 
+// PromotionPipelineAttention defines model for PromotionPipelineAttention.
+type PromotionPipelineAttention string
+
 // PromotionPipelineList defines model for PromotionPipelineList.
 type PromotionPipelineList struct {
 	Items  []PromotionPipeline `json:"items"`
@@ -2440,19 +2443,28 @@ type PromotionPipelineList struct {
 
 // PromotionPipelineStage defines model for PromotionPipelineStage.
 type PromotionPipelineStage struct {
+	// ArgoCdURL Direct link to the observed Application in the configured Argo CD UI.
+	ArgoCdURL *string `json:"argoCdUrl,omitempty"`
+
 	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
 	AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
 
 	// AvailableFreight Exact observed Freight not currently deployed to this Stage.
-	AvailableFreight PromotionFreight   `json:"availableFreight"`
-	Environment      string             `json:"environment"`
-	Freight          PromotionFreight   `json:"freight"`
-	ID               openapi_types.UUID `json:"id"`
+	AvailableFreight PromotionFreight `json:"availableFreight"`
+	Environment      string           `json:"environment"`
+	Freight          PromotionFreight `json:"freight"`
+
+	// HealthStatus Most recently observed aggregate Kargo health status for this Stage.
+	HealthStatus *string            `json:"healthStatus,omitempty"`
+	ID           openapi_types.UUID `json:"id"`
 
 	// KargoURL Direct link to this Stage in the configured Kargo UI.
-	KargoURL              *string                  `json:"kargoUrl,omitempty"`
-	LastObservedAt        time.Time                `json:"lastObservedAt"`
-	Name                  string                   `json:"name"`
+	KargoURL       *string   `json:"kargoUrl,omitempty"`
+	LastObservedAt time.Time `json:"lastObservedAt"`
+	Name           string    `json:"name"`
+
+	// ObservationStale Whether the Stage observation exceeds the integration freshness limit.
+	ObservationStale      bool                     `json:"observationStale"`
 	PendingPromotionCount int                      `json:"pendingPromotionCount"`
 	PromotionSources      []PromotionFreightSource `json:"promotionSources"`
 }
@@ -2540,13 +2552,19 @@ type PromotionStageList struct {
 type PromotionStageObservation struct {
 	Application string `json:"application"`
 
+	// ArgoApplicationNamespace Namespace of the matching Argo CD Application reported by Kargo health output.
+	ArgoApplicationNamespace *string `json:"argoApplicationNamespace,omitempty"`
+
 	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
 	AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
 
 	// DirectFreight Latest directly sourced Freight observed for each requested origin.
-	DirectFreight                   PromotionFreight                 `json:"directFreight"`
-	Environment                     string                           `json:"environment"`
-	Freight                         PromotionFreight                 `json:"freight"`
+	DirectFreight PromotionFreight `json:"directFreight"`
+	Environment   string           `json:"environment"`
+	Freight       PromotionFreight `json:"freight"`
+
+	// HealthStatus Aggregate health status reported by Kargo for this Stage.
+	HealthStatus                    *string                          `json:"healthStatus,omitempty"`
 	KubernetesUID                   string                           `json:"kubernetesUid"`
 	Name                            string                           `json:"name"`
 	Project                         CatalogName                      `json:"project"`
@@ -3578,10 +3596,10 @@ type ListPromotionPipelinesParams struct {
 	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
 	Repository  *CatalogName `form:"repository,omitempty" json:"repository,omitempty"`
 
-	// Status Include pipelines containing at least one comparable Freight artifact with this status. Freight is comparable only when Stages are present in at least two environments.
-	Status *PromotionFreightComparisonStatus `form:"status,omitempty" json:"status,omitempty"`
-	Limit  *Limit                            `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset *Offset                           `form:"offset,omitempty" json:"offset,omitempty"`
+	// Attention Include pipelines with Stage drift, newer Freight available to a manual Stage, or either condition. Stage drift requires comparable Freight in at least two environments.
+	Attention *PromotionPipelineAttention `form:"attention,omitempty" json:"attention,omitempty"`
+	Limit     *Limit                      `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset    *Offset                     `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListPromotionProjectsParams defines parameters for ListPromotionProjects.
@@ -7842,9 +7860,9 @@ func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipeli
 
 		}
 
-		if params.Status != nil {
+		if params.Attention != nil {
 
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "attention", *params.Attention, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {
@@ -23454,15 +23472,15 @@ func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter,
 		return
 	}
 
-	// ------------- Optional query parameter "status" -------------
+	// ------------- Optional query parameter "attention" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "status", r.URL.Query(), &params.Status, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "attention", r.URL.Query(), &params.Attention, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "status"})
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "attention"})
 		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "status", Err: err})
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attention", Err: err})
 		}
 		return
 	}

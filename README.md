@@ -290,7 +290,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_OIDC_REDIRECT_URL`                | Required                         | Absolute provider callback URL ending at `/api/v1/auth/callback`                                                           |
 | `SLIPRAMP_OIDC_SUBJECT_ROLES`               | Required                         | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required  |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME`         | `12h`                            | Absolute lifetime of a local browser session                                                                               |
-| `SLIPRAMP_KARGO_INTEGRATIONS`               | `{}`                             | JSON object containing optional named Kargo integrations for Stage inventory, operator creation, review preparation, and optional Kargo UI deep links |
+| `SLIPRAMP_KARGO_INTEGRATIONS`               | `{}`                             | JSON object containing optional named Kargo integrations for Stage inventory, operator creation, review preparation, health, and optional Kargo and environment-specific Argo CD UI deep links |
 
 OIDC configuration is required for the Server to start. The subject-role map is
 the installation's enrollment and role authority: unknown subjects cannot sign

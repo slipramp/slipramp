@@ -58,6 +58,8 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 	)
 	service.now = func() time.Time { return now }
 	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1901")
+	healthStatus := "Healthy"
+	argoNamespace := "argocd"
 	service.newID = func() uuid.UUID { return stageID }
 
 	err := service.ReplaceStageSnapshot(t.Context(), "prod", "colo", StageSnapshotReplacement{
@@ -65,18 +67,20 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 		ObservedAt: now.Add(-time.Second),
 		Stages: []StageObservation{
 			{
-				Project:              "kargo-core",
-				Name:                 "external-dns-prod",
-				KubernetesUID:        "stage-uid",
-				ResourceVersion:      "42",
-				Application:          "external-dns",
-				Environment:          "prod",
-				RepositoryURL:        "https://example.com/ops.git",
-				TargetBranch:         "stage/external-dns/prod",
-				SourcePaths:          []string{"k8s/external-dns/base"},
-				Freight:              Freight{Items: []FreightItem{}},
-				DirectFreight:        Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}},
-				AutoPromotionEnabled: true,
+				Project:                  "kargo-core",
+				Name:                     "external-dns-prod",
+				KubernetesUID:            "stage-uid",
+				ResourceVersion:          "42",
+				Application:              "external-dns",
+				Environment:              "prod",
+				RepositoryURL:            "https://example.com/ops.git",
+				TargetBranch:             "stage/external-dns/prod",
+				SourcePaths:              []string{"k8s/external-dns/base"},
+				Freight:                  Freight{Items: []FreightItem{}},
+				DirectFreight:            Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}},
+				AutoPromotionEnabled:     true,
+				HealthStatus:             &healthStatus,
+				ArgoApplicationNamespace: &argoNamespace,
 			},
 		},
 	})
@@ -86,9 +90,13 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 	if store.snapshot.ClusterName != "colo" || len(store.stages) != 1 {
 		t.Fatalf("stored snapshot = %#v, stages = %#v", store.snapshot, store.stages)
 	}
+	healthStatus = "Changed"
+	argoNamespace = "changed"
 	stage := store.stages[0]
 	if stage.ID != stageID || stage.RepositoryName != "ops" || stage.Integration != "prod" ||
 		stage.ClusterName != "colo" || !stage.AutoPromotionEnabled ||
+		stage.HealthStatus == nil || *stage.HealthStatus != "Healthy" ||
+		stage.ArgoApplicationNamespace == nil || *stage.ArgoApplicationNamespace != "argocd" ||
 		len(stage.DirectFreight.Items) != 1 || stage.DirectFreight.Items[0].Name != "freight-new" {
 		t.Errorf("stored Stage = %#v", stage)
 	}

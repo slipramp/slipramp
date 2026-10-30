@@ -7,113 +7,80 @@ import {
   Paper,
   SimpleGrid,
   Stack,
+  Switch,
   Table,
   Text,
+  TextInput,
 } from "@mantine/core";
-import type { ReactNode } from "react";
+import { IconSearch } from "@tabler/icons-react";
+import { useDeferredValue, useMemo, useState } from "react";
 
-import type { Artifact, Run, TerraformPlanReport, TerraformResourceChange } from "~/api/generated";
+import type { Artifact, TerraformPlanReport, TerraformResourceChange } from "~/api/generated";
 import { SectionHeader } from "~/shared/page";
-import { Timestamp } from "~/shared/display-values";
 import {
+  filterTerraformResources,
   groupTerraformResources,
   terraformActionBadges,
   terraformCheckBadges,
   type CountBadge,
 } from "~/features/runs/terraform-plan-report";
 import type { ReportLoad } from "~/features/runs/run-reports";
-import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 
 export function TerraformPlanReportView({
   artifact,
   canReadContents,
   load,
-  run,
 }: Readonly<{
   artifact: Artifact;
   canReadContents: boolean;
   load: ReportLoad;
-  run: Run;
 }>) {
   const report = artifact.report;
   if (!report || report.kind !== "terraform-plan") return null;
 
   const detail =
     load.state === "available" && load.detail.kind === "terraform-plan" ? load.detail : undefined;
-  const summaryBadges = terraformActionBadges(report.summary.resourceChanges);
+  const summaryBadges = terraformActionBadges(report.summary.resourceChanges).filter(
+    (badge) => badge.label !== "No-op",
+  );
 
   return (
     <Paper p="md" withBorder>
-      <Stack gap="lg">
+      <Stack gap="md">
         <SectionHeader
           actions={
-            canReadContents &&
-            artifact.state === "sealed" &&
-            artifact.retentionState === "retained" ? (
-              <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
-                Download source JSON
-              </Anchor>
-            ) : undefined
-          }
-          description={
-            <>
-              Structured, value-free preview produced from {report.tool}
-              {report.toolVersion ? ` ${report.toolVersion}` : ""}. Report facts are descriptive and
-              do not determine the Run outcome.
-            </>
+            <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
+              <BooleanFact label="Applyable" value={report.summary.applyable} />
+              <BooleanFact label="Complete" value={report.summary.complete} />
+              <BooleanFact label="Errored" negative value={report.summary.errored} />
+              <Badge color="gray" variant="light">
+                {sentenceCase(report.tool)}
+                {report.toolVersion ? ` ${report.toolVersion}` : ""}
+              </Badge>
+              {canReadContents &&
+              artifact.state === "sealed" &&
+              artifact.retentionState === "retained" ? (
+                <Anchor href={`/api/v1/artifacts/${artifact.id}/download`} size="sm">
+                  Download source JSON
+                </Anchor>
+              ) : null}
+            </Group>
           }
           title="Terraform plan report"
         />
 
-        <Group gap="xs" wrap="wrap">
-          <Badge variant="light">
-            {report.summary.resourceChanges.total}{" "}
-            {report.summary.resourceChanges.total === 1 ? "resource change" : "resource changes"}
-          </Badge>
-          {summaryBadges.map((badge) => (
-            <CountBadgeView badge={badge} key={badge.label} />
-          ))}
-          {report.summary.driftedResources > 0 ? (
-            <Badge color="grape" variant="light">
-              {report.summary.driftedResources} drifted
-            </Badge>
-          ) : null}
-        </Group>
-
-        <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
-          <ReportFact label="Run outcome">
-            <Badge color={runStatusColor(run)} variant="light">
-              {runStatusLabel(run)}
-            </Badge>
-            <Text c="dimmed" size="xs">
-              Authoritative execution result
-            </Text>
-          </ReportFact>
-          <ReportFact label="Report status">
-            <Group gap="xs" wrap="wrap">
-              <BooleanFact label="Applyable" value={report.summary.applyable} />
-              <BooleanFact label="Complete" value={report.summary.complete} />
-              <BooleanFact label="Errored" negative value={report.summary.errored} />
-            </Group>
-          </ReportFact>
-          <ReportFact label="Source Artifact">
-            <Group gap="xs" wrap="wrap">
-              <Badge color={artifact.state === "sealed" ? "green" : "gray"} variant="light">
-                {sentenceCase(artifact.state)}
+        {summaryBadges.length > 0 || report.summary.driftedResources > 0 ? (
+          <Group gap="xs" wrap="wrap">
+            {summaryBadges.map((badge) => (
+              <CountBadgeView badge={badge} key={badge.label} />
+            ))}
+            {report.summary.driftedResources > 0 ? (
+              <Badge color="grape" variant="light">
+                {report.summary.driftedResources} drifted
               </Badge>
-              <Badge
-                color={artifact.retentionState === "retained" ? "blue" : "orange"}
-                variant="light"
-              >
-                {sentenceCase(artifact.retentionState)}
-              </Badge>
-            </Group>
-            <Text c="dimmed" size="xs">
-              Projection schema {report.schemaVersion} · adapter {report.adapterVersion} · created{" "}
-              <Timestamp inherit value={report.createdAt} />
-            </Text>
-          </ReportFact>
-        </SimpleGrid>
+            ) : null}
+          </Group>
+        ) : null}
 
         <ReportDetailNotice state={load.state} />
 
@@ -124,18 +91,82 @@ export function TerraformPlanReportView({
 }
 
 function TerraformPlanDetail({ report }: Readonly<{ report: TerraformPlanReport }>) {
+  const [keyword, setKeyword] = useState("");
+  const [showNoOp, setShowNoOp] = useState(false);
+  const deferredKeyword = useDeferredValue(keyword);
+  const resourceChanges = useMemo(
+    () =>
+      filterTerraformResources(report.resourceChanges, {
+        keyword: deferredKeyword,
+        showNoOp,
+      }),
+    [deferredKeyword, report.resourceChanges, showNoOp],
+  );
+  const resourceDrift = useMemo(
+    () =>
+      filterTerraformResources(report.resourceDrift, {
+        keyword: deferredKeyword,
+        showNoOp,
+      }),
+    [deferredKeyword, report.resourceDrift, showNoOp],
+  );
+  const totalRows = report.resourceChanges.length + report.resourceDrift.length;
+  const visibleRows = resourceChanges.length + resourceDrift.length;
+  const noOpRows = useMemo(
+    () =>
+      [...report.resourceChanges, ...report.resourceDrift].filter(
+        (resource) => resource.action === "no-op",
+      ).length,
+    [report.resourceChanges, report.resourceDrift],
+  );
+
   return (
     <Stack gap="lg">
+      <Stack gap={6}>
+        <Group align="flex-end" gap="md" justify="space-between" wrap="wrap">
+          <TextInput
+            aria-label="Filter Terraform resources by keyword"
+            label="Filter resources"
+            leftSection={<IconSearch aria-hidden size={15} />}
+            onChange={(event) => setKeyword(event.currentTarget.value)}
+            placeholder="Address, type, provider, or reason"
+            style={{ flex: "1 1 24rem" }}
+            value={keyword}
+          />
+          {noOpRows > 0 ? (
+            <Switch
+              checked={showNoOp}
+              label={`Show no-op (${noOpRows.toLocaleString()})`}
+              onChange={(event) => setShowNoOp(event.currentTarget.checked)}
+            />
+          ) : null}
+        </Group>
+        <Text c="dimmed" size="xs">
+          Showing {visibleRows.toLocaleString()} of {totalRows.toLocaleString()} resource rows
+          {deferredKeyword.trim() ? " matching the keyword filter" : ""}.
+          {!showNoOp && noOpRows > 0 ? " No-op resources are hidden." : ""}
+        </Text>
+      </Stack>
       <ResourceSection
-        changes={report.resourceChanges}
-        empty="Terraform reported no resource changes."
+        changes={resourceChanges}
+        empty={
+          report.resourceChanges.length === 0
+            ? "Terraform reported no resource changes."
+            : "No resource changes match the current filters."
+        }
         title="Resource changes"
+        total={report.resourceChanges.length}
       />
       {report.summary.driftedResources > 0 || report.resourceDrift.length > 0 ? (
         <ResourceSection
-          changes={report.resourceDrift}
-          empty="Terraform counted drift, but no drift detail was projected."
+          changes={resourceDrift}
+          empty={
+            report.resourceDrift.length === 0
+              ? "Terraform counted drift, but no drift detail was projected."
+              : "No resource drift matches the current filters."
+          }
           title="Resource drift"
+          total={report.resourceDrift.length}
         />
       ) : null}
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
@@ -160,14 +191,19 @@ function ResourceSection({
   changes,
   empty,
   title,
-}: Readonly<{ changes: TerraformResourceChange[]; empty: string; title: string }>) {
+  total,
+}: Readonly<{ changes: TerraformResourceChange[]; empty: string; title: string; total: number }>) {
   return (
     <Stack gap="sm">
       <Group justify="space-between" wrap="wrap">
         <Text fw={600} size="lg">
           {title}
         </Text>
-        <Badge variant="light">{changes.length}</Badge>
+        <Badge variant="light">
+          {changes.length === total
+            ? total.toLocaleString()
+            : `${changes.length.toLocaleString()} of ${total.toLocaleString()}`}
+        </Badge>
       </Group>
       {changes.length === 0 ? (
         <Text c="dimmed" size="sm">
@@ -272,19 +308,6 @@ function AggregateSection({
             ))}
           </Group>
         )}
-      </Stack>
-    </Paper>
-  );
-}
-
-function ReportFact({ children, label }: Readonly<{ children: ReactNode; label: string }>) {
-  return (
-    <Paper p="sm" withBorder>
-      <Stack gap={6}>
-        <Text c="dimmed" fw={600} size="xs" tt="uppercase">
-          {label}
-        </Text>
-        {children}
       </Stack>
     </Paper>
   );

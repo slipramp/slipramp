@@ -72,6 +72,13 @@ func TestNormalizeKargoStage(t *testing.T) {
       },
       "status":{
 		"autoPromotionEnabled":true,
+		"health":{
+		  "status":"Healthy",
+		  "output":[{"applicationStatuses":[
+		    {"Name":"other","Namespace":"argocd"},
+		    {"Name":"external-dns-phi","Namespace":"argocd"}
+		  ]}]
+		},
         "freightHistory":[{"items":{
           "Warehouse/external-dns":{
             "name":"99d3a4",
@@ -99,6 +106,10 @@ func TestNormalizeKargoStage(t *testing.T) {
 		observed.Application != "external-dns-phi" || observed.Environment != "prod" ||
 		!observed.AutoPromotionEnabled {
 		t.Errorf("identity = %#v", observed)
+	}
+	if valueOrEmpty(observed.HealthStatus) != "Healthy" ||
+		valueOrEmpty(observed.ArgoApplicationNamespace) != "argocd" {
+		t.Errorf("health = %#v, Argo namespace = %v", observed.HealthStatus, observed.ArgoApplicationNamespace)
 	}
 	if observed.RepositoryURL != "https://example.com/ops.git" ||
 		observed.TargetBranch != "stage/external-dns/prod" {

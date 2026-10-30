@@ -8,6 +8,7 @@ import {
   Group,
   Menu,
   Paper,
+  Popover,
   SimpleGrid,
   Stack,
   Table,
@@ -383,9 +384,7 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         back={<PageBackLink label="Back to run history" to="/runs" />}
         badges={
           <>
-            <Badge color={runStatusColor(run)} variant="light">
-              {runStatusLabel(run)}
-            </Badge>
+            <RunStatusBadge run={run} />
             {run.phase !== "finished" && run.cancellationRequestedAt !== undefined ? (
               <Badge color="yellow" variant="outline">
                 Cancellation requested
@@ -465,8 +464,6 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
       <RunReviewPanel canReview={canReview} run={run} />
 
-      <RunSchedulingNotice run={run} />
-
       {run.phase !== "finished" && run.observationState === "unknown" ? (
         <Alert color="yellow" title="Execution observation unavailable">
           The cluster controller is unreachable or has not reported this Run recently. Its durable
@@ -526,19 +523,10 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
               canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
               key={artifact.id}
               load={load}
-              run={run}
             />
           );
         })}
       <RunLogViewer artifact={logArtifact} key={run.id} runId={run.id} />
-      {applySelection ? (
-        <ArtifactLineage
-          artifact={applySelection.artifact}
-          available={loaderData.artifactRunsAvailable}
-          canReadContents={canReadArtifactContents(applySelection.artifact, loaderData.principal)}
-          runs={loaderData.artifactRuns}
-        />
-      ) : null}
       <RunOverview repositoryName={loaderData.repositoryName} run={run} />
       <ParameterTable parameters={run.parameters} />
 
@@ -549,21 +537,33 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
         principal={loaderData.principal}
         producerSucceeded={run.outcome === "succeeded"}
       />
+      {applySelection ? (
+        <ArtifactLineage
+          artifact={applySelection.artifact}
+          available={loaderData.artifactRunsAvailable}
+          canReadContents={canReadArtifactContents(applySelection.artifact, loaderData.principal)}
+          runs={loaderData.artifactRuns}
+        />
+      ) : null}
     </Stack>
   );
 }
 
-function RunSchedulingNotice({ run }: Readonly<{ run: Run }>) {
+function RunStatusBadge({ run }: Readonly<{ run: Run }>) {
+  const label = runStatusLabel(run);
   if (
     run.phase !== "queued" ||
     !run.schedulingState ||
     run.queueAgeSeconds === undefined ||
     !run.schedulingSnapshotAt
   ) {
-    return null;
+    return (
+      <Badge color={runStatusColor(run)} variant="light">
+        {label}
+      </Badge>
+    );
   }
 
-  const title = runStatusLabel(run);
   let explanation: ReactNode;
   switch (run.schedulingState) {
     case "awaiting-review":
@@ -594,22 +594,46 @@ function RunSchedulingNotice({ run }: Readonly<{ run: Run }>) {
   }
 
   return (
-    <Alert color={run.schedulingState === "eligible" ? "blue" : "yellow"} title={title}>
-      <Stack gap={4}>
-        <Text>{explanation}</Text>
-        <Group gap="xs" wrap="wrap">
-          <Text size="sm">
-            Queued for {formatDuration(new Date(0), new Date(run.queueAgeSeconds * 1000))}
+    <Popover position="bottom-start" shadow="md" width="min(380px, calc(100vw - 2rem))" withArrow>
+      <Popover.Target>
+        <Badge
+          aria-label={`${label}. Show queue details`}
+          color={runStatusColor(run)}
+          component="button"
+          rightSection={<IconChevronDown aria-hidden size={12} />}
+          style={{ cursor: "pointer" }}
+          type="button"
+          variant="light"
+        >
+          {label}
+        </Badge>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <Stack gap="xs">
+          <Text fw={700} size="sm">
+            Queue details
           </Text>
-          {run.eligiblePosition !== undefined ? (
-            <Text size="sm">· Eligible position {run.eligiblePosition}</Text>
-          ) : null}
-          <Text c="dimmed" size="sm">
-            · Snapshot <Timestamp value={run.schedulingSnapshotAt} />; not an ETA
-          </Text>
-        </Group>
-      </Stack>
-    </Alert>
+          <Text size="sm">{explanation}</Text>
+          <Group gap="xs" wrap="wrap">
+            <Text size="xs">
+              Queued for {formatDuration(new Date(0), new Date(run.queueAgeSeconds * 1000))}
+            </Text>
+            {run.eligiblePosition !== undefined ? (
+              <Text size="xs">· Eligible position {run.eligiblePosition}</Text>
+            ) : null}
+          </Group>
+          <Group gap={4} wrap="wrap">
+            <Text c="dimmed" size="xs">
+              Snapshot
+            </Text>
+            <Timestamp c="dimmed" size="xs" value={run.schedulingSnapshotAt} />
+            <Text c="dimmed" size="xs">
+              · Point-in-time state, not an ETA
+            </Text>
+          </Group>
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
   );
 }
 
@@ -791,7 +815,7 @@ function ArtifactLineage({
       <Stack gap="sm">
         <SectionHeader
           actions={
-            <Group gap="sm">
+            <Group align="center" gap="xs" style={{ alignSelf: "center" }} wrap="wrap">
               <Badge variant="light">
                 {runs.length} {runs.length === 1 ? "run" : "runs"}
               </Badge>
@@ -803,11 +827,6 @@ function ArtifactLineage({
                 </Anchor>
               ) : null}
             </Group>
-          }
-          description={
-            artifact.description
-              ? `${artifact.description} Consuming Runs stay linked to the exact retained Artifact.`
-              : "Consuming Runs stay linked to the exact retained Artifact."
           }
           title="Artifact lineage"
         />
@@ -886,9 +905,6 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
             <Fact label="Catalog revision">
               <CommitReference commit={run.commit} repositoryId={run.repositoryId} />
             </Fact>
-            <Fact label="Run ID">
-              <Code style={{ overflowWrap: "anywhere" }}>{run.id}</Code>
-            </Fact>
             {run.rerunOfRunId && run.rerunMode ? (
               <Fact label="Run again">
                 <Anchor component={Link} to={`/runs/${run.rerunOfRunId}`}>
@@ -897,30 +913,41 @@ function RunOverview({ repositoryName, run }: Readonly<{ repositoryName?: string
                 </Anchor>
               </Fact>
             ) : null}
-            <Fact label="Job UID">
-              {run.jobUid ? (
-                <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
-              ) : (
-                <Text c="dimmed" size="sm">
-                  Not materialized
-                </Text>
-              )}
-            </Fact>
-            {run.images?.action ? (
-              <Fact label="Action image ID">
-                <Code style={{ overflowWrap: "anywhere" }}>{run.images.action}</Code>
-              </Fact>
-            ) : null}
-            {run.images?.checkout ? (
-              <Fact label="Checkout image ID">
-                <Code style={{ overflowWrap: "anywhere" }}>{run.images.checkout}</Code>
-              </Fact>
-            ) : null}
-            {run.images?.harness ? (
-              <Fact label="Harness image ID">
-                <Code style={{ overflowWrap: "anywhere" }}>{run.images.harness}</Code>
-              </Fact>
-            ) : null}
+            <Accordion defaultValue={null} variant="contained">
+              <Accordion.Item value="job-details">
+                <Accordion.Control>
+                  <Text fw={600}>Job details</Text>
+                </Accordion.Control>
+                <Accordion.Panel>
+                  <SimpleGrid cols={1} spacing="lg">
+                    <Fact label="Job UID">
+                      {run.jobUid ? (
+                        <Code style={{ overflowWrap: "anywhere" }}>{run.jobUid}</Code>
+                      ) : (
+                        <Text c="dimmed" size="sm">
+                          Not materialized
+                        </Text>
+                      )}
+                    </Fact>
+                    {run.images?.action ? (
+                      <Fact label="Action image ID">
+                        <Code style={{ wordBreak: "break-all" }}>{run.images.action}</Code>
+                      </Fact>
+                    ) : null}
+                    {run.images?.checkout ? (
+                      <Fact label="Checkout image ID">
+                        <Code style={{ wordBreak: "break-all" }}>{run.images.checkout}</Code>
+                      </Fact>
+                    ) : null}
+                    {run.images?.harness ? (
+                      <Fact label="Harness image ID">
+                        <Code style={{ wordBreak: "break-all" }}>{run.images.harness}</Code>
+                      </Fact>
+                    ) : null}
+                  </SimpleGrid>
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
           </SimpleGrid>
           {run.lastObservedAt ? (
             <Group gap={4}>

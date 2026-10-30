@@ -25,6 +25,8 @@ type StageObservation struct {
 	Freight                         Freight
 	DirectFreight                   Freight
 	AutoPromotionEnabled            bool
+	HealthStatus                    *string
+	ArgoApplicationNamespace        *string
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 }
 
@@ -141,6 +143,8 @@ func (s *StageService) ReplaceStageSnapshot(
 			Freight:                         cloneFreight(observed.Freight),
 			DirectFreight:                   cloneFreight(observed.DirectFreight),
 			AutoPromotionEnabled:            observed.AutoPromotionEnabled,
+			HealthStatus:                    cloneOptionalString(observed.HealthStatus),
+			ArgoApplicationNamespace:        cloneOptionalString(observed.ArgoApplicationNamespace),
 			SuccessfulRenderAcknowledgement: cloneRenderAcknowledgement(observed.SuccessfulRenderAcknowledgement),
 			FirstObservedAt:                 snapshot.ObservedAt,
 			LastObservedAt:                  snapshot.ObservedAt,

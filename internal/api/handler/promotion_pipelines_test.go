@@ -34,6 +34,8 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
 	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1907")
+	healthStatus := "Healthy"
+	argoNamespace := "argocd"
 	pipelines := &recordingPromotionPipelineService{
 		result: promotion.FreightPipelineList{
 			Items: []promotion.FreightPipeline{{
@@ -45,11 +47,14 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 				EnvironmentOrder: []string{"homelab", "prod"},
 				Stages: []promotion.FreightPipelineStage{{
 					Stage: promotion.Stage{
-						ID:             stageID,
-						Name:           "external-dns-prod",
-						Environment:    "prod",
-						Freight:        promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/external-dns", Name: "freight-1", Artifacts: []promotion.FreightArtifact{{Kind: "image", Repository: new("ghcr.io/example/external-dns"), Version: "1.2.3"}}}}},
-						LastObservedAt: now,
+						ID:                       stageID,
+						Name:                     "external-dns-prod",
+						Environment:              "prod",
+						Application:              "external-dns",
+						Freight:                  promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/external-dns", Name: "freight-1", Artifacts: []promotion.FreightArtifact{{Kind: "image", Repository: new("ghcr.io/example/external-dns"), Version: "1.2.3"}}}}},
+						HealthStatus:             &healthStatus,
+						ArgoApplicationNamespace: &argoNamespace,
+						LastObservedAt:           now,
 					},
 					PromotionSources: []promotion.FreightPromotionSource{{
 						StageID:     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1908"),
@@ -69,6 +74,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 						Name:   "freight-2",
 					}},
 					PendingPromotionCount: 1,
+					ObservationStale:      true,
 				}},
 			}},
 			Total:  1,
@@ -80,7 +86,10 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		Dependencies{
 			PromotionPipelines: pipelines,
 			KargoIntegrations: promotion.IntegrationSet{
-				"prod": {UIURL: "https://kargo.example.com"},
+				"prod": {
+					UIURL:        "https://kargo.example.com",
+					ArgoCDUIURLs: map[string]string{"prod": "https://argocd.example.com"},
+				},
 			},
 			ProductAuthentication: &recordingProductAuthenticationService{
 				authentication: productAuthentication(
@@ -96,7 +105,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		t.Context(),
 		http.MethodGet,
 		"/api/v1/promotion-pipelines?integration=prod&cluster=colo&project=kargo-core&"+
-			"repository=ops&application=external-dns&status=different&limit=10&offset=2",
+			"repository=ops&application=external-dns&attention=any&limit=10&offset=2",
 		nil,
 	)
 	request.Header.Set("Authorization", "Bearer viewer-key")
@@ -110,7 +119,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 	if pipelines.filter.Integration != "prod" || pipelines.filter.Cluster != "colo" ||
 		pipelines.filter.Project != "kargo-core" || pipelines.filter.Repository != "ops" ||
 		pipelines.filter.Application != "external-dns" ||
-		pipelines.filter.Status != promotion.FreightComparisonStatusDifferent || pipelines.filter.Limit != 10 ||
+		pipelines.filter.Attention != promotion.FreightPipelineAttentionAny || pipelines.filter.Limit != 10 ||
 		pipelines.filter.Offset != 2 {
 		t.Errorf("pipeline filter = %#v", pipelines.filter)
 	}
@@ -122,8 +131,11 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		`"promotionSources":[`,
 		`"availableFreight":{"items":[`,
 		`"autoPromotionEnabled":false`,
+		`"healthStatus":"Healthy"`,
+		`"observationStale":true`,
 		`"pendingPromotionCount":1`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/external-dns-prod"`,
+		`"argoCdUrl":"https://argocd.example.com/applications/argocd/external-dns"`,
 	} {
 		if !strings.Contains(response.Body.String(), expected) {
 			t.Errorf("response %q does not contain %q", response.Body.String(), expected)

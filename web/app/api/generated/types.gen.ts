@@ -1976,7 +1976,7 @@ export type PromotionStagePolicyUpdate = {
   reason?: string;
 };
 
-export type PromotionFreightComparisonStatus = "equal" | "different";
+export type PromotionPipelineAttention = "any" | "drifted" | "outdated";
 
 export type PromotionFreightSource = {
   stageId: string;
@@ -2000,11 +2000,23 @@ export type PromotionPipelineStage = {
    */
   autoPromotionEnabled: boolean;
   pendingPromotionCount: number;
+  /**
+   * Most recently observed aggregate Kargo health status for this Stage.
+   */
+  healthStatus?: string;
+  /**
+   * Whether the Stage observation exceeds the integration freshness limit.
+   */
+  observationStale: boolean;
   lastObservedAt: string;
   /**
    * Direct link to this Stage in the configured Kargo UI.
    */
   kargoUrl?: string;
+  /**
+   * Direct link to the observed Application in the configured Argo CD UI.
+   */
+  argoCdUrl?: string;
 };
 
 export type PromotionBranchDriftStatus = "current" | "drifted" | "unknown";
@@ -2057,6 +2069,14 @@ export type PromotionStageObservation = {
    * Effective Kargo auto-promotion state for this Stage.
    */
   autoPromotionEnabled: boolean;
+  /**
+   * Aggregate health status reported by Kargo for this Stage.
+   */
+  healthStatus?: string;
+  /**
+   * Namespace of the matching Argo CD Application reported by Kargo health output.
+   */
+  argoApplicationNamespace?: string;
   successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
 };
 
@@ -5208,9 +5228,9 @@ export type ListPromotionPipelinesData = {
     cluster?: CatalogName;
     repository?: CatalogName;
     /**
-     * Include pipelines containing at least one comparable Freight artifact with this status. Freight is comparable only when Stages are present in at least two environments.
+     * Include pipelines with Stage drift, newer Freight available to a manual Stage, or either condition. Stage drift requires comparable Freight in at least two environments.
      */
-    status?: PromotionFreightComparisonStatus;
+    attention?: PromotionPipelineAttention;
     limit?: number;
     offset?: number;
   };

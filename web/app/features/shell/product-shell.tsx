@@ -76,7 +76,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
     items: [
       { icon: IconFolder, label: "Projects", to: "/promotion-projects" },
       { icon: IconRocket, label: "Promotions", to: "/promotions" },
-      { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines?status=different" },
+      { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines?attention=any" },
       {
         icon: IconArrowsDiff,
         label: "Branch drift",

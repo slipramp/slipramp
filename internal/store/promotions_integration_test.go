@@ -1151,6 +1151,8 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	externalDNS := promotionTestStage("prod", "colo", "kargo-core", "external-dns-prod", secondObservedAt)
 	externalDNS.ResourceVersion = "2"
 	externalDNS.AutoPromotionEnabled = true
+	externalDNS.HealthStatus = new("Healthy")
+	externalDNS.ArgoApplicationNamespace = new("argocd")
 	externalDNS.DirectFreight = promotion.Freight{Items: []promotion.FreightItem{{
 		Origin: "Warehouse/external-dns",
 		Name:   "freight-new",
@@ -1169,7 +1171,9 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	}
 	if active.ID != firstStages[0].ID || active.ResourceVersion != "2" || active.ArchivedAt != nil ||
 		!active.AutoPromotionEnabled || len(active.DirectFreight.Items) != 1 ||
-		active.DirectFreight.Items[0].Name != "freight-new" {
+		active.DirectFreight.Items[0].Name != "freight-new" ||
+		active.HealthStatus == nil || *active.HealthStatus != "Healthy" ||
+		active.ArgoApplicationNamespace == nil || *active.ArgoApplicationNamespace != "argocd" {
 		t.Errorf("active Stage = %#v", active)
 	}
 	archived, err := database.GetPromotionStageByIdentity(ctx, "prod", "kargo-core", "metrics-server-prod")

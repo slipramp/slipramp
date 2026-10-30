@@ -12,7 +12,13 @@ import {
   Title,
   Tooltip,
 } from "@mantine/core";
-import { IconArrowRight, IconArrowsDiff, IconCheck, IconMinus } from "@tabler/icons-react";
+import {
+  IconArrowRight,
+  IconArrowsDiff,
+  IconCheck,
+  IconExternalLink,
+  IconMinus,
+} from "@tabler/icons-react";
 import { Fragment, useState } from "react";
 import { Link, redirect } from "react-router";
 
@@ -20,11 +26,13 @@ import { createServerAPIClient } from "~/api/client.server";
 import {
   getCurrentPrincipal,
   listPromotionPipelines,
-  type PromotionFreightComparisonStatus,
+  type PromotionPipelineAttention,
   type PromotionPipeline,
+  type PromotionPipelineStage,
 } from "~/api/generated";
 import { KargoLink } from "~/features/promotions/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
+import { formatTimestamp } from "~/shared/display";
 import { PageHeader } from "~/shared/page";
 import {
   PromotionCreateButton,
@@ -42,7 +50,6 @@ import { submitPromotionCreation } from "~/features/promotions/promotion-creatio
 import {
   buildFreightColumns,
   buildFreightRows,
-  filterFreightRows,
   freightRowStatus,
   type FreightColumn,
   type FreightComparisonRow,
@@ -63,7 +70,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const application = optionalValue(url.searchParams.get("application"));
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const repository = optionalValue(url.searchParams.get("repository"));
-  const status = optionalFreightStatus(url.searchParams.get("status"));
+  const attention = optionalAttention(url.searchParams.get("attention"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
   const [result, principalResult] = await Promise.all([
@@ -77,7 +84,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         offset: (requestedPage - 1) * pageSize,
         project,
         repository,
-        status,
+        attention,
       },
     }),
     getCurrentPrincipal({ client }),
@@ -99,17 +106,11 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     error: result.error?.detail ?? result.error?.title,
     integration,
     page: requestedPage,
-    pipelines:
-      result.data?.items.filter((pipeline) => {
-        if (!status) return true;
-
-        const columns = buildFreightColumns(pipeline);
-        return filterFreightRows(buildFreightRows(columns), columns, status).length > 0;
-      }) ?? [],
+    pipelines: result.data?.items ?? [],
     project,
     principal: principalResult.data,
     repository,
-    status,
+    attention,
     total: result.data?.total ?? 0,
   };
 }
@@ -130,11 +131,11 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
 
       <PipelineFilters
         application={loaderData.application}
+        attention={loaderData.attention}
         cluster={loaderData.cluster}
         integration={loaderData.integration}
         project={loaderData.project}
         repository={loaderData.repository}
-        status={loaderData.status}
       />
 
       {!loaderData.available ? (
@@ -144,19 +145,14 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
       ) : loaderData.pipelines.length === 0 ? (
         <Paper p="md" withBorder>
           <Text c="dimmed">
-            {loaderData.status === "different"
-              ? "All pipelines are in sync."
+            {loaderData.attention
+              ? "No pipelines match this attention filter."
               : "No active Kargo pipelines match these filters."}
           </Text>
         </Paper>
       ) : (
         loaderData.pipelines.map((pipeline) => (
-          <PipelineComparison
-            canWrite={canWrite}
-            key={pipelineKey(pipeline)}
-            pipeline={pipeline}
-            status={loaderData.status}
-          />
+          <PipelineComparison canWrite={canWrite} key={pipelineKey(pipeline)} pipeline={pipeline} />
         ))
       )}
 
@@ -175,18 +171,18 @@ export default function PromotionPipelines({ loaderData }: Route.ComponentProps)
 
 function PipelineFilters({
   application,
+  attention,
   cluster,
   integration,
   project,
   repository,
-  status,
 }: Readonly<{
   application?: string;
+  attention?: PromotionPipelineAttention;
   cluster?: string;
   integration?: string;
   project?: string;
   repository?: string;
-  status?: PromotionFreightComparisonStatus;
 }>) {
   return (
     <SearchParamFilters
@@ -201,16 +197,17 @@ function PipelineFilters({
           value: cluster,
         },
         {
-          active: Boolean(status),
+          active: Boolean(attention),
           data: [
-            { label: "All statuses", value: "" },
-            { label: "Equal", value: "equal" },
-            { label: "Different", value: "different" },
+            { label: "All pipelines", value: "" },
+            { label: "Needs attention", value: "any" },
+            { label: "Drifted", value: "drifted" },
+            { label: "Outdated", value: "outdated" },
           ],
           kind: "select",
-          label: "Status",
-          name: "status",
-          value: status,
+          label: "Attention",
+          name: "attention",
+          value: attention,
         },
         {
           active: Boolean(repository),
@@ -227,17 +224,18 @@ function PipelineFilters({
 function PipelineComparison({
   canWrite,
   pipeline,
-  status,
 }: Readonly<{
   canWrite: boolean;
   pipeline: PromotionPipeline;
-  status?: PromotionFreightComparisonStatus;
 }>) {
   const columns = buildFreightColumns(pipeline);
-  const rows = filterFreightRows(buildFreightRows(columns), columns, status);
+  const rows = buildFreightRows(columns);
   const statuses = rows.map((row) => freightRowStatus(row, columns));
   const differentCount = statuses.filter((rowStatus) => rowStatus === "different").length;
   const equalCount = statuses.filter((rowStatus) => rowStatus === "equal").length;
+  const outdatedCount = pipeline.stages.filter(
+    (stage) => !stage.autoPromotionEnabled && stage.availableFreight.items.length > 0,
+  ).length;
 
   return (
     <Paper p="md" withBorder>
@@ -251,22 +249,26 @@ function PipelineComparison({
               {pipeline.project} · {pipeline.repository}
             </Text>
           </Stack>
-          {differentCount > 0 ? (
-            <Badge color="yellow" variant="light">
-              {differentCount} different
-            </Badge>
-          ) : equalCount > 0 ? (
-            <Badge color="green" variant="light">
-              Freight aligned
-            </Badge>
-          ) : null}
+          <Group gap="xs">
+            {differentCount > 0 ? (
+              <Badge color="yellow" title={`${differentCount} Freight differences`} variant="light">
+                Drifted
+              </Badge>
+            ) : null}
+            {outdatedCount > 0 ? (
+              <Badge color="orange" variant="light">
+                {outdatedCount === 1 ? "1 outdated Stage" : `${outdatedCount} outdated Stages`}
+              </Badge>
+            ) : null}
+            {differentCount === 0 && outdatedCount === 0 && equalCount > 0 ? (
+              <Badge color="green" variant="light">
+                Freight aligned
+              </Badge>
+            ) : null}
+          </Group>
         </Group>
         {rows.length === 0 ? (
-          <Text c="dimmed">
-            {status
-              ? `No ${status} Freight artifacts match this filter.`
-              : "No Freight artifacts are currently reported."}
-          </Text>
+          <Text c="dimmed">No Freight artifacts are currently reported.</Text>
         ) : null}
         <Box className="pipeline-flow">
           {columns.map((column, index) => (
@@ -341,6 +343,7 @@ function PipelineStageCard({
                   No Stage
                 </Badge>
               )}
+              {stage ? <StageHealthBadge stage={stage} /> : null}
               {stage?.pendingPromotionCount ? (
                 <Anchor component={Link} size="xs" to={`/promotions?stageId=${stage.id}`}>
                   {stage.pendingPromotionCount} pending
@@ -388,6 +391,55 @@ function PipelineStageCard({
       ) : null}
     </>
   );
+}
+
+function StageHealthBadge({ stage }: Readonly<{ stage: PromotionPipelineStage }>) {
+  const presentation = stageHealthPresentation(stage);
+  const tooltip = stage.observationStale
+    ? `Last observed ${formatTimestamp(stage.lastObservedAt)}. The reported health may be outdated.`
+    : stage.healthStatus
+      ? `Kargo reported ${stage.healthStatus}. Last observed ${formatTimestamp(stage.lastObservedAt)}.`
+      : `Kargo has not reported Stage health. Last observed ${formatTimestamp(stage.lastObservedAt)}.`;
+  const badge = (
+    <Badge color={presentation.color} size="sm" variant="light">
+      <Group component="span" gap={4} wrap="nowrap">
+        {presentation.label}
+        {stage.argoCdUrl ? <IconExternalLink aria-hidden size={11} /> : null}
+      </Group>
+    </Badge>
+  );
+
+  return (
+    <Tooltip label={tooltip}>
+      {stage.argoCdUrl ? (
+        <Anchor href={stage.argoCdUrl} rel="noreferrer" target="_blank" underline="never">
+          {badge}
+        </Anchor>
+      ) : (
+        badge
+      )}
+    </Tooltip>
+  );
+}
+
+function stageHealthPresentation(stage: PromotionPipelineStage) {
+  if (stage.observationStale) {
+    return { color: "gray", label: "Observation stale" };
+  }
+
+  switch (stage.healthStatus?.toLowerCase()) {
+    case "healthy":
+      return { color: "green", label: stage.healthStatus };
+    case "progressing":
+      return { color: "yellow", label: stage.healthStatus };
+    case "degraded":
+    case "unhealthy":
+      return { color: "red", label: stage.healthStatus };
+    case "suspended":
+      return { color: "orange", label: stage.healthStatus };
+    default:
+      return { color: "gray", label: stage.healthStatus ?? "Health unavailable" };
+  }
 }
 
 function FreightArtifactCard({
@@ -472,6 +524,6 @@ function optionalValue(value: string | null) {
   return value?.trim() || undefined;
 }
 
-function optionalFreightStatus(value: string | null): PromotionFreightComparisonStatus | undefined {
-  return value === "equal" || value === "different" ? value : undefined;
+function optionalAttention(value: string | null): PromotionPipelineAttention | undefined {
+  return value === "any" || value === "drifted" || value === "outdated" ? value : undefined;
 }

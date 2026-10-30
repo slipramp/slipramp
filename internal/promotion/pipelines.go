@@ -4,15 +4,17 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 )
 
-type FreightComparisonStatus string
+type FreightPipelineAttention string
 
 const (
-	FreightComparisonStatusEqual     FreightComparisonStatus = "equal"
-	FreightComparisonStatusDifferent FreightComparisonStatus = "different"
+	FreightPipelineAttentionAny      FreightPipelineAttention = "any"
+	FreightPipelineAttentionDrifted  FreightPipelineAttention = "drifted"
+	FreightPipelineAttentionOutdated FreightPipelineAttention = "outdated"
 )
 
 type FreightPipelineListFilter struct {
@@ -21,7 +23,7 @@ type FreightPipelineListFilter struct {
 	Project     string
 	Repository  string
 	Application string
-	Status      FreightComparisonStatus
+	Attention   FreightPipelineAttention
 	Limit       int
 	Offset      int
 }
@@ -31,6 +33,7 @@ type FreightPipelineStage struct {
 	PromotionSources      []FreightPromotionSource
 	AvailableFreight      []FreightItem
 	PendingPromotionCount int
+	ObservationStale      bool
 }
 
 type FreightPromotionSource struct {
@@ -65,13 +68,14 @@ type FreightPipelineStore interface {
 type FreightPipelineService struct {
 	integrations IntegrationSet
 	store        FreightPipelineStore
+	now          func() time.Time
 }
 
 func NewFreightPipelineService(
 	integrations IntegrationSet,
 	store FreightPipelineStore,
 ) *FreightPipelineService {
-	return &FreightPipelineService{integrations: integrations, store: store}
+	return &FreightPipelineService{integrations: integrations, store: store, now: time.Now}
 }
 
 func (s *FreightPipelineService) List(
@@ -81,14 +85,15 @@ func (s *FreightPipelineService) List(
 	if err := validateListWindow(filter.Limit, filter.Offset); err != nil {
 		return FreightPipelineList{}, err
 	}
-	if filter.Status != "" && !filter.Status.Valid() {
-		return FreightPipelineList{}, fmt.Errorf("%w: Freight comparison status filter is invalid", ErrInvalid)
+	if filter.Attention != "" && !filter.Attention.Valid() {
+		return FreightPipelineList{}, fmt.Errorf("%w: pipeline attention filter is invalid", ErrInvalid)
 	}
 
 	stages, err := s.store.ListPromotionStages(ctx)
 	if err != nil {
 		return FreightPipelineList{}, err
 	}
+	evaluatedAt := s.now()
 	type pipelineKey struct {
 		integration string
 		cluster     string
@@ -145,7 +150,10 @@ func (s *FreightPipelineService) List(
 		if !slices.Contains(integration.EnvironmentOrder, stage.Environment) {
 			builder.unknownEnvs[stage.Environment] = struct{}{}
 		}
-		builder.pipeline.Stages = append(builder.pipeline.Stages, FreightPipelineStage{Stage: stage})
+		builder.pipeline.Stages = append(builder.pipeline.Stages, FreightPipelineStage{
+			Stage:            stage,
+			ObservationStale: stageObservationStale(stage, integration, evaluatedAt),
+		})
 	}
 
 	pendingCounts, err := s.store.CountPendingPromotionsByStage(ctx, stageIDs)
@@ -182,7 +190,7 @@ func (s *FreightPipelineService) List(
 
 			return compareText(left.Stage.ID.String(), right.Stage.ID.String())
 		})
-		if freightPipelineMatchesStatus(builder.pipeline, filter.Status) {
+		if freightPipelineMatchesAttention(builder.pipeline, filter.Attention) {
 			items = append(items, builder.pipeline)
 		}
 	}
@@ -206,6 +214,14 @@ func (s *FreightPipelineService) List(
 	items = page(items, filter.Offset, filter.Limit)
 
 	return FreightPipelineList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+func stageObservationStale(stage Stage, integration IntegrationConfig, now time.Time) bool {
+	if integration.MaximumStageObservationAge <= 0 {
+		return false
+	}
+
+	return stage.LastObservedAt.Before(now.UTC().Add(-integration.MaximumStageObservationAge))
 }
 
 type stageIdentity struct {
@@ -298,15 +314,35 @@ func availableFreight(target Stage, sources []FreightPromotionSource) []FreightI
 	return available
 }
 
-func (s FreightComparisonStatus) Valid() bool {
-	return s == FreightComparisonStatusEqual || s == FreightComparisonStatusDifferent
+func (a FreightPipelineAttention) Valid() bool {
+	switch a {
+	case FreightPipelineAttentionAny, FreightPipelineAttentionDrifted, FreightPipelineAttentionOutdated:
+		return true
+	default:
+		return false
+	}
 }
 
-func freightPipelineMatchesStatus(pipeline FreightPipeline, status FreightComparisonStatus) bool {
-	if status == "" {
+func freightPipelineMatchesAttention(pipeline FreightPipeline, attention FreightPipelineAttention) bool {
+	if attention == "" {
 		return true
 	}
+	drifted := freightPipelineDrifted(pipeline)
+	outdated := freightPipelineOutdated(pipeline)
 
+	switch attention {
+	case FreightPipelineAttentionAny:
+		return drifted || outdated
+	case FreightPipelineAttentionDrifted:
+		return drifted
+	case FreightPipelineAttentionOutdated:
+		return outdated
+	default:
+		return false
+	}
+}
+
+func freightPipelineDrifted(pipeline FreightPipeline) bool {
 	environments := make(map[string]struct{}, len(pipeline.Stages))
 	rows := make(map[freightComparisonRowKey]map[uuid.UUID][]string)
 	for _, pipelineStage := range pipeline.Stages {
@@ -340,8 +376,17 @@ func freightPipelineMatchesStatus(pipeline FreightPipeline, status FreightCompar
 	}
 
 	for _, values := range rows {
-		equal := freightValuesEqual(values, pipeline.Stages)
-		if (status == FreightComparisonStatusEqual) == equal {
+		if !freightValuesEqual(values, pipeline.Stages) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func freightPipelineOutdated(pipeline FreightPipeline) bool {
+	for _, stage := range pipeline.Stages {
+		if !stage.Stage.AutoPromotionEnabled && len(stage.AvailableFreight) > 0 {
 			return true
 		}
 	}

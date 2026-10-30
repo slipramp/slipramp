@@ -500,6 +500,8 @@ func (h *Handler) ReplaceKargoStageSnapshot(
 			Freight:                         promotionFreightFromRequest(observed.Freight),
 			DirectFreight:                   promotionFreightFromRequest(observed.DirectFreight),
 			AutoPromotionEnabled:            observed.AutoPromotionEnabled,
+			HealthStatus:                    observed.HealthStatus,
+			ArgoApplicationNamespace:        observed.ArgoApplicationNamespace,
 			SuccessfulRenderAcknowledgement: promotionAcknowledgementFromRequest(observed.SuccessfulRenderAcknowledgement),
 		})
 	}

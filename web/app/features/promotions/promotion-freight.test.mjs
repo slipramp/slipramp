@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   buildFreightColumns,
   buildFreightRows,
-  filterFreightRows,
   freightNames,
   freightRowStatus,
 } from "./promotion-freight.ts";
@@ -72,14 +71,10 @@ test("buildFreightRows aligns versions and reports exact equality", () => {
   assert.equal(rows.length, 1);
   assert.deepEqual(rows[0].values, { 1: ["1.2.0"], 2: ["1.2.0"] });
   assert.equal(freightRowStatus(rows[0], columns), "equal");
-  assert.deepEqual(filterFreightRows(rows, columns, "equal"), rows);
-  assert.deepEqual(filterFreightRows(rows, columns, "different"), []);
   assert.deepEqual(freightNames(columns[0].stage), ["freight-1.2.0"]);
 
   rows[0].values["2"] = ["1.1.0"];
   assert.equal(freightRowStatus(rows[0], columns), "different");
-  assert.deepEqual(filterFreightRows(rows, columns, "equal"), []);
-  assert.deepEqual(filterFreightRows(rows, columns, "different"), rows);
 });
 
 test("Freight is not comparable until Stages exist in two environments", () => {
@@ -95,6 +90,4 @@ test("Freight is not comparable until Stages exist in two environments", () => {
   const rows = buildFreightRows(columns);
 
   assert.equal(freightRowStatus(rows[0], columns), undefined);
-  assert.deepEqual(filterFreightRows(rows, columns, "equal"), []);
-  assert.deepEqual(filterFreightRows(rows, columns, "different"), []);
 });

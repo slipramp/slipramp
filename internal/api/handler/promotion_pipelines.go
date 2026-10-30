@@ -23,8 +23,8 @@ func (h *Handler) ListPromotionPipelines(
 	if request.Params.Application != nil {
 		filter.Application = *request.Params.Application
 	}
-	if request.Params.Status != nil {
-		filter.Status = promotion.FreightComparisonStatus(*request.Params.Status)
+	if request.Params.Attention != nil {
+		filter.Attention = promotion.FreightPipelineAttention(*request.Params.Attention)
 	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
@@ -49,6 +49,10 @@ func (h *Handler) ListPromotionPipelines(
 	for _, pipeline := range result.Items {
 		stages := make([]api.PromotionPipelineStage, 0, len(pipeline.Stages))
 		for _, pipelineStage := range pipeline.Stages {
+			argoApplicationNamespace := ""
+			if pipelineStage.Stage.ArgoApplicationNamespace != nil {
+				argoApplicationNamespace = *pipelineStage.Stage.ArgoApplicationNamespace
+			}
 			freight := promotionFreightResponse(pipelineStage.Stage.Freight)
 			availableFreight := promotionFreightResponse(promotion.Freight{Items: pipelineStage.AvailableFreight})
 			promotionSources := make([]api.PromotionFreightSource, 0, len(pipelineStage.PromotionSources))
@@ -72,12 +76,20 @@ func (h *Handler) ListPromotionPipelines(
 				PromotionSources:      promotionSources,
 				AvailableFreight:      availableFreight,
 				AutoPromotionEnabled:  pipelineStage.Stage.AutoPromotionEnabled,
+				HealthStatus:          pipelineStage.Stage.HealthStatus,
+				ObservationStale:      pipelineStage.ObservationStale,
 				PendingPromotionCount: pipelineStage.PendingPromotionCount,
 				LastObservedAt:        pipelineStage.Stage.LastObservedAt,
 				KargoURL: h.kargoIntegrations.KargoStageURL(
 					pipeline.Integration,
 					pipeline.Project,
 					pipelineStage.Stage.Name,
+				),
+				ArgoCdURL: h.kargoIntegrations.ArgoCDApplicationURL(
+					pipeline.Integration,
+					pipelineStage.Stage.Environment,
+					argoApplicationNamespace,
+					pipelineStage.Stage.Application,
 				),
 			})
 		}

@@ -273,6 +273,8 @@ type PromotionStage struct {
 	RequestedFreightJson            []byte
 	AutoPromotionEnabled            bool
 	DirectFreightJson               []byte
+	HealthStatus                    *string
+	ArgoApplicationNamespace        *string
 }
 
 type PromotionStagePolicy struct {

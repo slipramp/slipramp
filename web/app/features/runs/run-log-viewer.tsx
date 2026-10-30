@@ -4,22 +4,25 @@ import {
   Box,
   Button,
   Group,
+  Menu,
   Modal,
   Paper,
   Stack,
-  Switch,
   Text,
   TextInput,
   Title,
 } from "@mantine/core";
 import {
+  IconAdjustments,
   IconArrowDown,
   IconArrowUp,
+  IconCheck,
   IconDownload,
   IconMaximize,
   IconPlayerPause,
   IconPlayerPlay,
   IconSearch,
+  IconTextWrap,
 } from "@tabler/icons-react";
 import {
   memo,
@@ -48,7 +51,8 @@ type LogStreamStatus =
   | "Live"
   | "Paused"
   | "Reconnecting"
-  | "Retained";
+  | "Retained"
+  | "Waiting for logs";
 
 const reconnectDelayMs = 1000;
 const estimatedLineHeight = 20;
@@ -58,6 +62,7 @@ export function RunLogViewer({
   artifact,
   runId,
 }: Readonly<{ artifact?: Artifact; runId: string }>) {
+  const logAvailable = artifact !== undefined;
   const initialOffsetBytes = Math.max(0, (artifact?.sizeBytes ?? 0) - LOG_TAIL_WINDOW_BYTES);
   const [buffer] = useState(() => new BoundedLogBuffer(initialOffsetBytes));
 
@@ -67,7 +72,9 @@ export function RunLogViewer({
   const [matchPosition, setMatchPosition] = useState(0);
   const [paused, setPaused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [status, setStatus] = useState<LogStreamStatus>("Connecting");
+  const [status, setStatus] = useState<LogStreamStatus>(
+    logAvailable ? "Connecting" : "Waiting for logs",
+  );
   const [streamFinished, setStreamFinished] = useState(false);
   const [wrapLines, setWrapLines] = useState(true);
 
@@ -100,8 +107,8 @@ export function RunLogViewer({
       setDiagnostic(message);
       setStatus("Error");
     };
-    const connect = () => {
-      setStatus("Connecting");
+    const connect = (retrying = false) => {
+      if (!retrying) setStatus(logAvailable ? "Connecting" : "Waiting for logs");
       const streamURL = new URL(`/api/v1/runs/${runId}/logs`, window.location.origin);
       streamURL.searchParams.set("offsetBytes", String(buffer.cursorBytes));
       source = new EventSource(streamURL);
@@ -149,11 +156,16 @@ export function RunLogViewer({
         source?.close();
         if (stopped || reconnectTimer !== undefined) return;
 
-        setDiagnostic(`Connection lost; retrying from durable byte ${buffer.cursorBytes}.`);
-        setStatus("Reconnecting");
+        if (logAvailable) {
+          setDiagnostic(`Connection lost; retrying from durable byte ${buffer.cursorBytes}.`);
+          setStatus("Reconnecting");
+        } else {
+          setDiagnostic(undefined);
+          setStatus("Waiting for logs");
+        }
         reconnectTimer = window.setTimeout(() => {
           reconnectTimer = undefined;
-          connect();
+          connect(true);
         }, reconnectDelayMs);
       });
     };
@@ -166,7 +178,7 @@ export function RunLogViewer({
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       if (renderFrame !== undefined) window.cancelAnimationFrame(renderFrame);
     };
-  }, [buffer, paused, runId, streamFinished]);
+  }, [buffer, logAvailable, paused, runId, streamFinished]);
 
   const matchingLines = buffer.findMatchingLines(searchQuery);
   const selectedMatchPosition = Math.min(matchPosition, Math.max(matchingLines.length - 1, 0));
@@ -195,6 +207,7 @@ export function RunLogViewer({
 
   const selectedMatchLine = matchingLines[selectedMatchPosition];
   const activeMatchLine = paused || streamFinished ? selectedMatchLine : undefined;
+  const hasSearchQuery = searchQuery.trim().length > 0;
   const canDownloadRaw =
     artifact !== undefined &&
     artifact.retentionState === "retained" &&
@@ -213,55 +226,79 @@ export function RunLogViewer({
       : `${formatBinarySize(buffer.sizeBytes)} tail from byte ${buffer.windowStartBytes.toLocaleString()}`;
   const controls = (
     <>
-      <Group gap="xs" wrap="wrap">
-        <Text c="dimmed" size="xs">
-          {windowDescription} · {buffer.lineCount.toLocaleString()} lines
-        </Text>
-        <Badge color={statusColor} variant="light">
-          {status}
-        </Badge>
-        {!streamFinished ? (
-          <Button
-            leftSection={
-              paused ? (
-                <IconPlayerPlay aria-hidden size={15} />
+      <Group gap="xs" justify="space-between" wrap="wrap">
+        <Group gap="xs" wrap="wrap">
+          <Badge color={statusColor} variant="light">
+            {status}
+          </Badge>
+          <Text c="dimmed" size="xs">
+            {windowDescription} · {buffer.lineCount.toLocaleString()} lines
+          </Text>
+        </Group>
+        <Group gap="xs" wrap="wrap">
+          {!streamFinished ? (
+            <Button
+              leftSection={
+                paused ? (
+                  <IconPlayerPlay aria-hidden size={15} />
+                ) : (
+                  <IconPlayerPause aria-hidden size={15} />
+                )
+              }
+              onClick={() => {
+                setPaused(!paused);
+                setStatus(paused ? (logAvailable ? "Connecting" : "Waiting for logs") : "Paused");
+              }}
+              size="compact-sm"
+              variant="light"
+            >
+              {paused ? "Follow" : "Pause"}
+            </Button>
+          ) : null}
+          <Menu position="bottom-end" withinPortal>
+            <Menu.Target>
+              <Button
+                leftSection={<IconAdjustments aria-hidden size={15} />}
+                size="compact-sm"
+                variant="default"
+              >
+                Options
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                aria-checked={wrapLines}
+                closeMenuOnClick={false}
+                leftSection={<IconTextWrap aria-hidden size={15} />}
+                onClick={() => setWrapLines((current) => !current)}
+                rightSection={wrapLines ? <IconCheck aria-hidden size={14} /> : null}
+                role="menuitemcheckbox"
+              >
+                Wrap lines
+              </Menu.Item>
+              <Menu.Divider />
+              {canDownloadRaw && artifact ? (
+                <Menu.Item
+                  component="a"
+                  href={`/api/v1/artifacts/${artifact.id}/download`}
+                  leftSection={<IconDownload aria-hidden size={15} />}
+                >
+                  Download raw log
+                </Menu.Item>
               ) : (
-                <IconPlayerPause aria-hidden size={15} />
-              )
-            }
-            onClick={() => {
-              setPaused(!paused);
-              setStatus(paused ? "Connecting" : "Paused");
-            }}
-            size="compact-sm"
-            variant="light"
-          >
-            {paused ? "Follow" : "Pause"}
-          </Button>
-        ) : null}
-        {canDownloadRaw && artifact ? (
-          <Button
-            component="a"
-            href={`/api/v1/artifacts/${artifact.id}/download`}
-            leftSection={<IconDownload aria-hidden size={15} />}
-            size="compact-sm"
-            variant="subtle"
-          >
-            Download raw log
-          </Button>
-        ) : (
-          <Button
-            disabled
-            leftSection={<IconDownload aria-hidden size={15} />}
-            size="compact-sm"
-            title="Raw download is available after the complete log is retained."
-            variant="subtle"
-          >
-            Download raw log
-          </Button>
-        )}
+                <Menu.Item
+                  disabled
+                  leftSection={<IconDownload aria-hidden size={15} />}
+                  title="Raw download is available after the complete log is retained."
+                >
+                  Download raw log
+                </Menu.Item>
+              )}
+            </Menu.Dropdown>
+          </Menu>
+        </Group>
       </Group>
-      <Group align="flex-end" gap="xs" wrap="wrap">
+      <Group align="center" gap="xs" wrap="wrap">
         <TextInput
           aria-label="Search visible log tail"
           leftSection={<IconSearch aria-hidden size={15} />}
@@ -269,41 +306,38 @@ export function RunLogViewer({
           onKeyDown={handleSearchKeyDown}
           placeholder="Search visible tail"
           size="sm"
+          style={{ flex: "1 1 18rem" }}
           value={searchQuery}
         />
-        <Text aria-live="polite" c="dimmed" miw={110} size="xs">
-          {searchQuery.trim().length === 0
-            ? "Search is local"
-            : matchingLines.length === 0
-              ? "No matches"
-              : `${selectedMatchPosition + 1} of ${matchingLines.length} matching lines`}
-        </Text>
-        <Button.Group>
-          <Button
-            aria-label="Previous log search match"
-            disabled={matchingLines.length === 0}
-            onClick={() => selectMatch(-1)}
-            size="compact-sm"
-            variant="default"
-          >
-            <IconArrowUp aria-hidden size={15} />
-          </Button>
-          <Button
-            aria-label="Next log search match"
-            disabled={matchingLines.length === 0}
-            onClick={() => selectMatch(1)}
-            size="compact-sm"
-            variant="default"
-          >
-            <IconArrowDown aria-hidden size={15} />
-          </Button>
-        </Button.Group>
-        <Switch
-          checked={wrapLines}
-          label="Wrap lines"
-          onChange={(event) => setWrapLines(event.currentTarget.checked)}
-          size="sm"
-        />
+        {hasSearchQuery ? (
+          <>
+            <Text aria-live="polite" c="dimmed" miw={110} size="xs">
+              {matchingLines.length === 0
+                ? "No matches"
+                : `${selectedMatchPosition + 1} of ${matchingLines.length} matching lines`}
+            </Text>
+            <Button.Group>
+              <Button
+                aria-label="Previous log search match"
+                disabled={matchingLines.length === 0}
+                onClick={() => selectMatch(-1)}
+                size="compact-sm"
+                variant="default"
+              >
+                <IconArrowUp aria-hidden size={15} />
+              </Button>
+              <Button
+                aria-label="Next log search match"
+                disabled={matchingLines.length === 0}
+                onClick={() => selectMatch(1)}
+                size="compact-sm"
+                variant="default"
+              >
+                <IconArrowDown aria-hidden size={15} />
+              </Button>
+            </Button.Group>
+          </>
+        ) : null}
       </Group>
     </>
   );
@@ -325,7 +359,10 @@ export function RunLogViewer({
           </Group>
           {controls}
           {diagnostic ? (
-            <Alert color={status === "Incomplete" ? "yellow" : "red"} title={status}>
+            <Alert
+              color={status === "Incomplete" || status === "Reconnecting" ? "yellow" : "red"}
+              title={status}
+            >
               {diagnostic}
             </Alert>
           ) : null}
@@ -355,7 +392,10 @@ export function RunLogViewer({
         <Stack className="run-log-fullscreen-layout" gap="sm">
           {controls}
           {diagnostic ? (
-            <Alert color={status === "Incomplete" ? "yellow" : "red"} title={status}>
+            <Alert
+              color={status === "Incomplete" || status === "Reconnecting" ? "yellow" : "red"}
+              title={status}
+            >
               {diagnostic}
             </Alert>
           ) : null}

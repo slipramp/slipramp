@@ -81,3 +81,11 @@ func cloneRenderAcknowledgement(value *SuccessfulRenderAcknowledgement) *Success
 
 	return &cloned
 }
+
+func cloneOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+
+	return new(*value)
+}

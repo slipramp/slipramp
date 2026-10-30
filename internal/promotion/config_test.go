@@ -10,8 +10,12 @@ func TestIntegrationSetValidate(t *testing.T) {
 
 	integrations := IntegrationSet{
 		"prod": {
-			ClusterName:      "prod",
-			UIURL:            "https://kargo.example.com/console/",
+			ClusterName: "prod",
+			UIURL:       "https://kargo.example.com/console/",
+			ArgoCDUIURLs: map[string]string{
+				"homelab": "https://argocd.homelab.example.com",
+				"prod":    "https://argocd.example.com/console/",
+			},
 			Repositories:     []string{"kcloud-ops"},
 			EnvironmentOrder: []string{"homelab", "prod"},
 			Preparation: PreparationConfig{
@@ -56,6 +60,18 @@ func TestIntegrationSetValidate(t *testing.T) {
 	}
 
 	integration.UIURL = "https://kargo.example.com"
+	integration.ArgoCDUIURLs["unknown"] = "https://argocd.example.com"
+	integrations["prod"] = integration
+	if err := integrations.Validate(); err == nil {
+		t.Fatal("Validate() error = nil for Argo CD UI URL outside environment order")
+	}
+	delete(integration.ArgoCDUIURLs, "unknown")
+	integration.ArgoCDUIURLs["prod"] = "ftp://argocd.example.com"
+	integrations["prod"] = integration
+	if err := integrations.Validate(); err == nil {
+		t.Fatal("Validate() error = nil for non-HTTP Argo CD UI URL")
+	}
+	integration.ArgoCDUIURLs["prod"] = "https://argocd.example.com"
 	integration.CandidateBranchCleanup = &CandidateBranchCleanupConfig{
 		Retention:   0,
 		Credentials: map[string]string{"kcloud-ops": "github-write"},
@@ -96,6 +112,29 @@ func TestIntegrationSetBuildsKargoLinks(t *testing.T) {
 	}
 	if integrations.KargoProjectURL("missing", "kargo-core") != nil {
 		t.Error("KargoProjectURL() returned a URL for an unknown integration")
+	}
+}
+
+func TestIntegrationSetBuildsArgoCDApplicationLinks(t *testing.T) {
+	t.Parallel()
+
+	integrations := IntegrationSet{
+		"prod": {
+			ArgoCDUIURLs: map[string]string{
+				"prod": "https://argocd.example.com/console/",
+			},
+		},
+	}
+	applicationURL := integrations.ArgoCDApplicationURL("prod", "prod", "argocd", "external-dns")
+	if applicationURL == nil ||
+		*applicationURL != "https://argocd.example.com/console/applications/argocd/external-dns" {
+		t.Errorf("ArgoCDApplicationURL() = %v", applicationURL)
+	}
+	if integrations.ArgoCDApplicationURL("prod", "homelab", "argocd", "external-dns") != nil {
+		t.Error("ArgoCDApplicationURL() returned a URL for an unconfigured environment")
+	}
+	if integrations.ArgoCDApplicationURL("missing", "prod", "argocd", "external-dns") != nil {
+		t.Error("ArgoCDApplicationURL() returned a URL for an unknown integration")
 	}
 }
 

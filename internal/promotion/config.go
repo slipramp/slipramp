@@ -29,6 +29,7 @@ type CandidateBranchCleanupConfig struct {
 type IntegrationConfig struct {
 	ClusterName                string
 	UIURL                      string
+	ArgoCDUIURLs               map[string]string
 	Repositories               []string
 	EnvironmentOrder           []string
 	Preparation                PreparationConfig
@@ -85,17 +86,8 @@ func (c IntegrationConfig) Validate() error {
 	if len(c.Repositories) == 0 {
 		return fmt.Errorf("at least one Kargo repository is required")
 	}
-	if c.UIURL != "" {
-		parsed, err := url.Parse(c.UIURL)
-		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-			return fmt.Errorf("kargo UI URL must be an absolute URL")
-		}
-		if parsed.Scheme != "http" && parsed.Scheme != "https" {
-			return fmt.Errorf("kargo UI URL must use HTTP or HTTPS")
-		}
-		if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-			return fmt.Errorf("kargo UI URL must not contain credentials, a query, or a fragment")
-		}
+	if err := validateUIURL("kargo", c.UIURL); err != nil {
+		return err
 	}
 
 	seenRepositories := make(map[string]struct{}, len(c.Repositories))
@@ -121,6 +113,17 @@ func (c IntegrationConfig) Validate() error {
 			return fmt.Errorf("kargo environment %q is configured more than once", environment)
 		}
 		seenEnvironments[environment] = struct{}{}
+	}
+	for environment, uiURL := range c.ArgoCDUIURLs {
+		if _, ok := seenEnvironments[environment]; !ok {
+			return fmt.Errorf("argo CD UI environment %q is not in the environment order", environment)
+		}
+		if uiURL == "" {
+			return fmt.Errorf("argo CD UI URL for environment %q is required", environment)
+		}
+		if err := validateUIURL("Argo CD", uiURL); err != nil {
+			return fmt.Errorf("environment %q: %w", environment, err)
+		}
 	}
 
 	if err := kubevalidate.DNSLabel("Kargo preparation repository", c.Preparation.Repository); err != nil {
@@ -167,6 +170,24 @@ func (c IntegrationConfig) Validate() error {
 	return nil
 }
 
+func validateUIURL(subject, value string) error {
+	if value == "" {
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("%s UI URL must be an absolute URL", subject)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("%s UI URL must use HTTP or HTTPS", subject)
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("%s UI URL must not contain credentials, a query, or a fragment", subject)
+	}
+
+	return nil
+}
+
 func (s IntegrationSet) KargoStageURL(integration, project, stage string) *string {
 	config, ok := s.Lookup(integration)
 	if !ok || config.UIURL == "" {
@@ -202,6 +223,29 @@ func (s IntegrationSet) KargoPromotionURL(integration, project, promotion string
 	}
 
 	value, err := url.JoinPath(config.UIURL, "project", project, "promotion", promotion)
+	if err != nil {
+		return nil
+	}
+
+	return &value
+}
+
+func (s IntegrationSet) ArgoCDApplicationURL(
+	integration string,
+	environment string,
+	namespace string,
+	application string,
+) *string {
+	config, ok := s.Lookup(integration)
+	if !ok || namespace == "" || application == "" {
+		return nil
+	}
+	uiURL := config.ArgoCDUIURLs[environment]
+	if uiURL == "" {
+		return nil
+	}
+
+	value, err := url.JoinPath(uiURL, "applications", namespace, application)
 	if err != nil {
 		return nil
 	}

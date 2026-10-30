@@ -21,11 +21,12 @@ PromotionPolicyMode:
     - automatic
     - review-required
 
-PromotionFreightComparisonStatus:
+PromotionPipelineAttention:
   type: string
   enum:
-    - equal
-    - different
+    - any
+    - drifted
+    - outdated
 
 PromotionFreight:
   type: object
@@ -234,6 +235,17 @@ PromotionStageObservation:
     autoPromotionEnabled:
       type: boolean
       description: Effective Kargo auto-promotion state for this Stage.
+    healthStatus:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Aggregate health status reported by Kargo for this Stage.
+    argoApplicationNamespace:
+      type: string
+      minLength: 1
+      maxLength: 63
+      pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
+      description: Namespace of the matching Argo CD Application reported by Kargo health output.
     successfulRenderAcknowledgement:
       $ref: "#/SuccessfulRenderAcknowledgement"
 
@@ -445,6 +457,7 @@ PromotionPipelineStage:
     - availableFreight
     - autoPromotionEnabled
     - pendingPromotionCount
+    - observationStale
     - lastObservedAt
   properties:
     id:
@@ -473,6 +486,14 @@ PromotionPipelineStage:
     pendingPromotionCount:
       type: integer
       minimum: 0
+    healthStatus:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Most recently observed aggregate Kargo health status for this Stage.
+    observationStale:
+      type: boolean
+      description: Whether the Stage observation exceeds the integration freshness limit.
     lastObservedAt:
       type: string
       format: date-time
@@ -480,6 +501,10 @@ PromotionPipelineStage:
       type: string
       format: uri
       description: Direct link to this Stage in the configured Kargo UI.
+    argoCdUrl:
+      type: string
+      format: uri
+      description: Direct link to the observed Application in the configured Argo CD UI.
 
 PromotionFreightSource:
   type: object

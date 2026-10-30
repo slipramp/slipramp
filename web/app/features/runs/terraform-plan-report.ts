@@ -50,3 +50,34 @@ export function groupTerraformResources(resources: TerraformResourceChange[]) {
       resources: changes,
     }));
 }
+
+export function filterTerraformResources(
+  resources: TerraformResourceChange[],
+  options: Readonly<{ keyword: string; showNoOp: boolean }>,
+) {
+  const keywords = options.keyword.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+
+  return resources.filter((resource) => {
+    if (!options.showNoOp && resource.action === "no-op") return false;
+    if (keywords.length === 0) return true;
+
+    const searchableText = [
+      resource.address,
+      resource.replacedObjectKey,
+      resource.previousAddress,
+      resource.moduleAddress,
+      resource.mode,
+      resource.type,
+      resource.name,
+      resource.providerName,
+      resource.action,
+      resource.replacementOrder,
+      resource.actionReason,
+    ]
+      .filter((value): value is string => value !== undefined)
+      .join(" ")
+      .toLocaleLowerCase();
+
+    return keywords.every((keyword) => searchableText.includes(keyword));
+  });
+}
