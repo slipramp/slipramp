@@ -43,9 +43,20 @@ test("formats timestamps and datestamps in an explicit timezone", () => {
 test("normalizes timezone preferences and offers a clear UTC default", () => {
   assert.equal(normalizeTimeZone("America/Denver"), "America/Denver");
   assert.equal(normalizeTimeZone("Not/A_Timezone"), "UTC");
-  assert.deepEqual(timeZoneOptions("America/Denver").slice(0, 2), [
+  assert.deepEqual(timeZoneOptions("America/Denver"), [
     { label: "UTC (default)", value: "UTC" },
-    { label: "America/Denver (browser)", value: "America/Denver" },
+    { label: "Pacific Time", value: "America/Los_Angeles" },
+    { label: "Mountain Time (browser)", value: "America/Denver" },
+    { label: "Central Time", value: "America/Chicago" },
+    { label: "Eastern Time", value: "America/New_York" },
+    { label: "London", value: "Europe/London" },
+    { label: "Central European Time", value: "Europe/Berlin" },
+    { label: "Eastern European Time", value: "Europe/Helsinki" },
+    { label: "India Standard Time", value: "Asia/Calcutta" },
+  ]);
+  assert.deepEqual(timeZoneOptions("Asia/Tokyo", "Australia/Sydney").slice(-2), [
+    { label: "Asia/Tokyo (browser)", value: "Asia/Tokyo" },
+    { label: "Australia/Sydney", value: "Australia/Sydney" },
   ]);
 });
 

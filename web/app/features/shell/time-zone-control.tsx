@@ -14,7 +14,7 @@ export function TimeZoneControl() {
   const { setTimeZone, timeZone } = useTimeZone();
   const [opened, setOpened] = useState(false);
   const options = opened
-    ? timeZoneOptions(resolvedTimeZone())
+    ? timeZoneOptions(resolvedTimeZone(), timeZone)
     : [{ label: timeZoneLabel(timeZone), value: timeZone }];
 
   return (
@@ -22,6 +22,7 @@ export function TimeZoneControl() {
       <Popover.Target>
         <ActionIcon
           aria-label={`Choose timezone. Current timezone: ${timeZone}`}
+          onClick={() => setOpened((current) => !current)}
           size="lg"
           title={`Timezone: ${timeZone}`}
           variant="light"
@@ -33,6 +34,7 @@ export function TimeZoneControl() {
         <Stack gap="sm">
           <Select
             allowDeselect={false}
+            comboboxProps={{ withinPortal: false }}
             data={options}
             label="Timezone"
             maxDropdownHeight={280}
