@@ -36,6 +36,12 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 			{ID: uuid.New(), StageID: homelabA.ID, Status: StatusPending},
 			{ID: uuid.New(), StageID: homelabA.ID, Status: StatusApproved},
 		},
+		policies: map[uuid.UUID]StagePolicy{
+			production.ID: {
+				StageID: production.ID,
+				Mode:    PolicyModeReviewRequired,
+			},
+		},
 	}
 	service := NewFreightPipelineService(
 		IntegrationSet{
@@ -69,6 +75,10 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 	}
 	if pipeline.Stages[0].PendingPromotionCount != 1 {
 		t.Errorf("pending count = %d, want 1", pipeline.Stages[0].PendingPromotionCount)
+	}
+	if pipeline.Stages[2].Policy.EffectiveMode != PolicyModeReviewRequired ||
+		pipeline.Stages[0].Policy.EffectiveMode != PolicyModeAutomatic {
+		t.Errorf("Stage policies = %#v", pipeline.Stages)
 	}
 	wantPendingStageIDs := []uuid.UUID{production.ID, homelabB.ID, canary.ID, otherApplication.ID, homelabA.ID}
 	if !reflect.DeepEqual(store.pendingStageIDs, wantPendingStageIDs) {

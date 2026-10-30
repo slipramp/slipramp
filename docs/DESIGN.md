@@ -844,10 +844,13 @@ failure ages Stage freshness without disconnecting ordinary Run delivery.
 Stage identity is `(integration, project, name)`, with project equal to the
 Kubernetes namespace; the authenticated Controller supplies Cluster identity.
 
-Named integrations are Server startup configuration: Cluster, optional Kargo UI
-URL, Repository allowlist, ordered environments, preparation Repository/Target/
-Action, maximum observation age, pending-review retention, and optional
-candidate-branch cleanup policy. The Server
+Named integrations are Server startup configuration loaded once from a strict,
+versioned `slipramp.com/v1alpha1` `KargoIntegrationConfig` YAML file. The file
+defines Cluster, optional Kargo UI URL, Repository allowlist, ordered
+environments, preparation Repository/Target/Action, maximum observation age,
+pending-review retention, and optional candidate-branch cleanup policy. Unknown
+fields, duplicate keys, extra documents, unsupported versions, and invalid
+integration values fail Server startup. The Server
 matches normalized observed repository URLs against that allowlist. The
 Controller derives application, environment, repository, target branch, source
 paths, typed current Freight, requested-Freight origin, direct-Warehouse
@@ -1091,6 +1094,11 @@ has not been observed on an upstream Stage. Branch drift offers the drifted
 Stage's current Freight back to that same Stage and warns that the action reruns
 its Kargo promotion template. The shared dialog shows target and source Stage,
 environments, exact Freight name and origin, and Git, image, and chart versions.
+A policy panel shows the target Stage's current effective policy. Operators may
+leave it unchanged or enable required review before creation, either permanently
+or for 30 minutes, one hour, or 24 hours. A requested policy change must succeed
+in the same transaction that creates the Promotion and snapshots the resulting
+effective policy.
 A single choice is selected automatically; multiple choices require an explicit
 selection. **Promote and view** redirects to the durable detail page, while
 **Promote in background** closes the dialog and links the new Promotion from a
@@ -1275,6 +1283,10 @@ at startup, and sqlc-generated queries. S3 access uses a narrow MinIO-client
 boundary; the pre-provisioned bucket is checked at startup without requiring
 bucket-administration privileges. The separate Web process uses strict
 TypeScript, React Router v8 Framework/SSR mode, and Mantine UI v9.
+The Web formats every absolute date and timestamp through one shared display
+contract using a browser-selected IANA timezone. UTC is the stable SSR and
+first-visit default; the browser stores the operator's selection locally and
+applies it across all Web views without changing Server data.
 
 The homepage is a role-aware operational Inbox delivered through one generated
 Server API. Its complete read model groups pending Promotion decisions and
@@ -1452,12 +1464,12 @@ creates an internal metrics Service and no public route.
 Two focused [Helm charts](../deploy/charts) deploy one Server/web pair and one
 Controller per Cluster. The central chart requires external PostgreSQL and S3,
 gives the Server no RBAC or service-account token, and offers single-host
-Ingress. Placement ConfigMap checksums roll the Server on configuration changes;
-live reload is not part of the contract. The Controller chart grants only
-namespaced Job/Pod access and optional Kargo Stage reads. Secret-bearing values
-default to operator-managed Secret references. Images are pinned; a `vX.Y.Z`
-tag publishes matching application images and versioned OCI charts to GHCR
-with tag/chart/application/image versions required to agree.
+Ingress. Placement and Kargo integration ConfigMap checksums roll the Server on
+configuration changes; live reload is not part of the contract. The Controller
+chart grants only namespaced Job/Pod access and optional Kargo Stage reads.
+Secret-bearing values default to operator-managed Secret references. Images are
+pinned; a `vX.Y.Z` tag publishes matching application images and versioned OCI
+charts to GHCR with tag/chart/application/image versions required to agree.
 
 Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.

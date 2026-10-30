@@ -86,6 +86,7 @@ func (h *Handler) ListPromotionBranchDrift(
 				TargetBranch:   stage.Stage.TargetBranch,
 				SourcePaths:    stage.Stage.SourcePaths,
 				Freight:        freight,
+				Policy:         promotionPolicyResponse(stage.Policy),
 				Status:         api.PromotionBranchDriftStatus(stage.Status),
 				LastObservedAt: stage.Stage.LastObservedAt,
 				KargoURL: h.kargoIntegrations.KargoStageURL(

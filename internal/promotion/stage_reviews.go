@@ -1,6 +1,11 @@
 package promotion
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type StageReviewRecord struct {
 	Stage                 Stage
@@ -15,6 +20,10 @@ type StageReviewPage struct {
 
 type StageReviewStore interface {
 	ListPromotionStageReviews(context.Context, StageListFilter) (StageReviewPage, error)
+}
+
+type StagePolicyStore interface {
+	ListPromotionStagePolicies(context.Context, []uuid.UUID) (map[uuid.UUID]StagePolicy, error)
 }
 
 func (s *ReviewService) ListStages(ctx context.Context, filter StageListFilter) (StageReviewList, error) {
@@ -41,4 +50,28 @@ func (s *ReviewService) ListStages(ctx context.Context, filter StageListFilter) 
 	}
 
 	return StageReviewList{Items: items, Total: page.Total, Limit: filter.Limit, Offset: filter.Offset}, nil
+}
+
+func stagePolicyViews(
+	ctx context.Context,
+	store StagePolicyStore,
+	stageIDs []uuid.UUID,
+	at time.Time,
+) (map[uuid.UUID]PolicyView, error) {
+	policies, err := store.ListPromotionStagePolicies(ctx, stageIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	views := make(map[uuid.UUID]PolicyView, len(stageIDs))
+	for _, stageID := range stageIDs {
+		policy, ok := policies[stageID]
+		if !ok {
+			views[stageID] = policyView(nil, at)
+			continue
+		}
+		views[stageID] = policyView(&policy, at)
+	}
+
+	return views, nil
 }

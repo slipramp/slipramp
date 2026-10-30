@@ -59,11 +59,16 @@ func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 	}, store)
 	service.newID = func() uuid.UUID { return promotionID }
 	service.now = func() time.Time { return now }
+	policyExpiresAt := now.Add(30 * time.Minute)
 
 	record, err := service.Create(t.Context(), OperatorPromotionRequest{
 		TargetStageID: stageID,
 		FreightName:   "freight-42",
-		Principal:     principal,
+		Policy: &PolicyUpdate{
+			Mode:      PolicyModeReviewRequired,
+			ExpiresAt: &policyExpiresAt,
+		},
+		Principal: principal,
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -72,7 +77,11 @@ func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 		store.acceptance.Integration != "prod" || store.acceptance.FreightName != "freight-42" ||
 		store.acceptance.SourceStageID != uuid.Nil ||
 		store.acceptance.RequestedByPrincipalID != principal.ID ||
-		store.acceptance.AcceptedAt.Nanosecond() != 123456000 {
+		store.acceptance.AcceptedAt.Nanosecond() != 123456000 || store.acceptance.Policy == nil ||
+		store.acceptance.Policy.Mode != PolicyModeReviewRequired ||
+		store.acceptance.Policy.ExpiresAt == nil || !store.acceptance.Policy.ExpiresAt.Equal(policyExpiresAt) ||
+		store.acceptance.Policy.UpdatedByPrincipalID != principal.ID ||
+		!store.acceptance.Policy.UpdatedAt.Equal(store.acceptance.AcceptedAt) {
 		t.Errorf("acceptance = %#v, record = %#v", store.acceptance, record)
 	}
 }

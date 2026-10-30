@@ -23,6 +23,9 @@ import {
   type PromotionChoice,
   type PromotionCreationActionResult,
 } from "~/features/promotions/promotion-creation";
+import type { PromotionStagePolicy } from "~/api/generated";
+import { formatTimestamp } from "~/shared/display";
+import { useTimeZone } from "~/shared/time-zone-preference";
 
 export function PromotionCreateDialog({
   choices,
@@ -106,6 +109,8 @@ export function PromotionCreateDialog({
             </Alert>
           ) : null}
 
+          {choices[0] ? <StagePolicyControl policy={choices[0].targetPolicy} /> : null}
+
           <input name="targetStageId" type="hidden" value={selected?.targetStageId ?? ""} />
           <input name="sourceStageId" type="hidden" value={selected?.sourceStageId ?? ""} />
           <input name="freightName" type="hidden" value={selected?.freight.name ?? ""} />
@@ -141,6 +146,61 @@ export function PromotionCreateDialog({
       </fetcher.Form>
     </Modal>
   );
+}
+
+function StagePolicyControl({ policy }: Readonly<{ policy: PromotionStagePolicy }>) {
+  const reviewRequired = policy.effectiveMode === "review-required";
+  const { timeZone } = useTimeZone();
+
+  return (
+    <Paper p="md" withBorder>
+      <Stack gap="sm">
+        <Group justify="space-between" wrap="wrap">
+          <Text fw={600}>Current Stage policy</Text>
+          <Badge color={reviewRequired ? "yellow" : "green"} variant="light">
+            {reviewRequired ? "Review required" : "Automatic"}
+          </Badge>
+        </Group>
+        <Text c="dimmed" size="sm">
+          {stagePolicyDescription(policy, timeZone)}
+        </Text>
+        {policy.reason ? (
+          <Text size="sm">
+            <Text c="dimmed" component="span">
+              Reason:{" "}
+            </Text>
+            {policy.reason}
+          </Text>
+        ) : null}
+        <NativeSelect
+          data={[
+            { label: "Keep current policy", value: "unchanged" },
+            { label: "Require review permanently", value: "permanent" },
+            { label: "Require review for 30 minutes", value: "30m" },
+            { label: "Require review for 1 hour", value: "1h" },
+            { label: "Require review for 24 hours", value: "24h" },
+          ]}
+          defaultValue="unchanged"
+          description="A change is applied to the Stage before this Promotion is created."
+          label="Review policy"
+          name="reviewPolicy"
+        />
+      </Stack>
+    </Paper>
+  );
+}
+
+function stagePolicyDescription(policy: PromotionStagePolicy, timeZone: string) {
+  if (policy.effectiveMode === "review-required") {
+    return policy.expiresAt
+      ? `New Promotions require review until ${formatTimestamp(policy.expiresAt, timeZone)}.`
+      : "New Promotions require review until the Stage policy is changed.";
+  }
+  if (policy.configuredMode === "review-required" && policy.expiresAt) {
+    return `The review window expired ${formatTimestamp(policy.expiresAt, timeZone)}. New Promotions are automatic.`;
+  }
+
+  return "New Promotions proceed automatically without operator review.";
 }
 
 export function PromotionCreateButton({

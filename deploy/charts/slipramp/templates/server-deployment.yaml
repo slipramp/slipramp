@@ -22,6 +22,7 @@ spec:
   template:
     metadata:
       annotations:
+        checksum/kargo: {{ include (print $.Template.BasePath "/kargo-configmap.yaml") . | sha256sum }}
         checksum/placements: {{ include (print $.Template.BasePath "/placements-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "slipramp.selectorLabels" (dict "root" . "component" "server") | nindent 8 }}
@@ -144,8 +145,8 @@ spec:
               {{- $_ := set $credentials $name (printf "/var/run/slipramp/repository-credentials/%s/%s" $name $credential.gitConfigKey) }}
               {{- end }}
               value: {{ $credentials | toJson | quote }}
-            - name: SLIPRAMP_KARGO_INTEGRATIONS
-              value: {{ .Values.server.kargo.integrations | toJson | quote }}
+            - name: SLIPRAMP_KARGO_INTEGRATIONS_FILE
+              value: /etc/slipramp/kargo-integrations.yaml
             - name: SLIPRAMP_NOTIFICATIONS_PUBLIC_URL
               value: {{ .Values.server.notifications.publicUrl | quote }}
             - name: SLIPRAMP_NOTIFICATIONS_DESTINATIONS
@@ -188,7 +189,7 @@ spec:
           resources:
             {{- toYaml .Values.server.resources | nindent 12 }}
           volumeMounts:
-            - name: placements
+            - name: server-configuration
               mountPath: /etc/slipramp
               readOnly: true
             - name: temporary
@@ -204,9 +205,16 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
-        - name: placements
-          configMap:
-            name: {{ include "slipramp.serverName" . }}-placements
+        - name: server-configuration
+          projected:
+            sources:
+              - configMap:
+                  name: {{ include "slipramp.serverName" . }}-placements
+              - configMap:
+                  name: {{ include "slipramp.serverName" . }}-kargo
+                  items:
+                    - key: integrations.yaml
+                      path: kargo-integrations.yaml
         - name: temporary
           emptyDir: {}
         {{- range $name, $credential := .Values.server.repositoryRefresh.credentials }}

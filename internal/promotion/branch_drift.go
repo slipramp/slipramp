@@ -39,6 +39,7 @@ type BranchDriftListFilter struct {
 
 type BranchDriftStage struct {
 	Stage                          Stage
+	Policy                         PolicyView
 	Status                         BranchDriftStatus
 	AcknowledgedSourceRevision     string
 	AcknowledgedRenderBaseRevision string
@@ -68,6 +69,7 @@ type BranchDriftList struct {
 }
 
 type BranchDriftStore interface {
+	StagePolicyStore
 	ListPromotionStages(context.Context) ([]Stage, error)
 	ListRepositories(context.Context) ([]repository.Repository, error)
 }
@@ -235,6 +237,22 @@ func (s *BranchDriftService) List(
 		if start < end {
 			item.Stages = item.Stages[start:end]
 			items = append(items, item)
+		}
+	}
+	stageIDs := make([]uuid.UUID, 0)
+	for _, item := range items {
+		for _, stage := range item.Stages {
+			stageIDs = append(stageIDs, stage.Stage.ID)
+		}
+	}
+	policies, err := stagePolicyViews(ctx, s.store, stageIDs, s.currentTime())
+	if err != nil {
+		return BranchDriftList{}, err
+	}
+	for itemIndex := range items {
+		for stageIndex := range items[itemIndex].Stages {
+			stage := &items[itemIndex].Stages[stageIndex]
+			stage.Policy = policies[stage.Stage.ID]
 		}
 	}
 

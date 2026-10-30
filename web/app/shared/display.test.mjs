@@ -4,11 +4,19 @@ import test from "node:test";
 import {
   abbreviateMiddle,
   formatBinarySize,
+  formatDatestamp,
   formatDuration,
   formatElapsedDuration,
   formatRelativeTime,
+  formatTimestamp,
   shortIdentifier,
 } from "./display.ts";
+import {
+  loadTimeZonePreference,
+  normalizeTimeZone,
+  storeTimeZonePreference,
+  timeZoneOptions,
+} from "./time-zone.ts";
 
 test("formats binary sizes across IEC units", () => {
   assert.equal(formatBinarySize(0), "0 B");
@@ -22,6 +30,41 @@ test("formats relative times around a stable reference", () => {
 
   assert.equal(formatRelativeTime("2026-10-22T17:55:00Z", now), "5 minutes ago");
   assert.equal(formatRelativeTime("2026-10-23T18:00:00Z", now), "tomorrow");
+});
+
+test("formats timestamps and datestamps in an explicit timezone", () => {
+  const value = "2026-01-15T18:00:00Z";
+
+  assert.equal(formatTimestamp(value, "UTC"), "Jan 15, 2026, 6:00 PM UTC");
+  assert.equal(formatTimestamp(value, "America/Denver"), "Jan 15, 2026, 11:00 AM MST");
+  assert.equal(formatDatestamp("2026-01-15T01:00:00Z", "America/Denver"), "Jan 14, 2026");
+});
+
+test("normalizes timezone preferences and offers a clear UTC default", () => {
+  assert.equal(normalizeTimeZone("America/Denver"), "America/Denver");
+  assert.equal(normalizeTimeZone("Not/A_Timezone"), "UTC");
+  assert.deepEqual(timeZoneOptions("America/Denver").slice(0, 2), [
+    { label: "UTC (default)", value: "UTC" },
+    { label: "America/Denver (browser)", value: "America/Denver" },
+  ]);
+});
+
+test("loads and stores the browser timezone preference", () => {
+  const values = new Map();
+  const storage = {
+    getItem(key) {
+      return values.get(key) ?? null;
+    },
+    setItem(key, value) {
+      values.set(key, value);
+    },
+  };
+
+  assert.equal(loadTimeZonePreference(storage), "UTC");
+  assert.equal(storeTimeZonePreference(storage, "America/Denver"), "America/Denver");
+  assert.equal(loadTimeZonePreference(storage), "America/Denver");
+  assert.equal(storeTimeZonePreference(storage, "Not/A_Timezone"), "UTC");
+  assert.equal(loadTimeZonePreference(storage), "UTC");
 });
 
 test("formats compact durations and identifiers", () => {

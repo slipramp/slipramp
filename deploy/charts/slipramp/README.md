@@ -5,9 +5,10 @@ does not install PostgreSQL, RustFS, or any other S3-compatible service. The
 operator must provision the PostgreSQL database and artifact bucket first.
 
 The Server deliberately has `automountServiceAccountToken: false`; this chart
-creates no ServiceAccount, Role, or RoleBinding for it. Placements are ordinary
-Server configuration in a ConfigMap, never CRDs, and their checksum is attached
-to the Server Pod template so a placement change rolls the Deployment.
+creates no ServiceAccount, Role, or RoleBinding for it. Placements and Kargo
+integrations are ordinary Server configuration in versioned files backed by
+ConfigMaps, never CRDs. Each ConfigMap checksum is attached to the Server Pod
+template so either configuration change rolls the Deployment.
 
 ## Required configuration
 
@@ -63,7 +64,9 @@ Optional Kargo integrations are static Server configuration. Each integration
 selects a registered Cluster, a repository allowlist, ordered environments, and
 the repository-defined Target and Action that prepare review artifacts. The
 same configuration enables observed-Freight operator creation; Kargo remains
-authoritative for admission and availability:
+authoritative for admission and availability. The chart renders these values as
+a strict `slipramp.com/v1alpha1` `KargoIntegrationConfig` document and sets
+`SLIPRAMP_KARGO_INTEGRATIONS_FILE` to its mounted path:
 
 ```yaml
 server:

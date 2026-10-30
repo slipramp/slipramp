@@ -53,6 +53,7 @@ import mascotUrl from "~/features/mascot/assets/slipramp-mascot.webp";
 import { ActivityRefreshControl, ActivityRefreshProvider } from "~/features/shell/activity-refresh";
 import { Identity } from "~/shared/identity";
 import { PerformanceFooter } from "~/features/performance/performance-footer";
+import { TimeZoneControl } from "~/features/shell/time-zone-control";
 import { useThemePreset, type ThemePreset } from "~/features/shell/theme-preset";
 
 type NavigationItem = {
@@ -179,6 +180,7 @@ function ProductShellLayout({
               <img alt="" className="product-header-mascot" decoding="async" src={mascotUrl} />
             </Box>
             <ActivityRefreshControl />
+            <TimeZoneControl />
             <AppearanceControl />
           </Group>
         </Group>

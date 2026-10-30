@@ -290,7 +290,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_OIDC_REDIRECT_URL`                | Required                         | Absolute provider callback URL ending at `/api/v1/auth/callback`                                                           |
 | `SLIPRAMP_OIDC_SUBJECT_ROLES`               | Required                         | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required  |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME`         | `12h`                            | Absolute lifetime of a local browser session                                                                               |
-| `SLIPRAMP_KARGO_INTEGRATIONS`               | `{}`                             | JSON object containing optional named Kargo integrations for Stage inventory, operator creation, review preparation, health, and optional Kargo and environment-specific Argo CD UI deep links |
+| `SLIPRAMP_KARGO_INTEGRATIONS_FILE`          | Unset                            | Path to the versioned YAML Kargo integration configuration used for Stage inventory, operator creation, review preparation, health, and optional UI deep links |
 
 OIDC configuration is required for the Server to start. The subject-role map is
 the installation's enrollment and role authority: unknown subjects cannot sign
@@ -375,9 +375,42 @@ Cluster scheduling defaults to four active Runs. A configured Cluster maximum
 replaces that default, and a Placement maximum must be no larger than its
 configured Cluster maximum.
 
+Kargo integrations are loaded from the file named by
+`SLIPRAMP_KARGO_INTEGRATIONS_FILE` when the Server starts. The file is optional;
+when it is unset, no Kargo integrations are configured. For example:
+
+```yaml
+apiVersion: slipramp.com/v1alpha1
+kind: KargoIntegrationConfig
+integrations:
+  prod:
+    cluster: prod
+    uiUrl: https://kargo.example.com
+    argoCdUiUrls:
+      homelab: https://argocd.homelab.example.com
+      prod: https://argocd.example.com
+    repositories: [kcloud-ops]
+    environmentOrder: [homelab, prod]
+    preparation:
+      repository: kcloud-ops
+      target: kargo-promotions
+      action: prepare-review
+    candidateBranchCleanup:
+      retention: 168h
+      credentials:
+        kcloud-ops: github-write
+    maximumStageObservationAge: 5m
+    pendingReviewRetention: 192h
+```
+
+The loader requires exactly one document and rejects unknown fields, duplicate
+keys, unsupported versions, invalid durations, and invalid integration values.
+The selected Cluster must be registered in
+`SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`. Candidate branch cleanup credential
+names must select entries in `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS`.
 Kargo integration behavior, credential boundaries, Run execution, and artifact
-retention are described in the [design](docs/DESIGN.md). Integration and
-Placement configuration is loaded at Server startup.
+retention are described in the [design](docs/DESIGN.md). Kargo integration and
+Placement configuration are both loaded once at Server startup.
 
 ## Controller configuration
 
@@ -425,11 +458,12 @@ redirects and cookies on the web origin.
 [`deploy/charts/slipramp`](deploy/charts/slipramp/README.md) installs one Server
 and one web process. It requires external PostgreSQL and S3-compatible storage,
 uses operator-managed Secret references by default, rolls the Server when its
-Placement ConfigMap changes, and gives the Server neither RBAC nor a mounted
-service-account token. Its optional single-host Ingress routes API, Controller,
-execution, and health paths to the Server and the remaining web path to the web
-process. The Server also exposes `GET /metrics` on a dedicated port for trusted
-in-cluster scraping; the chart deliberately leaves that port out of its Ingress.
+Placement or Kargo integration ConfigMap changes, and gives the Server neither
+RBAC nor a mounted service-account token. Its optional single-host Ingress
+routes API, Controller, execution, and health paths to the Server and the
+remaining web path to the web process. The Server also exposes `GET /metrics`
+on a dedicated port for trusted in-cluster scraping; the chart deliberately
+leaves that port out of its Ingress.
 
 Install [`deploy/charts/slipramp-controller`](deploy/charts/slipramp-controller/README.md)
 once in each execution Cluster. It requires one stable Cluster name and one or

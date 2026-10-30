@@ -1546,6 +1546,40 @@ func (q *Queries) ListPromotionReviews(ctx context.Context, arg ListPromotionRev
 	return items, nil
 }
 
+const listPromotionStagePolicies = `-- name: ListPromotionStagePolicies :many
+SELECT stage_id, mode, expires_at, reason, updated_by_principal_id, updated_by_snapshot, updated_at
+FROM promotion_stage_policies
+WHERE stage_id = ANY($1::uuid[])
+`
+
+func (q *Queries) ListPromotionStagePolicies(ctx context.Context, stageIds []pgtype.UUID) ([]PromotionStagePolicy, error) {
+	rows, err := q.db.Query(ctx, listPromotionStagePolicies, stageIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PromotionStagePolicy
+	for rows.Next() {
+		var i PromotionStagePolicy
+		if err := rows.Scan(
+			&i.StageID,
+			&i.Mode,
+			&i.ExpiresAt,
+			&i.Reason,
+			&i.UpdatedByPrincipalID,
+			&i.UpdatedBySnapshot,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPromotionStageReviews = `-- name: ListPromotionStageReviews :many
 WITH paged_stages AS (
     SELECT id

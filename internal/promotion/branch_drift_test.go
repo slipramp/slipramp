@@ -18,11 +18,26 @@ import (
 
 type branchDriftTestStore struct {
 	stages       []Stage
+	policies     map[uuid.UUID]StagePolicy
 	repositories []repository.Repository
 }
 
 func (s *branchDriftTestStore) ListPromotionStages(context.Context) ([]Stage, error) {
 	return s.stages, nil
+}
+
+func (s *branchDriftTestStore) ListPromotionStagePolicies(
+	_ context.Context,
+	stageIDs []uuid.UUID,
+) (map[uuid.UUID]StagePolicy, error) {
+	policies := make(map[uuid.UUID]StagePolicy, len(stageIDs))
+	for _, stageID := range stageIDs {
+		if policy, ok := s.policies[stageID]; ok {
+			policies[stageID] = policy
+		}
+	}
+
+	return policies, nil
 }
 
 func (s *branchDriftTestStore) ListRepositories(context.Context) ([]repository.Repository, error) {
@@ -98,6 +113,12 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 	)
 	store := &branchDriftTestStore{
 		stages: []Stage{driftedStage, noOpStage},
+		policies: map[uuid.UUID]StagePolicy{
+			driftedStage.ID: {
+				StageID: driftedStage.ID,
+				Mode:    PolicyModeReviewRequired,
+			},
+		},
 		repositories: []repository.Repository{{
 			ID:       repositoryID,
 			Name:     "ops",
@@ -139,6 +160,10 @@ func TestBranchDriftServiceGroupsStagesByRepositoryAndCachesScans(t *testing.T) 
 	}
 	if result.Total != 2 || len(result.Items) != 1 || len(result.Items[0].Stages) != 2 {
 		t.Fatalf("List() = %#v", result)
+	}
+	if result.Items[0].Stages[0].Policy.EffectiveMode != PolicyModeReviewRequired ||
+		result.Items[0].Stages[1].Policy.EffectiveMode != PolicyModeAutomatic {
+		t.Errorf("Stage policies = %#v", result.Items[0].Stages)
 	}
 	if len(scanner.calls) != 1 || len(scanner.requests[0]) != 2 {
 		t.Fatalf("repository scans = %d, requests = %#v", len(scanner.calls), scanner.requests)

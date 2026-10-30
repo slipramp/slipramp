@@ -80,6 +80,11 @@ func (d *Database) CreateOperatorPromotion(
 	if repositoryRow.CloneUrl != target.RepositoryURL {
 		return promotion.Promotion{}, promotion.ErrRepositoryNotAllowed
 	}
+	if acceptance.Policy != nil {
+		if _, err := upsertPromotionStagePolicy(ctx, queries, *acceptance.Policy); err != nil {
+			return promotion.Promotion{}, fmt.Errorf("update operator Promotion Stage policy: %w", err)
+		}
+	}
 
 	policySnapshot, err := operatorPromotionPolicySnapshot(ctx, queries, target.ID, acceptance.AcceptedAt)
 	if err != nil {

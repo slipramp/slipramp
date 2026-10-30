@@ -137,7 +137,7 @@ tasks:
     deps: [deps:air, local:up]
     env:
       SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS: '{"homelab":"slipramp-local-homelab-enrollment-token","prod-sjc1":"slipramp-local-prod-sjc1-enrollment-token"}'
-      SLIPRAMP_KARGO_INTEGRATIONS: '{"homelab":{"cluster":"prod-sjc1","uiUrl":"https://kargo.k8s.kcloud.io","argoCdUiUrls":{"homelab":"https://argocd.k8s.kcloud.zone","prod":"https://argocd.k8s.kcloud.io"},"repositories":["kcloud-ops","universe"],"environmentOrder":["homelab","prod"],"preparation":{"repository":"kcloud-ops","target":"kargo-promotions","action":"prepare-review"},"maximumStageObservationAge":"5m","pendingReviewRetention":"192h"}}'
+      SLIPRAMP_KARGO_INTEGRATIONS_FILE: "{{.ROOT_DIR}}/deploy/local/kargo-integrations.yaml"
       SLIPRAMP_OIDC_CLIENT_ID: slipramp-local
       SLIPRAMP_OIDC_CLIENT_SECRET: slipramp-local-client-secret
       SLIPRAMP_OIDC_ISSUER: http://127.0.0.1:5556/dex

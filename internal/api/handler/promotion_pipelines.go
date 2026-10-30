@@ -76,6 +76,7 @@ func (h *Handler) ListPromotionPipelines(
 				PromotionSources:      promotionSources,
 				AvailableFreight:      availableFreight,
 				AutoPromotionEnabled:  pipelineStage.Stage.AutoPromotionEnabled,
+				Policy:                promotionPolicyResponse(pipelineStage.Policy),
 				HealthStatus:          pipelineStage.Stage.HealthStatus,
 				ObservationStale:      pipelineStage.ObservationStale,
 				PendingPromotionCount: pipelineStage.PendingPromotionCount,

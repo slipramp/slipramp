@@ -30,6 +30,7 @@ type FreightPipelineListFilter struct {
 
 type FreightPipelineStage struct {
 	Stage                 Stage
+	Policy                PolicyView
 	PromotionSources      []FreightPromotionSource
 	AvailableFreight      []FreightItem
 	PendingPromotionCount int
@@ -61,6 +62,7 @@ type FreightPipelineList struct {
 }
 
 type FreightPipelineStore interface {
+	StagePolicyStore
 	ListPromotionStages(context.Context) ([]Stage, error)
 	CountPendingPromotionsByStage(context.Context, []uuid.UUID) (map[uuid.UUID]int, error)
 }
@@ -212,6 +214,22 @@ func (s *FreightPipelineService) List(
 
 	total := len(items)
 	items = page(items, filter.Offset, filter.Limit)
+	stageIDs = stageIDs[:0]
+	for _, item := range items {
+		for _, stage := range item.Stages {
+			stageIDs = append(stageIDs, stage.Stage.ID)
+		}
+	}
+	policies, err := stagePolicyViews(ctx, s.store, stageIDs, evaluatedAt)
+	if err != nil {
+		return FreightPipelineList{}, err
+	}
+	for itemIndex := range items {
+		for stageIndex := range items[itemIndex].Stages {
+			stage := &items[itemIndex].Stages[stageIndex]
+			stage.Policy = policies[stage.Stage.ID]
+		}
+	}
 
 	return FreightPipelineList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
 }

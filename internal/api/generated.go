@@ -2333,6 +2333,7 @@ type PromotionBranchDriftStage struct {
 	Message            *string                    `json:"message,omitempty"`
 	Name               string                     `json:"name"`
 	NoOpRender         *bool                      `json:"noOpRender,omitempty"`
+	Policy             PromotionStagePolicy       `json:"policy"`
 	Project            CatalogName                `json:"project"`
 	SourceBranchCommit *GitCommit                 `json:"sourceBranchCommit,omitempty"`
 	SourceDrift        *bool                      `json:"sourceDrift,omitempty"`
@@ -2349,6 +2350,9 @@ type PromotionBranchDriftStatus string
 // PromotionCreate defines model for PromotionCreate.
 type PromotionCreate struct {
 	FreightName string `json:"freightName"`
+
+	// Policy Optional Stage policy change applied atomically before this Promotion snapshots policy.
+	Policy *PromotionStagePolicyUpdate `json:"policy,omitempty"`
 
 	// SourceStageID Source Stage supplying the Freight. Omit for directly requested Warehouse Freight.
 	SourceStageID *openapi_types.UUID `json:"sourceStageId,omitempty"`
@@ -2466,6 +2470,7 @@ type PromotionPipelineStage struct {
 	// ObservationStale Whether the Stage observation exceeds the integration freshness limit.
 	ObservationStale      bool                     `json:"observationStale"`
 	PendingPromotionCount int                      `json:"pendingPromotionCount"`
+	Policy                PromotionStagePolicy     `json:"policy"`
 	PromotionSources      []PromotionFreightSource `json:"promotionSources"`
 }
 

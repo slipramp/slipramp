@@ -33,6 +33,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
+	policyExpiresAt := now.Add(time.Hour)
 	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1907")
 	healthStatus := "Healthy"
 	argoNamespace := "argocd"
@@ -55,6 +56,11 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 						HealthStatus:             &healthStatus,
 						ArgoApplicationNamespace: &argoNamespace,
 						LastObservedAt:           now,
+					},
+					Policy: promotion.PolicyView{
+						ConfiguredMode: promotion.PolicyModeReviewRequired,
+						EffectiveMode:  promotion.PolicyModeReviewRequired,
+						ExpiresAt:      &policyExpiresAt,
 					},
 					PromotionSources: []promotion.FreightPromotionSource{{
 						StageID:     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1908"),
@@ -131,6 +137,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		`"promotionSources":[`,
 		`"availableFreight":{"items":[`,
 		`"autoPromotionEnabled":false`,
+		`"policy":{"configuredMode":"review-required","effectiveMode":"review-required","expiresAt":"2026-10-22T13:00:00Z"}`,
 		`"healthStatus":"Healthy"`,
 		`"observationStale":true`,
 		`"pendingPromotionCount":1`,

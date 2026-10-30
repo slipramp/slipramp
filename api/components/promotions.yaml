@@ -456,6 +456,7 @@ PromotionPipelineStage:
     - promotionSources
     - availableFreight
     - autoPromotionEnabled
+    - policy
     - pendingPromotionCount
     - observationStale
     - lastObservedAt
@@ -483,6 +484,8 @@ PromotionPipelineStage:
     autoPromotionEnabled:
       type: boolean
       description: Effective Kargo auto-promotion state for this Stage.
+    policy:
+      $ref: "#/PromotionStagePolicy"
     pendingPromotionCount:
       type: integer
       minimum: 0
@@ -611,6 +614,7 @@ PromotionBranchDriftStage:
     - targetBranch
     - sourcePaths
     - freight
+    - policy
     - status
     - lastObservedAt
   properties:
@@ -649,6 +653,8 @@ PromotionBranchDriftStage:
         maxLength: 1024
     freight:
       $ref: "#/PromotionFreight"
+    policy:
+      $ref: "#/PromotionStagePolicy"
     status:
       $ref: "#/PromotionBranchDriftStatus"
     acknowledgedSourceCommit:
@@ -1064,6 +1070,9 @@ PromotionCreate:
       type: string
       minLength: 1
       maxLength: 253
+    policy:
+      $ref: "#/PromotionStagePolicyUpdate"
+      description: Optional Stage policy change applied atomically before this Promotion snapshots policy.
 
 PromotionList:
   type: object

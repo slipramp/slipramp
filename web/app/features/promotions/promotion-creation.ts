@@ -3,12 +3,15 @@ import type {
   PromotionBranchDriftStage,
   PromotionFreightItem,
   PromotionPipelineStage,
+  PromotionStagePolicy,
+  PromotionStagePolicyUpdate,
 } from "~/api/generated";
 
 export type PromotionChoice = {
   targetStageId: string;
   targetStageName: string;
   targetEnvironment: string;
+  targetPolicy: PromotionStagePolicy;
   sourceStageId?: string;
   sourceStageName: string;
   sourceEnvironment: string;
@@ -20,6 +23,43 @@ export type PromotionCreationActionResult = {
   promotionId?: string;
 };
 
+export type PromotionReviewPolicySelection = "unchanged" | "permanent" | "30m" | "1h" | "24h";
+
+const promotionReviewPolicySelections = new Set<PromotionReviewPolicySelection>([
+  "unchanged",
+  "permanent",
+  "30m",
+  "1h",
+  "24h",
+]);
+
+export function parsePromotionReviewPolicySelection(
+  value: string,
+): PromotionReviewPolicySelection | undefined {
+  return promotionReviewPolicySelections.has(value as PromotionReviewPolicySelection)
+    ? (value as PromotionReviewPolicySelection)
+    : undefined;
+}
+
+export function promotionReviewPolicyUpdate(
+  selection: PromotionReviewPolicySelection,
+  now = new Date(),
+): PromotionStagePolicyUpdate | undefined {
+  if (selection === "unchanged") return undefined;
+  if (selection === "permanent") return { mode: "review-required" };
+
+  const durationMilliseconds = {
+    "30m": 30 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "24h": 24 * 60 * 60 * 1000,
+  }[selection];
+
+  return {
+    expiresAt: new Date(now.getTime() + durationMilliseconds).toISOString(),
+    mode: "review-required",
+  };
+}
+
 export function pipelinePromotionChoices(stage: PromotionPipelineStage): PromotionChoice[] {
   const upstream = stage.promotionSources.flatMap((source) =>
     source.freight.items.map((freight) => ({
@@ -30,6 +70,7 @@ export function pipelinePromotionChoices(stage: PromotionPipelineStage): Promoti
       targetEnvironment: stage.environment,
       targetStageId: stage.id,
       targetStageName: stage.name,
+      targetPolicy: stage.policy,
     })),
   );
   const upstreamFreight = new Set(
@@ -44,6 +85,7 @@ export function pipelinePromotionChoices(stage: PromotionPipelineStage): Promoti
       targetEnvironment: stage.environment,
       targetStageId: stage.id,
       targetStageName: stage.name,
+      targetPolicy: stage.policy,
     }));
 
   return [...upstream, ...direct];
@@ -58,6 +100,7 @@ export function inPlacePromotionChoices(stage: PromotionBranchDriftStage): Promo
     targetEnvironment: stage.environment,
     targetStageId: stage.id,
     targetStageName: stage.name,
+    targetPolicy: stage.policy,
   }));
 }
 

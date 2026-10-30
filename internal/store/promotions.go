@@ -103,6 +103,14 @@ func (d *Database) UpsertPromotionStagePolicy(
 	ctx context.Context,
 	record promotion.StagePolicy,
 ) (promotion.StagePolicy, error) {
+	return upsertPromotionStagePolicy(ctx, d.queries, record)
+}
+
+func upsertPromotionStagePolicy(
+	ctx context.Context,
+	queries *storedb.Queries,
+	record promotion.StagePolicy,
+) (promotion.StagePolicy, error) {
 	if err := record.Validate(); err != nil {
 		return promotion.StagePolicy{}, err
 	}
@@ -111,7 +119,7 @@ func (d *Database) UpsertPromotionStagePolicy(
 	if err != nil {
 		return promotion.StagePolicy{}, fmt.Errorf("encode promotion policy actor: %w", err)
 	}
-	row, err := d.queries.UpsertPromotionStagePolicy(
+	row, err := queries.UpsertPromotionStagePolicy(
 		ctx,
 		storedb.UpsertPromotionStagePolicyParams{
 			StageID:              databaseUUID(record.StageID),
@@ -146,6 +154,34 @@ func (d *Database) GetPromotionStagePolicy(
 	}
 
 	return promotionStagePolicyFromRow(row)
+}
+
+func (d *Database) ListPromotionStagePolicies(
+	ctx context.Context,
+	stageIDs []uuid.UUID,
+) (map[uuid.UUID]promotion.StagePolicy, error) {
+	policies := make(map[uuid.UUID]promotion.StagePolicy, len(stageIDs))
+	if len(stageIDs) == 0 {
+		return policies, nil
+	}
+
+	identifiers := make([]pgtype.UUID, 0, len(stageIDs))
+	for _, stageID := range stageIDs {
+		identifiers = append(identifiers, databaseUUID(stageID))
+	}
+	rows, err := d.queries.ListPromotionStagePolicies(ctx, identifiers)
+	if err != nil {
+		return nil, fmt.Errorf("list Promotion Stage policies: %w", err)
+	}
+	for _, row := range rows {
+		policy, decodeErr := promotionStagePolicyFromRow(row)
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		policies[policy.StageID] = policy
+	}
+
+	return policies, nil
 }
 
 func (d *Database) ReplacePromotionStageSnapshot(

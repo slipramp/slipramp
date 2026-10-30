@@ -35,7 +35,7 @@ const (
 	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
-	serverKargoIntegrationsEnvironment            = "SLIPRAMP_KARGO_INTEGRATIONS"
+	serverKargoIntegrationsFileEnvironment        = "SLIPRAMP_KARGO_INTEGRATIONS_FILE"
 	serverNotificationPublicURLEnvironment        = "SLIPRAMP_NOTIFICATIONS_PUBLIC_URL"
 	serverNotificationDestinationsEnvironment     = "SLIPRAMP_NOTIFICATIONS_DESTINATIONS"
 	serverNotificationRoutesEnvironment           = "SLIPRAMP_NOTIFICATIONS_ROUTES"
@@ -46,6 +46,29 @@ const (
 
 func TestLoadServerFromEnvironment(t *testing.T) {
 	t.Parallel()
+	kargoIntegrationsPath := writeKargoIntegrationsFile(t, `
+apiVersion: slipramp.com/v1alpha1
+kind: KargoIntegrationConfig
+integrations:
+  prod:
+    cluster: colo
+    uiUrl: https://kargo.example.com
+    argoCdUiUrls:
+      homelab: https://argocd.homelab.example.com
+      prod: https://argocd.example.com
+    repositories: [kcloud-ops]
+    environmentOrder: [homelab, prod]
+    preparation:
+      repository: kcloud-ops
+      target: kargo-promotions
+      action: prepare-review
+    candidateBranchCleanup:
+      retention: 168h
+      credentials:
+        kcloud-ops: github-server
+    maximumStageObservationAge: 5m
+    pendingReviewRetention: 192h
+`)
 
 	environment := map[string]string{
 		serverAddressEnvironment:                      "127.0.0.1:9000",
@@ -72,14 +95,7 @@ func TestLoadServerFromEnvironment(t *testing.T) {
 		serverOIDCRedirectURLEnvironment:              "https://slipramp.example.com/api/v1/auth/callback",
 		serverOIDCSubjectRolesEnvironment:             `{"admin-subject":"admin","operator-subject":"operator"}`,
 		serverProductSessionLifetimeEnvironment:       "8h",
-		serverKargoIntegrationsEnvironment: `{"prod":{"cluster":"colo","repositories":["kcloud-ops"],` +
-			`"uiUrl":"https://kargo.example.com","environmentOrder":["homelab","prod"],` +
-			`"argoCdUiUrls":{"homelab":"https://argocd.homelab.example.com",` +
-			`"prod":"https://argocd.example.com"},` +
-			`"preparation":{"repository":"kcloud-ops","target":"kargo-promotions",` +
-			`"action":"prepare-review"},"candidateBranchCleanup":{"retention":"168h",` +
-			`"credentials":{"kcloud-ops":"github-server"}},"maximumStageObservationAge":"5m",` +
-			`"pendingReviewRetention":"192h"}}`,
+		serverKargoIntegrationsFileEnvironment:        kargoIntegrationsPath,
 	}
 
 	cfg, err := config.LoadServer(mapEnvironment(environment))
@@ -240,11 +256,11 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 			wantError: serverOIDCSubjectRolesEnvironment,
 		},
 		{
-			name: "malformed Kargo integrations",
+			name: "missing Kargo integrations file",
 			environment: map[string]string{
-				serverKargoIntegrationsEnvironment: "not-json",
+				serverKargoIntegrationsFileEnvironment: "/missing/kargo-integrations.yaml",
 			},
-			wantError: serverKargoIntegrationsEnvironment,
+			wantError: serverKargoIntegrationsFileEnvironment,
 		},
 		{
 			name: "missing notification secret file",

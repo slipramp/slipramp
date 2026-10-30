@@ -171,6 +171,11 @@ SELECT *
 FROM promotion_stage_policies
 WHERE stage_id = sqlc.arg(stage_id);
 
+-- name: ListPromotionStagePolicies :many
+SELECT *
+FROM promotion_stage_policies
+WHERE stage_id = ANY(sqlc.arg(stage_ids)::uuid[]);
+
 -- name: GetActivePromotionRepositoryByName :one
 SELECT
     id,

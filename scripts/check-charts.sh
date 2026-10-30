@@ -99,6 +99,25 @@ checksum_default=$(grep -E 'checksum/placements:' "$server_render" | awk '{print
 checksum_changed=$(grep -E 'checksum/placements:' "$test_directory/server-placement.yaml" | awk '{print $2}')
 test "$checksum_default" != "$checksum_changed" || fail "Placement change did not change the rollout checksum"
 
+kargo_checksum_default=$(grep -E 'checksum/kargo:' "$server_render" | awk '{print $2}')
+"$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/slipramp-required.yaml" \
+  --set-string server.kargo.integrations.prod.cluster=primary \
+  --set-json 'server.kargo.integrations.prod.repositories=["ops"]' \
+  --set-json 'server.kargo.integrations.prod.environmentOrder=["prod"]' \
+  --set-string server.kargo.integrations.prod.preparation.repository=ops \
+  --set-string server.kargo.integrations.prod.preparation.target=kargo-promotions \
+  --set-string server.kargo.integrations.prod.preparation.action=prepare-review \
+  --set-string server.kargo.integrations.prod.maximumStageObservationAge=5m \
+  --set-string server.kargo.integrations.prod.pendingReviewRetention=192h \
+  >"$test_directory/server-kargo.yaml"
+kargo_checksum_changed=$(grep -E 'checksum/kargo:' "$test_directory/server-kargo.yaml" | awk '{print $2}')
+test "$kargo_checksum_default" != "$kargo_checksum_changed" || fail "Kargo change did not change the rollout checksum"
+assert_contains "$test_directory/server-kargo.yaml" 'name: SLIPRAMP_KARGO_INTEGRATIONS_FILE'
+assert_contains "$test_directory/server-kargo.yaml" 'kind: KargoIntegrationConfig'
+assert_not_contains "$test_directory/server-kargo.yaml" 'name: SLIPRAMP_KARGO_INTEGRATIONS$'
+
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
   --values "$testdata/slipramp-required.yaml" \

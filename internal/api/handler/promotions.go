@@ -156,11 +156,20 @@ func (h *Handler) CreatePromotion(
 	if request.Body.SourceStageID != nil {
 		sourceStageID = *request.Body.SourceStageID
 	}
+	var policy *promotion.PolicyUpdate
+	if request.Body.Policy != nil {
+		policy = &promotion.PolicyUpdate{
+			Mode:      promotion.PolicyMode(request.Body.Policy.Mode),
+			ExpiresAt: request.Body.Policy.ExpiresAt,
+			Reason:    request.Body.Policy.Reason,
+		}
+	}
 
 	record, err := h.promotionCreations.Create(ctx, promotion.OperatorPromotionRequest{
 		TargetStageID: request.StageID,
 		SourceStageID: sourceStageID,
 		FreightName:   request.Body.FreightName,
+		Policy:        policy,
 		Principal:     *principal,
 	})
 	if err != nil {

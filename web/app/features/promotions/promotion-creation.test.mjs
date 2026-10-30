@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   inPlacePromotionChoices,
+  parsePromotionReviewPolicySelection,
   pipelinePromotionChoices,
   promotionChoiceKey,
+  promotionReviewPolicyUpdate,
 } from "./promotion-creation.ts";
 
 const freight = (origin, name, version) => ({
@@ -12,6 +14,7 @@ const freight = (origin, name, version) => ({
   name,
   origin,
 });
+const automaticPolicy = { configuredMode: "automatic", effectiveMode: "automatic" };
 
 test("pipeline choices preserve exact eligible Freight and source Stage", () => {
   const stage = {
@@ -23,6 +26,7 @@ test("pipeline choices preserve exact eligible Freight and source Stage", () => 
     lastObservedAt: "2026-10-23T12:00:00Z",
     name: "app-prod",
     pendingPromotionCount: 0,
+    policy: automaticPolicy,
     promotionSources: [
       {
         environment: "homelab",
@@ -44,6 +48,7 @@ test("pipeline choices preserve exact eligible Freight and source Stage", () => 
       targetEnvironment: "prod",
       targetStageId: "target-id",
       targetStageName: "app-prod",
+      targetPolicy: automaticPolicy,
     },
   ]);
   assert.equal(promotionChoiceKey(choices[0]), '["source-id","Warehouse/app","freight-42"]');
@@ -60,6 +65,7 @@ test("pipeline choices include directly available Warehouse Freight", () => {
     lastObservedAt: "2026-10-23T12:00:00Z",
     name: "app-prod",
     pendingPromotionCount: 0,
+    policy: automaticPolicy,
     promotionSources: [],
   });
 
@@ -71,6 +77,7 @@ test("pipeline choices include directly available Warehouse Freight", () => {
       targetEnvironment: "prod",
       targetStageId: "target-id",
       targetStageName: "app-prod",
+      targetPolicy: automaticPolicy,
     },
   ]);
   assert.equal(promotionChoiceKey(choices[0]), '[null,"Warehouse/app","freight-43"]');
@@ -92,6 +99,7 @@ test("in-place choices target the same Stage for each current Freight item", () 
     lastObservedAt: "2026-10-23T12:00:00Z",
     name: "app-prod",
     project: "kargo-core",
+    policy: automaticPolicy,
     sourcePaths: ["apps/app"],
     status: "drifted",
     targetBranch: "stage/app/prod",
@@ -103,4 +111,27 @@ test("in-place choices target the same Stage for each current Freight item", () 
       (choice) => choice.sourceStageId === "stage-id" && choice.targetStageId === "stage-id",
     ),
   );
+});
+
+test("review policy choices produce permanent and time-boxed updates", () => {
+  const now = new Date("2026-10-29T18:00:00Z");
+
+  assert.equal(parsePromotionReviewPolicySelection("invalid"), undefined);
+  assert.equal(parsePromotionReviewPolicySelection("30m"), "30m");
+  assert.equal(promotionReviewPolicyUpdate("unchanged", now), undefined);
+  assert.deepEqual(promotionReviewPolicyUpdate("permanent", now), {
+    mode: "review-required",
+  });
+  assert.deepEqual(promotionReviewPolicyUpdate("30m", now), {
+    expiresAt: "2026-10-29T18:30:00.000Z",
+    mode: "review-required",
+  });
+  assert.deepEqual(promotionReviewPolicyUpdate("1h", now), {
+    expiresAt: "2026-10-29T19:00:00.000Z",
+    mode: "review-required",
+  });
+  assert.deepEqual(promotionReviewPolicyUpdate("24h", now), {
+    expiresAt: "2026-10-30T18:00:00.000Z",
+    mode: "review-required",
+  });
 });

@@ -1,0 +1,17 @@
+apiVersion: slipramp.com/v1alpha1
+kind: KargoIntegrationConfig
+integrations:
+  homelab:
+    cluster: prod-sjc1
+    uiUrl: https://kargo.k8s.kcloud.io
+    argoCdUiUrls:
+      homelab: https://argocd.k8s.kcloud.zone
+      prod: https://argocd.k8s.kcloud.io
+    repositories: [kcloud-ops, universe]
+    environmentOrder: [homelab, prod]
+    preparation:
+      repository: kcloud-ops
+      target: kargo-promotions
+      action: prepare-review
+    maximumStageObservationAge: 5m
+    pendingReviewRetention: 192h

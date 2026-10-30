@@ -35,6 +35,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
 	lastRenderedAt := now.Add(-2 * time.Hour)
+	policyExpiresAt := now.Add(24 * time.Hour)
 	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1910")
 	drift := &recordingPromotionBranchDriftService{
 		result: promotion.BranchDriftList{
@@ -54,6 +55,11 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 						SourcePaths:    []string{"apps/external-dns"},
 						Freight:        promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/external-dns", Name: "freight-1", Artifacts: []promotion.FreightArtifact{}}}},
 						LastObservedAt: now.Add(-time.Minute),
+					},
+					Policy: promotion.PolicyView{
+						ConfiguredMode: promotion.PolicyModeReviewRequired,
+						EffectiveMode:  promotion.PolicyModeReviewRequired,
+						ExpiresAt:      &policyExpiresAt,
 					},
 					Status:                         promotion.BranchDriftStatusCurrent,
 					AcknowledgedSourceRevision:     strings.Repeat("a", 40),
@@ -115,6 +121,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 		`"limit":10`,
 		`"offset":2`,
 		`"status":"current"`,
+		`"policy":{"configuredMode":"review-required","effectiveMode":"review-required","expiresAt":"2026-10-23T12:00:00Z"}`,
 		`"name":"freight-1"`,
 		`"noOpRender":true`,
 		`"sourceDrift":false`,

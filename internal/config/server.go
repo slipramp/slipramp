@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -46,7 +45,7 @@ const (
 	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
-	serverKargoIntegrationsEnvironment            = "SLIPRAMP_KARGO_INTEGRATIONS"
+	serverKargoIntegrationsFileEnvironment        = "SLIPRAMP_KARGO_INTEGRATIONS_FILE"
 	serverNotificationPublicURLEnvironment        = "SLIPRAMP_NOTIFICATIONS_PUBLIC_URL"
 	serverNotificationDestinationsEnvironment     = "SLIPRAMP_NOTIFICATIONS_DESTINATIONS"
 	serverNotificationRoutesEnvironment           = "SLIPRAMP_NOTIFICATIONS_ROUTES"
@@ -54,25 +53,6 @@ const (
 	serverNotificationMaxBackoffEnvironment       = "SLIPRAMP_NOTIFICATIONS_MAX_BACKOFF"
 	serverNotificationRetentionPeriodEnvironment  = "SLIPRAMP_NOTIFICATIONS_RETENTION_PERIOD"
 )
-
-type serverKargoIntegration struct {
-	Cluster          string            `json:"cluster"`
-	UIURL            string            `json:"uiUrl"`
-	ArgoCDUIURLs     map[string]string `json:"argoCdUiUrls"`
-	Repositories     []string          `json:"repositories"`
-	EnvironmentOrder []string          `json:"environmentOrder"`
-	Preparation      struct {
-		Repository string `json:"repository"`
-		Target     string `json:"target"`
-		Action     string `json:"action"`
-	} `json:"preparation"`
-	CandidateBranchCleanup *struct {
-		Retention   string            `json:"retention"`
-		Credentials map[string]string `json:"credentials"`
-	} `json:"candidateBranchCleanup"`
-	MaximumStageObservationAge string `json:"maximumStageObservationAge"`
-	PendingReviewRetention     string `json:"pendingReviewRetention"`
-}
 
 type serverNotificationDestination struct {
 	Type           notification.DestinationType `json:"type"`
@@ -267,10 +247,15 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 
 		cfg.ProductAuthentication.SessionLifetime = lifetime
 	}
-	if value, ok := lookupEnvironment(serverKargoIntegrationsEnvironment); ok {
-		integrations, err := parseServerKargoIntegrations(value)
+	if value, ok := lookupEnvironment(serverKargoIntegrationsFileEnvironment); ok {
+		integrations, err := promotion.LoadIntegrationFile(value)
 		if err != nil {
-			return server.Config{}, fmt.Errorf("parse %s: %w", serverKargoIntegrationsEnvironment, err)
+			return server.Config{}, fmt.Errorf(
+				"load %s from %q: %w",
+				serverKargoIntegrationsFileEnvironment,
+				value,
+				err,
+			)
 		}
 
 		cfg.KargoIntegrations = integrations
@@ -428,63 +413,6 @@ func decodeStrictJSONBytes(value []byte, destination any) error {
 	}
 
 	return nil
-}
-
-func parseServerKargoIntegrations(value string) (promotion.IntegrationSet, error) {
-	var encoded map[string]serverKargoIntegration
-	if err := json.Unmarshal([]byte(value), &encoded); err != nil {
-		return nil, err
-	}
-	if encoded == nil {
-		return promotion.IntegrationSet{}, nil
-	}
-
-	integrations := make(promotion.IntegrationSet, len(encoded))
-	for name, encodedIntegration := range encoded {
-		maximumAge, err := time.ParseDuration(encodedIntegration.MaximumStageObservationAge)
-		if err != nil {
-			return nil, fmt.Errorf("integration %q maximum Stage observation age: %w", name, err)
-		}
-		retention, err := time.ParseDuration(encodedIntegration.PendingReviewRetention)
-		if err != nil {
-			return nil, fmt.Errorf("integration %q pending review retention: %w", name, err)
-		}
-		var branchCleanup *promotion.CandidateBranchCleanupConfig
-		if encodedIntegration.CandidateBranchCleanup != nil {
-			cleanupRetention, cleanupErr := time.ParseDuration(
-				encodedIntegration.CandidateBranchCleanup.Retention,
-			)
-			if cleanupErr != nil {
-				return nil, fmt.Errorf(
-					"integration %q candidate branch cleanup retention: %w",
-					name,
-					cleanupErr,
-				)
-			}
-			branchCleanup = &promotion.CandidateBranchCleanupConfig{
-				Retention:   cleanupRetention,
-				Credentials: maps.Clone(encodedIntegration.CandidateBranchCleanup.Credentials),
-			}
-		}
-
-		integrations[name] = promotion.IntegrationConfig{
-			ClusterName:      encodedIntegration.Cluster,
-			UIURL:            encodedIntegration.UIURL,
-			ArgoCDUIURLs:     maps.Clone(encodedIntegration.ArgoCDUIURLs),
-			Repositories:     encodedIntegration.Repositories,
-			EnvironmentOrder: encodedIntegration.EnvironmentOrder,
-			Preparation: promotion.PreparationConfig{
-				Repository: encodedIntegration.Preparation.Repository,
-				Target:     encodedIntegration.Preparation.Target,
-				Action:     encodedIntegration.Preparation.Action,
-			},
-			CandidateBranchCleanup:     branchCleanup,
-			MaximumStageObservationAge: maximumAge,
-			PendingReviewRetention:     retention,
-		}
-	}
-
-	return integrations, nil
 }
 
 func parseDurationEnvironment(name, value string) (time.Duration, error) {

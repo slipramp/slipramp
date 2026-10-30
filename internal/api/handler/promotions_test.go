@@ -194,6 +194,7 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 		t.Fatalf("ActorSnapshot() error = %v", err)
 	}
 	nextDispatchAt := now
+	policyExpiresAt := now.Add(time.Hour)
 	promotions := &recordingPromotionCreationService{
 		record: promotion.Promotion{
 			ID:                      promotionID,
@@ -227,7 +228,7 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	request := authenticatedProductRequest(
 		http.MethodPost,
 		"/api/v1/promotion-stages/"+targetStageID.String()+"/promotions",
-		`{"freightName":"freight-42"}`,
+		`{"freightName":"freight-42","policy":{"mode":"review-required","expiresAt":"2026-10-23T13:00:00Z"}}`,
 	)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -242,7 +243,10 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	}
 	if promotions.request.TargetStageID != targetStageID || promotions.request.SourceStageID != uuid.Nil ||
 		promotions.request.FreightName != "freight-42" ||
-		promotions.request.Principal.ID != authentication.Principal.ID {
+		promotions.request.Principal.ID != authentication.Principal.ID || promotions.request.Policy == nil ||
+		promotions.request.Policy.Mode != promotion.PolicyModeReviewRequired ||
+		promotions.request.Policy.ExpiresAt == nil ||
+		!promotions.request.Policy.ExpiresAt.Equal(policyExpiresAt) {
 		t.Errorf("creation request = %#v", promotions.request)
 	}
 	for _, expected := range []string{promotionID.String(), `"source":"slipramp"`, `"status":"creating"`} {

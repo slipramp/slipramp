@@ -167,6 +167,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	}
 
 	acceptedAt := createdAt.Add(3 * time.Minute)
+	policyExpiresAt := acceptedAt.Add(time.Hour)
 	acceptance := promotion.OperatorPromotionAcceptance{
 		ID:                         uuid.New(),
 		Integration:                "prod",
@@ -178,6 +179,14 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 		AcceptedAt:                 acceptedAt,
 		MaximumStageObservationAge: 5 * time.Minute,
 		PendingReviewRetention:     8 * 24 * time.Hour,
+		Policy: &promotion.StagePolicy{
+			StageID:              fixture.stage.ID,
+			Mode:                 promotion.PolicyModeReviewRequired,
+			ExpiresAt:            &policyExpiresAt,
+			UpdatedByPrincipalID: fixture.principal.ID,
+			UpdatedBySnapshot:    fixture.actor,
+			UpdatedAt:            acceptedAt,
+		},
 	}
 	record, err := fixture.database.CreateOperatorPromotion(fixture.ctx, acceptance)
 	if err != nil {
@@ -187,7 +196,9 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 		record.ExternalPromotionID != fixture.stage.Name+"-slipramp-"+record.ID.String() || record.SourceStageID == nil ||
 		*record.SourceStageID != fixture.stage.ID || record.RequestDigest != (promotion.RequestDigest{}) ||
 		record.BaseRevision != "" || record.CandidateRevision != "" || record.CandidateBranch != "" ||
-		record.NextDispatchAt == nil || !record.NextDispatchAt.Equal(acceptedAt) {
+		record.NextDispatchAt == nil || !record.NextDispatchAt.Equal(acceptedAt) || !record.ReviewRequired ||
+		record.PolicySnapshot.EffectiveMode != promotion.PolicyModeReviewRequired ||
+		record.PolicySnapshot.ExpiresAt == nil || !record.PolicySnapshot.ExpiresAt.Equal(policyExpiresAt) {
 		t.Errorf("operator Promotion = %#v", record)
 	}
 	selected := record.SelectedFreightSnapshot
@@ -208,6 +219,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	directAcceptance.SourceStageID = uuid.Nil
 	directAcceptance.FreightName = "freight-43"
 	directAcceptance.AcceptedAt = acceptedAt.Add(time.Second)
+	directAcceptance.Policy = nil
 	direct, err := fixture.database.CreateOperatorPromotion(fixture.ctx, directAcceptance)
 	if err != nil {
 		t.Fatalf("CreateOperatorPromotion(direct) error = %v", err)
@@ -220,6 +232,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	staleAcceptance := acceptance
 	staleAcceptance.ID = uuid.New()
 	staleAcceptance.AcceptedAt = createdAt.Add(10 * time.Minute)
+	staleAcceptance.Policy = nil
 	if _, err := fixture.database.CreateOperatorPromotion(
 		fixture.ctx,
 		staleAcceptance,
@@ -238,6 +251,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	archivedAcceptance := acceptance
 	archivedAcceptance.ID = uuid.New()
 	archivedAcceptance.AcceptedAt = archivedAt.Add(time.Second)
+	archivedAcceptance.Policy = nil
 	if _, err := fixture.database.CreateOperatorPromotion(
 		fixture.ctx,
 		archivedAcceptance,

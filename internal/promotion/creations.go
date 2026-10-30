@@ -19,6 +19,7 @@ type OperatorPromotionRequest struct {
 	TargetStageID uuid.UUID
 	SourceStageID uuid.UUID
 	FreightName   string
+	Policy        *PolicyUpdate
 	Principal     productidentity.Principal
 }
 
@@ -33,6 +34,7 @@ type OperatorPromotionAcceptance struct {
 	AcceptedAt                 time.Time
 	MaximumStageObservationAge time.Duration
 	PendingReviewRetention     time.Duration
+	Policy                     *StagePolicy
 }
 
 func CreationExternalName(stageName string, promotionID uuid.UUID) string {
@@ -96,6 +98,21 @@ func (s *CreationService) Create(
 		return Promotion{}, ErrIntegrationNotFound
 	}
 	acceptedAt := s.now().UTC().Truncate(time.Microsecond)
+	var policy *StagePolicy
+	if request.Policy != nil {
+		policy = &StagePolicy{
+			StageID:              request.TargetStageID,
+			Mode:                 request.Policy.Mode,
+			ExpiresAt:            request.Policy.ExpiresAt,
+			Reason:               request.Policy.Reason,
+			UpdatedByPrincipalID: request.Principal.ID,
+			UpdatedBySnapshot:    actor,
+			UpdatedAt:            acceptedAt,
+		}
+		if err := policy.Validate(); err != nil {
+			return Promotion{}, err
+		}
+	}
 	acceptance := OperatorPromotionAcceptance{
 		ID:                         s.newID(),
 		Integration:                target.Integration,
@@ -107,6 +124,7 @@ func (s *CreationService) Create(
 		AcceptedAt:                 acceptedAt,
 		MaximumStageObservationAge: integration.MaximumStageObservationAge,
 		PendingReviewRetention:     integration.PendingReviewRetention,
+		Policy:                     policy,
 	}
 	if err := acceptance.Validate(); err != nil {
 		return Promotion{}, err
@@ -133,6 +151,15 @@ func (a OperatorPromotionAcceptance) Validate() error {
 	}
 	if err := a.RequestedBySnapshot.Validate(); err != nil {
 		return invalid(err)
+	}
+	if a.Policy != nil {
+		if a.Policy.StageID != a.TargetStageID || a.Policy.UpdatedByPrincipalID != a.RequestedByPrincipalID ||
+			!a.Policy.UpdatedAt.Equal(a.AcceptedAt) {
+			return fmt.Errorf("%w: Stage policy does not match the Promotion acceptance", ErrInvalid)
+		}
+		if err := a.Policy.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

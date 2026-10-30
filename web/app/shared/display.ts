@@ -1,22 +1,18 @@
-const timestampFormatter = new Intl.DateTimeFormat("en", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
+import { defaultTimeZone, normalizeTimeZone } from "./time-zone.ts";
 
-const datestampFormatter = new Intl.DateTimeFormat("en", {
-  dateStyle: "medium",
-});
+const timestampFormatters = new Map<string, Intl.DateTimeFormat>();
+const datestampFormatters = new Map<string, Intl.DateTimeFormat>();
 
 const relativeTimeFormatter = new Intl.RelativeTimeFormat("en", {
   numeric: "auto",
 });
 
-export function formatTimestamp(value: string | Date) {
-  return timestampFormatter.format(asDate(value));
+export function formatTimestamp(value: string | Date, timeZone = defaultTimeZone) {
+  return timestampFormatter(timeZone).format(asDate(value));
 }
 
-export function formatDatestamp(value: string | Date) {
-  return datestampFormatter.format(asDate(value));
+export function formatDatestamp(value: string | Date, timeZone = defaultTimeZone) {
+  return datestampFormatter(timeZone).format(asDate(value));
 }
 
 export function formatRelativeTime(value: string | Date, now = new Date()) {
@@ -114,4 +110,35 @@ export function abbreviateMiddle(value: string, length = 28) {
 
 function asDate(value: string | Date) {
   return value instanceof Date ? value : new Date(value);
+}
+
+function timestampFormatter(timeZone: string) {
+  const normalizedTimeZone = normalizeTimeZone(timeZone);
+  const existing = timestampFormatters.get(normalizedTimeZone);
+  if (existing) return existing;
+
+  const formatter = new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    timeZone: normalizedTimeZone,
+    timeZoneName: "short",
+    year: "numeric",
+  });
+  timestampFormatters.set(normalizedTimeZone, formatter);
+  return formatter;
+}
+
+function datestampFormatter(timeZone: string) {
+  const normalizedTimeZone = normalizeTimeZone(timeZone);
+  const existing = datestampFormatters.get(normalizedTimeZone);
+  if (existing) return existing;
+
+  const formatter = new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeZone: normalizedTimeZone,
+  });
+  datestampFormatters.set(normalizedTimeZone, formatter);
+  return formatter;
 }

@@ -1007,6 +1007,10 @@ export type PromotionCreate = {
    */
   sourceStageId?: string;
   freightName: string;
+  /**
+   * Optional Stage policy change applied atomically before this Promotion snapshots policy.
+   */
+  policy?: PromotionStagePolicyUpdate;
 };
 
 export type PromotionList = {
@@ -1999,6 +2003,7 @@ export type PromotionPipelineStage = {
    * Effective Kargo auto-promotion state for this Stage.
    */
   autoPromotionEnabled: boolean;
+  policy: PromotionStagePolicy;
   pendingPromotionCount: number;
   /**
    * Most recently observed aggregate Kargo health status for this Stage.
@@ -2032,6 +2037,7 @@ export type PromotionBranchDriftStage = {
   targetBranch: string;
   sourcePaths: Array<string>;
   freight: PromotionFreight;
+  policy: PromotionStagePolicy;
   status: PromotionBranchDriftStatus;
   acknowledgedSourceCommit?: GitCommit;
   acknowledgedRenderBaseCommit?: GitCommit;

@@ -17,7 +17,8 @@ manual-Stage Freight availability, promotion actions, and background-refreshed
 branch drift with Stage-level pagination are implemented. The pipeline view
 combines Stage drift and manual Freight availability into one attention filter,
 shows freshness-aware Kargo health, and links observed Applications to configured
-Argo CD UIs.
+Argo CD UIs. Pipeline and branch-drift promotion dialogs show the effective
+Stage policy and can enable review permanently or for a short predefined window.
 Opt-in candidate-branch
 cleanup scans remote inventory, protects nonterminal Promotions, exact-tip
 guards deletions after retention, and records the latest outcome per Repository.

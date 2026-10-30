@@ -58,6 +58,20 @@ func (s *reviewStore) GetPromotionStagePolicy(_ context.Context, id uuid.UUID) (
 	return record, nil
 }
 
+func (s *reviewStore) ListPromotionStagePolicies(
+	_ context.Context,
+	stageIDs []uuid.UUID,
+) (map[uuid.UUID]StagePolicy, error) {
+	policies := make(map[uuid.UUID]StagePolicy, len(stageIDs))
+	for _, stageID := range stageIDs {
+		if policy, ok := s.policies[stageID]; ok {
+			policies[stageID] = policy
+		}
+	}
+
+	return policies, nil
+}
+
 func (s *reviewStore) UpsertPromotionStagePolicy(
 	_ context.Context,
 	record StagePolicy,

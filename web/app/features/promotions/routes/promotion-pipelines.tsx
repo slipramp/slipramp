@@ -41,6 +41,7 @@ import {
 import { promotionScopeFilters } from "~/features/promotions/promotion-scope-filters";
 import { pageTitle } from "~/shared/page-title";
 import { pageFromSearchParam } from "~/shared/search-params";
+import { useTimeZone } from "~/shared/time-zone-preference";
 import {
   canWritePromotions,
   pipelinePromotionChoices,
@@ -394,12 +395,13 @@ function PipelineStageCard({
 }
 
 function StageHealthBadge({ stage }: Readonly<{ stage: PromotionPipelineStage }>) {
+  const { timeZone } = useTimeZone();
   const presentation = stageHealthPresentation(stage);
   const tooltip = stage.observationStale
-    ? `Last observed ${formatTimestamp(stage.lastObservedAt)}. The reported health may be outdated.`
+    ? `Last observed ${formatTimestamp(stage.lastObservedAt, timeZone)}. The reported health may be outdated.`
     : stage.healthStatus
-      ? `Kargo reported ${stage.healthStatus}. Last observed ${formatTimestamp(stage.lastObservedAt)}.`
-      : `Kargo has not reported Stage health. Last observed ${formatTimestamp(stage.lastObservedAt)}.`;
+      ? `Kargo reported ${stage.healthStatus}. Last observed ${formatTimestamp(stage.lastObservedAt, timeZone)}.`
+      : `Kargo has not reported Stage health. Last observed ${formatTimestamp(stage.lastObservedAt, timeZone)}.`;
   const badge = (
     <Badge color={presentation.color} size="sm" variant="light">
       <Group component="span" gap={4} wrap="nowrap">
