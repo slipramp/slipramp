@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { proxyAuthenticationRequest } from "./api/authentication.server.ts";
-import { forwardedCookieHeader, productSessionCookieName } from "./api/request-auth.server.ts";
+import { appendResponseCookie, proxyAuthenticationRequest } from "./api/authentication.server.ts";
+import {
+  automaticOIDCLoginCookieName,
+  forgetAutomaticOIDCLoginCookie,
+  forwardedCookieHeader,
+  productSessionCookieName,
+  rememberAutomaticOIDCLoginCookie,
+  shouldAutomaticallyBeginOIDCLogin,
+} from "./api/request-auth.server.ts";
 
 test("forwards only the named browser cookie", () => {
   const request = new Request("http://web.test/runs", {
@@ -15,6 +22,46 @@ test("forwards only the named browser cookie", () => {
     cookie: "slipramp_session=session-token",
   });
   assert.deepEqual(forwardedCookieHeader(request, "missing"), {});
+});
+
+test("remembers a successful OIDC login for future unauthenticated visits", () => {
+  const firstVisit = new Request("https://web.test/runs");
+  assert.equal(shouldAutomaticallyBeginOIDCLogin(firstVisit), false);
+
+  const cookie = rememberAutomaticOIDCLoginCookie(firstVisit);
+  assert.equal(
+    cookie,
+    `${automaticOIDCLoginCookieName}=1; Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax; Secure`,
+  );
+
+  const returningVisit = new Request("https://web.test/runs", {
+    headers: { cookie: `theme=dark; ${automaticOIDCLoginCookieName}=1` },
+  });
+  assert.equal(shouldAutomaticallyBeginOIDCLogin(returningVisit), true);
+});
+
+test("forgets automatic OIDC login on explicit logout", () => {
+  const request = new Request("http://web.test/logout");
+
+  assert.equal(
+    forgetAutomaticOIDCLoginCookie(request),
+    `${automaticOIDCLoginCookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`,
+  );
+});
+
+test("preserves the product session when remembering a successful login", () => {
+  const response = appendResponseCookie(
+    new Response(null, {
+      headers: { "set-cookie": "slipramp_session=session-token; Path=/; HttpOnly" },
+      status: 303,
+    }),
+    `${automaticOIDCLoginCookieName}=1; Path=/; HttpOnly`,
+  );
+
+  assert.deepEqual(response.headers.getSetCookie(), [
+    "slipramp_session=session-token; Path=/; HttpOnly",
+    `${automaticOIDCLoginCookieName}=1; Path=/; HttpOnly`,
+  ]);
 });
 
 test("proxies the OIDC callback with its state cookie and response cookies", async () => {

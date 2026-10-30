@@ -783,7 +783,12 @@ flow. Cookie state changes require CSRF protection, including
 The Web forwards only the Slipramp session for SSR calls, SSE, and artifact
 downloads and proxies same-origin login/callback requests. It never uses a
 deployment-wide privileged key on behalf of users. The Server remains the
-authorization authority even when the UI hides unavailable actions.
+authorization authority even when the UI hides unavailable actions. A browser
+without a session sees the sign-in page until the user successfully signs in
+through OIDC once. The Web then remembers that non-sensitive choice locally and
+starts OIDC automatically on future unauthenticated visits. Explicit logout or
+an unsuccessful OIDC flow forgets the choice so the browser can return to the
+sign-in page instead of immediately starting the same failing flow again.
 
 ### API keys and permissions
 

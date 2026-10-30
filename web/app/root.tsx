@@ -20,6 +20,7 @@ import {
   Links,
   Meta,
   Outlet,
+  redirect,
   Scripts,
   ScrollRestoration,
   useRouteError,
@@ -27,6 +28,7 @@ import {
 
 import { createServerAPIClient } from "~/api/client.server";
 import { getCurrentPrincipal } from "~/api/generated";
+import { shouldAutomaticallyBeginOIDCLogin } from "~/api/request-auth.server";
 import { ProductShell } from "~/components/product-shell";
 import { pageTitle } from "~/page-title";
 import { serverPerformanceMiddleware } from "~/performance.server";
@@ -62,6 +64,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     return { authentication: "authenticated", principal: result.data } as const;
   }
   if (result.response?.status === 401) {
+    if (shouldAutomaticallyBeginOIDCLogin(request)) {
+      return redirect("/api/v1/auth/login");
+    }
+
     return { authentication: "required", principal: undefined } as const;
   }
   return { authentication: "unavailable", principal: undefined } as const;

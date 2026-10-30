@@ -77,6 +77,11 @@
     }
   ],
   "output_changes": {
+    "access_key_id": {
+      "actions": ["no-op"],
+      "before": "do-not-project-output",
+      "after": "do-not-project-output"
+    },
     "endpoint": {"actions": ["create"], "after": "sensitive.example.com"},
     "old_endpoint": {"actions": ["delete"], "before": "secret.example.com"},
     "status": {"actions": ["update"]}

@@ -496,6 +496,8 @@ func normalizeTerraformAction(actions []string) (TerraformAction, TerraformRepla
 func normalizeTerraformOutputAction(actions []string) (TerraformAction, error) {
 	if len(actions) == 1 {
 		switch actions[0] {
+		case string(TerraformActionNoOp):
+			return TerraformActionNoOp, nil
 		case string(TerraformActionCreate):
 			return TerraformActionCreate, nil
 		case string(TerraformActionUpdate):

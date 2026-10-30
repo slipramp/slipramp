@@ -45,7 +45,7 @@ func TestDecodeTerraformPlanFixtures(t *testing.T) {
 				if report.Summary.ResourceChanges != wantCounts || report.Summary.DriftedResources != 1 {
 					t.Errorf("summary = %#v", report.Summary)
 				}
-				wantOutputs := TerraformActionCounts{Total: 3, Create: 1, Update: 1, Delete: 1}
+				wantOutputs := TerraformActionCounts{Total: 4, NoOp: 1, Create: 1, Update: 1, Delete: 1}
 				if report.Summary.OutputChanges != wantOutputs {
 					t.Errorf("output counts = %#v", report.Summary.OutputChanges)
 				}
@@ -76,7 +76,7 @@ func TestDecodeTerraformPlanFixtures(t *testing.T) {
 				}
 				for _, secret := range []string{
 					"do-not-project", "still-do-not-project", "sensitive.example.com",
-					"secret.example.com", "do-not-project-check-message",
+					"secret.example.com", "do-not-project-output", "do-not-project-check-message",
 				} {
 					if bytes.Contains(encoded, []byte(secret)) {
 						t.Errorf("encoded projection retained source value %q", secret)

@@ -1,7 +1,8 @@
 import { redirect } from "react-router";
 
-import { proxyAuthenticationRequest } from "~/api/authentication.server";
+import { appendResponseCookie, proxyAuthenticationRequest } from "~/api/authentication.server";
 import { getServerAPIURL } from "~/api/client.server";
+import { forgetAutomaticOIDCLoginCookie } from "~/api/request-auth.server";
 
 import type { Route } from "./+types/logout";
 
@@ -13,11 +14,7 @@ export async function action({ request }: Route.ActionArgs) {
   );
   if (!response.ok) return response;
 
-  const headers = new Headers();
-  const setCookie = response.headers.get("set-cookie");
-  if (setCookie !== null) {
-    headers.set("set-cookie", setCookie);
-  }
+  const redirectResponse = redirect("/", { headers: response.headers });
 
-  return redirect("/", { headers });
+  return appendResponseCookie(redirectResponse, forgetAutomaticOIDCLoginCookie(request));
 }

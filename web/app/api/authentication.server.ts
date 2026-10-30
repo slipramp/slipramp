@@ -62,3 +62,14 @@ export async function proxyAuthenticationRequest(
     statusText: response.statusText,
   });
 }
+
+export function appendResponseCookie(response: Response, cookie: string) {
+  const headers = new Headers(response.headers);
+  headers.append("set-cookie", cookie);
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+}
