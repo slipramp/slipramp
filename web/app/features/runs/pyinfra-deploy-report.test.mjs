@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   filterPyinfraOperations,
+  previewPyinfraHosts,
   pyinfraPlanBadges,
   pyinfraResultBadges,
 } from "./pyinfra-deploy-report.ts";
@@ -88,4 +89,17 @@ test("filters pyinfra operations by no-op visibility and keywords", () => {
     ),
     ["server.service"],
   );
+});
+
+test("previews long pyinfra host lists without discarding the complete list", () => {
+  const hosts = ["host-1", "host-2", "host-3", "host-4", "host-5", "host-6", "host-7"];
+
+  assert.deepEqual(previewPyinfraHosts(hosts, false), {
+    hiddenCount: 2,
+    visibleHosts: ["host-1", "host-2", "host-3", "host-4", "host-5"],
+  });
+  assert.deepEqual(previewPyinfraHosts(hosts, true), {
+    hiddenCount: 0,
+    visibleHosts: hosts,
+  });
 });

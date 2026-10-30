@@ -870,13 +870,16 @@ export type RunReportSummary =
       kind: "terraform-plan";
     } & TerraformPlanReportSummary)
   | ({
+      kind: "opentofu-plan";
+    } & OpenTofuPlanReportSummary)
+  | ({
       kind: "pyinfra-deploy";
     } & PyinfraDeployReportSummary);
 
 export type RunReportEnvelope = {
   artifactId: string;
   runId: string;
-  kind: "terraform-plan" | "pyinfra-deploy";
+  kind: "terraform-plan" | "opentofu-plan" | "pyinfra-deploy";
   schemaVersion: number;
   adapterVersion: number;
   tool: string;
@@ -890,44 +893,62 @@ export type RunReport =
       kind: "terraform-plan";
     } & TerraformPlanReport)
   | ({
+      kind: "opentofu-plan";
+    } & OpenTofuPlanReport)
+  | ({
       kind: "pyinfra-deploy";
     } & PyinfraDeployReport);
 
 export type TerraformPlanReportSummary = RunReportEnvelope & {
   kind: "terraform-plan";
   mode?: "preview";
-  summary: TerraformPlanSummary;
+  summary: InfrastructurePlanSummary;
 };
 
 export type TerraformPlanReport = RunReportEnvelope & {
   kind: "terraform-plan";
   mode?: "preview";
-  summary: TerraformPlanSummary;
-  resourceChanges: Array<TerraformResourceChange>;
-  resourceDrift: Array<TerraformResourceChange>;
+  summary: InfrastructurePlanSummary;
+  resourceChanges: Array<InfrastructureResourceChange>;
+  resourceDrift: Array<InfrastructureResourceChange>;
 };
 
-export type TerraformPlanSummary = {
-  resourceChanges: TerraformActionCounts;
+export type OpenTofuPlanReportSummary = RunReportEnvelope & {
+  kind: "opentofu-plan";
+  mode?: "preview";
+  summary: InfrastructurePlanSummary;
+};
+
+export type OpenTofuPlanReport = RunReportEnvelope & {
+  kind: "opentofu-plan";
+  mode?: "preview";
+  summary: InfrastructurePlanSummary;
+  resourceChanges: Array<InfrastructureResourceChange>;
+  resourceDrift: Array<InfrastructureResourceChange>;
+};
+
+export type InfrastructurePlanSummary = {
+  resourceChanges: InfrastructureActionCounts;
   driftedResources: number;
-  checks: TerraformCheckCounts;
-  outputChanges: TerraformActionCounts;
+  checks: InfrastructureCheckCounts;
+  outputChanges: InfrastructureActionCounts;
   applyable?: boolean;
   complete?: boolean;
   errored?: boolean;
 };
 
-export type TerraformActionCounts = {
+export type InfrastructureActionCounts = {
   total: number;
   noOp: number;
   create: number;
   read: number;
   update: number;
   delete: number;
+  forget: number;
   replace: number;
 };
 
-export type TerraformCheckCounts = {
+export type InfrastructureCheckCounts = {
   total: number;
   pass: number;
   fail: number;
@@ -935,10 +956,10 @@ export type TerraformCheckCounts = {
   unknown: number;
 };
 
-export type TerraformResourceChange = {
+export type InfrastructureResourceChange = {
   address: string;
   /**
-   * Opaque Terraform key distinguishing an old object retained during replacement from the current object at the same address.
+   * Opaque plan key distinguishing an old object retained during replacement from the current object at the same address.
    */
   replacedObjectKey?: string;
   previousAddress?: string;
@@ -947,7 +968,7 @@ export type TerraformResourceChange = {
   type: string;
   name: string;
   providerName: string;
-  action: "no-op" | "create" | "read" | "update" | "delete" | "replace";
+  action: "no-op" | "create" | "read" | "update" | "delete" | "forget" | "replace";
   replacementOrder?: "destroy-before-create" | "create-before-destroy";
   actionReason?: string;
 };

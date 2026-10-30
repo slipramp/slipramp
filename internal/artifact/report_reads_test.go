@@ -25,7 +25,7 @@ func TestServiceOpensVerifiedRunReportProjection(t *testing.T) {
 	if content.Artifact.ID != record.ID || content.Metadata.ArtifactID != record.ID {
 		t.Fatalf("OpenReport() = %#v", content)
 	}
-	report, ok := content.Report.(*runreport.TerraformPlanReport)
+	report, ok := content.Report.(*runreport.InfrastructurePlanReport)
 	if !ok || report.Summary.ResourceChanges.Create != 1 || report.ResourceChanges[0].Address != "example.main" {
 		t.Fatalf("OpenReport() report = %#v", content.Report)
 	}
@@ -90,7 +90,7 @@ func TestServiceRejectsUnavailableOrInvalidRunReportProjection(t *testing.T) {
 		{
 			name: "summary mismatch",
 			configure: func(metadata *serviceMetadataStore, _ *serviceContentStore, _ Artifact, report runreport.ArtifactReport) {
-				summary := *report.Summary.(*runreport.TerraformPlanSummary)
+				summary := *report.Summary.(*runreport.InfrastructurePlanSummary)
 				summary.ResourceChanges.Create = 0
 				summary.ResourceChanges.NoOp = 1
 				report.Summary = summary

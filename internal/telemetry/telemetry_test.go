@@ -106,6 +106,12 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		artifact.ReportIngestionSucceeded,
 		75*time.Millisecond,
 	)
+	metrics.ObserveReportIngestion(
+		t.Context(),
+		runreport.OpenTofuPlanKind,
+		artifact.ReportIngestionSucceeded,
+		80*time.Millisecond,
+	)
 
 	firstScrape := scrape(t, handler)
 	secondScrape := scrape(t, handler)
@@ -172,6 +178,14 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		firstScrape,
 		"slipramp_artifact_report_duration_seconds_count",
 		`report_kind="terraform-plan"`,
+		`result="succeeded"`,
+		" 1",
+	)
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_artifact_report_ingestions_total",
+		`report_kind="opentofu-plan"`,
 		`result="succeeded"`,
 		" 1",
 	)

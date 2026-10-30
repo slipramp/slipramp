@@ -49,7 +49,7 @@ func TestServiceProjectsRunReportArtifactIdempotently(t *testing.T) {
 		t.Fatalf("report upload = puts %d, Artifact %#v, reports %#v", contents.puts, metadata.record, metadata.reports)
 	}
 	report := metadata.reports[metadata.record.ID]
-	summary, ok := report.Summary.(*runreport.TerraformPlanSummary)
+	summary, ok := report.Summary.(*runreport.InfrastructurePlanSummary)
 	if !ok || summary.ResourceChanges.Create != 1 {
 		t.Fatalf("report summary = %#v", report.Summary)
 	}
@@ -86,6 +86,52 @@ func TestServiceProjectsRunReportArtifactIdempotently(t *testing.T) {
 	}
 	if !slices.Equal(observer.outcomes, wantOutcomes) {
 		t.Errorf("report ingestion outcomes = %v, want %v", observer.outcomes, wantOutcomes)
+	}
+}
+
+func TestServiceProjectsOpenTofuPlanReport(t *testing.T) {
+	t.Parallel()
+
+	source := []byte(`{
+		"format_version":"1.2",
+		"terraform_version":"1.13.2",
+		"errored":false,
+		"resource_changes":[{
+			"address":"terraform_data.forgotten",
+			"mode":"managed",
+			"type":"terraform_data",
+			"name":"forgotten",
+			"provider_name":"terraform.io/builtin/terraform",
+			"change":{"actions":["forget"]}
+		}]
+	}`)
+	request := reportUploadRequest(source)
+	metadata := reportTestMetadata()
+	metadata.context.Artifacts[request.Name] = Declaration{
+		MediaType: runreport.OpenTofuPlanMediaType,
+		Sensitive: true,
+	}
+	contents := &serviceContentStore{}
+	service := newTestService(metadata, contents)
+
+	if err := service.Upload(context.Background(), request); err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	if metadata.record == nil {
+		t.Fatal("Upload() did not persist Artifact metadata")
+	}
+	reportMetadata := metadata.reports[metadata.record.ID]
+	if reportMetadata.Kind != runreport.OpenTofuPlanKind || reportMetadata.Tool != "opentofu" {
+		t.Fatalf("stored report metadata = %#v", reportMetadata)
+	}
+	content, err := service.OpenReport(context.Background(), metadata.record.ID)
+	if err != nil {
+		t.Fatalf("OpenReport() error = %v", err)
+	}
+	report, ok := content.Report.(*runreport.InfrastructurePlanReport)
+	if !ok || report.Summary.ResourceChanges.Forget != 1 || len(report.ResourceChanges) != 1 ||
+		report.ResourceChanges[0].Action != runreport.InfrastructureActionForget {
+		t.Fatalf("OpenReport() report = %#v", content.Report)
 	}
 }
 

@@ -1,5 +1,7 @@
 import type { PyinfraOperation, PyinfraPlanSummary, PyinfraResultSummary } from "~/api/generated";
 
+export const PYINFRA_HOST_PREVIEW_LIMIT = 5;
+
 export type PyinfraCountBadge = {
   color: string;
   count: number;
@@ -57,4 +59,13 @@ export function isPyinfraNoOp(operation: PyinfraOperation) {
   return (
     operation.hostsWithChanges.length === 0 && operation.hostsWithConditionalChanges.length === 0
   );
+}
+
+export function previewPyinfraHosts(hosts: string[], expanded: boolean) {
+  const visibleHosts = expanded ? hosts : hosts.slice(0, PYINFRA_HOST_PREVIEW_LIMIT);
+
+  return {
+    hiddenCount: hosts.length - visibleHosts.length,
+    visibleHosts,
+  };
 }

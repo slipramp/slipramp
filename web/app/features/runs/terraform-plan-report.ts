@@ -1,7 +1,7 @@
 import type {
-  TerraformActionCounts,
-  TerraformCheckCounts,
-  TerraformResourceChange,
+  InfrastructureActionCounts,
+  InfrastructureCheckCounts,
+  InfrastructureResourceChange,
 } from "~/api/generated";
 
 export type CountBadge = {
@@ -10,18 +10,19 @@ export type CountBadge = {
   label: string;
 };
 
-export function terraformActionBadges(counts: TerraformActionCounts): CountBadge[] {
+export function infrastructureActionBadges(counts: InfrastructureActionCounts): CountBadge[] {
   return [
     { color: "green", count: counts.create, label: "Create" },
     { color: "blue", count: counts.read, label: "Read" },
     { color: "yellow", count: counts.update, label: "Update" },
     { color: "red", count: counts.delete, label: "Delete" },
+    { color: "grape", count: counts.forget, label: "Forget" },
     { color: "orange", count: counts.replace, label: "Replace" },
     { color: "gray", count: counts.noOp, label: "No-op" },
   ].filter((badge) => badge.count > 0);
 }
 
-export function terraformCheckBadges(counts: TerraformCheckCounts): CountBadge[] {
+export function infrastructureCheckBadges(counts: InfrastructureCheckCounts): CountBadge[] {
   return [
     { color: "green", count: counts.pass, label: "Pass" },
     { color: "red", count: counts.fail, label: "Fail" },
@@ -30,8 +31,8 @@ export function terraformCheckBadges(counts: TerraformCheckCounts): CountBadge[]
   ].filter((badge) => badge.count > 0);
 }
 
-export function groupTerraformResources(resources: TerraformResourceChange[]) {
-  const groups = new Map<string, TerraformResourceChange[]>();
+export function groupInfrastructureResources(resources: InfrastructureResourceChange[]) {
+  const groups = new Map<string, InfrastructureResourceChange[]>();
   for (const resource of resources) {
     const moduleAddress = resource.moduleAddress ?? "";
     const group = groups.get(moduleAddress) ?? [];
@@ -51,8 +52,8 @@ export function groupTerraformResources(resources: TerraformResourceChange[]) {
     }));
 }
 
-export function filterTerraformResources(
-  resources: TerraformResourceChange[],
+export function filterInfrastructureResources(
+  resources: InfrastructureResourceChange[],
   options: Readonly<{ keyword: string; showNoOp: boolean }>,
 ) {
   const keywords = options.keyword.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);

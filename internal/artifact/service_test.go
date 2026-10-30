@@ -738,7 +738,7 @@ func TestServiceRejectsUnsafeRunReportArtifactDeclarations(t *testing.T) {
 				MediaType: runreport.TerraformPlanMediaType,
 				Sensitive: true,
 			},
-			sizeBytes: runreport.MaximumTerraformPlanSourceSizeBytes + 1,
+			sizeBytes: runreport.MaximumInfrastructurePlanSourceSizeBytes + 1,
 			wantError: "source limit",
 		},
 	}

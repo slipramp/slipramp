@@ -116,6 +116,34 @@ func TestValidateExecutionDefaultsAndArtifacts(t *testing.T) {
 			},
 		},
 		{
+			name: "OpenTofu report is sensitive",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Artifacts = map[string]catalog.Artifact{
+					"plan-report": {
+						Path:      "/artifacts/plan.json",
+						MediaType: runreport.OpenTofuPlanMediaType,
+					},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+			wantError: "must set sensitive: true",
+		},
+		{
+			name: "sensitive OpenTofu report",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Artifacts = map[string]catalog.Artifact{
+					"plan-report": {
+						Path:      "/artifacts/plan.json",
+						MediaType: runreport.OpenTofuPlanMediaType + "; charset=utf-8",
+						Sensitive: true,
+					},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+			},
+		},
+		{
 			name: "undefined source action",
 			configure: func(input *catalog.Catalog) {
 				addPreviewAndApply(input)

@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { filterTerraformResources, groupTerraformResources } from "./terraform-plan-report.ts";
+import {
+  filterInfrastructureResources,
+  groupInfrastructureResources,
+  infrastructureActionBadges,
+} from "./terraform-plan-report.ts";
+
+test("includes forget actions in plan badges", () => {
+  assert.deepEqual(
+    infrastructureActionBadges({
+      total: 1,
+      noOp: 0,
+      create: 0,
+      read: 0,
+      update: 0,
+      delete: 0,
+      forget: 1,
+      replace: 0,
+    }),
+    [{ color: "grape", count: 1, label: "Forget" }],
+  );
+});
 
 test("groups resource changes by module with the root module first", () => {
   const root = { action: "create", address: "aws_vpc.main", moduleAddress: undefined };
@@ -17,7 +37,7 @@ test("groups resource changes by module with the root module first", () => {
   };
 
   assert.deepEqual(
-    groupTerraformResources([network, root, database]).map((group) => ({
+    groupInfrastructureResources([network, root, database]).map((group) => ({
       addresses: group.resources.map((resource) => resource.address),
       moduleAddress: group.moduleAddress,
     })),
@@ -67,23 +87,23 @@ test("filters resource changes by no-op visibility and keywords", () => {
   ];
 
   assert.deepEqual(
-    filterTerraformResources(resources, { keyword: "", showNoOp: false }).map(
+    filterInfrastructureResources(resources, { keyword: "", showNoOp: false }).map(
       (resource) => resource.address,
     ),
     ["module.database.aws_db_instance.primary", "terraform_data.bootstrap"],
   );
   assert.deepEqual(
-    filterTerraformResources(resources, { keyword: "DATABASE aws_db", showNoOp: true }).map(
+    filterInfrastructureResources(resources, { keyword: "DATABASE aws_db", showNoOp: true }).map(
       (resource) => resource.address,
     ),
     ["module.database.aws_db_instance.primary"],
   );
   assert.deepEqual(
-    filterTerraformResources(resources, { keyword: "network", showNoOp: false }),
+    filterInfrastructureResources(resources, { keyword: "network", showNoOp: false }),
     [],
   );
   assert.deepEqual(
-    filterTerraformResources(resources, { keyword: "network", showNoOp: true }).map(
+    filterInfrastructureResources(resources, { keyword: "network", showNoOp: true }).map(
       (resource) => resource.address,
     ),
     ["module.network.aws_vpc.main"],

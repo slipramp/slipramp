@@ -143,7 +143,7 @@ func TestArtifactTransferIntegration(t *testing.T) {
 	if reportRecord == nil || reportRecord.Report == nil {
 		t.Fatalf("report Artifact was not listed: %#v", records)
 	}
-	reportSummary, ok := reportRecord.Report.Summary.(*runreport.TerraformPlanSummary)
+	reportSummary, ok := reportRecord.Report.Summary.(*runreport.InfrastructurePlanSummary)
 	if !ok || reportSummary.ResourceChanges.Create != 1 {
 		t.Fatalf("stored report summary = %#v", reportRecord.Report.Summary)
 	}
@@ -151,7 +151,7 @@ func TestArtifactTransferIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenReport() error = %v", err)
 	}
-	plan, ok := reportContent.Report.(*runreport.TerraformPlanReport)
+	plan, ok := reportContent.Report.(*runreport.InfrastructurePlanReport)
 	if !ok || len(plan.ResourceChanges) != 1 || plan.ResourceChanges[0].Address != "example.main" {
 		t.Fatalf("OpenReport() report = %#v", reportContent.Report)
 	}
@@ -280,7 +280,7 @@ func TestArtifactReportPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetArtifactReport() error = %v", err)
 	}
-	summary, ok := loaded.Summary.(*runreport.TerraformPlanSummary)
+	summary, ok := loaded.Summary.(*runreport.InfrastructurePlanSummary)
 	if !ok || summary.ResourceChanges.Create != 1 ||
 		loaded.ProjectionObjectKey != report.ProjectionObjectKey || loaded.ProjectionSHA256 != report.ProjectionSHA256 {
 		t.Errorf("GetArtifactReport() = %#v", loaded)
@@ -312,6 +312,74 @@ func TestArtifactReportPersistenceIntegration(t *testing.T) {
 	}
 	if _, err := database.GetArtifact(ctx, conflict.ID); !errors.Is(err, artifact.ErrNotFound) {
 		t.Fatalf("rolled-back Artifact lookup error = %v, want not found", err)
+	}
+}
+
+func TestOpenTofuArtifactReportPersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 30, 15, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	report, err := runreport.DecodeOpenTofuPlan(strings.NewReader(`{
+		"format_version":"1.2",
+		"terraform_version":"1.13.2",
+		"errored":false,
+		"resource_changes":[{
+			"address":"terraform_data.forgotten",
+			"mode":"managed",
+			"type":"terraform_data",
+			"name":"forgotten",
+			"provider_name":"terraform.io/builtin/terraform",
+			"change":{"actions":["forget"]}
+		}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := runreport.Encode(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := strings.Repeat("c", 64)
+	objectKey := "runs/report/artifacts/opentofu-plan-report/content-a"
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          runID,
+		Name:           "opentofu-plan-report",
+		Kind:           artifact.KindOutput,
+		State:          artifact.StateSealed,
+		MediaType:      runreport.OpenTofuPlanMediaType,
+		SizeBytes:      512,
+		SHA256:         &digest,
+		Sensitive:      true,
+		ObjectKey:      &objectKey,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      createdAt,
+		SealedAt:       &createdAt,
+	}
+	metadata, err := runreport.NewArtifactReport(
+		record.ID,
+		report,
+		"runs/report/artifacts/opentofu-plan-report/reports/opentofu-plan-v1-a.json",
+		projection,
+		createdAt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateArtifactWithReport(ctx, record, metadata); err != nil {
+		t.Fatalf("CreateArtifactWithReport() error = %v", err)
+	}
+
+	loaded, err := database.GetArtifactReport(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetArtifactReport() error = %v", err)
+	}
+	summary, ok := loaded.Summary.(*runreport.InfrastructurePlanSummary)
+	if !ok || loaded.Kind != runreport.OpenTofuPlanKind || loaded.Tool != "opentofu" ||
+		summary.ResourceChanges.Forget != 1 {
+		t.Errorf("GetArtifactReport() = %#v", loaded)
 	}
 }
 

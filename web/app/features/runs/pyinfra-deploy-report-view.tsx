@@ -2,6 +2,7 @@ import {
   Alert,
   Anchor,
   Badge,
+  Button,
   Code,
   Group,
   Paper,
@@ -18,6 +19,8 @@ import type { Artifact, PyinfraDeployReport, PyinfraOperation } from "~/api/gene
 import {
   filterPyinfraOperations,
   isPyinfraNoOp,
+  previewPyinfraHosts,
+  PYINFRA_HOST_PREVIEW_LIMIT,
   pyinfraPlanBadges,
   pyinfraResultBadges,
   type PyinfraCountBadge,
@@ -218,10 +221,26 @@ function HostOutcome({
 }
 
 function HostNames({ hosts }: Readonly<{ hosts: string[] }>) {
+  const [expanded, setExpanded] = useState(false);
+  const { hiddenCount, visibleHosts } = previewPyinfraHosts(hosts, expanded);
+  const expandable = hosts.length > PYINFRA_HOST_PREVIEW_LIMIT;
+
   return (
-    <Text c="dimmed" size="xs" style={{ overflowWrap: "anywhere" }}>
-      {hosts.join(", ")}
-    </Text>
+    <Stack align="flex-start" gap={2}>
+      <Text c="dimmed" size="xs" style={{ overflowWrap: "anywhere" }}>
+        {visibleHosts.join(", ")}
+      </Text>
+      {expandable ? (
+        <Button
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          size="compact-xs"
+          variant="subtle"
+        >
+          {expanded ? "Show less" : `Show ${hiddenCount.toLocaleString()} more`}
+        </Button>
+      ) : null}
+    </Stack>
   );
 }
 

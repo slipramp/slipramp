@@ -262,6 +262,57 @@ func (e InboxItemKind) Valid() bool {
 	}
 }
 
+// Defines values for InfrastructureResourceChangeAction.
+const (
+	Create  InfrastructureResourceChangeAction = "create"
+	Delete  InfrastructureResourceChangeAction = "delete"
+	Forget  InfrastructureResourceChangeAction = "forget"
+	NoOp    InfrastructureResourceChangeAction = "no-op"
+	Read    InfrastructureResourceChangeAction = "read"
+	Replace InfrastructureResourceChangeAction = "replace"
+	Update  InfrastructureResourceChangeAction = "update"
+)
+
+// Valid indicates whether the value is a known member of the InfrastructureResourceChangeAction enum.
+func (e InfrastructureResourceChangeAction) Valid() bool {
+	switch e {
+	case Create:
+		return true
+	case Delete:
+		return true
+	case Forget:
+		return true
+	case NoOp:
+		return true
+	case Read:
+		return true
+	case Replace:
+		return true
+	case Update:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InfrastructureResourceChangeReplacementOrder.
+const (
+	CreateBeforeDestroy InfrastructureResourceChangeReplacementOrder = "create-before-destroy"
+	DestroyBeforeCreate InfrastructureResourceChangeReplacementOrder = "destroy-before-create"
+)
+
+// Valid indicates whether the value is a known member of the InfrastructureResourceChangeReplacementOrder enum.
+func (e InfrastructureResourceChangeReplacementOrder) Valid() bool {
+	switch e {
+	case CreateBeforeDestroy:
+		return true
+	case DestroyBeforeCreate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KargoPromotionDispatchReportResult.
 const (
 	KargoPromotionDispatchReportResultCreated   KargoPromotionDispatchReportResult = "created"
@@ -391,6 +442,66 @@ func (e NotificationDeliverySubjectType) Valid() bool {
 	case NotificationDeliverySubjectTypePromotion:
 		return true
 	case NotificationDeliverySubjectTypeRun:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpenTofuPlanReportKind.
+const (
+	OpenTofuPlanReportKindOpentofuPlan OpenTofuPlanReportKind = "opentofu-plan"
+)
+
+// Valid indicates whether the value is a known member of the OpenTofuPlanReportKind enum.
+func (e OpenTofuPlanReportKind) Valid() bool {
+	switch e {
+	case OpenTofuPlanReportKindOpentofuPlan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpenTofuPlanReportMode.
+const (
+	OpenTofuPlanReportModePreview OpenTofuPlanReportMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the OpenTofuPlanReportMode enum.
+func (e OpenTofuPlanReportMode) Valid() bool {
+	switch e {
+	case OpenTofuPlanReportModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpenTofuPlanReportSummaryKind.
+const (
+	OpenTofuPlanReportSummaryKindOpentofuPlan OpenTofuPlanReportSummaryKind = "opentofu-plan"
+)
+
+// Valid indicates whether the value is a known member of the OpenTofuPlanReportSummaryKind enum.
+func (e OpenTofuPlanReportSummaryKind) Valid() bool {
+	switch e {
+	case OpenTofuPlanReportSummaryKindOpentofuPlan:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OpenTofuPlanReportSummaryMode.
+const (
+	OpenTofuPlanReportSummaryModePreview OpenTofuPlanReportSummaryMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the OpenTofuPlanReportSummaryMode enum.
+func (e OpenTofuPlanReportSummaryMode) Valid() bool {
+	switch e {
+	case OpenTofuPlanReportSummaryModePreview:
 		return true
 	default:
 		return false
@@ -996,6 +1107,7 @@ func (e RunPhase) Valid() bool {
 
 // Defines values for RunReportEnvelopeKind.
 const (
+	RunReportEnvelopeKindOpentofuPlan  RunReportEnvelopeKind = "opentofu-plan"
 	RunReportEnvelopeKindPyinfraDeploy RunReportEnvelopeKind = "pyinfra-deploy"
 	RunReportEnvelopeKindTerraformPlan RunReportEnvelopeKind = "terraform-plan"
 )
@@ -1003,6 +1115,8 @@ const (
 // Valid indicates whether the value is a known member of the RunReportEnvelopeKind enum.
 func (e RunReportEnvelopeKind) Valid() bool {
 	switch e {
+	case RunReportEnvelopeKindOpentofuPlan:
+		return true
 	case RunReportEnvelopeKindPyinfraDeploy:
 		return true
 	case RunReportEnvelopeKindTerraformPlan:
@@ -1249,54 +1363,6 @@ const (
 func (e TerraformPlanReportSummaryMode) Valid() bool {
 	switch e {
 	case TerraformPlanReportSummaryModePreview:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for TerraformResourceChangeAction.
-const (
-	Create  TerraformResourceChangeAction = "create"
-	Delete  TerraformResourceChangeAction = "delete"
-	NoOp    TerraformResourceChangeAction = "no-op"
-	Read    TerraformResourceChangeAction = "read"
-	Replace TerraformResourceChangeAction = "replace"
-	Update  TerraformResourceChangeAction = "update"
-)
-
-// Valid indicates whether the value is a known member of the TerraformResourceChangeAction enum.
-func (e TerraformResourceChangeAction) Valid() bool {
-	switch e {
-	case Create:
-		return true
-	case Delete:
-		return true
-	case NoOp:
-		return true
-	case Read:
-		return true
-	case Replace:
-		return true
-	case Update:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for TerraformResourceChangeReplacementOrder.
-const (
-	CreateBeforeDestroy TerraformResourceChangeReplacementOrder = "create-before-destroy"
-	DestroyBeforeCreate TerraformResourceChangeReplacementOrder = "destroy-before-create"
-)
-
-// Valid indicates whether the value is a known member of the TerraformResourceChangeReplacementOrder enum.
-func (e TerraformResourceChangeReplacementOrder) Valid() bool {
-	switch e {
-	case CreateBeforeDestroy:
-		return true
-	case DestroyBeforeCreate:
 		return true
 	default:
 		return false
@@ -1954,6 +2020,61 @@ type InboxProblemAcknowledgements struct {
 	ProblemIds []string `json:"problemIds"`
 }
 
+// InfrastructureActionCounts defines model for InfrastructureActionCounts.
+type InfrastructureActionCounts struct {
+	Create  int `json:"create"`
+	Delete  int `json:"delete"`
+	Forget  int `json:"forget"`
+	NoOp    int `json:"noOp"`
+	Read    int `json:"read"`
+	Replace int `json:"replace"`
+	Total   int `json:"total"`
+	Update  int `json:"update"`
+}
+
+// InfrastructureCheckCounts defines model for InfrastructureCheckCounts.
+type InfrastructureCheckCounts struct {
+	Error   int `json:"error"`
+	Fail    int `json:"fail"`
+	Pass    int `json:"pass"`
+	Total   int `json:"total"`
+	Unknown int `json:"unknown"`
+}
+
+// InfrastructurePlanSummary defines model for InfrastructurePlanSummary.
+type InfrastructurePlanSummary struct {
+	Applyable        *bool                      `json:"applyable,omitempty"`
+	Checks           InfrastructureCheckCounts  `json:"checks"`
+	Complete         *bool                      `json:"complete,omitempty"`
+	DriftedResources int                        `json:"driftedResources"`
+	Errored          *bool                      `json:"errored,omitempty"`
+	OutputChanges    InfrastructureActionCounts `json:"outputChanges"`
+	ResourceChanges  InfrastructureActionCounts `json:"resourceChanges"`
+}
+
+// InfrastructureResourceChange defines model for InfrastructureResourceChange.
+type InfrastructureResourceChange struct {
+	Action          InfrastructureResourceChangeAction `json:"action"`
+	ActionReason    *string                            `json:"actionReason,omitempty"`
+	Address         string                             `json:"address"`
+	Mode            string                             `json:"mode"`
+	ModuleAddress   *string                            `json:"moduleAddress,omitempty"`
+	Name            string                             `json:"name"`
+	PreviousAddress *string                            `json:"previousAddress,omitempty"`
+	ProviderName    string                             `json:"providerName"`
+
+	// ReplacedObjectKey Opaque plan key distinguishing an old object retained during replacement from the current object at the same address.
+	ReplacedObjectKey *string                                       `json:"replacedObjectKey,omitempty"`
+	ReplacementOrder  *InfrastructureResourceChangeReplacementOrder `json:"replacementOrder,omitempty"`
+	Type              string                                        `json:"type"`
+}
+
+// InfrastructureResourceChangeAction defines model for InfrastructureResourceChange.Action.
+type InfrastructureResourceChangeAction string
+
+// InfrastructureResourceChangeReplacementOrder defines model for InfrastructureResourceChange.ReplacementOrder.
+type InfrastructureResourceChangeReplacementOrder string
+
 // InputExplanation defines model for InputExplanation.
 type InputExplanation struct {
 	Compatibility ExplainedString        `json:"compatibility"`
@@ -2132,6 +2253,48 @@ type NotificationDeliveryList struct {
 	Offset int                    `json:"offset"`
 	Total  int                    `json:"total"`
 }
+
+// OpenTofuPlanReport defines model for OpenTofuPlanReport.
+type OpenTofuPlanReport struct {
+	AdapterVersion  int                            `json:"adapterVersion"`
+	ArtifactID      openapi_types.UUID             `json:"artifactId"`
+	CreatedAt       time.Time                      `json:"createdAt"`
+	Kind            OpenTofuPlanReportKind         `json:"kind"`
+	Mode            OpenTofuPlanReportMode         `json:"mode"`
+	ResourceChanges []InfrastructureResourceChange `json:"resourceChanges"`
+	ResourceDrift   []InfrastructureResourceChange `json:"resourceDrift"`
+	RunID           openapi_types.UUID             `json:"runId"`
+	SchemaVersion   int                            `json:"schemaVersion"`
+	Summary         InfrastructurePlanSummary      `json:"summary"`
+	Tool            string                         `json:"tool"`
+	ToolVersion     *string                        `json:"toolVersion,omitempty"`
+}
+
+// OpenTofuPlanReportKind defines model for OpenTofuPlanReport.Kind.
+type OpenTofuPlanReportKind string
+
+// OpenTofuPlanReportMode defines model for OpenTofuPlanReport.Mode.
+type OpenTofuPlanReportMode string
+
+// OpenTofuPlanReportSummary defines model for OpenTofuPlanReportSummary.
+type OpenTofuPlanReportSummary struct {
+	AdapterVersion int                           `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID            `json:"artifactId"`
+	CreatedAt      time.Time                     `json:"createdAt"`
+	Kind           OpenTofuPlanReportSummaryKind `json:"kind"`
+	Mode           OpenTofuPlanReportSummaryMode `json:"mode"`
+	RunID          openapi_types.UUID            `json:"runId"`
+	SchemaVersion  int                           `json:"schemaVersion"`
+	Summary        InfrastructurePlanSummary     `json:"summary"`
+	Tool           string                        `json:"tool"`
+	ToolVersion    *string                       `json:"toolVersion,omitempty"`
+}
+
+// OpenTofuPlanReportSummaryKind defines model for OpenTofuPlanReportSummary.Kind.
+type OpenTofuPlanReportSummaryKind string
+
+// OpenTofuPlanReportSummaryMode defines model for OpenTofuPlanReportSummary.Mode.
+type OpenTofuPlanReportSummaryMode string
 
 // OutputExplanation defines model for OutputExplanation.
 type OutputExplanation struct {
@@ -3519,40 +3682,20 @@ type TargetSyncRunCheckpoint struct {
 	StartedAt       *time.Time         `json:"startedAt,omitempty"`
 }
 
-// TerraformActionCounts defines model for TerraformActionCounts.
-type TerraformActionCounts struct {
-	Create  int `json:"create"`
-	Delete  int `json:"delete"`
-	NoOp    int `json:"noOp"`
-	Read    int `json:"read"`
-	Replace int `json:"replace"`
-	Total   int `json:"total"`
-	Update  int `json:"update"`
-}
-
-// TerraformCheckCounts defines model for TerraformCheckCounts.
-type TerraformCheckCounts struct {
-	Error   int `json:"error"`
-	Fail    int `json:"fail"`
-	Pass    int `json:"pass"`
-	Total   int `json:"total"`
-	Unknown int `json:"unknown"`
-}
-
 // TerraformPlanReport defines model for TerraformPlanReport.
 type TerraformPlanReport struct {
-	AdapterVersion  int                       `json:"adapterVersion"`
-	ArtifactID      openapi_types.UUID        `json:"artifactId"`
-	CreatedAt       time.Time                 `json:"createdAt"`
-	Kind            TerraformPlanReportKind   `json:"kind"`
-	Mode            TerraformPlanReportMode   `json:"mode"`
-	ResourceChanges []TerraformResourceChange `json:"resourceChanges"`
-	ResourceDrift   []TerraformResourceChange `json:"resourceDrift"`
-	RunID           openapi_types.UUID        `json:"runId"`
-	SchemaVersion   int                       `json:"schemaVersion"`
-	Summary         TerraformPlanSummary      `json:"summary"`
-	Tool            string                    `json:"tool"`
-	ToolVersion     *string                   `json:"toolVersion,omitempty"`
+	AdapterVersion  int                            `json:"adapterVersion"`
+	ArtifactID      openapi_types.UUID             `json:"artifactId"`
+	CreatedAt       time.Time                      `json:"createdAt"`
+	Kind            TerraformPlanReportKind        `json:"kind"`
+	Mode            TerraformPlanReportMode        `json:"mode"`
+	ResourceChanges []InfrastructureResourceChange `json:"resourceChanges"`
+	ResourceDrift   []InfrastructureResourceChange `json:"resourceDrift"`
+	RunID           openapi_types.UUID             `json:"runId"`
+	SchemaVersion   int                            `json:"schemaVersion"`
+	Summary         InfrastructurePlanSummary      `json:"summary"`
+	Tool            string                         `json:"tool"`
+	ToolVersion     *string                        `json:"toolVersion,omitempty"`
 }
 
 // TerraformPlanReportKind defines model for TerraformPlanReport.Kind.
@@ -3570,7 +3713,7 @@ type TerraformPlanReportSummary struct {
 	Mode           TerraformPlanReportSummaryMode `json:"mode"`
 	RunID          openapi_types.UUID             `json:"runId"`
 	SchemaVersion  int                            `json:"schemaVersion"`
-	Summary        TerraformPlanSummary           `json:"summary"`
+	Summary        InfrastructurePlanSummary      `json:"summary"`
 	Tool           string                         `json:"tool"`
 	ToolVersion    *string                        `json:"toolVersion,omitempty"`
 }
@@ -3580,40 +3723,6 @@ type TerraformPlanReportSummaryKind string
 
 // TerraformPlanReportSummaryMode defines model for TerraformPlanReportSummary.Mode.
 type TerraformPlanReportSummaryMode string
-
-// TerraformPlanSummary defines model for TerraformPlanSummary.
-type TerraformPlanSummary struct {
-	Applyable        *bool                 `json:"applyable,omitempty"`
-	Checks           TerraformCheckCounts  `json:"checks"`
-	Complete         *bool                 `json:"complete,omitempty"`
-	DriftedResources int                   `json:"driftedResources"`
-	Errored          *bool                 `json:"errored,omitempty"`
-	OutputChanges    TerraformActionCounts `json:"outputChanges"`
-	ResourceChanges  TerraformActionCounts `json:"resourceChanges"`
-}
-
-// TerraformResourceChange defines model for TerraformResourceChange.
-type TerraformResourceChange struct {
-	Action          TerraformResourceChangeAction `json:"action"`
-	ActionReason    *string                       `json:"actionReason,omitempty"`
-	Address         string                        `json:"address"`
-	Mode            string                        `json:"mode"`
-	ModuleAddress   *string                       `json:"moduleAddress,omitempty"`
-	Name            string                        `json:"name"`
-	PreviousAddress *string                       `json:"previousAddress,omitempty"`
-	ProviderName    string                        `json:"providerName"`
-
-	// ReplacedObjectKey Opaque Terraform key distinguishing an old object retained during replacement from the current object at the same address.
-	ReplacedObjectKey *string                                  `json:"replacedObjectKey,omitempty"`
-	ReplacementOrder  *TerraformResourceChangeReplacementOrder `json:"replacementOrder,omitempty"`
-	Type              string                                   `json:"type"`
-}
-
-// TerraformResourceChangeAction defines model for TerraformResourceChange.Action.
-type TerraformResourceChangeAction string
-
-// TerraformResourceChangeReplacementOrder defines model for TerraformResourceChange.ReplacementOrder.
-type TerraformResourceChangeReplacementOrder string
 
 // Limit defines model for Limit.
 type Limit = int
@@ -4094,6 +4203,40 @@ func (t *RunReport) MergeTerraformPlanReport(v TerraformPlanReport) error {
 	return err
 }
 
+// AsOpenTofuPlanReport returns the union data inside the RunReport as a OpenTofuPlanReport
+func (t RunReport) AsOpenTofuPlanReport() (OpenTofuPlanReport, error) {
+	var body OpenTofuPlanReport
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOpenTofuPlanReport overwrites any union data inside the RunReport as the provided OpenTofuPlanReport
+func (t *RunReport) FromOpenTofuPlanReport(v OpenTofuPlanReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"opentofu-plan"}`))
+	t.union = b
+	return err
+}
+
+// MergeOpenTofuPlanReport performs a merge with any union data inside the RunReport, using the provided OpenTofuPlanReport
+func (t *RunReport) MergeOpenTofuPlanReport(v OpenTofuPlanReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"opentofu-plan"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsPyinfraDeployReport returns the union data inside the RunReport as a PyinfraDeployReport
 func (t RunReport) AsPyinfraDeployReport() (PyinfraDeployReport, error) {
 	var body PyinfraDeployReport
@@ -4142,6 +4285,8 @@ func (t RunReport) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "opentofu-plan":
+		return t.AsOpenTofuPlanReport()
 	case "pyinfra-deploy":
 		return t.AsPyinfraDeployReport()
 	case "terraform-plan":
@@ -4186,6 +4331,40 @@ func (t *RunReportSummary) MergeTerraformPlanReportSummary(v TerraformPlanReport
 		return err
 	}
 	b, err = runtime.JSONMerge(b, []byte(`{"kind":"terraform-plan"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsOpenTofuPlanReportSummary returns the union data inside the RunReportSummary as a OpenTofuPlanReportSummary
+func (t RunReportSummary) AsOpenTofuPlanReportSummary() (OpenTofuPlanReportSummary, error) {
+	var body OpenTofuPlanReportSummary
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromOpenTofuPlanReportSummary overwrites any union data inside the RunReportSummary as the provided OpenTofuPlanReportSummary
+func (t *RunReportSummary) FromOpenTofuPlanReportSummary(v OpenTofuPlanReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"opentofu-plan"}`))
+	t.union = b
+	return err
+}
+
+// MergeOpenTofuPlanReportSummary performs a merge with any union data inside the RunReportSummary, using the provided OpenTofuPlanReportSummary
+func (t *RunReportSummary) MergeOpenTofuPlanReportSummary(v OpenTofuPlanReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"opentofu-plan"}`))
 	if err != nil {
 		return err
 	}
@@ -4243,6 +4422,8 @@ func (t RunReportSummary) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "opentofu-plan":
+		return t.AsOpenTofuPlanReportSummary()
 	case "pyinfra-deploy":
 		return t.AsPyinfraDeployReportSummary()
 	case "terraform-plan":

@@ -46,6 +46,7 @@ function artifact(overrides = {}) {
         outputChanges: {
           create: 0,
           delete: 0,
+          forget: 0,
           noOp: 0,
           read: 0,
           replace: 0,
@@ -55,6 +56,7 @@ function artifact(overrides = {}) {
         resourceChanges: {
           create: 0,
           delete: 0,
+          forget: 0,
           noOp: 0,
           read: 0,
           replace: 0,

@@ -14,65 +14,68 @@ import (
 )
 
 const (
-	MaximumTerraformResourceEntries = 20_000
-	MaximumTerraformOutputEntries   = 10_000
-	MaximumTerraformCheckEntries    = 10_000
+	MaximumInfrastructureResourceEntries = 20_000
+	MaximumInfrastructureOutputEntries   = 10_000
+	MaximumInfrastructureCheckEntries    = 10_000
 
-	maximumTerraformVersionLength     = 128
-	maximumResourceAddressLength      = 2_048
-	maximumResourceModeLength         = 64
-	maximumResourceTypeLength         = 256
-	maximumResourceNameLength         = 256
-	maximumProviderNameLength         = 512
-	maximumResourceActionReasonLength = 256
+	maximumInfrastructureToolVersionLength = 128
+	maximumResourceAddressLength           = 2_048
+	maximumResourceModeLength              = 64
+	maximumResourceTypeLength              = 256
+	maximumResourceNameLength              = 256
+	maximumProviderNameLength              = 512
+	maximumResourceActionReasonLength      = 256
 )
 
-type TerraformAction string
+type InfrastructureAction string
 
 const (
-	TerraformActionNoOp    TerraformAction = "no-op"
-	TerraformActionCreate  TerraformAction = "create"
-	TerraformActionRead    TerraformAction = "read"
-	TerraformActionUpdate  TerraformAction = "update"
-	TerraformActionDelete  TerraformAction = "delete"
-	TerraformActionReplace TerraformAction = "replace"
+	InfrastructureActionNoOp    InfrastructureAction = "no-op"
+	InfrastructureActionCreate  InfrastructureAction = "create"
+	InfrastructureActionRead    InfrastructureAction = "read"
+	InfrastructureActionUpdate  InfrastructureAction = "update"
+	InfrastructureActionDelete  InfrastructureAction = "delete"
+	InfrastructureActionForget  InfrastructureAction = "forget"
+	InfrastructureActionReplace InfrastructureAction = "replace"
 )
 
-type TerraformReplacementOrder string
+type InfrastructureReplacementOrder string
 
 const (
-	TerraformReplacementDestroyBeforeCreate TerraformReplacementOrder = "destroy-before-create"
-	TerraformReplacementCreateBeforeDestroy TerraformReplacementOrder = "create-before-destroy"
+	InfrastructureReplacementDestroyBeforeCreate InfrastructureReplacementOrder = "destroy-before-create"
+	InfrastructureReplacementCreateBeforeDestroy InfrastructureReplacementOrder = "create-before-destroy"
 )
 
-type TerraformPlanReport struct {
+type InfrastructurePlanReport struct {
 	ReportEnvelope
-	Summary         TerraformPlanSummary      `json:"summary"`
-	ResourceChanges []TerraformResourceChange `json:"resourceChanges"`
-	ResourceDrift   []TerraformResourceChange `json:"resourceDrift"`
+	Summary         InfrastructurePlanSummary      `json:"summary"`
+	ResourceChanges []InfrastructureResourceChange `json:"resourceChanges"`
+	ResourceDrift   []InfrastructureResourceChange `json:"resourceDrift"`
 }
 
-type TerraformPlanSummary struct {
-	ResourceChanges  TerraformActionCounts `json:"resourceChanges"`
-	DriftedResources int                   `json:"driftedResources"`
-	Checks           TerraformCheckCounts  `json:"checks"`
-	OutputChanges    TerraformActionCounts `json:"outputChanges"`
-	Applyable        *bool                 `json:"applyable,omitempty"`
-	Complete         *bool                 `json:"complete,omitempty"`
-	Errored          *bool                 `json:"errored,omitempty"`
+type InfrastructurePlanSummary struct {
+	reportKind       ReportKind
+	ResourceChanges  InfrastructureActionCounts `json:"resourceChanges"`
+	DriftedResources int                        `json:"driftedResources"`
+	Checks           InfrastructureCheckCounts  `json:"checks"`
+	OutputChanges    InfrastructureActionCounts `json:"outputChanges"`
+	Applyable        *bool                      `json:"applyable,omitempty"`
+	Complete         *bool                      `json:"complete,omitempty"`
+	Errored          *bool                      `json:"errored,omitempty"`
 }
 
-type TerraformActionCounts struct {
+type InfrastructureActionCounts struct {
 	Total   int `json:"total"`
 	NoOp    int `json:"noOp"`
 	Create  int `json:"create"`
 	Read    int `json:"read"`
 	Update  int `json:"update"`
 	Delete  int `json:"delete"`
+	Forget  int `json:"forget"`
 	Replace int `json:"replace"`
 }
 
-type TerraformCheckCounts struct {
+type InfrastructureCheckCounts struct {
 	Total   int `json:"total"`
 	Pass    int `json:"pass"`
 	Fail    int `json:"fail"`
@@ -80,182 +83,203 @@ type TerraformCheckCounts struct {
 	Unknown int `json:"unknown"`
 }
 
-type TerraformResourceChange struct {
-	Address           string                    `json:"address"`
-	ReplacedObjectKey string                    `json:"replacedObjectKey,omitempty"`
-	PreviousAddress   string                    `json:"previousAddress,omitempty"`
-	ModuleAddress     string                    `json:"moduleAddress,omitempty"`
-	Mode              string                    `json:"mode"`
-	Type              string                    `json:"type"`
-	Name              string                    `json:"name"`
-	ProviderName      string                    `json:"providerName"`
-	Action            TerraformAction           `json:"action"`
-	ReplacementOrder  TerraformReplacementOrder `json:"replacementOrder,omitempty"`
-	ActionReason      string                    `json:"actionReason,omitempty"`
+type InfrastructureResourceChange struct {
+	Address           string                         `json:"address"`
+	ReplacedObjectKey string                         `json:"replacedObjectKey,omitempty"`
+	PreviousAddress   string                         `json:"previousAddress,omitempty"`
+	ModuleAddress     string                         `json:"moduleAddress,omitempty"`
+	Mode              string                         `json:"mode"`
+	Type              string                         `json:"type"`
+	Name              string                         `json:"name"`
+	ProviderName      string                         `json:"providerName"`
+	Action            InfrastructureAction           `json:"action"`
+	ReplacementOrder  InfrastructureReplacementOrder `json:"replacementOrder,omitempty"`
+	ActionReason      string                         `json:"actionReason,omitempty"`
 }
 
-type terraformPlanAdapter struct{}
-
-func (terraformPlanAdapter) Kind() ReportKind {
-	return TerraformPlanKind
+type infrastructurePlanAdapter struct {
+	kind ReportKind
+	tool string
 }
 
-func (terraformPlanAdapter) MaximumSourceSizeBytes() int64 {
-	return MaximumTerraformPlanSourceSizeBytes
+func (a infrastructurePlanAdapter) Kind() ReportKind {
+	return a.kind
 }
 
-func (terraformPlanAdapter) Decode(source io.Reader) (Report, error) {
-	return DecodeTerraformPlan(source)
+func (infrastructurePlanAdapter) MaximumSourceSizeBytes() int64 {
+	return MaximumInfrastructurePlanSourceSizeBytes
 }
 
-func (terraformPlanAdapter) newReport() Report {
-	return &TerraformPlanReport{}
-}
-
-func (terraformPlanAdapter) newSummary() Summary {
-	return &TerraformPlanSummary{}
-}
-
-func (terraformPlanAdapter) validateEnvelope(envelope ReportEnvelope) error {
-	if envelope.SchemaVersion != TerraformPlanSchemaVersion ||
-		envelope.AdapterVersion != TerraformPlanAdapterVersion ||
-		envelope.Tool != "terraform" || envelope.Mode != PreviewMode {
-		return errors.New("terraform plan report envelope is invalid")
+func (a infrastructurePlanAdapter) Decode(source io.Reader) (Report, error) {
+	report, err := decodeInfrastructurePlan(source, a.kind, a.tool)
+	if err != nil {
+		return nil, err
 	}
 
-	return validateOptionalString("toolVersion", envelope.ToolVersion, maximumTerraformVersionLength)
+	return &report, nil
 }
 
-type terraformPlanSource struct {
-	FormatVersion    string                           `json:"format_version"`
-	TerraformVersion string                           `json:"terraform_version"`
-	Applyable        *bool                            `json:"applyable"`
-	Complete         *bool                            `json:"complete"`
-	Errored          *bool                            `json:"errored"`
-	ResourceChanges  []terraformResourceChangeSource  `json:"resource_changes"`
-	ResourceDrift    []terraformResourceChangeSource  `json:"resource_drift"`
-	OutputChanges    map[string]terraformChangeSource `json:"output_changes"`
-	Checks           []terraformCheckSource           `json:"checks"`
+func (infrastructurePlanAdapter) newReport() Report {
+	return &InfrastructurePlanReport{}
 }
 
-type terraformResourceChangeSource struct {
-	Address         string                `json:"address"`
-	Deposed         string                `json:"deposed"`
-	PreviousAddress string                `json:"previous_address"`
-	ModuleAddress   string                `json:"module_address"`
-	Mode            string                `json:"mode"`
-	Type            string                `json:"type"`
-	Name            string                `json:"name"`
-	ProviderName    string                `json:"provider_name"`
-	Change          terraformChangeSource `json:"change"`
-	ActionReason    string                `json:"action_reason"`
+func (a infrastructurePlanAdapter) newSummary() Summary {
+	return &InfrastructurePlanSummary{reportKind: a.kind}
 }
 
-type terraformChangeSource struct {
+func (a infrastructurePlanAdapter) validateEnvelope(envelope ReportEnvelope) error {
+	if envelope.SchemaVersion != InfrastructurePlanSchemaVersion ||
+		envelope.AdapterVersion != InfrastructurePlanAdapterVersion ||
+		envelope.Tool != a.tool || envelope.Mode != PreviewMode {
+		return errors.New("infrastructure plan report envelope is invalid")
+	}
+
+	return validateOptionalString("toolVersion", envelope.ToolVersion, maximumInfrastructureToolVersionLength)
+}
+
+type infrastructurePlanSource struct {
+	FormatVersion    string                                `json:"format_version"`
+	TerraformVersion string                                `json:"terraform_version"`
+	Applyable        *bool                                 `json:"applyable"`
+	Complete         *bool                                 `json:"complete"`
+	Errored          *bool                                 `json:"errored"`
+	ResourceChanges  []infrastructureResourceChangeSource  `json:"resource_changes"`
+	ResourceDrift    []infrastructureResourceChangeSource  `json:"resource_drift"`
+	OutputChanges    map[string]infrastructureChangeSource `json:"output_changes"`
+	Checks           []infrastructureCheckSource           `json:"checks"`
+}
+
+type infrastructureResourceChangeSource struct {
+	Address         string                     `json:"address"`
+	Deposed         string                     `json:"deposed"`
+	PreviousAddress string                     `json:"previous_address"`
+	ModuleAddress   string                     `json:"module_address"`
+	Mode            string                     `json:"mode"`
+	Type            string                     `json:"type"`
+	Name            string                     `json:"name"`
+	ProviderName    string                     `json:"provider_name"`
+	Change          infrastructureChangeSource `json:"change"`
+	ActionReason    string                     `json:"action_reason"`
+}
+
+type infrastructureChangeSource struct {
 	Actions []string `json:"actions"`
 }
 
-type terraformCheckSource struct {
-	Status    string                         `json:"status"`
-	Instances []terraformCheckInstanceSource `json:"instances"`
+type infrastructureCheckSource struct {
+	Status    string                              `json:"status"`
+	Instances []infrastructureCheckInstanceSource `json:"instances"`
 }
 
-type terraformCheckInstanceSource struct {
+type infrastructureCheckInstanceSource struct {
 	Status string `json:"status"`
 }
 
-func DecodeTerraformPlan(source io.Reader) (TerraformPlanReport, error) {
+func DecodeTerraformPlan(source io.Reader) (InfrastructurePlanReport, error) {
+	return decodeInfrastructurePlan(source, TerraformPlanKind, "terraform")
+}
+
+func DecodeOpenTofuPlan(source io.Reader) (InfrastructurePlanReport, error) {
+	return decodeInfrastructurePlan(source, OpenTofuPlanKind, "opentofu")
+}
+
+func decodeInfrastructurePlan(
+	source io.Reader,
+	kind ReportKind,
+	tool string,
+) (InfrastructurePlanReport, error) {
 	if source == nil {
-		return TerraformPlanReport{}, errors.New("terraform plan source is required")
+		return InfrastructurePlanReport{}, errors.New("infrastructure plan source is required")
 	}
 
-	contents, err := io.ReadAll(io.LimitReader(source, MaximumTerraformPlanSourceSizeBytes+1))
+	contents, err := io.ReadAll(io.LimitReader(source, MaximumInfrastructurePlanSourceSizeBytes+1))
 	if err != nil {
-		return TerraformPlanReport{}, fmt.Errorf("%w: %w", ErrSourceRead, err)
+		return InfrastructurePlanReport{}, fmt.Errorf("%w: %w", ErrSourceRead, err)
 	}
-	if int64(len(contents)) > MaximumTerraformPlanSourceSizeBytes {
-		return TerraformPlanReport{}, fmt.Errorf(
-			"%w: Terraform plan source must not exceed %d bytes",
+	if int64(len(contents)) > MaximumInfrastructurePlanSourceSizeBytes {
+		return InfrastructurePlanReport{}, fmt.Errorf(
+			"%w: infrastructure plan source must not exceed %d bytes",
 			ErrSourceTooLarge,
-			MaximumTerraformPlanSourceSizeBytes,
+			MaximumInfrastructurePlanSourceSizeBytes,
 		)
 	}
 	if !utf8.Valid(contents) {
-		return TerraformPlanReport{}, errors.New("terraform plan source must be valid UTF-8 JSON")
+		return InfrastructurePlanReport{}, errors.New("infrastructure plan source must be valid UTF-8 JSON")
 	}
 
 	decoder := json.NewDecoder(bytes.NewReader(contents))
-	var document terraformPlanSource
+	var document infrastructurePlanSource
 	if err := decoder.Decode(&document); err != nil {
-		return TerraformPlanReport{}, fmt.Errorf("decode Terraform plan source: %w", err)
+		return InfrastructurePlanReport{}, fmt.Errorf("decode infrastructure plan source: %w", err)
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		if err == nil {
-			return TerraformPlanReport{}, errors.New("unexpected data after Terraform plan JSON object")
+			return InfrastructurePlanReport{}, errors.New("unexpected data after infrastructure plan JSON object")
 		}
 
-		return TerraformPlanReport{}, fmt.Errorf("decode trailing Terraform plan data: %w", err)
+		return InfrastructurePlanReport{}, fmt.Errorf("decode trailing infrastructure plan data: %w", err)
 	}
 
-	if err := validateTerraformFormatVersion(document.FormatVersion); err != nil {
-		return TerraformPlanReport{}, err
+	if err := validateInfrastructureFormatVersion(document.FormatVersion); err != nil {
+		return InfrastructurePlanReport{}, err
 	}
 	if document.ResourceChanges == nil && document.ResourceDrift == nil && document.OutputChanges == nil &&
 		document.Checks == nil && document.Applyable == nil && document.Complete == nil && document.Errored == nil {
-		return TerraformPlanReport{}, errors.New("terraform plan source does not contain a plan representation")
+		return InfrastructurePlanReport{}, errors.New("infrastructure plan source does not contain a plan representation")
 	}
 	if err := validateOptionalString(
 		"terraform_version",
 		document.TerraformVersion,
-		maximumTerraformVersionLength,
+		maximumInfrastructureToolVersionLength,
 	); err != nil {
-		return TerraformPlanReport{}, err
+		return InfrastructurePlanReport{}, err
 	}
-	if len(document.ResourceChanges)+len(document.ResourceDrift) > MaximumTerraformResourceEntries {
-		return TerraformPlanReport{}, fmt.Errorf(
+	if len(document.ResourceChanges)+len(document.ResourceDrift) > MaximumInfrastructureResourceEntries {
+		return InfrastructurePlanReport{}, fmt.Errorf(
 			"resource_changes and resource_drift must contain at most %d entries in total",
-			MaximumTerraformResourceEntries,
+			MaximumInfrastructureResourceEntries,
 		)
 	}
-	if len(document.OutputChanges) > MaximumTerraformOutputEntries {
-		return TerraformPlanReport{}, fmt.Errorf(
+	if len(document.OutputChanges) > MaximumInfrastructureOutputEntries {
+		return InfrastructurePlanReport{}, fmt.Errorf(
 			"output_changes must contain at most %d entries",
-			MaximumTerraformOutputEntries,
+			MaximumInfrastructureOutputEntries,
 		)
 	}
 
 	envelope := ReportEnvelope{
-		Kind:           TerraformPlanKind,
-		SchemaVersion:  TerraformPlanSchemaVersion,
-		AdapterVersion: TerraformPlanAdapterVersion,
-		Tool:           "terraform",
+		Kind:           kind,
+		SchemaVersion:  InfrastructurePlanSchemaVersion,
+		AdapterVersion: InfrastructurePlanAdapterVersion,
+		Tool:           tool,
 		ToolVersion:    document.TerraformVersion,
 		Mode:           PreviewMode,
 	}
-	report := TerraformPlanReport{
+	report := InfrastructurePlanReport{
 		ReportEnvelope: envelope,
-		Summary: TerraformPlanSummary{
-			Applyable: document.Applyable,
-			Complete:  document.Complete,
-			Errored:   document.Errored,
+		Summary: InfrastructurePlanSummary{
+			reportKind: kind,
+			Applyable:  document.Applyable,
+			Complete:   document.Complete,
+			Errored:    document.Errored,
 		},
-		ResourceChanges: make([]TerraformResourceChange, 0, len(document.ResourceChanges)),
-		ResourceDrift:   make([]TerraformResourceChange, 0, len(document.ResourceDrift)),
+		ResourceChanges: make([]InfrastructureResourceChange, 0, len(document.ResourceChanges)),
+		ResourceDrift:   make([]InfrastructureResourceChange, 0, len(document.ResourceDrift)),
 	}
 
 	for index, sourceChange := range document.ResourceChanges {
-		change, err := projectTerraformResourceChange("resource_changes", index, sourceChange)
+		change, err := projectInfrastructureResourceChange("resource_changes", index, sourceChange)
 		if err != nil {
-			return TerraformPlanReport{}, err
+			return InfrastructurePlanReport{}, err
 		}
 		report.ResourceChanges = append(report.ResourceChanges, change)
 		report.Summary.ResourceChanges.add(change.Action)
 	}
 	for index, sourceChange := range document.ResourceDrift {
-		change, err := projectTerraformResourceChange("resource_drift", index, sourceChange)
+		change, err := projectInfrastructureResourceChange("resource_drift", index, sourceChange)
 		if err != nil {
-			return TerraformPlanReport{}, err
+			return InfrastructurePlanReport{}, err
 		}
 		report.ResourceDrift = append(report.ResourceDrift, change)
 	}
@@ -267,83 +291,86 @@ func DecodeTerraformPlan(source io.Reader) (TerraformPlanReport, error) {
 	}
 	slices.Sort(outputNames)
 	for _, name := range outputNames {
-		action, err := normalizeTerraformOutputAction(document.OutputChanges[name].Actions)
+		action, err := normalizeInfrastructureOutputAction(document.OutputChanges[name].Actions)
 		if err != nil {
-			return TerraformPlanReport{}, fmt.Errorf("output_changes[%q].actions: %w", name, err)
+			return InfrastructurePlanReport{}, fmt.Errorf("output_changes[%q].actions: %w", name, err)
 		}
 		report.Summary.OutputChanges.add(action)
 	}
 
 	checkCount := 0
 	for index, check := range document.Checks {
-		if err := validateTerraformCheckStatus(
+		if err := validateInfrastructureCheckStatus(
 			fmt.Sprintf("checks[%d].status", index),
 			check.Status,
 		); err != nil {
-			return TerraformPlanReport{}, err
+			return InfrastructurePlanReport{}, err
 		}
 		if len(check.Instances) == 0 {
 			checkCount++
 			report.Summary.Checks.add(check.Status)
-			if checkCount > MaximumTerraformCheckEntries {
-				return TerraformPlanReport{}, fmt.Errorf(
+			if checkCount > MaximumInfrastructureCheckEntries {
+				return InfrastructurePlanReport{}, fmt.Errorf(
 					"checks must contain at most %d summarized entries",
-					MaximumTerraformCheckEntries,
+					MaximumInfrastructureCheckEntries,
 				)
 			}
 			continue
 		}
 		for instanceIndex, instance := range check.Instances {
 			field := fmt.Sprintf("checks[%d].instances[%d].status", index, instanceIndex)
-			if err := validateTerraformCheckStatus(field, instance.Status); err != nil {
-				return TerraformPlanReport{}, err
+			if err := validateInfrastructureCheckStatus(field, instance.Status); err != nil {
+				return InfrastructurePlanReport{}, err
 			}
 			checkCount++
 			report.Summary.Checks.add(instance.Status)
-			if checkCount > MaximumTerraformCheckEntries {
-				return TerraformPlanReport{}, fmt.Errorf(
+			if checkCount > MaximumInfrastructureCheckEntries {
+				return InfrastructurePlanReport{}, fmt.Errorf(
 					"checks must contain at most %d summarized entries",
-					MaximumTerraformCheckEntries,
+					MaximumInfrastructureCheckEntries,
 				)
 			}
 		}
 	}
 
-	slices.SortFunc(report.ResourceChanges, compareTerraformResourceChanges)
-	slices.SortFunc(report.ResourceDrift, compareTerraformResourceChanges)
+	slices.SortFunc(report.ResourceChanges, compareInfrastructureResourceChanges)
+	slices.SortFunc(report.ResourceDrift, compareInfrastructureResourceChanges)
 	if _, err := Encode(report); err != nil {
-		return TerraformPlanReport{}, err
+		return InfrastructurePlanReport{}, err
 	}
 
 	return report, nil
 }
 
-func (r TerraformPlanReport) Metadata() ReportEnvelope {
+func (r InfrastructurePlanReport) Metadata() ReportEnvelope {
 	return r.ReportEnvelope
 }
 
-func (r TerraformPlanReport) ReportSummary() Summary {
-	return &r.Summary
+func (r InfrastructurePlanReport) ReportSummary() Summary {
+	summary := r.Summary
+	summary.reportKind = r.Kind
+
+	return &summary
 }
 
-func (r TerraformPlanReport) Validate() error {
+func (r InfrastructurePlanReport) Validate() error {
 	if err := r.ReportEnvelope.Validate(); err != nil {
 		return err
 	}
-	if len(r.ResourceChanges)+len(r.ResourceDrift) > MaximumTerraformResourceEntries {
+	if len(r.ResourceChanges)+len(r.ResourceDrift) > MaximumInfrastructureResourceEntries {
 		return fmt.Errorf(
 			"resourceChanges and resourceDrift must contain at most %d entries in total",
-			MaximumTerraformResourceEntries,
+			MaximumInfrastructureResourceEntries,
 		)
 	}
 
-	calculated := TerraformActionCounts{}
+	calculated := InfrastructureActionCounts{}
 	for index, change := range r.ResourceChanges {
 		if err := change.validate(fmt.Sprintf("resourceChanges[%d]", index)); err != nil {
 			return err
 		}
 		calculated.add(change.Action)
-		if index > 0 && compareTerraformResourceChanges(r.ResourceChanges[index-1], change) > 0 {
+		if index > 0 && compareInfrastructureResourceChanges(r.ResourceChanges[index-1], change) > 0 {
 			return errors.New("resourceChanges must use deterministic order")
 		}
 	}
@@ -354,7 +381,7 @@ func (r TerraformPlanReport) Validate() error {
 		if err := change.validate(fmt.Sprintf("resourceDrift[%d]", index)); err != nil {
 			return err
 		}
-		if index > 0 && compareTerraformResourceChanges(r.ResourceDrift[index-1], change) > 0 {
+		if index > 0 && compareInfrastructureResourceChanges(r.ResourceDrift[index-1], change) > 0 {
 			return errors.New("resourceDrift must use deterministic order")
 		}
 	}
@@ -368,21 +395,21 @@ func (r TerraformPlanReport) Validate() error {
 	return nil
 }
 
-func (s TerraformPlanSummary) ReportKind() ReportKind {
-	return TerraformPlanKind
+func (s InfrastructurePlanSummary) ReportKind() ReportKind {
+	return s.reportKind
 }
 
-func (s TerraformPlanSummary) Validate() error {
-	if err := s.ResourceChanges.validate("summary.resourceChanges", MaximumTerraformResourceEntries); err != nil {
+func (s InfrastructurePlanSummary) Validate() error {
+	if err := s.ResourceChanges.validate("summary.resourceChanges", MaximumInfrastructureResourceEntries); err != nil {
 		return err
 	}
-	if s.DriftedResources < 0 || s.ResourceChanges.Total+s.DriftedResources > MaximumTerraformResourceEntries {
+	if s.DriftedResources < 0 || s.ResourceChanges.Total+s.DriftedResources > MaximumInfrastructureResourceEntries {
 		return fmt.Errorf(
 			"summary resourceChanges and driftedResources must contain at most %d entries in total",
-			MaximumTerraformResourceEntries,
+			MaximumInfrastructureResourceEntries,
 		)
 	}
-	if err := s.OutputChanges.validate("summary.outputChanges", MaximumTerraformOutputEntries); err != nil {
+	if err := s.OutputChanges.validate("summary.outputChanges", MaximumInfrastructureOutputEntries); err != nil {
 		return err
 	}
 	if err := s.Checks.validate(); err != nil {
@@ -392,7 +419,7 @@ func (s TerraformPlanSummary) Validate() error {
 	return nil
 }
 
-func (c TerraformResourceChange) validate(field string) error {
+func (c InfrastructureResourceChange) validate(field string) error {
 	for _, item := range []struct {
 		name     string
 		value    string
@@ -419,14 +446,14 @@ func (c TerraformResourceChange) validate(field string) error {
 	}
 
 	switch c.Action {
-	case TerraformActionNoOp, TerraformActionCreate, TerraformActionRead, TerraformActionUpdate,
-		TerraformActionDelete:
+	case InfrastructureActionNoOp, InfrastructureActionCreate, InfrastructureActionRead, InfrastructureActionUpdate,
+		InfrastructureActionDelete, InfrastructureActionForget:
 		if c.ReplacementOrder != "" {
 			return fmt.Errorf("%s.replacementOrder is only valid for replace actions", field)
 		}
-	case TerraformActionReplace:
-		if c.ReplacementOrder != TerraformReplacementDestroyBeforeCreate &&
-			c.ReplacementOrder != TerraformReplacementCreateBeforeDestroy {
+	case InfrastructureActionReplace:
+		if c.ReplacementOrder != InfrastructureReplacementDestroyBeforeCreate &&
+			c.ReplacementOrder != InfrastructureReplacementCreateBeforeDestroy {
 			return fmt.Errorf("%s.replacementOrder is required for replace actions", field)
 		}
 	default:
@@ -436,17 +463,17 @@ func (c TerraformResourceChange) validate(field string) error {
 	return nil
 }
 
-func projectTerraformResourceChange(
+func projectInfrastructureResourceChange(
 	collection string,
 	index int,
-	source terraformResourceChangeSource,
-) (TerraformResourceChange, error) {
-	action, order, err := normalizeTerraformAction(source.Change.Actions)
+	source infrastructureResourceChangeSource,
+) (InfrastructureResourceChange, error) {
+	action, order, err := normalizeInfrastructureAction(source.Change.Actions)
 	if err != nil {
-		return TerraformResourceChange{}, fmt.Errorf("%s[%d].change.actions: %w", collection, index, err)
+		return InfrastructureResourceChange{}, fmt.Errorf("%s[%d].change.actions: %w", collection, index, err)
 	}
 
-	change := TerraformResourceChange{
+	change := InfrastructureResourceChange{
 		Address:           source.Address,
 		ReplacedObjectKey: source.Deposed,
 		PreviousAddress:   source.PreviousAddress,
@@ -460,57 +487,61 @@ func projectTerraformResourceChange(
 		ActionReason:      source.ActionReason,
 	}
 	if err := change.validate(fmt.Sprintf("%s[%d]", collection, index)); err != nil {
-		return TerraformResourceChange{}, err
+		return InfrastructureResourceChange{}, err
 	}
 
 	return change, nil
 }
 
-func normalizeTerraformAction(actions []string) (TerraformAction, TerraformReplacementOrder, error) {
+func normalizeInfrastructureAction(
+	actions []string,
+) (InfrastructureAction, InfrastructureReplacementOrder, error) {
 	if len(actions) == 1 {
 		switch actions[0] {
-		case string(TerraformActionNoOp):
-			return TerraformActionNoOp, "", nil
-		case string(TerraformActionCreate):
-			return TerraformActionCreate, "", nil
-		case string(TerraformActionRead):
-			return TerraformActionRead, "", nil
-		case string(TerraformActionUpdate):
-			return TerraformActionUpdate, "", nil
-		case string(TerraformActionDelete):
-			return TerraformActionDelete, "", nil
+		case string(InfrastructureActionNoOp):
+			return InfrastructureActionNoOp, "", nil
+		case string(InfrastructureActionCreate):
+			return InfrastructureActionCreate, "", nil
+		case string(InfrastructureActionRead):
+			return InfrastructureActionRead, "", nil
+		case string(InfrastructureActionUpdate):
+			return InfrastructureActionUpdate, "", nil
+		case string(InfrastructureActionDelete):
+			return InfrastructureActionDelete, "", nil
+		case string(InfrastructureActionForget):
+			return InfrastructureActionForget, "", nil
 		}
 	}
 	if len(actions) == 2 {
 		switch {
 		case actions[0] == "delete" && actions[1] == "create":
-			return TerraformActionReplace, TerraformReplacementDestroyBeforeCreate, nil
+			return InfrastructureActionReplace, InfrastructureReplacementDestroyBeforeCreate, nil
 		case actions[0] == "create" && actions[1] == "delete":
-			return TerraformActionReplace, TerraformReplacementCreateBeforeDestroy, nil
+			return InfrastructureActionReplace, InfrastructureReplacementCreateBeforeDestroy, nil
 		}
 	}
 
 	return "", "", errors.New("action combination is not supported")
 }
 
-func normalizeTerraformOutputAction(actions []string) (TerraformAction, error) {
+func normalizeInfrastructureOutputAction(actions []string) (InfrastructureAction, error) {
 	if len(actions) == 1 {
 		switch actions[0] {
-		case string(TerraformActionNoOp):
-			return TerraformActionNoOp, nil
-		case string(TerraformActionCreate):
-			return TerraformActionCreate, nil
-		case string(TerraformActionUpdate):
-			return TerraformActionUpdate, nil
-		case string(TerraformActionDelete):
-			return TerraformActionDelete, nil
+		case string(InfrastructureActionNoOp):
+			return InfrastructureActionNoOp, nil
+		case string(InfrastructureActionCreate):
+			return InfrastructureActionCreate, nil
+		case string(InfrastructureActionUpdate):
+			return InfrastructureActionUpdate, nil
+		case string(InfrastructureActionDelete):
+			return InfrastructureActionDelete, nil
 		}
 	}
 
 	return "", errors.New("output action combination is not supported")
 }
 
-func validateTerraformFormatVersion(value string) error {
+func validateInfrastructureFormatVersion(value string) error {
 	if err := validateRequiredString("format_version", value, 32); err != nil {
 		return err
 	}
@@ -532,12 +563,12 @@ func validateTerraformFormatVersion(value string) error {
 	return nil
 }
 
-func validateTerraformCheckStatus(field string, status string) error {
+func validateInfrastructureCheckStatus(field string, status string) error {
 	switch status {
 	case "pass", "fail", "error", "unknown":
 		return nil
 	default:
-		return fmt.Errorf("%s is not a supported Terraform check status", field)
+		return fmt.Errorf("%s is not a supported infrastructure plan check status", field)
 	}
 }
 
@@ -557,30 +588,32 @@ func validateOptionalString(field string, value string, maximum int) error {
 	return nil
 }
 
-func (c *TerraformActionCounts) add(action TerraformAction) {
+func (c *InfrastructureActionCounts) add(action InfrastructureAction) {
 	c.Total++
 	switch action {
-	case TerraformActionNoOp:
+	case InfrastructureActionNoOp:
 		c.NoOp++
-	case TerraformActionCreate:
+	case InfrastructureActionCreate:
 		c.Create++
-	case TerraformActionRead:
+	case InfrastructureActionRead:
 		c.Read++
-	case TerraformActionUpdate:
+	case InfrastructureActionUpdate:
 		c.Update++
-	case TerraformActionDelete:
+	case InfrastructureActionDelete:
 		c.Delete++
-	case TerraformActionReplace:
+	case InfrastructureActionForget:
+		c.Forget++
+	case InfrastructureActionReplace:
 		c.Replace++
 	}
 }
 
-func (c TerraformActionCounts) validate(field string, maximum int) error {
+func (c InfrastructureActionCounts) validate(field string, maximum int) error {
 	if c.Total < 0 || c.NoOp < 0 || c.Create < 0 || c.Read < 0 || c.Update < 0 || c.Delete < 0 ||
-		c.Replace < 0 {
+		c.Forget < 0 || c.Replace < 0 {
 		return fmt.Errorf("%s counts must not be negative", field)
 	}
-	if c.Total != c.NoOp+c.Create+c.Read+c.Update+c.Delete+c.Replace {
+	if c.Total != c.NoOp+c.Create+c.Read+c.Update+c.Delete+c.Forget+c.Replace {
 		return fmt.Errorf("%s total does not match its action counts", field)
 	}
 	if c.Total > maximum {
@@ -590,7 +623,7 @@ func (c TerraformActionCounts) validate(field string, maximum int) error {
 	return nil
 }
 
-func (c *TerraformCheckCounts) add(status string) {
+func (c *InfrastructureCheckCounts) add(status string) {
 	c.Total++
 	switch status {
 	case "pass":
@@ -604,21 +637,21 @@ func (c *TerraformCheckCounts) add(status string) {
 	}
 }
 
-func (c TerraformCheckCounts) validate() error {
+func (c InfrastructureCheckCounts) validate() error {
 	if c.Total < 0 || c.Pass < 0 || c.Fail < 0 || c.Error < 0 || c.Unknown < 0 {
 		return errors.New("summary.checks counts must not be negative")
 	}
 	if c.Total != c.Pass+c.Fail+c.Error+c.Unknown {
 		return errors.New("summary.checks total does not match its status counts")
 	}
-	if c.Total > MaximumTerraformCheckEntries {
-		return fmt.Errorf("summary.checks must not exceed %d entries", MaximumTerraformCheckEntries)
+	if c.Total > MaximumInfrastructureCheckEntries {
+		return fmt.Errorf("summary.checks must not exceed %d entries", MaximumInfrastructureCheckEntries)
 	}
 
 	return nil
 }
 
-func compareTerraformResourceChanges(left, right TerraformResourceChange) int {
+func compareInfrastructureResourceChanges(left, right InfrastructureResourceChange) int {
 	return cmp.Or(
 		cmp.Compare(left.Address, right.Address),
 		cmp.Compare(left.ReplacedObjectKey, right.ReplacedObjectKey),

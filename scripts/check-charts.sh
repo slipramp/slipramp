@@ -125,6 +125,10 @@ assert_not_contains "$test_directory/server-kargo.yaml" 'name: SLIPRAMP_KARGO_IN
   >"$test_directory/server-scheduling.yaml"
 assert_contains "$test_directory/server-scheduling.yaml" '^kind: Ingress$'
 assert_contains "$test_directory/server-scheduling.yaml" 'ingressClassName: nginx'
+assert_contains "$test_directory/server-scheduling.yaml" 'path: /api/v1/auth/login'
+assert_contains "$test_directory/server-scheduling.yaml" 'path: /api/v1/auth/callback'
+test "$(grep -Ec '^            pathType: Exact$' "$test_directory/server-scheduling.yaml")" = 2 || \
+  fail "Server chart did not route both browser OIDC endpoints exactly"
 assert_contains "$test_directory/server-scheduling.yaml" 'topologySpreadConstraints:'
 assert_contains "$test_directory/server-scheduling.yaml" 'name: registry-credentials'
 assert_contains "$test_directory/server-scheduling.yaml" 'kubernetes.io/os: linux'

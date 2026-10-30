@@ -20,6 +20,7 @@ RunReportEnvelope:
       type: string
       enum:
         - terraform-plan
+        - opentofu-plan
         - pyinfra-deploy
     schemaVersion:
       type: integer
@@ -47,21 +48,25 @@ RunReportEnvelope:
 RunReportSummary:
   oneOf:
     - $ref: "#/TerraformPlanReportSummary"
+    - $ref: "#/OpenTofuPlanReportSummary"
     - $ref: "#/PyinfraDeployReportSummary"
   discriminator:
     propertyName: kind
     mapping:
       terraform-plan: "#/TerraformPlanReportSummary"
+      opentofu-plan: "#/OpenTofuPlanReportSummary"
       pyinfra-deploy: "#/PyinfraDeployReportSummary"
 
 RunReport:
   oneOf:
     - $ref: "#/TerraformPlanReport"
+    - $ref: "#/OpenTofuPlanReport"
     - $ref: "#/PyinfraDeployReport"
   discriminator:
     propertyName: kind
     mapping:
       terraform-plan: "#/TerraformPlanReport"
+      opentofu-plan: "#/OpenTofuPlanReport"
       pyinfra-deploy: "#/PyinfraDeployReport"
 
 TerraformPlanReportSummary:
@@ -81,7 +86,7 @@ TerraformPlanReportSummary:
           enum:
             - preview
         summary:
-          $ref: "#/TerraformPlanSummary"
+          $ref: "#/InfrastructurePlanSummary"
 
 TerraformPlanReport:
   allOf:
@@ -102,19 +107,69 @@ TerraformPlanReport:
           enum:
             - preview
         summary:
-          $ref: "#/TerraformPlanSummary"
+          $ref: "#/InfrastructurePlanSummary"
         resourceChanges:
           type: array
           maxItems: 20000
           items:
-            $ref: "#/TerraformResourceChange"
+            $ref: "#/InfrastructureResourceChange"
         resourceDrift:
           type: array
           maxItems: 20000
           items:
-            $ref: "#/TerraformResourceChange"
+            $ref: "#/InfrastructureResourceChange"
 
-TerraformPlanSummary:
+OpenTofuPlanReportSummary:
+  allOf:
+    - $ref: "#/RunReportEnvelope"
+    - type: object
+      required:
+        - kind
+        - summary
+      properties:
+        kind:
+          type: string
+          enum:
+            - opentofu-plan
+        mode:
+          type: string
+          enum:
+            - preview
+        summary:
+          $ref: "#/InfrastructurePlanSummary"
+
+OpenTofuPlanReport:
+  allOf:
+    - $ref: "#/RunReportEnvelope"
+    - type: object
+      required:
+        - kind
+        - summary
+        - resourceChanges
+        - resourceDrift
+      properties:
+        kind:
+          type: string
+          enum:
+            - opentofu-plan
+        mode:
+          type: string
+          enum:
+            - preview
+        summary:
+          $ref: "#/InfrastructurePlanSummary"
+        resourceChanges:
+          type: array
+          maxItems: 20000
+          items:
+            $ref: "#/InfrastructureResourceChange"
+        resourceDrift:
+          type: array
+          maxItems: 20000
+          items:
+            $ref: "#/InfrastructureResourceChange"
+
+InfrastructurePlanSummary:
   type: object
   required:
     - resourceChanges
@@ -123,15 +178,15 @@ TerraformPlanSummary:
     - outputChanges
   properties:
     resourceChanges:
-      $ref: "#/TerraformActionCounts"
+      $ref: "#/InfrastructureActionCounts"
     driftedResources:
       type: integer
       minimum: 0
       maximum: 20000
     checks:
-      $ref: "#/TerraformCheckCounts"
+      $ref: "#/InfrastructureCheckCounts"
     outputChanges:
-      $ref: "#/TerraformActionCounts"
+      $ref: "#/InfrastructureActionCounts"
     applyable:
       type: boolean
     complete:
@@ -139,7 +194,7 @@ TerraformPlanSummary:
     errored:
       type: boolean
 
-TerraformActionCounts:
+InfrastructureActionCounts:
   type: object
   required:
     - total
@@ -148,6 +203,7 @@ TerraformActionCounts:
     - read
     - update
     - delete
+    - forget
     - replace
   properties:
     total:
@@ -174,12 +230,16 @@ TerraformActionCounts:
       type: integer
       minimum: 0
       maximum: 20000
+    forget:
+      type: integer
+      minimum: 0
+      maximum: 20000
     replace:
       type: integer
       minimum: 0
       maximum: 20000
 
-TerraformCheckCounts:
+InfrastructureCheckCounts:
   type: object
   required:
     - total
@@ -209,7 +269,7 @@ TerraformCheckCounts:
       minimum: 0
       maximum: 10000
 
-TerraformResourceChange:
+InfrastructureResourceChange:
   type: object
   required:
     - address
@@ -227,7 +287,7 @@ TerraformResourceChange:
       type: string
       minLength: 1
       maxLength: 2048
-      description: Opaque Terraform key distinguishing an old object retained during replacement from the current object at the same address.
+      description: Opaque plan key distinguishing an old object retained during replacement from the current object at the same address.
     previousAddress:
       type: string
       minLength: 1
@@ -260,6 +320,7 @@ TerraformResourceChange:
         - read
         - update
         - delete
+        - forget
         - replace
     replacementOrder:
       type: string

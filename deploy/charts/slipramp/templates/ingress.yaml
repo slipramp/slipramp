@@ -21,6 +21,15 @@ spec:
     - host: {{ required "ingress.host is required when ingress is enabled" .Values.ingress.host | quote }}
       http:
         paths:
+          {{- range $path := list "/api/v1/auth/login" "/api/v1/auth/callback" }}
+          - path: {{ $path }}
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "slipramp.webName" $ }}
+                port:
+                  number: {{ $.Values.web.service.port }}
+          {{- end }}
           {{- range $path := list "/api" "/controller" "/execution" "/healthz" "/readyz" }}
           - path: {{ $path }}
             pathType: Prefix

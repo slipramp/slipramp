@@ -69,7 +69,7 @@ import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { RunLogViewer } from "~/features/runs/run-log-viewer";
 import { PyinfraDeployReportView } from "~/features/runs/pyinfra-deploy-report-view";
-import { TerraformPlanReportView } from "~/features/runs/terraform-plan-report-view";
+import { InfrastructurePlanReportView } from "~/features/runs/terraform-plan-report-view";
 import {
   formatBinarySize,
   formatDuration,
@@ -518,9 +518,12 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
           );
           if (!load) return null;
 
-          if (artifact.report?.kind === "terraform-plan") {
+          if (
+            artifact.report?.kind === "terraform-plan" ||
+            artifact.report?.kind === "opentofu-plan"
+          ) {
             return (
-              <TerraformPlanReportView
+              <InfrastructurePlanReportView
                 artifact={artifact}
                 canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
                 key={artifact.id}

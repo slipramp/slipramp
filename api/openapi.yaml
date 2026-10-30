@@ -277,14 +277,18 @@ components:
       $ref: ./components/run-reports.yaml#/TerraformPlanReportSummary
     TerraformPlanReport:
       $ref: ./components/run-reports.yaml#/TerraformPlanReport
-    TerraformPlanSummary:
-      $ref: ./components/run-reports.yaml#/TerraformPlanSummary
-    TerraformActionCounts:
-      $ref: ./components/run-reports.yaml#/TerraformActionCounts
-    TerraformCheckCounts:
-      $ref: ./components/run-reports.yaml#/TerraformCheckCounts
-    TerraformResourceChange:
-      $ref: ./components/run-reports.yaml#/TerraformResourceChange
+    OpenTofuPlanReportSummary:
+      $ref: ./components/run-reports.yaml#/OpenTofuPlanReportSummary
+    OpenTofuPlanReport:
+      $ref: ./components/run-reports.yaml#/OpenTofuPlanReport
+    InfrastructurePlanSummary:
+      $ref: ./components/run-reports.yaml#/InfrastructurePlanSummary
+    InfrastructureActionCounts:
+      $ref: ./components/run-reports.yaml#/InfrastructureActionCounts
+    InfrastructureCheckCounts:
+      $ref: ./components/run-reports.yaml#/InfrastructureCheckCounts
+    InfrastructureResourceChange:
+      $ref: ./components/run-reports.yaml#/InfrastructureResourceChange
     PyinfraDeployReportSummary:
       $ref: ./components/run-reports.yaml#/PyinfraDeployReportSummary
     PyinfraDeployReport:

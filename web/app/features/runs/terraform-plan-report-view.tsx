@@ -14,19 +14,31 @@ import {
 import { IconSearch } from "@tabler/icons-react";
 import { useDeferredValue, useMemo, useState } from "react";
 
-import type { Artifact, TerraformPlanReport, TerraformResourceChange } from "~/api/generated";
+import type {
+  Artifact,
+  InfrastructureResourceChange,
+  OpenTofuPlanReport,
+  OpenTofuPlanReportSummary,
+  RunReport,
+  RunReportSummary,
+  TerraformPlanReport,
+  TerraformPlanReportSummary,
+} from "~/api/generated";
 import { SectionHeader } from "~/shared/page";
 import {
-  filterTerraformResources,
-  groupTerraformResources,
-  terraformActionBadges,
-  terraformCheckBadges,
+  filterInfrastructureResources,
+  groupInfrastructureResources,
+  infrastructureActionBadges,
+  infrastructureCheckBadges,
   type CountBadge,
 } from "~/features/runs/terraform-plan-report";
 import type { ReportLoad } from "~/features/runs/run-reports";
 import { ReportDetailNotice } from "~/features/runs/run-report-detail-notice";
 
-export function TerraformPlanReportView({
+type InfrastructurePlanDetailReport = OpenTofuPlanReport | TerraformPlanReport;
+type InfrastructurePlanSummaryReport = OpenTofuPlanReportSummary | TerraformPlanReportSummary;
+
+export function InfrastructurePlanReportView({
   artifact,
   canReadContents,
   load,
@@ -36,13 +48,16 @@ export function TerraformPlanReportView({
   load: ReportLoad;
 }>) {
   const report = artifact.report;
-  if (!report || report.kind !== "terraform-plan") return null;
+  if (!report || !isInfrastructurePlanSummaryReport(report)) return null;
 
   const detail =
-    load.state === "available" && load.detail.kind === "terraform-plan" ? load.detail : undefined;
-  const summaryBadges = terraformActionBadges(report.summary.resourceChanges).filter(
+    load.state === "available" && isInfrastructurePlanDetailReport(load.detail)
+      ? load.detail
+      : undefined;
+  const summaryBadges = infrastructureActionBadges(report.summary.resourceChanges).filter(
     (badge) => badge.label !== "No-op",
   );
+  const toolName = infrastructureToolName(report.tool);
 
   return (
     <Paper p="md" withBorder>
@@ -54,7 +69,7 @@ export function TerraformPlanReportView({
               <BooleanFact label="Complete" value={report.summary.complete} />
               <BooleanFact label="Errored" negative value={report.summary.errored} />
               <Badge color="gray" variant="light">
-                {sentenceCase(report.tool)}
+                {toolName}
                 {report.toolVersion ? ` ${report.toolVersion}` : ""}
               </Badge>
               {canReadContents &&
@@ -66,7 +81,7 @@ export function TerraformPlanReportView({
               ) : null}
             </Group>
           }
-          title="Terraform plan report"
+          title={`${toolName} plan report`}
         />
 
         {summaryBadges.length > 0 || report.summary.driftedResources > 0 ? (
@@ -84,19 +99,21 @@ export function TerraformPlanReportView({
 
         <ReportDetailNotice state={load.state} />
 
-        {detail ? <TerraformPlanDetail report={detail} /> : null}
+        {detail ? <InfrastructurePlanDetail report={detail} /> : null}
       </Stack>
     </Paper>
   );
 }
 
-function TerraformPlanDetail({ report }: Readonly<{ report: TerraformPlanReport }>) {
+function InfrastructurePlanDetail({
+  report,
+}: Readonly<{ report: InfrastructurePlanDetailReport }>) {
   const [keyword, setKeyword] = useState("");
   const [showNoOp, setShowNoOp] = useState(false);
   const deferredKeyword = useDeferredValue(keyword);
   const resourceChanges = useMemo(
     () =>
-      filterTerraformResources(report.resourceChanges, {
+      filterInfrastructureResources(report.resourceChanges, {
         keyword: deferredKeyword,
         showNoOp,
       }),
@@ -104,7 +121,7 @@ function TerraformPlanDetail({ report }: Readonly<{ report: TerraformPlanReport 
   );
   const resourceDrift = useMemo(
     () =>
-      filterTerraformResources(report.resourceDrift, {
+      filterInfrastructureResources(report.resourceDrift, {
         keyword: deferredKeyword,
         showNoOp,
       }),
@@ -125,7 +142,7 @@ function TerraformPlanDetail({ report }: Readonly<{ report: TerraformPlanReport 
       <Stack gap={6}>
         <Group align="flex-end" gap="md" justify="space-between" wrap="wrap">
           <TextInput
-            aria-label="Filter Terraform resources by keyword"
+            aria-label={`Filter ${infrastructureToolName(report.tool)} resources by keyword`}
             label="Filter resources"
             leftSection={<IconSearch aria-hidden size={15} />}
             onChange={(event) => setKeyword(event.currentTarget.value)}
@@ -151,7 +168,7 @@ function TerraformPlanDetail({ report }: Readonly<{ report: TerraformPlanReport 
         changes={resourceChanges}
         empty={
           report.resourceChanges.length === 0
-            ? "Terraform reported no resource changes."
+            ? `${infrastructureToolName(report.tool)} reported no resource changes.`
             : "No resource changes match the current filters."
         }
         title="Resource changes"
@@ -162,7 +179,7 @@ function TerraformPlanDetail({ report }: Readonly<{ report: TerraformPlanReport 
           changes={resourceDrift}
           empty={
             report.resourceDrift.length === 0
-              ? "Terraform counted drift, but no drift detail was projected."
+              ? `${infrastructureToolName(report.tool)} counted drift, but no drift detail was projected.`
               : "No resource drift matches the current filters."
           }
           title="Resource drift"
@@ -171,13 +188,13 @@ function TerraformPlanDetail({ report }: Readonly<{ report: TerraformPlanReport 
       ) : null}
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <AggregateSection
-          badges={terraformCheckBadges(report.summary.checks)}
+          badges={infrastructureCheckBadges(report.summary.checks)}
           empty="No checks were reported."
           title="Checks"
           total={report.summary.checks.total}
         />
         <AggregateSection
-          badges={terraformActionBadges(report.summary.outputChanges)}
+          badges={infrastructureActionBadges(report.summary.outputChanges)}
           empty="No output changes were reported."
           title="Output changes"
           total={report.summary.outputChanges.total}
@@ -192,7 +209,12 @@ function ResourceSection({
   empty,
   title,
   total,
-}: Readonly<{ changes: TerraformResourceChange[]; empty: string; title: string; total: number }>) {
+}: Readonly<{
+  changes: InfrastructureResourceChange[];
+  empty: string;
+  title: string;
+  total: number;
+}>) {
   return (
     <Stack gap="sm">
       <Group justify="space-between" wrap="wrap">
@@ -222,7 +244,7 @@ function ResourceSection({
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {groupTerraformResources(changes).map((group) => (
+              {groupInfrastructureResources(changes).map((group) => (
                 <ResourceGroup
                   key={group.moduleAddress ?? "root"}
                   moduleAddress={group.moduleAddress}
@@ -240,7 +262,7 @@ function ResourceSection({
 function ResourceGroup({
   moduleAddress,
   resources,
-}: Readonly<{ moduleAddress?: string; resources: TerraformResourceChange[] }>) {
+}: Readonly<{ moduleAddress?: string; resources: InfrastructureResourceChange[] }>) {
   return (
     <>
       <Table.Tr>
@@ -336,10 +358,11 @@ function CountBadgeView({ badge }: Readonly<{ badge: CountBadge }>) {
   );
 }
 
-function ActionBadge({ action }: Readonly<{ action: TerraformResourceChange["action"] }>) {
+function ActionBadge({ action }: Readonly<{ action: InfrastructureResourceChange["action"] }>) {
   const color = {
     create: "green",
     delete: "red",
+    forget: "grape",
     "no-op": "gray",
     read: "blue",
     replace: "orange",
@@ -353,7 +376,7 @@ function ActionBadge({ action }: Readonly<{ action: TerraformResourceChange["act
   );
 }
 
-function replacementLabel(order: TerraformResourceChange["replacementOrder"]) {
+function replacementLabel(order: InfrastructureResourceChange["replacementOrder"]) {
   switch (order) {
     case "create-before-destroy":
       return "Create before destroy";
@@ -366,4 +389,20 @@ function replacementLabel(order: TerraformResourceChange["replacementOrder"]) {
 
 function sentenceCase(value: string) {
   return `${value.slice(0, 1).toLocaleUpperCase()}${value.slice(1)}`;
+}
+
+function isInfrastructurePlanSummaryReport(
+  report: RunReportSummary,
+): report is InfrastructurePlanSummaryReport {
+  return report.kind === "opentofu-plan" || report.kind === "terraform-plan";
+}
+
+function isInfrastructurePlanDetailReport(
+  report: RunReport,
+): report is InfrastructurePlanDetailReport {
+  return report.kind === "opentofu-plan" || report.kind === "terraform-plan";
+}
+
+function infrastructureToolName(tool: string) {
+  return tool === "opentofu" ? "OpenTofu" : sentenceCase(tool);
 }

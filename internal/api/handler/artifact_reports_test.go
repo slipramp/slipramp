@@ -121,6 +121,40 @@ func TestArtifactResponseIncludesTypedReportSummary(t *testing.T) {
 	}
 }
 
+func TestOpenTofuPlanReportResponses(t *testing.T) {
+	t.Parallel()
+
+	content := handlerOpenTofuReportContent(t)
+	response, err := runReportResponse(content)
+	if err != nil {
+		t.Fatalf("runReportResponse() error = %v", err)
+	}
+	report, err := response.AsOpenTofuPlanReport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Tool != "opentofu" || report.ToolVersion == nil || *report.ToolVersion != "1.13.2" ||
+		report.Summary.ResourceChanges.Forget != 1 || len(report.ResourceChanges) != 1 ||
+		report.ResourceChanges[0].Action != api.Forget {
+		t.Errorf("runReportResponse() report = %#v", report)
+	}
+
+	artifactResponse, err := artifactResponse(artifact.Record{
+		Artifact: content.Artifact,
+		Report:   &content.Metadata,
+	}, api.GitCommit{})
+	if err != nil {
+		t.Fatalf("artifactResponse() error = %v", err)
+	}
+	summary, err := artifactResponse.Report.AsOpenTofuPlanReportSummary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Tool != "opentofu" || summary.Summary.ResourceChanges.Forget != 1 {
+		t.Errorf("artifactResponse() summary = %#v", summary)
+	}
+}
+
 func TestPyinfraDeployReportResponses(t *testing.T) {
 	t.Parallel()
 
@@ -232,6 +266,56 @@ func handlerReportContent(t *testing.T) artifact.ReportContent {
 		record.ID,
 		report,
 		"runs/report/artifacts/plan-report/reports/terraform-plan-v1.json",
+		projection,
+		createdAt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return artifact.ReportContent{Artifact: record, Metadata: metadata, Report: &report}
+}
+
+func handlerOpenTofuReportContent(t *testing.T) artifact.ReportContent {
+	t.Helper()
+
+	report, err := runreport.DecodeOpenTofuPlan(strings.NewReader(`{
+		"format_version":"1.2",
+		"terraform_version":"1.13.2",
+		"errored":false,
+		"resource_changes":[{
+			"address":"terraform_data.forgotten",
+			"mode":"managed",
+			"type":"terraform_data",
+			"name":"forgotten",
+			"provider_name":"terraform.io/builtin/terraform",
+			"change":{"actions":["forget"]}
+		}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := runreport.Encode(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	createdAt := time.Date(2026, time.October, 30, 15, 0, 0, 0, time.UTC)
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          uuid.New(),
+		Name:           "plan-report",
+		Kind:           artifact.KindOutput,
+		State:          artifact.StateSealed,
+		MediaType:      runreport.OpenTofuPlanMediaType,
+		Sensitive:      true,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      createdAt,
+		SealedAt:       &createdAt,
+	}
+	metadata, err := runreport.NewArtifactReport(
+		record.ID,
+		report,
+		"runs/report/artifacts/plan-report/reports/opentofu-plan-v1.json",
 		projection,
 		createdAt,
 	)
