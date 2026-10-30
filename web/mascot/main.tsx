@@ -21,10 +21,10 @@ import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, Route, Routes, useParams } from "react-router";
 
-import mascotUrl from "~/assets/slipramp-mascot.webp";
-import { MascotGallery, MascotPoseDetail, mascotPoseCount } from "~/components/mascot-gallery";
-import { findMascotPose } from "~/mascot-poses";
-import { sliprampTheme } from "~/theme";
+import mascotUrl from "~/features/mascot/assets/slipramp-mascot.webp";
+import { MascotGallery, MascotPoseDetail, mascotPoseCount } from "~/features/mascot/mascot-gallery";
+import { findMascotPose } from "~/features/mascot/mascot-poses";
+import { sliprampTheme } from "~/features/shell/theme";
 
 document.documentElement.dataset.sliprampTheme = "kawaii";
 

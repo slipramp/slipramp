@@ -1,4 +1,4 @@
-import type { ServerPerformanceTrace } from "../performance.server.ts";
+import type { ServerPerformanceTrace } from "~/features/performance/performance.server";
 import type { Client } from "./generated/client";
 
 const instrumentedMethods = new Set([

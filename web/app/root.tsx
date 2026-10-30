@@ -29,11 +29,11 @@ import {
 import { createServerAPIClient } from "~/api/client.server";
 import { getCurrentPrincipal } from "~/api/generated";
 import { shouldAutomaticallyBeginOIDCLogin } from "~/api/request-auth.server";
-import { ProductShell } from "~/components/product-shell";
-import { pageTitle } from "~/page-title";
-import { serverPerformanceMiddleware } from "~/performance.server";
-import { sliprampTheme } from "~/theme";
-import { ThemePresetScript } from "~/theme-preset";
+import { ProductShell } from "~/features/shell/product-shell";
+import { pageTitle } from "~/shared/page-title";
+import { serverPerformanceMiddleware } from "~/features/performance/performance.server";
+import { sliprampTheme } from "~/features/shell/theme";
+import { ThemePresetScript } from "~/features/shell/theme-preset";
 
 import type { Route } from "./+types/root";
 

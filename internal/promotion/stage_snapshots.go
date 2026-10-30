@@ -23,6 +23,8 @@ type StageObservation struct {
 	SourcePaths                     []string
 	RequestedFreight                []FreightRequest
 	Freight                         Freight
+	DirectFreight                   Freight
+	AutoPromotionEnabled            bool
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 }
 
@@ -137,6 +139,8 @@ func (s *StageService) ReplaceStageSnapshot(
 			SourcePaths:                     slices.Clone(observed.SourcePaths),
 			RequestedFreight:                cloneFreightRequests(observed.RequestedFreight),
 			Freight:                         cloneFreight(observed.Freight),
+			DirectFreight:                   cloneFreight(observed.DirectFreight),
+			AutoPromotionEnabled:            observed.AutoPromotionEnabled,
 			SuccessfulRenderAcknowledgement: cloneRenderAcknowledgement(observed.SuccessfulRenderAcknowledgement),
 			FirstObservedAt:                 snapshot.ObservedAt,
 			LastObservedAt:                  snapshot.ObservedAt,

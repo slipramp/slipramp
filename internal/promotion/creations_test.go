@@ -33,7 +33,7 @@ func (s *creationTestStore) CreateOperatorPromotion(
 	return s.record, s.err
 }
 
-func TestCreationServiceBuildsOperatorAcceptance(t *testing.T) {
+func TestCreationServiceBuildsDirectOperatorAcceptance(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 23, 12, 0, 0, 123456789, time.UTC)
@@ -62,7 +62,6 @@ func TestCreationServiceBuildsOperatorAcceptance(t *testing.T) {
 
 	record, err := service.Create(t.Context(), OperatorPromotionRequest{
 		TargetStageID: stageID,
-		SourceStageID: stageID,
 		FreightName:   "freight-42",
 		Principal:     principal,
 	})
@@ -71,6 +70,7 @@ func TestCreationServiceBuildsOperatorAcceptance(t *testing.T) {
 	}
 	if record.ID != promotionID || store.acceptance.ID != promotionID ||
 		store.acceptance.Integration != "prod" || store.acceptance.FreightName != "freight-42" ||
+		store.acceptance.SourceStageID != uuid.Nil ||
 		store.acceptance.RequestedByPrincipalID != principal.ID ||
 		store.acceptance.AcceptedAt.Nanosecond() != 123456000 {
 		t.Errorf("acceptance = %#v, record = %#v", store.acceptance, record)
@@ -156,6 +156,38 @@ func TestSelectPromotionFreightValidatesUpstreamTopology(t *testing.T) {
 		t.Fatalf("in-place SelectPromotionFreight() error = %v", err)
 	}
 	if _, err := SelectPromotionFreight(source, source, "missing"); !errors.Is(err, ErrFreightNotFound) {
+		t.Fatalf("missing Freight error = %v, want ErrFreightNotFound", err)
+	}
+}
+
+func TestSelectDirectPromotionFreightValidatesRequest(t *testing.T) {
+	t.Parallel()
+
+	target := Stage{
+		RequestedFreight: []FreightRequest{{Origin: "Warehouse/app", Direct: true}},
+		DirectFreight: Freight{Items: []FreightItem{{
+			Origin: "Warehouse/app", Name: "freight-42",
+			Artifacts: []FreightArtifact{{Kind: "image", Version: "1.2.3"}},
+		}}},
+	}
+
+	selected, err := SelectDirectPromotionFreight(target, "freight-42")
+	if err != nil {
+		t.Fatalf("SelectDirectPromotionFreight() error = %v", err)
+	}
+	if selected.Name != "freight-42" || selected.Origin != "Warehouse/app" {
+		t.Errorf("selected Freight = %#v", selected)
+	}
+	target.DirectFreight.Items[0].Artifacts[0].Version = "2.0.0"
+	if selected.Artifacts[0].Version != "1.2.3" {
+		t.Error("selected direct Freight changed with the observed Stage")
+	}
+
+	target.RequestedFreight[0].Direct = false
+	if _, err := SelectDirectPromotionFreight(target, "freight-42"); !errors.Is(err, ErrFreightSource) {
+		t.Fatalf("indirect request error = %v, want ErrFreightSource", err)
+	}
+	if _, err := SelectDirectPromotionFreight(target, "missing"); !errors.Is(err, ErrFreightNotFound) {
 		t.Fatalf("missing Freight error = %v, want ErrFreightNotFound", err)
 	}
 }

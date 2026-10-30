@@ -71,6 +71,7 @@ func TestNormalizeKargoStage(t *testing.T) {
         ]}}
       },
       "status":{
+		"autoPromotionEnabled":true,
         "freightHistory":[{"items":{
           "Warehouse/external-dns":{
             "name":"99d3a4",
@@ -95,7 +96,8 @@ func TestNormalizeKargoStage(t *testing.T) {
 	}
 	if observed.Project != "kargo-core" || observed.Name != "external-dns-prod" ||
 		observed.KubernetesUID != "stage-uid" || observed.ResourceVersion != "42" ||
-		observed.Application != "external-dns-phi" || observed.Environment != "prod" {
+		observed.Application != "external-dns-phi" || observed.Environment != "prod" ||
+		!observed.AutoPromotionEnabled {
 		t.Errorf("identity = %#v", observed)
 	}
 	if observed.RepositoryURL != "https://example.com/ops.git" ||
@@ -125,6 +127,56 @@ func TestNormalizeKargoStage(t *testing.T) {
 		valueOrEmpty(observed.SuccessfulRenderAcknowledgement.SourceRevision) != "source-sha" ||
 		valueOrEmpty(observed.SuccessfulRenderAcknowledgement.ResultRevision) != "target-sha" {
 		t.Errorf("successful render acknowledgement = %#v", observed.SuccessfulRenderAcknowledgement)
+	}
+}
+
+func TestKargoStageObserverReportsNewestDirectFreight(t *testing.T) {
+	t.Parallel()
+
+	stage := minimalUnstructuredStage(t, "kargo-core", "external-dns-prod")
+	spec := stage.Object["spec"].(map[string]any)
+	spec["requestedFreight"] = []any{map[string]any{
+		"origin":  map[string]any{"kind": "Warehouse", "name": "external-dns"},
+		"sources": map[string]any{"direct": true},
+	}}
+
+	freightLister := kargoStagePageListerFunc(func(
+		_ context.Context,
+		namespace string,
+		_ metav1.ListOptions,
+	) (*unstructured.UnstructuredList, error) {
+		return &unstructured.UnstructuredList{Items: []unstructured.Unstructured{
+			*unstructuredFreight(t, namespace, "freight-old", "2026-10-21T10:00:00Z", "1.0.0"),
+			*unstructuredFreight(t, namespace, "freight-new", "2026-10-21T11:00:00Z", "2.0.0"),
+		}}, nil
+	})
+	observer := &kargoStageObserver{
+		integration: "prod",
+		namespaces:  []string{"kargo-core"},
+		lister: kargoStagePageListerFunc(func(
+			_ context.Context,
+			_ string,
+			_ metav1.ListOptions,
+		) (*unstructured.UnstructuredList, error) {
+			return &unstructured.UnstructuredList{Items: []unstructured.Unstructured{*stage}}, nil
+		}),
+		freight: freightLister,
+		logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		newID:   uuid.New,
+		now:     time.Now,
+	}
+
+	snapshot, err := observer.observe(t.Context())
+	if err != nil {
+		t.Fatalf("observe() error = %v", err)
+	}
+	if len(snapshot.Stages) != 1 || len(snapshot.Stages[0].DirectFreight.Items) != 1 {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+	item := snapshot.Stages[0].DirectFreight.Items[0]
+	if item.Name != "freight-new" || item.Origin != "Warehouse/external-dns" ||
+		len(item.Artifacts) != 1 || item.Artifacts[0].Version != "2.0.0" {
+		t.Errorf("direct Freight = %#v", item)
 	}
 }
 
@@ -355,4 +407,26 @@ func minimalUnstructuredStage(t *testing.T, namespace string, name string) *unst
 	stage.SetResourceVersion("1")
 
 	return stage
+}
+
+func unstructuredFreight(
+	t *testing.T,
+	namespace string,
+	name string,
+	discoveredAt string,
+	version string,
+) *unstructured.Unstructured {
+	t.Helper()
+
+	freight := unstructuredStage(t, `{
+      "apiVersion":"kargo.akuity.io/v1alpha1",
+      "kind":"Freight",
+      "origin":{"kind":"Warehouse","name":"external-dns"},
+      "images":[{"repoURL":"ghcr.io/example/external-dns","tag":"`+version+`"}],
+      "discoveredAt":"`+discoveredAt+`"
+    }`)
+	freight.SetNamespace(namespace)
+	freight.SetName(name)
+
+	return freight
 }

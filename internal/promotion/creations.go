@@ -70,8 +70,8 @@ func (s *CreationService) Create(
 	ctx context.Context,
 	request OperatorPromotionRequest,
 ) (Promotion, error) {
-	if request.TargetStageID == uuid.Nil || request.SourceStageID == uuid.Nil {
-		return Promotion{}, fmt.Errorf("%w: target and source Stage IDs are required", ErrInvalid)
+	if request.TargetStageID == uuid.Nil {
+		return Promotion{}, fmt.Errorf("%w: target Stage ID is required", ErrInvalid)
 	}
 	if err := kubevalidate.DNSSubdomain("Kargo Freight name", request.FreightName); err != nil {
 		return Promotion{}, invalid(err)
@@ -116,9 +116,8 @@ func (s *CreationService) Create(
 }
 
 func (a OperatorPromotionAcceptance) Validate() error {
-	if a.ID == uuid.Nil || a.TargetStageID == uuid.Nil || a.SourceStageID == uuid.Nil ||
-		a.RequestedByPrincipalID == uuid.Nil {
-		return fmt.Errorf("%w: Promotion, Stage, and principal IDs are required", ErrInvalid)
+	if a.ID == uuid.Nil || a.TargetStageID == uuid.Nil || a.RequestedByPrincipalID == uuid.Nil {
+		return fmt.Errorf("%w: Promotion, target Stage, and principal IDs are required", ErrInvalid)
 	}
 	if err := kubevalidate.DNSLabel("Kargo integration name", a.Integration); err != nil {
 		return invalid(err)
@@ -145,18 +144,9 @@ func SelectPromotionFreight(target Stage, source Stage, name string) (*FreightIt
 		return nil, ErrStageScope
 	}
 
-	var selected *FreightItem
-	for index := range source.Freight.Items {
-		if source.Freight.Items[index].Name != name {
-			continue
-		}
-		if selected != nil {
-			return nil, fmt.Errorf("%w: Freight name %q is ambiguous", ErrInvalid, name)
-		}
-		selected = &source.Freight.Items[index]
-	}
-	if selected == nil {
-		return nil, ErrFreightNotFound
+	selected, err := selectFreightByName(source.Freight.Items, name)
+	if err != nil {
+		return nil, err
 	}
 
 	if target.ID != source.ID {
@@ -174,4 +164,38 @@ func SelectPromotionFreight(target Stage, source Stage, name string) (*FreightIt
 
 	cloned := cloneFreightItem(*selected)
 	return &cloned, nil
+}
+
+func SelectDirectPromotionFreight(target Stage, name string) (*FreightItem, error) {
+	selected, err := selectFreightByName(target.DirectFreight.Items, name)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, request := range target.RequestedFreight {
+		if request.Direct && request.Origin == selected.Origin {
+			cloned := cloneFreightItem(*selected)
+			return &cloned, nil
+		}
+	}
+
+	return nil, ErrFreightSource
+}
+
+func selectFreightByName(items []FreightItem, name string) (*FreightItem, error) {
+	var selected *FreightItem
+	for index := range items {
+		if items[index].Name != name {
+			continue
+		}
+		if selected != nil {
+			return nil, fmt.Errorf("%w: Freight name %q is ambiguous", ErrInvalid, name)
+		}
+		selected = &items[index]
+	}
+	if selected == nil {
+		return nil, ErrFreightNotFound
+	}
+
+	return selected, nil
 }

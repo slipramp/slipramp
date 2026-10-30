@@ -152,10 +152,14 @@ func (h *Handler) CreatePromotion(
 	if principal == nil {
 		return nil, errors.New("authenticated Promotion creator is missing")
 	}
+	sourceStageID := uuid.Nil
+	if request.Body.SourceStageID != nil {
+		sourceStageID = *request.Body.SourceStageID
+	}
 
 	record, err := h.promotionCreations.Create(ctx, promotion.OperatorPromotionRequest{
 		TargetStageID: request.StageID,
-		SourceStageID: request.Body.SourceStageID,
+		SourceStageID: sourceStageID,
 		FreightName:   request.Body.FreightName,
 		Principal:     *principal,
 	})
@@ -494,6 +498,8 @@ func (h *Handler) ReplaceKargoStageSnapshot(
 			SourcePaths:                     observed.SourcePaths,
 			RequestedFreight:                promotionFreightRequests(observed.RequestedFreight),
 			Freight:                         promotionFreightFromRequest(observed.Freight),
+			DirectFreight:                   promotionFreightFromRequest(observed.DirectFreight),
+			AutoPromotionEnabled:            observed.AutoPromotionEnabled,
 			SuccessfulRenderAcknowledgement: promotionAcknowledgementFromRequest(observed.SuccessfulRenderAcknowledgement),
 		})
 	}
@@ -569,6 +575,7 @@ func (h *Handler) promotionStageResponse(review promotion.StageReview) api.Promo
 		SourcePaths:                     review.Stage.SourcePaths,
 		RequestedFreight:                promotionFreightRequestResponse(review.Stage.RequestedFreight),
 		Freight:                         promotionFreightResponse(review.Stage.Freight),
+		AutoPromotionEnabled:            review.Stage.AutoPromotionEnabled,
 		SuccessfulRenderAcknowledgement: promotionAcknowledgementResponse(review.Stage.SuccessfulRenderAcknowledgement),
 		Policy:                          promotionPolicyResponse(review.Policy),
 		PendingPromotionCount:           review.PendingPromotionCount,

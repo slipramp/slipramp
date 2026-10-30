@@ -1002,7 +1002,10 @@ export type Promotion = {
 };
 
 export type PromotionCreate = {
-  sourceStageId: string;
+  /**
+   * Source Stage supplying the Freight. Omit for directly requested Warehouse Freight.
+   */
+  sourceStageId?: string;
   freightName: string;
 };
 
@@ -1049,6 +1052,10 @@ export type PromotionStage = {
   sourcePaths: Array<string>;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
+  /**
+   * Effective Kargo auto-promotion state for this Stage.
+   */
+  autoPromotionEnabled: boolean;
   successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
   policy: PromotionStagePolicy;
   pendingPromotionCount: number;
@@ -1984,6 +1991,14 @@ export type PromotionPipelineStage = {
   environment: string;
   freight: PromotionFreight;
   promotionSources: Array<PromotionFreightSource>;
+  /**
+   * Exact observed Freight not currently deployed to this Stage.
+   */
+  availableFreight: PromotionFreight;
+  /**
+   * Effective Kargo auto-promotion state for this Stage.
+   */
+  autoPromotionEnabled: boolean;
   pendingPromotionCount: number;
   lastObservedAt: string;
   /**
@@ -2034,6 +2049,14 @@ export type PromotionStageObservation = {
   sourcePaths: Array<string>;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
+  /**
+   * Latest directly sourced Freight observed for each requested origin.
+   */
+  directFreight: PromotionFreight;
+  /**
+   * Effective Kargo auto-promotion state for this Stage.
+   */
+  autoPromotionEnabled: boolean;
   successfulRenderAcknowledgement?: SuccessfulRenderAcknowledgement;
 };
 

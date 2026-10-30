@@ -91,8 +91,12 @@ func TestPromotionValidateCreatingOperatorPromotion(t *testing.T) {
 	record.NextDispatchAt = nil
 
 	record.SourceStageID = nil
+	if err := record.Validate(); err != nil {
+		t.Fatalf("direct Freight Validate() error = %v", err)
+	}
+	record.SelectedFreightSnapshot = nil
 	if err := record.Validate(); !errors.Is(err, ErrInvalid) {
-		t.Fatalf("missing source Stage error = %v, want ErrInvalid", err)
+		t.Fatalf("missing Freight snapshot error = %v, want ErrInvalid", err)
 	}
 }
 

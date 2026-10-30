@@ -271,6 +271,8 @@ type PromotionStage struct {
 	LastObservedAt                  pgtype.Timestamptz
 	ArchivedAt                      pgtype.Timestamptz
 	RequestedFreightJson            []byte
+	AutoPromotionEnabled            bool
+	DirectFreightJson               []byte
 }
 
 type PromotionStagePolicy struct {

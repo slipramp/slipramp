@@ -161,6 +161,32 @@ func TestFreightPipelineServiceBuildsPromotionSourcesFromDeclaredTopology(t *tes
 		promotionSource.Freight[0].Name != "freight-42" {
 		t.Errorf("promotion source = %#v", promotionSource)
 	}
+	if len(targetPipeline.Stages[0].AvailableFreight) != 1 ||
+		targetPipeline.Stages[0].AvailableFreight[0].Name != "freight-42" {
+		t.Errorf("available Freight = %#v", targetPipeline.Stages[0].AvailableFreight)
+	}
+}
+
+func TestFreightPipelineServiceReportsDirectFreightNotCurrentlyDeployed(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
+	stage := pipelineStage("prod", "kargo-core", "app", "app-homelab", "homelab", now)
+	stage.Freight = Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-old"}}}
+	stage.DirectFreight = Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}}
+	service := NewFreightPipelineService(
+		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab"}}},
+		&reviewStore{stages: []Stage{stage}},
+	)
+
+	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: DefaultListLimit})
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	available := result.Items[0].Stages[0].AvailableFreight
+	if len(available) != 1 || available[0].Name != "freight-new" {
+		t.Errorf("available Freight = %#v", available)
+	}
 }
 
 func TestFreightPipelineServiceFiltersComparisonStatusBeforePagination(t *testing.T) {

@@ -7,7 +7,10 @@ import { renderToPipeableStream } from "react-dom/server";
 import type { EntryContext, RouterContextProvider, ServerInstrumentation } from "react-router";
 import { ServerRouter } from "react-router";
 
-import { getServerPerformanceTrace, serverPerformanceInstrumentation } from "~/performance.server";
+import {
+  getServerPerformanceTrace,
+  serverPerformanceInstrumentation,
+} from "~/features/performance/performance.server";
 
 export const streamTimeout = 5_000;
 

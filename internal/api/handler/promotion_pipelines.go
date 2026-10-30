@@ -50,6 +50,7 @@ func (h *Handler) ListPromotionPipelines(
 		stages := make([]api.PromotionPipelineStage, 0, len(pipeline.Stages))
 		for _, pipelineStage := range pipeline.Stages {
 			freight := promotionFreightResponse(pipelineStage.Stage.Freight)
+			availableFreight := promotionFreightResponse(promotion.Freight{Items: pipelineStage.AvailableFreight})
 			promotionSources := make([]api.PromotionFreightSource, 0, len(pipelineStage.PromotionSources))
 			for _, source := range pipelineStage.PromotionSources {
 				items := make([]api.PromotionFreightItem, 0, len(source.Freight))
@@ -69,6 +70,8 @@ func (h *Handler) ListPromotionPipelines(
 				Environment:           pipelineStage.Stage.Environment,
 				Freight:               freight,
 				PromotionSources:      promotionSources,
+				AvailableFreight:      availableFreight,
+				AutoPromotionEnabled:  pipelineStage.Stage.AutoPromotionEnabled,
 				PendingPromotionCount: pipelineStage.PendingPromotionCount,
 				LastObservedAt:        pipelineStage.Stage.LastObservedAt,
 				KargoURL: h.kargoIntegrations.KargoStageURL(

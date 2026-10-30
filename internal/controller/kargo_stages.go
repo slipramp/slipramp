@@ -24,6 +24,7 @@ import (
 
 const (
 	kargoStageListLimit            = 500
+	kargoFreightListLimit          = 500
 	kargoStageObservationPeriod    = 30 * time.Second
 	promotionSourcePathsAnnotation = "slipramp.com/promotion-source-paths"
 )
@@ -32,6 +33,12 @@ var kargoStageResource = schema.GroupVersionResource{
 	Group:    "kargo.akuity.io",
 	Version:  "v1alpha1",
 	Resource: "stages",
+}
+
+var kargoFreightResource = schema.GroupVersionResource{
+	Group:    "kargo.akuity.io",
+	Version:  "v1alpha1",
+	Resource: "freights",
 }
 
 type kargoStageSnapshotReporter interface {
@@ -58,6 +65,7 @@ type kargoStageObserver struct {
 	integration string
 	namespaces  []string
 	lister      kargoStagePageLister
+	freight     kargoStagePageLister
 	reporter    kargoStageSnapshotReporter
 	logger      *slog.Logger
 	interval    time.Duration
@@ -73,11 +81,13 @@ func newKargoStageObservers(
 ) []*kargoStageObserver {
 	observers := make([]*kargoStageObserver, 0, len(configs))
 	lister := dynamicKargoStageLister{resources: kubeClient.Resource(kargoStageResource)}
+	freight := dynamicKargoStageLister{resources: kubeClient.Resource(kargoFreightResource)}
 	for _, config := range configs {
 		observers = append(observers, &kargoStageObserver{
 			integration: config.Name,
 			namespaces:  slices.Clone(config.StageNamespaces),
 			lister:      lister,
+			freight:     freight,
 			reporter:    reporter,
 			logger: logger.With(
 				"component", "kargo-stage-observer",
@@ -133,6 +143,11 @@ func (o *kargoStageObserver) Run(ctx context.Context) error {
 func (o *kargoStageObserver) observe(ctx context.Context) (api.KargoStageSnapshot, error) {
 	stages := make([]api.PromotionStageObservation, 0)
 	for _, namespace := range o.namespaces {
+		directFreight, err := o.latestDirectFreight(ctx, namespace)
+		if err != nil {
+			return api.KargoStageSnapshot{}, err
+		}
+
 		continueToken := ""
 		for {
 			page, err := o.lister.List(ctx, namespace, metav1.ListOptions{
@@ -152,7 +167,7 @@ func (o *kargoStageObserver) observe(ctx context.Context) (api.KargoStageSnapsho
 						namespace,
 					)
 				}
-				observed, err := normalizeKargoStage(item)
+				observed, err := normalizeKargoStageWithDirectFreight(item, directFreight)
 				if err != nil {
 					return api.KargoStageSnapshot{}, fmt.Errorf(
 						"normalize Kargo Stage %s/%s: %w",
@@ -185,6 +200,69 @@ func (o *kargoStageObserver) observe(ctx context.Context) (api.KargoStageSnapsho
 	}, nil
 }
 
+type observedKargoFreight struct {
+	item         api.PromotionFreightItem
+	discoveredAt time.Time
+}
+
+func (o *kargoStageObserver) latestDirectFreight(
+	ctx context.Context,
+	namespace string,
+) (map[string]api.PromotionFreightItem, error) {
+	latest := make(map[string]observedKargoFreight)
+	if o.freight == nil {
+		return map[string]api.PromotionFreightItem{}, nil
+	}
+
+	continueToken := ""
+	for {
+		page, err := o.freight.List(ctx, namespace, metav1.ListOptions{
+			Limit:    kargoFreightListLimit,
+			Continue: continueToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("list Kargo Freight in namespace %q: %w", namespace, err)
+		}
+
+		for index := range page.Items {
+			item := &page.Items[index]
+			if item.GetNamespace() != namespace {
+				return nil, fmt.Errorf(
+					"kargo Freight %q was returned outside configured namespace %q",
+					item.GetName(),
+					namespace,
+				)
+			}
+			observed, normalizeErr := normalizeKargoFreight(item)
+			if normalizeErr != nil {
+				return nil, fmt.Errorf(
+					"normalize Kargo Freight %s/%s: %w",
+					namespace,
+					item.GetName(),
+					normalizeErr,
+				)
+			}
+			current, ok := latest[observed.item.Origin]
+			if !ok || observed.discoveredAt.After(current.discoveredAt) ||
+				(observed.discoveredAt.Equal(current.discoveredAt) && observed.item.Name > current.item.Name) {
+				latest[observed.item.Origin] = observed
+			}
+		}
+
+		continueToken = page.GetContinue()
+		if continueToken == "" {
+			break
+		}
+	}
+
+	items := make(map[string]api.PromotionFreightItem, len(latest))
+	for origin, observed := range latest {
+		items[origin] = observed.item
+	}
+
+	return items, nil
+}
+
 type kargoStage struct {
 	Spec struct {
 		RequestedFreight []struct {
@@ -207,7 +285,8 @@ type kargoStage struct {
 		} `json:"promotionTemplate"`
 	} `json:"spec"`
 	Status struct {
-		FreightHistory []struct {
+		AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
+		FreightHistory       []struct {
 			Items map[string]kargoFreightReference `json:"items"`
 		} `json:"freightHistory"`
 		LastPromotion *struct {
@@ -217,6 +296,29 @@ type kargoStage struct {
 			} `json:"status"`
 		} `json:"lastPromotion"`
 	} `json:"status"`
+}
+
+type kargoFreight struct {
+	DiscoveredAt *metav1.Time `json:"discoveredAt"`
+	Origin       struct {
+		Kind string `json:"kind"`
+		Name string `json:"name"`
+	} `json:"origin"`
+	Commits []struct {
+		RepositoryURL string `json:"repoURL"`
+		ID            string `json:"id"`
+		Tag           string `json:"tag"`
+	} `json:"commits"`
+	Images []struct {
+		RepositoryURL string `json:"repoURL"`
+		Tag           string `json:"tag"`
+		Digest        string `json:"digest"`
+	} `json:"images"`
+	Charts []struct {
+		RepositoryURL string `json:"repoURL"`
+		Name          string `json:"name"`
+		Version       string `json:"version"`
+	} `json:"charts"`
 }
 
 type kargoFreightReference struct {
@@ -239,6 +341,13 @@ type kargoFreightReference struct {
 }
 
 func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObservation, error) {
+	return normalizeKargoStageWithDirectFreight(item, nil)
+}
+
+func normalizeKargoStageWithDirectFreight(
+	item *unstructured.Unstructured,
+	directFreight map[string]api.PromotionFreightItem,
+) (api.PromotionStageObservation, error) {
 	encoded, err := json.Marshal(item.Object)
 	if err != nil {
 		return api.PromotionStageObservation{}, fmt.Errorf("encode unstructured Stage: %w", err)
@@ -256,17 +365,19 @@ func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObs
 		return api.PromotionStageObservation{}, err
 	}
 	observed := api.PromotionStageObservation{
-		Project:          api.CatalogName(item.GetNamespace()),
-		Name:             item.GetName(),
-		KubernetesUID:    string(item.GetUID()),
-		ResourceVersion:  item.GetResourceVersion(),
-		Application:      application,
-		Environment:      strings.TrimSpace(item.GetLabels()["env"]),
-		RepositoryURL:    repositoryURL,
-		TargetBranch:     targetBranch,
-		SourcePaths:      sourcePaths,
-		RequestedFreight: requestedFreight,
-		Freight:          currentKargoFreight(raw),
+		Project:              api.CatalogName(item.GetNamespace()),
+		Name:                 item.GetName(),
+		KubernetesUID:        string(item.GetUID()),
+		ResourceVersion:      item.GetResourceVersion(),
+		Application:          application,
+		Environment:          strings.TrimSpace(item.GetLabels()["env"]),
+		RepositoryURL:        repositoryURL,
+		TargetBranch:         targetBranch,
+		SourcePaths:          sourcePaths,
+		RequestedFreight:     requestedFreight,
+		Freight:              currentKargoFreight(raw),
+		DirectFreight:        directKargoFreight(raw, directFreight),
+		AutoPromotionEnabled: raw.Status.AutoPromotionEnabled,
 	}
 
 	observed.SuccessfulRenderAcknowledgement = kargoSuccessfulRenderAcknowledgement(raw)
@@ -290,6 +401,61 @@ func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObs
 	}
 
 	return observed, nil
+}
+
+func normalizeKargoFreight(item *unstructured.Unstructured) (observedKargoFreight, error) {
+	encoded, err := json.Marshal(item.Object)
+	if err != nil {
+		return observedKargoFreight{}, fmt.Errorf("encode unstructured Freight: %w", err)
+	}
+	var raw kargoFreight
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		return observedKargoFreight{}, fmt.Errorf("decode Freight: %w", err)
+	}
+
+	kind := strings.TrimSpace(raw.Origin.Kind)
+	name := strings.TrimSpace(raw.Origin.Name)
+	if item.GetName() == "" || kind == "" || name == "" {
+		return observedKargoFreight{}, errors.New("name and origin are required")
+	}
+	discoveredAt := item.GetCreationTimestamp().Time
+	if raw.DiscoveredAt != nil {
+		discoveredAt = raw.DiscoveredAt.Time
+	}
+	if discoveredAt.IsZero() {
+		return observedKargoFreight{}, errors.New("discovery time is required")
+	}
+
+	reference := kargoFreightReference{
+		Name:    item.GetName(),
+		Commits: raw.Commits,
+		Images:  raw.Images,
+		Charts:  raw.Charts,
+	}
+
+	return observedKargoFreight{
+		item:         kargoFreightItem(kind+"/"+name, reference),
+		discoveredAt: discoveredAt,
+	}, nil
+}
+
+func directKargoFreight(
+	stage kargoStage,
+	latest map[string]api.PromotionFreightItem,
+) api.PromotionFreight {
+	result := api.PromotionFreight{Items: []api.PromotionFreightItem{}}
+	for _, request := range stage.Spec.RequestedFreight {
+		if !request.Sources.Direct {
+			continue
+		}
+		origin := strings.TrimSpace(request.Origin.Kind) + "/" + strings.TrimSpace(request.Origin.Name)
+		if item, ok := latest[origin]; ok {
+			result.Items = append(result.Items, item)
+		}
+	}
+	sort.Slice(result.Items, func(i, j int) bool { return result.Items[i].Origin < result.Items[j].Origin })
+
+	return result
 }
 
 func requestedKargoFreight(stage kargoStage) ([]api.PromotionFreightRequest, error) {
@@ -404,52 +570,52 @@ func currentKargoFreight(stage kargoStage) api.PromotionFreight {
 	}
 
 	for origin, reference := range stage.Status.FreightHistory[0].Items {
-		artifacts := make(
-			[]api.PromotionFreightArtifact,
-			0,
-			len(reference.Commits)+len(reference.Images)+len(reference.Charts),
-		)
-		for _, commit := range reference.Commits {
-			artifacts = append(artifacts, api.PromotionFreightArtifact{
-				Kind:       api.PromotionFreightArtifactKindGit,
-				Repository: optionalFreightRepository(commit.RepositoryURL),
-				Version:    firstNonempty(commit.Tag, commit.ID),
-			})
-		}
-		for _, image := range reference.Images {
-			artifacts = append(artifacts, api.PromotionFreightArtifact{
-				Kind:       api.PromotionFreightArtifactKindImage,
-				Repository: optionalFreightRepository(image.RepositoryURL),
-				Version:    firstNonempty(image.Tag, image.Digest),
-			})
-		}
-		for _, chart := range reference.Charts {
-			artifacts = append(artifacts, api.PromotionFreightArtifact{
-				Kind:       api.PromotionFreightArtifactKindChart,
-				Repository: optionalFreightRepository(firstNonempty(chart.Name, chart.RepositoryURL)),
-				Version:    chart.Version,
-			})
-		}
-		sort.Slice(artifacts, func(i, j int) bool {
-			if artifacts[i].Kind != artifacts[j].Kind {
-				return artifacts[i].Kind < artifacts[j].Kind
-			}
-			leftRepository := freightRepository(artifacts[i].Repository)
-			rightRepository := freightRepository(artifacts[j].Repository)
-			if leftRepository != rightRepository {
-				return leftRepository < rightRepository
-			}
-			return artifacts[i].Version < artifacts[j].Version
-		})
-		summary.Items = append(summary.Items, api.PromotionFreightItem{
-			Origin:    origin,
-			Name:      reference.Name,
-			Artifacts: artifacts,
-		})
+		summary.Items = append(summary.Items, kargoFreightItem(origin, reference))
 	}
 	sort.Slice(summary.Items, func(i, j int) bool { return summary.Items[i].Origin < summary.Items[j].Origin })
 
 	return summary
+}
+
+func kargoFreightItem(origin string, reference kargoFreightReference) api.PromotionFreightItem {
+	artifacts := make(
+		[]api.PromotionFreightArtifact,
+		0,
+		len(reference.Commits)+len(reference.Images)+len(reference.Charts),
+	)
+	for _, commit := range reference.Commits {
+		artifacts = append(artifacts, api.PromotionFreightArtifact{
+			Kind:       api.PromotionFreightArtifactKindGit,
+			Repository: optionalFreightRepository(commit.RepositoryURL),
+			Version:    firstNonempty(commit.Tag, commit.ID),
+		})
+	}
+	for _, image := range reference.Images {
+		artifacts = append(artifacts, api.PromotionFreightArtifact{
+			Kind:       api.PromotionFreightArtifactKindImage,
+			Repository: optionalFreightRepository(image.RepositoryURL),
+			Version:    firstNonempty(image.Tag, image.Digest),
+		})
+	}
+	for _, chart := range reference.Charts {
+		artifacts = append(artifacts, api.PromotionFreightArtifact{
+			Kind:       api.PromotionFreightArtifactKindChart,
+			Repository: optionalFreightRepository(firstNonempty(chart.Name, chart.RepositoryURL)),
+			Version:    chart.Version,
+		})
+	}
+	sort.Slice(artifacts, func(i, j int) bool {
+		if artifacts[i].Kind != artifacts[j].Kind {
+			return artifacts[i].Kind < artifacts[j].Kind
+		}
+		leftRepository := freightRepository(artifacts[i].Repository)
+		rightRepository := freightRepository(artifacts[j].Repository)
+		if leftRepository != rightRepository {
+			return leftRepository < rightRepository
+		}
+		return artifacts[i].Version < artifacts[j].Version
+	})
+	return api.PromotionFreightItem{Origin: origin, Name: reference.Name, Artifacts: artifacts}
 }
 
 func optionalFreightRepository(value string) *string {

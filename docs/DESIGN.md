@@ -1102,6 +1102,16 @@ environments; otherwise it reports absence. Status filters select pipelines with
 at least one matching Freight artifact before pagination. Comparisons do not
 infer version or Git ancestry ordering.
 
+The Controller also observes Kargo's effective auto-promotion state and the
+newest Freight from directly requested Warehouses. Pipeline Stages combine that
+direct evidence with current Freight from declared upstream Stages. A manual
+Stage shows available Freight when an exact observed Freight name differs from
+the Freight currently deployed for the same origin. Promotion attempts do not
+clear this signal; only a later Stage observation showing that Freight as current
+does. Operators may select an available directly requested Warehouse Freight;
+the creation request omits a source Stage and persists the exact observed
+Freight snapshot before the Controller materializes the Kargo Promotion.
+
 Branch drift groups active Stages by Repository. A background worker refreshes
 expired or invalidated groups with bounded, concurrent read-only Git scans while
 API reads serve cached evidence without waiting for Git. Each Repository has one

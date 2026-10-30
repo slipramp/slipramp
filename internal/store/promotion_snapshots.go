@@ -79,6 +79,10 @@ func encodePromotionStageJSON(record promotion.Stage, params *storedb.UpsertProm
 	if err != nil {
 		return fmt.Errorf("encode Stage Freight: %w", err)
 	}
+	params.DirectFreightJson, err = json.Marshal(promotionFreightValue(record.DirectFreight))
+	if err != nil {
+		return fmt.Errorf("encode direct Stage Freight: %w", err)
+	}
 	if record.SuccessfulRenderAcknowledgement != nil {
 		params.SuccessfulRenderAcknowledgement, err = json.Marshal(record.SuccessfulRenderAcknowledgement)
 		if err != nil {
@@ -97,6 +101,10 @@ func decodePromotionStageJSON(row storedb.PromotionStage, record *promotion.Stag
 		return fmt.Errorf("decode Stage Freight: %w", err)
 	}
 	record.Freight = promotionFreightValue(record.Freight)
+	if err := json.Unmarshal(row.DirectFreightJson, &record.DirectFreight); err != nil {
+		return fmt.Errorf("decode direct Stage Freight: %w", err)
+	}
+	record.DirectFreight = promotionFreightValue(record.DirectFreight)
 	if len(row.SuccessfulRenderAcknowledgement) > 0 {
 		if err := json.Unmarshal(row.SuccessfulRenderAcknowledgement, &record.SuccessfulRenderAcknowledgement); err != nil {
 			return fmt.Errorf("decode Stage render acknowledgement: %w", err)

@@ -1103,7 +1103,7 @@ func (q *Queries) GetPromotionDecision(ctx context.Context, promotionID pgtype.U
 }
 
 const getPromotionStage = `-- name: GetPromotionStage :one
-SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json
+SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, direct_freight_json
 FROM promotion_stages
 WHERE id = $1
 `
@@ -1131,12 +1131,14 @@ func (q *Queries) GetPromotionStage(ctx context.Context, id pgtype.UUID) (Promot
 		&i.LastObservedAt,
 		&i.ArchivedAt,
 		&i.RequestedFreightJson,
+		&i.AutoPromotionEnabled,
+		&i.DirectFreightJson,
 	)
 	return i, err
 }
 
 const getPromotionStageByIdentity = `-- name: GetPromotionStageByIdentity :one
-SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json
+SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, direct_freight_json
 FROM promotion_stages
 WHERE integration = $1
   AND project = $2
@@ -1172,6 +1174,8 @@ func (q *Queries) GetPromotionStageByIdentity(ctx context.Context, arg GetPromot
 		&i.LastObservedAt,
 		&i.ArchivedAt,
 		&i.RequestedFreightJson,
+		&i.AutoPromotionEnabled,
+		&i.DirectFreightJson,
 	)
 	return i, err
 }
@@ -1558,7 +1562,7 @@ WITH paged_stages AS (
     GROUP BY promotions.stage_id
 )
 SELECT
-    promotion_stages.id, promotion_stages.integration, promotion_stages.cluster_name, promotion_stages.project, promotion_stages.name, promotion_stages.kubernetes_uid, promotion_stages.resource_version, promotion_stages.application, promotion_stages.environment, promotion_stages.repository_name, promotion_stages.repository_url, promotion_stages.target_branch, promotion_stages.source_paths, promotion_stages.freight_json, promotion_stages.successful_render_acknowledgement, promotion_stages.first_observed_at, promotion_stages.last_observed_at, promotion_stages.archived_at, promotion_stages.requested_freight_json,
+    promotion_stages.id, promotion_stages.integration, promotion_stages.cluster_name, promotion_stages.project, promotion_stages.name, promotion_stages.kubernetes_uid, promotion_stages.resource_version, promotion_stages.application, promotion_stages.environment, promotion_stages.repository_name, promotion_stages.repository_url, promotion_stages.target_branch, promotion_stages.source_paths, promotion_stages.freight_json, promotion_stages.successful_render_acknowledgement, promotion_stages.first_observed_at, promotion_stages.last_observed_at, promotion_stages.archived_at, promotion_stages.requested_freight_json, promotion_stages.auto_promotion_enabled, promotion_stages.direct_freight_json,
     promotion_stage_policies.stage_id AS policy_stage_id,
     promotion_stage_policies.mode AS policy_mode,
     promotion_stage_policies.expires_at AS policy_expires_at,
@@ -1636,6 +1640,8 @@ func (q *Queries) ListPromotionStageReviews(ctx context.Context, arg ListPromoti
 			&i.PromotionStage.LastObservedAt,
 			&i.PromotionStage.ArchivedAt,
 			&i.PromotionStage.RequestedFreightJson,
+			&i.PromotionStage.AutoPromotionEnabled,
+			&i.PromotionStage.DirectFreightJson,
 			&i.PolicyStageID,
 			&i.PolicyMode,
 			&i.PolicyExpiresAt,
@@ -1656,7 +1662,7 @@ func (q *Queries) ListPromotionStageReviews(ctx context.Context, arg ListPromoti
 }
 
 const listPromotionStages = `-- name: ListPromotionStages :many
-SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json
+SELECT id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, direct_freight_json
 FROM promotion_stages
 ORDER BY integration, project, name
 `
@@ -1690,6 +1696,8 @@ func (q *Queries) ListPromotionStages(ctx context.Context) ([]PromotionStage, er
 			&i.LastObservedAt,
 			&i.ArchivedAt,
 			&i.RequestedFreightJson,
+			&i.AutoPromotionEnabled,
+			&i.DirectFreightJson,
 		); err != nil {
 			return nil, err
 		}
@@ -2519,6 +2527,8 @@ INSERT INTO promotion_stages (
     source_paths,
     requested_freight_json,
     freight_json,
+    direct_freight_json,
+    auto_promotion_enabled,
     successful_render_acknowledgement,
     first_observed_at,
     last_observed_at,
@@ -2542,7 +2552,9 @@ INSERT INTO promotion_stages (
     $16,
     $17,
     $18,
-    $19
+    $19,
+    $20,
+    $21
 )
 ON CONFLICT (integration, project, name) DO UPDATE
 SET cluster_name = EXCLUDED.cluster_name,
@@ -2556,6 +2568,8 @@ SET cluster_name = EXCLUDED.cluster_name,
     source_paths = EXCLUDED.source_paths,
     requested_freight_json = EXCLUDED.requested_freight_json,
     freight_json = EXCLUDED.freight_json,
+    direct_freight_json = EXCLUDED.direct_freight_json,
+    auto_promotion_enabled = EXCLUDED.auto_promotion_enabled,
     successful_render_acknowledgement = COALESCE(
         EXCLUDED.successful_render_acknowledgement,
         promotion_stages.successful_render_acknowledgement
@@ -2564,7 +2578,7 @@ SET cluster_name = EXCLUDED.cluster_name,
     archived_at = EXCLUDED.archived_at
 WHERE promotion_stages.cluster_name = EXCLUDED.cluster_name
   AND promotion_stages.last_observed_at <= EXCLUDED.last_observed_at
-RETURNING id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json
+RETURNING id, integration, cluster_name, project, name, kubernetes_uid, resource_version, application, environment, repository_name, repository_url, target_branch, source_paths, freight_json, successful_render_acknowledgement, first_observed_at, last_observed_at, archived_at, requested_freight_json, auto_promotion_enabled, direct_freight_json
 `
 
 type UpsertPromotionStageParams struct {
@@ -2583,6 +2597,8 @@ type UpsertPromotionStageParams struct {
 	SourcePaths                     []string
 	RequestedFreightJson            []byte
 	FreightJson                     []byte
+	DirectFreightJson               []byte
+	AutoPromotionEnabled            bool
 	SuccessfulRenderAcknowledgement []byte
 	FirstObservedAt                 pgtype.Timestamptz
 	LastObservedAt                  pgtype.Timestamptz
@@ -2606,6 +2622,8 @@ func (q *Queries) UpsertPromotionStage(ctx context.Context, arg UpsertPromotionS
 		arg.SourcePaths,
 		arg.RequestedFreightJson,
 		arg.FreightJson,
+		arg.DirectFreightJson,
+		arg.AutoPromotionEnabled,
 		arg.SuccessfulRenderAcknowledgement,
 		arg.FirstObservedAt,
 		arg.LastObservedAt,
@@ -2632,6 +2650,8 @@ func (q *Queries) UpsertPromotionStage(ctx context.Context, arg UpsertPromotionS
 		&i.LastObservedAt,
 		&i.ArchivedAt,
 		&i.RequestedFreightJson,
+		&i.AutoPromotionEnabled,
+		&i.DirectFreightJson,
 	)
 	return i, err
 }

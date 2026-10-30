@@ -144,6 +144,17 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 			Kind: "image", Repository: new("ghcr.io/example/external-dns"), Version: "1.2.3",
 		}},
 	}}}
+	fixture.stage.RequestedFreight = []promotion.FreightRequest{{
+		Origin: "Warehouse/external-dns",
+		Direct: true,
+	}}
+	fixture.stage.DirectFreight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin: "Warehouse/external-dns",
+		Name:   "freight-43",
+		Artifacts: []promotion.FreightArtifact{{
+			Kind: "image", Repository: new("ghcr.io/example/external-dns"), Version: "1.2.4",
+		}},
+	}}}
 	fixture.stage.SuccessfulRenderAcknowledgement = &promotion.SuccessfulRenderAcknowledgement{
 		SourceRevision: strings.Repeat("a", 40),
 	}
@@ -190,6 +201,20 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 		loaded.StageSnapshot.SuccessfulRenderAcknowledgement == nil ||
 		loaded.StageSnapshot.SuccessfulRenderAcknowledgement.SourceRevision != strings.Repeat("a", 40) {
 		t.Errorf("GetPromotion() = %#v, %v", loaded, err)
+	}
+
+	directAcceptance := acceptance
+	directAcceptance.ID = uuid.New()
+	directAcceptance.SourceStageID = uuid.Nil
+	directAcceptance.FreightName = "freight-43"
+	directAcceptance.AcceptedAt = acceptedAt.Add(time.Second)
+	direct, err := fixture.database.CreateOperatorPromotion(fixture.ctx, directAcceptance)
+	if err != nil {
+		t.Fatalf("CreateOperatorPromotion(direct) error = %v", err)
+	}
+	if direct.SourceStageID != nil || direct.SelectedFreightSnapshot == nil ||
+		direct.SelectedFreightSnapshot.Name != "freight-43" {
+		t.Errorf("direct operator Promotion = %#v", direct)
 	}
 
 	staleAcceptance := acceptance
@@ -1125,6 +1150,11 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	secondSnapshot := promotionTestSnapshot(uuid.New(), "prod", "colo", secondObservedAt)
 	externalDNS := promotionTestStage("prod", "colo", "kargo-core", "external-dns-prod", secondObservedAt)
 	externalDNS.ResourceVersion = "2"
+	externalDNS.AutoPromotionEnabled = true
+	externalDNS.DirectFreight = promotion.Freight{Items: []promotion.FreightItem{{
+		Origin: "Warehouse/external-dns",
+		Name:   "freight-new",
+	}}}
 	if err := database.ReplacePromotionStageSnapshot(
 		ctx,
 		secondSnapshot,
@@ -1137,7 +1167,9 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get active Stage: %v", err)
 	}
-	if active.ID != firstStages[0].ID || active.ResourceVersion != "2" || active.ArchivedAt != nil {
+	if active.ID != firstStages[0].ID || active.ResourceVersion != "2" || active.ArchivedAt != nil ||
+		!active.AutoPromotionEnabled || len(active.DirectFreight.Items) != 1 ||
+		active.DirectFreight.Items[0].Name != "freight-new" {
 		t.Errorf("active Stage = %#v", active)
 	}
 	archived, err := database.GetPromotionStageByIdentity(ctx, "prod", "kargo-core", "metrics-server-prod")

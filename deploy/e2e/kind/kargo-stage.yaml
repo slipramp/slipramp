@@ -1,4 +1,16 @@
 apiVersion: kargo.akuity.io/v1alpha1
+kind: Freight
+metadata:
+  name: acceptance-freight
+  namespace: kargo-acceptance
+origin:
+  kind: Warehouse
+  name: acceptance
+commits:
+  - repoURL: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+    id: acceptance-source
+---
+apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
 metadata:
   name: acceptance

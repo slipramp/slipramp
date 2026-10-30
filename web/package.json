@@ -12,7 +12,7 @@
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",
     "start": "node ./server.mjs",
-    "test": "node --test --experimental-strip-types app/*.test.mjs",
+    "test": "node --test --experimental-strip-types app/features/*/*.test.mjs app/shared/*.test.mjs",
     "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {

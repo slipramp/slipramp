@@ -29,6 +29,7 @@ type FreightPipelineListFilter struct {
 type FreightPipelineStage struct {
 	Stage                 Stage
 	PromotionSources      []FreightPromotionSource
+	AvailableFreight      []FreightItem
 	PendingPromotionCount int
 }
 
@@ -157,6 +158,7 @@ func (s *FreightPipelineService) List(
 		for index := range builder.pipeline.Stages {
 			stage := &builder.pipeline.Stages[index]
 			stage.PromotionSources = promotionSources(stage.Stage, activeStages)
+			stage.AvailableFreight = availableFreight(stage.Stage, stage.PromotionSources)
 			stage.PendingPromotionCount = pendingCounts[stage.Stage.ID]
 		}
 		unknownEnvironments := make([]string, 0, len(builder.unknownEnvs))
@@ -255,6 +257,45 @@ func promotionSources(target Stage, stages map[stageIdentity]Stage) []FreightPro
 	}
 
 	return sources
+}
+
+func availableFreight(target Stage, sources []FreightPromotionSource) []FreightItem {
+	current := make(map[string]string, len(target.Freight.Items))
+	for _, item := range target.Freight.Items {
+		current[item.Origin] = item.Name
+	}
+
+	available := make([]FreightItem, 0)
+	seen := make(map[string]struct{})
+	add := func(item FreightItem) {
+		if current[item.Origin] == item.Name {
+			return
+		}
+		key := item.Origin + "\x00" + item.Name
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		available = append(available, cloneFreightItem(item))
+	}
+
+	for _, item := range target.DirectFreight.Items {
+		add(item)
+	}
+	for _, source := range sources {
+		for _, item := range source.Freight {
+			add(item)
+		}
+	}
+
+	slices.SortFunc(available, func(left, right FreightItem) int {
+		if value := compareText(left.Origin, right.Origin); value != 0 {
+			return value
+		}
+		return compareText(left.Name, right.Name)
+	})
+
+	return available
 }
 
 func (s FreightComparisonStatus) Valid() bool {

@@ -153,7 +153,9 @@ func TestReplaceKargoStageSnapshotUsesAuthenticatedCluster(t *testing.T) {
             "targetBranch":"stage/external-dns/prod",
             "sourcePaths":["k8s/external-dns/base"],
             "requestedFreight":[],
-            "freight":{"items":[]}
+            "freight":{"items":[]},
+            "directFreight":{"items":[]},
+            "autoPromotionEnabled":false
           }]
         }`),
 	)
@@ -182,7 +184,6 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	now := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1930")
 	targetStageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1931")
-	sourceStageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1932")
 	authentication := productAuthentication(
 		productidentity.RoleOperator,
 		productidentity.AuthenticationMethodWebSession,
@@ -200,7 +201,6 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 			Integration:             "prod",
 			ExternalPromotionID:     "external-dns-prod-slipramp-" + promotionID.String(),
 			StageID:                 targetStageID,
-			SourceStageID:           &sourceStageID,
 			StageSnapshot:           promotion.PromotionStageSnapshot{Project: "kargo-core", Name: "external-dns-prod"},
 			RepositoryID:            uuid.New(),
 			RepositorySnapshot:      promotion.PromotionRepositorySnapshot{Name: "ops"},
@@ -227,7 +227,7 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	request := authenticatedProductRequest(
 		http.MethodPost,
 		"/api/v1/promotion-stages/"+targetStageID.String()+"/promotions",
-		`{"sourceStageId":"`+sourceStageID.String()+`","freightName":"freight-42"}`,
+		`{"freightName":"freight-42"}`,
 	)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -240,7 +240,7 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	if response.Header().Get("Location") != "/api/v1/promotions/"+promotionID.String() {
 		t.Errorf("Location = %q", response.Header().Get("Location"))
 	}
-	if promotions.request.TargetStageID != targetStageID || promotions.request.SourceStageID != sourceStageID ||
+	if promotions.request.TargetStageID != targetStageID || promotions.request.SourceStageID != uuid.Nil ||
 		promotions.request.FreightName != "freight-42" ||
 		promotions.request.Principal.ID != authentication.Principal.ID {
 		t.Errorf("creation request = %#v", promotions.request)

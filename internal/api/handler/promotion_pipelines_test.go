@@ -64,6 +64,10 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 							}},
 						}},
 					}},
+					AvailableFreight: []promotion.FreightItem{{
+						Origin: "Warehouse/external-dns",
+						Name:   "freight-2",
+					}},
 					PendingPromotionCount: 1,
 				}},
 			}},
@@ -116,6 +120,8 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 		`"version":"1.2.3"`,
 		`"stageName":"external-dns-homelab"`,
 		`"promotionSources":[`,
+		`"availableFreight":{"items":[`,
+		`"autoPromotionEnabled":false`,
 		`"pendingPromotionCount":1`,
 		`"kargoUrl":"https://kargo.example.com/project/kargo-core/stage/external-dns-prod"`,
 	} {

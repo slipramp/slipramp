@@ -238,7 +238,7 @@ func (s *suite) deployFixtures(t *testing.T) {
 	s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-api.yaml"))
 	s.kubectl(t,
 		"wait", "--for=condition=Established",
-		"crd/stages.kargo.akuity.io", "crd/promotions.kargo.akuity.io",
+		"crd/stages.kargo.akuity.io", "crd/freights.kargo.akuity.io", "crd/promotions.kargo.akuity.io",
 		"--timeout="+s.timeout.String(),
 	)
 	s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-stage.yaml"))

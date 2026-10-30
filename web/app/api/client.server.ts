@@ -1,6 +1,6 @@
 import type { RouterContextProvider } from "react-router";
 
-import { getServerPerformanceTrace } from "~/performance.server";
+import { getServerPerformanceTrace } from "~/features/performance/performance.server";
 
 import { instrumentAPIClient } from "./client-performance.server.ts";
 import { createClient } from "./generated/client";

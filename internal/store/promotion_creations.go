@@ -38,14 +38,20 @@ func (d *Database) CreateOperatorPromotion(
 	if target.Integration != acceptance.Integration {
 		return promotion.Promotion{}, promotion.ErrIntegrationNotFound
 	}
-	source := target
-	if acceptance.SourceStageID != acceptance.TargetStageID {
-		source, err = getOperatorPromotionStage(ctx, queries, acceptance.SourceStageID)
-		if err != nil {
-			return promotion.Promotion{}, err
+	stages := []promotion.Stage{target}
+	var source *promotion.Stage
+	if acceptance.SourceStageID != uuid.Nil {
+		value := target
+		if acceptance.SourceStageID != acceptance.TargetStageID {
+			value, err = getOperatorPromotionStage(ctx, queries, acceptance.SourceStageID)
+			if err != nil {
+				return promotion.Promotion{}, err
+			}
+			stages = append(stages, value)
 		}
+		source = &value
 	}
-	for _, stage := range []promotion.Stage{target, source} {
+	for _, stage := range stages {
 		if stage.ArchivedAt != nil {
 			return promotion.Promotion{}, promotion.ErrStageArchived
 		}
@@ -54,7 +60,12 @@ func (d *Database) CreateOperatorPromotion(
 		}
 	}
 
-	selectedFreight, err := promotion.SelectPromotionFreight(target, source, acceptance.FreightName)
+	var selectedFreight *promotion.FreightItem
+	if source == nil {
+		selectedFreight, err = promotion.SelectDirectPromotionFreight(target, acceptance.FreightName)
+	} else {
+		selectedFreight, err = promotion.SelectPromotionFreight(target, *source, acceptance.FreightName)
+	}
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
@@ -92,14 +103,17 @@ func (d *Database) CreateOperatorPromotion(
 	if reviewRequired {
 		expiresAt = new(acceptance.AcceptedAt.Add(acceptance.PendingReviewRetention))
 	}
-	sourceStageID := acceptance.SourceStageID
+	var sourceStageID *uuid.UUID
+	if acceptance.SourceStageID != uuid.Nil {
+		sourceStageID = new(acceptance.SourceStageID)
+	}
 	record := promotion.Promotion{
 		ID:                      acceptance.ID,
 		Source:                  promotion.SourceSlipramp,
 		Integration:             target.Integration,
 		ExternalPromotionID:     promotion.CreationExternalName(target.Name, acceptance.ID),
 		StageID:                 target.ID,
-		SourceStageID:           &sourceStageID,
+		SourceStageID:           sourceStageID,
 		StageSnapshot:           stageSnapshot,
 		RepositoryID:            uuid.UUID(repositoryRow.ID.Bytes),
 		RepositorySnapshot:      repositorySnapshot,

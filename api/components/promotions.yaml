@@ -180,6 +180,8 @@ PromotionStageObservation:
     - sourcePaths
     - requestedFreight
     - freight
+    - directFreight
+    - autoPromotionEnabled
   properties:
     project:
       $ref: ./runs.yaml#/CatalogName
@@ -226,6 +228,12 @@ PromotionStageObservation:
         $ref: "#/PromotionFreightRequest"
     freight:
       $ref: "#/PromotionFreight"
+    directFreight:
+      $ref: "#/PromotionFreight"
+      description: Latest directly sourced Freight observed for each requested origin.
+    autoPromotionEnabled:
+      type: boolean
+      description: Effective Kargo auto-promotion state for this Stage.
     successfulRenderAcknowledgement:
       $ref: "#/SuccessfulRenderAcknowledgement"
 
@@ -321,6 +329,7 @@ PromotionStage:
     - sourcePaths
     - requestedFreight
     - freight
+    - autoPromotionEnabled
     - policy
     - pendingPromotionCount
     - firstObservedAt
@@ -377,6 +386,9 @@ PromotionStage:
         $ref: "#/PromotionFreightRequest"
     freight:
       $ref: "#/PromotionFreight"
+    autoPromotionEnabled:
+      type: boolean
+      description: Effective Kargo auto-promotion state for this Stage.
     successfulRenderAcknowledgement:
       $ref: "#/SuccessfulRenderAcknowledgement"
     policy:
@@ -430,6 +442,8 @@ PromotionPipelineStage:
     - environment
     - freight
     - promotionSources
+    - availableFreight
+    - autoPromotionEnabled
     - pendingPromotionCount
     - lastObservedAt
   properties:
@@ -450,6 +464,12 @@ PromotionPipelineStage:
       type: array
       items:
         $ref: "#/PromotionFreightSource"
+    availableFreight:
+      $ref: "#/PromotionFreight"
+      description: Exact observed Freight not currently deployed to this Stage.
+    autoPromotionEnabled:
+      type: boolean
+      description: Effective Kargo auto-promotion state for this Stage.
     pendingPromotionCount:
       type: integer
       minimum: 0
@@ -1009,12 +1029,12 @@ PromotionCreate:
   type: object
   additionalProperties: false
   required:
-    - sourceStageId
     - freightName
   properties:
     sourceStageId:
       type: string
       format: uuid
+      description: Source Stage supplying the Freight. Omit for directly requested Warehouse Freight.
     freightName:
       type: string
       minLength: 1

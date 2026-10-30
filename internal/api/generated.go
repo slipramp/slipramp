@@ -2345,8 +2345,10 @@ type PromotionBranchDriftStatus string
 
 // PromotionCreate defines model for PromotionCreate.
 type PromotionCreate struct {
-	FreightName   string             `json:"freightName"`
-	SourceStageID openapi_types.UUID `json:"sourceStageId"`
+	FreightName string `json:"freightName"`
+
+	// SourceStageID Source Stage supplying the Freight. Omit for directly requested Warehouse Freight.
+	SourceStageID *openapi_types.UUID `json:"sourceStageId,omitempty"`
 }
 
 // PromotionDecision defines model for PromotionDecision.
@@ -2438,9 +2440,14 @@ type PromotionPipelineList struct {
 
 // PromotionPipelineStage defines model for PromotionPipelineStage.
 type PromotionPipelineStage struct {
-	Environment string             `json:"environment"`
-	Freight     PromotionFreight   `json:"freight"`
-	ID          openapi_types.UUID `json:"id"`
+	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
+	AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
+
+	// AvailableFreight Exact observed Freight not currently deployed to this Stage.
+	AvailableFreight PromotionFreight   `json:"availableFreight"`
+	Environment      string             `json:"environment"`
+	Freight          PromotionFreight   `json:"freight"`
+	ID               openapi_types.UUID `json:"id"`
 
 	// KargoURL Direct link to this Stage in the configured Kargo UI.
 	KargoURL              *string                  `json:"kargoUrl,omitempty"`
@@ -2492,14 +2499,17 @@ type PromotionSource string
 
 // PromotionStage defines model for PromotionStage.
 type PromotionStage struct {
-	Application     string             `json:"application"`
-	ArchivedAt      *time.Time         `json:"archivedAt,omitempty"`
-	Cluster         CatalogName        `json:"cluster"`
-	Environment     string             `json:"environment"`
-	FirstObservedAt time.Time          `json:"firstObservedAt"`
-	Freight         PromotionFreight   `json:"freight"`
-	ID              openapi_types.UUID `json:"id"`
-	Integration     CatalogName        `json:"integration"`
+	Application string     `json:"application"`
+	ArchivedAt  *time.Time `json:"archivedAt,omitempty"`
+
+	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
+	AutoPromotionEnabled bool               `json:"autoPromotionEnabled"`
+	Cluster              CatalogName        `json:"cluster"`
+	Environment          string             `json:"environment"`
+	FirstObservedAt      time.Time          `json:"firstObservedAt"`
+	Freight              PromotionFreight   `json:"freight"`
+	ID                   openapi_types.UUID `json:"id"`
+	Integration          CatalogName        `json:"integration"`
 
 	// KargoURL Direct link to this Stage in the configured Kargo UI.
 	KargoURL                        *string                          `json:"kargoUrl,omitempty"`
@@ -2528,7 +2538,13 @@ type PromotionStageList struct {
 
 // PromotionStageObservation defines model for PromotionStageObservation.
 type PromotionStageObservation struct {
-	Application                     string                           `json:"application"`
+	Application string `json:"application"`
+
+	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
+	AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
+
+	// DirectFreight Latest directly sourced Freight observed for each requested origin.
+	DirectFreight                   PromotionFreight                 `json:"directFreight"`
 	Environment                     string                           `json:"environment"`
 	Freight                         PromotionFreight                 `json:"freight"`
 	KubernetesUID                   string                           `json:"kubernetesUid"`

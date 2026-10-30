@@ -26,7 +26,7 @@ func (s *suite) testKargoPromotions(t *testing.T) {
 
 	t.Log("testing operator-started Promotion dispatch and callback hydration")
 	creationResponse, err := s.productClient.CreatePromotionWithResponse(t.Context(), kargoStage.ID, api.PromotionCreate{
-		SourceStageID: kargoStage.ID,
+		SourceStageID: new(kargoStage.ID),
 		FreightName:   "acceptance-freight",
 	})
 	if err != nil {

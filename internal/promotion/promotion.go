@@ -99,6 +99,8 @@ type Stage struct {
 	SourcePaths                     []string
 	RequestedFreight                []FreightRequest
 	Freight                         Freight
+	DirectFreight                   Freight
+	AutoPromotionEnabled            bool
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 	FirstObservedAt                 time.Time
 	LastObservedAt                  time.Time
@@ -400,8 +402,8 @@ func (p Promotion) Validate() error {
 			return fmt.Errorf("%w: Kargo-originated Promotion cannot have creation dispatch state", ErrInvalid)
 		}
 	} else {
-		if p.SourceStageID == nil || p.SelectedFreightSnapshot == nil {
-			return fmt.Errorf("%w: Slipramp-originated Promotion requires source Stage and Freight snapshots", ErrInvalid)
+		if p.SelectedFreightSnapshot == nil {
+			return fmt.Errorf("%w: Slipramp-originated Promotion requires a Freight snapshot", ErrInvalid)
 		}
 		if p.Status == StatusCreating && hydrated {
 			return fmt.Errorf("%w: creating Promotion cannot have callback data", ErrInvalid)
