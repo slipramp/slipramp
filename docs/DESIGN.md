@@ -694,10 +694,14 @@ validated and projected during upload. Report media types must be declared
 `sensitive` because their source documents may contain secret values. The
 source remains the ordinary immutable Artifact; the adapter produces a bounded,
 versioned projection that excludes tool values and other unneeded source data.
-The current adapter accepts Terraform plan JSON from `terraform show -json`,
-requires format major version 1 while ignoring unknown fields from compatible
-minor versions, and projects plan flags, aggregate resource/output/check counts,
-resource changes, drift, replacement order, and retained replaced-object identity.
+The Terraform adapter accepts plan JSON from `terraform show -json`, requires
+format major version 1 while ignoring unknown fields from compatible minor
+versions, and projects plan flags, aggregate resource/output/check counts,
+resource changes, drift, replacement order, and retained replaced-object
+identity. The pyinfra adapter accepts its JSON deploy output, distinguishes
+preview plans from completed applies, and projects operation names, planned and
+conditional hosts, host outcomes, failed hosts, and aggregate counts without
+retaining operation arguments or internal hashes.
 
 PostgreSQL stores the report kind, projection and adapter versions, tool
 metadata, mode, bounded summary, projection object metadata, and creation time
@@ -710,8 +714,8 @@ uses the sensitive-artifact permission. Expiry removes both stored objects but
 retains report metadata and summary with the Artifact history.
 
 Report facts are descriptive output, not Run lifecycle authority or an approval
-gate. The Web renders the Terraform summary and normalized detail on Run pages
-while keeping the source JSON available as an explicit download.
+gate. The Web renders Terraform and pyinfra summaries and normalized detail on
+Run pages while keeping source JSON available as an explicit download.
 
 Inputs explicitly select a particular retained Artifact. `fromAction` must
 name an Action that declares the input's name as an output. The supported

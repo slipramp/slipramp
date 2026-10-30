@@ -607,6 +607,72 @@ func (e PromotionStatus) Valid() bool {
 	}
 }
 
+// Defines values for PyinfraDeployReportKind.
+const (
+	PyinfraDeployReportKindPyinfraDeploy PyinfraDeployReportKind = "pyinfra-deploy"
+)
+
+// Valid indicates whether the value is a known member of the PyinfraDeployReportKind enum.
+func (e PyinfraDeployReportKind) Valid() bool {
+	switch e {
+	case PyinfraDeployReportKindPyinfraDeploy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PyinfraDeployReportMode.
+const (
+	PyinfraDeployReportModeApply   PyinfraDeployReportMode = "apply"
+	PyinfraDeployReportModePreview PyinfraDeployReportMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the PyinfraDeployReportMode enum.
+func (e PyinfraDeployReportMode) Valid() bool {
+	switch e {
+	case PyinfraDeployReportModeApply:
+		return true
+	case PyinfraDeployReportModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PyinfraDeployReportSummaryKind.
+const (
+	PyinfraDeployReportSummaryKindPyinfraDeploy PyinfraDeployReportSummaryKind = "pyinfra-deploy"
+)
+
+// Valid indicates whether the value is a known member of the PyinfraDeployReportSummaryKind enum.
+func (e PyinfraDeployReportSummaryKind) Valid() bool {
+	switch e {
+	case PyinfraDeployReportSummaryKindPyinfraDeploy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PyinfraDeployReportSummaryMode.
+const (
+	PyinfraDeployReportSummaryModeApply   PyinfraDeployReportSummaryMode = "apply"
+	PyinfraDeployReportSummaryModePreview PyinfraDeployReportSummaryMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the PyinfraDeployReportSummaryMode enum.
+func (e PyinfraDeployReportSummaryMode) Valid() bool {
+	switch e {
+	case PyinfraDeployReportSummaryModeApply:
+		return true
+	case PyinfraDeployReportSummaryModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ReadinessResponseStatus.
 const (
 	NotReady ReadinessResponseStatus = "not-ready"
@@ -930,12 +996,15 @@ func (e RunPhase) Valid() bool {
 
 // Defines values for RunReportEnvelopeKind.
 const (
+	RunReportEnvelopeKindPyinfraDeploy RunReportEnvelopeKind = "pyinfra-deploy"
 	RunReportEnvelopeKindTerraformPlan RunReportEnvelopeKind = "terraform-plan"
 )
 
 // Valid indicates whether the value is a known member of the RunReportEnvelopeKind enum.
 func (e RunReportEnvelopeKind) Valid() bool {
 	switch e {
+	case RunReportEnvelopeKindPyinfraDeploy:
+		return true
 	case RunReportEnvelopeKindTerraformPlan:
 		return true
 	default:
@@ -945,12 +1014,15 @@ func (e RunReportEnvelopeKind) Valid() bool {
 
 // Defines values for RunReportEnvelopeMode.
 const (
+	RunReportEnvelopeModeApply   RunReportEnvelopeMode = "apply"
 	RunReportEnvelopeModePreview RunReportEnvelopeMode = "preview"
 )
 
 // Valid indicates whether the value is a known member of the RunReportEnvelopeMode enum.
 func (e RunReportEnvelopeMode) Valid() bool {
 	switch e {
+	case RunReportEnvelopeModeApply:
+		return true
 	case RunReportEnvelopeModePreview:
 		return true
 	default:
@@ -2622,6 +2694,91 @@ type PromotionStageSnapshot struct {
 // PromotionStatus defines model for PromotionStatus.
 type PromotionStatus string
 
+// PyinfraDeployReport defines model for PyinfraDeployReport.
+type PyinfraDeployReport struct {
+	AdapterVersion int                     `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID      `json:"artifactId"`
+	CreatedAt      time.Time               `json:"createdAt"`
+	FailedHosts    PyinfraHostList         `json:"failedHosts"`
+	Kind           PyinfraDeployReportKind `json:"kind"`
+	Mode           PyinfraDeployReportMode `json:"mode"`
+	Operations     []PyinfraOperation      `json:"operations"`
+	RunID          openapi_types.UUID      `json:"runId"`
+	SchemaVersion  int                     `json:"schemaVersion"`
+	Summary        PyinfraDeploySummary    `json:"summary"`
+	Tool           string                  `json:"tool"`
+	ToolVersion    *string                 `json:"toolVersion,omitempty"`
+}
+
+// PyinfraDeployReportKind defines model for PyinfraDeployReport.Kind.
+type PyinfraDeployReportKind string
+
+// PyinfraDeployReportMode defines model for PyinfraDeployReport.Mode.
+type PyinfraDeployReportMode string
+
+// PyinfraDeployReportSummary defines model for PyinfraDeployReportSummary.
+type PyinfraDeployReportSummary struct {
+	AdapterVersion int                            `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID             `json:"artifactId"`
+	CreatedAt      time.Time                      `json:"createdAt"`
+	Kind           PyinfraDeployReportSummaryKind `json:"kind"`
+	Mode           PyinfraDeployReportSummaryMode `json:"mode"`
+	RunID          openapi_types.UUID             `json:"runId"`
+	SchemaVersion  int                            `json:"schemaVersion"`
+	Summary        PyinfraDeploySummary           `json:"summary"`
+	Tool           string                         `json:"tool"`
+	ToolVersion    *string                        `json:"toolVersion,omitempty"`
+}
+
+// PyinfraDeployReportSummaryKind defines model for PyinfraDeployReportSummary.Kind.
+type PyinfraDeployReportSummaryKind string
+
+// PyinfraDeployReportSummaryMode defines model for PyinfraDeployReportSummary.Mode.
+type PyinfraDeployReportSummaryMode string
+
+// PyinfraDeploySummary defines model for PyinfraDeploySummary.
+type PyinfraDeploySummary struct {
+	Plan    PyinfraPlanSummary    `json:"plan"`
+	Results *PyinfraResultSummary `json:"results,omitempty"`
+}
+
+// PyinfraHostList defines model for PyinfraHostList.
+type PyinfraHostList = []string
+
+// PyinfraOperation defines model for PyinfraOperation.
+type PyinfraOperation struct {
+	HostsWithChanges            PyinfraHostList         `json:"hostsWithChanges"`
+	HostsWithConditionalChanges PyinfraHostList         `json:"hostsWithConditionalChanges"`
+	Names                       []string                `json:"names"`
+	Result                      *PyinfraOperationResult `json:"result,omitempty"`
+}
+
+// PyinfraOperationResult defines model for PyinfraOperationResult.
+type PyinfraOperationResult struct {
+	ChangedHosts   PyinfraHostList `json:"changedHosts"`
+	FailedHosts    PyinfraHostList `json:"failedHosts"`
+	UnchangedHosts PyinfraHostList `json:"unchangedHosts"`
+}
+
+// PyinfraPlanSummary defines model for PyinfraPlanSummary.
+type PyinfraPlanSummary struct {
+	AffectedHosts             int `json:"affectedHosts"`
+	ChangedOperations         int `json:"changedOperations"`
+	ConditionalHostOperations int `json:"conditionalHostOperations"`
+	PlannedHostOperations     int `json:"plannedHostOperations"`
+	TotalOperations           int `json:"totalOperations"`
+	UnchangedOperations       int `json:"unchangedOperations"`
+}
+
+// PyinfraResultSummary defines model for PyinfraResultSummary.
+type PyinfraResultSummary struct {
+	ChangedHostOperations   int `json:"changedHostOperations"`
+	FailedHostOperations    int `json:"failedHostOperations"`
+	FailedHosts             int `json:"failedHosts"`
+	HostOperations          int `json:"hostOperations"`
+	UnchangedHostOperations int `json:"unchangedHostOperations"`
+}
+
 // ReadinessResponse defines model for ReadinessResponse.
 type ReadinessResponse struct {
 	ArtifactStorage DependencyStatus        `json:"artifactStorage"`
@@ -3937,6 +4094,40 @@ func (t *RunReport) MergeTerraformPlanReport(v TerraformPlanReport) error {
 	return err
 }
 
+// AsPyinfraDeployReport returns the union data inside the RunReport as a PyinfraDeployReport
+func (t RunReport) AsPyinfraDeployReport() (PyinfraDeployReport, error) {
+	var body PyinfraDeployReport
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPyinfraDeployReport overwrites any union data inside the RunReport as the provided PyinfraDeployReport
+func (t *RunReport) FromPyinfraDeployReport(v PyinfraDeployReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"pyinfra-deploy"}`))
+	t.union = b
+	return err
+}
+
+// MergePyinfraDeployReport performs a merge with any union data inside the RunReport, using the provided PyinfraDeployReport
+func (t *RunReport) MergePyinfraDeployReport(v PyinfraDeployReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"pyinfra-deploy"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RunReport) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"kind"`
@@ -3951,6 +4142,8 @@ func (t RunReport) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "pyinfra-deploy":
+		return t.AsPyinfraDeployReport()
 	case "terraform-plan":
 		return t.AsTerraformPlanReport()
 	default:
@@ -4002,6 +4195,40 @@ func (t *RunReportSummary) MergeTerraformPlanReportSummary(v TerraformPlanReport
 	return err
 }
 
+// AsPyinfraDeployReportSummary returns the union data inside the RunReportSummary as a PyinfraDeployReportSummary
+func (t RunReportSummary) AsPyinfraDeployReportSummary() (PyinfraDeployReportSummary, error) {
+	var body PyinfraDeployReportSummary
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromPyinfraDeployReportSummary overwrites any union data inside the RunReportSummary as the provided PyinfraDeployReportSummary
+func (t *RunReportSummary) FromPyinfraDeployReportSummary(v PyinfraDeployReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"pyinfra-deploy"}`))
+	t.union = b
+	return err
+}
+
+// MergePyinfraDeployReportSummary performs a merge with any union data inside the RunReportSummary, using the provided PyinfraDeployReportSummary
+func (t *RunReportSummary) MergePyinfraDeployReportSummary(v PyinfraDeployReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"pyinfra-deploy"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RunReportSummary) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"kind"`
@@ -4016,6 +4243,8 @@ func (t RunReportSummary) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "pyinfra-deploy":
+		return t.AsPyinfraDeployReportSummary()
 	case "terraform-plan":
 		return t.AsTerraformPlanReportSummary()
 	default:

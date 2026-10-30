@@ -68,6 +68,7 @@ import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { RunLogViewer } from "~/features/runs/run-log-viewer";
+import { PyinfraDeployReportView } from "~/features/runs/pyinfra-deploy-report-view";
 import { TerraformPlanReportView } from "~/features/runs/terraform-plan-report-view";
 import {
   formatBinarySize,
@@ -510,21 +511,35 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
 
       <CommitDetails commit={run.commit} repositoryId={run.repositoryId} />
       {loaderData.artifacts
-        .filter((artifact) => artifact.report?.kind === "terraform-plan")
+        .filter((artifact) => artifact.report !== undefined)
         .map((artifact) => {
           const load = loaderData.reportLoads.find(
             (candidate) => candidate.artifactId === artifact.id,
           );
           if (!load) return null;
 
-          return (
-            <TerraformPlanReportView
-              artifact={artifact}
-              canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
-              key={artifact.id}
-              load={load}
-            />
-          );
+          if (artifact.report?.kind === "terraform-plan") {
+            return (
+              <TerraformPlanReportView
+                artifact={artifact}
+                canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
+                key={artifact.id}
+                load={load}
+              />
+            );
+          }
+          if (artifact.report?.kind === "pyinfra-deploy") {
+            return (
+              <PyinfraDeployReportView
+                artifact={artifact}
+                canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
+                key={artifact.id}
+                load={load}
+              />
+            );
+          }
+
+          return null;
         })}
       <RunLogViewer artifact={logArtifact} key={run.id} runId={run.id} />
       <RunOverview repositoryName={loaderData.repositoryName} run={run} />

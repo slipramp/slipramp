@@ -181,7 +181,7 @@ names, commit SHAs, paths, URLs, diagnostics, and other unbounded values.
 | `slipramp.artifact.reconciliation.runs` | `slipramp_artifact_reconciliation_runs_total` | counter / `{run}` | `result=succeeded|failed` |
 | `slipramp.artifact.reconciliation.duration` | `slipramp_artifact_reconciliation_duration_seconds` | histogram / `s` | same `result` |
 | `slipramp.artifact.reconciliation.items` | `slipramp_artifact_reconciliation_items_total` | counter / `{item}` | `operation=expired|deleted|orphan_deleted` |
-| `slipramp.artifact.report.ingestions` | `slipramp_artifact_report_ingestions_total` | counter / `{report}` | `report_kind=terraform-plan`, `result=succeeded|rejected|failed` |
+| `slipramp.artifact.report.ingestions` | `slipramp_artifact_report_ingestions_total` | counter / `{report}` | `report_kind=terraform-plan|pyinfra-deploy`, `result=succeeded|rejected|failed` |
 | `slipramp.artifact.report.duration` | `slipramp_artifact_report_duration_seconds` | histogram / `s` | same `report_kind` and `result` |
 
 Every metric in this table is a Slipramp-specific convention. An attempt is

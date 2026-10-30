@@ -285,6 +285,20 @@ components:
       $ref: ./components/run-reports.yaml#/TerraformCheckCounts
     TerraformResourceChange:
       $ref: ./components/run-reports.yaml#/TerraformResourceChange
+    PyinfraDeployReportSummary:
+      $ref: ./components/run-reports.yaml#/PyinfraDeployReportSummary
+    PyinfraDeployReport:
+      $ref: ./components/run-reports.yaml#/PyinfraDeployReport
+    PyinfraDeploySummary:
+      $ref: ./components/run-reports.yaml#/PyinfraDeploySummary
+    PyinfraPlanSummary:
+      $ref: ./components/run-reports.yaml#/PyinfraPlanSummary
+    PyinfraResultSummary:
+      $ref: ./components/run-reports.yaml#/PyinfraResultSummary
+    PyinfraOperation:
+      $ref: ./components/run-reports.yaml#/PyinfraOperation
+    PyinfraOperationResult:
+      $ref: ./components/run-reports.yaml#/PyinfraOperationResult
     LogCursor:
       $ref: ./components/artifacts.yaml#/LogCursor
     LogEvent:

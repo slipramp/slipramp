@@ -865,29 +865,43 @@ export type ArtifactStorageUsage = {
   recordedBytes: number;
 };
 
-export type RunReportSummary = TerraformPlanReportSummary;
+export type RunReportSummary =
+  | ({
+      kind: "terraform-plan";
+    } & TerraformPlanReportSummary)
+  | ({
+      kind: "pyinfra-deploy";
+    } & PyinfraDeployReportSummary);
 
 export type RunReportEnvelope = {
   artifactId: string;
   runId: string;
-  kind: "terraform-plan";
+  kind: "terraform-plan" | "pyinfra-deploy";
   schemaVersion: number;
   adapterVersion: number;
   tool: string;
   toolVersion?: string;
-  mode: "preview";
+  mode: "preview" | "apply";
   createdAt: string;
 };
 
-export type RunReport = TerraformPlanReport;
+export type RunReport =
+  | ({
+      kind: "terraform-plan";
+    } & TerraformPlanReport)
+  | ({
+      kind: "pyinfra-deploy";
+    } & PyinfraDeployReport);
 
 export type TerraformPlanReportSummary = RunReportEnvelope & {
   kind: "terraform-plan";
+  mode?: "preview";
   summary: TerraformPlanSummary;
 };
 
 export type TerraformPlanReport = RunReportEnvelope & {
   kind: "terraform-plan";
+  mode?: "preview";
   summary: TerraformPlanSummary;
   resourceChanges: Array<TerraformResourceChange>;
   resourceDrift: Array<TerraformResourceChange>;
@@ -936,6 +950,55 @@ export type TerraformResourceChange = {
   action: "no-op" | "create" | "read" | "update" | "delete" | "replace";
   replacementOrder?: "destroy-before-create" | "create-before-destroy";
   actionReason?: string;
+};
+
+export type PyinfraDeployReportSummary = RunReportEnvelope & {
+  kind: "pyinfra-deploy";
+  mode: "preview" | "apply";
+  summary: PyinfraDeploySummary;
+};
+
+export type PyinfraDeployReport = RunReportEnvelope & {
+  kind: "pyinfra-deploy";
+  mode: "preview" | "apply";
+  summary: PyinfraDeploySummary;
+  operations: Array<PyinfraOperation>;
+  failedHosts: PyinfraHostList;
+};
+
+export type PyinfraDeploySummary = {
+  plan: PyinfraPlanSummary;
+  results?: PyinfraResultSummary;
+};
+
+export type PyinfraPlanSummary = {
+  totalOperations: number;
+  changedOperations: number;
+  unchangedOperations: number;
+  affectedHosts: number;
+  plannedHostOperations: number;
+  conditionalHostOperations: number;
+};
+
+export type PyinfraResultSummary = {
+  hostOperations: number;
+  changedHostOperations: number;
+  failedHostOperations: number;
+  unchangedHostOperations: number;
+  failedHosts: number;
+};
+
+export type PyinfraOperation = {
+  names: Array<string>;
+  hostsWithChanges: PyinfraHostList;
+  hostsWithConditionalChanges: PyinfraHostList;
+  result?: PyinfraOperationResult;
+};
+
+export type PyinfraOperationResult = {
+  changedHosts: PyinfraHostList;
+  failedHosts: PyinfraHostList;
+  unchangedHosts: PyinfraHostList;
 };
 
 export type LogCursor = {
@@ -1868,6 +1931,8 @@ export type ArtifactProvenance = {
   commit: GitCommit;
   catalogRevisionId: string;
 };
+
+export type PyinfraHostList = Array<string>;
 
 export type ApiKeyScope =
   | "slipramp:read"

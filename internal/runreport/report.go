@@ -12,14 +12,20 @@ import (
 
 const (
 	TerraformPlanMediaType = "application/vnd.slipramp.terraform-plan+json"
+	PyinfraDeployMediaType = "application/vnd.slipramp.pyinfra-deploy+json"
 
 	TerraformPlanKind ReportKind = "terraform-plan"
+	PyinfraDeployKind ReportKind = "pyinfra-deploy"
 	PreviewMode       ReportMode = "preview"
+	ApplyMode         ReportMode = "apply"
 
 	TerraformPlanSchemaVersion  = 1
 	TerraformPlanAdapterVersion = 1
+	PyinfraDeploySchemaVersion  = 1
+	PyinfraDeployAdapterVersion = 1
 
 	MaximumTerraformPlanSourceSizeBytes int64 = 32 * 1024 * 1024
+	MaximumPyinfraDeploySourceSizeBytes int64 = 32 * 1024 * 1024
 	MaximumProjectionSizeBytes          int64 = 16 * 1024 * 1024
 	maximumSummarySizeBytes             int64 = 64 * 1024
 )
@@ -70,13 +76,16 @@ type registeredAdapter interface {
 }
 
 var terraformPlanReportAdapter registeredAdapter = terraformPlanAdapter{}
+var pyinfraDeployReportAdapter registeredAdapter = pyinfraDeployAdapter{}
 
 var adaptersByMediaType = map[string]registeredAdapter{
 	TerraformPlanMediaType: terraformPlanReportAdapter,
+	PyinfraDeployMediaType: pyinfraDeployReportAdapter,
 }
 
 var adaptersByKind = map[ReportKind]registeredAdapter{
 	TerraformPlanKind: terraformPlanReportAdapter,
+	PyinfraDeployKind: pyinfraDeployReportAdapter,
 }
 
 func AdapterForMediaType(value string) (Adapter, bool) {

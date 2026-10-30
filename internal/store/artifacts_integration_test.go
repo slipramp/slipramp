@@ -315,6 +315,80 @@ func TestArtifactReportPersistenceIntegration(t *testing.T) {
 	}
 }
 
+func TestPyinfraArtifactReportPersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.October, 29, 16, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	report, err := runreport.DecodePyinfraDeploy(strings.NewReader(`{
+		"plan":[{
+			"op_hash":"package",
+			"names":["server.package"],
+			"hosts_with_change":["web-1"],
+			"hosts_with_conditional_change":[]
+		}],
+		"results":{
+			"operations":[{
+				"op_hash":"package",
+				"hosts":1,
+				"success":["web-1"],
+				"error":[],
+				"no_change":[]
+			}],
+			"totals":{"hosts":1,"success":1,"error":0,"no_change":0},
+			"failed_hosts":[]
+		}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection, err := runreport.Encode(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := strings.Repeat("b", 64)
+	objectKey := "runs/report/artifacts/deploy-report/content-a"
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          runID,
+		Name:           "deploy-report",
+		Kind:           artifact.KindOutput,
+		State:          artifact.StateSealed,
+		MediaType:      runreport.PyinfraDeployMediaType,
+		SizeBytes:      512,
+		SHA256:         &digest,
+		Sensitive:      true,
+		ObjectKey:      &objectKey,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      createdAt,
+		SealedAt:       &createdAt,
+	}
+	metadata, err := runreport.NewArtifactReport(
+		record.ID,
+		report,
+		"runs/report/artifacts/deploy-report/reports/pyinfra-deploy-v1-a.json",
+		projection,
+		createdAt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateArtifactWithReport(ctx, record, metadata); err != nil {
+		t.Fatalf("CreateArtifactWithReport() error = %v", err)
+	}
+
+	loaded, err := database.GetArtifactReport(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetArtifactReport() error = %v", err)
+	}
+	summary, ok := loaded.Summary.(*runreport.PyinfraDeploySummary)
+	if !ok || loaded.Kind != runreport.PyinfraDeployKind || loaded.Mode != runreport.ApplyMode ||
+		summary.Results == nil || summary.Results.ChangedHostOperations != 1 {
+		t.Errorf("GetArtifactReport() = %#v", loaded)
+	}
+}
+
 func TestArtifactPersistenceIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()

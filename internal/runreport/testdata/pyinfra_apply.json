@@ -1,0 +1,51 @@
+{
+  "plan": [
+    {
+      "op_hash": "install-node-exporter",
+      "name": "Install node exporter (do-not-project)",
+      "names": ["Install node exporter"],
+      "args": ["do-not-project"],
+      "hosts_with_change": ["node-02.example.com", "node-01.example.com"],
+      "hosts_with_conditional_change": []
+    },
+    {
+      "op_hash": "restart-node-exporter",
+      "name": "Restart node exporter",
+      "names": ["Restart node exporter"],
+      "args": [],
+      "hosts_with_change": [],
+      "hosts_with_conditional_change": ["node-02.example.com"]
+    }
+  ],
+  "results": {
+    "operations": [
+      {
+        "op_hash": "restart-node-exporter",
+        "name": "Restart node exporter",
+        "names": ["Restart node exporter"],
+        "args": [],
+        "hosts": 2,
+        "success": ["node-02.example.com"],
+        "error": [],
+        "no_change": ["node-01.example.com"]
+      },
+      {
+        "op_hash": "install-node-exporter",
+        "name": "Install node exporter (do-not-project)",
+        "names": ["Install node exporter"],
+        "args": ["do-not-project"],
+        "hosts": 2,
+        "success": ["node-01.example.com"],
+        "error": ["node-02.example.com"],
+        "no_change": []
+      }
+    ],
+    "totals": {
+      "hosts": 4,
+      "success": 2,
+      "error": 1,
+      "no_change": 1
+    },
+    "failed_hosts": ["node-02.example.com"]
+  }
+}

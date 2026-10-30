@@ -89,6 +89,58 @@ func TestServiceProjectsRunReportArtifactIdempotently(t *testing.T) {
 	}
 }
 
+func TestServiceProjectsPyinfraDeployReport(t *testing.T) {
+	t.Parallel()
+
+	source := []byte(`{
+		"plan":[{
+			"op_hash":"package",
+			"names":["server.package"],
+			"hosts_with_change":["web-1"],
+			"hosts_with_conditional_change":[]
+		}],
+		"results":{
+			"operations":[{
+				"op_hash":"package",
+				"hosts":1,
+				"success":["web-1"],
+				"error":[],
+				"no_change":[]
+			}],
+			"totals":{"hosts":1,"success":1,"error":0,"no_change":0},
+			"failed_hosts":[]
+		}
+	}`)
+	request := reportUploadRequest(source)
+	metadata := reportTestMetadata()
+	metadata.context.Artifacts[request.Name] = Declaration{
+		MediaType: runreport.PyinfraDeployMediaType,
+		Sensitive: true,
+	}
+	contents := &serviceContentStore{}
+	service := newTestService(metadata, contents)
+
+	if err := service.Upload(context.Background(), request); err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	if metadata.record == nil {
+		t.Fatal("Upload() did not persist Artifact metadata")
+	}
+	reportMetadata := metadata.reports[metadata.record.ID]
+	if reportMetadata.Kind != runreport.PyinfraDeployKind || reportMetadata.Mode != runreport.ApplyMode {
+		t.Fatalf("stored report metadata = %#v", reportMetadata)
+	}
+	content, err := service.OpenReport(context.Background(), metadata.record.ID)
+	if err != nil {
+		t.Fatalf("OpenReport() error = %v", err)
+	}
+	report, ok := content.Report.(*runreport.PyinfraDeployReport)
+	if !ok || report.Summary.Results == nil || report.Summary.Results.ChangedHostOperations != 1 ||
+		len(report.Operations) != 1 || report.Operations[0].Names[0] != "server.package" {
+		t.Fatalf("OpenReport() report = %#v", content.Report)
+	}
+}
+
 func TestServiceLeavesReportObjectsForReconciliationAfterFailure(t *testing.T) {
 	t.Parallel()
 

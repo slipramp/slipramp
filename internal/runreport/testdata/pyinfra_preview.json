@@ -1,0 +1,31 @@
+{
+  "plan": [
+    {
+      "op_hash": "install-node-exporter",
+      "name": "Install node exporter (do-not-project)",
+      "names": ["Install node exporter"],
+      "args": ["do-not-project"],
+      "hosts_with_change": ["node-02.example.com", "node-01.example.com"],
+      "hosts_with_conditional_change": [],
+      "future_field": "ignored"
+    },
+    {
+      "op_hash": "restart-node-exporter",
+      "name": "Restart node exporter",
+      "names": ["Restart node exporter"],
+      "args": [],
+      "hosts_with_change": [],
+      "hosts_with_conditional_change": ["node-02.example.com"]
+    },
+    {
+      "op_hash": "unchanged-service",
+      "name": "Check node exporter service",
+      "names": ["Check node exporter service"],
+      "args": [],
+      "hosts_with_change": [],
+      "hosts_with_conditional_change": []
+    }
+  ],
+  "results": null,
+  "future_top_level": true
+}
