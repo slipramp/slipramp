@@ -46,20 +46,132 @@ login:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+nativeLogin:
+  get:
+    operationId: beginNativeOIDCLogin
+    summary: Begin native app login
+    description: >-
+      Creates a short-lived OIDC authorization transaction bound to the native
+      app's PKCE challenge and redirects the system browser to the configured
+      identity provider.
+    security: []
+    tags:
+      - Authentication
+    parameters:
+      - name: codeChallenge
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{43}$"
+    responses:
+      "303":
+        description: The system browser should continue at the identity provider.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+              format: uri
+          Set-Cookie:
+            required: true
+            schema:
+              type: string
+          Cache-Control:
+            required: true
+            schema:
+              type: string
+              enum:
+                - "private, no-store"
+      "400":
+        description: The native PKCE challenge is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "503":
+        description: Native authentication is temporarily unavailable.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The login transaction could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
+nativeExchange:
+  post:
+    operationId: exchangeNativeOIDCLogin
+    summary: Exchange a native login grant
+    description: >-
+      Consumes the one-time grant returned to the native app and issues an
+      opaque, expiring Slipramp session credential after verifying PKCE.
+    security: []
+    tags:
+      - Authentication
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/authentication.yaml#/NativeOIDCExchange
+    responses:
+      "200":
+        description: The native app session credential.
+        headers:
+          Cache-Control:
+            required: true
+            schema:
+              type: string
+              enum:
+                - "private, no-store"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/authentication.yaml#/NativeOIDCCredential
+      "400":
+        description: The native login grant or PKCE verifier is invalid or expired.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The session credential could not be issued.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 callback:
   get:
     operationId: completeOIDCLogin
-    summary: Complete browser login
+    summary: Complete OIDC login
     description: >-
       Validates the OIDC authorization response, enrolls or refreshes the
-      configured user, issues a local session, and redirects to the web root.
+      configured user, and redirects with either a browser session or a native
+      one-time grant.
     security: []
     tags:
       - Authentication
     parameters:
       - name: code
         in: query
-        required: true
+        required: false
         schema:
           type: string
           minLength: 1
@@ -76,14 +188,13 @@ callback:
           type: string
     responses:
       "303":
-        description: Login succeeded and the browser should return to the web application.
+        description: Login completed and the browser should return to the web or native application.
         headers:
           Location:
             required: true
             schema:
               type: string
           Set-Cookie:
-            required: true
             schema:
               type: string
           Cache-Control:

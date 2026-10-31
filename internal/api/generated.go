@@ -1685,6 +1685,13 @@ type CatalogSourceRange struct {
 	Path      string  `json:"path"`
 }
 
+// ClientCompatibility defines model for ClientCompatibility.
+type ClientCompatibility struct {
+	AuthenticationMethods []string `json:"authenticationMethods"`
+	ProductAPIContract    int      `json:"productApiContract"`
+	ServerVersion         string   `json:"serverVersion"`
+}
+
 // Cluster defines model for Cluster.
 type Cluster struct {
 	// ConnectionState Whether the cluster controller has contacted the Server within the connection window.
@@ -2209,6 +2216,18 @@ type LogEvent struct {
 type LogSeal struct {
 	Sha256    string `json:"sha256"`
 	SizeBytes int64  `json:"sizeBytes"`
+}
+
+// NativeOIDCCredential defines model for NativeOIDCCredential.
+type NativeOIDCCredential struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+	Token     string    `json:"token"`
+}
+
+// NativeOIDCExchange defines model for NativeOIDCExchange.
+type NativeOIDCExchange struct {
+	Code         string `json:"code"`
+	CodeVerifier string `json:"codeVerifier"`
 }
 
 // NotificationDelivery defines model for NotificationDelivery.
@@ -3780,7 +3799,7 @@ type ListAPIKeysParams struct {
 
 // CompleteOIDCLoginParams defines parameters for CompleteOIDCLogin.
 type CompleteOIDCLoginParams struct {
-	Code              string  `form:"code" json:"code"`
+	Code              *string `form:"code,omitempty" json:"code,omitempty"`
 	State             string  `form:"state" json:"state"`
 	SliprampOidcState *string `form:"slipramp_oidc_state,omitempty" json:"slipramp_oidc_state,omitempty"`
 }
@@ -3793,6 +3812,11 @@ type LogoutParams struct {
 
 // LogoutParamsXSliprampCSRF defines parameters for Logout.
 type LogoutParamsXSliprampCSRF string
+
+// BeginNativeOIDCLoginParams defines parameters for BeginNativeOIDCLogin.
+type BeginNativeOIDCLoginParams struct {
+	CodeChallenge string `form:"codeChallenge" json:"codeChallenge"`
+}
 
 // GetCurrentPrincipalParams defines parameters for GetCurrentPrincipal.
 type GetCurrentPrincipalParams struct {
@@ -4023,6 +4047,9 @@ type UploadRunArtifactParams struct {
 
 // CreateAPIKeyJSONRequestBody defines body for CreateAPIKey for application/json ContentType.
 type CreateAPIKeyJSONRequestBody = APIKeyCreate
+
+// ExchangeNativeOIDCLoginJSONRequestBody defines body for ExchangeNativeOIDCLogin for application/json ContentType.
+type ExchangeNativeOIDCLoginJSONRequestBody = NativeOIDCExchange
 
 // AcknowledgeInboxProblemsJSONRequestBody defines body for AcknowledgeInboxProblems for application/json ContentType.
 type AcknowledgeInboxProblemsJSONRequestBody = InboxProblemAcknowledgements
@@ -4569,9 +4596,9 @@ type ClientInterface interface {
 	// Corresponds with DELETE /api/v1/auth/api-keys/{apiKeyId} (the `RevokeAPIKey` operationId).
 	RevokeAPIKey(ctx context.Context, apiKeyID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CompleteOIDCLogin Complete browser login
+	// CompleteOIDCLogin Complete OIDC login
 	//
-	// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+	// Validates the OIDC authorization response, enrolls or refreshes the configured user, and redirects with either a browser session or a native one-time grant.
 	//
 	// Corresponds with GET /api/v1/auth/callback (the `CompleteOIDCLogin` operationId).
 	CompleteOIDCLogin(ctx context.Context, params *CompleteOIDCLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4590,10 +4617,42 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/auth/logout (the `Logout` operationId).
 	Logout(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ExchangeNativeOIDCLoginWithBody Exchange a native login grant
+	//
+	// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+	ExchangeNativeOIDCLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeNativeOIDCLogin Exchange a native login grant
+	//
+	// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+	ExchangeNativeOIDCLogin(ctx context.Context, body ExchangeNativeOIDCLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// BeginNativeOIDCLogin Begin native app login
+	//
+	// Creates a short-lived OIDC authorization transaction bound to the native app's PKCE challenge and redirects the system browser to the configured identity provider.
+	//
+	// Corresponds with GET /api/v1/auth/native/login (the `BeginNativeOIDCLogin` operationId).
+	BeginNativeOIDCLogin(ctx context.Context, params *BeginNativeOIDCLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetCurrentPrincipal Get the current principal
 	//
 	// Corresponds with GET /api/v1/auth/session (the `GetCurrentPrincipal` operationId).
 	GetCurrentPrincipal(ctx context.Context, params *GetCurrentPrincipalParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetClientCompatibility Check client compatibility
+	//
+	// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+	//
+	// Corresponds with GET /api/v1/client-compatibility (the `GetClientCompatibility` operationId).
+	GetClientCompatibility(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListClusters List execution clusters
 	//
@@ -5307,9 +5366,9 @@ func (c *Client) RevokeAPIKey(ctx context.Context, apiKeyID openapi_types.UUID, 
 	return c.Client.Do(req)
 }
 
-// CompleteOIDCLogin Complete browser login
+// CompleteOIDCLogin Complete OIDC login
 //
-// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+// Validates the OIDC authorization response, enrolls or refreshes the configured user, and redirects with either a browser session or a native one-time grant.
 //
 // Corresponds with GET /api/v1/auth/callback (the `CompleteOIDCLogin` operationId).
 func (c *Client) CompleteOIDCLogin(ctx context.Context, params *CompleteOIDCLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5358,11 +5417,83 @@ func (c *Client) Logout(ctx context.Context, params *LogoutParams, reqEditors ..
 	return c.Client.Do(req)
 }
 
+// ExchangeNativeOIDCLoginWithBody Exchange a native login grant
+//
+// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+func (c *Client) ExchangeNativeOIDCLoginWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeNativeOIDCLoginRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeNativeOIDCLogin Exchange a native login grant
+//
+// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+func (c *Client) ExchangeNativeOIDCLogin(ctx context.Context, body ExchangeNativeOIDCLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeNativeOIDCLoginRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// BeginNativeOIDCLogin Begin native app login
+//
+// Creates a short-lived OIDC authorization transaction bound to the native app's PKCE challenge and redirects the system browser to the configured identity provider.
+//
+// Corresponds with GET /api/v1/auth/native/login (the `BeginNativeOIDCLogin` operationId).
+func (c *Client) BeginNativeOIDCLogin(ctx context.Context, params *BeginNativeOIDCLoginParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewBeginNativeOIDCLoginRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetCurrentPrincipal Get the current principal
 //
 // Corresponds with GET /api/v1/auth/session (the `GetCurrentPrincipal` operationId).
 func (c *Client) GetCurrentPrincipal(ctx context.Context, params *GetCurrentPrincipalParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetCurrentPrincipalRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetClientCompatibility Check client compatibility
+//
+// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+//
+// Corresponds with GET /api/v1/client-compatibility (the `GetClientCompatibility` operationId).
+func (c *Client) GetClientCompatibility(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClientCompatibilityRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -7028,12 +7159,16 @@ func NewCompleteOIDCLoginRequest(server string, params *CompleteOIDCLoginParams)
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
-		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-			return nil, err
-		} else {
-			for _, qp := range strings.Split(queryFrag, "&") {
-				rawQueryFragments = append(rawQueryFragments, qp)
+		if params.Code != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", *params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
 			}
+
 		}
 
 		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -7159,6 +7294,96 @@ func NewLogoutRequest(server string, params *LogoutParams) (*http.Request, error
 	return req, nil
 }
 
+// NewExchangeNativeOIDCLoginRequest calls the generic ExchangeNativeOIDCLogin builder with application/json body
+func NewExchangeNativeOIDCLoginRequest(server string, body ExchangeNativeOIDCLoginJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewExchangeNativeOIDCLoginRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewExchangeNativeOIDCLoginRequestWithBody constructs an http.Request for the ExchangeNativeOIDCLogin method, with any body, and a specified content type
+func NewExchangeNativeOIDCLoginRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/native/exchange")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewBeginNativeOIDCLoginRequest constructs an http.Request for the BeginNativeOIDCLogin method
+func NewBeginNativeOIDCLoginRequest(server string, params *BeginNativeOIDCLoginParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/native/login")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "codeChallenge", params.CodeChallenge, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetCurrentPrincipalRequest constructs an http.Request for the GetCurrentPrincipal method
 func NewGetCurrentPrincipalRequest(server string, params *GetCurrentPrincipalParams) (*http.Request, error) {
 	var err error
@@ -7200,6 +7425,33 @@ func NewGetCurrentPrincipalRequest(server string, params *GetCurrentPrincipalPar
 			req.AddCookie(cookie0)
 		}
 	}
+	return req, nil
+}
+
+// NewGetClientCompatibilityRequest constructs an http.Request for the GetClientCompatibility method
+func NewGetClientCompatibilityRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/client-compatibility")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
 	return req, nil
 }
 
@@ -10757,9 +11009,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /api/v1/auth/api-keys/{apiKeyId} (the `RevokeAPIKey` operationId).
 	RevokeAPIKeyWithResponse(ctx context.Context, apiKeyID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeAPIKeyResponse, error)
 
-	// CompleteOIDCLoginWithResponse Complete browser login
+	// CompleteOIDCLoginWithResponse Complete OIDC login
 	//
-	// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+	// Validates the OIDC authorization response, enrolls or refreshes the configured user, and redirects with either a browser session or a native one-time grant.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10784,12 +11036,48 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/auth/logout (the `Logout` operationId).
 	LogoutWithResponse(ctx context.Context, params *LogoutParams, reqEditors ...RequestEditorFn) (*LogoutResponse, error)
 
+	// ExchangeNativeOIDCLoginWithBodyWithResponse Exchange a native login grant
+	//
+	// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+	ExchangeNativeOIDCLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeNativeOIDCLoginResponse, error)
+
+	// ExchangeNativeOIDCLoginWithResponse Exchange a native login grant
+	//
+	// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+	ExchangeNativeOIDCLoginWithResponse(ctx context.Context, body ExchangeNativeOIDCLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*ExchangeNativeOIDCLoginResponse, error)
+
+	// BeginNativeOIDCLoginWithResponse Begin native app login
+	//
+	// Creates a short-lived OIDC authorization transaction bound to the native app's PKCE challenge and redirects the system browser to the configured identity provider.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/auth/native/login (the `BeginNativeOIDCLogin` operationId).
+	BeginNativeOIDCLoginWithResponse(ctx context.Context, params *BeginNativeOIDCLoginParams, reqEditors ...RequestEditorFn) (*BeginNativeOIDCLoginResponse, error)
+
 	// GetCurrentPrincipalWithResponse Get the current principal
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/auth/session (the `GetCurrentPrincipal` operationId).
 	GetCurrentPrincipalWithResponse(ctx context.Context, params *GetCurrentPrincipalParams, reqEditors ...RequestEditorFn) (*GetCurrentPrincipalResponse, error)
+
+	// GetClientCompatibilityWithResponse Check client compatibility
+	//
+	// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/client-compatibility (the `GetClientCompatibility` operationId).
+	GetClientCompatibilityWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetClientCompatibilityResponse, error)
 
 	// ListClustersWithResponse List execution clusters
 	//
@@ -11935,7 +12223,7 @@ func (r RevokeAPIKeyResponse) ContentType() string {
 type CompleteOIDCLoginResponse303Headers struct {
 	CacheControl string
 	Location     string
-	SetCookie    string
+	SetCookie    *string
 }
 
 type CompleteOIDCLoginResponse struct {
@@ -12143,6 +12431,146 @@ func (r LogoutResponse) ContentType() string {
 	return ""
 }
 
+// ExchangeNativeOIDCLoginResponse200Headers the declared response headers of an HTTP 200 response for ExchangeNativeOIDCLogin
+type ExchangeNativeOIDCLoginResponse200Headers struct {
+	CacheControl string
+}
+
+type ExchangeNativeOIDCLoginResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *NativeOIDCCredential
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ExchangeNativeOIDCLoginResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ExchangeNativeOIDCLoginResponse) GetJSON200() *NativeOIDCCredential {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ExchangeNativeOIDCLoginResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ExchangeNativeOIDCLoginResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ExchangeNativeOIDCLoginResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ExchangeNativeOIDCLoginResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExchangeNativeOIDCLoginResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExchangeNativeOIDCLoginResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExchangeNativeOIDCLoginResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// BeginNativeOIDCLoginResponse303Headers the declared response headers of an HTTP 303 response for BeginNativeOIDCLogin
+type BeginNativeOIDCLoginResponse303Headers struct {
+	CacheControl string
+	Location     string
+	SetCookie    string
+}
+
+type BeginNativeOIDCLoginResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationProblemJSON503 *Problem
+	// Headers303 the parsed response headers for an HTTP 303 response
+	Headers303 *BeginNativeOIDCLoginResponse303Headers
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r BeginNativeOIDCLoginResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r BeginNativeOIDCLoginResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r BeginNativeOIDCLoginResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetApplicationProblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r BeginNativeOIDCLoginResponse) GetApplicationProblemJSON503() *Problem {
+	return r.ApplicationProblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r BeginNativeOIDCLoginResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r BeginNativeOIDCLoginResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r BeginNativeOIDCLoginResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r BeginNativeOIDCLoginResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetCurrentPrincipalResponse200Headers the declared response headers of an HTTP 200 response for GetCurrentPrincipal
 type GetCurrentPrincipalResponse200Headers struct {
 	CacheControl string
@@ -12206,6 +12634,54 @@ func (r GetCurrentPrincipalResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetCurrentPrincipalResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetClientCompatibilityResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ClientCompatibility
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetClientCompatibilityResponse) GetJSON200() *ClientCompatibility {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r GetClientCompatibilityResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetBody returns the raw response body bytes
+func (r GetClientCompatibilityResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClientCompatibilityResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClientCompatibilityResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetClientCompatibilityResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17055,9 +17531,9 @@ func (c *ClientWithResponses) RevokeAPIKeyWithResponse(ctx context.Context, apiK
 	return ParseRevokeAPIKeyResponse(rsp)
 }
 
-// CompleteOIDCLoginWithResponse Complete browser login
+// CompleteOIDCLoginWithResponse Complete OIDC login
 //
-// Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+// Validates the OIDC authorization response, enrolls or refreshes the configured user, and redirects with either a browser session or a native one-time grant.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -17100,6 +17576,51 @@ func (c *ClientWithResponses) LogoutWithResponse(ctx context.Context, params *Lo
 	return ParseLogoutResponse(rsp)
 }
 
+// ExchangeNativeOIDCLoginWithBodyWithResponse Exchange a native login grant
+//
+// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+func (c *ClientWithResponses) ExchangeNativeOIDCLoginWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeNativeOIDCLoginResponse, error) {
+	rsp, err := c.ExchangeNativeOIDCLoginWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeNativeOIDCLoginResponse(rsp)
+}
+
+// ExchangeNativeOIDCLoginWithResponse Exchange a native login grant
+//
+// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/native/exchange (the `ExchangeNativeOIDCLogin` operationId).
+func (c *ClientWithResponses) ExchangeNativeOIDCLoginWithResponse(ctx context.Context, body ExchangeNativeOIDCLoginJSONRequestBody, reqEditors ...RequestEditorFn) (*ExchangeNativeOIDCLoginResponse, error) {
+	rsp, err := c.ExchangeNativeOIDCLogin(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeNativeOIDCLoginResponse(rsp)
+}
+
+// BeginNativeOIDCLoginWithResponse Begin native app login
+//
+// Creates a short-lived OIDC authorization transaction bound to the native app's PKCE challenge and redirects the system browser to the configured identity provider.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/auth/native/login (the `BeginNativeOIDCLogin` operationId).
+func (c *ClientWithResponses) BeginNativeOIDCLoginWithResponse(ctx context.Context, params *BeginNativeOIDCLoginParams, reqEditors ...RequestEditorFn) (*BeginNativeOIDCLoginResponse, error) {
+	rsp, err := c.BeginNativeOIDCLogin(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseBeginNativeOIDCLoginResponse(rsp)
+}
+
 // GetCurrentPrincipalWithResponse Get the current principal
 //
 // Returns a wrapper object for the known response body format(s).
@@ -17111,6 +17632,21 @@ func (c *ClientWithResponses) GetCurrentPrincipalWithResponse(ctx context.Contex
 		return nil, err
 	}
 	return ParseGetCurrentPrincipalResponse(rsp)
+}
+
+// GetClientCompatibilityWithResponse Check client compatibility
+//
+// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/client-compatibility (the `GetClientCompatibility` operationId).
+func (c *ClientWithResponses) GetClientCompatibilityWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetClientCompatibilityResponse, error) {
+	rsp, err := c.GetClientCompatibility(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClientCompatibilityResponse(rsp)
 }
 
 // ListClustersWithResponse List execution clusters
@@ -18729,10 +19265,10 @@ func ParseCompleteOIDCLoginResponse(rsp *http.Response) (*CompleteOIDCLoginRespo
 		}
 		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
 			var value string
-			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
 				return nil, err
 			}
-			headers.SetCookie = value
+			headers.SetCookie = &value
 		}
 		response.Headers303 = &headers
 	}
@@ -18887,6 +19423,143 @@ func ParseLogoutResponse(rsp *http.Response) (*LogoutResponse, error) {
 	return response, nil
 }
 
+// ParseExchangeNativeOIDCLoginResponse parses an HTTP response from a ExchangeNativeOIDCLoginWithResponse call
+func ParseExchangeNativeOIDCLoginResponse(rsp *http.Response) (*ExchangeNativeOIDCLoginResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExchangeNativeOIDCLoginResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest NativeOIDCCredential
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ExchangeNativeOIDCLoginResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseBeginNativeOIDCLoginResponse parses an HTTP response from a BeginNativeOIDCLoginWithResponse call
+func ParseBeginNativeOIDCLoginResponse(rsp *http.Response) (*BeginNativeOIDCLoginResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &BeginNativeOIDCLoginResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 303:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON503 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 303:
+		var headers BeginNativeOIDCLoginResponse303Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = value
+		}
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: "uri"}); err != nil {
+				return nil, err
+			}
+			headers.Location = value
+		}
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = value
+		}
+		response.Headers303 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseGetCurrentPrincipalResponse parses an HTTP response from a GetCurrentPrincipalWithResponse call
 func ParseGetCurrentPrincipalResponse(rsp *http.Response) (*GetCurrentPrincipalResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18942,6 +19615,39 @@ func ParseGetCurrentPrincipalResponse(rsp *http.Response) (*GetCurrentPrincipalR
 			headers.CacheControl = value
 		}
 		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetClientCompatibilityResponse parses an HTTP response from a GetClientCompatibilityWithResponse call
+func ParseGetClientCompatibilityResponse(rsp *http.Response) (*GetClientCompatibilityResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClientCompatibilityResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClientCompatibility
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
 	}
 
 	return response, nil
@@ -22881,7 +23587,7 @@ type ServerInterface interface {
 	// RevokeAPIKey Revoke an API key
 	// (DELETE /api/v1/auth/api-keys/{apiKeyId})
 	RevokeAPIKey(w http.ResponseWriter, r *http.Request, apiKeyID openapi_types.UUID)
-	// CompleteOIDCLogin Complete browser login
+	// CompleteOIDCLogin Complete OIDC login
 	// (GET /api/v1/auth/callback)
 	CompleteOIDCLogin(w http.ResponseWriter, r *http.Request, params CompleteOIDCLoginParams)
 	// BeginOIDCLogin Begin browser login
@@ -22890,9 +23596,18 @@ type ServerInterface interface {
 	// Logout Revoke the current browser session
 	// (POST /api/v1/auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request, params LogoutParams)
+	// ExchangeNativeOIDCLogin Exchange a native login grant
+	// (POST /api/v1/auth/native/exchange)
+	ExchangeNativeOIDCLogin(w http.ResponseWriter, r *http.Request)
+	// BeginNativeOIDCLogin Begin native app login
+	// (GET /api/v1/auth/native/login)
+	BeginNativeOIDCLogin(w http.ResponseWriter, r *http.Request, params BeginNativeOIDCLoginParams)
 	// GetCurrentPrincipal Get the current principal
 	// (GET /api/v1/auth/session)
 	GetCurrentPrincipal(w http.ResponseWriter, r *http.Request, params GetCurrentPrincipalParams)
+	// GetClientCompatibility Check client compatibility
+	// (GET /api/v1/client-compatibility)
+	GetClientCompatibility(w http.ResponseWriter, r *http.Request)
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(w http.ResponseWriter, r *http.Request, params ListClustersParams)
@@ -23245,9 +23960,9 @@ func (siw *ServerInterfaceWrapper) CompleteOIDCLogin(w http.ResponseWriter, r *h
 	// Parameter object where we will unmarshal all parameters from the context
 	var params CompleteOIDCLoginParams
 
-	// ------------- Required query parameter "code" -------------
+	// ------------- Optional query parameter "code" -------------
 
-	err = runtime.BindQueryParameterWithOptions("form", true, true, "code", r.URL.Query(), &params.Code, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "code", r.URL.Query(), &params.Code, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
 	if err != nil {
 		var requiredError *runtime.RequiredParameterError
 		if errors.As(err, &requiredError) {
@@ -23371,6 +24086,53 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// ExchangeNativeOIDCLogin operation middleware
+func (siw *ServerInterfaceWrapper) ExchangeNativeOIDCLogin(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExchangeNativeOIDCLogin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// BeginNativeOIDCLogin operation middleware
+func (siw *ServerInterfaceWrapper) BeginNativeOIDCLogin(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BeginNativeOIDCLoginParams
+
+	// ------------- Required query parameter "codeChallenge" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "codeChallenge", r.URL.Query(), &params.CodeChallenge, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "codeChallenge"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "codeChallenge", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BeginNativeOIDCLogin(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetCurrentPrincipal operation middleware
 func (siw *ServerInterfaceWrapper) GetCurrentPrincipal(w http.ResponseWriter, r *http.Request) {
 
@@ -23397,6 +24159,20 @@ func (siw *ServerInterfaceWrapper) GetCurrentPrincipal(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCurrentPrincipal(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetClientCompatibility operation middleware
+func (siw *ServerInterfaceWrapper) GetClientCompatibility(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClientCompatibility(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -26065,6 +26841,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/healthz", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/readyz", wrapper.GetReadiness)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/client-compatibility", wrapper.GetClientCompatibility)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/repositories", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repositories", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/repository-connection-tests", wrapper.TestRepositoryConnection)
@@ -26108,6 +26885,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/download", wrapper.DownloadArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactId}/report", wrapper.GetArtifactReport)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/login", wrapper.BeginOIDCLogin)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/native/login", wrapper.BeginNativeOIDCLogin)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/auth/native/exchange", wrapper.ExchangeNativeOIDCLogin)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/callback", wrapper.CompleteOIDCLogin)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/auth/session", wrapper.GetCurrentPrincipal)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/auth/logout", wrapper.Logout)
@@ -26783,7 +27562,7 @@ type CompleteOIDCLoginResponseObject interface {
 type CompleteOIDCLogin303ResponseHeaders struct {
 	CacheControl string
 	Location     string
-	SetCookie    string
+	SetCookie    *string
 }
 
 type CompleteOIDCLogin303Response struct {
@@ -26793,7 +27572,9 @@ type CompleteOIDCLogin303Response struct {
 func (response CompleteOIDCLogin303Response) VisitCompleteOIDCLoginResponse(w http.ResponseWriter) error {
 	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
-	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	if response.Headers.SetCookie != nil {
+		w.Header().Set("Set-Cookie", fmt.Sprint(*response.Headers.SetCookie))
+	}
 	w.WriteHeader(303)
 	return nil
 }
@@ -27015,6 +27796,160 @@ func (response Logout500ApplicationProblemPlusJSONResponse) VisitLogoutResponse(
 	return err
 }
 
+type ExchangeNativeOIDCLoginRequestObject struct {
+	Body *ExchangeNativeOIDCLoginJSONRequestBody
+}
+
+type ExchangeNativeOIDCLoginResponseObject interface {
+	VisitExchangeNativeOIDCLoginResponse(w http.ResponseWriter) error
+}
+
+type ExchangeNativeOIDCLogin200ResponseHeaders struct {
+	CacheControl string
+}
+
+type ExchangeNativeOIDCLogin200JSONResponse struct {
+	Body    NativeOIDCCredential
+	Headers ExchangeNativeOIDCLogin200ResponseHeaders
+}
+
+func (response ExchangeNativeOIDCLogin200JSONResponse) VisitExchangeNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExchangeNativeOIDCLogin400ApplicationProblemPlusJSONResponse Problem
+
+func (response ExchangeNativeOIDCLogin400ApplicationProblemPlusJSONResponse) VisitExchangeNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExchangeNativeOIDCLogin405ApplicationProblemPlusJSONResponse Problem
+
+func (response ExchangeNativeOIDCLogin405ApplicationProblemPlusJSONResponse) VisitExchangeNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ExchangeNativeOIDCLogin500ApplicationProblemPlusJSONResponse Problem
+
+func (response ExchangeNativeOIDCLogin500ApplicationProblemPlusJSONResponse) VisitExchangeNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginNativeOIDCLoginRequestObject struct {
+	Params BeginNativeOIDCLoginParams
+}
+
+type BeginNativeOIDCLoginResponseObject interface {
+	VisitBeginNativeOIDCLoginResponse(w http.ResponseWriter) error
+}
+
+type BeginNativeOIDCLogin303ResponseHeaders struct {
+	CacheControl string
+	Location     string
+	SetCookie    string
+}
+
+type BeginNativeOIDCLogin303Response struct {
+	Headers BeginNativeOIDCLogin303ResponseHeaders
+}
+
+func (response BeginNativeOIDCLogin303Response) VisitBeginNativeOIDCLoginResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.Header().Set("Set-Cookie", fmt.Sprint(response.Headers.SetCookie))
+	w.WriteHeader(303)
+	return nil
+}
+
+type BeginNativeOIDCLogin400ApplicationProblemPlusJSONResponse Problem
+
+func (response BeginNativeOIDCLogin400ApplicationProblemPlusJSONResponse) VisitBeginNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginNativeOIDCLogin405ApplicationProblemPlusJSONResponse Problem
+
+func (response BeginNativeOIDCLogin405ApplicationProblemPlusJSONResponse) VisitBeginNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginNativeOIDCLogin500ApplicationProblemPlusJSONResponse Problem
+
+func (response BeginNativeOIDCLogin500ApplicationProblemPlusJSONResponse) VisitBeginNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginNativeOIDCLogin503ApplicationProblemPlusJSONResponse Problem
+
+func (response BeginNativeOIDCLogin503ApplicationProblemPlusJSONResponse) VisitBeginNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetCurrentPrincipalRequestObject struct {
 	Params GetCurrentPrincipalParams
 }
@@ -27083,6 +28018,41 @@ func (response GetCurrentPrincipal500ApplicationProblemPlusJSONResponse) VisitGe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClientCompatibilityRequestObject struct {
+}
+
+type GetClientCompatibilityResponseObject interface {
+	VisitGetClientCompatibilityResponse(w http.ResponseWriter) error
+}
+
+type GetClientCompatibility200JSONResponse ClientCompatibility
+
+func (response GetClientCompatibility200JSONResponse) VisitGetClientCompatibilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetClientCompatibility405ApplicationProblemPlusJSONResponse Problem
+
+func (response GetClientCompatibility405ApplicationProblemPlusJSONResponse) VisitGetClientCompatibilityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -33334,7 +34304,7 @@ type StrictServerInterface interface {
 	// RevokeAPIKey Revoke an API key
 	// (DELETE /api/v1/auth/api-keys/{apiKeyId})
 	RevokeAPIKey(ctx context.Context, request RevokeAPIKeyRequestObject) (RevokeAPIKeyResponseObject, error)
-	// CompleteOIDCLogin Complete browser login
+	// CompleteOIDCLogin Complete OIDC login
 	// (GET /api/v1/auth/callback)
 	CompleteOIDCLogin(ctx context.Context, request CompleteOIDCLoginRequestObject) (CompleteOIDCLoginResponseObject, error)
 	// BeginOIDCLogin Begin browser login
@@ -33343,9 +34313,18 @@ type StrictServerInterface interface {
 	// Logout Revoke the current browser session
 	// (POST /api/v1/auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// ExchangeNativeOIDCLogin Exchange a native login grant
+	// (POST /api/v1/auth/native/exchange)
+	ExchangeNativeOIDCLogin(ctx context.Context, request ExchangeNativeOIDCLoginRequestObject) (ExchangeNativeOIDCLoginResponseObject, error)
+	// BeginNativeOIDCLogin Begin native app login
+	// (GET /api/v1/auth/native/login)
+	BeginNativeOIDCLogin(ctx context.Context, request BeginNativeOIDCLoginRequestObject) (BeginNativeOIDCLoginResponseObject, error)
 	// GetCurrentPrincipal Get the current principal
 	// (GET /api/v1/auth/session)
 	GetCurrentPrincipal(ctx context.Context, request GetCurrentPrincipalRequestObject) (GetCurrentPrincipalResponseObject, error)
+	// GetClientCompatibility Check client compatibility
+	// (GET /api/v1/client-compatibility)
+	GetClientCompatibility(ctx context.Context, request GetClientCompatibilityRequestObject) (GetClientCompatibilityResponseObject, error)
 	// ListClusters List execution clusters
 	// (GET /api/v1/clusters)
 	ListClusters(ctx context.Context, request ListClustersRequestObject) (ListClustersResponseObject, error)
@@ -33802,6 +34781,63 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request, params L
 	}
 }
 
+// ExchangeNativeOIDCLogin operation middleware
+func (sh *strictHandler) ExchangeNativeOIDCLogin(w http.ResponseWriter, r *http.Request) {
+	var request ExchangeNativeOIDCLoginRequestObject
+
+	var body ExchangeNativeOIDCLoginJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ExchangeNativeOIDCLogin(ctx, request.(ExchangeNativeOIDCLoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ExchangeNativeOIDCLogin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ExchangeNativeOIDCLoginResponseObject); ok {
+		if err := validResponse.VisitExchangeNativeOIDCLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// BeginNativeOIDCLogin operation middleware
+func (sh *strictHandler) BeginNativeOIDCLogin(w http.ResponseWriter, r *http.Request, params BeginNativeOIDCLoginParams) {
+	var request BeginNativeOIDCLoginRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.BeginNativeOIDCLogin(ctx, request.(BeginNativeOIDCLoginRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "BeginNativeOIDCLogin")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(BeginNativeOIDCLoginResponseObject); ok {
+		if err := validResponse.VisitBeginNativeOIDCLoginResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetCurrentPrincipal operation middleware
 func (sh *strictHandler) GetCurrentPrincipal(w http.ResponseWriter, r *http.Request, params GetCurrentPrincipalParams) {
 	var request GetCurrentPrincipalRequestObject
@@ -33821,6 +34857,30 @@ func (sh *strictHandler) GetCurrentPrincipal(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCurrentPrincipalResponseObject); ok {
 		if err := validResponse.VisitGetCurrentPrincipalResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetClientCompatibility operation middleware
+func (sh *strictHandler) GetClientCompatibility(w http.ResponseWriter, r *http.Request) {
+	var request GetClientCompatibilityRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClientCompatibility(ctx, request.(GetClientCompatibilityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClientCompatibility")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClientCompatibilityResponseObject); ok {
+		if err := validResponse.VisitGetClientCompatibilityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

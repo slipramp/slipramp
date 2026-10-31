@@ -16,6 +16,8 @@ import type {
   AppendRunLogChunkData,
   AppendRunLogChunkErrors,
   AppendRunLogChunkResponses,
+  BeginNativeOidcLoginData,
+  BeginNativeOidcLoginErrors,
   BeginOidcLoginData,
   BeginOidcLoginErrors,
   CancelRunData,
@@ -56,6 +58,9 @@ import type {
   EnrollControllerData,
   EnrollControllerErrors,
   EnrollControllerResponses,
+  ExchangeNativeOidcLoginData,
+  ExchangeNativeOidcLoginErrors,
+  ExchangeNativeOidcLoginResponses,
   ExplainTargetActionData,
   ExplainTargetActionErrors,
   ExplainTargetActionResponses,
@@ -68,6 +73,9 @@ import type {
   GetArtifactStorageUsageData,
   GetArtifactStorageUsageErrors,
   GetArtifactStorageUsageResponses,
+  GetClientCompatibilityData,
+  GetClientCompatibilityErrors,
+  GetClientCompatibilityResponses,
   GetCommitData,
   GetCommitErrors,
   GetCommitResponses,
@@ -264,6 +272,20 @@ export const getReadiness = <ThrowOnError extends boolean = false>(
     url: "/readyz",
     ...options,
   });
+
+/**
+ * Check client compatibility
+ *
+ * Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+ */
+export const getClientCompatibility = <ThrowOnError extends boolean = false>(
+  options?: Options<GetClientCompatibilityData, ThrowOnError>,
+): RequestResult<GetClientCompatibilityResponses, GetClientCompatibilityErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetClientCompatibilityResponses,
+    GetClientCompatibilityErrors,
+    ThrowOnError
+  >({ url: "/api/v1/client-compatibility", ...options });
 
 /**
  * List repositories
@@ -1402,9 +1424,43 @@ export const beginOidcLogin = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Complete browser login
+ * Begin native app login
  *
- * Validates the OIDC authorization response, enrolls or refreshes the configured user, issues a local session, and redirects to the web root.
+ * Creates a short-lived OIDC authorization transaction bound to the native app's PKCE challenge and redirects the system browser to the configured identity provider.
+ */
+export const beginNativeOidcLogin = <ThrowOnError extends boolean = false>(
+  options: Options<BeginNativeOidcLoginData, ThrowOnError>,
+): RequestResult<unknown, BeginNativeOidcLoginErrors, ThrowOnError> =>
+  (options.client ?? client).get<unknown, BeginNativeOidcLoginErrors, ThrowOnError>({
+    url: "/api/v1/auth/native/login",
+    ...options,
+  });
+
+/**
+ * Exchange a native login grant
+ *
+ * Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+ */
+export const exchangeNativeOidcLogin = <ThrowOnError extends boolean = false>(
+  options: Options<ExchangeNativeOidcLoginData, ThrowOnError>,
+): RequestResult<ExchangeNativeOidcLoginResponses, ExchangeNativeOidcLoginErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ExchangeNativeOidcLoginResponses,
+    ExchangeNativeOidcLoginErrors,
+    ThrowOnError
+  >({
+    url: "/api/v1/auth/native/exchange",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Complete OIDC login
+ *
+ * Validates the OIDC authorization response, enrolls or refreshes the configured user, and redirects with either a browser session or a native one-time grant.
  */
 export const completeOidcLogin = <ThrowOnError extends boolean = false>(
   options: Options<CompleteOidcLoginData, ThrowOnError>,

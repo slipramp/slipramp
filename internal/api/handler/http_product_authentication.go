@@ -37,6 +37,10 @@ func (a *productAuthenticator) AuthenticateProductRequest(
 			return productidentity.Authentication{}, productidentity.ErrUnauthenticated
 		}
 
+		if !strings.HasPrefix(token, "slipramp_key_") {
+			return a.authentication.AuthenticateSession(ctx, token)
+		}
+
 		return a.authentication.AuthenticateAPIKey(ctx, token)
 	}
 

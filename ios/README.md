@@ -1,8 +1,9 @@
 # Slipramp for iOS
 
-The native Slipramp client is an iOS 17 SwiftUI application. Its first vertical
-slice connects to one Slipramp Server with an API key, stores the credential in
-the Keychain, and exposes the operational Inbox, recent Runs, Run detail, and
+The native Slipramp client is an iOS 17 SwiftUI application. It checks one
+Slipramp Server's exact product API contract before revealing authentication,
+then validates an API key, stores the credential in the Keychain, and exposes
+the operational Inbox, recent Runs, Run detail, and
 reconnectable retained or live Run logs. Operators can approve or reject
 pending Run reviews with an immutable optional comment and can request
 cancellation of unfinished Runs. The Targets tab searches active Targets,
@@ -14,7 +15,10 @@ Runs can be started again from the same frozen revision or the latest catalog
 revision; Runs with Artifact inputs remain pinned to their producing revision.
 Active Run details refresh until completion. The log view can be opened before
 the execution Job starts and waits for its durable stream, or explains the
-terminal outcome when no log becomes available.
+terminal outcome when no log becomes available. Run detail browses Artifact
+metadata and provenance, opens retained sealed content through a verified
+ephemeral system preview, and starts compatible Artifact-input Actions from the
+producing Run with an explicit pinned binding.
 
 The visual language and extension rules are documented in
 [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md). New screens should compose the shared
@@ -66,10 +70,10 @@ the checked-in bundle and Swift sources alongside the Go and TypeScript clients;
 `task api:check` fails when any generated output is stale. Do not edit files in
 `Slipramp/GeneratedSources` by hand.
 
-The generated client handles Inbox, Target, Run, Promotion, and artifact-download
-operations, including Target browsing, Run creation, Run and Promotion decisions,
-and Run cancellation. The generated Run operations also create idempotent
-same-revision or latest-revision reruns. The handwritten Run log reader remains
-separate because it implements
-Slipramp's reconnectable byte-offset SSE validation and replay-suppression
-contract.
+The generated client handles Inbox, Target, Run, Promotion, Artifact listing,
+and Artifact download operations, including Target browsing, Run creation, Run
+and Promotion decisions, and Run cancellation. The generated Run operations
+also create idempotent same-revision or latest-revision reruns and bind compatible
+Artifact inputs. The handwritten Run log reader remains separate because it
+implements Slipramp's reconnectable byte-offset SSE validation and
+replay-suppression contract.

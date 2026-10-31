@@ -124,7 +124,19 @@ private final class RunLogViewModel: ObservableObject {
             return status == 408 || status == 429 || status >= 500
         case .invalidResponse:
             return true
-        case .invalidServerURL, .invalidPagination, .decoding, .invalidArtifact, .invalidLogStream:
+        case .invalidServerURL,
+             .invalidPagination,
+             .compatibilityUnavailable,
+             .incompatibleProductAPIContract,
+             .apiKeyAuthenticationUnavailable,
+             .publicHTTPNotAllowed,
+             .trustedPrivateHTTPConfirmationRequired,
+             .nativeOIDCAuthenticationUnavailable,
+             .nativeOIDCSignInFailed,
+             .connectionFailed,
+             .decoding,
+             .invalidArtifact,
+             .invalidLogStream:
             return false
         }
     }

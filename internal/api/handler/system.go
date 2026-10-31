@@ -7,6 +7,19 @@ import (
 	"github.com/slipramp/slipramp/internal/readiness"
 )
 
+const productAPIContract = 1
+
+func (h *Handler) GetClientCompatibility(
+	context.Context,
+	api.GetClientCompatibilityRequestObject,
+) (api.GetClientCompatibilityResponseObject, error) {
+	return api.GetClientCompatibility200JSONResponse{
+		ServerVersion:         h.serviceVersion,
+		ProductAPIContract:    productAPIContract,
+		AuthenticationMethods: []string{"oidc-native", "api-key"},
+	}, nil
+}
+
 func (*Handler) GetHealth(context.Context, api.GetHealthRequestObject) (api.GetHealthResponseObject, error) {
 	return api.GetHealth200JSONResponse{
 		Status: api.Ok,

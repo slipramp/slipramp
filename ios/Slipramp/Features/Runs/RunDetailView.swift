@@ -3,9 +3,12 @@ import SwiftUI
 @MainActor
 private final class RunDetailViewModel: ObservableObject {
     @Published private(set) var run: Run?
+    @Published private(set) var artifacts: [Artifact] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var isLoadingArtifacts = false
     @Published private(set) var isMutating = false
     @Published var error: String?
+    @Published var artifactError: String?
     @Published var operationError: String?
 
     private let client: SliprampAPIClient
@@ -30,6 +33,23 @@ private final class RunDetailViewModel: ObservableObject {
             error = nil
         } catch {
             self.error = error.localizedDescription
+        }
+
+        await loadArtifacts()
+    }
+
+    func loadArtifacts() async {
+        guard !isLoadingArtifacts else {
+            return
+        }
+        isLoadingArtifacts = true
+        defer { isLoadingArtifacts = false }
+
+        do {
+            artifacts = try await client.listRunArtifacts(runID: runID).items
+            artifactError = nil
+        } catch {
+            artifactError = error.localizedDescription
         }
     }
 
@@ -181,6 +201,17 @@ struct RunDetailView: View {
                     actionSection(run)
                     parametersSection(run)
                     artifactInputsSection(run)
+                    RunArtifactsSection(
+                        run: run,
+                        artifacts: model.artifacts,
+                        isLoading: model.isLoadingArtifacts,
+                        error: model.artifactError,
+                        client: client,
+                        onRetry: {
+                            Task { await model.loadArtifacts() }
+                        },
+                        onRunChanged: onRunChanged
+                    )
                     revisionSection(run)
                     timelineSection(run)
                     resultSection(run)

@@ -162,6 +162,33 @@ func TestProductAuthenticationDoesNotRequireCSRFProtectionForAPIKeys(t *testing.
 	}
 }
 
+func TestProductAuthenticationDoesNotRequireCSRFProtectionForNativeSessionBearer(t *testing.T) {
+	t.Parallel()
+
+	authentication := productAuthentication(
+		productidentity.RoleOperator,
+		productidentity.AuthenticationMethodWebSession,
+		nil,
+	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", nil)
+	request.Header.Set("Authorization", "Bearer native-session-token")
+	called := false
+	response := runProductMiddlewareRequest(
+		t,
+		&recordingProductAuthenticator{authentication: authentication},
+		"CreateRun",
+		request,
+		func(context.Context) { called = true },
+	)
+
+	if response.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if !called {
+		t.Error("next handler was not called")
+	}
+}
+
 func TestProductAuthenticationRejectsInsufficientRoleOrScope(t *testing.T) {
 	t.Parallel()
 
@@ -511,7 +538,7 @@ func TestEveryGeneratedOperationHasAuthenticationBoundary(t *testing.T) {
 		if _, found := productOperationPermissions[operationID]; found {
 			boundaries++
 		}
-		if _, found := productAuthenticationOperations[operationID]; found {
+		if _, found := productAuthenticationExemptOperations[operationID]; found {
 			boundaries++
 		}
 		if _, found := nonProductOperations[operationID]; found {

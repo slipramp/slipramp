@@ -1,5 +1,4 @@
-// Package productauth owns product credentials, OIDC login, and local browser
-// sessions.
+// Package productauth owns product credentials, OIDC login, and local sessions.
 package productauth
 
 import (
@@ -11,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -26,14 +26,16 @@ import (
 const (
 	SessionCookieName = "slipramp_session"
 	StateCookieName   = "slipramp_oidc_state"
+	NativeCallbackURL = "slipramp://auth/callback"
 
 	randomSecretBytes        = 32
 	maximumCreateTries       = 3
 	maximumLoginTransactions = 1024
+	maximumNativeExchanges   = 1024
 )
 
 var (
-	ErrUnavailable      = errors.New("browser authentication is unavailable")
+	ErrUnavailable      = errors.New("OIDC authentication is unavailable")
 	ErrInvalidLogin     = errors.New("invalid OIDC login")
 	ErrEnrollmentDenied = errors.New("OIDC identity is not enrolled")
 	ErrForbidden        = errors.New("product credential operation is forbidden")
@@ -70,9 +72,16 @@ type browserSessionStore interface {
 }
 
 type loginTransaction struct {
-	nonce        string
-	codeVerifier string
-	expiresAt    time.Time
+	nonce               string
+	codeVerifier        string
+	nativeCodeChallenge string
+	expiresAt           time.Time
+}
+
+type nativeExchange struct {
+	principalID   uuid.UUID
+	codeChallenge string
+	expiresAt     time.Time
 }
 
 type Service struct {
@@ -85,6 +94,7 @@ type Service struct {
 	randomSecret   func() (string, error)
 	transactionsMu sync.Mutex
 	transactions   map[string]loginTransaction
+	exchanges      map[string]nativeExchange
 }
 
 type LoginStart struct {
@@ -96,6 +106,11 @@ type LoginStart struct {
 type SessionCredential struct {
 	Token     string
 	ExpiresAt time.Time
+}
+
+type LoginCompletion struct {
+	Session     *SessionCredential
+	RedirectURL string
 }
 
 func NewService(store Store, provider OIDCProvider, cfg Config) (*Service, error) {
@@ -119,6 +134,7 @@ func NewService(store Store, provider OIDCProvider, cfg Config) (*Service, error
 		newID:         uuid.New,
 		randomSecret:  newRandomSecret,
 		transactions:  make(map[string]loginTransaction),
+		exchanges:     make(map[string]nativeExchange),
 	}, nil
 }
 
@@ -127,6 +143,18 @@ func (s *Service) SecureCookies() bool {
 }
 
 func (s *Service) BeginLogin() (LoginStart, error) {
+	return s.beginLogin("")
+}
+
+func (s *Service) BeginNativeLogin(codeChallenge string) (LoginStart, error) {
+	if !validPKCEValue(codeChallenge) {
+		return LoginStart{}, fmt.Errorf("%w: native code challenge is invalid", ErrInvalidLogin)
+	}
+
+	return s.beginLogin(codeChallenge)
+}
+
+func (s *Service) beginLogin(nativeCodeChallenge string) (LoginStart, error) {
 	now := s.now().UTC()
 	state, err := s.randomSecret()
 	if err != nil {
@@ -147,9 +175,10 @@ func (s *Service) BeginLogin() (LoginStart, error) {
 		return LoginStart{}, ErrUnavailable
 	}
 	s.transactions[state] = loginTransaction{
-		nonce:        nonce,
-		codeVerifier: codeVerifier,
-		expiresAt:    expiresAt,
+		nonce:               nonce,
+		codeVerifier:        codeVerifier,
+		nativeCodeChallenge: nativeCodeChallenge,
+		expiresAt:           expiresAt,
 	}
 
 	return LoginStart{
@@ -164,39 +193,86 @@ func (s *Service) CompleteLogin(
 	code string,
 	state string,
 	cookieState string,
-) (SessionCredential, error) {
-	if strings.TrimSpace(code) == "" {
-		return SessionCredential{}, fmt.Errorf("%w: authorization code is missing", ErrInvalidLogin)
-	}
-
+) (LoginCompletion, error) {
 	transaction, err := s.takeLoginTransaction(state, cookieState)
 	if err != nil {
-		return SessionCredential{}, err
+		return LoginCompletion{}, err
+	}
+	if strings.TrimSpace(code) == "" {
+		return s.completeLoginError(transaction, fmt.Errorf("%w: authorization code is missing", ErrInvalidLogin))
 	}
 
 	profile, err := s.provider.Authenticate(ctx, code, transaction.codeVerifier, transaction.nonce)
 	if err != nil {
 		if errors.Is(err, ErrInvalidLogin) {
-			return SessionCredential{}, err
+			return s.completeLoginError(transaction, err)
 		}
 
-		return SessionCredential{}, fmt.Errorf("authenticate with OIDC provider: %w", err)
+		return LoginCompletion{}, fmt.Errorf("authenticate with OIDC provider: %w", err)
 	}
 
 	role, enrolled := s.cfg.OIDC.SubjectRoles[profile.Subject]
 	if !enrolled {
-		return SessionCredential{}, ErrEnrollmentDenied
+		return s.completeLoginError(transaction, ErrEnrollmentDenied)
 	}
 
 	principal, err := s.resolveOIDCUser(ctx, profile, role)
 	if err != nil {
-		return SessionCredential{}, err
+		return LoginCompletion{}, err
 	}
 	if principal.DisabledAt != nil {
-		return SessionCredential{}, productidentity.ErrUnauthenticated
+		return s.completeLoginError(transaction, productidentity.ErrUnauthenticated)
 	}
 
-	return s.createSession(ctx, principal.ID)
+	if transaction.nativeCodeChallenge != "" {
+		completion, err := s.createNativeExchange(principal.ID, transaction.nativeCodeChallenge)
+		if errors.Is(err, ErrUnavailable) {
+			return s.completeLoginError(transaction, err)
+		}
+
+		return completion, err
+	}
+
+	credential, err := s.createSession(ctx, principal.ID)
+	if err != nil {
+		return LoginCompletion{}, err
+	}
+
+	return LoginCompletion{Session: &credential}, nil
+}
+
+func (s *Service) ExchangeNativeLogin(
+	ctx context.Context,
+	code string,
+	codeVerifier string,
+) (SessionCredential, error) {
+	if !validPKCEValue(codeVerifier) {
+		return SessionCredential{}, fmt.Errorf("%w: native code verifier is invalid", ErrInvalidLogin)
+	}
+
+	now := s.now().UTC()
+	challenge := sha256.Sum256([]byte(codeVerifier))
+	encodedChallenge := base64.RawURLEncoding.EncodeToString(challenge[:])
+
+	s.transactionsMu.Lock()
+	s.pruneNativeExchanges(now)
+	exchange, found := s.exchanges[code]
+	challengeMatches := subtle.ConstantTimeCompare(
+		[]byte(encodedChallenge),
+		[]byte(exchange.codeChallenge),
+	) == 1
+	if found && challengeMatches {
+		delete(s.exchanges, code)
+	} else {
+		found = false
+	}
+	s.transactionsMu.Unlock()
+
+	if !found || !now.Before(exchange.expiresAt) {
+		return SessionCredential{}, fmt.Errorf("%w: native exchange is missing or expired", ErrInvalidLogin)
+	}
+
+	return s.createSession(ctx, exchange.principalID)
 }
 
 func (s *Service) AuthenticateSession(ctx context.Context, token string) (productidentity.Authentication, error) {
@@ -279,6 +355,73 @@ func (s *Service) pruneLoginTransactions(now time.Time) {
 			delete(s.transactions, state)
 		}
 	}
+}
+
+func (s *Service) completeLoginError(
+	transaction loginTransaction,
+	err error,
+) (LoginCompletion, error) {
+	if transaction.nativeCodeChallenge == "" {
+		return LoginCompletion{}, err
+	}
+
+	callback, parseErr := url.Parse(NativeCallbackURL)
+	if parseErr != nil {
+		return LoginCompletion{}, parseErr
+	}
+	query := callback.Query()
+	query.Set("error", "sign_in_failed")
+	callback.RawQuery = query.Encode()
+
+	return LoginCompletion{RedirectURL: callback.String()}, nil
+}
+
+func (s *Service) createNativeExchange(
+	principalID uuid.UUID,
+	codeChallenge string,
+) (LoginCompletion, error) {
+	now := s.now().UTC()
+	code, err := s.randomSecret()
+	if err != nil {
+		return LoginCompletion{}, fmt.Errorf("generate native login exchange code: %w", err)
+	}
+
+	s.transactionsMu.Lock()
+	defer s.transactionsMu.Unlock()
+
+	s.pruneNativeExchanges(now)
+	if len(s.exchanges) >= maximumNativeExchanges {
+		return LoginCompletion{}, ErrUnavailable
+	}
+	s.exchanges[code] = nativeExchange{
+		principalID:   principalID,
+		codeChallenge: codeChallenge,
+		expiresAt:     now.Add(s.cfg.LoginTransactionLifetime),
+	}
+
+	callback, err := url.Parse(NativeCallbackURL)
+	if err != nil {
+		delete(s.exchanges, code)
+		return LoginCompletion{}, err
+	}
+	query := callback.Query()
+	query.Set("code", code)
+	callback.RawQuery = query.Encode()
+
+	return LoginCompletion{RedirectURL: callback.String()}, nil
+}
+
+func (s *Service) pruneNativeExchanges(now time.Time) {
+	for code, exchange := range s.exchanges {
+		if !now.Before(exchange.expiresAt) {
+			delete(s.exchanges, code)
+		}
+	}
+}
+
+func validPKCEValue(value string) bool {
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	return err == nil && len(value) == 43 && len(decoded) == sha256.Size
 }
 
 func (s *Service) resolveOIDCUser(

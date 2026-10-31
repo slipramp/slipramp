@@ -50,3 +50,29 @@ readiness:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+clientCompatibility:
+  get:
+    operationId: getClientCompatibility
+    summary: Check client compatibility
+    description: >-
+      Reports the Server release, exact pre-stable product API contract, and
+      authentication methods available to native clients before they submit a
+      credential. The response intentionally excludes identity-provider and
+      deployment configuration.
+    security: []
+    tags:
+      - System
+    responses:
+      "200":
+        description: Client compatibility information for this Server.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/common.yaml#/ClientCompatibility
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

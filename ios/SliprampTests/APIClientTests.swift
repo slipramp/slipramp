@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import XCTest
 @testable import SliprampCore
@@ -6,6 +7,100 @@ final class APIClientTests: XCTestCase {
     override func tearDown() {
         StubURLProtocol.requestHandler = nil
         super.tearDown()
+    }
+
+    func testCompatibilityCheckIsPublicAndEnforcesTheExactContract() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            session: session
+        )
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/client-compatibility")
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+
+            let body = Data(
+                """
+                {
+                  "serverVersion": "test-version",
+                  "productApiContract": 1,
+                  "authenticationMethods": ["api-key"]
+                }
+                """.utf8
+            )
+            return (self.response(for: request, status: 200), body)
+        }
+
+        let compatibility = try await client.getClientCompatibility()
+        XCTAssertEqual(compatibility.serverVersion, "test-version")
+        XCTAssertNoThrow(try ClientCompatibilityPolicy.validate(compatibility))
+
+        let incompatible = ServerCompatibility(
+            serverVersion: "future-version",
+            productApiContract: 2,
+            authenticationMethods: ["api-key"]
+        )
+        XCTAssertThrowsError(try ClientCompatibilityPolicy.validate(incompatible)) { error in
+            XCTAssertEqual(
+                error as? SliprampAPIError,
+                .incompatibleProductAPIContract(server: 2)
+            )
+        }
+    }
+
+    func testNativeOIDCBuildsPKCELoginAndExchangesCallbackGrant() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example/base")!,
+            session: session
+        )
+        let pkce = NativeOIDCPKCE.make()
+        XCTAssertEqual(pkce.verifier.count, 43)
+        XCTAssertEqual(pkce.challenge.count, 43)
+
+        let loginURL = try client.nativeOIDCLoginURL(codeChallenge: pkce.challenge)
+        let loginComponents = try XCTUnwrap(
+            URLComponents(url: loginURL, resolvingAgainstBaseURL: false)
+        )
+        XCTAssertEqual(loginComponents.path, "/base/api/v1/auth/native/login")
+        XCTAssertEqual(
+            loginComponents.queryItems,
+            [URLQueryItem(name: "codeChallenge", value: pkce.challenge)]
+        )
+        let callback = URL(string: "slipramp://auth/callback?code=one-time-grant")!
+        XCTAssertEqual(
+            try SliprampAPIClient.nativeOIDCAuthorizationCode(from: callback),
+            "one-time-grant"
+        )
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/base/api/v1/auth/native/exchange")
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+            let body = try self.requestBody(request)
+            let payload = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: body) as? [String: String]
+            )
+            XCTAssertEqual(payload["code"], "one-time-grant")
+            XCTAssertEqual(payload["codeVerifier"], pkce.verifier)
+
+            let response = Data(
+                """
+                {
+                  "token": "native-session-token",
+                  "expiresAt": "2026-10-31T00:00:00Z"
+                }
+                """.utf8
+            )
+            return (self.response(for: request, status: 200), response)
+        }
+
+        let token = try await client.exchangeNativeOIDCLogin(
+            code: "one-time-grant",
+            codeVerifier: pkce.verifier
+        )
+        XCTAssertEqual(token, "native-session-token")
     }
 
     func testInboxUsesBearerCredentialAndDecodesProjection() async throws {
@@ -141,6 +236,86 @@ final class APIClientTests: XCTestCase {
             idempotencyKey: "start-action-key"
         )
         XCTAssertEqual(run.id, runID)
+    }
+
+    func testCreateRunBindsArtifactInput() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let artifactID = "2a76876f-bf1b-4851-b401-16c68608962c"
+
+        StubURLProtocol.requestHandler = { request in
+            let requestBody = try self.requestBody(request)
+            let payload = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: requestBody) as? [String: Any]
+            )
+            XCTAssertEqual(payload["targetId"] as? String, "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14")
+            XCTAssertEqual(payload["action"] as? String, "apply")
+            XCTAssertEqual(payload["inputs"] as? [String: String], ["plan": artifactID])
+            XCTAssertEqual(payload["parameters"] as? [String: String], [:])
+
+            return (
+                self.response(for: request, status: 201),
+                self.runBody(
+                    id: "531a9f8c-4341-455c-b87c-690fb8f6e37b",
+                    phase: "queued",
+                    reviewState: "not-required"
+                )
+            )
+        }
+
+        _ = try await client.createRun(
+            targetID: "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14",
+            action: "apply",
+            parameters: [:],
+            inputs: ["plan": artifactID],
+            idempotencyKey: "apply-artifact-key"
+        )
+    }
+
+    func testCreateRunMapsContentTooLargeProblem() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+
+        StubURLProtocol.requestHandler = { request in
+            let body = Data(
+                """
+                {
+                  "type": "about:blank",
+                  "title": "Request too large",
+                  "status": 413,
+                  "detail": "The request body is too large."
+                }
+                """.utf8
+            )
+            return (self.response(for: request, status: 413), body)
+        }
+
+        do {
+            _ = try await client.createRun(
+                targetID: "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14",
+                action: "apply",
+                parameters: [:],
+                idempotencyKey: "large-request-key"
+            )
+            XCTFail("Expected the request to fail")
+        } catch let error as SliprampAPIError {
+            XCTAssertEqual(
+                error,
+                .http(
+                    status: 413,
+                    title: "Request too large",
+                    detail: "The request body is too large."
+                )
+            )
+        }
     }
 
     func testActionParameterDecoderValidatesAndConvertsValues() throws {
@@ -360,6 +535,9 @@ final class APIClientTests: XCTestCase {
         )
         let artifactID = "2a76876f-bf1b-4851-b401-16c68608962c"
 
+        let contents = Data("@@ -1 +1 @@\n-old\n+new\n".utf8)
+        let digest = SHA256.hash(data: contents).map { String(format: "%02x", $0) }.joined()
+
         StubURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.httpMethod, "GET")
             XCTAssertEqual(request.url?.path, "/api/v1/artifacts/\(artifactID)/download")
@@ -368,13 +546,124 @@ final class APIClientTests: XCTestCase {
                 url: request.url!,
                 statusCode: 200,
                 httpVersion: "HTTP/1.1",
-                headerFields: ["Content-Type": "application/octet-stream"]
+                headerFields: [
+                    "Content-Type": "application/octet-stream",
+                    "Digest": "sha-256=\(digest)",
+                ]
             )!
-            return (response, Data("@@ -1 +1 @@\n-old\n+new\n".utf8))
+            return (response, contents)
         }
 
-        let contents = try await client.downloadArtifactText(id: artifactID)
-        XCTAssertEqual(contents, "@@ -1 +1 @@\n-old\n+new\n")
+        let text = try await client.downloadArtifactText(id: artifactID)
+        XCTAssertEqual(text, "@@ -1 +1 @@\n-old\n+new\n")
+    }
+
+    func testRunArtifactListUsesGeneratedOperation() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let runID = "19d265a2-c116-4e8f-b547-a824a9039574"
+        let artifactID = "2a76876f-bf1b-4851-b401-16c68608962c"
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/api/v1/runs/\(runID)/artifacts")
+            let body = Data(
+                """
+                {
+                  "items": [
+                    {
+                      "id": "\(artifactID)",
+                      "runId": "\(runID)",
+                      "name": "plan",
+                      "description": "Reviewed infrastructure plan.",
+                      "kind": "output",
+                      "state": "sealed",
+                      "mediaType": "application/json",
+                      "sizeBytes": 2048,
+                      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                      "sensitive": true,
+                      "retentionState": "retained",
+                      "provenance": {
+                        "producerRunId": "\(runID)",
+                        "repositoryId": "ff281fe6-d60b-4312-840c-df2714f89717",
+                        "target": "homelab",
+                        "action": "plan",
+                        "commit": { "sha": "0123456789abcdef0123456789abcdef01234567" },
+                        "catalogRevisionId": "ced99dba-bb0b-4a8a-a9be-a5ef9875b945"
+                      },
+                      "createdAt": "2026-10-30T12:34:56Z",
+                      "sealedAt": "2026-10-30T12:35:10Z"
+                    }
+                  ]
+                }
+                """.utf8
+            )
+            return (self.response(for: request, status: 200), body)
+        }
+
+        let list = try await client.listRunArtifacts(runID: runID)
+        XCTAssertEqual(list.items.count, 1)
+        XCTAssertEqual(list.items[0].id, artifactID)
+        XCTAssertEqual(list.items[0].name, "plan")
+        XCTAssertEqual(list.items[0].statusLabel, "Sealed")
+        XCTAssertTrue(list.items[0].isDownloadable)
+    }
+
+    func testArtifactDownloadStreamsVerifiedFile() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let artifactID = "2a76876f-bf1b-4851-b401-16c68608962c"
+        let contents = Data("immutable plan bytes".utf8)
+        let digest = SHA256.hash(data: contents).map { String(format: "%02x", $0) }.joined()
+
+        StubURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: [
+                    "Content-Type": "application/octet-stream",
+                    "Digest": "sha-256=\(digest)",
+                ]
+            )!
+            return (response, contents)
+        }
+
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("slipramp-artifact-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: destination) }
+
+        try await client.downloadArtifact(
+            id: artifactID,
+            to: destination,
+            expectedSHA256: digest
+        )
+        XCTAssertEqual(try Data(contentsOf: destination), contents)
+
+        let rejectedDestination = destination.appendingPathExtension("rejected")
+        defer { try? FileManager.default.removeItem(at: rejectedDestination) }
+        do {
+            try await client.downloadArtifact(
+                id: artifactID,
+                to: rejectedDestination,
+                expectedSHA256: String(repeating: "0", count: 64)
+            )
+            XCTFail("Expected the metadata digest mismatch to fail")
+        } catch let error as SliprampAPIError {
+            XCTAssertEqual(
+                error,
+                .invalidArtifact("The downloaded content did not match its Artifact metadata.")
+            )
+            XCTAssertFalse(FileManager.default.fileExists(atPath: rejectedDestination.path))
+        }
     }
 
     func testRunLogStreamReportsConnectionBeforeTerminalEvent() async throws {
@@ -470,6 +759,66 @@ final class APIClientTests: XCTestCase {
         )
     }
 
+    func testTransportSecurityAllowsHTTPSAndOnlyPrivateHTTP() throws {
+        XCTAssertEqual(
+            try SliprampAPIClient.transportSecurity(
+                for: URL(string: "https://slipramp.example.com")!
+            ),
+            .https
+        )
+
+        for value in [
+            "http://localhost:8080",
+            "http://slipramp.local",
+            "http://slipramp",
+            "http://10.20.30.40",
+            "http://172.16.0.1",
+            "http://192.168.1.4",
+            "http://100.100.100.100",
+            "http://[fd00::1]",
+        ] {
+            XCTAssertEqual(
+                try SliprampAPIClient.transportSecurity(for: URL(string: value)!),
+                .trustedPrivateHTTP,
+                value
+            )
+        }
+
+        for value in [
+            "http://slipramp.example.com",
+            "http://8.8.8.8",
+            "http://[2001:4860:4860::8888]",
+        ] {
+            XCTAssertThrowsError(
+                try SliprampAPIClient.transportSecurity(for: URL(string: value)!)
+            ) { error in
+                XCTAssertEqual(error as? SliprampAPIError, .publicHTTPNotAllowed, value)
+            }
+        }
+    }
+
+    func testCompatibilityCheckExplainsUntrustedCertificate() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            session: session
+        )
+        StubURLProtocol.requestHandler = { _ in
+            throw URLError(.serverCertificateUntrusted)
+        }
+
+        do {
+            _ = try await client.getClientCompatibility()
+            XCTFail("Expected the request to fail")
+        } catch let error as SliprampAPIError {
+            XCTAssertEqual(error, .connectionFailed(.certificate))
+            XCTAssertEqual(
+                error.localizedDescription,
+                "The Server’s TLS certificate is not trusted for this address. Use a system-trusted certificate with the correct hostname."
+            )
+        }
+    }
+
     private func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURLProtocol.self]
@@ -485,6 +834,7 @@ final class APIClientTests: XCTestCase {
                 "Content-Type": status < 400
                     ? "application/json"
                     : "application/problem+json",
+                "Cache-Control": "private, no-store",
             ]
         )!
     }

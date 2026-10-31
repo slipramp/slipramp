@@ -12,6 +12,8 @@ paths:
     $ref: ./paths/system.yaml#/health
   /readyz:
     $ref: ./paths/system.yaml#/readiness
+  /api/v1/client-compatibility:
+    $ref: ./paths/system.yaml#/clientCompatibility
   /api/v1/repositories:
     $ref: ./paths/repositories.yaml#/repositories
   /api/v1/repository-connection-tests:
@@ -88,6 +90,10 @@ paths:
     $ref: ./paths/artifacts.yaml#/artifactReport
   /api/v1/auth/login:
     $ref: ./paths/authentication.yaml#/login
+  /api/v1/auth/native/login:
+    $ref: ./paths/authentication.yaml#/nativeLogin
+  /api/v1/auth/native/exchange:
+    $ref: ./paths/authentication.yaml#/nativeExchange
   /api/v1/auth/callback:
     $ref: ./paths/authentication.yaml#/callback
   /api/v1/auth/session:
@@ -143,7 +149,7 @@ components:
     ProductBearer:
       type: http
       scheme: bearer
-      description: Slipramp API key for a product principal.
+      description: Slipramp API key or native app session for a product principal.
     ControllerBearer:
       type: http
       scheme: bearer
@@ -158,6 +164,8 @@ components:
       $ref: ./components/common.yaml#/HealthResponse
     ReadinessResponse:
       $ref: ./components/common.yaml#/ReadinessResponse
+    ClientCompatibility:
+      $ref: ./components/common.yaml#/ClientCompatibility
     DependencyStatus:
       $ref: ./components/common.yaml#/DependencyStatus
     GitCommit:

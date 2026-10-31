@@ -14,6 +14,12 @@ export type ReadinessResponse = {
   artifactStorage: DependencyStatus;
 };
 
+export type ClientCompatibility = {
+  serverVersion: string;
+  productApiContract: number;
+  authenticationMethods: Array<string>;
+};
+
 export type DependencyStatus = "available" | "unavailable";
 
 export type GitCommit = {
@@ -1955,6 +1961,16 @@ export type ArtifactProvenance = {
 
 export type PyinfraHostList = Array<string>;
 
+export type NativeOidcExchange = {
+  code: string;
+  codeVerifier: string;
+};
+
+export type NativeOidcCredential = {
+  token: string;
+  expiresAt: string;
+};
+
 export type ApiKeyScope =
   | "slipramp:read"
   | "slipramp:runs:write"
@@ -2237,6 +2253,33 @@ export type GetReadinessResponses = {
 };
 
 export type GetReadinessResponse = GetReadinessResponses[keyof GetReadinessResponses];
+
+export type GetClientCompatibilityData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: "/api/v1/client-compatibility";
+};
+
+export type GetClientCompatibilityErrors = {
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+};
+
+export type GetClientCompatibilityError =
+  GetClientCompatibilityErrors[keyof GetClientCompatibilityErrors];
+
+export type GetClientCompatibilityResponses = {
+  /**
+   * Client compatibility information for this Server.
+   */
+  200: ClientCompatibility;
+};
+
+export type GetClientCompatibilityResponse =
+  GetClientCompatibilityResponses[keyof GetClientCompatibilityResponses];
 
 export type ListRepositoriesData = {
   body?: never;
@@ -4369,11 +4412,77 @@ export type BeginOidcLoginErrors = {
 
 export type BeginOidcLoginError = BeginOidcLoginErrors[keyof BeginOidcLoginErrors];
 
+export type BeginNativeOidcLoginData = {
+  body?: never;
+  path?: never;
+  query: {
+    codeChallenge: string;
+  };
+  url: "/api/v1/auth/native/login";
+};
+
+export type BeginNativeOidcLoginErrors = {
+  /**
+   * The native PKCE challenge is invalid.
+   */
+  400: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The login transaction could not be created.
+   */
+  500: Problem;
+  /**
+   * Native authentication is temporarily unavailable.
+   */
+  503: Problem;
+};
+
+export type BeginNativeOidcLoginError =
+  BeginNativeOidcLoginErrors[keyof BeginNativeOidcLoginErrors];
+
+export type ExchangeNativeOidcLoginData = {
+  body: NativeOidcExchange;
+  path?: never;
+  query?: never;
+  url: "/api/v1/auth/native/exchange";
+};
+
+export type ExchangeNativeOidcLoginErrors = {
+  /**
+   * The native login grant or PKCE verifier is invalid or expired.
+   */
+  400: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The session credential could not be issued.
+   */
+  500: Problem;
+};
+
+export type ExchangeNativeOidcLoginError =
+  ExchangeNativeOidcLoginErrors[keyof ExchangeNativeOidcLoginErrors];
+
+export type ExchangeNativeOidcLoginResponses = {
+  /**
+   * The native app session credential.
+   */
+  200: NativeOidcCredential;
+};
+
+export type ExchangeNativeOidcLoginResponse =
+  ExchangeNativeOidcLoginResponses[keyof ExchangeNativeOidcLoginResponses];
+
 export type CompleteOidcLoginData = {
   body?: never;
   path?: never;
   query: {
-    code: string;
+    code?: string;
     state: string;
   };
   url: "/api/v1/auth/callback";

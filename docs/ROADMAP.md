@@ -169,8 +169,8 @@ findings are intentionally retained as explicit follow-up work:
 
 ## Native iOS client
 
-An iOS 17 SwiftUI preview now supplies Keychain-backed API-key connection,
-the role-aware operational Inbox, recent Run history, Run detail, and
+An iOS 17 SwiftUI preview now supplies Keychain-backed native OIDC and API-key
+connection, the role-aware operational Inbox, recent Run history, Run detail, and
 reconnectable retained or live Run logs. It also searches active Targets,
 browses their Actions, and starts parameterized Actions that do not require
 Artifact inputs. It stays inside the product API boundary and shares the
@@ -196,10 +196,15 @@ repository while contracts are pre-stable.
 - [x] Keep visible active Run details fresh through completion and let operators
       enter logs before execution starts, waiting for the durable stream or a
       terminal no-log outcome.
-- [ ] Add general Run Artifact browsing and start Artifact-input Actions from
+- [x] Add general Run Artifact browsing and start Artifact-input Actions from
       compatible producing Runs.
-- [ ] Design native OIDC sign-in, client and Server compatibility negotiation,
-      and release-safe private-network transport before TestFlight distribution.
+- [x] Add native OIDC sign-in through the system authentication session with an
+      app PKCE-bound one-time grant, expiring local Bearer session, and API-key
+      fallback.
+- [x] Add release-safe private-network transport: use normal system trust for
+      HTTPS, reject public HTTP, require exact-Server confirmation and a visible
+      warning for private HTTP, retain ATS local-network scoping, and surface
+      actionable certificate, DNS, reachability, and transport errors.
 - [ ] Add Xcode build and test automation on a pinned macOS toolchain, app icon
       packaging, accessibility verification, signing, and TestFlight metadata.
 - [ ] Add APNs device registration and routed push delivery only after the

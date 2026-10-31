@@ -15,15 +15,61 @@ const callbackPath = "/api/v1/auth/callback"
 
 type BrowserAuthenticationService interface {
 	BeginLogin() (productauth.LoginStart, error)
+	BeginNativeLogin(codeChallenge string) (productauth.LoginStart, error)
 	CompleteLogin(
 		ctx context.Context,
 		code string,
 		state string,
 		cookieState string,
+	) (productauth.LoginCompletion, error)
+	ExchangeNativeLogin(
+		ctx context.Context,
+		code string,
+		codeVerifier string,
 	) (productauth.SessionCredential, error)
 	AuthenticateSession(ctx context.Context, token string) (productidentity.Authentication, error)
 	RevokeSession(context.Context, string) error
 	SecureCookies() bool
+}
+
+func (h *Handler) BeginNativeOIDCLogin(
+	_ context.Context,
+	request api.BeginNativeOIDCLoginRequestObject,
+) (api.BeginNativeOIDCLoginResponseObject, error) {
+	login, err := h.productAuth.BeginNativeLogin(request.Params.CodeChallenge)
+	if errors.Is(err, productauth.ErrInvalidLogin) {
+		problem := NewProblem(http.StatusBadRequest, "The native PKCE challenge is invalid.")
+
+		return api.BeginNativeOIDCLogin400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if errors.Is(err, productauth.ErrUnavailable) {
+		problem := NewProblem(
+			http.StatusServiceUnavailable,
+			"Native authentication is temporarily unavailable.",
+		)
+
+		return api.BeginNativeOIDCLogin503ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	stateCookie := http.Cookie{
+		Name:     productauth.StateCookieName,
+		Value:    login.State,
+		Path:     callbackPath,
+		Expires:  login.ExpiresAt,
+		HttpOnly: true,
+		Secure:   h.productAuth.SecureCookies(),
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	return api.BeginNativeOIDCLogin303Response{
+		Headers: api.BeginNativeOIDCLogin303ResponseHeaders{
+			CacheControl: privateNoStoreCacheControl,
+			Location:     login.AuthorizationURL,
+			SetCookie:    stateCookie.String(),
+		},
+	}, nil
 }
 
 func (h *Handler) BeginOIDCLogin(
@@ -66,7 +112,11 @@ func (h *Handler) CompleteOIDCLogin(
 	if request.Params.SliprampOidcState != nil {
 		cookieState = *request.Params.SliprampOidcState
 	}
-	credential, err := h.productAuth.CompleteLogin(ctx, request.Params.Code, request.Params.State, cookieState)
+	code := ""
+	if request.Params.Code != nil {
+		code = *request.Params.Code
+	}
+	completion, err := h.productAuth.CompleteLogin(ctx, code, request.Params.State, cookieState)
 	if err != nil {
 		switch {
 		case errors.Is(err, productauth.ErrInvalidLogin):
@@ -82,6 +132,18 @@ func (h *Handler) CompleteOIDCLogin(
 			return nil, err
 		}
 	}
+	if completion.RedirectURL != "" {
+		return api.CompleteOIDCLogin303Response{
+			Headers: api.CompleteOIDCLogin303ResponseHeaders{
+				CacheControl: privateNoStoreCacheControl,
+				Location:     completion.RedirectURL,
+			},
+		}, nil
+	}
+	if completion.Session == nil {
+		return nil, errors.New("OIDC login completion is missing a destination")
+	}
+	credential := *completion.Session
 
 	sessionCookie := http.Cookie{
 		Name:     productauth.SessionCookieName,
@@ -92,12 +154,47 @@ func (h *Handler) CompleteOIDCLogin(
 		Secure:   h.productAuth.SecureCookies(),
 		SameSite: http.SameSiteLaxMode,
 	}
+	setCookie := sessionCookie.String()
 
 	return api.CompleteOIDCLogin303Response{
 		Headers: api.CompleteOIDCLogin303ResponseHeaders{
 			CacheControl: privateNoStoreCacheControl,
 			Location:     "/",
-			SetCookie:    sessionCookie.String(),
+			SetCookie:    &setCookie,
+		},
+	}, nil
+}
+
+func (h *Handler) ExchangeNativeOIDCLogin(
+	ctx context.Context,
+	request api.ExchangeNativeOIDCLoginRequestObject,
+) (api.ExchangeNativeOIDCLoginResponseObject, error) {
+	if request.Body == nil {
+		problem := NewProblem(http.StatusBadRequest, "The native login grant is required.")
+
+		return api.ExchangeNativeOIDCLogin400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	credential, err := h.productAuth.ExchangeNativeLogin(
+		ctx,
+		request.Body.Code,
+		request.Body.CodeVerifier,
+	)
+	if errors.Is(err, productauth.ErrInvalidLogin) {
+		problem := NewProblem(http.StatusBadRequest, "The native login grant is invalid or expired.")
+
+		return api.ExchangeNativeOIDCLogin400ApplicationProblemPlusJSONResponse(problem), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return api.ExchangeNativeOIDCLogin200JSONResponse{
+		Body: api.NativeOIDCCredential{
+			Token:     credential.Token,
+			ExpiresAt: credential.ExpiresAt,
+		},
+		Headers: api.ExchangeNativeOIDCLogin200ResponseHeaders{
+			CacheControl: privateNoStoreCacheControl,
 		},
 	}, nil
 }

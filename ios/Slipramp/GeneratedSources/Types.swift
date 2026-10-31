@@ -11,6 +11,13 @@ import struct Foundation.Date
 #endif
 /// A type that performs HTTP operations defined by the OpenAPI document.
 internal protocol APIProtocol: Sendable {
+    /// Check client compatibility
+    ///
+    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+    ///
+    /// - Remark: HTTP `GET /api/v1/client-compatibility`.
+    /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)`.
+    func getClientCompatibility(_ input: Operations.GetClientCompatibility.Input) async throws -> Operations.GetClientCompatibility.Output
     /// Get the current operational Inbox
     ///
     /// Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
@@ -72,11 +79,23 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/runs/{runId}/review`.
     /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/review/post(decideRunReview)`.
     func decideRunReview(_ input: Operations.DecideRunReview.Input) async throws -> Operations.DecideRunReview.Output
+    /// List a Run's artifacts
+    ///
+    /// - Remark: HTTP `GET /api/v1/runs/{runId}/artifacts`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)`.
+    func listRunArtifacts(_ input: Operations.ListRunArtifacts.Input) async throws -> Operations.ListRunArtifacts.Output
     /// Download a sealed artifact
     ///
     /// - Remark: HTTP `GET /api/v1/artifacts/{artifactId}/download`.
     /// - Remark: Generated from `#/paths//api/v1/artifacts/{artifactId}/download/get(downloadArtifact)`.
     func downloadArtifact(_ input: Operations.DownloadArtifact.Input) async throws -> Operations.DownloadArtifact.Output
+    /// Exchange a native login grant
+    ///
+    /// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+    ///
+    /// - Remark: HTTP `POST /api/v1/auth/native/exchange`.
+    /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)`.
+    func exchangeNativeOIDCLogin(_ input: Operations.ExchangeNativeOIDCLogin.Input) async throws -> Operations.ExchangeNativeOIDCLogin.Output
     /// Get a Promotion
     ///
     /// - Remark: HTTP `GET /api/v1/promotions/{promotionId}`.
@@ -91,6 +110,15 @@ internal protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// Check client compatibility
+    ///
+    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+    ///
+    /// - Remark: HTTP `GET /api/v1/client-compatibility`.
+    /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)`.
+    internal func getClientCompatibility(headers: Operations.GetClientCompatibility.Input.Headers = .init()) async throws -> Operations.GetClientCompatibility.Output {
+        try await getClientCompatibility(Operations.GetClientCompatibility.Input(headers: headers))
+    }
     /// Get the current operational Inbox
     ///
     /// Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
@@ -222,6 +250,19 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// List a Run's artifacts
+    ///
+    /// - Remark: HTTP `GET /api/v1/runs/{runId}/artifacts`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)`.
+    internal func listRunArtifacts(
+        path: Operations.ListRunArtifacts.Input.Path,
+        headers: Operations.ListRunArtifacts.Input.Headers = .init()
+    ) async throws -> Operations.ListRunArtifacts.Output {
+        try await listRunArtifacts(Operations.ListRunArtifacts.Input(
+            path: path,
+            headers: headers
+        ))
+    }
     /// Download a sealed artifact
     ///
     /// - Remark: HTTP `GET /api/v1/artifacts/{artifactId}/download`.
@@ -233,6 +274,21 @@ extension APIProtocol {
         try await downloadArtifact(Operations.DownloadArtifact.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Exchange a native login grant
+    ///
+    /// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+    ///
+    /// - Remark: HTTP `POST /api/v1/auth/native/exchange`.
+    /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)`.
+    internal func exchangeNativeOIDCLogin(
+        headers: Operations.ExchangeNativeOIDCLogin.Input.Headers = .init(),
+        body: Operations.ExchangeNativeOIDCLogin.Input.Body
+    ) async throws -> Operations.ExchangeNativeOIDCLogin.Output {
+        try await exchangeNativeOIDCLogin(Operations.ExchangeNativeOIDCLogin.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// Get a Promotion
@@ -288,6 +344,55 @@ internal enum Servers {
 internal enum Components {
     /// Types generated from the `#/components/schemas` section of the OpenAPI document.
     internal enum Schemas {
+        /// - Remark: Generated from `#/components/schemas/ClientCompatibility`.
+        internal struct ClientCompatibility: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ClientCompatibility/serverVersion`.
+            internal var serverVersion: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ClientCompatibility/productApiContract`.
+            internal var productApiContract: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ClientCompatibility/authenticationMethods`.
+            internal var authenticationMethods: [Swift.String]
+            /// Creates a new `ClientCompatibility`.
+            ///
+            /// - Parameters:
+            ///   - serverVersion:
+            ///   - productApiContract:
+            ///   - authenticationMethods:
+            internal init(
+                serverVersion: Swift.String,
+                productApiContract: Swift.Int,
+                authenticationMethods: [Swift.String]
+            ) {
+                self.serverVersion = serverVersion
+                self.productApiContract = productApiContract
+                self.authenticationMethods = authenticationMethods
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case serverVersion
+                case productApiContract
+                case authenticationMethods
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.serverVersion = try container.decode(
+                    Swift.String.self,
+                    forKey: .serverVersion
+                )
+                self.productApiContract = try container.decode(
+                    Swift.Int.self,
+                    forKey: .productApiContract
+                )
+                self.authenticationMethods = try container.decode(
+                    [Swift.String].self,
+                    forKey: .authenticationMethods
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "serverVersion",
+                    "productApiContract",
+                    "authenticationMethods"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/GitCommit`.
         internal struct GitCommit: Codable, Hashable, Sendable {
             /// Exact Git object identity.
@@ -1653,6 +1758,21 @@ internal enum Components {
                 case createdAt
                 case sealedAt
                 case report
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ArtifactList`.
+        internal struct ArtifactList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ArtifactList/items`.
+            internal var items: [Components.Schemas.Artifact]
+            /// Creates a new `ArtifactList`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            internal init(items: [Components.Schemas.Artifact]) {
+                self.items = items
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case items
             }
         }
         /// - Remark: Generated from `#/components/schemas/RunReportSummary`.
@@ -4064,6 +4184,82 @@ internal enum Components {
                 case catalogRevisionId
             }
         }
+        /// - Remark: Generated from `#/components/schemas/NativeOIDCExchange`.
+        internal struct NativeOIDCExchange: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/NativeOIDCExchange/code`.
+            internal var code: Swift.String
+            /// - Remark: Generated from `#/components/schemas/NativeOIDCExchange/codeVerifier`.
+            internal var codeVerifier: Swift.String
+            /// Creates a new `NativeOIDCExchange`.
+            ///
+            /// - Parameters:
+            ///   - code:
+            ///   - codeVerifier:
+            internal init(
+                code: Swift.String,
+                codeVerifier: Swift.String
+            ) {
+                self.code = code
+                self.codeVerifier = codeVerifier
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case code
+                case codeVerifier
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.code = try container.decode(
+                    Swift.String.self,
+                    forKey: .code
+                )
+                self.codeVerifier = try container.decode(
+                    Swift.String.self,
+                    forKey: .codeVerifier
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "code",
+                    "codeVerifier"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/NativeOIDCCredential`.
+        internal struct NativeOIDCCredential: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/NativeOIDCCredential/token`.
+            internal var token: Swift.String
+            /// - Remark: Generated from `#/components/schemas/NativeOIDCCredential/expiresAt`.
+            internal var expiresAt: Foundation.Date
+            /// Creates a new `NativeOIDCCredential`.
+            ///
+            /// - Parameters:
+            ///   - token:
+            ///   - expiresAt:
+            internal init(
+                token: Swift.String,
+                expiresAt: Foundation.Date
+            ) {
+                self.token = token
+                self.expiresAt = expiresAt
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case token
+                case expiresAt
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.token = try container.decode(
+                    Swift.String.self,
+                    forKey: .token
+                )
+                self.expiresAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .expiresAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "token",
+                    "expiresAt"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionStatus`.
         internal enum PromotionStatus: String, Codable, Hashable, Sendable, CaseIterable {
             case creating = "creating"
@@ -4982,6 +5178,175 @@ internal enum Components {
 
 /// API operations, with input and output types, generated from `#/paths` in the OpenAPI document.
 internal enum Operations {
+    /// Check client compatibility
+    ///
+    /// Reports the Server release, exact pre-stable product API contract, and authentication methods available to native clients before they submit a credential. The response intentionally excludes identity-provider and deployment configuration.
+    ///
+    /// - Remark: HTTP `GET /api/v1/client-compatibility`.
+    /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)`.
+    internal enum GetClientCompatibility {
+        internal static let id: Swift.String = "getClientCompatibility"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/client-compatibility/GET/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetClientCompatibility.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetClientCompatibility.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.GetClientCompatibility.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            internal init(headers: Operations.GetClientCompatibility.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/client-compatibility/GET/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/client-compatibility/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ClientCompatibility)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.ClientCompatibility {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetClientCompatibility.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetClientCompatibility.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Client compatibility information for this Server.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetClientCompatibility.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.GetClientCompatibility.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct MethodNotAllowed: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/client-compatibility/GET/responses/405/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/client-compatibility/GET/responses/405/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetClientCompatibility.Output.MethodNotAllowed.Body
+                /// Creates a new `MethodNotAllowed`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetClientCompatibility.Output.MethodNotAllowed.Body) {
+                    self.body = body
+                }
+            }
+            /// The HTTP method is not supported for this resource.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/client-compatibility/get(getClientCompatibility)/responses/405`.
+            ///
+            /// HTTP response code: `405 methodNotAllowed`.
+            case methodNotAllowed(Operations.GetClientCompatibility.Output.MethodNotAllowed)
+            /// The associated value of the enum case if `self` is `.methodNotAllowed`.
+            ///
+            /// - Throws: An error if `self` is not `.methodNotAllowed`.
+            /// - SeeAlso: `.methodNotAllowed`.
+            internal var methodNotAllowed: Operations.GetClientCompatibility.Output.MethodNotAllowed {
+                get throws {
+                    switch self {
+                    case let .methodNotAllowed(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
     /// Get the current operational Inbox
     ///
     /// Returns a complete role-aware projection of pending decisions, visible unacknowledged problems, and current Run activity. The operation fails instead of returning a knowingly partial projection.
@@ -8888,6 +9253,395 @@ internal enum Operations {
             }
         }
     }
+    /// List a Run's artifacts
+    ///
+    /// - Remark: HTTP `GET /api/v1/runs/{runId}/artifacts`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)`.
+    internal enum ListRunArtifacts {
+        internal static let id: Swift.String = "listRunArtifacts"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/path`.
+            internal struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/path/runId`.
+                internal var runId: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - runId:
+                internal init(runId: Swift.String) {
+                    self.runId = runId
+                }
+            }
+            internal var path: Operations.ListRunArtifacts.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListRunArtifacts.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListRunArtifacts.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.ListRunArtifacts.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            internal init(
+                path: Operations.ListRunArtifacts.Input.Path,
+                headers: Operations.ListRunArtifacts.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ArtifactList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.ArtifactList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListRunArtifacts.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListRunArtifacts.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Artifacts ordered by creation time.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListRunArtifacts.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.ListRunArtifacts.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Unauthorized: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/401/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/401/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListRunArtifacts.Output.Unauthorized.Body
+                /// Creates a new `Unauthorized`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListRunArtifacts.Output.Unauthorized.Body) {
+                    self.body = body
+                }
+            }
+            /// A valid product session or bearer credential is required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Operations.ListRunArtifacts.Output.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            internal var unauthorized: Operations.ListRunArtifacts.Output.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/403/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/403/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListRunArtifacts.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListRunArtifacts.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// The authenticated principal cannot read artifact metadata.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.ListRunArtifacts.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            internal var forbidden: Operations.ListRunArtifacts.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/404/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/404/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListRunArtifacts.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListRunArtifacts.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// The Run does not exist.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.ListRunArtifacts.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            internal var notFound: Operations.ListRunArtifacts.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct MethodNotAllowed: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/405/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/405/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListRunArtifacts.Output.MethodNotAllowed.Body
+                /// Creates a new `MethodNotAllowed`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListRunArtifacts.Output.MethodNotAllowed.Body) {
+                    self.body = body
+                }
+            }
+            /// The HTTP method is not supported.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)/responses/405`.
+            ///
+            /// HTTP response code: `405 methodNotAllowed`.
+            case methodNotAllowed(Operations.ListRunArtifacts.Output.MethodNotAllowed)
+            /// The associated value of the enum case if `self` is `.methodNotAllowed`.
+            ///
+            /// - Throws: An error if `self` is not `.methodNotAllowed`.
+            /// - SeeAlso: `.methodNotAllowed`.
+            internal var methodNotAllowed: Operations.ListRunArtifacts.Output.MethodNotAllowed {
+                get throws {
+                    switch self {
+                    case let .methodNotAllowed(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct InternalServerError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/500/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/artifacts/GET/responses/500/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListRunArtifacts.Output.InternalServerError.Body
+                /// Creates a new `InternalServerError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListRunArtifacts.Output.InternalServerError.Body) {
+                    self.body = body
+                }
+            }
+            /// Artifacts could not be listed.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/artifacts/get(listRunArtifacts)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Operations.ListRunArtifacts.Output.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Operations.ListRunArtifacts.Output.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
     /// Download a sealed artifact
     ///
     /// - Remark: HTTP `GET /api/v1/artifacts/{artifactId}/download`.
@@ -9349,6 +10103,311 @@ internal enum Operations {
             internal static var allCases: [Self] {
                 [
                     .binary,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
+    /// Exchange a native login grant
+    ///
+    /// Consumes the one-time grant returned to the native app and issues an opaque, expiring Slipramp session credential after verifying PKCE.
+    ///
+    /// - Remark: HTTP `POST /api/v1/auth/native/exchange`.
+    /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)`.
+    internal enum ExchangeNativeOIDCLogin {
+        internal static let id: Swift.String = "exchangeNativeOIDCLogin"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ExchangeNativeOIDCLogin.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ExchangeNativeOIDCLogin.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.ExchangeNativeOIDCLogin.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.NativeOIDCExchange)
+            }
+            internal var body: Operations.ExchangeNativeOIDCLogin.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            internal init(
+                headers: Operations.ExchangeNativeOIDCLogin.Input.Headers = .init(),
+                body: Operations.ExchangeNativeOIDCLogin.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/200/headers`.
+                internal struct Headers: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/200/headers/Cache-Control`.
+                    internal enum CacheControlPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case private_comma_NoStore = "private, no-store"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/200/headers/Cache-Control`.
+                    internal var cacheControl: Operations.ExchangeNativeOIDCLogin.Output.Ok.Headers.CacheControlPayload
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - cacheControl:
+                    internal init(cacheControl: Operations.ExchangeNativeOIDCLogin.Output.Ok.Headers.CacheControlPayload) {
+                        self.cacheControl = cacheControl
+                    }
+                }
+                /// Received HTTP response headers
+                internal var headers: Operations.ExchangeNativeOIDCLogin.Output.Ok.Headers
+                /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.NativeOIDCCredential)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.NativeOIDCCredential {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ExchangeNativeOIDCLogin.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                ///   - body: Received HTTP response body
+                internal init(
+                    headers: Operations.ExchangeNativeOIDCLogin.Output.Ok.Headers,
+                    body: Operations.ExchangeNativeOIDCLogin.Output.Ok.Body
+                ) {
+                    self.headers = headers
+                    self.body = body
+                }
+            }
+            /// The native app session credential.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ExchangeNativeOIDCLogin.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.ExchangeNativeOIDCLogin.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/400/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ExchangeNativeOIDCLogin.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ExchangeNativeOIDCLogin.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// The native login grant or PKCE verifier is invalid or expired.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.ExchangeNativeOIDCLogin.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.ExchangeNativeOIDCLogin.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct MethodNotAllowed: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/405/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/405/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ExchangeNativeOIDCLogin.Output.MethodNotAllowed.Body
+                /// Creates a new `MethodNotAllowed`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ExchangeNativeOIDCLogin.Output.MethodNotAllowed.Body) {
+                    self.body = body
+                }
+            }
+            /// The HTTP method is not supported for this resource.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)/responses/405`.
+            ///
+            /// HTTP response code: `405 methodNotAllowed`.
+            case methodNotAllowed(Operations.ExchangeNativeOIDCLogin.Output.MethodNotAllowed)
+            /// The associated value of the enum case if `self` is `.methodNotAllowed`.
+            ///
+            /// - Throws: An error if `self` is not `.methodNotAllowed`.
+            /// - SeeAlso: `.methodNotAllowed`.
+            internal var methodNotAllowed: Operations.ExchangeNativeOIDCLogin.Output.MethodNotAllowed {
+                get throws {
+                    switch self {
+                    case let .methodNotAllowed(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct InternalServerError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/500/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/auth/native/exchange/POST/responses/500/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ExchangeNativeOIDCLogin.Output.InternalServerError.Body
+                /// Creates a new `InternalServerError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ExchangeNativeOIDCLogin.Output.InternalServerError.Body) {
+                    self.body = body
+                }
+            }
+            /// The session credential could not be issued.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Operations.ExchangeNativeOIDCLogin.Output.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Operations.ExchangeNativeOIDCLogin.Output.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
                     .applicationProblemJson
                 ]
             }

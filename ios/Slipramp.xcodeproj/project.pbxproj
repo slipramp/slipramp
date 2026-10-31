@@ -37,6 +37,7 @@
 		10000000000000000000001C /* MascotCatalog.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001C /* MascotCatalog.generated.swift */; };
 		10000000000000000000001D /* SliprampMascotAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* SliprampMascotAnimation.swift */; };
 		10000000000000000000001E /* Mascots in Resources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001E /* Mascots */; };
+		10000000000000000000001F /* RunArtifactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001F /* RunArtifactsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -70,6 +71,7 @@
 		20000000000000000000001C /* MascotCatalog.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MascotCatalog.generated.swift; sourceTree = "<group>"; };
 		20000000000000000000001D /* SliprampMascotAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampMascotAnimation.swift; sourceTree = "<group>"; };
 		20000000000000000000001E /* Mascots */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Mascots; sourceTree = "<group>"; };
+		20000000000000000000001F /* RunArtifactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunArtifactsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,6 +210,7 @@
 			children = (
 				200000000000000000000009 /* RunListView.swift */,
 				20000000000000000000000A /* RunDetailView.swift */,
+				20000000000000000000001F /* RunArtifactsView.swift */,
 				200000000000000000000011 /* RunLogView.swift */,
 			);
 			path = Runs;
@@ -347,6 +350,7 @@
 				100000000000000000000008 /* InboxView.swift in Sources */,
 				100000000000000000000009 /* RunListView.swift in Sources */,
 				10000000000000000000000A /* RunDetailView.swift in Sources */,
+				10000000000000000000001F /* RunArtifactsView.swift in Sources */,
 				10000000000000000000000B /* SettingsView.swift in Sources */,
 				10000000000000000000000E /* RunLogStream.swift in Sources */,
 				10000000000000000000000F /* RunLogView.swift in Sources */,

@@ -33,6 +33,41 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+func TestClientCompatibilityEndpoint(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/client-compatibility",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	httpHandler := NewHTTP(Dependencies{ServiceVersion: "test-version"}, HTTPOptions{})
+
+	httpHandler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	if cacheControl := response.Header().Get("Cache-Control"); cacheControl != privateNoStoreCacheControl {
+		t.Errorf("Cache-Control = %q, want %q", cacheControl, privateNoStoreCacheControl)
+	}
+
+	var body api.ClientCompatibility
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode compatibility response: %v", err)
+	}
+	if body.ServerVersion != "test-version" || body.ProductAPIContract != productAPIContract {
+		t.Errorf("compatibility response = %#v", body)
+	}
+	if len(body.AuthenticationMethods) != 2 ||
+		body.AuthenticationMethods[0] != "oidc-native" ||
+		body.AuthenticationMethods[1] != "api-key" {
+		t.Errorf("authentication methods = %#v, want [oidc-native api-key]", body.AuthenticationMethods)
+	}
+}
+
 func TestHealthEndpointDoesNotCheckDependencies(t *testing.T) {
 	t.Parallel()
 

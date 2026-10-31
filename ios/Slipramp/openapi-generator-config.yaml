@@ -10,10 +10,13 @@ filter:
     - decidePromotion
     - decideRunReview
     - downloadArtifact
+    - exchangeNativeOIDCLogin
+    - getClientCompatibility
     - getInbox
     - getPromotion
     - getRun
     - getTarget
     - listRuns
+    - listRunArtifacts
     - listTargets
     - rerunRun

@@ -200,6 +200,81 @@ func TestAuthenticationHTTPRejectsInvalidRequests(t *testing.T) {
 	}
 }
 
+func TestNativeAuthenticationHTTPFlow(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 30, 12, 0, 0, 0, time.UTC)
+	service := &recordingProductAuthenticationService{
+		login: productauth.LoginStart{
+			AuthorizationURL: "https://identity.example.com/authorize",
+			State:            "native-login-state",
+			ExpiresAt:        now.Add(10 * time.Minute),
+		},
+		credential: productauth.SessionCredential{
+			Token:     "native-session-token",
+			ExpiresAt: now.Add(12 * time.Hour),
+		},
+		completion: productauth.LoginCompletion{
+			RedirectURL: "slipramp://auth/callback?code=native-grant",
+		},
+	}
+	httpHandler := newAuthenticationHandler(service)
+	challenge := strings.Repeat("A", 43)
+
+	loginRequest := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/auth/native/login?codeChallenge="+challenge,
+		nil,
+	)
+	loginResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(loginResponse, loginRequest)
+	if loginResponse.Code != http.StatusSeeOther || service.nativeChallenge != challenge {
+		t.Fatalf("native login status=%d challenge=%q", loginResponse.Code, service.nativeChallenge)
+	}
+
+	callbackRequest := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/auth/callback?code=authorization-code&state=native-login-state",
+		nil,
+	)
+	callbackRequest.AddCookie(loginResponse.Result().Cookies()[0])
+	callbackResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(callbackResponse, callbackRequest)
+	if callbackResponse.Code != http.StatusSeeOther ||
+		callbackResponse.Header().Get("Location") != service.completion.RedirectURL ||
+		callbackResponse.Header().Get("Set-Cookie") != "" {
+		t.Fatalf(
+			"native callback status=%d location=%q cookie=%q",
+			callbackResponse.Code,
+			callbackResponse.Header().Get("Location"),
+			callbackResponse.Header().Get("Set-Cookie"),
+		)
+	}
+
+	exchangeRequest := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		"/api/v1/auth/native/exchange",
+		strings.NewReader(`{"code":"native-grant","codeVerifier":"`+challenge+`"}`),
+	)
+	exchangeRequest.Header.Set("Content-Type", "application/json")
+	exchangeResponse := httptest.NewRecorder()
+	httpHandler.ServeHTTP(exchangeResponse, exchangeRequest)
+	if exchangeResponse.Code != http.StatusOK ||
+		!strings.Contains(exchangeResponse.Body.String(), service.credential.Token) ||
+		service.exchangeCode != "native-grant" || service.exchangeVerifier != challenge {
+		t.Fatalf(
+			"native exchange status=%d code=%q verifier=%q body=%s",
+			exchangeResponse.Code,
+			service.exchangeCode,
+			service.exchangeVerifier,
+			exchangeResponse.Body.String(),
+		)
+	}
+}
+
 func TestProductAuthenticatorPrefersExplicitBearerCredential(t *testing.T) {
 	t.Parallel()
 
@@ -233,6 +308,22 @@ func TestProductAuthenticatorRejectsMalformedBearerWithoutSessionFallback(t *tes
 	}
 	if service.apiKeyToken != "" || service.authToken != "" {
 		t.Errorf("API key token = %q, session token = %q", service.apiKeyToken, service.authToken)
+	}
+}
+
+func TestProductAuthenticatorAcceptsNativeSessionBearer(t *testing.T) {
+	t.Parallel()
+
+	service := &recordingProductAuthenticationService{}
+	authenticator := newProductAuthenticator(service)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/runs", nil)
+	request.Header.Set("Authorization", "Bearer native-session-token")
+
+	if _, err := authenticator.AuthenticateProductRequest(context.Background(), request); err != nil {
+		t.Fatalf("AuthenticateProductRequest() error = %v", err)
+	}
+	if service.authToken != "native-session-token" || service.apiKeyToken != "" {
+		t.Errorf("session token = %q, API key token = %q", service.authToken, service.apiKeyToken)
 	}
 }
 
@@ -439,6 +530,7 @@ func newAuthenticationHandler(service ProductAuthenticationService) http.Handler
 type recordingProductAuthenticationService struct {
 	login                        productauth.LoginStart
 	credential                   productauth.SessionCredential
+	completion                   productauth.LoginCompletion
 	authentication               productidentity.Authentication
 	authenticationErr            error
 	revokeErr                    error
@@ -446,6 +538,9 @@ type recordingProductAuthenticationService struct {
 	completeCode                 string
 	completeState                string
 	completeCookieState          string
+	nativeChallenge              string
+	exchangeCode                 string
+	exchangeVerifier             string
 	authToken                    string
 	apiKeyToken                  string
 	revokedToken                 string
@@ -472,15 +567,38 @@ func (s *recordingProductAuthenticationService) BeginLogin() (productauth.LoginS
 	return s.login, nil
 }
 
+func (s *recordingProductAuthenticationService) BeginNativeLogin(
+	codeChallenge string,
+) (productauth.LoginStart, error) {
+	s.nativeChallenge = codeChallenge
+
+	return s.login, nil
+}
+
 func (s *recordingProductAuthenticationService) CompleteLogin(
 	_ context.Context,
 	code string,
 	state string,
 	cookieState string,
-) (productauth.SessionCredential, error) {
+) (productauth.LoginCompletion, error) {
 	s.completeCode = code
 	s.completeState = state
 	s.completeCookieState = cookieState
+
+	if s.completion.Session != nil || s.completion.RedirectURL != "" {
+		return s.completion, nil
+	}
+
+	return productauth.LoginCompletion{Session: &s.credential}, nil
+}
+
+func (s *recordingProductAuthenticationService) ExchangeNativeLogin(
+	_ context.Context,
+	code string,
+	codeVerifier string,
+) (productauth.SessionCredential, error) {
+	s.exchangeCode = code
+	s.exchangeVerifier = codeVerifier
 
 	return s.credential, nil
 }

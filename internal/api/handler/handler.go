@@ -17,6 +17,7 @@ type ControllerIdentityService interface {
 }
 
 type Handler struct {
+	serviceVersion           string
 	clusters                 ClusterService
 	placements               PlacementService
 	identities               ControllerIdentityService
@@ -58,6 +59,7 @@ type ProductAuthenticationService interface {
 }
 
 type Dependencies struct {
+	ServiceVersion           string
 	Clusters                 ClusterService
 	Placements               PlacementService
 	ControllerIdentities     ControllerIdentityService
@@ -87,7 +89,13 @@ type Dependencies struct {
 var _ api.StrictServerInterface = (*Handler)(nil)
 
 func newHandler(dependencies Dependencies) *Handler {
+	serviceVersion := dependencies.ServiceVersion
+	if serviceVersion == "" {
+		serviceVersion = "dev"
+	}
+
 	return &Handler{
+		serviceVersion:           serviceVersion,
 		clusters:                 dependencies.Clusters,
 		placements:               dependencies.Placements,
 		identities:               dependencies.ControllerIdentities,

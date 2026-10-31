@@ -250,6 +250,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	workers = append(workers, promotionBranchDrift.Run)
 	httpHandler := handler.NewHTTP(
 		handler.Dependencies{
+			ServiceVersion:           serviceVersion,
 			Clusters:                 clusters,
 			Placements:               placement.NewInventoryService(cfg.Placements, clusters, persistence.database),
 			ControllerIdentities:     identities,

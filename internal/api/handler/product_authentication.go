@@ -77,18 +77,21 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"UpdatePromotionStagePolicy":     productidentity.PermissionPromotionsWrite,
 }
 
-var productAuthenticationOperations = map[string]struct{}{
-	"BeginOIDCLogin":      {},
-	"CompleteOIDCLogin":   {},
-	"GetCurrentPrincipal": {},
-	"Logout":              {},
+var productAuthenticationExemptOperations = map[string]struct{}{
+	"BeginNativeOIDCLogin":    {},
+	"BeginOIDCLogin":          {},
+	"CompleteOIDCLogin":       {},
+	"ExchangeNativeOIDCLogin": {},
+	"GetClientCompatibility":  {},
+	"GetCurrentPrincipal":     {},
+	"Logout":                  {},
 }
 
 // ProductAuthentication establishes and authorizes product principals for
 // /api/v1 operations.
 func ProductAuthentication(authenticator ProductAuthenticator) api.StrictMiddlewareFunc {
 	return func(next api.StrictHandlerFunc, operationID string) api.StrictHandlerFunc {
-		if _, isAuthenticationOperation := productAuthenticationOperations[operationID]; isAuthenticationOperation {
+		if _, isExemptOperation := productAuthenticationExemptOperations[operationID]; isExemptOperation {
 			return next
 		}
 
@@ -171,6 +174,7 @@ func establishProductAuthentication(
 		return ctx, false, nil
 	}
 	if authentication.Method == productidentity.AuthenticationMethodWebSession &&
+		request.Header.Get("Authorization") == "" &&
 		requiresCSRFProtection(request.Method) &&
 		request.Header.Get(csrfProtectionHeaderName) != csrfProtectionHeaderValue {
 		WriteProblem(writer, http.StatusForbidden, "The CSRF protection header is invalid.")

@@ -26,7 +26,7 @@ unless explicitly requested.
 | Controller            | Outbound command polling, local Jobs, observations, log forwarding, and configured Kargo discovery/materialization/reconciliation | One replica per execution Cluster; namespace-scoped Kubernetes access  |
 | Harness               | Wrap checkout and action processes, transfer artifacts, forward signals, preserve exit status      | Injected by Slipramp; runtime images and tools need no Slipramp SDK    |
 | Web                   | React Router SSR and browser UI                                                                    | Uses the generated Server client and forwards the browser's session    |
-| iOS                   | Native operator Inbox, Target and Action browsing, Run creation, decisions, and history             | Uses the product API with one user-supplied API key stored in Keychain |
+| iOS                   | Native operator Inbox, Target and Action browsing, Run creation, decisions, and history             | Checks the exact product API contract, signs in through native OIDC or an API-key fallback, and stores one credential in Keychain |
 | PostgreSQL            | Authoritative product state, identity, history, metadata, and scheduling coordination              | Stores credential digests and references, never injected secret values |
 | S3-compatible storage | Artifact contents, including live log chunks and sealed logs                                       | Only the Server accesses it; RustFS is the local implementation        |
 
@@ -256,9 +256,26 @@ remote API access, rendering, and log streaming remain framework-independent
 command handlers so their contracts can be tested without Cobra internals.
 
 The native iOS preview is an iOS 17 SwiftUI application under `ios/`. It
-connects to one operator-supplied Server URL, validates a user API key through
-the role-aware Inbox boundary, and stores only that credential in the iOS
-Keychain. Its initial surface presents the operational Inbox, recent Runs, Run
+connects to one operator-supplied Server URL and first reads the public,
+non-sensitive client-compatibility response. The response carries the Server
+release, one exact pre-stable product API contract integer, and available native
+authentication method names. Contract mismatch stops before authentication;
+there are no version ranges, legacy API fallbacks, or feature negotiation. When
+native OIDC is available, the app signs in through `ASWebAuthenticationSession`,
+exchanges the returned one-time grant with its app PKCE verifier, validates the
+opaque local session through the role-aware Inbox boundary, and stores only that
+credential in the iOS Keychain. A user-supplied API key remains an explicit
+fallback. HTTPS uses normal system trust without certificate pinning or custom
+trust handling. Plain HTTP is rejected for public or qualified hosts. For a
+local hostname or private, loopback, link-local, or tailnet address, the app may
+use HTTP only after explicit confirmation for that exact Server URL and keeps a
+visible warning that the surrounding private network must provide transport
+encryption. The app enables Apple's local-network ATS exception but has no
+global arbitrary-load exception or self-signed-certificate bypass. Connection
+failures distinguish certificate, DNS, reachability, and insecure-transport
+problems with actionable guidance. Saved connections repeat the compatibility
+check before credential use and retain the Keychain item when the check fails.
+Its initial surface presents the operational Inbox, recent Runs, Run
 details, and retained or live Run logs. The first writable slice lets
 authorized operators approve or reject pending Run reviews with an immutable
 optional comment and request cancellation of unfinished Runs. Both mutations
@@ -272,21 +289,28 @@ details offer the same idempotent rerun boundary as the Web: same revision
 reuses the frozen execution snapshot, while latest revision resolves the
 Target, Action, parameters, and Placement from the active catalog. Runs with
 Artifact inputs cannot select latest revision. A successful rerun opens the new
-queued Run and refreshes native Run and Inbox state. Promotion-review Inbox
-items open a native detail built from immutable Stage, Repository, policy,
-Freight, revision, and preparation snapshots. The detail reads the retained
-sensitive Git and Argo CD artifacts, renders Argo resources as structured
-searchable changes with version-only changes hidden initially, and records
-confirmed approve or reject decisions with an optional immutable comment.
-Promotion mutations refresh the detail and Inbox from Server-returned state;
-approval does not imply downstream success.
+queued Run and refreshes native Run and Inbox state. Run detail also lists its
+Artifact metadata and provenance. A retained sealed Artifact downloads through
+the generated operation to an ephemeral file, verifies its SHA-256 response and
+metadata digests, opens in the system preview, and is removed when the detail
+leaves the screen. Sensitive content is never fetched until the operator
+explicitly opens it. A successful producing Run offers only the directly
+runnable `artifactConsumers` frozen into its Run projection; a confirmed
+selection creates a new Run with the exact Artifact bound to the declared input
+and opens that Run. Promotion-review Inbox items open a native detail built from
+immutable Stage, Repository, policy, Freight, revision, and preparation
+snapshots. The detail reads the retained sensitive Git and Argo CD artifacts,
+renders Argo resources as structured searchable changes with version-only
+changes hidden initially, and records confirmed approve or reject decisions
+with an optional immutable comment. Promotion mutations refresh the detail and
+Inbox from Server-returned state; approval does not imply downstream success.
 Swift models and ordinary HTTP operations are generated from the same bundled
 OpenAPI contract as the Go and TypeScript clients, with exact generator and
 runtime versions and a shared generated-output freshness check. A small
-handwritten adapter supplies API-key authentication and presentation
-conveniences. The log reader remains a focused handwritten transport for the
-reconnectable byte-offset SSE contract: it validates replayed chunks and resumes
-without duplicating output. The app calls only `/api/v1` product endpoints and
+handwritten adapter supplies bearer authentication, native OIDC presentation,
+and presentation conveniences. The log reader remains a focused handwritten
+transport for the reconnectable byte-offset SSE contract: it validates replayed
+chunks and resumes without duplicating output. The app calls only `/api/v1` product endpoints and
 never the Controller, execution, PostgreSQL, object-storage, or Kubernetes
 boundaries.
 Disconnecting removes the local URL and Keychain item but does not revoke the
@@ -791,10 +815,11 @@ not inspect the bucket or establish a quota or enforcement policy.
 ## Product identity and authorization
 
 The Server owns product authentication. `/api/v1` uses product sessions or API
-keys except the OIDC login/callback boundary; `/controller/v1` and
-`/execution/v1` retain independent Cluster and Run credentials. Execution
-credentials never become product Principals. `/healthz` and `/readyz` expose
-only non-sensitive unauthenticated availability information.
+keys except the OIDC login/callback boundary and the read-only client-compatibility
+operation; `/controller/v1` and `/execution/v1` retain independent Cluster and
+Run credentials. Execution credentials never become product Principals.
+`/healthz`, `/readyz`, and client compatibility expose only non-sensitive
+unauthenticated information.
 
 Principals are users or service accounts with a stable UUID, display name,
 global role, and disabled state. OIDC identities use `(issuer, subject)`;
@@ -821,13 +846,18 @@ on login; unknown subjects are rejected and at least one administrator mapping
 is required. Removing a mapping prevents new logins but does not revoke an
 existing session before its fixed expiry or revocation.
 
-Opaque local sessions store only SHA-256 digests. The HTTP-only
-`slipramp_session` cookie has a default absolute lifetime of 12 hours with no
-idle extension. Provider access and refresh tokens are not retained. One-time
-login transactions live in memory, so an interrupted login restarts after a
-Server restart. A matching HTTP-only SameSite=Lax state cookie accompanies the
-flow. Every unsafe product API request authenticated by a browser session must
-include `X-Slipramp-CSRF: 1`; API-key requests do not require that header. The
+Opaque local sessions store only SHA-256 digests and have a default absolute
+lifetime of 12 hours with no idle extension. Browser sessions use the HTTP-only
+`slipramp_session` cookie. Native iOS login uses the same provider callback and
+state cookie, binds the transaction to an app-generated PKCE challenge, and
+returns through the fixed `slipramp://auth/callback` scheme with a short-lived
+one-time exchange code. The app presents the verifier directly to the Server
+before receiving the same opaque local session as a Bearer credential, so a
+custom-scheme interceptor cannot redeem the code. Provider access and refresh
+tokens are not retained. One-time login and native exchange transactions live
+in memory, so an interrupted login restarts after a Server restart. Every unsafe
+product API request authenticated by a browser cookie must include
+`X-Slipramp-CSRF: 1`; Bearer requests do not require that header. The
 Web rejects unsafe requests without a same-host `Origin` before adding the CSRF
 proof to Server requests, so it cannot act as a deputy for cross-site forms.
 
@@ -860,7 +890,7 @@ API keys are `slipramp_key_` plus unpadded Base64URL encoding of 32 random bytes
 displayed once. PostgreSQL retains a SHA-256 digest, display prefix, scopes,
 expiry, last use, and revocation. Disabled Principals and expired or revoked
 credentials cannot authenticate. User keys are created only from the user's
-browser session. Administrators create service accounts and their keys through
+local session. Administrators create service accounts and their keys through
 normal authenticated operations. Rotation is create, update clients, revoke.
 There is no bootstrap API key or anonymous bypass: the first administrator
 signs in through OIDC.

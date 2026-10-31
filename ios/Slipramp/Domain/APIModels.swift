@@ -3,18 +3,37 @@ import Foundation
 typealias Inbox = Components.Schemas.Inbox
 typealias InboxActivity = Components.Schemas.InboxActivity
 typealias InboxItem = Components.Schemas.InboxItem
+typealias ServerCompatibility = Components.Schemas.ClientCompatibility
+typealias Artifact = Components.Schemas.Artifact
+typealias ArtifactList = Components.Schemas.ArtifactList
 typealias Promotion = Components.Schemas.Promotion
 typealias PromotionDecisionChoice = Components.Schemas.PromotionDecisionUpdate.DecisionPayload
 typealias Run = Components.Schemas.Run
 typealias RunList = Components.Schemas.RunList
 typealias RunRerunMode = Components.Schemas.RunRerunMode
 typealias RunReviewDecision = Components.Schemas.RunReviewDecision
+typealias RunArtifactConsumer = Components.Schemas.RunArtifactConsumer
 typealias CatalogTarget = Components.Schemas.Target
 typealias TargetAction = Components.Schemas.Action
 typealias TargetList = Components.Schemas.TargetSummaryList
 typealias TargetSummary = Components.Schemas.TargetSummary
 typealias ActionParameter = Components.Schemas.Parameter
 typealias ActionParameterValue = Components.Schemas.ParameterValue
+
+enum ClientCompatibilityPolicy {
+    static let productAPIContract = 1
+
+    static func validate(_ compatibility: ServerCompatibility) throws {
+        guard compatibility.productApiContract == productAPIContract else {
+            throw SliprampAPIError.incompatibleProductAPIContract(
+                server: compatibility.productApiContract
+            )
+        }
+        guard compatibility.authenticationMethods.contains("api-key") else {
+            throw SliprampAPIError.apiKeyAuthenticationUnavailable
+        }
+    }
+}
 
 extension Components.Schemas.InboxActivity {
     var total: Int {
@@ -23,6 +42,19 @@ extension Components.Schemas.InboxActivity {
 }
 
 extension Components.Schemas.InboxItem: Identifiable {}
+
+extension Components.Schemas.Artifact: Identifiable {
+    var isDownloadable: Bool {
+        state == .sealed && retentionState == .retained
+    }
+
+    var statusLabel: String {
+        if retentionState != .retained {
+            return retentionState.rawValue.capitalized
+        }
+        return state.rawValue.capitalized
+    }
+}
 
 extension Components.Schemas.TargetSummary: Identifiable {
     var displayName: String {

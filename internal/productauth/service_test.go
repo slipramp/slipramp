@@ -2,9 +2,11 @@ package productauth
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
@@ -34,10 +36,14 @@ func TestServiceCompletesLoginAndAuthenticatesSession(t *testing.T) {
 		t.Errorf("AuthorizationURL = %q", login.AuthorizationURL)
 	}
 
-	credential, err := service.CompleteLogin(context.Background(), "authorization-code", login.State, login.State)
+	completion, err := service.CompleteLogin(context.Background(), "authorization-code", login.State, login.State)
 	if err != nil {
 		t.Fatalf("CompleteLogin() error = %v", err)
 	}
+	if completion.Session == nil {
+		t.Fatal("CompleteLogin() did not issue a browser session")
+	}
+	credential := *completion.Session
 	if provider.code != "authorization-code" || provider.expectedNonce == "" ||
 		provider.codeVerifier == "" {
 		t.Errorf("provider exchange = %#v", provider)
@@ -78,6 +84,67 @@ func TestServiceCompletesLoginAndAuthenticatesSession(t *testing.T) {
 	_, err = service.AuthenticateSession(context.Background(), credential.Token)
 	if !errors.Is(err, productidentity.ErrUnauthenticated) {
 		t.Fatalf("authentication after logout error = %v, want unauthenticated", err)
+	}
+}
+
+func TestServiceCompletesNativeLoginWithPKCE(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.October, 30, 12, 0, 0, 0, time.UTC)
+	provider := &recordingOIDCProvider{profile: OIDCProfile{
+		Issuer:  "https://identity.example.com",
+		Subject: "ada-subject",
+	}}
+	service := newTestService(t, newProductAuthStore(), provider, now)
+	verifier := encodedSecret(80)
+	challengeDigest := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(challengeDigest[:])
+
+	login, err := service.BeginNativeLogin(challenge)
+	if err != nil {
+		t.Fatalf("BeginNativeLogin() error = %v", err)
+	}
+	completion, err := service.CompleteLogin(
+		context.Background(),
+		"authorization-code",
+		login.State,
+		login.State,
+	)
+	if err != nil {
+		t.Fatalf("CompleteLogin() error = %v", err)
+	}
+	callback, err := url.Parse(completion.RedirectURL)
+	if err != nil {
+		t.Fatalf("parse native callback: %v", err)
+	}
+	if callback.Scheme != "slipramp" || callback.Host != "auth" || callback.Path != "/callback" {
+		t.Fatalf("native callback = %q", callback.String())
+	}
+	exchangeCode := callback.Query().Get("code")
+	if exchangeCode == "" || completion.Session != nil {
+		t.Fatalf("native completion = %#v", completion)
+	}
+
+	if _, err := service.ExchangeNativeLogin(
+		context.Background(),
+		exchangeCode,
+		encodedSecret(81),
+	); !errors.Is(err, ErrInvalidLogin) {
+		t.Fatalf("wrong verifier error = %v, want invalid login", err)
+	}
+	credential, err := service.ExchangeNativeLogin(context.Background(), exchangeCode, verifier)
+	if err != nil {
+		t.Fatalf("ExchangeNativeLogin() error = %v", err)
+	}
+	if _, err := service.AuthenticateSession(context.Background(), credential.Token); err != nil {
+		t.Fatalf("AuthenticateSession() error = %v", err)
+	}
+	if _, err := service.ExchangeNativeLogin(
+		context.Background(),
+		exchangeCode,
+		verifier,
+	); !errors.Is(err, ErrInvalidLogin) {
+		t.Fatalf("replayed exchange error = %v, want invalid login", err)
 	}
 }
 

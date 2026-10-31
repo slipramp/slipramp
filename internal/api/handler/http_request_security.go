@@ -232,16 +232,24 @@ func requestHasBody(request *http.Request) bool {
 func isPublicRequestPath(path string) bool {
 	return path == "/controller/v1/enroll" ||
 		!isPrivateAPIPath(path) ||
-		isProductAuthenticationPath(path)
+		isProductAuthenticationPath(path) ||
+		isClientCompatibilityPath(path)
 }
 
 func isProtectedProductPath(path string) bool {
-	return isProductPath(path) && !isProductAuthenticationPath(path)
+	return isProductPath(path) &&
+		!isProductAuthenticationPath(path) &&
+		!isClientCompatibilityPath(path)
+}
+
+func isClientCompatibilityPath(path string) bool {
+	return path == "/api/v1/client-compatibility"
 }
 
 func isProductAuthenticationPath(path string) bool {
 	switch path {
-	case "/api/v1/auth/login", "/api/v1/auth/callback", "/api/v1/auth/session", "/api/v1/auth/logout":
+	case "/api/v1/auth/login", "/api/v1/auth/native/login", "/api/v1/auth/native/exchange",
+		"/api/v1/auth/callback", "/api/v1/auth/session", "/api/v1/auth/logout":
 		return true
 	default:
 		return false

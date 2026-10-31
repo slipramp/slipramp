@@ -28,6 +28,35 @@ ProductPrincipal:
         - viewer
       x-go-type: string
 
+NativeOIDCExchange:
+  type: object
+  additionalProperties: false
+  required:
+    - code
+    - codeVerifier
+  properties:
+    code:
+      type: string
+      minLength: 1
+      maxLength: 128
+    codeVerifier:
+      type: string
+      pattern: "^[A-Za-z0-9_-]{43}$"
+
+NativeOIDCCredential:
+  type: object
+  additionalProperties: false
+  required:
+    - token
+    - expiresAt
+  properties:
+    token:
+      type: string
+      minLength: 1
+    expiresAt:
+      type: string
+      format: date-time
+
 APIKeyScope:
   type: string
   enum:
