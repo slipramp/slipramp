@@ -2316,6 +2316,10 @@ export type CreateRepositoryErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The repository could not be registered.
    */
   500: Problem;
@@ -2356,6 +2360,10 @@ export type TestRepositoryConnectionErrors = {
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The repository connection could not be tested.
    */
@@ -2436,6 +2444,10 @@ export type AcknowledgeInboxProblemsErrors = {
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The complete Inbox projection or acknowledgement could not be completed.
    */
@@ -2584,6 +2596,10 @@ export type UpdateRepositoryErrors = {
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The repository could not be updated.
    */
@@ -3227,6 +3243,10 @@ export type EnrollControllerErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The controller could not be enrolled.
    */
   500: Problem;
@@ -3325,6 +3345,10 @@ export type ReportKargoPromotionDispatchErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The dispatch result could not be recorded.
    */
   500: Problem;
@@ -3377,6 +3401,10 @@ export type ReportKargoPromotionReconciliationErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The reconciliation result could not be recorded.
    */
   500: Problem;
@@ -3428,6 +3456,10 @@ export type ReportRunObservationErrors = {
    * The observation conflicts with the Run or its Job.
    */
   409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The Run observation could not be recorded.
    */
@@ -3576,6 +3608,10 @@ export type SealRunLogErrors = {
    * The seal conflicts with the durable bytes.
    */
   409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The log could not be sealed.
    */
@@ -3849,6 +3885,10 @@ export type CreateRunErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The Run could not be created.
    */
   500: Problem;
@@ -4002,6 +4042,10 @@ export type RerunRunErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The rerun could not be created.
    */
   500: Problem;
@@ -4055,6 +4099,10 @@ export type DecideRunReviewErrors = {
    * The Run is no longer queued and pending review, or already has a different decision or deciding Principal.
    */
   409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The Run review could not be decided.
    */
@@ -4499,6 +4547,10 @@ export type CreateApiKeyErrors = {
    */
   405: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The API key could not be created.
    */
   500: Problem;
@@ -4672,6 +4724,10 @@ export type UpdatePrincipalErrors = {
    */
   404: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The principal state could not be changed.
    */
   500: Problem;
@@ -4820,6 +4876,10 @@ export type CreatePrincipalApiKeyErrors = {
    */
   405: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The API key could not be created.
    */
   500: Problem;
@@ -4912,6 +4972,10 @@ export type CreateServiceAccountErrors = {
    */
   405: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The service account could not be created.
    */
   500: Problem;
@@ -4960,6 +5024,10 @@ export type SubmitKargoPromotionErrors = {
    * The request conflicts with durable Promotion state.
    */
   409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The operation could not be completed.
    */
@@ -5107,6 +5175,10 @@ export type DecidePromotionErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The operation could not be completed.
    */
   500: Problem;
@@ -5245,6 +5317,10 @@ export type CreatePromotionErrors = {
    */
   409: Problem;
   /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
    * The operation could not be completed.
    */
   500: Problem;
@@ -5291,6 +5367,10 @@ export type UpdatePromotionStagePolicyErrors = {
    * The request conflicts with durable Promotion state.
    */
   409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The operation could not be completed.
    */
@@ -5438,6 +5518,10 @@ export type ReplaceKargoStageSnapshotErrors = {
    * The request conflicts with durable Promotion state.
    */
   409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
   /**
    * The operation could not be completed.
    */

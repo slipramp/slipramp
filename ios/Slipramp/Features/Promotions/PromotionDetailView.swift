@@ -149,6 +149,20 @@ struct PromotionDetailView: View {
         Group {
             if let promotion = model.promotion {
                 List {
+                    SliprampMascotActivityView(
+                        activity: MascotActivityResolver.activity(for: promotion),
+                        identity: promotion.id
+                    )
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: SliprampTheme.Space.small,
+                            leading: SliprampTheme.Space.large,
+                            bottom: SliprampTheme.Space.small,
+                            trailing: SliprampTheme.Space.large
+                        )
+                    )
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                     statusSection(promotion)
                     contextSection(promotion)
                     revisionSection(promotion)

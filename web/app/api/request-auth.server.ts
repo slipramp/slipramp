@@ -1,6 +1,8 @@
 export const productSessionCookieName = "slipramp_session";
 export const oidcStateCookieName = "slipramp_oidc_state";
 export const automaticOIDCLoginCookieName = "slipramp_oidc_auto_login";
+export const csrfProtectionHeaderName = "x-slipramp-csrf";
+export const csrfProtectionHeaderValue = "1";
 
 const automaticOIDCLoginMaxAgeSeconds = 365 * 24 * 60 * 60;
 
@@ -8,6 +10,13 @@ export function forwardedCookieHeader(request: Request, name: string): Record<st
   const value = browserCookie(request, name);
 
   return value === undefined ? {} : { cookie: `${name}=${value}` };
+}
+
+export function forwardedProductHeaders(request: Request): Record<string, string> {
+  return {
+    ...forwardedCookieHeader(request, productSessionCookieName),
+    [csrfProtectionHeaderName]: csrfProtectionHeaderValue,
+  };
 }
 
 export function shouldAutomaticallyBeginOIDCLogin(request: Request) {

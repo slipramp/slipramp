@@ -2,7 +2,9 @@ openapi: 3.1.0
 info:
   title: Slipramp API
   version: 0.1.0
-  description: HTTP API for the Slipramp Server.
+  description: >-
+    HTTP API for the Slipramp Server. Responses under /api, /controller, and
+    /execution are private and must not be stored by clients or shared caches.
 servers:
   - url: /
 paths:
@@ -134,7 +136,10 @@ components:
       type: apiKey
       in: cookie
       name: slipramp_session
-      description: Opaque local browser session issued by the Slipramp Server.
+      description: >-
+        Opaque local browser session issued by the Slipramp Server. Every unsafe
+        session-authenticated request must include X-Slipramp-CSRF: 1. Bearer-authenticated
+        requests do not require this header.
     ProductBearer:
       type: http
       scheme: bearer

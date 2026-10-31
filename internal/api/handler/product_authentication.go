@@ -17,6 +17,11 @@ type ProductAuthenticator interface {
 
 type productAuthenticationContextKey struct{}
 
+const (
+	csrfProtectionHeaderName  = "X-Slipramp-CSRF"
+	csrfProtectionHeaderValue = "1"
+)
+
 var productOperationPermissions = map[string]productidentity.Permission{
 	"ListAPIKeys":                    productidentity.PermissionRead,
 	"CreateAPIKey":                   productidentity.PermissionRead,
@@ -104,23 +109,20 @@ func ProductAuthentication(authenticator ProductAuthenticator) api.StrictMiddlew
 		}
 
 		return func(ctx context.Context, writer http.ResponseWriter, request *http.Request, value any) (any, error) {
-			authentication, err := authenticator.AuthenticateProductRequest(ctx, request)
-			if errors.Is(err, productidentity.ErrUnauthenticated) {
-				writeProductUnauthorized(writer)
-
-				return nil, nil
-			}
+			authenticatedContext, ok, err := establishProductAuthentication(
+				ctx,
+				writer,
+				request,
+				authenticator,
+			)
 			if err != nil {
-				return nil, fmt.Errorf("authenticate product request: %w", err)
+				return nil, err
 			}
-			if err := authentication.Validate(); err != nil {
-				return nil, fmt.Errorf("validate product authentication result: %w", err)
-			}
-			if authentication.Principal.DisabledAt != nil {
-				writeProductUnauthorized(writer)
-
+			if !ok {
 				return nil, nil
 			}
+
+			authentication, _ := productAuthenticationFromContext(authenticatedContext)
 			if !authentication.Authorizes(permission) {
 				WriteProblem(
 					writer,
@@ -142,10 +144,48 @@ func ProductAuthentication(authenticator ProductAuthenticator) api.StrictMiddlew
 				return nil, nil
 			}
 
-			requestContext := context.WithValue(ctx, productAuthenticationContextKey{}, authentication)
-
-			return next(requestContext, writer, request, value)
+			return next(authenticatedContext, writer, request, value)
 		}
+	}
+}
+
+func establishProductAuthentication(
+	ctx context.Context,
+	writer http.ResponseWriter,
+	request *http.Request,
+	authenticator ProductAuthenticator,
+) (context.Context, bool, error) {
+	authentication, err := authenticator.AuthenticateProductRequest(ctx, request)
+	if errors.Is(err, productidentity.ErrUnauthenticated) {
+		writeProductUnauthorized(writer)
+		return ctx, false, nil
+	}
+	if err != nil {
+		return ctx, false, fmt.Errorf("authenticate product request: %w", err)
+	}
+	if err := authentication.Validate(); err != nil {
+		return ctx, false, fmt.Errorf("validate product authentication result: %w", err)
+	}
+	if authentication.Principal.DisabledAt != nil {
+		writeProductUnauthorized(writer)
+		return ctx, false, nil
+	}
+	if authentication.Method == productidentity.AuthenticationMethodWebSession &&
+		requiresCSRFProtection(request.Method) &&
+		request.Header.Get(csrfProtectionHeaderName) != csrfProtectionHeaderValue {
+		WriteProblem(writer, http.StatusForbidden, "The CSRF protection header is invalid.")
+		return ctx, false, nil
+	}
+
+	return context.WithValue(ctx, productAuthenticationContextKey{}, authentication), true, nil
+}
+
+func requiresCSRFProtection(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	default:
+		return true
 	}
 }
 

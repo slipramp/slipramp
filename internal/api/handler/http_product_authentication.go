@@ -26,6 +26,10 @@ func (a *productAuthenticator) AuthenticateProductRequest(
 	ctx context.Context,
 	request *http.Request,
 ) (productidentity.Authentication, error) {
+	if authentication, ok := productAuthenticationFromContext(ctx); ok {
+		return authentication, nil
+	}
+
 	authorizationValues := request.Header.Values("Authorization")
 	if len(authorizationValues) != 0 {
 		token, valid := productBearerToken(authorizationValues)

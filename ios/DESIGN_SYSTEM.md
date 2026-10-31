@@ -101,7 +101,9 @@ or turning every row into a pill.
 | `SliprampLoadingState` | Branded but native progress state |
 | `SliprampField` | Labeled onboarding field with native text input behavior |
 | `SliprampPrimaryButtonStyle` | One prominent action per surface |
-| `SliprampMark` / `SliprampMascot` | Brand artwork with resilient symbol fallback |
+| `SliprampMark` / `SliprampMascot` | Static brand artwork with resilient symbol fallback |
+| `SliprampAnimatedMascot` | Four-frame production loop with native resource caching and Reduce Motion behavior |
+| `SliprampMascotActivityView` | One expressive Run or Promotion status moment for detail screens |
 
 Prefer composing these primitives over adding feature-specific variants. Add a
 new primitive only after the same visual and behavioral pattern appears in at
@@ -129,6 +131,11 @@ from accessibility; nearby copy carries the meaning.
 Do not randomly select a pose on every render. When stateful poses are added,
 choose them deterministically from durable product identity, matching the web
 mascot behavior.
+
+Run and Promotion detail screens use the generated production catalog and the
+same FNV-1a selection, frame duration, and reviewed frame holds as the web.
+Keep the optimized sprites in the app bundle so mascot presentation remains
+instant and offline. Decode only the visible pose; do not preload the catalog.
 
 ## Accessibility and motion
 

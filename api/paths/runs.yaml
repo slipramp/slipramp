@@ -148,6 +148,8 @@ runs:
           schema:
             $ref: ../components/runs.yaml#/RunCreate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "201":
         description: The queued Run was created or recovered by idempotency key.
         content:
@@ -356,6 +358,8 @@ rerunRun:
           schema:
             $ref: ../components/runs.yaml#/RunRerun
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "201":
         description: The queued rerun was created or recovered by idempotency key.
         content:
@@ -438,6 +442,8 @@ decideRunReview:
           schema:
             $ref: ../components/runs.yaml#/RunReviewDecisionRequest
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
         description: The decision was recorded or an identical decision was repeated.
         content:

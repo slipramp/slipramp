@@ -1,0 +1,720 @@
+{
+  "assets": [
+    {
+      "bytes": 91066,
+      "name": "slipramp-axolotl-phone-scroll.webp",
+      "outputSHA256": "d712289684cda9631c09fe918b9439282badea20f2f7349c8ade5abb32921abb",
+      "sourceSHA256": "68e5ec7919d031499137cecb8b3ba1ce95bcdc8c1c069ee3b31153e89579ba3d"
+    },
+    {
+      "bytes": 83514,
+      "name": "slipramp-axolotl-book-browse.webp",
+      "outputSHA256": "6bae1d0f520e852492e8700b518e3d0c22ecb03e628e7a3acdd84d758d406fad",
+      "sourceSHA256": "441bc74fb975d7a4efbff239d4d820f2372dcb5f5d49b6a2447ab0a21ee6935e"
+    },
+    {
+      "bytes": 88380,
+      "name": "slipramp-axolotl-camera-snap.webp",
+      "outputSHA256": "c8d08880c53e75858656d1189e0e69df8f8bd8e6adc2d203de31f9860a629863",
+      "sourceSHA256": "e0005c9d1c389ab1f941d0ecaa876a0b6d31c3a5cfb66557e565ca95fb2cdb37"
+    },
+    {
+      "bytes": 73690,
+      "name": "slipramp-axolotl-traffic-light-match.webp",
+      "outputSHA256": "2d939a4529119b43261b4ab6605423083dd8baede7134a1364a81dfec7279db2",
+      "sourceSHA256": "67bf81ec1e5207bd5b0a6e4c5310b4d581834396c24ff7762bc72803bfd2fa1a"
+    },
+    {
+      "bytes": 91034,
+      "name": "slipramp-axolotl-iced-coffee-sip.webp",
+      "outputSHA256": "2c6c546dbcdad6e0a09d8b510ed1eb869dc43877cc4e7349d64d053a899c22e0",
+      "sourceSHA256": "5df26cf020c1ad93abe205a05076193e28ae374b77a899c76a7c1658383c8f69"
+    },
+    {
+      "bytes": 92232,
+      "name": "slipramp-axolotl-magazine-load.webp",
+      "outputSHA256": "7a74b31e6a5329c12ad5da584ed7ed56e255d993d447a9da0bb735d7da29cc65",
+      "sourceSHA256": "05f31250bd193e5f6e752d4a09b1693e340cac3cb2d129a9b024701fa80e9021"
+    },
+    {
+      "bytes": 99306,
+      "name": "slipramp-axolotl-rifle-clean.webp",
+      "outputSHA256": "5db5254bcc9e637cd7b7f2040462dd449f1b503553bac64fdd78ba47c742e30e",
+      "sourceSHA256": "68e59012efec50f7db1ca14cd6cd889492e442ba6379ca31b9eb2d18f2c9859a"
+    },
+    {
+      "bytes": 92466,
+      "name": "slipramp-axolotl-popcorn-munch.webp",
+      "outputSHA256": "6d105cabb9de4922236123fe51d30b01acbfd80a669613c79df37623fcfcf817",
+      "sourceSHA256": "bdf2c5cb48438464abf228c600f97746d2acc3df087313405db6ef1946be4fcc"
+    },
+    {
+      "bytes": 88234,
+      "name": "slipramp-axolotl-headphone-headbang.webp",
+      "outputSHA256": "be31d5e9c3fa21bc1b619832feb6f1beca26f0164c158306361b735bbf5dd1ce",
+      "sourceSHA256": "468fee8bbe3af0adbe551bbad9fe6ff2955422be2c6420f08cf2e1b346165751"
+    },
+    {
+      "bytes": 76508,
+      "name": "slipramp-axolotl-toaster-vigil.webp",
+      "outputSHA256": "249dd6b775343ad3936a12780d41bc50c3a1032380ada0765eb9449bb2fa49d7",
+      "sourceSHA256": "91916ca298de6d47afe4e63176cecb4e9cc094573681cd9c36ebd9e3928d2834"
+    },
+    {
+      "bytes": 80108,
+      "name": "slipramp-axolotl-suspended-animation.webp",
+      "outputSHA256": "ba38a3964c6087cde83b9230c22a06171c9bb1ef9d3974d4bb4206b6d92dd155",
+      "sourceSHA256": "51846804e82c886d5de4c049c2078bdbc867d86d63ef429a1c3c597b4ab4decd"
+    },
+    {
+      "bytes": 83036,
+      "name": "slipramp-axolotl-bubblegum-blow.webp",
+      "outputSHA256": "764fc53fcc047a38ed80cef66c19e04bf813e02a83da6d081ab5f2e2eb9adafe",
+      "sourceSHA256": "5b30ccb0fb39d5576b421a633351a8a2b243c5458c52bc50540e50c219b8a70c"
+    },
+    {
+      "bytes": 88066,
+      "name": "slipramp-axolotl-binocular-scan.webp",
+      "outputSHA256": "7adcd24b730c009b369cbdce664b63514c5e6c24260afe203867533023c4990a",
+      "sourceSHA256": "07c18fa143ed7902d90d671a5af1671c42eb647f3078d30517cb5fbadbe80eb4"
+    },
+    {
+      "bytes": 91390,
+      "name": "slipramp-axolotl-hourglass-turn.webp",
+      "outputSHA256": "1858eef4b01eadac4b2d982a1d79ca9640657bdc6ad810b0c6da0f39ff823c80",
+      "sourceSHA256": "a36153591db0eccf3e00509991432035149880f5dc878af4a4ce1f2d47d74e3f"
+    },
+    {
+      "bytes": 88554,
+      "name": "slipramp-axolotl-duck-float.webp",
+      "outputSHA256": "4db1b062ba8a1636ce9200e569603a3001f914cf655c560ca81202f1233f7035",
+      "sourceSHA256": "70d11a73933e76a1f3fdbeebfd553d97ce898464f260428cea559eef45714d9f"
+    },
+    {
+      "bytes": 89680,
+      "name": "slipramp-axolotl-lava-lamp-gaze.webp",
+      "outputSHA256": "3f7619ca333b560fa087b0cc535739989f57ef00a365a85b6e51cd9f4ffec128",
+      "sourceSHA256": "44fd511e6624f2d5cc1687f7063be2f11f119bfeaaa7516b6dcc958f6c0f6f72"
+    },
+    {
+      "bytes": 93110,
+      "name": "slipramp-axolotl-plasma-globe-touch.webp",
+      "outputSHA256": "9166382264612d5f557e9b66d5e666704db195380a6bf337a44340857f8a2643",
+      "sourceSHA256": "a6bd39973eabad21ad788cfe0231414909e2d0fdad2f3ec0e536de856885093c"
+    },
+    {
+      "bytes": 62140,
+      "name": "slipramp-axolotl-progress-bar-stare.webp",
+      "outputSHA256": "9898d62be14321458fe85c3ab94c39d7e29c5f17914ccd1ad0baab8a8b2b7a2f",
+      "sourceSHA256": "28835ecf42fb48c1f2496af25e3d2b7d4e12e575ee66ceba5cc2921f3b222a1b"
+    },
+    {
+      "bytes": 66608,
+      "name": "slipramp-axolotl-snail-coach.webp",
+      "outputSHA256": "9c172e255ac2cc6654d7caca9df55ef44bc63b5f5f7fd5e75278dc562ac78eca",
+      "sourceSHA256": "cfa6c547e8e99e44eb1c771c9ad9f1f8aa91b67b6c7dc03c3067243a4aa2cc77"
+    },
+    {
+      "bytes": 90420,
+      "name": "slipramp-axolotl-beach-ball-roll.webp",
+      "outputSHA256": "9584bf5a28fa3223769a2b38c4620e582ab4b27822243429719008ddb3da8e6b",
+      "sourceSHA256": "d46b96c43dfd28d0ff794de60c0364b8a536d11b445be54cd00860db482e93ff"
+    },
+    {
+      "bytes": 70334,
+      "name": "slipramp-axolotl-cat-petting.webp",
+      "outputSHA256": "2b0f6c042bafc02590c207af1c31871fb2316334ba97425c476bee0169cd104f",
+      "sourceSHA256": "3ceaa7c572afd6fea443ec76cb06470b9f8fa32ee6b5d168de17a716b9058f92"
+    },
+    {
+      "bytes": 77904,
+      "name": "slipramp-axolotl-grass-touch.webp",
+      "outputSHA256": "5cf13e3994d3350793dbb23ecf3197c34b7ee0da4f082a024bb31510ad34253a",
+      "sourceSHA256": "ab9a216ecf6c21b15b594a0574880baae2d863dd9e1a11ab6d08a2ca0093f61a"
+    },
+    {
+      "bytes": 90812,
+      "name": "slipramp-axolotl-pinwheel-spin.webp",
+      "outputSHA256": "bf5de6e1235dbdd2b7f2263db20d870bc3627bb84491ccad2106a50c054d6daa",
+      "sourceSHA256": "f8b78870c7eb4e9540afe9e30656cef7dec6e16910476a5a0b82c0af809b3307"
+    },
+    {
+      "bytes": 89490,
+      "name": "slipramp-axolotl-skull-consult.webp",
+      "outputSHA256": "5f602070d8cad5a4874ad404d9d15c0c8bd28915a274d00b727d1ad10c74fbd5",
+      "sourceSHA256": "50c0871da7f8d5dcf320e9511547c013c7147c5958dfb94743a0c412e5e67cbe"
+    },
+    {
+      "bytes": 88362,
+      "name": "slipramp-axolotl-candle-vigil.webp",
+      "outputSHA256": "c3a53bae2f1e5933b6d061431fc8f737c5e89e527b9c4477193aaed80d354b63",
+      "sourceSHA256": "e9bbf0c6cc5a4c5aac457dadbeaf87216921c0a68bf0f7f188c7d012e398ad82"
+    },
+    {
+      "bytes": 91054,
+      "name": "slipramp-axolotl-ghost-jar.webp",
+      "outputSHA256": "a131ee76c2eacb2effa8c9a77f167d1ec8db9bb41d8b8d5caeef7c31497c19aa",
+      "sourceSHA256": "e6a7413b31b84a9bd11233ca9e78ba5acccf16be44f12bac44eaed6658e3e60d"
+    },
+    {
+      "bytes": 93756,
+      "name": "slipramp-axolotl-ramen-slurp.webp",
+      "outputSHA256": "df2a2efb99d230b8bc18ff7e54ba6d7164eda92447dd002195d1679b43d66500",
+      "sourceSHA256": "4744a470d48769fbd58126fef694fd2cdf5ae800689e236fcfa94cc4a140cd71"
+    },
+    {
+      "bytes": 66964,
+      "name": "slipramp-axolotl-window-seat-dreamer.webp",
+      "outputSHA256": "fa1e5746e47515db804ce14f92700cf44f1aee4f35110ee45319b16a17832b32",
+      "sourceSHA256": "6d5eb588551dce1925ab440b22e91f2db294676d3d269520943d6068aaf3803f"
+    },
+    {
+      "bytes": 78198,
+      "name": "slipramp-axolotl-tray-table-snack.webp",
+      "outputSHA256": "cc1abb9758c2cb437301a12a76d9eae4b9f56179e8da5c6b4ec90fef978be9a5",
+      "sourceSHA256": "a099036c3c0b40ecf159f06c98e23ad248989291038e77185a4d63e085240aaa"
+    },
+    {
+      "bytes": 73602,
+      "name": "slipramp-axolotl-red-eye-passenger.webp",
+      "outputSHA256": "6d2a30e6150b89cc4bd7f9719156d4e26d0054157fa741fce8ebf558a640bd32",
+      "sourceSHA256": "760ed5353fd876ed9101af682548c4dde92e420fbe029da61adc54426fbb7cbf"
+    },
+    {
+      "bytes": 80240,
+      "name": "slipramp-axolotl-seatbelt-click.webp",
+      "outputSHA256": "fe28f55d29a96a1748a653262c7760960c10dc3467adfd3e0bbe54c286089aa3",
+      "sourceSHA256": "d2587131f37381d1bd320b525e4925bfbad47056c802c6068bf5907e6e243568"
+    },
+    {
+      "bytes": 82240,
+      "name": "slipramp-axolotl-turbulence-cup-save.webp",
+      "outputSHA256": "f18763ae8beeea504fa20ce13028e7a77058d6dc4ea3563a71ab5a854bee906f",
+      "sourceSHA256": "7ffa688ee3eab74899581829c6b132f9236794715b578b55665cf781b23aa677"
+    },
+    {
+      "bytes": 81214,
+      "name": "slipramp-axolotl-cabin-blanket-tuck.webp",
+      "outputSHA256": "a48e0b2279b59805e284cb3ea27d57e8bcf06a1e4b170ce8de799839c56a892b",
+      "sourceSHA256": "cc9fcfbf33dba6cbad500d1e2eb9fcd839c344586dfda621a5d85a55f967c810"
+    },
+    {
+      "bytes": 91602,
+      "name": "slipramp-axolotl-egg-basket-check.webp",
+      "outputSHA256": "61ce5ddc67ebf591a486304f292ebe17cbf02a8656b18915c3f8dd64d2759808",
+      "sourceSHA256": "1ffeec1b3e638817c2f2d27ffe11a038efea9efcfb0821451873b83732505460"
+    },
+    {
+      "bytes": 91678,
+      "name": "slipramp-axolotl-laptop-typing.webp",
+      "outputSHA256": "7e6973e602b290e0df11075c863b3777ebeac0429e0295fd47d8068efcc1b390",
+      "sourceSHA256": "b25d1f8a2477ce304fc984d332948da77be754a3a8fa3a408a80455e0a98685f"
+    },
+    {
+      "bytes": 74216,
+      "name": "slipramp-axolotl-inflight-laptop-typing.webp",
+      "outputSHA256": "6e9deac137b7f4a6a7a96687eb04a34a476f195049d41164db2cc0a217cdb323",
+      "sourceSHA256": "ef2a73a9f22a8a7797b95efca66f4b9e0d2a18f6672418036b06a1d4315a2d0f"
+    },
+    {
+      "bytes": 89850,
+      "name": "slipramp-axolotl-runway-marshal.webp",
+      "outputSHA256": "ea1933628464bbc6d893ebe2d9db1ec40777c568f7cd517a97dc6861936583c2",
+      "sourceSHA256": "d769cc02eaedcf592d02109ff637b767d7bef5f291065f68a42cfa5abc060f3b"
+    },
+    {
+      "bytes": 89976,
+      "name": "slipramp-axolotl-flight-controller.webp",
+      "outputSHA256": "fbfed3e741463f4d2feedc4846d49e131fc1f98c6c30c556ba349ff2f8d30091",
+      "sourceSHA256": "93b19dd4eaa3b930c34cd060b3f0b13f9d9e56e7f2bded4d78aa978ac8753607"
+    },
+    {
+      "bytes": 67366,
+      "name": "slipramp-axolotl-mainframe-reel-watch.webp",
+      "outputSHA256": "2acb51289c2bb7b62bfcbaf99b8a4cc7cf5d7c05b21311c479fa82fcd7c37e4e",
+      "sourceSHA256": "8243c23c8a3c5e3e9dd77b03e64b8d354d011e452a3c460bcb0458cbe837735f"
+    },
+    {
+      "bytes": 82168,
+      "name": "slipramp-axolotl-cpu-cooler-install.webp",
+      "outputSHA256": "6de3668e9042c9fc3b06d2329248bfdb91d132da7eb5123462ea4a4a5b3519b8",
+      "sourceSHA256": "21a61d7969d89acca4a4095e8a4f03e0279f0723c29e2f1698923a259dbffcd3"
+    },
+    {
+      "bytes": 67532,
+      "name": "slipramp-axolotl-ram-install.webp",
+      "outputSHA256": "972c82a38b1a391d08316792078e94a6d43167c662af105aa63e3d3f956816d4",
+      "sourceSHA256": "ac0a9a855bcd5b0e42d426a643ee96e6d6daa3247fe0ab9cb181e2bf69fbb86b"
+    },
+    {
+      "bytes": 96092,
+      "name": "slipramp-axolotl-blueprint-review.webp",
+      "outputSHA256": "5478df8a7eb8958798d528ce4d8a4d81a55f31c776d2ecd1aff32c62a4967515",
+      "sourceSHA256": "10352cb2a6634be9f389cf27bbc2fc3da097a1cce059ae395272358deb12cb7f"
+    },
+    {
+      "bytes": 96398,
+      "name": "slipramp-axolotl-clipboard-check.webp",
+      "outputSHA256": "4cf44da4e9a17251e336eb7dce3bbea37e85ca4f3b00f794e8e9167b5aa8f0bf",
+      "sourceSHA256": "c7312c44ed1d7b46f112bbe092c4474a6f6f3c6a82d1752ee496113298d54730"
+    },
+    {
+      "bytes": 91742,
+      "name": "slipramp-axolotl-walkie-talkie.webp",
+      "outputSHA256": "4f3a93badccd7fc0b942977a2b02847c8127366255b2a6679f28bc8015a691d3",
+      "sourceSHA256": "e58c919ca686ef71b2e60abf82d6c33fdf5f4cef618bd94d2f8df2cb9d86afea"
+    },
+    {
+      "bytes": 81330,
+      "name": "slipramp-axolotl-antenna-tune.webp",
+      "outputSHA256": "130bce5f327a9e03c2d11c2bc2c9034d86b05481f4a149107a5ebbbf996f4fdf",
+      "sourceSHA256": "330b7f3166576519b025871c8887304c9ea806f9c29e1412a0bd1cbc1a83bf2a"
+    },
+    {
+      "bytes": 95028,
+      "name": "slipramp-axolotl-drill-drive.webp",
+      "outputSHA256": "d097a3f8f08f8ab9c4e6849e026580bcd6ba75bdd104709cf261619ee3df0257",
+      "sourceSHA256": "9778a7e32f43122d85d8b11c9f7bbf656b6a0b73cd3dd54a4fb20262bc5e102d"
+    },
+    {
+      "bytes": 72048,
+      "name": "slipramp-axolotl-weld-spark-pipe.webp",
+      "outputSHA256": "6db91cfa12a0df74336560faaee818857833c7529b174464c3acc63f3c780b9a",
+      "sourceSHA256": "c8670a23dc4d9f94e125dd8ae61fafacd8286bf73f5d4f71a9089b690580a904"
+    },
+    {
+      "bytes": 82266,
+      "name": "slipramp-axolotl-grenade-throw.webp",
+      "outputSHA256": "8ff9f46c63cc8545cf55cdf72c46c8a35d795c9af3568e3064a9717eeadaca86",
+      "sourceSHA256": "d5ed2caf9d0c2a766adbc6775bb50cd02dff4088514d08714e6697dd21966287"
+    },
+    {
+      "bytes": 97604,
+      "name": "slipramp-axolotl-mortar-drop.webp",
+      "outputSHA256": "4f88a5cd80505dcd4aacc4b08740c1c814679b743c5fd6da13ac69813f7f646f",
+      "sourceSHA256": "b438344a192e99a8b0d319b8fcb47794f23f9b3cfabba54871f98ae39fadb8ed"
+    },
+    {
+      "bytes": 68768,
+      "name": "slipramp-axolotl-shoulder-launcher-check.webp",
+      "outputSHA256": "423f5a30463901712b80a12cd2640904233a4fedf959e085377d48a772a7b0b5",
+      "sourceSHA256": "9ae597255050ac6122eb01b676320beb006c1673e6ad32174cf667f54be50212"
+    },
+    {
+      "bytes": 102846,
+      "name": "slipramp-axolotl-map-coordinate-check.webp",
+      "outputSHA256": "794ad60144d47834ec1c153b8caec20fa0bc5a5eaa1f91d7cdc03c39da49932d",
+      "sourceSHA256": "cc75e289546bfdd2f87e8a00a6aa8150e7dc3742c7958c333f234249ba76f0ee"
+    },
+    {
+      "bytes": 90028,
+      "name": "slipramp-axolotl-rangefinder-check.webp",
+      "outputSHA256": "16a48682516277db21e828b4a3af04e9403125f7e7f5c976dbdd9d7f3ec4122c",
+      "sourceSHA256": "58d743bcc546fc9282735a0be0a42244517b0e693c3c6acdc7b56e5541456359"
+    },
+    {
+      "bytes": 97618,
+      "name": "slipramp-axolotl-field-medic-check.webp",
+      "outputSHA256": "25df3c4c38914a5cc0f403a40f67b6bb9eb2787e612ff44ee551429574ba6402",
+      "sourceSHA256": "dbde327c2a95d568e90fa2e090703ddd9f67fe0c3850846ad531d87cf2b3ecee"
+    },
+    {
+      "bytes": 82576,
+      "name": "slipramp-axolotl-field-radio-operator.webp",
+      "outputSHA256": "eb8136983466523f73c4a63535588934521bd3bd45e4af34b97b88e4faea6449",
+      "sourceSHA256": "938a7cf557a14938d1102d8359843d0187946f13519df3336404b83f44bb5fd1"
+    },
+    {
+      "bytes": 68940,
+      "name": "slipramp-axolotl-belt-feed-check.webp",
+      "outputSHA256": "44ee5d59cb222545f2ef82983c4fee235e6c08400de881f1f9a8dcf8d74ee7e5",
+      "sourceSHA256": "40ac2ad768734d2f002bae1d16c168ee7210aa8bf8fbacbc660e1d586b2396f8"
+    },
+    {
+      "bytes": 72978,
+      "name": "slipramp-axolotl-entrenching-tool-dig.webp",
+      "outputSHA256": "64c7d03e8f5f2d31f21914de59fd09923c49e87ca4ce7483de15aff35e0b909e",
+      "sourceSHA256": "8905184ad35f3c550df1b0e0436e9991cfae3a719b167ab026f8ca3b2824954c"
+    },
+    {
+      "bytes": 97524,
+      "name": "slipramp-axolotl-gas-mask-seal-check.webp",
+      "outputSHA256": "b2c4e6d9821b62c9af0e9646f0acced2398ac509168230fbd5a81f90ffcff801",
+      "sourceSHA256": "41c92c918079a77cbbf32ad544b4874fb1a03b43bef932ed6d3ea68599e7d45d"
+    },
+    {
+      "bytes": 67170,
+      "name": "slipramp-axolotl-drone-reconnaissance.webp",
+      "outputSHA256": "399446fd2d04cfb6e8ad00b1d463b6cbcb3e7b36d58a99b338a2b70f093a5a95",
+      "sourceSHA256": "058714319781271ac379287f0282319e9474d5123498174f36ab640c50433967"
+    },
+    {
+      "bytes": 80460,
+      "name": "slipramp-axolotl-plate-carrier-donning.webp",
+      "outputSHA256": "6c41cb48af9ed2661dabfe5cf9e7227e1d8eb07ba2b97a5e17d10ed9ab1022d7",
+      "sourceSHA256": "77ede0f10b37785b5d0af6f9ce7ba2f3c3b6997de0ef3ea6ca577500473d4d32"
+    },
+    {
+      "bytes": 79482,
+      "name": "slipramp-axolotl-eod-suit-rise.webp",
+      "outputSHA256": "70ca0436c51720a2a8baa5842dcd9d3c1d5401a0cf147c612327676f2174f843",
+      "sourceSHA256": "92152867c72d3a52db0b61b020f02818ed7dcdd375a32c2876e785ba89243391"
+    },
+    {
+      "bytes": 74772,
+      "name": "slipramp-axolotl-field-generator-start.webp",
+      "outputSHA256": "714b5d2ef34b589373b21a53027e8ab8915821f105b42b28aad7973c77150d67",
+      "sourceSHA256": "18d84e0332ee5bd237548d022fa670032459541c345dfc2bfb594f791f5b50e4"
+    },
+    {
+      "bytes": 66078,
+      "name": "slipramp-axolotl-jackhammer-ride.webp",
+      "outputSHA256": "0d68ee4dc099439de782031e2c05cc895f82b46f1649ace82d8b72f258e33f61",
+      "sourceSHA256": "76c4165c30eb8e43ab2e8f5caaf65b717739abc31e1cb1cdaaf3258e752f7037"
+    },
+    {
+      "bytes": 88366,
+      "name": "slipramp-axolotl-bubble-level-check.webp",
+      "outputSHA256": "80fed59169c61af73a514e034b6d63f45f834e7b01b33afc549a7b6d7232a0cc",
+      "sourceSHA256": "d28683d5b786587857b986af6f6c21d1765be19488584026959f0155785ec989"
+    },
+    {
+      "bytes": 80464,
+      "name": "slipramp-axolotl-paint-roller-swipe.webp",
+      "outputSHA256": "541125a8d967af1bba5195a22ffaa3e639843966d90a1159bf13a36dde7999b8",
+      "sourceSHA256": "3595222c614d0e35740a3b4dc11ae42b0dace401b9c6891ff22ee26884d3da5d"
+    },
+    {
+      "bytes": 85712,
+      "name": "slipramp-axolotl-pumpkin-autopsy.webp",
+      "outputSHA256": "9da691d5598f39445bba9855f650d53e98665fb78c9642c63921297489d66b9d",
+      "sourceSHA256": "2f1f5b6052ecfc4a4575f9f5e1889ed596c44640058bec126fcab5de5b7982f6"
+    },
+    {
+      "bytes": 82202,
+      "name": "slipramp-axolotl-breaker-bar-bounce.webp",
+      "outputSHA256": "db5b649b9167eb2265aca2f29a091608660e346c2defb3283c71e284d3ec7e9e",
+      "sourceSHA256": "9d2ebd55595c197ff8a67e70cd145060f8f3d66aee90aef334a561cccc9d8992"
+    },
+    {
+      "bytes": 66224,
+      "name": "slipramp-axolotl-hay-bale-roll.webp",
+      "outputSHA256": "63b363ffd4c68bcecab3a5fff8bff452c5b8a141d583b387f83500fdf044b01c",
+      "sourceSHA256": "4f0b7a87f4cc1c2b15566a96fab7f16550e5928419e1955ee3925f4425a8f024"
+    },
+    {
+      "bytes": 79556,
+      "name": "slipramp-axolotl-watering-can-pour.webp",
+      "outputSHA256": "cdcea0a2293182f8d84798bb9673e81c2856012e6e6fcaefb14fa3cbed340eb0",
+      "sourceSHA256": "34d7f9c2170e190e41141bedc6047133e9341bbdc77b0aa645ec073df9916cac"
+    },
+    {
+      "bytes": 65900,
+      "name": "slipramp-axolotl-wheelbarrow-push.webp",
+      "outputSHA256": "ddcdf5d5704f969daa9b86f2aebc357f8961e503aa39fb1aa87e46cfec06ae0f",
+      "sourceSHA256": "a7263e38c9511331e3cff5e09596161844c4f0e30260dd3460a589aaadf60cce"
+    },
+    {
+      "bytes": 77450,
+      "name": "slipramp-axolotl-dough-flip.webp",
+      "outputSHA256": "b28675a88713250db66d18052943d1d0fe283af37c711226694a33a1e3bf5545",
+      "sourceSHA256": "7ef02aaab95bed29eedbe723ae4efcef9a8982c197a7268f858ec5ad47fd8dfd"
+    },
+    {
+      "bytes": 90776,
+      "name": "slipramp-axolotl-dough-knead.webp",
+      "outputSHA256": "b3ce828056642bae054485728269111349eef1707d6f31f1da4e8fb2132b46d6",
+      "sourceSHA256": "78b473d4261e4deb1ac60dc7b74244f8528fc41167ef0bed0579b288eb5ddde4"
+    },
+    {
+      "bytes": 92368,
+      "name": "slipramp-axolotl-cake-piping.webp",
+      "outputSHA256": "a14be31c6a521a3cad782d94870a89b297072e26f4ff13b61702ef3496d472b9",
+      "sourceSHA256": "35b860e317971cadfcd7142e19fd3cacdedfdfa032a92ae25db8a46fca6c6ba6"
+    },
+    {
+      "bytes": 79250,
+      "name": "slipramp-axolotl-grillmaster-flip.webp",
+      "outputSHA256": "49c1487f4577fc80cc4f8f5aeaf2a69d34559c7788a853e507efbc23d875a2b3",
+      "sourceSHA256": "30285ac5b65a078f99060dcaacd439f99bc7b85a83f8ba9b99ad98a4f33fb887"
+    },
+    {
+      "bytes": 89600,
+      "name": "slipramp-axolotl-wok-toss.webp",
+      "outputSHA256": "f2fab9f2fe52e236b272eff4e3cfeee653de46839322ab8dbcca64df1ba70291",
+      "sourceSHA256": "1429c29c400d03a5769fbadc810a6c402927f0702f0f630965e633d423cc715e"
+    },
+    {
+      "bytes": 73692,
+      "name": "slipramp-axolotl-kebab-turn.webp",
+      "outputSHA256": "e23cf579eec0583ab234ea436b04ed4f6bd65723257d49e7f671cef79153383b",
+      "sourceSHA256": "9c93a1d77fb608c73e76bdf7015172592f5b661864e77d65a8504f96e2dcec19"
+    },
+    {
+      "bytes": 96046,
+      "name": "slipramp-axolotl-beer-sip.webp",
+      "outputSHA256": "57b5b98449d4e5d3b68dbbc1febc684e8d612c029e6901a5101c5f8658f889ca",
+      "sourceSHA256": "c0b6ac0598bda04ea0a741a291f163dbc3ca7cb36564b7450dddee0c7f8e93db"
+    },
+    {
+      "bytes": 82988,
+      "name": "slipramp-axolotl-pennant-wave.webp",
+      "outputSHA256": "f917c6dacdbc25896c544cce25f7bb57af28ee96381d160b7c07a5e22698de50",
+      "sourceSHA256": "c6acb1c78ed20340928b779ca57703fc52da37e1935a37b8ea3f281d456a2b0b"
+    },
+    {
+      "bytes": 93120,
+      "name": "slipramp-axolotl-check-badge.webp",
+      "outputSHA256": "4a97ea14c843951f447260da600fcc4ba3900a89fa058e0d6010874b66512826",
+      "sourceSHA256": "6ae1c5de877ede954efe6f656aa0b5a167f1768714b3553afcf21e4d608ea630"
+    },
+    {
+      "bytes": 94576,
+      "name": "slipramp-axolotl-beer-toast.webp",
+      "outputSHA256": "e26ea9668608c3210113247dc1091fb7e118634262715e2281829f24c1bc0df7",
+      "sourceSHA256": "9f19b8e7c0472b97590c4ac54c13e2fb251119d53b156425d5db3c25a71ddcda"
+    },
+    {
+      "bytes": 91290,
+      "name": "slipramp-axolotl-explosion-walkaway.webp",
+      "outputSHA256": "350ff5be4206230ec26f40b683d2e6f48aed464f8258b6e12bef2a098a4ca982",
+      "sourceSHA256": "69d1b700ef05a03e4649ec92217d00cce872bfb8c824077a8e55b0ba9612d457"
+    },
+    {
+      "bytes": 92114,
+      "name": "slipramp-axolotl-flower-offer.webp",
+      "outputSHA256": "2ddccd85e492103e5e5e9df052be20ab92ba6569296f96b2a8b503a5d47370c8",
+      "sourceSHA256": "334c19f0008077edfa5535e3d08f8c3c03e87cc79851f8db571e03afa9561b4d"
+    },
+    {
+      "bytes": 90190,
+      "name": "slipramp-axolotl-championship-belt.webp",
+      "outputSHA256": "65be130a3ccb7fb71b1ffa3826497b1728d619c8dc0116bf9864a0296225c98a",
+      "sourceSHA256": "e6f7178db8a159581924c0e211df977f962efa77151cabb063cd5641c205d712"
+    },
+    {
+      "bytes": 82932,
+      "name": "slipramp-axolotl-confetti-cannon.webp",
+      "outputSHA256": "1703f625931ed2de18186c7f0fc57d79220a5782d9a16aff4927f001bf062162",
+      "sourceSHA256": "e1db9ba36ad9fd44e068f830d9c0919068463bd3e2976eed176a27cdce296fbf"
+    },
+    {
+      "bytes": 80266,
+      "name": "slipramp-axolotl-jackpot-stars.webp",
+      "outputSHA256": "39ff5b1d4703fcc6f0689423685cfd265157c1ef0478acc139f2348f08baa7e1",
+      "sourceSHA256": "4a20ac2c30582bf01d7a42c73dde10ffa8f73364d269ff4f7e6ded607f4ffafc"
+    },
+    {
+      "bytes": 69716,
+      "name": "slipramp-axolotl-pistol-salute.webp",
+      "outputSHA256": "ec78b20e4b55f2f4469a3b745b718058b264897d02b30f63b954ae1662e9e6a0",
+      "sourceSHA256": "fa40211b5ef5e8ac66e2103ed8d90b979f8fa1d48b020e241bb8862ad9d995e2"
+    },
+    {
+      "bytes": 74606,
+      "name": "slipramp-axolotl-flag-salute.webp",
+      "outputSHA256": "703a0fc9c57e102233029a2a0a810ac2acd9ae9bfbd7befe7d594ab95c78f79b",
+      "sourceSHA256": "9ee979def2cd76e627e3da17f884e3a20da2f4791954a979f78d24455f82fc66"
+    },
+    {
+      "bytes": 91282,
+      "name": "slipramp-axolotl-trophy-hoist.webp",
+      "outputSHA256": "d07861e4eaa4f216bf4bd6ac1beeec5e306d3b2956683e442cc725a4c8e0bb28",
+      "sourceSHA256": "4a01d520f2c01e95f760c412fdfa30bd8f8138e782fef4616e36b3c8597a2616"
+    },
+    {
+      "bytes": 75738,
+      "name": "slipramp-axolotl-cowbell-clang.webp",
+      "outputSHA256": "51d06b1bd151d4ef29a9c84e27b7ec8a7aa32228245b4a983dd886dd767dcc89",
+      "sourceSHA256": "73022b7e9f91ed32c840b024d45c42c5af46d4ffdc913cbf9db794cb337eeee7"
+    },
+    {
+      "bytes": 98658,
+      "name": "slipramp-axolotl-chart-rise.webp",
+      "outputSHA256": "dc8b1a92c18e9ff6ea8707307df7eb8a253ed29502417ccd7b4af949fac3d23d",
+      "sourceSHA256": "a65b4f2d029a3c354eb2e4e66b11b7a126dad13b15c8986a19559650e9c5df49"
+    },
+    {
+      "bytes": 91332,
+      "name": "slipramp-axolotl-server-hug.webp",
+      "outputSHA256": "d5144fb5646ffebe86ab98e77e35c871b01620dec5ed4253f04c969b538b5c2f",
+      "sourceSHA256": "a554141b74b6580f673a142833925bd877264ca5e507a293e1c02c3daae7189d"
+    },
+    {
+      "bytes": 68694,
+      "name": "slipramp-axolotl-floppy-disk-insert.webp",
+      "outputSHA256": "bea897ec148d85222c1c6a654f7d54af53f4e169d68b84f5c5a6c29bd0b22190",
+      "sourceSHA256": "01193d363657464613616f1cbe9fa5d91ed33141f60b8c13940d5f551765849f"
+    },
+    {
+      "bytes": 80914,
+      "name": "slipramp-axolotl-hard-drive-spinup.webp",
+      "outputSHA256": "3ac6eaa30a6ebf9b63c085d4e6c1c49ae434d26179d1809b52d49e6bc53de708",
+      "sourceSHA256": "248ec10dec47e31c2fc3b7f3eb5742e5148fb88fcb153f466b0cd92123e7d849"
+    },
+    {
+      "bytes": 85382,
+      "name": "slipramp-axolotl-pixel-heart-display.webp",
+      "outputSHA256": "643fa02a2e4e6877bd37e98b11b21cfd250622ee5bf7c68807f81bf814e429ea",
+      "sourceSHA256": "c6e3fded605ea1e3c6f796d07809e227dcd2ac2f718282a79dd48832b09f4541"
+    },
+    {
+      "bytes": 86190,
+      "name": "slipramp-axolotl-cargo-loader-triumph.webp",
+      "outputSHA256": "4a8fc123a3991dc4dfc201a563210c0fde1974d62894b24d40b14938e42b6a51",
+      "sourceSHA256": "2d08f373083ad8864b36530b621cab12f7e506cda874cad6f7a914546a6b1df5"
+    },
+    {
+      "bytes": 94032,
+      "name": "slipramp-axolotl-guitar-power-chord.webp",
+      "outputSHA256": "03a0f9cd96c9bf3b142190d939c32748dea7895db615f0256bf90c32080db77e",
+      "sourceSHA256": "e588948fc0816899b24d30b9a20de1b970f8b19f4bdfb6a9da39900670cb7dfb"
+    },
+    {
+      "bytes": 82414,
+      "name": "slipramp-axolotl-oven-mitt-triumph.webp",
+      "outputSHA256": "a4d2ea411fe62cc70b20514855fc262474b64359c7ad67e8633e9aa8d8198970",
+      "sourceSHA256": "939687645dff39b08370e1dc7b17f5189c9c36ec06a09e029f9f7635670c49ad"
+    },
+    {
+      "bytes": 71448,
+      "name": "slipramp-axolotl-parachute-landing.webp",
+      "outputSHA256": "bf2f6439bdd118301677614619fe0a6579d337bdbdcb970f479d7c5448d28874",
+      "sourceSHA256": "628fe947d11775f8ba65dcc2b4e6fdb5709094de589fa68f8d87635780082e69"
+    },
+    {
+      "bytes": 88426,
+      "name": "slipramp-axolotl-laptop-slump.webp",
+      "outputSHA256": "428197725fe92ad166beb3cb5dd6f157ec145df8198611db6bb8ebfb75c0e917",
+      "sourceSHA256": "a9b8e24e40687eeb3362ffd5a79e7bfea2c23753e29925a13c2fbafcac5134f6"
+    },
+    {
+      "bytes": 91362,
+      "name": "slipramp-axolotl-server-bite.webp",
+      "outputSHA256": "1fc3af759c140e81c025e44312030332cff926de385af1e3b7990963450b7f97",
+      "sourceSHA256": "0355ebd0ae219d17f3be31ae5f165a8e76e0439315f9eab5d56fa003f1eddf87"
+    },
+    {
+      "bytes": 89534,
+      "name": "slipramp-axolotl-rocket-boot-misfire.webp",
+      "outputSHA256": "2df730888d5fb2896e1d2a6930811f1694964083e8b00ded5a6a8cf4fe0ac2da",
+      "sourceSHA256": "1a1efcff7ba76c4b694961d596dd1930f8ec14c6b8824a95960bd72eccbbb452"
+    },
+    {
+      "bytes": 84960,
+      "name": "slipramp-axolotl-kaiju-server-stomp.webp",
+      "outputSHA256": "2cad73567d03178f72f5676b930469567dba6de918e91392a7308f2907e6ef5b",
+      "sourceSHA256": "1f0d31245da1872d6a879e1dc20ef66121a1e2c987bb299602bea488d815b0ff"
+    },
+    {
+      "bytes": 93514,
+      "name": "slipramp-axolotl-wrench-fumble.webp",
+      "outputSHA256": "8875e5d4f1b939251f1c0c48ccd9a52112990b1bcb7fd5306282f299aba7c5bb",
+      "sourceSHA256": "b2beb1985c518067106dc25489d957cf8bfb474af9ba94046f787c609e9c1efd"
+    },
+    {
+      "bytes": 70534,
+      "name": "slipramp-axolotl-button-panic.webp",
+      "outputSHA256": "0375cb58dea852e94920a2fe00092ac29ef0da593b3b5b63cbeea53b36d75974",
+      "sourceSHA256": "e655eb489793e88367ad7a0c9b99ed8279e8144621ef70a08bd3d85d58b29e9b"
+    },
+    {
+      "bytes": 82510,
+      "name": "slipramp-axolotl-chart-plunge.webp",
+      "outputSHA256": "53e21909c550062b6d9d95e2e5807c182ec70d907aa0198506f35e70d86dd134",
+      "sourceSHA256": "de0579c7f3fdf08dff6da7c99b82d972ed61acf2d4b8a67357a047ef7a3354fd"
+    },
+    {
+      "bytes": 54194,
+      "name": "slipramp-axolotl-play-dead.webp",
+      "outputSHA256": "1a402af92715db14d130f8571b0b9ed4a8357b1602c7363c81e5a07a297074b0",
+      "sourceSHA256": "da785dd33bd77e674deb660fafd6c09fb1f23892647e92d6206c8cd95e42274c"
+    },
+    {
+      "bytes": 49202,
+      "name": "slipramp-axolotl-tombstone-peek.webp",
+      "outputSHA256": "c15f9dff142ca87e6e98a103490e5d519b384915022a2b3ed8bf5ede559be351",
+      "sourceSHA256": "34bce49208f27ee707a7eb0aaced835a6f566e4f943356cfe2215388082e6f08"
+    },
+    {
+      "bytes": 73030,
+      "name": "slipramp-axolotl-trash-can-hide.webp",
+      "outputSHA256": "4ed21b0d022c2bbbe28a0f22032126b136472ac037bde0eba26c255415887acd",
+      "sourceSHA256": "026703bfc9d00d4c988197dd464425bf1358ee4f90bbe645c6b5e1ac955016ff"
+    },
+    {
+      "bytes": 88414,
+      "name": "slipramp-axolotl-lever-regret.webp",
+      "outputSHA256": "2e8b5641764635c90473944e8375f70ab19464e710d4b921b216e2f10d69f95a",
+      "sourceSHA256": "9d5ea4865c34c9c5a7a6f89636ed5f0a85b23c67ec10fffe54ead9bfd8a4714a"
+    },
+    {
+      "bytes": 83892,
+      "name": "slipramp-axolotl-anvil-bonk.webp",
+      "outputSHA256": "b1445ff843eda9f5a0ed1c942a329dbd5b82487ccd595940b26dd0ddef472ea4",
+      "sourceSHA256": "b2c4c5e7a1f958307cbfad9293bbe7991f4e04d865dba63aa79df3cb4e564a42"
+    },
+    {
+      "bytes": 95512,
+      "name": "slipramp-axolotl-cable-cocoon.webp",
+      "outputSHA256": "01fc890c22d0c61794ead6d461838a794ea8d6056504fc87bce4e9f69070956e",
+      "sourceSHA256": "dd6b5ecca3ef8c01d35a1c80c39db2de8bea2027f5b773baf3974b77f700338b"
+    },
+    {
+      "bytes": 112416,
+      "name": "slipramp-axolotl-nuclear-vaporize.webp",
+      "outputSHA256": "0f01e3c0c0a59230161e53b6ef06c887afbc6fd792fb22c11eea6bba3b4d70c1",
+      "sourceSHA256": "d5f957a3856eececa1363759bb3d098d33ab135ad1cf259b213baa6e0a39c6b9"
+    },
+    {
+      "bytes": 64908,
+      "name": "slipramp-axolotl-lightning-vaporize.webp",
+      "outputSHA256": "024608db1e2789a81cc70449cbfb192c4cd662a64148c3809976264cc13f3929",
+      "sourceSHA256": "6c6c95e0ae8b2cc2a949e6279f1c9f60ec80c3d65e02d1ba0f81844c971707b1"
+    },
+    {
+      "bytes": 91564,
+      "name": "slipramp-axolotl-too-many-arms.webp",
+      "outputSHA256": "cb2af8f99d99554d195a17bfe73c996fadc33c6fbb035101707ea43f16ee5acd",
+      "sourceSHA256": "3a844f442f0b131c3c8069ea9697e44c09dbb4f4cb91892829b7c0e34a44e9ec"
+    },
+    {
+      "bytes": 73750,
+      "name": "slipramp-axolotl-trapdoor-deploy.webp",
+      "outputSHA256": "e112e3c94d3de944a4e46352932cebf3d29527da40fc11d7a0409cfbf087cf4d",
+      "sourceSHA256": "c32fc0c714c4575ec399dcdd6d50727e49646aa2b5b5da3dbb4aac99de9ce7b0"
+    },
+    {
+      "bytes": 71672,
+      "name": "slipramp-axolotl-steamroller-flat.webp",
+      "outputSHA256": "b760be0aeaa88d520ed7e94bfdc65f7da9df7bb094e7c1826bf233b57bd768f3",
+      "sourceSHA256": "faedc945ddb43df188ee03375e5b99d2ccabeb7919d850db16b0f35ec05de177"
+    },
+    {
+      "bytes": 76474,
+      "name": "slipramp-axolotl-under-desk-drag.webp",
+      "outputSHA256": "d3a37fdb45d0c26121d6d83f186feaaf678413f9e371dbd00447ed4daf5e3543",
+      "sourceSHA256": "aa3ed1b93f6d9adf7f60b3c538c1367be2c8da3742f9e64b74cbcec2349a24f9"
+    },
+    {
+      "bytes": 75544,
+      "name": "slipramp-axolotl-fire-extinguisher-blast.webp",
+      "outputSHA256": "d44444ae9d3b55592573eeeec5364cde99b2e96cb768d3b22282754bce1ba805",
+      "sourceSHA256": "9567e794da1e627e6361aafe5d630ebe42e8471038601e2695c2af046aa11a41"
+    },
+    {
+      "bytes": 63960,
+      "name": "slipramp-axolotl-parachute-collapse.webp",
+      "outputSHA256": "609bd699cfd6452db966ec0133b988ef2137c5358b692e6405927275c91e8513",
+      "sourceSHA256": "973b4666a052b0eccaf9b54c324aa817b30a69ce3675d2ccda75f405b5a37414"
+    }
+  ],
+  "encoding": {
+    "alphaQuality": 100,
+    "method": 6,
+    "quality": 90
+  },
+  "frameCount": 4,
+  "frameSize": 288,
+  "version": 1
+}

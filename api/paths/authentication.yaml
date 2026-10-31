@@ -26,7 +26,7 @@ login:
             schema:
               type: string
               enum:
-                - no-store
+                - "private, no-store"
       "405":
         description: The HTTP method is not supported for this resource.
         content:
@@ -91,7 +91,7 @@ callback:
             schema:
               type: string
               enum:
-                - no-store
+                - "private, no-store"
       "400":
         description: The authorization response or login transaction is invalid.
         content:
@@ -140,7 +140,7 @@ session:
             schema:
               type: string
               enum:
-                - no-store
+                - "private, no-store"
         content:
           application/json:
             schema:
@@ -201,7 +201,7 @@ logout:
             schema:
               type: string
               enum:
-                - no-store
+                - "private, no-store"
       "400":
         description: The required CSRF header is missing or malformed.
         content:
@@ -312,6 +312,8 @@ apiKeys:
           schema:
             $ref: ../components/authentication.yaml#/APIKeyCreate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "201":
         description: API key created.
         headers:
@@ -541,6 +543,8 @@ principal:
           schema:
             $ref: ../components/authentication.yaml#/PrincipalUpdate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
         description: The updated product principal.
         content:
@@ -671,6 +675,8 @@ principalAPIKeys:
           schema:
             $ref: ../components/authentication.yaml#/APIKeyCreate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "201":
         description: API key created.
         headers:
@@ -844,6 +850,8 @@ serviceAccounts:
           schema:
             $ref: ../components/authentication.yaml#/ServiceAccountCreate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "201":
         description: Service account created.
         content:

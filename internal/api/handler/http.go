@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -15,7 +17,7 @@ type HTTPOptions struct {
 }
 
 func NewHTTP(dependencies Dependencies, options HTTPOptions) http.Handler {
-	return newHTTP(dependencies, options)
+	return disablePrivateAPICaching(boundRequestReadTime(newHTTP(dependencies, options)))
 }
 
 func newHTTP(dependencies Dependencies, options HTTPOptions) *operationRouter {
@@ -23,37 +25,44 @@ func newHTTP(dependencies Dependencies, options HTTPOptions) *operationRouter {
 		dependencies.ControllerIdentities,
 		options.ControllerEnrollmentTokens,
 	)
+	productAuthenticator := newProductAuthenticator(dependencies.ProductAuthentication)
 	middlewares := []api.StrictMiddlewareFunc{
 		ControllerAuthentication(controllerAuthenticator),
-		ProductAuthentication(newProductAuthenticator(dependencies.ProductAuthentication)),
+		ProductAuthentication(productAuthenticator),
+	}
+	responseErrorHandler := func(writer http.ResponseWriter, request *http.Request, err error) {
+		if request.Context().Err() != nil {
+			return
+		}
+
+		if options.Logger != nil {
+			options.Logger.Error(
+				"handle API request",
+				"method", request.Method,
+				"path", request.URL.Path,
+				"error", err,
+			)
+		}
+
+		WriteProblem(
+			writer,
+			http.StatusInternalServerError,
+			"The server could not complete the request.",
+		)
 	}
 	strictHandler := api.NewStrictHandlerWithOptions(
 		newHandler(dependencies),
 		middlewares,
 		api.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, err error) {
-				WriteProblem(writer, http.StatusBadRequest, err.Error())
-			},
-			ResponseErrorHandlerFunc: func(writer http.ResponseWriter, request *http.Request, err error) {
-				if request.Context().Err() != nil {
+				if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+					writeRequestTooLarge(writer)
 					return
 				}
 
-				if options.Logger != nil {
-					options.Logger.Error(
-						"handle API request",
-						"method", request.Method,
-						"path", request.URL.Path,
-						"error", err,
-					)
-				}
-
-				WriteProblem(
-					writer,
-					http.StatusInternalServerError,
-					"The server could not complete the request.",
-				)
+				WriteProblem(writer, http.StatusBadRequest, err.Error())
 			},
+			ResponseErrorHandlerFunc: responseErrorHandler,
 		},
 	)
 
@@ -62,6 +71,17 @@ func newHTTP(dependencies Dependencies, options HTTPOptions) *operationRouter {
 		strictHandler,
 		api.StdHTTPServerOptions{
 			BaseRouter: router,
+			Middlewares: []api.MiddlewareFunc{
+				limitRequestBodies,
+				authenticateBeforeDecoding(
+					productAuthenticator,
+					controllerAuthenticator,
+					dependencies.Artifacts,
+					func(writer http.ResponseWriter, request *http.Request, err error) {
+						responseErrorHandler(writer, request, fmt.Errorf("authenticate request before decoding: %w", err))
+					},
+				),
+			},
 			ErrorHandlerFunc: func(writer http.ResponseWriter, _ *http.Request, err error) {
 				WriteProblem(writer, http.StatusBadRequest, err.Error())
 			},

@@ -82,6 +82,86 @@ func TestProductAuthenticationRejectsDisabledPrincipal(t *testing.T) {
 	}
 }
 
+func TestProductAuthenticationRequiresCSRFProtectionForSessionMutations(t *testing.T) {
+	t.Parallel()
+
+	authentication := productAuthentication(
+		productidentity.RoleOperator,
+		productidentity.AuthenticationMethodWebSession,
+		nil,
+	)
+	tests := []struct {
+		name        string
+		method      string
+		headerValue string
+		wantStatus  int
+		wantCalled  bool
+	}{
+		{name: "missing header", method: http.MethodPost, wantStatus: http.StatusForbidden},
+		{name: "invalid header", method: http.MethodPost, headerValue: "2", wantStatus: http.StatusForbidden},
+		{
+			name:        "valid header",
+			method:      http.MethodPost,
+			headerValue: csrfProtectionHeaderValue,
+			wantStatus:  http.StatusNoContent,
+			wantCalled:  true,
+		},
+		{name: "safe method", method: http.MethodGet, wantStatus: http.StatusNoContent, wantCalled: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			called := false
+			request := httptest.NewRequestWithContext(context.Background(), test.method, "/api/v1/runs", nil)
+			if test.headerValue != "" {
+				request.Header.Set(csrfProtectionHeaderName, test.headerValue)
+			}
+			response := runProductMiddlewareRequest(
+				t,
+				&recordingProductAuthenticator{authentication: authentication},
+				"CreateRun",
+				request,
+				func(context.Context) { called = true },
+			)
+
+			if response.Code != test.wantStatus {
+				t.Errorf("status = %d, want %d", response.Code, test.wantStatus)
+			}
+			if called != test.wantCalled {
+				t.Errorf("next handler called = %t, want %t", called, test.wantCalled)
+			}
+		})
+	}
+}
+
+func TestProductAuthenticationDoesNotRequireCSRFProtectionForAPIKeys(t *testing.T) {
+	t.Parallel()
+
+	authentication := productAuthentication(
+		productidentity.RoleOperator,
+		productidentity.AuthenticationMethodAPIKey,
+		[]productidentity.Scope{productidentity.ScopeRunsWrite},
+	)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", nil)
+	called := false
+	response := runProductMiddlewareRequest(
+		t,
+		&recordingProductAuthenticator{authentication: authentication},
+		"CreateRun",
+		request,
+		func(context.Context) { called = true },
+	)
+
+	if response.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if !called {
+		t.Error("next handler was not called")
+	}
+}
+
 func TestProductAuthenticationRejectsInsufficientRoleOrScope(t *testing.T) {
 	t.Parallel()
 
@@ -465,6 +545,19 @@ func runProductMiddleware(
 	inspectContext func(context.Context),
 ) *httptest.ResponseRecorder {
 	t.Helper()
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+
+	return runProductMiddlewareRequest(t, authenticator, operationID, request, inspectContext)
+}
+
+func runProductMiddlewareRequest(
+	t *testing.T,
+	authenticator ProductAuthenticator,
+	operationID string,
+	request *http.Request,
+	inspectContext func(context.Context),
+) *httptest.ResponseRecorder {
+	t.Helper()
 
 	next := func(ctx context.Context, writer http.ResponseWriter, _ *http.Request, _ any) (any, error) {
 		inspectContext(ctx)
@@ -474,7 +567,6 @@ func runProductMiddleware(
 	}
 	middleware := ProductAuthentication(authenticator)
 	handler := middleware(api.StrictHandlerFunc(next), operationID)
-	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	response := httptest.NewRecorder()
 
 	if _, err := handler(request.Context(), response, request, struct{}{}); err != nil {

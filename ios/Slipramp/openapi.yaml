@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Slipramp API
   version: 0.1.0
-  description: HTTP API for the Slipramp Server.
+  description: HTTP API for the Slipramp Server. Responses under /api, /controller, and /execution are private and must not be stored by clients or shared caches.
 servers:
   - url: /
 paths:
@@ -187,6 +187,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The repository could not be registered.
           content:
@@ -240,6 +242,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The repository connection could not be tested.
           content:
@@ -298,6 +302,8 @@ paths:
           $ref: '#/components/responses/InboxForbidden'
         '405':
           $ref: '#/components/responses/InboxMethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           $ref: '#/components/responses/InboxInternalError'
   /api/v1/notification-deliveries:
@@ -423,6 +429,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The repository could not be updated.
           content:
@@ -1333,6 +1341,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The controller could not be enrolled.
           content:
@@ -1447,6 +1457,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The dispatch result could not be recorded.
           content:
@@ -1509,6 +1521,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The reconciliation result could not be recorded.
           content:
@@ -1571,6 +1585,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The Run observation could not be recorded.
           content:
@@ -1755,6 +1771,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The log could not be sealed.
           content:
@@ -2129,6 +2147,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The Run could not be created.
           content:
@@ -2324,6 +2344,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The rerun could not be created.
           content:
@@ -2397,6 +2419,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The Run review could not be decided.
           content:
@@ -2718,7 +2742,7 @@ paths:
               schema:
                 type: string
                 enum:
-                  - no-store
+                  - private, no-store
         '405':
           description: The HTTP method is not supported for this resource.
           content:
@@ -2780,7 +2804,7 @@ paths:
               schema:
                 type: string
                 enum:
-                  - no-store
+                  - private, no-store
         '400':
           description: The authorization response or login transaction is invalid.
           content:
@@ -2828,7 +2852,7 @@ paths:
               schema:
                 type: string
                 enum:
-                  - no-store
+                  - private, no-store
           content:
             application/json:
               schema:
@@ -2886,7 +2910,7 @@ paths:
               schema:
                 type: string
                 enum:
-                  - no-store
+                  - private, no-store
         '400':
           description: The required CSRF header is missing or malformed.
           content:
@@ -3029,6 +3053,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The API key could not be created.
           content:
@@ -3245,6 +3271,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The principal state could not be changed.
           content:
@@ -3382,6 +3410,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The API key could not be created.
           content:
@@ -3538,6 +3568,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The service account could not be created.
           content:
@@ -3581,6 +3613,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           $ref: '#/components/responses/InternalError'
         '503':
@@ -3712,6 +3746,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/promotion-projects:
@@ -3846,6 +3882,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/promotion-stages/{stageId}/policy:
@@ -3887,6 +3925,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/promotion-pipelines:
@@ -4027,6 +4067,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           $ref: '#/components/responses/InternalError'
 components:
@@ -4035,7 +4077,7 @@ components:
       type: apiKey
       in: cookie
       name: slipramp_session
-      description: Opaque local browser session issued by the Slipramp Server.
+      description: 'Opaque local browser session issued by the Slipramp Server. Every unsafe session-authenticated request must include X-Slipramp-CSRF: 1. Bearer-authenticated requests do not require this header.'
     ProductBearer:
       type: http
       scheme: bearer
@@ -8923,6 +8965,12 @@ components:
           items:
             $ref: '#/components/schemas/PromotionStageObservation'
   responses:
+    RequestTooLargeResponse:
+      description: The request body exceeds the accepted size limit.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     InboxUnauthorized:
       description: A valid product session or bearer credential is required.
       content:

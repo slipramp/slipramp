@@ -39,6 +39,16 @@ func (a *controllerAuthenticator) AuthenticateController(
 	return a.identities.AuthenticateController(ctx, bearerToken)
 }
 
+func (a *controllerAuthenticator) AuthorizeAnyControllerEnrollment(bearerToken string) bool {
+	providedDigest := sha256.Sum256([]byte(bearerToken))
+	authorized := 0
+	for _, expectedDigest := range a.enrollmentTokenDigests {
+		authorized |= subtle.ConstantTimeCompare(providedDigest[:], expectedDigest[:])
+	}
+
+	return authorized == 1
+}
+
 func (a *controllerAuthenticator) AuthorizeControllerEnrollment(clusterName string, bearerToken string) bool {
 	expectedDigest, configured := a.enrollmentTokenDigests[clusterName]
 	providedDigest := sha256.Sum256([]byte(bearerToken))

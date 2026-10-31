@@ -4667,6 +4667,34 @@ internal enum Components {
     internal enum RequestBodies {}
     /// Types generated from the `#/components/responses` section of the OpenAPI document.
     internal enum Responses {
+        internal struct RequestTooLargeResponse: Sendable, Hashable {
+            /// - Remark: Generated from `#/components/responses/RequestTooLargeResponse/content`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/components/responses/RequestTooLargeResponse/content/application\/problem+json`.
+                case applicationProblemJson(Components.Schemas.Problem)
+                /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                ///
+                /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                /// - SeeAlso: `.applicationProblemJson`.
+                internal var applicationProblemJson: Components.Schemas.Problem {
+                    get throws {
+                        switch self {
+                        case let .applicationProblemJson(body):
+                            return body
+                        }
+                    }
+                }
+            }
+            /// Received HTTP response body
+            internal var body: Components.Responses.RequestTooLargeResponse.Body
+            /// Creates a new `RequestTooLargeResponse`.
+            ///
+            /// - Parameters:
+            ///   - body: Received HTTP response body
+            internal init(body: Components.Responses.RequestTooLargeResponse.Body) {
+                self.body = body
+            }
+        }
         internal struct InboxUnauthorized: Sendable, Hashable {
             /// - Remark: Generated from `#/components/responses/InboxUnauthorized/content`.
             internal enum Body: Sendable, Hashable {
@@ -6853,6 +6881,29 @@ internal enum Operations {
                     }
                 }
             }
+            /// The request body exceeds the accepted size limit.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/413`.
+            ///
+            /// HTTP response code: `413 contentTooLarge`.
+            case contentTooLarge(Components.Responses.RequestTooLargeResponse)
+            /// The associated value of the enum case if `self` is `.contentTooLarge`.
+            ///
+            /// - Throws: An error if `self` is not `.contentTooLarge`.
+            /// - SeeAlso: `.contentTooLarge`.
+            internal var contentTooLarge: Components.Responses.RequestTooLargeResponse {
+                get throws {
+                    switch self {
+                    case let .contentTooLarge(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "contentTooLarge",
+                            response: self
+                        )
+                    }
+                }
+            }
             internal struct InternalServerError: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/500/content`.
                 internal enum Body: Sendable, Hashable {
@@ -8199,6 +8250,29 @@ internal enum Operations {
                     }
                 }
             }
+            /// The request body exceeds the accepted size limit.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/413`.
+            ///
+            /// HTTP response code: `413 contentTooLarge`.
+            case contentTooLarge(Components.Responses.RequestTooLargeResponse)
+            /// The associated value of the enum case if `self` is `.contentTooLarge`.
+            ///
+            /// - Throws: An error if `self` is not `.contentTooLarge`.
+            /// - SeeAlso: `.contentTooLarge`.
+            internal var contentTooLarge: Components.Responses.RequestTooLargeResponse {
+                get throws {
+                    switch self {
+                    case let .contentTooLarge(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "contentTooLarge",
+                            response: self
+                        )
+                    }
+                }
+            }
             internal struct InternalServerError: Sendable, Hashable {
                 /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/500/content`.
                 internal enum Body: Sendable, Hashable {
@@ -8698,6 +8772,29 @@ internal enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request body exceeds the accepted size limit.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/review/post(decideRunReview)/responses/413`.
+            ///
+            /// HTTP response code: `413 contentTooLarge`.
+            case contentTooLarge(Components.Responses.RequestTooLargeResponse)
+            /// The associated value of the enum case if `self` is `.contentTooLarge`.
+            ///
+            /// - Throws: An error if `self` is not `.contentTooLarge`.
+            /// - SeeAlso: `.contentTooLarge`.
+            internal var contentTooLarge: Components.Responses.RequestTooLargeResponse {
+                get throws {
+                    switch self {
+                    case let .contentTooLarge(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "contentTooLarge",
                             response: self
                         )
                     }
@@ -9699,6 +9796,29 @@ internal enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request body exceeds the accepted size limit.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/{promotionId}/decision/put(decidePromotion)/responses/413`.
+            ///
+            /// HTTP response code: `413 contentTooLarge`.
+            case contentTooLarge(Components.Responses.RequestTooLargeResponse)
+            /// The associated value of the enum case if `self` is `.contentTooLarge`.
+            ///
+            /// - Throws: An error if `self` is not `.contentTooLarge`.
+            /// - SeeAlso: `.contentTooLarge`.
+            internal var contentTooLarge: Components.Responses.RequestTooLargeResponse {
+                get throws {
+                    switch self {
+                    case let .contentTooLarge(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "contentTooLarge",
                             response: self
                         )
                     }

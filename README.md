@@ -506,6 +506,9 @@ git push origin v0.1.0
 Go 1.27.2, Git, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
 required. Docker is required for the local PostgreSQL, RustFS, Dex, Prometheus,
 and Grafana services.
+Canonical source artwork is maintained in the sibling `../slipramp-assets` repository.
+ImageMagick and the libwebp command-line tools are required only when packaging
+new mascot source sheets or regenerating the optimized native iOS mascot pack.
 Development tool and package versions are pinned by `Taskfile.yml`, `go.mod`,
 `package.json`, and `pnpm-lock.yaml`; `task deps` installs the pinned Go tools
 and pnpm release into the ignored repository cache. The local stack includes a
@@ -521,6 +524,8 @@ task ios:test
 task ios:build
 task mascot:dev
 task mascot:build
+task mascot:generate
+task mascot:check
 task mascot:deploy
 task generate
 task charts:check

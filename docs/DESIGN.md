@@ -826,8 +826,10 @@ Opaque local sessions store only SHA-256 digests. The HTTP-only
 idle extension. Provider access and refresh tokens are not retained. One-time
 login transactions live in memory, so an interrupted login restarts after a
 Server restart. A matching HTTP-only SameSite=Lax state cookie accompanies the
-flow. Cookie state changes require CSRF protection, including
-`X-Slipramp-CSRF: 1` for logout.
+flow. Every unsafe product API request authenticated by a browser session must
+include `X-Slipramp-CSRF: 1`; API-key requests do not require that header. The
+Web rejects unsafe requests without a same-host `Origin` before adding the CSRF
+proof to Server requests, so it cannot act as a deputy for cross-site forms.
 
 The Web forwards only the Slipramp session for SSR calls, SSE, and artifact
 downloads and proxies same-origin login/callback requests. It never uses a
@@ -838,6 +840,19 @@ through OIDC once. The Web then remembers that non-sensitive choice locally and
 starts OIDC automatically on future unauthenticated visits. Explicit logout or
 an unsuccessful OIDC flow forgets the choice so the browser can return to the
 sign-in page instead of immediately starting the same failing flow again.
+
+The Server marks every product, Controller, and execution API response
+`Cache-Control: private, no-store`. Health and readiness responses are excluded.
+
+The HTTP boundary authenticates product, Controller, and Run credentials before
+decoding protected request bodies. Public request bodies, including Controller
+enrollment after preliminary enrollment-token validation, are limited to 64 KiB
+and a 15-second read window. Authenticated JSON bodies use a single generous
+32 MiB safety limit and a two-minute read window rather than endpoint-specific
+policy. Controller log chunks retain their 256 KiB contract. Authenticated Run
+artifact uploads require a declared content length and valid Run credential
+before their unbounded stream is admitted; the JSON limit and absolute body-read
+deadline do not apply to that stream.
 
 ### API keys and permissions
 
@@ -1481,6 +1496,15 @@ routine CI deployments update only the Worker and its static assets, so the
 deployment token does not need zone-route write access. Gallery cards load their
 sprite sheets as they approach the viewport. Activity respects reduced motion
 preferences and leaves textual status indicators available.
+
+The native iOS client presents the same deterministic activity on Run and
+Promotion detail screens. Its generated Swift catalog is derived from the web
+pose pools and reviewed CSS frame timing, including pose-specific holds. The
+complete production set is re-encoded as quality-90 WebP with lossless alpha
+and bundled under a preserved resource subdirectory; it is not fetched from
+the Slipramp Server or a public CDN. The client decodes and caches only visible
+poses, retains nearby textual status, hides artwork from VoiceOver, and shows
+the first frame when Reduce Motion is enabled.
 
 `/healthz` reports process liveness. `/readyz` checks PostgreSQL and artifact
 storage concurrently under a two-second deadline, returning non-sensitive

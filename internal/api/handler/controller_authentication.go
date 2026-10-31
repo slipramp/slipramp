@@ -12,6 +12,7 @@ import (
 
 type ControllerAuthenticator interface {
 	AuthenticateController(ctx context.Context, bearerToken string) (controlleridentity.Principal, error)
+	AuthorizeAnyControllerEnrollment(bearerToken string) bool
 	AuthorizeControllerEnrollment(clusterName, bearerToken string) bool
 }
 
@@ -174,6 +175,10 @@ func attachExecutionRequest(
 	next api.StrictHandlerFunc,
 	unauthorizedResponse func() any,
 ) (any, error) {
+	if _, ok := ctx.Value(executionRequestContextKey{}).(executionRequestContext); ok {
+		return next(ctx, writer, request, value)
+	}
+
 	token, ok := parseBearerToken(request.Header)
 	if !ok {
 		writer.Header().Set("WWW-Authenticate", "Bearer")
@@ -210,6 +215,10 @@ func authenticateControllerRequest(
 	next api.StrictHandlerFunc,
 	unauthorizedResponse func() any,
 ) (any, error) {
+	if _, ok := ctx.Value(controllerPrincipalContextKey{}).(controlleridentity.Principal); ok {
+		return next(ctx, writer, request, value)
+	}
+
 	token, ok := parseBearerToken(request.Header)
 	if !ok {
 		writer.Header().Set("WWW-Authenticate", "Bearer")

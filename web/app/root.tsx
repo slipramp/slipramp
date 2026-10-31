@@ -27,6 +27,7 @@ import {
 } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
+import { csrfProtectionMiddleware } from "~/api/csrf.server";
 import { getCurrentPrincipal } from "~/api/generated";
 import { shouldAutomaticallyBeginOIDCLogin } from "~/api/request-auth.server";
 import { ProductShell } from "~/features/shell/product-shell";
@@ -39,7 +40,10 @@ import type { Route } from "./+types/root";
 
 const authenticationProxyPaths = new Set(["/api/v1/auth/login", "/api/v1/auth/callback"]);
 
-export const middleware: Route.MiddlewareFunction[] = [serverPerformanceMiddleware];
+export const middleware: Route.MiddlewareFunction[] = [
+  csrfProtectionMiddleware,
+  serverPerformanceMiddleware,
+];
 
 export function meta() {
   return [{ title: pageTitle() }];
@@ -47,7 +51,7 @@ export function meta() {
 
 export function headers() {
   return {
-    "Cache-Control": "no-store",
+    "Cache-Control": "private, no-store",
     "Referrer-Policy": "same-origin",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",

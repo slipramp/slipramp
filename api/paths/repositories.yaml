@@ -90,6 +90,8 @@ repositories:
           schema:
             $ref: ../components/repositories.yaml#/RepositoryConfig
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "201":
         description: Repository registered.
         headers:
@@ -158,6 +160,8 @@ repositoryConnectionTests:
           schema:
             $ref: ../components/repositories.yaml#/RepositoryConnectionTestRequest
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
         description: Completed connection probe, whether successful or failed.
         content:
@@ -223,6 +227,8 @@ repository:
           schema:
             $ref: ../components/repositories.yaml#/RepositoryUpdate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
         description: Updated repository registration.
         content:

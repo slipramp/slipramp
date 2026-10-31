@@ -96,6 +96,7 @@ tasks:
 
   ios:test:
     desc: Test the iOS domain and networking layer
+    deps: [mascot:check]
     env:
       DEVELOPER_DIR: "{{.XCODE_DEVELOPER_DIR}}"
     cmds:
@@ -103,6 +104,7 @@ tasks:
 
   ios:build:
     desc: Build the native app for the iOS Simulator
+    deps: [mascot:check]
     env:
       DEVELOPER_DIR: "{{.XCODE_DEVELOPER_DIR}}"
     cmds:
@@ -116,6 +118,16 @@ tasks:
     deps: [deps:web]
     cmds:
       - '"{{.PNPM}}" --filter @slipramp/web run dev:mascot'
+
+  mascot:generate:
+    desc: Generate the optimized iOS mascot pack and native catalog
+    cmds:
+      - node --experimental-strip-types scripts/generate-ios-mascots.mjs
+
+  mascot:check:
+    desc: Check the generated iOS mascot pack and native catalog
+    cmds:
+      - node --experimental-strip-types scripts/generate-ios-mascots.mjs --check
 
   mascot:build:
     desc: Build the public mascot gallery static site
@@ -310,6 +322,7 @@ tasks:
       - task: catalog:schema:check
       - task: store:check
       - task: charts:check
+      - task: mascot:check
       - '"{{.GOLANGCI_LINT}}" fmt --diff'
       - '"{{.GOLANGCI_LINT}}" run'
       - go test -race ./...

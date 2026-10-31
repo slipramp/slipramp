@@ -93,6 +93,8 @@ enroll:
           schema:
             $ref: ../components/controllers.yaml#/ControllerEnrollment
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "204":
         description: The controller credential is enrolled.
       "400":
@@ -213,6 +215,8 @@ promotionDispatch:
           schema:
             $ref: ../components/controllers.yaml#/KargoPromotionDispatchReport
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "204":
         description: The dispatch result was recorded or was already reflected in newer state.
       "400":
@@ -281,6 +285,8 @@ promotionReconciliation:
           schema:
             $ref: ../components/controllers.yaml#/KargoPromotionReconciliationReport
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "204":
         description: The terminal phase was recorded or newer callback state already won the race.
       "400":
@@ -348,6 +354,8 @@ runObservations:
           schema:
             $ref: ../components/controllers.yaml#/RunObservation
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "204":
         description: The observation was recorded.
       "400":
@@ -530,6 +538,8 @@ runLog:
           schema:
             $ref: ../components/artifacts.yaml#/LogSeal
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "204": { description: The log was sealed or already matched the seal. }
       "400":
         description: The seal is invalid.

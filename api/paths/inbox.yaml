@@ -45,6 +45,8 @@ problemAcknowledgements:
           schema:
             $ref: ../components/inbox.yaml#/InboxProblemAcknowledgements
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "204":
         description: The matching current problem occurrences were acknowledged.
       "400":

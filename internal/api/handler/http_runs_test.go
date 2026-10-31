@@ -151,6 +151,7 @@ func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
 	}`)
 	createRequest := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/runs", body)
 	createRequest.Header.Set("Content-Type", "application/json")
+	createRequest.Header.Set(csrfProtectionHeaderName, csrfProtectionHeaderValue)
 	createRequest.AddCookie(&http.Cookie{Name: "slipramp_session", Value: "session-token"})
 	createResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(createResponse, createRequest)
@@ -169,6 +170,7 @@ func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
 		"/api/v1/runs/"+runID.String()+"/cancel",
 		nil,
 	)
+	cancelRequest.Header.Set(csrfProtectionHeaderName, csrfProtectionHeaderValue)
 	cancelRequest.AddCookie(&http.Cookie{Name: "slipramp_session", Value: "session-token"})
 	cancelResponse := httptest.NewRecorder()
 	httpHandler.ServeHTTP(cancelResponse, cancelRequest)

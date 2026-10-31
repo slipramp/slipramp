@@ -145,6 +145,28 @@ Kubernetes API access:
 - [ ] Extend the Harness environment contract only when tools demonstrate a need
       beyond current workspace, artifacts, logging, signals, and cancellation.
 
+## Security hardening
+
+The unauthenticated-boundary review completed the session-authenticated CSRF,
+private response caching, and pre-decode request-body protections. The remaining
+findings are intentionally retained as explicit follow-up work:
+
+- [ ] Remove the public development fallback for the Run artifact-token signing
+      key. Require every Server startup path to supply an explicit random key of
+      at least 32 bytes, keep test fixtures explicit, and document the effect of
+      key rotation on active Run artifact and input credentials.
+- [ ] Require Controller bearer and enrollment credentials to use one canonical
+      encoding of at least 32 random bytes. Reject enrollment-token reuse across
+      Clusters and add bounded throttling for failed enrollment and Controller
+      authentication without weakening the existing first-enrollment binding.
+- [ ] Prevent anonymous OIDC login starts from exhausting the global in-memory
+      transaction pool. Define trustworthy client identification behind the
+      supported proxy topology, combine per-client throttling with a global
+      bound, and preserve bounded transaction expiry and legitimate concurrency.
+- [ ] Redact OIDC callback query parameters from Web access logs so authorization
+      codes and state never reach stdout, including failed or incomplete callback
+      requests whose transactions may remain replayable.
+
 ## Native iOS client
 
 An iOS 17 SwiftUI preview now supplies Keychain-backed API-key connection,
@@ -157,6 +179,9 @@ repository while contracts are pre-stable.
 - [x] Establish the native operational-kawaii design system, shared semantic
       status presentation, reusable overview components, mascot usage rules,
       and accessible light and dark foundations before expanding features.
+- [x] Bring the complete production mascot catalog to Run and Promotion detail
+      screens with deterministic web-matching selection, reviewed frame timing,
+      optimized bundled assets, and Reduce Motion support.
 - [x] Generate the Swift client and models reproducibly from the bundled
       OpenAPI contract, check them for freshness, and retain the handwritten
       transport only for reconnectable SSE logs.

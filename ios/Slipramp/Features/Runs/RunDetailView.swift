@@ -163,6 +163,19 @@ struct RunDetailView: View {
         Group {
             if let run = model.run {
                 List {
+                    if let activity = MascotActivityResolver.activity(for: run) {
+                        SliprampMascotActivityView(activity: activity, identity: run.id)
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: SliprampTheme.Space.small,
+                                    leading: SliprampTheme.Space.large,
+                                    bottom: SliprampTheme.Space.small,
+                                    trailing: SliprampTheme.Space.large
+                                )
+                            )
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
                     statusSection(run)
                     reviewSection(run)
                     actionSection(run)

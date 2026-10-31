@@ -18,6 +18,8 @@ kargoPromotion:
           schema:
             $ref: ../components/promotions.yaml#/KargoPromotionRequest
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
         description: The newly accepted or previously persisted Promotion state.
         content:
@@ -153,6 +155,8 @@ promotionDecision:
           schema:
             $ref: ../components/promotions.yaml#/PromotionDecisionUpdate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
         description: The decided Promotion, including immutable attribution.
         content:
@@ -282,6 +286,8 @@ promotionStagePolicy:
           schema:
             $ref: ../components/promotions.yaml#/PromotionStagePolicyUpdate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "200":
         description: The updated configured and effective policy.
         content:
@@ -323,6 +329,8 @@ promotionStagePromotions:
           schema:
             $ref: ../components/promotions.yaml#/PromotionCreate
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "201":
         description: The durable Promotion creation request.
         headers:
@@ -478,6 +486,8 @@ controllerKargoStages:
           schema:
             $ref: ../components/promotions.yaml#/KargoStageSnapshot
     responses:
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
       "204":
         description: The complete snapshot was accepted or had already been accepted.
       "400":

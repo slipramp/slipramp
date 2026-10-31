@@ -3766,6 +3766,9 @@ type KargoServiceUnavailable = Problem
 // NotFound An RFC 9457 problem detail.
 type NotFound = Problem
 
+// RequestTooLargeResponse An RFC 9457 problem detail.
+type RequestTooLargeResponse = Problem
+
 // Unauthorized An RFC 9457 problem detail.
 type Unauthorized = Problem
 
@@ -11780,6 +11783,8 @@ type CreateAPIKeyResponse struct {
 	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -11809,6 +11814,11 @@ func (r CreateAPIKeyResponse) GetApplicationProblemJSON403() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r CreateAPIKeyResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r CreateAPIKeyResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -12510,6 +12520,8 @@ type AcknowledgeInboxProblemsResponse struct {
 	ApplicationProblemJSON403 *InboxForbidden
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *InboxMethodNotAllowed
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *InboxInternalError
 }
@@ -12532,6 +12544,11 @@ func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON403() *InboxF
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON405() *InboxMethodNotAllowed {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AcknowledgeInboxProblemsResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -12583,6 +12600,8 @@ type SubmitKargoPromotionResponse struct {
 	ApplicationProblemJSON404 *NotFound
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Conflict
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *InternalError
 	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
@@ -12617,6 +12636,11 @@ func (r SubmitKargoPromotionResponse) GetApplicationProblemJSON404() *NotFound {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r SubmitKargoPromotionResponse) GetApplicationProblemJSON409() *Conflict {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r SubmitKargoPromotionResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -13044,6 +13068,8 @@ type UpdatePrincipalResponse struct {
 	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -13071,6 +13097,11 @@ func (r UpdatePrincipalResponse) GetApplicationProblemJSON403() *Problem {
 // GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r UpdatePrincipalResponse) GetApplicationProblemJSON404() *Problem {
 	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r UpdatePrincipalResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -13286,6 +13317,8 @@ type CreatePrincipalAPIKeyResponse struct {
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -13320,6 +13353,11 @@ func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON404() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r CreatePrincipalAPIKeyResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -13723,6 +13761,8 @@ type UpdatePromotionStagePolicyResponse struct {
 	ApplicationProblemJSON404 *NotFound
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Conflict
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *InternalError
 }
@@ -13755,6 +13795,11 @@ func (r UpdatePromotionStagePolicyResponse) GetApplicationProblemJSON404() *NotF
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r UpdatePromotionStagePolicyResponse) GetApplicationProblemJSON409() *Conflict {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r UpdatePromotionStagePolicyResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -13811,6 +13856,8 @@ type CreatePromotionResponse struct {
 	ApplicationProblemJSON404 *NotFound
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Conflict
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *InternalError
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -13845,6 +13892,11 @@ func (r CreatePromotionResponse) GetApplicationProblemJSON404() *NotFound {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r CreatePromotionResponse) GetApplicationProblemJSON409() *Conflict {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r CreatePromotionResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -14034,6 +14086,8 @@ type DecidePromotionResponse struct {
 	ApplicationProblemJSON404 *NotFound
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Conflict
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *InternalError
 }
@@ -14066,6 +14120,11 @@ func (r DecidePromotionResponse) GetApplicationProblemJSON404() *NotFound {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r DecidePromotionResponse) GetApplicationProblemJSON409() *Conflict {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r DecidePromotionResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -14198,6 +14257,8 @@ type CreateRepositoryResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 	// Headers201 the parsed response headers for an HTTP 201 response
@@ -14232,6 +14293,11 @@ func (r CreateRepositoryResponse) GetApplicationProblemJSON405() *Problem {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r CreateRepositoryResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r CreateRepositoryResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -14359,6 +14425,8 @@ type UpdateRepositoryResponse struct {
 	ApplicationProblemJSON404 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -14391,6 +14459,11 @@ func (r UpdateRepositoryResponse) GetApplicationProblemJSON404() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r UpdateRepositoryResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r UpdateRepositoryResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -14779,6 +14852,8 @@ type TestRepositoryConnectionResponse struct {
 	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -14806,6 +14881,11 @@ func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON403() *Proble
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r TestRepositoryConnectionResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -14935,6 +15015,8 @@ type CreateRunResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -14972,6 +15054,11 @@ func (r CreateRunResponse) GetApplicationProblemJSON405() *Problem {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r CreateRunResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r CreateRunResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -15336,6 +15423,8 @@ type RerunRunResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -15373,6 +15462,11 @@ func (r RerunRunResponse) GetApplicationProblemJSON405() *Problem {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r RerunRunResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r RerunRunResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -15426,6 +15520,8 @@ type DecideRunReviewResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -15463,6 +15559,11 @@ func (r DecideRunReviewResponse) GetApplicationProblemJSON405() *Problem {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r DecideRunReviewResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r DecideRunReviewResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -15512,6 +15613,8 @@ type CreateServiceAccountResponse struct {
 	ApplicationProblemJSON403 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -15539,6 +15642,11 @@ func (r CreateServiceAccountResponse) GetApplicationProblemJSON403() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r CreateServiceAccountResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r CreateServiceAccountResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -15821,6 +15929,8 @@ type EnrollControllerResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -15843,6 +15953,11 @@ func (r EnrollControllerResponse) GetApplicationProblemJSON405() *Problem {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r EnrollControllerResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r EnrollControllerResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -15892,6 +16007,8 @@ type ReplaceKargoStageSnapshotResponse struct {
 	ApplicationProblemJSON404 *NotFound
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Conflict
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *InternalError
 }
@@ -15919,6 +16036,11 @@ func (r ReplaceKargoStageSnapshotResponse) GetApplicationProblemJSON404() *NotFo
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r ReplaceKargoStageSnapshotResponse) GetApplicationProblemJSON409() *Conflict {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r ReplaceKargoStageSnapshotResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -16037,6 +16159,8 @@ type ReportKargoPromotionDispatchResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -16064,6 +16188,11 @@ func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON405() *Pr
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r ReportKargoPromotionDispatchResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -16113,6 +16242,8 @@ type ReportKargoPromotionReconciliationResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -16140,6 +16271,11 @@ func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON405
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r ReportKargoPromotionReconciliationResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -16258,6 +16394,8 @@ type SealRunLogResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -16285,6 +16423,11 @@ func (r SealRunLogResponse) GetApplicationProblemJSON405() *Problem {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r SealRunLogResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r SealRunLogResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -16493,6 +16636,8 @@ type ReportRunObservationResponse struct {
 	ApplicationProblemJSON405 *Problem
 	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
 	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 }
@@ -16520,6 +16665,11 @@ func (r ReportRunObservationResponse) GetApplicationProblemJSON405() *Problem {
 // GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
 func (r ReportRunObservationResponse) GetApplicationProblemJSON409() *Problem {
 	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r ReportRunObservationResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -18417,6 +18567,13 @@ func ParseCreateAPIKeyResponse(rsp *http.Response) (*CreateAPIKeyResponse, error
 		}
 		response.ApplicationProblemJSON405 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19072,6 +19229,13 @@ func ParseAcknowledgeInboxProblemsResponse(rsp *http.Response) (*AcknowledgeInbo
 		}
 		response.ApplicationProblemJSON405 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InboxInternalError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19139,6 +19303,13 @@ func ParseSubmitKargoPromotionResponse(rsp *http.Response) (*SubmitKargoPromotio
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -19506,6 +19677,13 @@ func ParseUpdatePrincipalResponse(rsp *http.Response) (*UpdatePrincipalResponse,
 		}
 		response.ApplicationProblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19705,6 +19883,13 @@ func ParseCreatePrincipalAPIKeyResponse(rsp *http.Response) (*CreatePrincipalAPI
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -20067,6 +20252,13 @@ func ParseUpdatePromotionStagePolicyResponse(rsp *http.Response) (*UpdatePromoti
 		}
 		response.ApplicationProblemJSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -20134,6 +20326,13 @@ func ParseCreatePromotionResponse(rsp *http.Response) (*CreatePromotionResponse,
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -20324,6 +20523,13 @@ func ParseDecidePromotionResponse(rsp *http.Response) (*DecidePromotionResponse,
 		}
 		response.ApplicationProblemJSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -20452,6 +20658,13 @@ func ParseCreateRepositoryResponse(rsp *http.Response) (*CreateRepositoryRespons
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -20597,6 +20810,13 @@ func ParseUpdateRepositoryResponse(rsp *http.Response) (*UpdateRepositoryRespons
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -20944,6 +21164,13 @@ func ParseTestRepositoryConnectionResponse(rsp *http.Response) (*TestRepositoryC
 		}
 		response.ApplicationProblemJSON405 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -21079,6 +21306,13 @@ func ParseCreateRunResponse(rsp *http.Response) (*CreateRunResponse, error) {
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -21406,6 +21640,13 @@ func ParseRerunRunResponse(rsp *http.Response) (*RerunRunResponse, error) {
 		}
 		response.ApplicationProblemJSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -21481,6 +21722,13 @@ func ParseDecideRunReviewResponse(rsp *http.Response) (*DecideRunReviewResponse,
 		}
 		response.ApplicationProblemJSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -21541,6 +21789,13 @@ func ParseCreateServiceAccountResponse(rsp *http.Response) (*CreateServiceAccoun
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -21789,6 +22044,13 @@ func ParseEnrollControllerResponse(rsp *http.Response) (*EnrollControllerRespons
 		}
 		response.ApplicationProblemJSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -21852,6 +22114,13 @@ func ParseReplaceKargoStageSnapshotResponse(rsp *http.Response) (*ReplaceKargoSt
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -21974,6 +22243,13 @@ func ParseReportKargoPromotionDispatchResponse(rsp *http.Response) (*ReportKargo
 		}
 		response.ApplicationProblemJSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -22037,6 +22313,13 @@ func ParseReportKargoPromotionReconciliationResponse(rsp *http.Response) (*Repor
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -22155,6 +22438,13 @@ func ParseSealRunLogResponse(rsp *http.Response) (*SealRunLogResponse, error) {
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -22354,6 +22644,13 @@ func ParseReportRunObservationResponse(rsp *http.Response) (*ReportRunObservatio
 			return nil, err
 		}
 		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -25862,6 +26159,8 @@ type KargoServiceUnavailableApplicationProblemPlusJSONResponse Problem
 
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
+type RequestTooLargeResponseApplicationProblemPlusJSONResponse Problem
+
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
 
 type GetArtifactStorageUsageRequestObject struct {
@@ -26339,6 +26638,22 @@ func (response CreateAPIKey405ApplicationProblemPlusJSONResponse) VisitCreateAPI
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAPIKey413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAPIKey413ApplicationProblemPlusJSONResponse) VisitCreateAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -27213,6 +27528,22 @@ func (response AcknowledgeInboxProblems405ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type AcknowledgeInboxProblems413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response AcknowledgeInboxProblems413ApplicationProblemPlusJSONResponse) VisitAcknowledgeInboxProblemsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type AcknowledgeInboxProblems500ApplicationProblemPlusJSONResponse struct {
 	InboxInternalErrorApplicationProblemPlusJSONResponse
 }
@@ -27328,6 +27659,22 @@ func (response SubmitKargoPromotion409ApplicationProblemPlusJSONResponse) VisitS
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitKargoPromotion413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response SubmitKargoPromotion413ApplicationProblemPlusJSONResponse) VisitSubmitKargoPromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -27889,6 +28236,22 @@ func (response UpdatePrincipal404ApplicationProblemPlusJSONResponse) VisitUpdate
 	return err
 }
 
+type UpdatePrincipal413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePrincipal413ApplicationProblemPlusJSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdatePrincipal500ApplicationProblemPlusJSONResponse Problem
 
 func (response UpdatePrincipal500ApplicationProblemPlusJSONResponse) VisitUpdatePrincipalResponse(w http.ResponseWriter) error {
@@ -28207,6 +28570,22 @@ func (response CreatePrincipalAPIKey405ApplicationProblemPlusJSONResponse) Visit
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePrincipalAPIKey413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePrincipalAPIKey413ApplicationProblemPlusJSONResponse) VisitCreatePrincipalAPIKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -28772,6 +29151,22 @@ func (response UpdatePromotionStagePolicy409ApplicationProblemPlusJSONResponse) 
 	return err
 }
 
+type UpdatePromotionStagePolicy413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response UpdatePromotionStagePolicy413ApplicationProblemPlusJSONResponse) VisitUpdatePromotionStagePolicyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UpdatePromotionStagePolicy500ApplicationProblemPlusJSONResponse struct {
 	InternalErrorApplicationProblemPlusJSONResponse
 }
@@ -28897,6 +29292,22 @@ func (response CreatePromotion409ApplicationProblemPlusJSONResponse) VisitCreate
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePromotion413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response CreatePromotion413ApplicationProblemPlusJSONResponse) VisitCreatePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -29192,6 +29603,22 @@ func (response DecidePromotion409ApplicationProblemPlusJSONResponse) VisitDecide
 	return err
 }
 
+type DecidePromotion413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response DecidePromotion413ApplicationProblemPlusJSONResponse) VisitDecidePromotionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DecidePromotion500ApplicationProblemPlusJSONResponse struct {
 	InternalErrorApplicationProblemPlusJSONResponse
 }
@@ -29402,6 +29829,22 @@ func (response CreateRepository409ApplicationProblemPlusJSONResponse) VisitCreat
 	return err
 }
 
+type CreateRepository413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRepository413ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type CreateRepository500ApplicationProblemPlusJSONResponse Problem
 
 func (response CreateRepository500ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
@@ -29605,6 +30048,22 @@ func (response UpdateRepository405ApplicationProblemPlusJSONResponse) VisitUpdat
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateRepository413ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -30137,6 +30596,22 @@ func (response TestRepositoryConnection405ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type TestRepositoryConnection413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response TestRepositoryConnection413ApplicationProblemPlusJSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type TestRepositoryConnection500ApplicationProblemPlusJSONResponse Problem
 
 func (response TestRepositoryConnection500ApplicationProblemPlusJSONResponse) VisitTestRepositoryConnectionResponse(w http.ResponseWriter) error {
@@ -30346,6 +30821,22 @@ func (response CreateRun409ApplicationProblemPlusJSONResponse) VisitCreateRunRes
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRun413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRun413ApplicationProblemPlusJSONResponse) VisitCreateRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -30898,6 +31389,22 @@ func (response RerunRun409ApplicationProblemPlusJSONResponse) VisitRerunRunRespo
 	return err
 }
 
+type RerunRun413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response RerunRun413ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RerunRun500ApplicationProblemPlusJSONResponse Problem
 
 func (response RerunRun500ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
@@ -31019,6 +31526,22 @@ func (response DecideRunReview409ApplicationProblemPlusJSONResponse) VisitDecide
 	return err
 }
 
+type DecideRunReview413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response DecideRunReview413ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DecideRunReview500ApplicationProblemPlusJSONResponse Problem
 
 func (response DecideRunReview500ApplicationProblemPlusJSONResponse) VisitDecideRunReviewResponse(w http.ResponseWriter) error {
@@ -31107,6 +31630,22 @@ func (response CreateServiceAccount405ApplicationProblemPlusJSONResponse) VisitC
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateServiceAccount413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response CreateServiceAccount413ApplicationProblemPlusJSONResponse) VisitCreateServiceAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -31488,6 +32027,22 @@ func (response EnrollController409ApplicationProblemPlusJSONResponse) VisitEnrol
 	return err
 }
 
+type EnrollController413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response EnrollController413ApplicationProblemPlusJSONResponse) VisitEnrollControllerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type EnrollController500ApplicationProblemPlusJSONResponse Problem
 
 func (response EnrollController500ApplicationProblemPlusJSONResponse) VisitEnrollControllerResponse(w http.ResponseWriter) error {
@@ -31595,6 +32150,22 @@ func (response ReplaceKargoStageSnapshot409ApplicationProblemPlusJSONResponse) V
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceKargoStageSnapshot413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceKargoStageSnapshot413ApplicationProblemPlusJSONResponse) VisitReplaceKargoStageSnapshotResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -31788,6 +32359,22 @@ func (response ReportKargoPromotionDispatch409ApplicationProblemPlusJSONResponse
 	return err
 }
 
+type ReportKargoPromotionDispatch413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response ReportKargoPromotionDispatch413ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReportKargoPromotionDispatch500ApplicationProblemPlusJSONResponse Problem
 
 func (response ReportKargoPromotionDispatch500ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionDispatchResponse(w http.ResponseWriter) error {
@@ -31885,6 +32472,22 @@ func (response ReportKargoPromotionReconciliation409ApplicationProblemPlusJSONRe
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportKargoPromotionReconciliation413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response ReportKargoPromotionReconciliation413ApplicationProblemPlusJSONResponse) VisitReportKargoPromotionReconciliationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -32064,6 +32667,22 @@ func (response SealRunLog409ApplicationProblemPlusJSONResponse) VisitSealRunLogR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SealRunLog413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response SealRunLog413ApplicationProblemPlusJSONResponse) VisitSealRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -32381,6 +33000,22 @@ func (response ReportRunObservation409ApplicationProblemPlusJSONResponse) VisitR
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportRunObservation413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response ReportRunObservation413ApplicationProblemPlusJSONResponse) VisitReportRunObservationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
 	_, err := buf.WriteTo(w)
 	return err
 }

@@ -33,6 +33,10 @@
 		100000000000000000000018 /* TargetListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000018 /* TargetListView.swift */; };
 		100000000000000000000019 /* TargetDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* TargetDetailView.swift */; };
 		10000000000000000000001A /* ActionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001A /* ActionDetailView.swift */; };
+		10000000000000000000001B /* MascotActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* MascotActivity.swift */; };
+		10000000000000000000001C /* MascotCatalog.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001C /* MascotCatalog.generated.swift */; };
+		10000000000000000000001D /* SliprampMascotAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* SliprampMascotAnimation.swift */; };
+		10000000000000000000001E /* Mascots in Resources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001E /* Mascots */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +66,10 @@
 		200000000000000000000018 /* TargetListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetListView.swift; sourceTree = "<group>"; };
 		200000000000000000000019 /* TargetDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetDetailView.swift; sourceTree = "<group>"; };
 		20000000000000000000001A /* ActionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionDetailView.swift; sourceTree = "<group>"; };
+		20000000000000000000001B /* MascotActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MascotActivity.swift; sourceTree = "<group>"; };
+		20000000000000000000001C /* MascotCatalog.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MascotCatalog.generated.swift; sourceTree = "<group>"; };
+		20000000000000000000001D /* SliprampMascotAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampMascotAnimation.swift; sourceTree = "<group>"; };
+		20000000000000000000001E /* Mascots */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Mascots; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -116,6 +124,8 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000004 /* APIModels.swift */,
+				20000000000000000000001B /* MascotActivity.swift */,
+				20000000000000000000001C /* MascotCatalog.generated.swift */,
 			);
 			path = Domain;
 			sourceTree = "<group>";
@@ -172,6 +182,7 @@
 				20000000000000000000000D /* Info.plist */,
 				20000000000000000000000C /* slipramp-mark-master.png */,
 				200000000000000000000017 /* slipramp-mascot.png */,
+				20000000000000000000001E /* Mascots */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -232,6 +243,7 @@
 			children = (
 				200000000000000000000015 /* SliprampTheme.swift */,
 				200000000000000000000016 /* SliprampComponents.swift */,
+				20000000000000000000001D /* SliprampMascotAnimation.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -314,6 +326,7 @@
 			files = (
 				10000000000000000000000C /* slipramp-mark-master.png in Resources */,
 				100000000000000000000017 /* slipramp-mascot.png in Resources */,
+				10000000000000000000001E /* Mascots in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,6 +358,9 @@
 				100000000000000000000018 /* TargetListView.swift in Sources */,
 				100000000000000000000019 /* TargetDetailView.swift in Sources */,
 				10000000000000000000001A /* ActionDetailView.swift in Sources */,
+				10000000000000000000001B /* MascotActivity.swift in Sources */,
+				10000000000000000000001C /* MascotCatalog.generated.swift in Sources */,
+				10000000000000000000001D /* SliprampMascotAnimation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

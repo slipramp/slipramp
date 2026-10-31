@@ -7,12 +7,16 @@ import {
 } from "../../api/authentication.server.ts";
 import {
   automaticOIDCLoginCookieName,
+  csrfProtectionHeaderName,
+  csrfProtectionHeaderValue,
   forgetAutomaticOIDCLoginCookie,
   forwardedCookieHeader,
+  forwardedProductHeaders,
   productSessionCookieName,
   rememberAutomaticOIDCLoginCookie,
   shouldAutomaticallyBeginOIDCLogin,
 } from "../../api/request-auth.server.ts";
+import { csrfProtectionMiddleware } from "../../api/csrf.server.ts";
 
 test("forwards only the named browser cookie", () => {
   const request = new Request("http://web.test/runs", {
@@ -25,6 +29,86 @@ test("forwards only the named browser cookie", () => {
     cookie: "slipramp_session=session-token",
   });
   assert.deepEqual(forwardedCookieHeader(request, "missing"), {});
+});
+
+test("adds CSRF proof to authenticated product API requests", () => {
+  const request = new Request("http://web.test/runs", {
+    headers: {
+      cookie: "theme=dark; slipramp_session=session-token; analytics=disabled",
+    },
+  });
+
+  assert.deepEqual(forwardedProductHeaders(request), {
+    cookie: "slipramp_session=session-token",
+    [csrfProtectionHeaderName]: csrfProtectionHeaderValue,
+  });
+});
+
+test("rejects unsafe cross-origin requests before routing them", async () => {
+  let called = false;
+  const response = await csrfProtectionMiddleware(
+    {
+      request: new Request("http://web.test/runs", {
+        headers: { origin: "https://attacker.web.test" },
+        method: "POST",
+      }),
+    },
+    async () => {
+      called = true;
+      return new Response(null, { status: 204 });
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.get("content-type"), "application/problem+json");
+  assert.equal(called, false);
+});
+
+test("rejects unsafe requests without an origin", async () => {
+  let called = false;
+  const response = await csrfProtectionMiddleware(
+    { request: new Request("http://web.test/runs", { method: "POST" }) },
+    async () => {
+      called = true;
+      return new Response(null, { status: 204 });
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.equal(called, false);
+});
+
+test("allows unsafe same-host requests across a terminating proxy", async () => {
+  let called = false;
+  const response = await csrfProtectionMiddleware(
+    {
+      request: new Request("http://web.test/runs", {
+        headers: { origin: "https://web.test" },
+        method: "POST",
+      }),
+    },
+    async () => {
+      called = true;
+      return new Response(null, { status: 204 });
+    },
+  );
+
+  assert.equal(response.status, 204);
+  assert.equal(called, true);
+});
+
+test("allows safe requests without an origin", async () => {
+  let called = false;
+  const response = await csrfProtectionMiddleware(
+    { request: new Request("http://web.test/runs") },
+    async () => {
+      called = true;
+      return new Response(null, { status: 204 });
+    },
+  );
+
+  assert.equal(response.status, 204);
+  assert.equal(called, true);
 });
 
 test("remembers a successful OIDC login for future unauthenticated visits", () => {

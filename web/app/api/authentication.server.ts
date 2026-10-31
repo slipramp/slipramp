@@ -1,4 +1,6 @@
 import {
+  csrfProtectionHeaderName,
+  csrfProtectionHeaderValue,
   forwardedCookieHeader,
   oidcStateCookieName,
   productSessionCookieName,
@@ -25,7 +27,7 @@ export async function proxyAuthenticationRequest(
     path === "/api/v1/auth/callback" ? oidcStateCookieName : productSessionCookieName;
   const headers = new Headers(forwardedCookieHeader(request, cookieName));
   if (path === "/api/v1/auth/logout") {
-    headers.set("x-slipramp-csrf", "1");
+    headers.set(csrfProtectionHeaderName, csrfProtectionHeaderValue);
   }
 
   let response: Response;

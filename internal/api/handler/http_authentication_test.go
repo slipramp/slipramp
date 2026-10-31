@@ -52,7 +52,7 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 		loginResponse.Header().Get("Location") != service.login.AuthorizationURL {
 		t.Fatalf("login status=%d location=%q", loginResponse.Code, loginResponse.Header().Get("Location"))
 	}
-	if loginResponse.Header().Get("Cache-Control") != "no-store" {
+	if loginResponse.Header().Get("Cache-Control") != privateNoStoreCacheControl {
 		t.Errorf("login Cache-Control = %q", loginResponse.Header().Get("Cache-Control"))
 	}
 	stateCookie := loginResponse.Result().Cookies()[0]
@@ -100,7 +100,7 @@ func TestAuthenticationHTTPFlow(t *testing.T) {
 	if sessionResponse.Code != http.StatusOK {
 		t.Fatalf("session status=%d body=%s", sessionResponse.Code, sessionResponse.Body.String())
 	}
-	if sessionResponse.Header().Get("Cache-Control") != "no-store" {
+	if sessionResponse.Header().Get("Cache-Control") != privateNoStoreCacheControl {
 		t.Errorf("session Cache-Control = %q", sessionResponse.Header().Get("Cache-Control"))
 	}
 	var principal struct {
@@ -425,6 +425,9 @@ func TestAPIKeyAndServiceAccountManagementHTTP(t *testing.T) {
 func authenticatedProductRequest(method, path, body string) *http.Request {
 	request := httptest.NewRequestWithContext(context.Background(), method, path, strings.NewReader(body))
 	request.AddCookie(&http.Cookie{Name: productauth.SessionCookieName, Value: "session-token"})
+	if requiresCSRFProtection(method) {
+		request.Header.Set(csrfProtectionHeaderName, csrfProtectionHeaderValue)
+	}
 
 	return request
 }

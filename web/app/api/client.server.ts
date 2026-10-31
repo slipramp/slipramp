@@ -4,7 +4,7 @@ import { getServerPerformanceTrace } from "~/features/performance/performance.se
 
 import { instrumentAPIClient } from "./client-performance.server.ts";
 import { createClient } from "./generated/client";
-import { forwardedCookieHeader, productSessionCookieName } from "./request-auth.server.ts";
+import { forwardedProductHeaders } from "./request-auth.server.ts";
 
 const defaultAPIURL = "http://127.0.0.1:8080";
 
@@ -18,7 +18,7 @@ export function createServerAPIClient(
 ) {
   const client = createClient({
     baseUrl: getServerAPIURL(),
-    headers: forwardedCookieHeader(request, productSessionCookieName),
+    headers: forwardedProductHeaders(request),
   });
 
   const trace = getServerPerformanceTrace(context);

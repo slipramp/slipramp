@@ -51,7 +51,7 @@ func (h *Handler) BeginOIDCLogin(
 
 	return api.BeginOIDCLogin303Response{
 		Headers: api.BeginOIDCLogin303ResponseHeaders{
-			CacheControl: "no-store",
+			CacheControl: privateNoStoreCacheControl,
 			Location:     login.AuthorizationURL,
 			SetCookie:    stateCookie.String(),
 		},
@@ -95,7 +95,7 @@ func (h *Handler) CompleteOIDCLogin(
 
 	return api.CompleteOIDCLogin303Response{
 		Headers: api.CompleteOIDCLogin303ResponseHeaders{
-			CacheControl: "no-store",
+			CacheControl: privateNoStoreCacheControl,
 			Location:     "/",
 			SetCookie:    sessionCookie.String(),
 		},
@@ -123,13 +123,13 @@ func (h *Handler) GetCurrentPrincipal(
 	return api.GetCurrentPrincipal200JSONResponse{
 		Body: productPrincipalResponse(authentication.Principal),
 		Headers: api.GetCurrentPrincipal200ResponseHeaders{
-			CacheControl: "no-store",
+			CacheControl: privateNoStoreCacheControl,
 		},
 	}, nil
 }
 
 func (h *Handler) Logout(ctx context.Context, request api.LogoutRequestObject) (api.LogoutResponseObject, error) {
-	if request.Params.XSliprampCSRF != "1" {
+	if request.Params.XSliprampCSRF != csrfProtectionHeaderValue {
 		problem := NewProblem(http.StatusForbidden, "The CSRF protection header is invalid.")
 
 		return api.Logout403ApplicationProblemPlusJSONResponse(problem), nil
@@ -161,7 +161,7 @@ func (h *Handler) Logout(ctx context.Context, request api.LogoutRequestObject) (
 
 	return api.Logout204Response{
 		Headers: api.Logout204ResponseHeaders{
-			CacheControl: "no-store",
+			CacheControl: privateNoStoreCacheControl,
 			SetCookie:    clearedCookie.String(),
 		},
 	}, nil

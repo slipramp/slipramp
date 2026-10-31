@@ -112,3 +112,10 @@ Problem:
       type: string
       format: uri-reference
       description: URI reference identifying this occurrence.
+
+RequestTooLargeResponse:
+  description: The request body exceeds the accepted size limit.
+  content:
+    application/problem+json:
+      schema:
+        $ref: "#/Problem"

@@ -5,7 +5,6 @@ import { createServerAPIClient } from "~/api/client.server";
 import { listPromotions, type Promotion, type PromotionStatus } from "~/api/generated";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime } from "~/shared/display-values";
-import { CommitReference } from "~/features/commits/git-commit";
 import { Identity } from "~/shared/identity";
 import { KargoLink } from "~/features/promotions/kargo-link";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
@@ -162,14 +161,13 @@ function PromotionFilters({
 function PromotionTable({ promotions }: Readonly<{ promotions: Promotion[] }>) {
   return (
     <Paper withBorder>
-      <Table.ScrollContainer minWidth={1080} type="native">
+      <Table.ScrollContainer minWidth={760} type="native">
         <Table verticalSpacing="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Promotion / Stage</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th>Application</Table.Th>
-              <Table.Th>Change</Table.Th>
               <Table.Th>Source / author</Table.Th>
               <Table.Th>Created</Table.Th>
             </Table.Tr>
@@ -200,7 +198,7 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
             title={promotion.externalPromotionId}
             to={`/promotions/${promotion.id}`}
           >
-            {abbreviateMiddle(promotion.externalPromotionId, 26)}
+            {abbreviateMiddle(promotion.externalPromotionId, 36)}
           </Anchor>
           <Group gap="xs" wrap="wrap">
             <Text c="dimmed" size="xs">
@@ -239,38 +237,6 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
             {promotion.integration}
           </Text>
         </Stack>
-      </Table.Td>
-      <Table.Td>
-        {promotion.candidateBranch && promotion.baseCommit && promotion.candidateCommit ? (
-          <Stack gap={0}>
-            <Text size="sm">
-              <Text component="span" inherit title={promotion.candidateBranch}>
-                {abbreviateMiddle(promotion.candidateBranch, 30)}
-              </Text>{" "}
-              → {promotion.targetBranch}
-            </Text>
-            <Text c="dimmed" size="xs">
-              <CommitReference
-                commit={promotion.baseCommit}
-                length={10}
-                repositoryId={promotion.repositoryId}
-              />{" "}
-              →{" "}
-              <CommitReference
-                commit={promotion.candidateCommit}
-                length={10}
-                repositoryId={promotion.repositoryId}
-              />
-            </Text>
-          </Stack>
-        ) : (
-          <Stack gap={0}>
-            <Text size="sm">→ {promotion.targetBranch}</Text>
-            <Text c="dimmed" size="xs">
-              Waiting for Kargo callback
-            </Text>
-          </Stack>
-        )}
       </Table.Td>
       <Table.Td>
         <Stack gap={0}>
