@@ -8,7 +8,10 @@ Ansible, and repository scripts rather than replacing them.
 
 This document records the implemented architecture and its governing decisions.
 [ROADMAP.md](./ROADMAP.md) tracks unfinished work and deferred choices. The
-[README](../README.md) covers configuration, installation, and development;
+[README](../README.md) introduces the product and maps its documentation;
+[CLI.md](./CLI.md) covers local and remote CLI workflows;
+[CONFIGURATION.md](./CONFIGURATION.md), [INSTALLATION.md](./INSTALLATION.md),
+and [DEVELOPMENT.md](./DEVELOPMENT.md) cover operation and contribution;
 [OpenAPI](../api/openapi.yaml) is authoritative for HTTP contracts, and
 [examples/infrastructure-ops](../examples/infrastructure-ops/README.md) supplies
 a complete repository catalog example.
