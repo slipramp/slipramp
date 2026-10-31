@@ -145,6 +145,34 @@ Kubernetes API access:
 - [ ] Extend the Harness environment contract only when tools demonstrate a need
       beyond current workspace, artifacts, logging, signals, and cancellation.
 
+## Native iOS client
+
+An iOS 17 SwiftUI preview now supplies Keychain-backed API-key connection,
+the role-aware operational Inbox, recent Run history, Run detail, and
+reconnectable retained or live Run logs. It stays inside the product API
+boundary and shares the repository while contracts are pre-stable.
+
+- [x] Establish the native operational-kawaii design system, shared semantic
+      status presentation, reusable overview components, mascot usage rules,
+      and accessible light and dark foundations before expanding features.
+- [x] Generate the Swift client and models reproducibly from the bundled
+      OpenAPI contract, check them for freshness, and retain the handwritten
+      transport only for reconnectable SSE logs.
+- [x] Add confirmed Run review decisions with optional immutable comments and
+      Run cancellation, refreshing the native Inbox and Run history after each
+      mutation.
+- [x] Make Promotion-review Inbox items actionable with native frozen context,
+      preparation Run navigation, sensitive Git and structured Argo CD diff
+      previews, and confirmed decisions with immutable optional comments.
+- [ ] Add Action creation, reruns, and general Run Artifact browsing in focused
+      operator-first slices.
+- [ ] Design native OIDC sign-in, client and Server compatibility negotiation,
+      and release-safe private-network transport before TestFlight distribution.
+- [ ] Add Xcode build and test automation on a pinned macOS toolchain, app icon
+      packaging, accessibility verification, signing, and TestFlight metadata.
+- [ ] Add APNs device registration and routed push delivery only after the
+      native Inbox proves a concrete notification need.
+
 ## Identity and MCP
 
 OIDC, local sessions, API keys, service accounts, role/scope enforcement,

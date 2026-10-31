@@ -1,0 +1,15 @@
+generate:
+  - types
+  - client
+accessModifier: internal
+namingStrategy: idiomatic
+filter:
+  operations:
+    - cancelRun
+    - decidePromotion
+    - decideRunReview
+    - downloadArtifact
+    - getInbox
+    - getPromotion
+    - getRun
+    - listRuns

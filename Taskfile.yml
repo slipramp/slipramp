@@ -12,7 +12,7 @@ vars:
   KIND_VERSION: v0.33.0
   OAPI_CODEGEN: "{{.ROOT_DIR}}/.bin/oapi-codegen"
   OAPI_CODEGEN_VERSION: v2.8.0
-  OPENAPI_BUNDLE: "{{.ROOT_DIR}}/.cache/openapi.yaml"
+  OPENAPI_BUNDLE: "{{.ROOT_DIR}}/ios/Slipramp/openapi.yaml"
   OPENAPI_TS: "{{.ROOT_DIR}}/node_modules/.bin/openapi-ts"
   PNPM: "{{.ROOT_DIR}}/.cache/pnpm/node_modules/.bin/pnpm"
   PNPM_STORE: "{{.ROOT_DIR}}/.cache/pnpm-store"
@@ -21,6 +21,7 @@ vars:
   CATALOG_SCHEMA: "{{.ROOT_DIR}}/schemas/catalog-v1alpha1.json"
   SQLC: "{{.ROOT_DIR}}/.bin/sqlc"
   SQLC_VERSION: v1.31.1
+  XCODE_DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer
 
 env:
   GOCACHE: "{{.ROOT_DIR}}/.cache/go-build"
@@ -92,6 +93,23 @@ tasks:
     deps: [deps:web]
     cmds:
       - '"{{.PNPM}}" --filter @slipramp/web run dev'
+
+  ios:test:
+    desc: Test the iOS domain and networking layer
+    env:
+      DEVELOPER_DIR: "{{.XCODE_DEVELOPER_DIR}}"
+    cmds:
+      - swift test --package-path ios
+
+  ios:build:
+    desc: Build the native app for the iOS Simulator
+    env:
+      DEVELOPER_DIR: "{{.XCODE_DEVELOPER_DIR}}"
+    cmds:
+      - >-
+        xcodebuild -project ios/Slipramp.xcodeproj -scheme Slipramp
+        -configuration Debug -destination 'generic/platform=iOS Simulator'
+        -derivedDataPath "{{.ROOT_DIR}}/.cache/ios-derived-data" build
 
   mascot:dev:
     desc: Run the public mascot gallery development server
@@ -183,9 +201,20 @@ tasks:
     cmds:
       - '"{{.REDOCLY}}" lint api/openapi.yaml'
       - '"{{.REDOCLY}}" bundle api/openapi.yaml --output "{{.OPENAPI_BUNDLE}}"'
+      - task: api:swift:generate
       - '"{{.OAPI_CODEGEN}}" --config api/oapi-codegen.yaml "{{.OPENAPI_BUNDLE}}"'
       - '"{{.OPENAPI_TS}}" --file openapi-ts.config.ts'
       - '"{{.PNPM}}" --filter @slipramp/web exec oxfmt --write app/api/generated'
+
+  api:swift:generate:
+    internal: true
+    desc: Generate the checked-in Swift client from the bundled API contract
+    env:
+      DEVELOPER_DIR: "{{.XCODE_DEVELOPER_DIR}}"
+    cmds:
+      - >-
+        swift package --package-path ios --allow-writing-to-package-directory
+        generate-code-from-openapi --target SliprampCore
 
   api:check:
     desc: Check generated API artifacts are current

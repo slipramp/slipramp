@@ -1,0 +1,553 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		100000000000000000000001 /* SliprampApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* SliprampApp.swift */; };
+		100000000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* AppModel.swift */; };
+		100000000000000000000003 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* MainTabView.swift */; };
+		100000000000000000000004 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* APIModels.swift */; };
+		100000000000000000000005 /* SliprampAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* SliprampAPIClient.swift */; };
+		100000000000000000000006 /* KeychainCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* KeychainCredentialStore.swift */; };
+		100000000000000000000007 /* ConnectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* ConnectionView.swift */; };
+		100000000000000000000008 /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* InboxView.swift */; };
+		100000000000000000000009 /* RunListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* RunListView.swift */; };
+		10000000000000000000000A /* RunDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* RunDetailView.swift */; };
+		10000000000000000000000B /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* SettingsView.swift */; };
+		10000000000000000000000C /* slipramp-mark-master.png in Resources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* slipramp-mark-master.png */; };
+		10000000000000000000000D /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000F /* Security.framework */; };
+		10000000000000000000000E /* RunLogStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* RunLogStream.swift */; };
+		10000000000000000000000F /* RunLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000011 /* RunLogView.swift */; };
+		100000000000000000000010 /* Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000012 /* Client.swift */; };
+		100000000000000000000011 /* Types.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000013 /* Types.swift */; };
+		100000000000000000000012 /* OpenAPIRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000001 /* OpenAPIRuntime */; };
+		100000000000000000000013 /* OpenAPIURLSession in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000002 /* OpenAPIURLSession */; };
+		100000000000000000000014 /* PromotionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000014 /* PromotionDetailView.swift */; };
+		100000000000000000000015 /* SliprampTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000015 /* SliprampTheme.swift */; };
+		100000000000000000000016 /* SliprampComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000016 /* SliprampComponents.swift */; };
+		100000000000000000000017 /* slipramp-mascot.png in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000017 /* slipramp-mascot.png */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		200000000000000000000001 /* SliprampApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampApp.swift; sourceTree = "<group>"; };
+		200000000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		200000000000000000000003 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		200000000000000000000004 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		200000000000000000000005 /* SliprampAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampAPIClient.swift; sourceTree = "<group>"; };
+		200000000000000000000006 /* KeychainCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainCredentialStore.swift; sourceTree = "<group>"; };
+		200000000000000000000007 /* ConnectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionView.swift; sourceTree = "<group>"; };
+		200000000000000000000008 /* InboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxView.swift; sourceTree = "<group>"; };
+		200000000000000000000009 /* RunListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunListView.swift; sourceTree = "<group>"; };
+		20000000000000000000000A /* RunDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunDetailView.swift; sourceTree = "<group>"; };
+		20000000000000000000000B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		20000000000000000000000C /* slipramp-mark-master.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "slipramp-mark-master.png"; sourceTree = "<group>"; };
+		20000000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		20000000000000000000000E /* Slipramp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Slipramp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		20000000000000000000000F /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		200000000000000000000010 /* RunLogStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunLogStream.swift; sourceTree = "<group>"; };
+		200000000000000000000011 /* RunLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunLogView.swift; sourceTree = "<group>"; };
+		200000000000000000000012 /* Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Client.swift; sourceTree = "<group>"; };
+		200000000000000000000013 /* Types.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Types.swift; sourceTree = "<group>"; };
+		200000000000000000000014 /* PromotionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromotionDetailView.swift; sourceTree = "<group>"; };
+		200000000000000000000015 /* SliprampTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampTheme.swift; sourceTree = "<group>"; };
+		200000000000000000000016 /* SliprampComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampComponents.swift; sourceTree = "<group>"; };
+		200000000000000000000017 /* slipramp-mascot.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "slipramp-mascot.png"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		300000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10000000000000000000000D /* Security.framework in Frameworks */,
+				100000000000000000000012 /* OpenAPIRuntime in Frameworks */,
+				100000000000000000000013 /* OpenAPIURLSession in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		400000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000002 /* Slipramp */,
+				40000000000000000000000C /* Frameworks */,
+				40000000000000000000000B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		400000000000000000000002 /* Slipramp */ = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000003 /* App */,
+				400000000000000000000011 /* DesignSystem */,
+				400000000000000000000004 /* Domain */,
+				400000000000000000000005 /* Networking */,
+				400000000000000000000006 /* Security */,
+				400000000000000000000007 /* Features */,
+				40000000000000000000000F /* GeneratedSources */,
+				40000000000000000000000A /* Resources */,
+			);
+			path = Slipramp;
+			sourceTree = "<group>";
+		};
+		400000000000000000000003 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000001 /* SliprampApp.swift */,
+				200000000000000000000002 /* AppModel.swift */,
+				200000000000000000000003 /* MainTabView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		400000000000000000000004 /* Domain */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000004 /* APIModels.swift */,
+			);
+			path = Domain;
+			sourceTree = "<group>";
+		};
+		400000000000000000000005 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000005 /* SliprampAPIClient.swift */,
+				200000000000000000000010 /* RunLogStream.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		400000000000000000000006 /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000006 /* KeychainCredentialStore.swift */,
+			);
+			path = Security;
+			sourceTree = "<group>";
+		};
+		400000000000000000000007 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				400000000000000000000008 /* Connection */,
+				400000000000000000000009 /* Inbox */,
+				40000000000000000000000D /* Runs */,
+				400000000000000000000010 /* Promotions */,
+				40000000000000000000000E /* Settings */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		400000000000000000000008 /* Connection */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000007 /* ConnectionView.swift */,
+			);
+			path = Connection;
+			sourceTree = "<group>";
+		};
+		400000000000000000000009 /* Inbox */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000008 /* InboxView.swift */,
+			);
+			path = Inbox;
+			sourceTree = "<group>";
+		};
+		40000000000000000000000A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000D /* Info.plist */,
+				20000000000000000000000C /* slipramp-mark-master.png */,
+				200000000000000000000017 /* slipramp-mascot.png */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		40000000000000000000000B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000E /* Slipramp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		40000000000000000000000C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000F /* Security.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		40000000000000000000000D /* Runs */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000009 /* RunListView.swift */,
+				20000000000000000000000A /* RunDetailView.swift */,
+				200000000000000000000011 /* RunLogView.swift */,
+			);
+			path = Runs;
+			sourceTree = "<group>";
+		};
+		40000000000000000000000E /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000B /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		40000000000000000000000F /* GeneratedSources */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000012 /* Client.swift */,
+				200000000000000000000013 /* Types.swift */,
+			);
+			path = GeneratedSources;
+			sourceTree = "<group>";
+		};
+		400000000000000000000010 /* Promotions */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000014 /* PromotionDetailView.swift */,
+			);
+			path = Promotions;
+			sourceTree = "<group>";
+		};
+		400000000000000000000011 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000015 /* SliprampTheme.swift */,
+				200000000000000000000016 /* SliprampComponents.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		500000000000000000000001 /* Slipramp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 600000000000000000000002 /* Build configuration list for PBXNativeTarget "Slipramp" */;
+			buildPhases = (
+				700000000000000000000001 /* Sources */,
+				300000000000000000000001 /* Frameworks */,
+				700000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Slipramp;
+			packageProductDependencies = (
+				A10000000000000000000001 /* OpenAPIRuntime */,
+				A10000000000000000000002 /* OpenAPIURLSession */,
+			);
+			productName = Slipramp;
+			productReference = 20000000000000000000000E /* Slipramp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		800000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					500000000000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = 600000000000000000000001 /* Build configuration list for PBXProject "Slipramp" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 400000000000000000000001;
+			packageReferences = (
+				A20000000000000000000001 /* XCRemoteSwiftPackageReference "swift-openapi-runtime" */,
+				A20000000000000000000002 /* XCRemoteSwiftPackageReference "swift-openapi-urlsession" */,
+			);
+			productRefGroup = 40000000000000000000000B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				500000000000000000000001 /* Slipramp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		700000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10000000000000000000000C /* slipramp-mark-master.png in Resources */,
+				100000000000000000000017 /* slipramp-mascot.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		700000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				100000000000000000000001 /* SliprampApp.swift in Sources */,
+				100000000000000000000002 /* AppModel.swift in Sources */,
+				100000000000000000000003 /* MainTabView.swift in Sources */,
+				100000000000000000000004 /* APIModels.swift in Sources */,
+				100000000000000000000005 /* SliprampAPIClient.swift in Sources */,
+				100000000000000000000006 /* KeychainCredentialStore.swift in Sources */,
+				100000000000000000000007 /* ConnectionView.swift in Sources */,
+				100000000000000000000008 /* InboxView.swift in Sources */,
+				100000000000000000000009 /* RunListView.swift in Sources */,
+				10000000000000000000000A /* RunDetailView.swift in Sources */,
+				10000000000000000000000B /* SettingsView.swift in Sources */,
+				10000000000000000000000E /* RunLogStream.swift in Sources */,
+				10000000000000000000000F /* RunLogView.swift in Sources */,
+				100000000000000000000010 /* Client.swift in Sources */,
+				100000000000000000000011 /* Types.swift in Sources */,
+				100000000000000000000014 /* PromotionDetailView.swift in Sources */,
+				100000000000000000000015 /* SliprampTheme.swift in Sources */,
+				100000000000000000000016 /* SliprampComponents.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		900000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		900000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		900000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = EPW6Y86UW3;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Slipramp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ianunruh.slipramp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		900000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = EPW6Y86UW3;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Slipramp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ianunruh.slipramp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		600000000000000000000001 /* Build configuration list for PBXProject "Slipramp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				900000000000000000000001 /* Debug */,
+				900000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		600000000000000000000002 /* Build configuration list for PBXNativeTarget "Slipramp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				900000000000000000000003 /* Debug */,
+				900000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A20000000000000000000001 /* XCRemoteSwiftPackageReference "swift-openapi-runtime" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-openapi-runtime";
+			requirement = {
+				kind = exactVersion;
+				version = 1.12.0;
+			};
+		};
+		A20000000000000000000002 /* XCRemoteSwiftPackageReference "swift-openapi-urlsession" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-openapi-urlsession";
+			requirement = {
+				kind = exactVersion;
+				version = 1.3.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000000000000000000001 /* OpenAPIRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A20000000000000000000001 /* XCRemoteSwiftPackageReference "swift-openapi-runtime" */;
+			productName = OpenAPIRuntime;
+		};
+		A10000000000000000000002 /* OpenAPIURLSession */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A20000000000000000000002 /* XCRemoteSwiftPackageReference "swift-openapi-urlsession" */;
+			productName = OpenAPIURLSession;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 800000000000000000000001 /* Project object */;
+}

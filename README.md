@@ -72,6 +72,7 @@ failures first (`limit` 1–200). There is no manual delivery retry action.
   semantic-convention status, labels, and scrape guidance.
 - [End-to-end acceptance](deploy/e2e/README.md): disposable kind coverage and
   diagnostics.
+- [iOS preview](ios/README.md): native SwiftUI setup, connection, and tests.
 - [Mascot gallery](https://mascot.slipramp.com): the production axolotl
   animations, published independently from the private control plane.
 
@@ -516,6 +517,8 @@ web process in separate terminals:
 task deps
 task local:server
 task web:dev
+task ios:test
+task ios:build
 task mascot:dev
 task mascot:build
 task mascot:deploy

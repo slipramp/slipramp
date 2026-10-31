@@ -26,6 +26,7 @@ unless explicitly requested.
 | Controller            | Outbound command polling, local Jobs, observations, log forwarding, and configured Kargo discovery/materialization/reconciliation | One replica per execution Cluster; namespace-scoped Kubernetes access  |
 | Harness               | Wrap checkout and action processes, transfer artifacts, forward signals, preserve exit status      | Injected by Slipramp; runtime images and tools need no Slipramp SDK    |
 | Web                   | React Router SSR and browser UI                                                                    | Uses the generated Server client and forwards the browser's session    |
+| iOS                   | Native operator Inbox, Run decisions, and history                                                  | Uses the product API with one user-supplied API key stored in Keychain |
 | PostgreSQL            | Authoritative product state, identity, history, metadata, and scheduling coordination              | Stores credential digests and references, never injected secret values |
 | S3-compatible storage | Artifact contents, including live log chunks and sealed logs                                       | Only the Server accesses it; RustFS is the local implementation        |
 
@@ -253,6 +254,34 @@ Command construction is explicit and receives the `App` dependency container;
 package-global commands and `init` registration are not used. Catalog behavior,
 remote API access, rendering, and log streaming remain framework-independent
 command handlers so their contracts can be tested without Cobra internals.
+
+The native iOS preview is an iOS 17 SwiftUI application under `ios/`. It
+connects to one operator-supplied Server URL, validates a user API key through
+the role-aware Inbox boundary, and stores only that credential in the iOS
+Keychain. Its initial surface presents the operational Inbox, recent Runs, Run
+details, and retained or live Run logs. The first writable slice lets
+authorized operators approve or reject pending Run reviews with an immutable
+optional comment and request cancellation of unfinished Runs. Both mutations
+require explicit confirmation and refresh the Run, Inbox, and Run history from
+Server-returned state. Promotion-review Inbox items open a native detail built
+from immutable Stage, Repository, policy, Freight, revision, and preparation
+snapshots. The detail reads the retained sensitive Git and Argo CD artifacts,
+renders Argo resources as structured searchable changes with version-only
+changes hidden initially, and records confirmed approve or reject decisions
+with an optional immutable comment. Promotion mutations refresh the detail and
+Inbox from Server-returned state; approval does not imply downstream success.
+Swift models and ordinary HTTP operations are generated from the same bundled
+OpenAPI contract as the Go and TypeScript clients, with exact generator and
+runtime versions and a shared generated-output freshness check. A small
+handwritten adapter supplies API-key authentication and presentation
+conveniences. The log reader remains a focused handwritten transport for the
+reconnectable byte-offset SSE contract: it validates replayed chunks and resumes
+without duplicating output. The app calls only `/api/v1` product endpoints and
+never the Controller, execution, PostgreSQL, object-storage, or Kubernetes
+boundaries.
+Disconnecting removes the local URL and Keychain item but does not revoke the
+Server credential. Release transport retains App Transport Security; the app
+does not provide a general insecure-TLS bypass.
 
 Remote Run creation selects an exact durable Target UUID and Action name. Without
 Artifact inputs, the client reads the current Target definition and applies the

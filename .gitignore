@@ -7,3 +7,8 @@
 /web/build/
 /web/dist/
 /web/node_modules/
+/ios/.build/
+/ios/DerivedData/
+/ios/**/xcuserdata/
+*.xcuserstate
+.DS_Store
