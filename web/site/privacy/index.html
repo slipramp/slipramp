@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <meta
+      content="How privacy works for self-hosted Slipramp installations and the slipramp.com website."
+      name="description"
+    />
+    <meta content="#f7f3ff" name="theme-color" />
+    <meta content="Privacy policy · Slipramp" property="og:title" />
+    <meta
+      content="How privacy works for self-hosted Slipramp installations and slipramp.com."
+      property="og:description"
+    />
+    <meta content="website" property="og:type" />
+    <meta content="https://slipramp.com/privacy/" property="og:url" />
+    <meta content="summary" name="twitter:card" />
+    <link href="https://slipramp.com/privacy/" rel="canonical" />
+    <link href="/favicon.ico" rel="icon" sizes="any" />
+    <link href="/apple-touch-icon.png" rel="apple-touch-icon" />
+    <title>Privacy policy · Slipramp</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="shell nav-shell">
+        <a class="brand" href="/" aria-label="Slipramp home">
+          <img alt="" aria-hidden="true" height="36" src="/slipramp-mark.png" width="36" />
+          <span>Slipramp</span>
+        </a>
+        <nav aria-label="Primary navigation">
+          <a href="/#how-it-works">How it works</a>
+          <a aria-current="page" href="/privacy/">Privacy</a>
+          <a href="https://mascot.slipramp.com/">Mascot</a>
+          <a class="nav-github" href="https://github.com/slipramp/slipramp">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="policy-page shell">
+      <header class="policy-header">
+        <a class="back-link" href="/"><span aria-hidden="true">←</span> Back to Slipramp</a>
+        <p class="eyebrow"><span></span> Clear boundaries</p>
+        <h1>Privacy policy</h1>
+        <p class="policy-intro">
+          Slipramp does not currently include product analytics. The public website is hosted by
+          Cloudflare and produces limited website traffic data. This policy explains both boundaries
+          and the private data we will not collect.
+        </p>
+        <p class="policy-date">Effective October 30, 2026</p>
+      </header>
+
+      <article class="policy-card">
+        <section>
+          <h2>1. Your self-hosted Slipramp installation</h2>
+          <p>
+            The Slipramp project maintainers do not operate a service that receives repository
+            contents, credentials or secrets, catalog definitions, run inputs or outputs, logs,
+            artifacts, or other private control-plane data from your installation. Slipramp does not
+            currently include product analytics or a call-home mechanism.
+          </p>
+          <p>
+            We may add product analytics in the future to understand how Slipramp is used and
+            improve it. Any product analytics will not include repository contents, credentials or
+            secrets, catalog definitions, run inputs or outputs, logs, or artifacts. We will update
+            this policy and the product documentation before that collection begins.
+          </p>
+          <p>
+            Your deployment can communicate with systems you configure—such as Git providers,
+            identity providers, object storage, and Kubernetes clusters. You operate those
+            connections, and their own privacy terms may apply.
+          </p>
+        </section>
+
+        <section>
+          <h2>2. Visiting slipramp.com</h2>
+          <p>
+            slipramp.com is a static website hosted by Cloudflare. When you visit, Cloudflare
+            processes the HTTP request and network information needed to deliver and protect the
+            site. That includes your IP address, the requested host and path, request headers your
+            browser sends, timestamps, response status, and bytes transferred. Cloudflare can use
+            the IP address to estimate the request’s country.
+          </p>
+          <p>
+            Cloudflare makes aggregate traffic information available to us. That includes request
+            volume, bandwidth, response status, and visitor or country estimates. We may use it to
+            operate, secure, and understand use of the public website. It comes only from visits to
+            slipramp.com; it does not include data from your self-hosted Slipramp installation.
+          </p>
+          <p>
+            Cloudflare may also ask compatible browsers to send network-error reports when they have
+            trouble reaching the site. Those reports describe the failure and let Cloudflare provide
+            network, country, and data-center reachability information. Cloudflare documents this in
+            its
+            <a href="https://developers.cloudflare.com/network-error-logging/"
+              >Network Error Logging overview</a
+            >.
+          </p>
+          <p>
+            Cloudflare may provide hosting-level analytics as described above. We have not added any
+            other analytics service or an advertising network, and the site has no accounts or
+            forms. Cloudflare handles website traffic under its services and privacy terms. Learn
+            more in
+            <a href="https://www.cloudflare.com/privacypolicy/">Cloudflare’s privacy policy</a>.
+          </p>
+        </section>
+
+        <section>
+          <h2>3. Information you choose to share</h2>
+          <p>
+            If you open a GitHub issue, contribute code, or otherwise contact the project through a
+            third-party service, we can see the information you choose to submit. That service’s
+            privacy policy governs its handling of your account and activity.
+          </p>
+        </section>
+
+        <section>
+          <h2>4. Links to other sites</h2>
+          <p>
+            slipramp.com links to GitHub and may link to other external documentation or services.
+            We do not control how those sites collect or use data.
+          </p>
+        </section>
+
+        <section>
+          <h2>5. Changes and questions</h2>
+          <p>
+            If the project or website changes in a way that affects privacy, this policy will be
+            updated and the effective date will change. For questions, open an issue in the
+            <a href="https://github.com/slipramp/slipramp/issues">Slipramp GitHub repository</a>.
+          </p>
+        </section>
+      </article>
+    </main>
+
+    <footer>
+      <div class="shell footer-shell">
+        <a class="brand" href="/" aria-label="Slipramp home">
+          <img alt="" aria-hidden="true" height="30" src="/slipramp-mark.png" width="30" />
+          <span>Slipramp</span>
+        </a>
+        <p>GitOps-driven infrastructure control for homelabs and teams.</p>
+        <nav aria-label="Footer navigation">
+          <a href="https://github.com/slipramp/slipramp">GitHub</a>
+          <a href="https://mascot.slipramp.com/">Mascot</a>
+          <a aria-current="page" href="/privacy/">Privacy</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="/main.ts" type="module"></script>
+  </body>
+</html>

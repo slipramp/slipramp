@@ -73,6 +73,7 @@ failures first (`limit` 1–200). There is no manual delivery retry action.
 - [End-to-end acceptance](deploy/e2e/README.md): disposable kind coverage and
   diagnostics.
 - [iOS preview](ios/README.md): native SwiftUI setup, connection, and tests.
+- [Project site](https://slipramp.com): the public landing page and privacy policy.
 - [Mascot gallery](https://mascot.slipramp.com): the production axolotl
   animations, published independently from the private control plane.
 
@@ -527,6 +528,9 @@ task mascot:build
 task mascot:generate
 task mascot:check
 task mascot:deploy
+task site:dev
+task site:build
+task site:deploy
 task generate
 task charts:check
 task charts:package CHART_VERSION=0.1.0
@@ -539,6 +543,18 @@ go run ./cmd/slipramp-harness command argument
 The `mascot.slipramp.com` custom domain is attached to the `slipramp-mascot`
 Worker once in Cloudflare. Routine `mascot:deploy` and CI deployments update the
 Worker and its static assets without rewriting that zone binding.
+
+The public landing page and privacy policy use the same static deployment model.
+The `slipramp.com` custom domain is attached to the `slipramp-site` Worker once
+in Cloudflare, and routine `site:deploy` and CI deployments update its assets
+without rewriting that zone binding. Cloudflare provides the site's hosting-level
+traffic analytics; no other analytics service, advertising network, forms, or
+accounts are part of the site. Website data is separate from self-hosted
+Slipramp installations. Slipramp does not currently include product analytics;
+if product analytics are added, they will exclude repository contents,
+credentials or secrets, catalog definitions, run inputs or outputs, logs, and
+artifacts. Cloudflare Network Error Logging may also collect browser reports
+about failures reaching the site.
 
 Open `http://localhost:5173` and sign in with
 `admin@slipramp.local` / `slipramp`. These credentials and the static OIDC

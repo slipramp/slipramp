@@ -141,6 +141,24 @@ tasks:
     cmds:
       - '"{{.PNPM}}" --filter @slipramp/web run deploy:mascot'
 
+  site:dev:
+    desc: Run the public Slipramp site development server
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/web run dev:site'
+
+  site:build:
+    desc: Build the public Slipramp static site
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/web run build:site'
+
+  site:deploy:
+    desc: Build and deploy the public Slipramp site to Cloudflare
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/web run deploy:site'
+
   local:dependencies:
     internal: true
     cmds:
@@ -313,6 +331,7 @@ tasks:
       - go build ./...
       - '"{{.PNPM}}" --filter @slipramp/web run build'
       - '"{{.PNPM}}" --filter @slipramp/web run build:mascot'
+      - '"{{.PNPM}}" --filter @slipramp/web run build:site'
 
   check:
     desc: Run all local quality checks
@@ -333,3 +352,4 @@ tasks:
       - '"{{.PNPM}}" --filter @slipramp/web run typecheck'
       - '"{{.PNPM}}" --filter @slipramp/web run build'
       - '"{{.PNPM}}" --filter @slipramp/web run build:mascot'
+      - '"{{.PNPM}}" --filter @slipramp/web run build:site'

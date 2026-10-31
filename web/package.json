@@ -5,9 +5,12 @@
   "scripts": {
     "build": "react-router build",
     "build:mascot": "vite build --config vite.mascot.config.ts",
+    "build:site": "vite build --config vite.site.config.ts",
     "dev": "react-router dev",
     "dev:mascot": "vite --config vite.mascot.config.ts",
+    "dev:site": "vite --config vite.site.config.ts",
     "deploy:mascot": "pnpm run build:mascot && wrangler deploy --config wrangler.mascot.jsonc",
+    "deploy:site": "pnpm run build:site && wrangler deploy --config wrangler.site.jsonc",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint .",

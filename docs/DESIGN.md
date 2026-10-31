@@ -1527,6 +1527,22 @@ deployment token does not need zone-route write access. Gallery cards load their
 sprite sheets as they approach the viewport. Activity respects reduced motion
 preferences and leaves textual status indicators available.
 
+The public project site at `https://slipramp.com` is another independent static
+build served by Cloudflare Workers Static Assets. It contains the landing page
+and `/privacy/` policy, has no API or control-plane connection, and its site code
+adds no non-Cloudflare analytics service, advertising network, forms, or accounts.
+Cloudflare processes ordinary HTTP request and network data to deliver and
+protect the site, exposes aggregate zone traffic information, and may receive
+browser Network Error Logging reports about failures reaching the site. The
+policy keeps that website data separate from the self-hosted product boundary.
+Slipramp does not currently include product analytics. Future product analytics
+may report usage and diagnostic metadata, but must not include repository
+contents, credentials or secrets, catalog definitions, Run inputs or outputs,
+logs, or artifacts. The privacy policy and product documentation must be updated
+before that collection begins. The `slipramp.com` custom-domain binding is
+provisioned once in Cloudflare, while routine CI deployment updates only the
+`slipramp-site` Worker and static assets.
+
 The native iOS client presents the same deterministic activity on Run and
 Promotion detail screens. Its generated Swift catalog is derived from the web
 pose pools and reviewed CSS frame timing, including pose-specific holds. The
