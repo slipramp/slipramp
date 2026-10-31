@@ -1595,7 +1595,7 @@ Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.
 Versions are pinned and warnings fail. Go uses golangci-lint v2; frontend uses
 Oxlint and Oxfmt. Disposable kind acceptance runs as an independent,
-non-blocking CI job on the self-hosted runners and remains available through the
+non-blocking CI job on a GitHub-hosted Linux runner and remains available through the
 local task. Its Go suite provisions the environment through the real kind,
 Helm, kubectl, Docker, and Git command boundaries, then exercises the built CLI
 across Target discovery and explanation, Run creation and control, log streaming,

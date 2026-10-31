@@ -22,7 +22,7 @@ concurrency:
 jobs:
   deploy-mascot:
     name: Deploy mascot gallery
-    runs-on: slipramp-prod
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: mascot-production
@@ -55,7 +55,7 @@ jobs:
 
   deploy-site:
     name: Deploy public site
-    runs-on: slipramp-prod
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: mascot-production
