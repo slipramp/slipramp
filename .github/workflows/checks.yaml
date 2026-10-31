@@ -14,6 +14,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ios:
+    name: iOS
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.22.0
+
+      - name: Verify pinned Xcode
+        run: test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
+
+      - name: Install Task
+        run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
+
+      - run: task ios:test
+      - run: task ios:build
+      - run: task ios:build:release
+
   check:
     name: Check
     runs-on: slipramp-prod

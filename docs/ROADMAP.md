@@ -205,8 +205,12 @@ repository while contracts are pre-stable.
       HTTPS, reject public HTTP, require exact-Server confirmation and a visible
       warning for private HTTP, retain ATS local-network scoping, and surface
       actionable certificate, DNS, reachability, and transport errors.
-- [ ] Add Xcode build and test automation on a pinned macOS toolchain, app icon
-      packaging, accessibility verification, signing, and TestFlight metadata.
+- [x] Package the production app icon, required-reason privacy manifest,
+      privacy-policy link, and export-compliance declaration.
+- [x] Run native Swift tests and Debug Simulator and unsigned Release device
+      builds in CI on a pinned Xcode toolchain.
+- [ ] Complete physical-device accessibility verification, signing, and
+      remaining TestFlight metadata.
 - [ ] Add APNs device registration and routed push delivery only after the
       native Inbox proves a concrete notification need.
 

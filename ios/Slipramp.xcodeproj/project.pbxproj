@@ -38,6 +38,8 @@
 		10000000000000000000001D /* SliprampMascotAnimation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* SliprampMascotAnimation.swift */; };
 		10000000000000000000001E /* Mascots in Resources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001E /* Mascots */; };
 		10000000000000000000001F /* RunArtifactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001F /* RunArtifactsView.swift */; };
+		100000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000020 /* Assets.xcassets */; };
+		100000000000000000000021 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000021 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +74,8 @@
 		20000000000000000000001D /* SliprampMascotAnimation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampMascotAnimation.swift; sourceTree = "<group>"; };
 		20000000000000000000001E /* Mascots */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Mascots; sourceTree = "<group>"; };
 		20000000000000000000001F /* RunArtifactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunArtifactsView.swift; sourceTree = "<group>"; };
+		200000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		200000000000000000000021 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +186,8 @@
 			isa = PBXGroup;
 			children = (
 				20000000000000000000000D /* Info.plist */,
+				200000000000000000000021 /* PrivacyInfo.xcprivacy */,
+				200000000000000000000020 /* Assets.xcassets */,
 				20000000000000000000000C /* slipramp-mark-master.png */,
 				200000000000000000000017 /* slipramp-mascot.png */,
 				20000000000000000000001E /* Mascots */,
@@ -327,6 +333,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				100000000000000000000020 /* Assets.xcassets in Resources */,
+				100000000000000000000021 /* PrivacyInfo.xcprivacy in Resources */,
 				10000000000000000000000C /* slipramp-mark-master.png in Resources */,
 				100000000000000000000017 /* slipramp-mascot.png in Resources */,
 				10000000000000000000001E /* Mascots in Resources */,
@@ -489,6 +497,7 @@
 		900000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = EPW6Y86UW3;
@@ -513,6 +522,7 @@
 		900000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = EPW6Y86UW3;

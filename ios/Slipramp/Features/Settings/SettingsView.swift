@@ -16,7 +16,7 @@ struct SettingsView: View {
                             .frame(width: 58, height: 58)
                         Text("Slipramp")
                             .font(.title2.weight(.bold))
-                        Text("Native preview")
+                        Text("GitOps infrastructure control")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -61,6 +61,23 @@ struct SettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+
+                        Link(destination: URL(string: "https://slipramp.com/privacy/")!) {
+                            HStack(spacing: SliprampTheme.Space.medium) {
+                                Image(systemName: "hand.raised.fill")
+                                    .foregroundStyle(SliprampTheme.accent)
+                                    .frame(width: 24)
+                                Text("Privacy policy")
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+
+                        SettingsRow(label: "Version", symbol: "info.circle.fill") {
+                            Text(versionDescription)
+                        }
                     }
 
                     VStack(spacing: SliprampTheme.Space.medium) {
@@ -95,6 +112,22 @@ struct SettingsView: View {
             "Slipramp always uses its light appearance."
         case .dark:
             "Slipramp always uses its dark appearance."
+        }
+    }
+
+    private var versionDescription: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        switch (version, build) {
+        case let (.some(version), .some(build)):
+            return "\(version) (\(build))"
+        case let (.some(version), .none):
+            return version
+        case let (.none, .some(build)):
+            return build
+        case (.none, .none):
+            return "Unknown"
         }
     }
 

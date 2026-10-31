@@ -113,6 +113,18 @@ tasks:
         -configuration Debug -destination 'generic/platform=iOS Simulator'
         -derivedDataPath "{{.ROOT_DIR}}/.cache/ios-derived-data" build
 
+  ios:build:release:
+    desc: Build and validate the unsigned native app for an iOS device
+    deps: [mascot:check]
+    env:
+      DEVELOPER_DIR: "{{.XCODE_DEVELOPER_DIR}}"
+    cmds:
+      - >-
+        xcodebuild -project ios/Slipramp.xcodeproj -scheme Slipramp
+        -configuration Release -destination 'generic/platform=iOS'
+        -derivedDataPath "{{.ROOT_DIR}}/.cache/ios-release-derived-data"
+        CODE_SIGNING_ALLOWED=NO build
+
   mascot:dev:
     desc: Run the public mascot gallery development server
     deps: [deps:web]

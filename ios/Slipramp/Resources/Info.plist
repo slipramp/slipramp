@@ -40,6 +40,8 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Slipramp connects to the Server you configure on your local or private network.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>

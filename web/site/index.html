@@ -7,7 +7,7 @@
       content="A self-hosted, GitOps-driven infrastructure control plane for homelabs and teams."
       name="description"
     />
-    <meta content="#f7f3ff" name="theme-color" />
+    <meta content="#fff9fc" name="theme-color" />
     <meta
       content="Slipramp · Serious infrastructure. A happier place to run it."
       property="og:title"
@@ -44,7 +44,7 @@
       <section class="hero shell">
         <div class="hero-copy">
           <p class="eyebrow"><span></span> Self-hosted infrastructure control plane</p>
-          <h1>Serious infrastructure. A happier place to run it.</h1>
+          <h1>Serious infrastructure. <span>A happier place to run it.</span></h1>
           <p class="hero-lede">
             Slipramp turns versioned Actions into Kubernetes Jobs across your clusters—with exact
             commits, live logs, durable artifacts, and cluster-local execution.
@@ -56,14 +56,9 @@
             </a>
             <a class="button button-secondary" href="#how-it-works">See how it works</a>
           </div>
-          <ul class="hero-notes" aria-label="Project qualities">
-            <li>Source on GitHub</li>
-            <li>Built for Kubernetes</li>
-            <li>Made for teams</li>
-          </ul>
         </div>
 
-        <div class="hero-art" aria-label="Slipramp architecture at a glance">
+        <div class="hero-art">
           <div class="orbit orbit-one"></div>
           <div class="orbit orbit-two"></div>
           <img
@@ -72,18 +67,6 @@
             data-mascot
             decoding="async"
           />
-          <div class="architecture-card architecture-git">
-            <span class="card-dot card-dot-yellow"></span>
-            <span><strong>Git</strong><small>Versioned definitions</small></span>
-          </div>
-          <div class="architecture-card architecture-server">
-            <span class="card-dot card-dot-purple"></span>
-            <span><strong>Server</strong><small>No Kubernetes access</small></span>
-          </div>
-          <div class="architecture-card architecture-cluster">
-            <span class="card-dot card-dot-green"></span>
-            <span><strong>Your clusters</strong><small>Controllers reach out</small></span>
-          </div>
         </div>
       </section>
 
@@ -106,35 +89,40 @@
 
       <section class="section shell" id="how-it-works">
         <div class="section-heading">
-          <p class="eyebrow"><span></span> A short path from intent to execution</p>
-          <h2>A clean path from Git to every cluster.</h2>
+          <p class="eyebrow"><span></span> Server and Controller</p>
+          <h2>The Server schedules. Controllers execute.</h2>
           <p>
-            The Server coordinates product state. A Controller inside each cluster handles local
-            execution. Your tools stay ordinary, and your boundaries stay intact.
+            The Server validates Git definitions and manages product state. A Controller in each
+            cluster creates local Kubernetes Jobs. Logs stream to the Server, and declared artifacts
+            are retained.
           </p>
         </div>
         <ol class="steps">
           <li>
             <span class="step-number">01</span>
             <div>
-              <h3>Define it in Git</h3>
-              <p>Describe reusable Runtimes, operational Targets, and the Actions they expose.</p>
+              <h3>Define Targets and Actions</h3>
+              <p>Keep operational definitions with the infrastructure code they control.</p>
             </div>
           </li>
           <li>
             <span class="step-number">02</span>
             <div>
-              <h3>Run the exact revision</h3>
+              <h3>Create a pinned Run</h3>
               <p>
-                Start manually, through the API, or from a named Git trigger with static parameters.
+                Start manually, through the API, or from a named Git trigger. Slipramp snapshots the
+                definition and commit before dispatch.
               </p>
             </div>
           </li>
           <li>
             <span class="step-number">03</span>
             <div>
-              <h3>Keep execution local</h3>
-              <p>Cluster-local Controllers create Jobs and stream logs back to your own Server.</p>
+              <h3>Execute inside the cluster</h3>
+              <p>
+                The local Controller creates the Job and reports its status. The Server never needs
+                Kubernetes access.
+              </p>
             </div>
           </li>
         </ol>
@@ -142,25 +130,24 @@
 
       <section class="privacy-callout shell">
         <div>
-          <p class="eyebrow eyebrow-light"><span></span> Privacy, plainly</p>
-          <h2>Your control plane stays yours.</h2>
+          <p class="eyebrow eyebrow-light"><span></span> Data boundaries</p>
+          <h2>Your installation does not call home.</h2>
         </div>
         <div class="privacy-copy">
           <p>
-            Slipramp does not currently include product analytics. If we add them, they will never
-            include repository contents, credentials or secrets, run inputs or outputs, logs, or
-            artifacts. This website is hosted on Cloudflare, so we receive ordinary traffic
-            analytics about visits to slipramp.com.
+            Slipramp has no product analytics. Repository contents, credentials, Run inputs and
+            outputs, logs, and artifacts are not sent to the project maintainers. Cloudflare hosts
+            this public website and provides ordinary traffic analytics for visits to slipramp.com.
           </p>
           <a href="/privacy/">Read the privacy policy <span aria-hidden="true">→</span></a>
         </div>
       </section>
 
       <section class="closing shell">
-        <p class="eyebrow"><span></span> Source on GitHub</p>
-        <h2>Your infrastructure already has a home.<br />Slipramp helps it move.</h2>
+        <p class="eyebrow"><span></span> Open source</p>
+        <h2>Code, Helm charts, and a complete catalog example—all on GitHub.</h2>
         <a class="button button-primary" href="https://github.com/slipramp/slipramp">
-          View the project on GitHub
+          Browse the repository
           <span aria-hidden="true">↗</span>
         </a>
       </section>
