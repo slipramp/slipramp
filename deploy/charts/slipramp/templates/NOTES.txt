@@ -10,7 +10,13 @@ slipramp-controller chart in each execution Cluster.
 
 {{- if .Values.ingress.enabled }}
 Open https://{{ .Values.ingress.host }}/ (or the scheme configured by your ingress).
-{{- else }}
+{{- end }}
+{{- if .Values.httpRoute.enabled }}
+{{- with .Values.httpRoute.hostnames }}
+Open https://{{ first . }}/ (or the scheme configured by your Gateway).
+{{- end }}
+{{- end }}
+{{- if and (not .Values.ingress.enabled) (not .Values.httpRoute.enabled) }}
 To inspect the web application locally:
   kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "slipramp.webName" . }} 3000:{{ .Values.web.service.port }}
 {{- end }}

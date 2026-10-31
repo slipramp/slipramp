@@ -25,8 +25,8 @@ func (d *Database) ListPromotionCandidateBranchReferences(
 			PromotionID:       uuid.UUID(row.PromotionID.Bytes),
 			Integration:       row.Integration,
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
-			CandidateBranch:   stringValue(row.CandidateBranch),
-			CandidateRevision: stringValue(row.CandidateRevision),
+			CandidateBranch:   textValue(row.CandidateBranch),
+			CandidateRevision: textValue(row.CandidateRevision),
 			Status:            promotion.PromotionStatus(row.Status),
 			UpdatedAt:         row.UpdatedAt.Time.UTC(),
 		})
@@ -49,7 +49,7 @@ func (d *Database) UpsertPromotionCandidateBranchCleanup(
 			ObservedBranches: int32(cleanup.ObservedBranches),
 			DeletedBranches:  int32(cleanup.DeletedBranches),
 			RetainedBranches: int32(cleanup.RetainedBranches),
-			Error:            optionalString(cleanup.Error),
+			Error:            nullableText(cleanup.Error),
 		},
 	)
 	if err != nil {
@@ -72,10 +72,10 @@ func (d *Database) GetPromotionCandidateBranchCleanup(
 		RepositoryID:     uuid.UUID(row.RepositoryID.Bytes),
 		Status:           promotion.CandidateBranchCleanupStatus(row.Status),
 		StartedAt:        row.StartedAt.Time.UTC(),
-		FinishedAt:       optionalTime(row.FinishedAt),
+		FinishedAt:       applicationTime(row.FinishedAt),
 		ObservedBranches: int(row.ObservedBranches),
 		DeletedBranches:  int(row.DeletedBranches),
 		RetainedBranches: int(row.RetainedBranches),
-		Error:            stringValue(row.Error),
+		Error:            textValue(row.Error),
 	}, nil
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/runreport"
-	"github.com/slipramp/slipramp/internal/store"
 )
 
 func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
@@ -35,8 +34,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	now := time.Date(2026, time.October, 25, 12, 0, 0, 0, time.UTC)
 	oldest := now.Add(-90 * time.Second)
 	lastSeen := now.Add(-10 * time.Second)
-	metricsStore := &testSnapshotStore{
-		snapshot: store.MetricsSnapshot{
+	snapshotSource := &testSnapshotSource{
+		snapshot: MetricsSnapshot{
 			ActiveRuns:                 map[string]int64{"running": 2},
 			PendingRunReviews:          3,
 			OldestEligibleRunCreatedAt: &oldest,
@@ -45,7 +44,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 			RepositoryRefreshStates:    map[string]int64{"succeeded": 4},
 			NotificationDeliveryStates: map[string]int64{"pending": 5},
 		},
-		pool: store.DatabasePoolMetrics{
+		pool: DatabasePoolMetrics{
 			AcquiredConnections: 2,
 			IdleConnections:     3,
 			MaximumConnections:  10,
@@ -56,7 +55,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	}
 	metrics, err := New(t.Context(), Config{
 		ServiceVersion: "test-version",
-		Store:          metricsStore,
+		Source:         snapshotSource,
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	if err != nil {
@@ -72,8 +71,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	assertMetricLine(t, initialScrape, "slipramp_run_active", `phase="running"`, " 0")
 	assertMetricLine(t, initialScrape, "slipramp_metrics_snapshot_success_ratio", " 0")
 	metrics.snapshots.refresh(t.Context())
-	if metricsStore.snapshotCalls != 1 {
-		t.Fatalf("snapshot refresh calls = %d, want 1", metricsStore.snapshotCalls)
+	if snapshotSource.snapshotCalls != 1 {
+		t.Fatalf("snapshot refresh calls = %d, want 1", snapshotSource.snapshotCalls)
 	}
 
 	router := http.NewServeMux()
@@ -115,8 +114,8 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 
 	firstScrape := scrape(t, handler)
 	secondScrape := scrape(t, handler)
-	if metricsStore.snapshotCalls != 1 {
-		t.Fatalf("snapshot calls after scrapes = %d, want 1", metricsStore.snapshotCalls)
+	if snapshotSource.snapshotCalls != 1 {
+		t.Fatalf("snapshot calls after scrapes = %d, want 1", snapshotSource.snapshotCalls)
 	}
 
 	assertMetricLine(t, firstScrape, "target_info", `service_name="slipramp-server"`, `service_namespace="slipramp"`)
@@ -196,7 +195,7 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 	}
 
 	lastSuccess := metricLine(t, firstScrape, "slipramp_metrics_snapshot_last_success_time_seconds")
-	metricsStore.err = errors.New("database unavailable")
+	snapshotSource.err = errors.New("database unavailable")
 	metrics.snapshots.now = func() time.Time { return now.Add(time.Minute) }
 	metrics.snapshots.refresh(t.Context())
 	failedScrape := scrape(t, handler)
@@ -342,7 +341,7 @@ func TestRuntimeRequiresServiceName(t *testing.T) {
 func TestHTTPInstrumentationPreservesResponseBehavior(t *testing.T) {
 	metrics, err := New(t.Context(), Config{
 		ServiceVersion: "test-version",
-		Store:          &testSnapshotStore{},
+		Source:         &testSnapshotSource{},
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	if err != nil {
@@ -419,20 +418,20 @@ func TestHTTPInstrumentationPreservesResponseBehavior(t *testing.T) {
 	assertMetricLine(t, exposition, "http_server_request_duration_seconds_count", `http_route="/stream"`, " 1")
 }
 
-type testSnapshotStore struct {
-	snapshot      store.MetricsSnapshot
-	pool          store.DatabasePoolMetrics
+type testSnapshotSource struct {
+	snapshot      MetricsSnapshot
+	pool          DatabasePoolMetrics
 	err           error
 	snapshotCalls int
 }
 
-func (s *testSnapshotStore) LoadMetricsSnapshot(context.Context, time.Time) (store.MetricsSnapshot, error) {
+func (s *testSnapshotSource) LoadMetricsSnapshot(context.Context, time.Time) (MetricsSnapshot, error) {
 	s.snapshotCalls++
 
 	return s.snapshot, s.err
 }
 
-func (s *testSnapshotStore) DatabasePoolMetrics() store.DatabasePoolMetrics {
+func (s *testSnapshotSource) DatabasePoolMetrics() DatabasePoolMetrics {
 	return s.pool
 }
 

@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	catalog "github.com/slipramp/slipramp/internal/catalog"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
+	catalog "github.com/slipramp/slipramp/internal/catalog"
 )
 
 // Defines values for ActionTriggerReview.

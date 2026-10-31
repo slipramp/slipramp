@@ -616,9 +616,9 @@ func promotionDatabaseParams(
 		StageID:                      databaseUUID(record.StageID),
 		SourceStageID:                optionalDatabaseUUID(record.SourceStageID),
 		RepositoryID:                 databaseUUID(record.RepositoryID),
-		BaseRevision:                 optionalString(record.BaseRevision),
-		CandidateRevision:            optionalString(record.CandidateRevision),
-		CandidateBranch:              optionalString(record.CandidateBranch),
+		BaseRevision:                 nullableText(record.BaseRevision),
+		CandidateRevision:            nullableText(record.CandidateRevision),
+		CandidateBranch:              nullableText(record.CandidateBranch),
 		TargetBranch:                 record.TargetBranch,
 		ReviewRequired:               record.ReviewRequired,
 		Status:                       string(record.Status),
@@ -723,9 +723,9 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		StageID:                      uuid.UUID(row.StageID.Bytes),
 		SourceStageID:                applicationUUID(row.SourceStageID),
 		RepositoryID:                 uuid.UUID(row.RepositoryID.Bytes),
-		BaseRevision:                 stringValue(row.BaseRevision),
-		CandidateRevision:            stringValue(row.CandidateRevision),
-		CandidateBranch:              stringValue(row.CandidateBranch),
+		BaseRevision:                 textValue(row.BaseRevision),
+		CandidateRevision:            textValue(row.CandidateRevision),
+		CandidateBranch:              textValue(row.CandidateBranch),
 		TargetBranch:                 row.TargetBranch,
 		ReviewRequired:               row.ReviewRequired,
 		Status:                       promotion.PromotionStatus(row.Status),
@@ -804,31 +804,6 @@ func nullablePromotionRequestDigest(value promotion.RequestDigest) []byte {
 	}
 
 	return value[:]
-}
-
-func optionalString(value string) *string {
-	if value == "" {
-		return nil
-	}
-
-	return &value
-}
-
-func stringValue(value *string) string {
-	if value == nil {
-		return ""
-	}
-
-	return *value
-}
-
-func applicationUUID(value pgtype.UUID) *uuid.UUID {
-	if !value.Valid {
-		return nil
-	}
-
-	converted := uuid.UUID(value.Bytes)
-	return &converted
 }
 
 func optionalStringsEqual(left, right *string) bool {

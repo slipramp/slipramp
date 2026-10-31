@@ -29,6 +29,32 @@ func applicationTime(value pgtype.Timestamptz) *time.Time {
 	return &converted
 }
 
+func nullableText(value string) *string {
+	if value == "" {
+		return nil
+	}
+
+	return &value
+}
+
+func textValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
+}
+
+func cloneStringPointer(value *string) *string {
+	if value == nil {
+		return nil
+	}
+
+	cloned := *value
+
+	return &cloned
+}
+
 func databaseUUID(value uuid.UUID) pgtype.UUID {
 	return pgtype.UUID{Bytes: value, Valid: true}
 }
@@ -39,4 +65,14 @@ func optionalDatabaseUUID(value *uuid.UUID) pgtype.UUID {
 	}
 
 	return databaseUUID(*value)
+}
+
+func applicationUUID(value pgtype.UUID) *uuid.UUID {
+	if !value.Valid {
+		return nil
+	}
+
+	converted := uuid.UUID(value.Bytes)
+
+	return &converted
 }

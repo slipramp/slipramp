@@ -76,6 +76,7 @@ assert_contains "$server_render" 'path: /healthz'
 assert_contains "$server_render" 'path: /readyz'
 assert_contains "$server_render" 'timeoutSeconds: 3'
 assert_not_contains "$server_render" '^kind: (ClusterRole|Role|RoleBinding|ServiceAccount)$'
+assert_not_contains "$server_render" '^kind: (Ingress|HTTPRoute)$'
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
@@ -133,6 +134,28 @@ assert_contains "$test_directory/server-scheduling.yaml" 'topologySpreadConstrai
 assert_contains "$test_directory/server-scheduling.yaml" 'name: registry-credentials'
 assert_contains "$test_directory/server-scheduling.yaml" 'kubernetes.io/os: linux'
 assert_not_contains "$test_directory/server-scheduling.yaml" 'path: /metrics'
+
+"$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/slipramp-required.yaml" \
+  --values "$testdata/slipramp-http-route.yaml" \
+  >"$test_directory/server-http-route.yaml"
+assert_contains "$test_directory/server-http-route.yaml" '^apiVersion: gateway.networking.k8s.io/v1$'
+assert_contains "$test_directory/server-http-route.yaml" '^kind: HTTPRoute$'
+assert_not_contains "$test_directory/server-http-route.yaml" '^kind: Ingress$'
+assert_contains "$test_directory/server-http-route.yaml" 'external-dns.alpha.kubernetes.io/hostname: slipramp.test'
+assert_contains "$test_directory/server-http-route.yaml" 'namespace: gateway-system'
+assert_contains "$test_directory/server-http-route.yaml" 'sectionName: https'
+assert_contains "$test_directory/server-http-route.yaml" 'value: /api/v1/auth/login'
+assert_contains "$test_directory/server-http-route.yaml" 'value: /api/v1/auth/callback'
+test "$(grep -Ec '^            type: Exact$' "$test_directory/server-http-route.yaml")" = 2 || \
+  fail "Server HTTPRoute did not route both browser OIDC endpoints exactly"
+assert_contains "$test_directory/server-http-route.yaml" 'value: /api$'
+assert_contains "$test_directory/server-http-route.yaml" 'value: /controller$'
+assert_contains "$test_directory/server-http-route.yaml" 'value: /execution$'
+assert_contains "$test_directory/server-http-route.yaml" 'value: /healthz$'
+assert_contains "$test_directory/server-http-route.yaml" 'value: /readyz$'
+assert_not_contains "$test_directory/server-http-route.yaml" 'value: /metrics$'
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
@@ -248,6 +271,12 @@ assert_render_fails "Notification route with unknown event" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
   --values "$testdata/slipramp-notifications.yaml" \
   --set-json 'server.notifications.routes=[{"events":["run.failed"],"destinations":["operations"]}]'
+assert_render_fails "HTTPRoute without a parent reference" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set httpRoute.enabled=true --set-json httpRoute.hostnames='["slipramp.test"]'
+assert_render_fails "HTTPRoute without a hostname" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set httpRoute.enabled=true --set-json httpRoute.parentRefs='[{"name":"public"}]'
 assert_render_fails "Missing required Controller configuration" \
   invalid "$controller_chart"
 assert_render_fails "Controller replica count greater than one" \

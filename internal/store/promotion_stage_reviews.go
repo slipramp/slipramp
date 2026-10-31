@@ -15,10 +15,10 @@ func (d *Database) ListPromotionStageReviews(
 	filter promotion.StageListFilter,
 ) (promotion.StageReviewPage, error) {
 	countParams := storedb.CountPromotionStageReviewsParams{
-		Integration: optionalString(filter.Integration),
-		ClusterName: optionalString(filter.Cluster),
-		Project:     optionalString(filter.Project),
-		Application: optionalString(filter.Application),
+		Integration: nullableText(filter.Integration),
+		ClusterName: nullableText(filter.Cluster),
+		Project:     nullableText(filter.Project),
+		Application: nullableText(filter.Application),
 		Archived:    filter.Archived,
 	}
 	total, err := d.queries.CountPromotionStageReviews(ctx, countParams)
@@ -66,7 +66,7 @@ func promotionStageReviewFromRow(row storedb.ListPromotionStageReviewsRow) (prom
 
 	policy, err := promotionStagePolicyFromRow(storedb.PromotionStagePolicy{
 		StageID:              row.PolicyStageID,
-		Mode:                 stringValue(row.PolicyMode),
+		Mode:                 textValue(row.PolicyMode),
 		ExpiresAt:            row.PolicyExpiresAt,
 		Reason:               row.PolicyReason,
 		UpdatedByPrincipalID: row.PolicyUpdatedByPrincipalID,

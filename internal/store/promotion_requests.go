@@ -258,9 +258,9 @@ func finishExistingPromotionRequest(
 		ctx,
 		storedb.HydrateOperatorPromotionParams{
 			RequestDigest:     acceptance.RequestDigest[:],
-			BaseRevision:      optionalString(acceptance.Request.BaseRevision),
-			CandidateRevision: optionalString(acceptance.Request.CandidateRevision),
-			CandidateBranch:   optionalString(acceptance.Request.CandidateBranch),
+			BaseRevision:      nullableText(acceptance.Request.BaseRevision),
+			CandidateRevision: nullableText(acceptance.Request.CandidateRevision),
+			CandidateBranch:   nullableText(acceptance.Request.CandidateBranch),
 			HydratedAt:        databaseTime(acceptance.AcceptedAt),
 			ID:                databaseUUID(existing.ID),
 		},

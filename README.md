@@ -461,11 +461,11 @@ redirects and cookies on the web origin.
 and one web process. It requires external PostgreSQL and S3-compatible storage,
 uses operator-managed Secret references by default, rolls the Server when its
 Placement or Kargo integration ConfigMap changes, and gives the Server neither
-RBAC nor a mounted service-account token. Its optional single-host Ingress
-routes API, Controller, execution, and health paths to the Server and the
-remaining web path to the web process. The Server also exposes `GET /metrics`
-on a dedicated port for trusted in-cluster scraping; the chart deliberately
-leaves that port out of its Ingress.
+RBAC nor a mounted service-account token. It can create an optional Ingress,
+Gateway API HTTPRoute, or both; each sends API, Controller, execution, and
+health paths to the Server and the remaining web path to the web process. The
+Server also exposes `GET /metrics` on a dedicated port for trusted in-cluster
+scraping; the chart deliberately leaves that port out of its public routes.
 
 Install [`deploy/charts/slipramp-controller`](deploy/charts/slipramp-controller/README.md)
 once in each execution Cluster. It requires one stable Cluster name and one or

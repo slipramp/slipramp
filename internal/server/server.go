@@ -38,7 +38,6 @@ const (
 type Server struct {
 	address              string
 	shutdownTimeout      time.Duration
-	placements           placement.Set
 	logger               *slog.Logger
 	httpServer           *http.Server
 	metricsServer        metricsRunner
@@ -67,7 +66,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	}
 	metrics, err := telemetry.New(ctx, telemetry.Config{
 		ServiceVersion: serviceVersion,
-		Store:          persistence.database,
+		Source:         persistence.database,
 		Logger:         logger,
 	})
 	if err != nil {
@@ -299,7 +298,6 @@ func newServer(cfg Config, logger *slog.Logger, handler http.Handler) *Server {
 	return &Server{
 		address:         cfg.Address,
 		shutdownTimeout: cfg.ShutdownTimeout,
-		placements:      cfg.Placements,
 		logger:          logger.With("component", "server"),
 		httpServer: &http.Server{
 			Handler:           handler,

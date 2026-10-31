@@ -31,13 +31,13 @@ func (d *Database) ListPromotionReviews(
 
 	countParams := storedb.CountPromotionReviewsParams{
 		RepositoryID: optionalDatabaseUUID(filter.RepositoryID),
-		CommitSha:    optionalString(filter.CommitSHA),
-		Status:       optionalString(string(filter.Status)),
-		Integration:  optionalString(filter.Integration),
+		CommitSha:    nullableText(filter.CommitSHA),
+		Status:       nullableText(string(filter.Status)),
+		Integration:  nullableText(filter.Integration),
 		StageID:      optionalDatabaseUUID(filter.StageID),
-		ClusterName:  optionalString(filter.Cluster),
-		Project:      optionalString(filter.Project),
-		Application:  optionalString(filter.Application),
+		ClusterName:  nullableText(filter.Cluster),
+		Project:      nullableText(filter.Project),
+		Application:  nullableText(filter.Application),
 	}
 	total, err := queries.CountPromotionReviews(ctx, countParams)
 	if err != nil {

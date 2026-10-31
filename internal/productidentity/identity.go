@@ -236,6 +236,21 @@ func (r Role) valid() bool {
 	return r == RoleAdmin || r == RoleOperator || r == RoleViewer
 }
 
+func (s Scope) valid() bool {
+	switch s {
+	case ScopeRead,
+		ScopeRunsWrite,
+		ScopeRunsReview,
+		ScopeInboxWrite,
+		ScopePromotionsSubmit,
+		ScopePromotionsWrite,
+		ScopeAdmin:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateIssuer(value string) error {
 	if err := validateName("OIDC issuer", value, maximumIssuerLength); err != nil {
 		return err
@@ -262,8 +277,7 @@ func validateScopes(scopes []Scope) error {
 
 	seen := make(map[Scope]struct{}, len(scopes))
 	for _, scope := range scopes {
-		if scope != ScopeRead && scope != ScopeRunsWrite && scope != ScopeRunsReview && scope != ScopeInboxWrite &&
-			scope != ScopePromotionsSubmit && scope != ScopePromotionsWrite && scope != ScopeAdmin {
+		if !scope.valid() {
 			return fmt.Errorf("%w: API key scope %q is invalid", ErrInvalid, scope)
 		}
 		if _, found := seen[scope]; found {

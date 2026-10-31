@@ -138,13 +138,32 @@ Secrets, PostgreSQL, logs, or API responses. Routes accept only implemented
 exact event names. Retry and retention settings establish bounded policy for
 the delivery workers; pending deliveries are never eligible for retention.
 
-## Ingress and operation
+## Ingress, HTTPRoute, and operation
 
-The optional Ingress uses one host. `/api`, `/controller`, `/execution`,
-`/healthz`, and `/readyz` route to the Server; `/` routes to the web process.
-This preserves the single-origin browser flow while keeping Controller and
-execution endpoints on the Server. Terminate TLS before exposing Slipramp over
-an untrusted network.
+The chart can create a `networking.k8s.io/v1` Ingress, a Gateway API
+`gateway.networking.k8s.io/v1` HTTPRoute, or both. Each route sends `/api`,
+`/controller`, `/execution`, `/healthz`, and `/readyz` to the Server and `/` to
+the web process. The two exact browser OIDC paths under `/api/v1/auth` route to
+the web process so it can preserve the single-origin login flow.
+
+HTTPRoute support requires Gateway API CRDs and an operator-managed Gateway.
+The chart does not install either. Attach the route through one or more
+`parentRefs`; TLS belongs on the matching Gateway listener:
+
+```yaml
+httpRoute:
+  enabled: true
+  annotations: {}
+  parentRefs:
+    - name: public
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - slipramp.example.com
+```
+
+The referenced listener must allow HTTPRoutes from the release namespace.
+Terminate TLS before exposing Slipramp over an untrusted network.
 
 The Server's liveness probe uses `/healthz`. Readiness uses `/readyz` with a
 three-second Kubernetes timeout because the application bounds its dependency
@@ -154,7 +173,7 @@ does not claim high-availability support.
 
 The Server also exposes unauthenticated Prometheus/OpenMetrics text at
 `/metrics` on its dedicated `metrics` Service port, defaulting to `9091`. The
-Ingress does not expose that port. Configure an in-cluster scraper explicitly,
+Neither public route exposes that port. Configure an in-cluster scraper explicitly,
 for example with Service annotations in an overlay:
 
 ```yaml

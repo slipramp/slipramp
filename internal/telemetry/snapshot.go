@@ -14,7 +14,6 @@ import (
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
-	"github.com/slipramp/slipramp/internal/store"
 )
 
 const (
@@ -22,15 +21,34 @@ const (
 	defaultSnapshotTimeout  = 2 * time.Second
 )
 
+type MetricsSnapshot struct {
+	ActiveRuns                 map[string]int64
+	PendingRunReviews          int64
+	OldestEligibleRunCreatedAt *time.Time
+	ConnectedControllers       int64
+	ControllerLastSeenAt       *time.Time
+	RepositoryRefreshStates    map[string]int64
+	NotificationDeliveryStates map[string]int64
+}
+
+type DatabasePoolMetrics struct {
+	AcquiredConnections int64
+	IdleConnections     int64
+	MaximumConnections  int64
+	AcquireWaits        int64
+	CanceledAcquires    int64
+	AcquireDuration     time.Duration
+}
+
 type publishedSnapshot struct {
-	state       store.MetricsSnapshot
-	pool        store.DatabasePoolMetrics
+	state       MetricsSnapshot
+	pool        DatabasePoolMetrics
 	success     bool
 	lastSuccess *time.Time
 }
 
 type snapshotPublisher struct {
-	store        SnapshotStore
+	source       SnapshotSource
 	logger       *slog.Logger
 	interval     time.Duration
 	timeout      time.Duration
@@ -58,7 +76,7 @@ type snapshotInstruments struct {
 
 func newSnapshotPublisher(
 	meter metric.Meter,
-	snapshotStore SnapshotStore,
+	snapshotSource SnapshotSource,
 	logger *slog.Logger,
 ) (*snapshotPublisher, error) {
 	instruments, err := newSnapshotInstruments(meter)
@@ -67,14 +85,14 @@ func newSnapshotPublisher(
 	}
 
 	publisher := &snapshotPublisher{
-		store:    snapshotStore,
+		source:   snapshotSource,
 		logger:   logger.With("component", "metrics_snapshot"),
 		interval: defaultSnapshotInterval,
 		timeout:  defaultSnapshotTimeout,
 		now:      time.Now,
 	}
 	publisher.published.Store(&publishedSnapshot{
-		state: store.MetricsSnapshot{
+		state: MetricsSnapshot{
 			ActiveRuns:                 map[string]int64{},
 			RepositoryRefreshStates:    map[string]int64{},
 			NotificationDeliveryStates: map[string]int64{},
@@ -236,7 +254,7 @@ func (p *snapshotPublisher) Run(ctx context.Context) {
 func (p *snapshotPublisher) refresh(ctx context.Context) {
 	at := p.now().UTC()
 	refreshContext, cancel := context.WithTimeout(ctx, p.timeout)
-	snapshot, err := p.store.LoadMetricsSnapshot(refreshContext, at)
+	snapshot, err := p.source.LoadMetricsSnapshot(refreshContext, at)
 	cancel()
 	if err != nil {
 		if ctx.Err() == nil {
@@ -253,7 +271,7 @@ func (p *snapshotPublisher) refresh(ctx context.Context) {
 	succeededAt := p.now().UTC()
 	p.published.Store(&publishedSnapshot{
 		state:       snapshot,
-		pool:        p.store.DatabasePoolMetrics(),
+		pool:        p.source.DatabasePoolMetrics(),
 		success:     true,
 		lastSuccess: &succeededAt,
 	})

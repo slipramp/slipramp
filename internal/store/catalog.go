@@ -342,9 +342,9 @@ func targetSyncCheckpoint(
 
 	return &catalog.SyncRunCheckpoint{
 		RunID:                   uuid.UUID(runID.Bytes),
-		RelevanceCommitSHA:      cloneOptionalString(relevanceCommitSHA),
+		RelevanceCommitSHA:      cloneStringPointer(relevanceCommitSHA),
 		Phase:                   *phase,
-		Outcome:                 cloneOptionalString(outcome),
+		Outcome:                 cloneStringPointer(outcome),
 		CreatedAt:               createdAt.Time.UTC(),
 		AssignedAt:              assignedAt.Time.UTC(),
 		PreparingAt:             applicationTime(preparingAt),
@@ -352,15 +352,6 @@ func targetSyncCheckpoint(
 		FinishedAt:              applicationTime(finishedAt),
 		CancellationRequestedAt: applicationTime(cancellationRequestedAt),
 	}, nil
-}
-
-func cloneOptionalString(value *string) *string {
-	if value == nil {
-		return nil
-	}
-	cloned := *value
-
-	return &cloned
 }
 
 func targetSummaryFromRow(

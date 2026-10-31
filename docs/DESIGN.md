@@ -1582,10 +1582,11 @@ creates an internal metrics Service and no public route.
 
 Two focused [Helm charts](../deploy/charts) deploy one Server/web pair and one
 Controller per Cluster. The central chart requires external PostgreSQL and S3,
-gives the Server no RBAC or service-account token, and offers single-host
-Ingress. Placement and Kargo integration ConfigMap checksums roll the Server on
-configuration changes; live reload is not part of the contract. The Controller
-chart grants only namespaced Job/Pod access and optional Kargo Stage reads.
+gives the Server no RBAC or service-account token, and offers Ingress and Gateway
+API HTTPRoute exposure. Placement and Kargo integration ConfigMap checksums roll
+the Server on configuration changes; live reload is not part of the contract.
+The Controller chart grants only namespaced Job/Pod access and optional Kargo
+Stage reads.
 Secret-bearing values default to operator-managed Secret references. Images are
 pinned; a `vX.Y.Z` tag publishes matching application images and versioned OCI
 charts to GHCR with tag/chart/application/image versions required to agree.

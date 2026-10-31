@@ -23,8 +23,6 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
-
-	"github.com/slipramp/slipramp/internal/store"
 )
 
 const (
@@ -32,14 +30,14 @@ const (
 	cardinalityLimit     = 256
 )
 
-type SnapshotStore interface {
-	LoadMetricsSnapshot(context.Context, time.Time) (store.MetricsSnapshot, error)
-	DatabasePoolMetrics() store.DatabasePoolMetrics
+type SnapshotSource interface {
+	LoadMetricsSnapshot(context.Context, time.Time) (MetricsSnapshot, error)
+	DatabasePoolMetrics() DatabasePoolMetrics
 }
 
 type Config struct {
 	ServiceVersion string
-	Store          SnapshotStore
+	Source         SnapshotSource
 	Logger         *slog.Logger
 }
 
@@ -63,8 +61,8 @@ type Telemetry struct {
 }
 
 func New(ctx context.Context, config Config) (*Telemetry, error) {
-	if config.Store == nil {
-		return nil, errors.New("telemetry snapshot store is required")
+	if config.Source == nil {
+		return nil, errors.New("telemetry snapshot source is required")
 	}
 	if config.Logger == nil {
 		return nil, errors.New("telemetry logger is required")
@@ -88,7 +86,7 @@ func New(ctx context.Context, config Config) (*Telemetry, error) {
 
 		return nil, err
 	}
-	snapshots, err := newSnapshotPublisher(meter, config.Store, config.Logger)
+	snapshots, err := newSnapshotPublisher(meter, config.Source, config.Logger)
 	if err != nil {
 		_ = runtimeTelemetry.Shutdown(context.Background())
 

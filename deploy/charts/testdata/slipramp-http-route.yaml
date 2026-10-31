@@ -1,0 +1,10 @@
+httpRoute:
+  enabled: true
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: slipramp.test
+  parentRefs:
+    - name: public
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - slipramp.test

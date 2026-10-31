@@ -259,9 +259,9 @@ func refreshState(
 	return repository.RefreshState{
 		Status:           repository.RefreshStatus(status),
 		CommitSHA:        commitSHA,
-		AttemptedAt:      optionalTime(attemptedAt),
-		SucceededAt:      optionalTime(succeededAt),
-		FailureStartedAt: optionalTime(failureStartedAt),
+		AttemptedAt:      applicationTime(attemptedAt),
+		SucceededAt:      applicationTime(succeededAt),
+		FailureStartedAt: applicationTime(failureStartedAt),
 		FailureReason:    failureReason,
 	}
 }
@@ -289,18 +289,8 @@ func commitHistoryIndex(
 		DesiredHeadSHA:  desiredHeadSHA,
 		IndexedHeadSHA:  indexedHeadSHA,
 		CommitCount:     count,
-		LastAttemptedAt: optionalTime(lastAttemptedAt),
-		LastSucceededAt: optionalTime(lastSucceededAt),
+		LastAttemptedAt: applicationTime(lastAttemptedAt),
+		LastSucceededAt: applicationTime(lastSucceededAt),
 		FailureReason:   failureReason,
 	}
-}
-
-func optionalTime(value pgtype.Timestamptz) *time.Time {
-	if !value.Valid {
-		return nil
-	}
-
-	timestamp := value.Time.UTC()
-
-	return &timestamp
 }

@@ -77,8 +77,8 @@ func (d *Database) ListInboxActiveRuns(ctx context.Context) ([]inbox.ActiveRun, 
 			Review:      run.ReviewState(row.ReviewState),
 			Status: run.ObservationStatus{
 				Phase:          run.Phase(row.Phase),
-				AssignedAt:     optionalTime(row.AssignedAt),
-				LastObservedAt: optionalTime(row.LastObservedAt),
+				AssignedAt:     applicationTime(row.AssignedAt),
+				LastObservedAt: applicationTime(row.LastObservedAt),
 			},
 		})
 	}
@@ -105,7 +105,7 @@ func (d *Database) ListInboxPromotions(ctx context.Context) ([]inbox.PromotionSt
 			ID:              uuid.UUID(row.ID.Bytes),
 			StageName:       stage.Name,
 			Application:     stage.Application,
-			CandidateBranch: stringValue(row.CandidateBranch),
+			CandidateBranch: textValue(row.CandidateBranch),
 			TargetBranch:    row.TargetBranch,
 			Status:          promotion.PromotionStatus(row.Status),
 			Message:         row.Message,

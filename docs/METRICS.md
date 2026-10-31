@@ -13,7 +13,7 @@ The Slipramp Server exposes Prometheus/OpenMetrics text at `GET /metrics` on a
 dedicated listener, defaulting to port `9091`. The endpoint is operational and
 unauthenticated; expose it only to a trusted monitoring network. The central
 Helm chart exposes the listener only on the internal Server Service and does not
-route it through the public Ingress:
+route it through the public Ingress or HTTPRoute:
 
 ```yaml
 scrape_configs:
@@ -24,7 +24,7 @@ scrape_configs:
 ```
 
 For annotation-based discovery, set the Server Service annotations shown in
-the [chart operations guide](../deploy/charts/slipramp/README.md#ingress-and-operation).
+the [chart operations guide](../deploy/charts/slipramp/README.md#ingress-httproute-and-operation).
 
 Each Controller exposes its own Prometheus/OpenMetrics endpoint at
 `GET /metrics` on the shared metrics-server implementation, defaulting to port

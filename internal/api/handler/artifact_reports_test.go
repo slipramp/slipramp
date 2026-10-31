@@ -245,35 +245,15 @@ func handlerReportContent(t *testing.T) artifact.ReportContent {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := runreport.Encode(report)
-	if err != nil {
-		t.Fatal(err)
-	}
-	createdAt := time.Date(2026, time.October, 29, 15, 0, 0, 0, time.UTC)
-	record := artifact.Artifact{
-		ID:             uuid.New(),
-		RunID:          uuid.New(),
-		Name:           "plan-report",
-		Kind:           artifact.KindOutput,
-		State:          artifact.StateSealed,
-		MediaType:      runreport.TerraformPlanMediaType,
-		Sensitive:      true,
-		RetentionState: artifact.RetentionRetained,
-		CreatedAt:      createdAt,
-		SealedAt:       &createdAt,
-	}
-	metadata, err := runreport.NewArtifactReport(
-		record.ID,
-		report,
-		"runs/report/artifacts/plan-report/reports/terraform-plan-v1.json",
-		projection,
-		createdAt,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	return artifact.ReportContent{Artifact: record, Metadata: metadata, Report: &report}
+	return newHandlerReportContent(
+		t,
+		&report,
+		"plan-report",
+		runreport.TerraformPlanMediaType,
+		"runs/report/artifacts/plan-report/reports/terraform-plan-v1.json",
+		time.Date(2026, time.October, 29, 15, 0, 0, 0, time.UTC),
+	)
 }
 
 func handlerOpenTofuReportContent(t *testing.T) artifact.ReportContent {
@@ -295,35 +275,15 @@ func handlerOpenTofuReportContent(t *testing.T) artifact.ReportContent {
 	if err != nil {
 		t.Fatal(err)
 	}
-	projection, err := runreport.Encode(report)
-	if err != nil {
-		t.Fatal(err)
-	}
-	createdAt := time.Date(2026, time.October, 30, 15, 0, 0, 0, time.UTC)
-	record := artifact.Artifact{
-		ID:             uuid.New(),
-		RunID:          uuid.New(),
-		Name:           "plan-report",
-		Kind:           artifact.KindOutput,
-		State:          artifact.StateSealed,
-		MediaType:      runreport.OpenTofuPlanMediaType,
-		Sensitive:      true,
-		RetentionState: artifact.RetentionRetained,
-		CreatedAt:      createdAt,
-		SealedAt:       &createdAt,
-	}
-	metadata, err := runreport.NewArtifactReport(
-		record.ID,
-		report,
-		"runs/report/artifacts/plan-report/reports/opentofu-plan-v1.json",
-		projection,
-		createdAt,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	return artifact.ReportContent{Artifact: record, Metadata: metadata, Report: &report}
+	return newHandlerReportContent(
+		t,
+		&report,
+		"plan-report",
+		runreport.OpenTofuPlanMediaType,
+		"runs/report/artifacts/plan-report/reports/opentofu-plan-v1.json",
+		time.Date(2026, time.October, 30, 15, 0, 0, 0, time.UTC),
+	)
 }
 
 func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportContent {
@@ -341,18 +301,38 @@ func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportCo
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	return newHandlerReportContent(
+		t,
+		&report,
+		"deploy-report",
+		runreport.PyinfraDeployMediaType,
+		"runs/report/artifacts/deploy-report/reports/pyinfra-deploy-v1.json",
+		time.Date(2026, time.October, 29, 16, 0, 0, 0, time.UTC),
+	)
+}
+
+func newHandlerReportContent(
+	t *testing.T,
+	report runreport.Report,
+	name string,
+	mediaType string,
+	projectionObjectKey string,
+	createdAt time.Time,
+) artifact.ReportContent {
+	t.Helper()
+
 	projection, err := runreport.Encode(report)
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdAt := time.Date(2026, time.October, 29, 16, 0, 0, 0, time.UTC)
 	record := artifact.Artifact{
 		ID:             uuid.New(),
 		RunID:          uuid.New(),
-		Name:           "deploy-report",
+		Name:           name,
 		Kind:           artifact.KindOutput,
 		State:          artifact.StateSealed,
-		MediaType:      runreport.PyinfraDeployMediaType,
+		MediaType:      mediaType,
 		Sensitive:      true,
 		RetentionState: artifact.RetentionRetained,
 		CreatedAt:      createdAt,
@@ -361,7 +341,7 @@ func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportCo
 	metadata, err := runreport.NewArtifactReport(
 		record.ID,
 		report,
-		"runs/report/artifacts/deploy-report/reports/pyinfra-deploy-v1.json",
+		projectionObjectKey,
 		projection,
 		createdAt,
 	)
@@ -369,5 +349,5 @@ func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportCo
 		t.Fatal(err)
 	}
 
-	return artifact.ReportContent{Artifact: record, Metadata: metadata, Report: &report}
+	return artifact.ReportContent{Artifact: record, Metadata: metadata, Report: report}
 }

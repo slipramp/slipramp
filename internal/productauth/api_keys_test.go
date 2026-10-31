@@ -222,16 +222,16 @@ func TestServiceManagesUserAndServiceAccountAPIKeys(t *testing.T) {
 		t.Fatalf("ListPrincipalAPIKeys() keys=%#v error=%v", serviceKeys, err)
 	}
 
-	inboxOnlyUserKey := productidentity.Authentication{
+	promotionOnlyUserKey := productidentity.Authentication{
 		Principal: user, Method: productidentity.AuthenticationMethodAPIKey,
 		CredentialID: userCredential.Key.ID, CredentialLabel: userCredential.Key.Name,
-		Scopes: []productidentity.Scope{productidentity.ScopeInboxWrite},
+		Scopes: []productidentity.Scope{productidentity.ScopePromotionsSubmit},
 	}
-	err = service.RevokeAPIKey(context.Background(), inboxOnlyUserKey, serviceCredential.Key.ID)
+	err = service.RevokeAPIKey(context.Background(), promotionOnlyUserKey, serviceCredential.Key.ID)
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatalf("cross-principal revoke error = %v, want forbidden", err)
 	}
-	if err := service.RevokeAPIKey(context.Background(), inboxOnlyUserKey, userCredential.Key.ID); err != nil {
+	if err := service.RevokeAPIKey(context.Background(), promotionOnlyUserKey, userCredential.Key.ID); err != nil {
 		t.Fatalf("owner revoke error = %v", err)
 	}
 	if err := service.RevokeAPIKey(context.Background(), session, serviceCredential.Key.ID); err != nil {

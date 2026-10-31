@@ -108,7 +108,13 @@ func roleAuthorizes(role Role, permission Permission) bool {
 
 func scopesAuthorize(scopes []Scope, permission Permission) bool {
 	for _, scope := range scopes {
+		if !scope.valid() {
+			continue
+		}
 		if scope == ScopeAdmin {
+			return true
+		}
+		if permission == PermissionAPIKeyRevoke {
 			return true
 		}
 
@@ -139,10 +145,6 @@ func scopesAuthorize(scopes []Scope, permission Permission) bool {
 			}
 		case PermissionPromotionsWrite:
 			if scope == ScopePromotionsWrite {
-				return true
-			}
-		case PermissionAPIKeyRevoke:
-			if scope == ScopeRead || scope == ScopeRunsWrite || scope == ScopeRunsReview || scope == ScopeInboxWrite {
 				return true
 			}
 		case PermissionAdmin:

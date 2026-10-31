@@ -16,6 +16,7 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 		method     AuthenticationMethod
 		scopes     []Scope
 		permission Permission
+		disabled   bool
 		want       bool
 	}{
 		{
@@ -220,11 +221,27 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			permission: PermissionPromotionsWrite,
 		},
 		{
+			name:       "promotion submit key grants owner revoke permission",
+			role:       RoleOperator,
+			method:     AuthenticationMethodAPIKey,
+			scopes:     []Scope{ScopePromotionsSubmit},
+			permission: PermissionAPIKeyRevoke,
+			want:       true,
+		},
+		{
 			name:       "promotion write key decides",
 			role:       RoleOperator,
 			method:     AuthenticationMethodAPIKey,
 			scopes:     []Scope{ScopePromotionsWrite},
 			permission: PermissionPromotionsWrite,
+			want:       true,
+		},
+		{
+			name:       "promotion write key grants owner revoke permission",
+			role:       RoleOperator,
+			method:     AuthenticationMethodAPIKey,
+			scopes:     []Scope{ScopePromotionsWrite},
+			permission: PermissionAPIKeyRevoke,
 			want:       true,
 		},
 		{
@@ -241,6 +258,13 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			scopes:     []Scope{ScopeAdmin},
 			permission: PermissionAdmin,
 		},
+		{
+			name:       "disabled principal authorizes nothing",
+			role:       RoleAdmin,
+			method:     AuthenticationMethodWebSession,
+			permission: PermissionRead,
+			disabled:   true,
+		},
 	}
 
 	for _, test := range tests {
@@ -248,6 +272,10 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			t.Parallel()
 
 			authentication := testAuthentication(test.role, test.method, test.scopes)
+			if test.disabled {
+				disabledAt := time.Now().UTC()
+				authentication.Principal.DisabledAt = &disabledAt
+			}
 			if got := authentication.Authorizes(test.permission); got != test.want {
 				t.Errorf("Authorizes(%q) = %t, want %t", test.permission, got, test.want)
 			}
@@ -255,20 +283,22 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 	}
 }
 
-func TestDisabledAuthenticationAuthorizesNothing(t *testing.T) {
-	t.Parallel()
-
-	authentication := testAuthentication(RoleAdmin, AuthenticationMethodWebSession, nil)
-	disabledAt := time.Now().UTC()
-	authentication.Principal.DisabledAt = &disabledAt
-
-	if authentication.Authorizes(PermissionRead) {
-		t.Error("disabled principal unexpectedly authorized")
-	}
-}
-
 func TestAuthenticationValidate(t *testing.T) {
 	t.Parallel()
+
+	allScopes := []Scope{
+		ScopeRead,
+		ScopeRunsWrite,
+		ScopeRunsReview,
+		ScopeInboxWrite,
+		ScopePromotionsSubmit,
+		ScopePromotionsWrite,
+		ScopeAdmin,
+	}
+	validAPIKey := testAuthentication(RoleAdmin, AuthenticationMethodAPIKey, allScopes)
+	if err := validAPIKey.Validate(); err != nil {
+		t.Fatalf("Validate() all API key scopes error = %v", err)
+	}
 
 	tests := []struct {
 		name   string
@@ -312,14 +342,6 @@ func TestAuthenticationValidate(t *testing.T) {
 				t.Error("Validate() error = nil")
 			}
 		})
-	}
-}
-
-func TestInboxWriteScopeIsValid(t *testing.T) {
-	t.Parallel()
-
-	if err := validateScopes([]Scope{ScopeInboxWrite}); err != nil {
-		t.Fatalf("validateScopes() error = %v", err)
 	}
 }
 
