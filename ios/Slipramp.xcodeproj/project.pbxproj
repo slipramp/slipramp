@@ -30,6 +30,9 @@
 		100000000000000000000015 /* SliprampTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000015 /* SliprampTheme.swift */; };
 		100000000000000000000016 /* SliprampComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000016 /* SliprampComponents.swift */; };
 		100000000000000000000017 /* slipramp-mascot.png in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000017 /* slipramp-mascot.png */; };
+		100000000000000000000018 /* TargetListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000018 /* TargetListView.swift */; };
+		100000000000000000000019 /* TargetDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* TargetDetailView.swift */; };
+		10000000000000000000001A /* ActionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001A /* ActionDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +59,9 @@
 		200000000000000000000015 /* SliprampTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampTheme.swift; sourceTree = "<group>"; };
 		200000000000000000000016 /* SliprampComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliprampComponents.swift; sourceTree = "<group>"; };
 		200000000000000000000017 /* slipramp-mascot.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "slipramp-mascot.png"; sourceTree = "<group>"; };
+		200000000000000000000018 /* TargetListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetListView.swift; sourceTree = "<group>"; };
+		200000000000000000000019 /* TargetDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetDetailView.swift; sourceTree = "<group>"; };
+		20000000000000000000001A /* ActionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActionDetailView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +142,7 @@
 			children = (
 				400000000000000000000008 /* Connection */,
 				400000000000000000000009 /* Inbox */,
+				400000000000000000000012 /* Targets */,
 				40000000000000000000000D /* Runs */,
 				400000000000000000000010 /* Promotions */,
 				40000000000000000000000E /* Settings */,
@@ -227,6 +234,16 @@
 				200000000000000000000016 /* SliprampComponents.swift */,
 			);
 			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		400000000000000000000012 /* Targets */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000018 /* TargetListView.swift */,
+				200000000000000000000019 /* TargetDetailView.swift */,
+				20000000000000000000001A /* ActionDetailView.swift */,
+			);
+			path = Targets;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -325,6 +342,9 @@
 				100000000000000000000014 /* PromotionDetailView.swift in Sources */,
 				100000000000000000000015 /* SliprampTheme.swift in Sources */,
 				100000000000000000000016 /* SliprampComponents.swift in Sources */,
+				100000000000000000000018 /* TargetListView.swift in Sources */,
+				100000000000000000000019 /* TargetDetailView.swift in Sources */,
+				10000000000000000000001A /* ActionDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -405,6 +405,7 @@ struct PromotionDetailView: View {
                     showDecisionSheet = true
                 } label: {
                     Label("Review Promotion", systemImage: "checkmark.shield")
+                        .labelStyle(.titleAndIcon)
                 }
                 .disabled(model.isMutating)
             } else {
@@ -707,17 +708,8 @@ private struct PromotionDecisionSheet: View {
                 }
 
                 Section {
-                    Button(role: .destructive) {
-                        decisionToConfirm = .rejected
-                    } label: {
-                        Label("Reject Promotion", systemImage: "xmark.circle")
-                    }
-
-                    Button {
-                        decisionToConfirm = .approved
-                    } label: {
-                        Label("Approve Promotion", systemImage: "checkmark.circle")
-                    }
+                    decisionButton(.rejected)
+                    decisionButton(.approved)
                 }
                 .disabled(model.isMutating || comment.count > 4096)
             }
@@ -736,51 +728,57 @@ private struct PromotionDecisionSheet: View {
                     }
                 }
             }
-            .confirmationDialog(
-                confirmationTitle,
-                isPresented: confirmationPresented,
-                titleVisibility: .visible
-            ) {
-                if let decision = decisionToConfirm {
-                    Button(
-                        decision == .approved ? "Approve Promotion" : "Reject Promotion",
-                        role: decision == .rejected ? .destructive : nil
-                    ) {
-                        decisionToConfirm = nil
-                        Task {
-                            if await model.decide(decision, comment: comment) {
-                                onCompleted()
-                                dismiss()
-                            }
-                        }
-                    }
-                }
-                Button("Go Back", role: .cancel) {
-                    decisionToConfirm = nil
-                }
-            } message: {
-                Text(confirmationMessage)
-            }
         }
     }
 
-    private var confirmationPresented: Binding<Bool> {
+    private func confirmationPresented(for decision: PromotionDecisionChoice) -> Binding<Bool> {
         Binding(
-            get: { decisionToConfirm != nil },
+            get: { decisionToConfirm == decision },
             set: { presented in
-                if !presented {
+                if !presented, decisionToConfirm == decision {
                     decisionToConfirm = nil
                 }
             }
         )
     }
 
-    private var confirmationTitle: String {
-        decisionToConfirm == .approved ? "Approve this Promotion?" : "Reject this Promotion?"
+    private func decisionButton(_ decision: PromotionDecisionChoice) -> some View {
+        Button(role: decision == .rejected ? .destructive : nil) {
+            decisionToConfirm = decision
+        } label: {
+            Label(
+                decision == .approved ? "Approve Promotion" : "Reject Promotion",
+                systemImage: decision == .approved ? "checkmark.circle" : "xmark.circle"
+            )
+            .labelStyle(.titleAndIcon)
+        }
+        .confirmationDialog(
+            decision == .approved ? "Approve this Promotion?" : "Reject this Promotion?",
+            isPresented: confirmationPresented(for: decision),
+            titleVisibility: .visible
+        ) {
+            Button(
+                decision == .approved ? "Approve Promotion" : "Reject Promotion",
+                role: decision == .rejected ? .destructive : nil
+            ) {
+                decisionToConfirm = nil
+                Task {
+                    if await model.decide(decision, comment: comment) {
+                        onCompleted()
+                        dismiss()
+                    }
+                }
+            }
+            Button("Go Back", role: .cancel) {
+                decisionToConfirm = nil
+            }
+        } message: {
+            Text(confirmationMessage(for: decision))
+        }
     }
 
-    private var confirmationMessage: String {
-        if decisionToConfirm == .approved {
+    private func confirmationMessage(for decision: PromotionDecisionChoice) -> String {
+        if decision == .approved {
             return "Approval lets Kargo continue; it does not mean the downstream Promotion succeeded."
         }
         return "Rejection records the decision permanently and cannot be undone."

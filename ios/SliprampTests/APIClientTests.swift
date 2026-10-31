@@ -69,6 +69,115 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(list.items.first?.commit.shortSHA, "01234567")
     }
 
+    func testTargetListSendsSearchAndDecodesSummaries() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+
+        StubURLProtocol.requestHandler = { request in
+            let query = try XCTUnwrap(URLComponents(url: request.url!, resolvingAgainstBaseURL: false))
+            XCTAssertEqual(
+                query.queryItems,
+                [
+                    URLQueryItem(name: "q", value: "sync"),
+                    URLQueryItem(name: "limit", value: "100"),
+                    URLQueryItem(name: "offset", value: "0"),
+                ]
+            )
+            return (self.response(for: request, status: 200), self.targetListBody())
+        }
+
+        let list = try await client.listTargets(query: "sync")
+        XCTAssertEqual(list.total, 1)
+        XCTAssertEqual(list.items.first?.displayName, "Homelab")
+        XCTAssertEqual(list.items.first?.actions, ["preview", "sync"])
+        XCTAssertEqual(list.items.first?.reconciliation.comparison, .matched)
+    }
+
+    func testCreateRunSendsTypedParametersAndIdempotencyKey() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let runID = "531a9f8c-4341-455c-b87c-690fb8f6e37b"
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/api/v1/runs")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), "start-action-key")
+
+            let requestBody = try self.requestBody(request)
+            let payload = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: requestBody) as? [String: Any]
+            )
+            XCTAssertEqual(payload["targetId"] as? String, "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14")
+            XCTAssertEqual(payload["action"] as? String, "preview")
+            XCTAssertEqual(payload["inputs"] as? [String: String], [:])
+
+            let parameters = try XCTUnwrap(payload["parameters"] as? [String: Any])
+            XCTAssertEqual(parameters["environment"] as? String, "production")
+            XCTAssertEqual(parameters["refresh"] as? Bool, true)
+            XCTAssertEqual(parameters["parallelism"] as? Double, 4)
+
+            return (
+                self.response(for: request, status: 201),
+                self.runBody(id: runID, phase: "queued", reviewState: "not-required")
+            )
+        }
+
+        let run = try await client.createRun(
+            targetID: "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14",
+            action: "preview",
+            parameters: [
+                "environment": .case1("production"),
+                "refresh": .case2(true),
+                "parallelism": .case3(4),
+            ],
+            idempotencyKey: "start-action-key"
+        )
+        XCTAssertEqual(run.id, runID)
+    }
+
+    func testActionParameterDecoderValidatesAndConvertsValues() throws {
+        let declarations: [String: ActionParameter] = [
+            "environment": .init(
+                title: "Environment",
+                _type: ._enum,
+                required: true,
+                values: ["staging", "production"]
+            ),
+            "refresh": .init(_type: .boolean),
+            "parallelism": .init(_type: .number),
+            "note": .init(_type: .string),
+        ]
+
+        let decoded = try ActionParameterDecoder.decode(
+            values: [
+                "environment": "production",
+                "refresh": "false",
+                "parallelism": "3.5",
+                "note": "operator requested",
+            ],
+            declarations: declarations
+        )
+
+        XCTAssertEqual(decoded["environment"], .case1("production"))
+        XCTAssertEqual(decoded["refresh"], .case2(false))
+        XCTAssertEqual(decoded["parallelism"], .case3(3.5))
+        XCTAssertEqual(decoded["note"], .case1("operator requested"))
+
+        XCTAssertThrowsError(
+            try ActionParameterDecoder.decode(values: [:], declarations: declarations)
+        ) { error in
+            XCTAssertEqual(error as? ActionParameterValidationError, .required("Environment"))
+        }
+    }
+
     func testReviewDecisionSendsCommentAndReturnsUpdatedRun() async throws {
         let session = makeSession()
         let client = SliprampAPIClient(
@@ -135,6 +244,49 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(run.phase, .finished)
         XCTAssertEqual(run.outcome, .canceled)
         XCTAssertFalse(run.canCancel)
+    }
+
+    func testRerunRunSendsModeAndIdempotencyKey() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let runID = "19d265a2-c116-4e8f-b547-a824a9039574"
+        let rerunID = "531a9f8c-4341-455c-b87c-690fb8f6e37b"
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/api/v1/runs/\(runID)/rerun")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Idempotency-Key"), "rerun-key-latest")
+
+            let requestBody = try self.requestBody(request)
+            let payload = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: requestBody) as? [String: String]
+            )
+            XCTAssertEqual(payload["mode"], "latest")
+
+            return (
+                self.response(for: request, status: 201),
+                self.runBody(
+                    id: rerunID,
+                    phase: "queued",
+                    reviewState: "not-required",
+                    rerunOfRunID: runID,
+                    rerunMode: "latest"
+                )
+            )
+        }
+
+        let run = try await client.rerunRun(
+            id: runID,
+            mode: .latest,
+            idempotencyKey: "rerun-key-latest"
+        )
+        XCTAssertEqual(run.id, rerunID)
+        XCTAssertEqual(run.rerunOfRunId, runID)
+        XCTAssertEqual(run.rerunMode, .latest)
     }
 
     func testPromotionDetailDecodesPreparedReviewContext() async throws {
@@ -223,6 +375,39 @@ final class APIClientTests: XCTestCase {
 
         let contents = try await client.downloadArtifactText(id: artifactID)
         XCTAssertEqual(contents, "@@ -1 +1 @@\n-old\n+new\n")
+    }
+
+    func testRunLogStreamReportsConnectionBeforeTerminalEvent() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let runID = "19d265a2-c116-4e8f-b547-a824a9039574"
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/api/v1/runs/\(runID)/logs")
+            XCTAssertEqual(request.url?.query, "offsetBytes=0")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "text/event-stream")
+
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "text/event-stream"]
+            )!
+            return (response, Data("id: 0\nevent: sealed\ndata: {}\n\n".utf8))
+        }
+
+        var iterator = client.streamRunLog(id: runID).makeAsyncIterator()
+        let connected = try await iterator.next()
+        let sealed = try await iterator.next()
+        let finished = try await iterator.next()
+        XCTAssertEqual(connected, .connected(offset: 0))
+        XCTAssertEqual(sealed, .sealed(offset: 0))
+        XCTAssertNil(finished)
     }
 
     func testArgoDiffDocumentDefaultsVersionMetadataFlag() throws {
@@ -332,14 +517,21 @@ final class APIClientTests: XCTestCase {
         id: String,
         phase: String,
         outcome: String? = nil,
-        reviewState: String
+        reviewState: String,
+        rerunOfRunID: String? = nil,
+        rerunMode: String? = nil
     ) -> Data {
         let outcomeField = outcome.map { ",\"outcome\":\"\($0)\"" } ?? ""
+        let rerunFields = rerunOfRunID.flatMap { parentID in
+            rerunMode.map { mode in
+                ",\"rerunOfRunId\":\"\(parentID)\",\"rerunMode\":\"\(mode)\""
+            }
+        } ?? ""
         return Data(
             """
             {
               "id": "\(id)",
-              "phase": "\(phase)"\(outcomeField),
+              "phase": "\(phase)"\(outcomeField)\(rerunFields),
               "targetId": "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14",
               "repositoryId": "ff281fe6-d60b-4312-840c-df2714f89717",
               "catalogRevisionId": "ced99dba-bb0b-4a8a-a9be-a5ef9875b945",
@@ -356,6 +548,34 @@ final class APIClientTests: XCTestCase {
               "artifactConsumers": {},
               "review": { "state": "\(reviewState)" },
               "createdAt": "2026-10-30T12:34:56Z"
+            }
+            """.utf8
+        )
+    }
+
+    private func targetListBody() -> Data {
+        Data(
+            """
+            {
+              "items": [
+                {
+                  "id": "929e7e9d-102a-43d0-9ca6-fc4d53dfbb14",
+                  "repositoryId": "ff281fe6-d60b-4312-840c-df2714f89717",
+                  "repositoryName": "infrastructure",
+                  "catalogRevisionId": "ced99dba-bb0b-4a8a-a9be-a5ef9875b945",
+                  "catalogCommit": { "sha": "0123456789abcdef0123456789abcdef01234567" },
+                  "name": "homelab",
+                  "title": "Homelab",
+                  "actions": ["preview", "sync"],
+                  "runtime": "terraform",
+                  "placement": "primary",
+                  "desiredCommit": { "sha": "89abcdef0123456789abcdef0123456789abcdef" },
+                  "reconciliation": { "comparison": "matched" }
+                }
+              ],
+              "total": 1,
+              "limit": 100,
+              "offset": 0
             }
             """.utf8
         )

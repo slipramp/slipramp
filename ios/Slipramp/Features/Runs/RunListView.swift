@@ -131,7 +131,7 @@ struct RunRow: View {
                         Text(run.displayAction)
                             .font(.headline)
                         Spacer(minLength: SliprampTheme.Space.small)
-                        Text(run.createdAt, style: .relative)
+                        CompactRunTimestamp(date: run.createdAt)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize()
@@ -187,6 +187,32 @@ struct RunRow: View {
             case .preparing, .assigned: .info
             case .queued, .finished: .warning
             }
+        }
+    }
+}
+
+private struct CompactRunTimestamp: View {
+    let date: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(label(relativeTo: context.date))
+                .monospacedDigit()
+        }
+    }
+
+    private func label(relativeTo now: Date) -> String {
+        let elapsedSeconds = max(0, Int(now.timeIntervalSince(date)))
+
+        switch elapsedSeconds {
+        case ..<60:
+            return "\(elapsedSeconds) sec"
+        case ..<3_600:
+            return "\(elapsedSeconds / 60) min"
+        case ..<86_400:
+            return "\(elapsedSeconds / 3_600) hr"
+        default:
+            return date.formatted(date: .abbreviated, time: .omitted)
         }
     }
 }

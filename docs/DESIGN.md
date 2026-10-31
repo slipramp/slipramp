@@ -26,7 +26,7 @@ unless explicitly requested.
 | Controller            | Outbound command polling, local Jobs, observations, log forwarding, and configured Kargo discovery/materialization/reconciliation | One replica per execution Cluster; namespace-scoped Kubernetes access  |
 | Harness               | Wrap checkout and action processes, transfer artifacts, forward signals, preserve exit status      | Injected by Slipramp; runtime images and tools need no Slipramp SDK    |
 | Web                   | React Router SSR and browser UI                                                                    | Uses the generated Server client and forwards the browser's session    |
-| iOS                   | Native operator Inbox, Run decisions, and history                                                  | Uses the product API with one user-supplied API key stored in Keychain |
+| iOS                   | Native operator Inbox, Target and Action browsing, Run creation, decisions, and history             | Uses the product API with one user-supplied API key stored in Keychain |
 | PostgreSQL            | Authoritative product state, identity, history, metadata, and scheduling coordination              | Stores credential digests and references, never injected secret values |
 | S3-compatible storage | Artifact contents, including live log chunks and sealed logs                                       | Only the Server accesses it; RustFS is the local implementation        |
 
@@ -263,13 +263,23 @@ details, and retained or live Run logs. The first writable slice lets
 authorized operators approve or reject pending Run reviews with an immutable
 optional comment and request cancellation of unfinished Runs. Both mutations
 require explicit confirmation and refresh the Run, Inbox, and Run history from
-Server-returned state. Promotion-review Inbox items open a native detail built
-from immutable Stage, Repository, policy, Freight, revision, and preparation
-snapshots. The detail reads the retained sensitive Git and Argo CD artifacts,
-renders Argo resources as structured searchable changes with version-only
-changes hidden initially, and records confirmed approve or reject decisions
-with an optional immutable comment. Promotion mutations refresh the detail and
-Inbox from Server-returned state; approval does not imply downstream success.
+Server-returned state. A visible nonterminal Run detail refreshes every two
+seconds until the Run finishes. Its log view may open at any phase: it follows
+Run state while queued, connects when the Controller creates the durable log,
+then uses the reconnectable stream normally. A terminal Run without a log
+artifact shows the terminal outcome instead of retrying forever. Finished Run
+details offer the same idempotent rerun boundary as the Web: same revision
+reuses the frozen execution snapshot, while latest revision resolves the
+Target, Action, parameters, and Placement from the active catalog. Runs with
+Artifact inputs cannot select latest revision. A successful rerun opens the new
+queued Run and refreshes native Run and Inbox state. Promotion-review Inbox
+items open a native detail built from immutable Stage, Repository, policy,
+Freight, revision, and preparation snapshots. The detail reads the retained
+sensitive Git and Argo CD artifacts, renders Argo resources as structured
+searchable changes with version-only changes hidden initially, and records
+confirmed approve or reject decisions with an optional immutable comment.
+Promotion mutations refresh the detail and Inbox from Server-returned state;
+approval does not imply downstream success.
 Swift models and ordinary HTTP operations are generated from the same bundled
 OpenAPI contract as the Go and TypeScript clients, with exact generator and
 runtime versions and a shared generated-output freshness check. A small

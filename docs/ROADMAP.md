@@ -149,8 +149,10 @@ Kubernetes API access:
 
 An iOS 17 SwiftUI preview now supplies Keychain-backed API-key connection,
 the role-aware operational Inbox, recent Run history, Run detail, and
-reconnectable retained or live Run logs. It stays inside the product API
-boundary and shares the repository while contracts are pre-stable.
+reconnectable retained or live Run logs. It also searches active Targets,
+browses their Actions, and starts parameterized Actions that do not require
+Artifact inputs. It stays inside the product API boundary and shares the
+repository while contracts are pre-stable.
 
 - [x] Establish the native operational-kawaii design system, shared semantic
       status presentation, reusable overview components, mascot usage rules,
@@ -164,8 +166,13 @@ boundary and shares the repository while contracts are pre-stable.
 - [x] Make Promotion-review Inbox items actionable with native frozen context,
       preparation Run navigation, sensitive Git and structured Argo CD diff
       previews, and confirmed decisions with immutable optional comments.
-- [ ] Add Action creation, reruns, and general Run Artifact browsing in focused
-      operator-first slices.
+- [x] Add idempotent finished Run reruns with same-revision and latest-revision
+      selection, Artifact-input pinning, provenance, and navigation to the new Run.
+- [x] Keep visible active Run details fresh through completion and let operators
+      enter logs before execution starts, waiting for the durable stream or a
+      terminal no-log outcome.
+- [ ] Add general Run Artifact browsing and start Artifact-input Actions from
+      compatible producing Runs.
 - [ ] Design native OIDC sign-in, client and Server compatibility negotiation,
       and release-safe private-network transport before TestFlight distribution.
 - [ ] Add Xcode build and test automation on a pinned macOS toolchain, app icon

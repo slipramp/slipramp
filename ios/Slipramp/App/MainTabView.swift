@@ -19,6 +19,17 @@ struct MainTabView: View {
             }
 
             NavigationStack {
+                TargetListView(
+                    client: client,
+                    onRunChanged: invalidateProductData
+                )
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem {
+                Label("Targets", systemImage: "scope")
+            }
+
+            NavigationStack {
                 RunListView(
                     client: client,
                     refreshRevision: productDataRevision,

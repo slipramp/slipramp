@@ -1,6 +1,7 @@
 import Foundation
 
 enum RunLogStreamUpdate: Equatable, Sendable {
+    case connected(offset: Int64)
     case chunk(Data, nextOffset: Int64)
     case reconnecting(offset: Int64)
     case sealed(offset: Int64)

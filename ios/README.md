@@ -5,9 +5,16 @@ slice connects to one Slipramp Server with an API key, stores the credential in
 the Keychain, and exposes the operational Inbox, recent Runs, Run detail, and
 reconnectable retained or live Run logs. Operators can approve or reject
 pending Run reviews with an immutable optional comment and can request
-cancellation of unfinished Runs. Promotion-review Inbox items open a native
+cancellation of unfinished Runs. The Targets tab searches active Targets,
+browses their Actions and execution metadata, and starts parameterized Actions
+that do not require Artifact inputs. Promotion-review Inbox items open a native
 detail that shows frozen Stage, revision, Freight, policy, preparation, and
-sensitive Git and Argo CD diff context before a confirmed decision.
+sensitive Git and Argo CD diff context before a confirmed decision. Finished
+Runs can be started again from the same frozen revision or the latest catalog
+revision; Runs with Artifact inputs remain pinned to their producing revision.
+Active Run details refresh until completion. The log view can be opened before
+the execution Job starts and waits for its durable stream, or explains the
+terminal outcome when no log becomes available.
 
 The visual language and extension rules are documented in
 [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md). New screens should compose the shared
@@ -20,10 +27,10 @@ status treatments.
 - An iOS 17 simulator or device
 - A Slipramp API key with at least `slipramp:read`
 
-Run decisions additionally require `slipramp:runs:review`; cancellation
-requires `slipramp:runs:write`; Promotion decisions require
-`slipramp:promotions:write`. Sensitive Promotion diff previews use the read
-scope and require an operator or admin Principal.
+Run decisions additionally require `slipramp:runs:review`; cancellation,
+Action starts, and reruns require `slipramp:runs:write`; Promotion decisions
+require `slipramp:promotions:write`. Sensitive Promotion diff previews use the
+read scope and require an operator or admin Principal.
 
 Open `Slipramp.xcodeproj`, select a development team for the `Slipramp` target,
 and run the shared `Slipramp` scheme. The default bundle identifier is
@@ -51,7 +58,10 @@ the checked-in bundle and Swift sources alongside the Go and TypeScript clients;
 `task api:check` fails when any generated output is stale. Do not edit files in
 `Slipramp/GeneratedSources` by hand.
 
-The generated client handles Inbox, Run, Promotion, and artifact-download
-operations, including Run and Promotion decisions and Run cancellation. The
-handwritten Run log reader remains separate because it implements Slipramp's
-reconnectable byte-offset SSE validation and replay-suppression contract.
+The generated client handles Inbox, Target, Run, Promotion, and artifact-download
+operations, including Target browsing, Run creation, Run and Promotion decisions,
+and Run cancellation. The generated Run operations also create idempotent
+same-revision or latest-revision reruns. The handwritten Run log reader remains
+separate because it implements
+Slipramp's reconnectable byte-offset SSE validation and replay-suppression
+contract.

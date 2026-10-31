@@ -7,7 +7,14 @@ typealias Promotion = Components.Schemas.Promotion
 typealias PromotionDecisionChoice = Components.Schemas.PromotionDecisionUpdate.DecisionPayload
 typealias Run = Components.Schemas.Run
 typealias RunList = Components.Schemas.RunList
+typealias RunRerunMode = Components.Schemas.RunRerunMode
 typealias RunReviewDecision = Components.Schemas.RunReviewDecision
+typealias CatalogTarget = Components.Schemas.Target
+typealias TargetAction = Components.Schemas.Action
+typealias TargetList = Components.Schemas.TargetSummaryList
+typealias TargetSummary = Components.Schemas.TargetSummary
+typealias ActionParameter = Components.Schemas.Parameter
+typealias ActionParameterValue = Components.Schemas.ParameterValue
 
 extension Components.Schemas.InboxActivity {
     var total: Int {
@@ -16,6 +23,18 @@ extension Components.Schemas.InboxActivity {
 }
 
 extension Components.Schemas.InboxItem: Identifiable {}
+
+extension Components.Schemas.TargetSummary: Identifiable {
+    var displayName: String {
+        title ?? name
+    }
+}
+
+extension Components.Schemas.Target {
+    var displayName: String {
+        definition.metadata.title ?? definition.metadata.name
+    }
+}
 
 extension Components.Schemas.Run: Identifiable {
     var displayAction: String {
@@ -66,6 +85,71 @@ extension Components.Schemas.ParameterValue {
     }
 }
 
+enum ActionParameterDecoder {
+    static func decode(
+        values: [String: String],
+        declarations: [String: ActionParameter]
+    ) throws -> [String: ActionParameterValue] {
+        var parameters: [String: ActionParameterValue] = [:]
+
+        for name in declarations.keys.sorted() {
+            guard let declaration = declarations[name] else {
+                continue
+            }
+
+            let value = values[name] ?? ""
+            if value.isEmpty {
+                if declaration.required == true {
+                    throw ActionParameterValidationError.required(declaration.title ?? name)
+                }
+                continue
+            }
+
+            switch declaration._type {
+            case .string:
+                parameters[name] = .case1(value)
+            case .boolean:
+                guard value == "true" || value == "false" else {
+                    throw ActionParameterValidationError.invalidBoolean(declaration.title ?? name)
+                }
+                parameters[name] = .case2(value == "true")
+            case .number:
+                guard let number = Double(value), number.isFinite else {
+                    throw ActionParameterValidationError.invalidNumber(declaration.title ?? name)
+                }
+                parameters[name] = .case3(number)
+            case ._enum:
+                guard declaration.values?.contains(value) == true else {
+                    throw ActionParameterValidationError.invalidChoice(declaration.title ?? name)
+                }
+                parameters[name] = .case1(value)
+            }
+        }
+
+        return parameters
+    }
+}
+
+enum ActionParameterValidationError: LocalizedError, Equatable {
+    case required(String)
+    case invalidBoolean(String)
+    case invalidNumber(String)
+    case invalidChoice(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .required(name):
+            return "\(name) is required."
+        case let .invalidBoolean(name):
+            return "\(name) must be true or false."
+        case let .invalidNumber(name):
+            return "\(name) must be a number."
+        case let .invalidChoice(name):
+            return "Choose an allowed value for \(name)."
+        }
+    }
+}
+
 extension Components.Schemas.RunSource {
     var displayLabel: String {
         switch _type {
@@ -77,6 +161,17 @@ extension Components.Schemas.RunSource {
             "Git trigger"
         case .promotion:
             "Promotion"
+        }
+    }
+}
+
+extension Components.Schemas.RunRerunMode {
+    var displayLabel: String {
+        switch self {
+        case .exact:
+            "Same revision"
+        case .latest:
+            "Latest revision"
         }
     }
 }

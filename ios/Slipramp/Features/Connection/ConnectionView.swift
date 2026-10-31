@@ -64,6 +64,7 @@ struct ConnectionView: View {
                                             .accessibilityLabel("Connecting")
                                     } else {
                                         Label("Connect", systemImage: "arrow.right")
+                                            .labelStyle(.titleAndIcon)
                                     }
                                 }
                                 .buttonStyle(SliprampPrimaryButtonStyle())

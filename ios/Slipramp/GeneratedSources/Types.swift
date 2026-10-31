@@ -18,6 +18,20 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/inbox`.
     /// - Remark: Generated from `#/paths//api/v1/inbox/get(getInbox)`.
     func getInbox(_ input: Operations.GetInbox.Input) async throws -> Operations.GetInbox.Output
+    /// List active targets
+    ///
+    /// Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+    ///
+    /// - Remark: HTTP `GET /api/v1/targets`.
+    /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)`.
+    func listTargets(_ input: Operations.ListTargets.Input) async throws -> Operations.ListTargets.Output
+    /// Get a Target
+    ///
+    /// Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+    ///
+    /// - Remark: HTTP `GET /api/v1/targets/{targetId}`.
+    /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)`.
+    func getTarget(_ input: Operations.GetTarget.Input) async throws -> Operations.GetTarget.Output
     /// List recent Runs
     ///
     /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
@@ -25,6 +39,13 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
     func listRuns(_ input: Operations.ListRuns.Input) async throws -> Operations.ListRuns.Output
+    /// Create an action run
+    ///
+    /// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
+    ///
+    /// - Remark: HTTP `POST /api/v1/runs`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)`.
+    func createRun(_ input: Operations.CreateRun.Input) async throws -> Operations.CreateRun.Output
     /// Get a Run
     ///
     /// - Remark: HTTP `GET /api/v1/runs/{runId}`.
@@ -37,6 +58,13 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/runs/{runId}/cancel`.
     /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/cancel/post(cancelRun)`.
     func cancelRun(_ input: Operations.CancelRun.Input) async throws -> Operations.CancelRun.Output
+    /// Rerun a finished Run
+    ///
+    /// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+    ///
+    /// - Remark: HTTP `POST /api/v1/runs/{runId}/rerun`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)`.
+    func rerunRun(_ input: Operations.RerunRun.Input) async throws -> Operations.RerunRun.Output
     /// Decide a Run review
     ///
     /// Approves or rejects a queued Git-triggered Run awaiting review. Approval makes the existing Run eligible for ordinary FIFO assignment. Rejection finishes it as canceled. An optional comment is recorded immutably with the decision.
@@ -72,6 +100,36 @@ extension APIProtocol {
     internal func getInbox(headers: Operations.GetInbox.Input.Headers = .init()) async throws -> Operations.GetInbox.Output {
         try await getInbox(Operations.GetInbox.Input(headers: headers))
     }
+    /// List active targets
+    ///
+    /// Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+    ///
+    /// - Remark: HTTP `GET /api/v1/targets`.
+    /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)`.
+    internal func listTargets(
+        query: Operations.ListTargets.Input.Query = .init(),
+        headers: Operations.ListTargets.Input.Headers = .init()
+    ) async throws -> Operations.ListTargets.Output {
+        try await listTargets(Operations.ListTargets.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Get a Target
+    ///
+    /// Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+    ///
+    /// - Remark: HTTP `GET /api/v1/targets/{targetId}`.
+    /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)`.
+    internal func getTarget(
+        path: Operations.GetTarget.Input.Path,
+        headers: Operations.GetTarget.Input.Headers = .init()
+    ) async throws -> Operations.GetTarget.Output {
+        try await getTarget(Operations.GetTarget.Input(
+            path: path,
+            headers: headers
+        ))
+    }
     /// List recent Runs
     ///
     /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
@@ -85,6 +143,21 @@ extension APIProtocol {
         try await listRuns(Operations.ListRuns.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// Create an action run
+    ///
+    /// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
+    ///
+    /// - Remark: HTTP `POST /api/v1/runs`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)`.
+    internal func createRun(
+        headers: Operations.CreateRun.Input.Headers = .init(),
+        body: Operations.CreateRun.Input.Body
+    ) async throws -> Operations.CreateRun.Output {
+        try await createRun(Operations.CreateRun.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// Get a Run
@@ -113,6 +186,23 @@ extension APIProtocol {
         try await cancelRun(Operations.CancelRun.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Rerun a finished Run
+    ///
+    /// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+    ///
+    /// - Remark: HTTP `POST /api/v1/runs/{runId}/rerun`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)`.
+    internal func rerunRun(
+        path: Operations.RerunRun.Input.Path,
+        headers: Operations.RerunRun.Input.Headers = .init(),
+        body: Operations.RerunRun.Input.Body
+    ) async throws -> Operations.RerunRun.Output {
+        try await rerunRun(Operations.RerunRun.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// Decide a Run review
@@ -646,6 +736,242 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/TargetSummary`.
+        internal struct TargetSummary: Codable, Hashable, Sendable {
+            /// Stable identity of the durable Target.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/id`.
+            internal var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/repositoryId`.
+            internal var repositoryId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/repositoryName`.
+            internal var repositoryName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/catalogRevisionId`.
+            internal var catalogRevisionId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/catalogCommit`.
+            internal var catalogCommit: Components.Schemas.GitCommit
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/name`.
+            internal var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/title`.
+            internal var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/actions`.
+            internal var actions: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/runtime`.
+            internal var runtime: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/placement`.
+            internal var placement: Swift.String?
+            /// Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/desiredCommit`.
+            internal var desiredCommit: Components.Schemas.GitCommit
+            /// - Remark: Generated from `#/components/schemas/TargetSummary/reconciliation`.
+            internal var reconciliation: Components.Schemas.TargetReconciliationStatus
+            /// Creates a new `TargetSummary`.
+            ///
+            /// - Parameters:
+            ///   - id: Stable identity of the durable Target.
+            ///   - repositoryId:
+            ///   - repositoryName:
+            ///   - catalogRevisionId:
+            ///   - catalogCommit:
+            ///   - name:
+            ///   - title:
+            ///   - actions:
+            ///   - runtime:
+            ///   - placement:
+            ///   - desiredCommit: Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
+            ///   - reconciliation:
+            internal init(
+                id: Swift.String,
+                repositoryId: Swift.String,
+                repositoryName: Swift.String,
+                catalogRevisionId: Swift.String,
+                catalogCommit: Components.Schemas.GitCommit,
+                name: Swift.String,
+                title: Swift.String? = nil,
+                actions: [Swift.String],
+                runtime: Swift.String? = nil,
+                placement: Swift.String? = nil,
+                desiredCommit: Components.Schemas.GitCommit,
+                reconciliation: Components.Schemas.TargetReconciliationStatus
+            ) {
+                self.id = id
+                self.repositoryId = repositoryId
+                self.repositoryName = repositoryName
+                self.catalogRevisionId = catalogRevisionId
+                self.catalogCommit = catalogCommit
+                self.name = name
+                self.title = title
+                self.actions = actions
+                self.runtime = runtime
+                self.placement = placement
+                self.desiredCommit = desiredCommit
+                self.reconciliation = reconciliation
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case id
+                case repositoryId
+                case repositoryName
+                case catalogRevisionId
+                case catalogCommit
+                case name
+                case title
+                case actions
+                case runtime
+                case placement
+                case desiredCommit
+                case reconciliation
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TargetSummaryList`.
+        internal struct TargetSummaryList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TargetSummaryList/items`.
+            internal var items: [Components.Schemas.TargetSummary]
+            /// Total number of active targets matching the filters.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetSummaryList/total`.
+            internal var total: Swift.Int64
+            /// - Remark: Generated from `#/components/schemas/TargetSummaryList/limit`.
+            internal var limit: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/TargetSummaryList/offset`.
+            internal var offset: Swift.Int
+            /// Creates a new `TargetSummaryList`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - total: Total number of active targets matching the filters.
+            ///   - limit:
+            ///   - offset:
+            internal init(
+                items: [Components.Schemas.TargetSummary],
+                total: Swift.Int64,
+                limit: Swift.Int,
+                offset: Swift.Int
+            ) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case items
+                case total
+                case limit
+                case offset
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/Target`.
+        internal struct Target: Codable, Hashable, Sendable {
+            /// Stable identity of the durable Target.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Target/id`.
+            internal var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Target/repositoryId`.
+            internal var repositoryId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Target/repositoryName`.
+            internal var repositoryName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Target/catalogRevisionId`.
+            internal var catalogRevisionId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Target/catalogCommit`.
+            internal var catalogCommit: Components.Schemas.GitCommit
+            /// Present when the Target is absent from the active repository catalog.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Target/archivedAt`.
+            internal var archivedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/Target/definition`.
+            internal var definition: Components.Schemas.TargetDefinition
+            /// Creates a new `Target`.
+            ///
+            /// - Parameters:
+            ///   - id: Stable identity of the durable Target.
+            ///   - repositoryId:
+            ///   - repositoryName:
+            ///   - catalogRevisionId:
+            ///   - catalogCommit:
+            ///   - archivedAt: Present when the Target is absent from the active repository catalog.
+            ///   - definition:
+            internal init(
+                id: Swift.String,
+                repositoryId: Swift.String,
+                repositoryName: Swift.String,
+                catalogRevisionId: Swift.String,
+                catalogCommit: Components.Schemas.GitCommit,
+                archivedAt: Foundation.Date? = nil,
+                definition: Components.Schemas.TargetDefinition
+            ) {
+                self.id = id
+                self.repositoryId = repositoryId
+                self.repositoryName = repositoryName
+                self.catalogRevisionId = catalogRevisionId
+                self.catalogCommit = catalogCommit
+                self.archivedAt = archivedAt
+                self.definition = definition
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case id
+                case repositoryId
+                case repositoryName
+                case catalogRevisionId
+                case catalogCommit
+                case archivedAt
+                case definition
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TargetDefinition`.
+        internal struct TargetDefinition: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/apiVersion`.
+            internal enum ApiVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case slipramp_comV1alpha1 = "slipramp.com/v1alpha1"
+            }
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/apiVersion`.
+            internal var apiVersion: Components.Schemas.TargetDefinition.ApiVersionPayload
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/kind`.
+            internal enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case target = "Target"
+            }
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/kind`.
+            internal var kind: Components.Schemas.TargetDefinition.KindPayload
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/metadata`.
+            internal var metadata: Components.Schemas.ResourceMetadata
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/spec`.
+            internal var spec: Components.Schemas.TargetSpec
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/source`.
+            internal var source: Components.Schemas.CatalogSource
+            /// - Remark: Generated from `#/components/schemas/TargetDefinition/status`.
+            internal var status: Components.Schemas.TargetStatus
+            /// Creates a new `TargetDefinition`.
+            ///
+            /// - Parameters:
+            ///   - apiVersion:
+            ///   - kind:
+            ///   - metadata:
+            ///   - spec:
+            ///   - source:
+            ///   - status:
+            internal init(
+                apiVersion: Components.Schemas.TargetDefinition.ApiVersionPayload,
+                kind: Components.Schemas.TargetDefinition.KindPayload,
+                metadata: Components.Schemas.ResourceMetadata,
+                spec: Components.Schemas.TargetSpec,
+                source: Components.Schemas.CatalogSource,
+                status: Components.Schemas.TargetStatus
+            ) {
+                self.apiVersion = apiVersion
+                self.kind = kind
+                self.metadata = metadata
+                self.spec = spec
+                self.source = source
+                self.status = status
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case apiVersion
+                case kind
+                case metadata
+                case spec
+                case source
+                case status
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/Run`.
         internal struct Run: Codable, Hashable, Sendable {
             /// Stable identity of the immutable action execution.
@@ -1066,6 +1392,104 @@ internal enum Components {
                 case limit
                 case offset
                 case total
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/RunCreate`.
+        internal struct RunCreate: Codable, Hashable, Sendable {
+            /// Durable Target containing the Action.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RunCreate/targetId`.
+            internal var targetId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/RunCreate/action`.
+            internal var action: Components.Schemas.CatalogName
+            /// Values for parameters declared by the selected action.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RunCreate/parameters`.
+            internal struct ParametersPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Components.Schemas.ParameterValue]
+                /// Creates a new `ParametersPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Components.Schemas.ParameterValue] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// Values for parameters declared by the selected action.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RunCreate/parameters`.
+            internal var parameters: Components.Schemas.RunCreate.ParametersPayload?
+            /// Explicit bindings from declared input names to sealed artifacts. Exact catalog compatibility pins the new Run to the producer's commit and catalog revision.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RunCreate/inputs`.
+            internal struct InputsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Swift.String]
+                /// Creates a new `InputsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Swift.String] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// Explicit bindings from declared input names to sealed artifacts. Exact catalog compatibility pins the new Run to the producer's commit and catalog revision.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RunCreate/inputs`.
+            internal var inputs: Components.Schemas.RunCreate.InputsPayload?
+            /// Creates a new `RunCreate`.
+            ///
+            /// - Parameters:
+            ///   - targetId: Durable Target containing the Action.
+            ///   - action:
+            ///   - parameters: Values for parameters declared by the selected action.
+            ///   - inputs: Explicit bindings from declared input names to sealed artifacts. Exact catalog compatibility pins the new Run to the producer's commit and catalog revision.
+            internal init(
+                targetId: Swift.String,
+                action: Components.Schemas.CatalogName,
+                parameters: Components.Schemas.RunCreate.ParametersPayload? = nil,
+                inputs: Components.Schemas.RunCreate.InputsPayload? = nil
+            ) {
+                self.targetId = targetId
+                self.action = action
+                self.parameters = parameters
+                self.inputs = inputs
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case targetId
+                case action
+                case parameters
+                case inputs
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/RunRerun`.
+        internal struct RunRerun: Codable, Hashable, Sendable {
+            /// Exact reuses the original Run's frozen commit, catalog, parameters, artifact inputs, and execution configuration. Latest resolves the original target, action, and parameters against the active catalog and current placement configuration.
+            ///
+            /// - Remark: Generated from `#/components/schemas/RunRerun/mode`.
+            internal var mode: Components.Schemas.RunRerunMode
+            /// Creates a new `RunRerun`.
+            ///
+            /// - Parameters:
+            ///   - mode: Exact reuses the original Run's frozen commit, catalog, parameters, artifact inputs, and execution configuration. Latest resolves the original target, action, and parameters against the active catalog and current placement configuration.
+            internal init(mode: Components.Schemas.RunRerunMode) {
+                self.mode = mode
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case mode
             }
         }
         /// - Remark: Generated from `#/components/schemas/RunRerunMode`.
@@ -2365,6 +2789,283 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ResourceMetadata`.
+        internal struct ResourceMetadata: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ResourceMetadata/name`.
+            internal var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ResourceMetadata/title`.
+            internal var title: Swift.String?
+            /// Creates a new `ResourceMetadata`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - title:
+            internal init(
+                name: Swift.String,
+                title: Swift.String? = nil
+            ) {
+                self.name = name
+                self.title = title
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case name
+                case title
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CatalogSource`.
+        internal struct CatalogSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CatalogSource/path`.
+            internal var path: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CatalogSource/document`.
+            internal var document: Swift.Int
+            /// Creates a new `CatalogSource`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - document:
+            internal init(
+                path: Swift.String,
+                document: Swift.Int
+            ) {
+                self.path = path
+                self.document = document
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case path
+                case document
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ResourceRequirements`.
+        internal struct ResourceRequirements: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ResourceRequirements/requests`.
+            internal struct RequestsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Swift.String]
+                /// Creates a new `RequestsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Swift.String] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ResourceRequirements/requests`.
+            internal var requests: Components.Schemas.ResourceRequirements.RequestsPayload?
+            /// - Remark: Generated from `#/components/schemas/ResourceRequirements/limits`.
+            internal struct LimitsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Swift.String]
+                /// Creates a new `LimitsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Swift.String] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ResourceRequirements/limits`.
+            internal var limits: Components.Schemas.ResourceRequirements.LimitsPayload?
+            /// Creates a new `ResourceRequirements`.
+            ///
+            /// - Parameters:
+            ///   - requests:
+            ///   - limits:
+            internal init(
+                requests: Components.Schemas.ResourceRequirements.RequestsPayload? = nil,
+                limits: Components.Schemas.ResourceRequirements.LimitsPayload? = nil
+            ) {
+                self.requests = requests
+                self.limits = limits
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case requests
+                case limits
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ParameterArgument`.
+        internal struct ParameterArgument: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ParameterArgument/name`.
+            internal var name: Swift.String?
+            /// Creates a new `ParameterArgument`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            internal init(name: Swift.String? = nil) {
+                self.name = name
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case name
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/Parameter`.
+        internal struct Parameter: Codable, Hashable, Sendable {
+            /// Operator-facing form label. The parameter map key remains its stable identity.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Parameter/title`.
+            internal var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Parameter/description`.
+            internal var description: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Parameter/type`.
+            internal enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case string = "string"
+                case boolean = "boolean"
+                case number = "number"
+                case _enum = "enum"
+            }
+            /// - Remark: Generated from `#/components/schemas/Parameter/type`.
+            internal var _type: Components.Schemas.Parameter._TypePayload
+            /// - Remark: Generated from `#/components/schemas/Parameter/required`.
+            internal var required: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/Parameter/values`.
+            internal var values: [Swift.String]?
+            /// - Remark: Generated from `#/components/schemas/Parameter/environment`.
+            internal var environment: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Parameter/argument`.
+            internal var argument: Components.Schemas.ParameterArgument?
+            /// Creates a new `Parameter`.
+            ///
+            /// - Parameters:
+            ///   - title: Operator-facing form label. The parameter map key remains its stable identity.
+            ///   - description:
+            ///   - _type:
+            ///   - required:
+            ///   - values:
+            ///   - environment:
+            ///   - argument:
+            internal init(
+                title: Swift.String? = nil,
+                description: Swift.String? = nil,
+                _type: Components.Schemas.Parameter._TypePayload,
+                required: Swift.Bool? = nil,
+                values: [Swift.String]? = nil,
+                environment: Swift.String? = nil,
+                argument: Components.Schemas.ParameterArgument? = nil
+            ) {
+                self.title = title
+                self.description = description
+                self._type = _type
+                self.required = required
+                self.values = values
+                self.environment = environment
+                self.argument = argument
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case title
+                case description
+                case _type = "type"
+                case required
+                case values
+                case environment
+                case argument
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ArtifactDeclaration`.
+        internal struct ArtifactDeclaration: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ArtifactDeclaration/description`.
+            internal var description: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ArtifactDeclaration/path`.
+            internal var path: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ArtifactDeclaration/mediaType`.
+            internal var mediaType: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ArtifactDeclaration/sensitive`.
+            internal var sensitive: Swift.Bool?
+            /// Creates a new `ArtifactDeclaration`.
+            ///
+            /// - Parameters:
+            ///   - description:
+            ///   - path:
+            ///   - mediaType:
+            ///   - sensitive:
+            internal init(
+                description: Swift.String? = nil,
+                path: Swift.String,
+                mediaType: Swift.String? = nil,
+                sensitive: Swift.Bool? = nil
+            ) {
+                self.description = description
+                self.path = path
+                self.mediaType = mediaType
+                self.sensitive = sensitive
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case description
+                case path
+                case mediaType
+                case sensitive
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ArtifactInputSource`.
+        internal struct ArtifactInputSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ArtifactInputSource/fromAction`.
+            internal var fromAction: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ArtifactInputSource/compatibility`.
+            internal enum CompatibilityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case exactCatalogRevision = "exact-catalog-revision"
+            }
+            /// - Remark: Generated from `#/components/schemas/ArtifactInputSource/compatibility`.
+            internal var compatibility: Components.Schemas.ArtifactInputSource.CompatibilityPayload?
+            /// Creates a new `ArtifactInputSource`.
+            ///
+            /// - Parameters:
+            ///   - fromAction:
+            ///   - compatibility:
+            internal init(
+                fromAction: Swift.String,
+                compatibility: Components.Schemas.ArtifactInputSource.CompatibilityPayload? = nil
+            ) {
+                self.fromAction = fromAction
+                self.compatibility = compatibility
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case fromAction
+                case compatibility
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ArtifactInput`.
+        internal struct ArtifactInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ArtifactInput/artifact`.
+            internal var artifact: Components.Schemas.ArtifactInputSource
+            /// - Remark: Generated from `#/components/schemas/ArtifactInput/mountPath`.
+            internal var mountPath: Swift.String
+            /// Creates a new `ArtifactInput`.
+            ///
+            /// - Parameters:
+            ///   - artifact:
+            ///   - mountPath:
+            internal init(
+                artifact: Components.Schemas.ArtifactInputSource,
+                mountPath: Swift.String
+            ) {
+                self.artifact = artifact
+                self.mountPath = mountPath
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case artifact
+                case mountPath
+            }
+        }
+        /// Runs the action when a newly accepted repository head changes a path matching the containing target's watch patterns.
+        ///
+        /// - Remark: Generated from `#/components/schemas/GitTrigger`.
+        internal struct GitTrigger: Codable, Hashable, Sendable {
+            /// Creates a new `GitTrigger`.
+            internal init() {}
+            internal init(from decoder: any Swift.Decoder) throws {
+                try decoder.ensureNoAdditionalProperties(knownKeys: [])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ParameterValue`.
         internal enum ParameterValue: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ParameterValue/case1`.
@@ -2410,6 +3111,331 @@ internal enum Components {
                 }
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ActionTrigger`.
+        internal struct ActionTrigger: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ActionTrigger/name`.
+            internal var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ActionTrigger/git`.
+            internal var git: Components.Schemas.GitTrigger
+            /// Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ActionTrigger/review`.
+            internal enum ReviewPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case required = "required"
+            }
+            /// Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ActionTrigger/review`.
+            internal var review: Components.Schemas.ActionTrigger.ReviewPayload?
+            /// - Remark: Generated from `#/components/schemas/ActionTrigger/parameters`.
+            internal struct ParametersPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Components.Schemas.ParameterValue]
+                /// Creates a new `ParametersPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Components.Schemas.ParameterValue] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/ActionTrigger/parameters`.
+            internal var parameters: Components.Schemas.ActionTrigger.ParametersPayload?
+            /// Creates a new `ActionTrigger`.
+            ///
+            /// - Parameters:
+            ///   - name:
+            ///   - git:
+            ///   - review: Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
+            ///   - parameters:
+            internal init(
+                name: Swift.String,
+                git: Components.Schemas.GitTrigger,
+                review: Components.Schemas.ActionTrigger.ReviewPayload? = nil,
+                parameters: Components.Schemas.ActionTrigger.ParametersPayload? = nil
+            ) {
+                self.name = name
+                self.git = git
+                self.review = review
+                self.parameters = parameters
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case name
+                case git
+                case review
+                case parameters
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/Action`.
+        internal struct Action: Codable, Hashable, Sendable {
+            /// Operator-facing display title. The action map key remains its stable identity.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Action/title`.
+            internal var title: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Action/description`.
+            internal var description: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Action/documentationUrl`.
+            internal var documentationUrl: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Action/intent`.
+            internal var intent: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Action/command`.
+            internal var command: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/Action/runtime`.
+            internal var runtime: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Action/placement`.
+            internal var placement: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Action/credentials`.
+            internal struct CredentialsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Swift.String]
+                /// Creates a new `CredentialsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Swift.String] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/Action/credentials`.
+            internal var credentials: Components.Schemas.Action.CredentialsPayload?
+            /// - Remark: Generated from `#/components/schemas/Action/timeout`.
+            internal var timeout: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Action/resources`.
+            internal var resources: Components.Schemas.ResourceRequirements?
+            /// - Remark: Generated from `#/components/schemas/Action/parameters`.
+            internal struct ParametersPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Components.Schemas.Parameter]
+                /// Creates a new `ParametersPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Components.Schemas.Parameter] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/Action/parameters`.
+            internal var parameters: Components.Schemas.Action.ParametersPayload?
+            /// - Remark: Generated from `#/components/schemas/Action/artifacts`.
+            internal struct ArtifactsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Components.Schemas.ArtifactDeclaration]
+                /// Creates a new `ArtifactsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Components.Schemas.ArtifactDeclaration] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/Action/artifacts`.
+            internal var artifacts: Components.Schemas.Action.ArtifactsPayload?
+            /// - Remark: Generated from `#/components/schemas/Action/inputs`.
+            internal struct InputsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Components.Schemas.ArtifactInput]
+                /// Creates a new `InputsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Components.Schemas.ArtifactInput] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/Action/inputs`.
+            internal var inputs: Components.Schemas.Action.InputsPayload?
+            /// - Remark: Generated from `#/components/schemas/Action/triggers`.
+            internal var triggers: [Components.Schemas.ActionTrigger]?
+            /// Creates a new `Action`.
+            ///
+            /// - Parameters:
+            ///   - title: Operator-facing display title. The action map key remains its stable identity.
+            ///   - description:
+            ///   - documentationUrl:
+            ///   - intent:
+            ///   - command:
+            ///   - runtime:
+            ///   - placement:
+            ///   - credentials:
+            ///   - timeout:
+            ///   - resources:
+            ///   - parameters:
+            ///   - artifacts:
+            ///   - inputs:
+            ///   - triggers:
+            internal init(
+                title: Swift.String? = nil,
+                description: Swift.String? = nil,
+                documentationUrl: Swift.String? = nil,
+                intent: Swift.String? = nil,
+                command: [Swift.String],
+                runtime: Swift.String? = nil,
+                placement: Swift.String? = nil,
+                credentials: Components.Schemas.Action.CredentialsPayload? = nil,
+                timeout: Swift.String? = nil,
+                resources: Components.Schemas.ResourceRequirements? = nil,
+                parameters: Components.Schemas.Action.ParametersPayload? = nil,
+                artifacts: Components.Schemas.Action.ArtifactsPayload? = nil,
+                inputs: Components.Schemas.Action.InputsPayload? = nil,
+                triggers: [Components.Schemas.ActionTrigger]? = nil
+            ) {
+                self.title = title
+                self.description = description
+                self.documentationUrl = documentationUrl
+                self.intent = intent
+                self.command = command
+                self.runtime = runtime
+                self.placement = placement
+                self.credentials = credentials
+                self.timeout = timeout
+                self.resources = resources
+                self.parameters = parameters
+                self.artifacts = artifacts
+                self.inputs = inputs
+                self.triggers = triggers
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case title
+                case description
+                case documentationUrl
+                case intent
+                case command
+                case runtime
+                case placement
+                case credentials
+                case timeout
+                case resources
+                case parameters
+                case artifacts
+                case inputs
+                case triggers
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TargetSpec`.
+        internal struct TargetSpec: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/path`.
+            internal var path: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/watch`.
+            internal var watch: [Swift.String]?
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/runtime`.
+            internal var runtime: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/placement`.
+            internal var placement: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/credentials`.
+            internal struct CredentialsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Swift.String]
+                /// Creates a new `CredentialsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Swift.String] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/credentials`.
+            internal var credentials: Components.Schemas.TargetSpec.CredentialsPayload?
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/timeout`.
+            internal var timeout: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/resources`.
+            internal var resources: Components.Schemas.ResourceRequirements?
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/actions`.
+            internal struct ActionsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                internal var additionalProperties: [String: Components.Schemas.Action]
+                /// Creates a new `ActionsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                internal init(additionalProperties: [String: Components.Schemas.Action] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                internal init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                internal func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TargetSpec/actions`.
+            internal var actions: Components.Schemas.TargetSpec.ActionsPayload
+            /// Creates a new `TargetSpec`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - watch:
+            ///   - runtime:
+            ///   - placement:
+            ///   - credentials:
+            ///   - timeout:
+            ///   - resources:
+            ///   - actions:
+            internal init(
+                path: Swift.String? = nil,
+                watch: [Swift.String]? = nil,
+                runtime: Swift.String? = nil,
+                placement: Swift.String? = nil,
+                credentials: Components.Schemas.TargetSpec.CredentialsPayload? = nil,
+                timeout: Swift.String? = nil,
+                resources: Components.Schemas.ResourceRequirements? = nil,
+                actions: Components.Schemas.TargetSpec.ActionsPayload
+            ) {
+                self.path = path
+                self.watch = watch
+                self.runtime = runtime
+                self.placement = placement
+                self.credentials = credentials
+                self.timeout = timeout
+                self.resources = resources
+                self.actions = actions
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case path
+                case watch
+                case runtime
+                case placement
+                case credentials
+                case timeout
+                case resources
+                case actions
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/RunPhase`.
         internal enum RunPhase: String, Codable, Hashable, Sendable, CaseIterable {
             case queued = "queued"
@@ -2424,6 +3450,222 @@ internal enum Components {
             case failed = "failed"
             case canceled = "canceled"
             case timedOut = "timed-out"
+        }
+        /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint`.
+        internal struct TargetSyncRunCheckpoint: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/runId`.
+            internal var runId: Swift.String
+            /// Target relevance commit frozen by the Run. It is absent when the Run predates trustworthy relevance markers or exactly reruns such a Run.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/relevanceCommit`.
+            internal var relevanceCommit: Components.Schemas.GitCommit?
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/phase`.
+            internal var phase: Components.Schemas.RunPhase
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/outcome`.
+            internal var outcome: Components.Schemas.RunOutcome?
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/createdAt`.
+            internal var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/assignedAt`.
+            internal var assignedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/preparingAt`.
+            internal var preparingAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/startedAt`.
+            internal var startedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/finishedAt`.
+            internal var finishedAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/TargetSyncRunCheckpoint/cancellationRequestedAt`.
+            internal var cancellationRequestedAt: Foundation.Date?
+            /// Creates a new `TargetSyncRunCheckpoint`.
+            ///
+            /// - Parameters:
+            ///   - runId:
+            ///   - relevanceCommit: Target relevance commit frozen by the Run. It is absent when the Run predates trustworthy relevance markers or exactly reruns such a Run.
+            ///   - phase:
+            ///   - outcome:
+            ///   - createdAt:
+            ///   - assignedAt:
+            ///   - preparingAt:
+            ///   - startedAt:
+            ///   - finishedAt:
+            ///   - cancellationRequestedAt:
+            internal init(
+                runId: Swift.String,
+                relevanceCommit: Components.Schemas.GitCommit? = nil,
+                phase: Components.Schemas.RunPhase,
+                outcome: Components.Schemas.RunOutcome? = nil,
+                createdAt: Foundation.Date,
+                assignedAt: Foundation.Date,
+                preparingAt: Foundation.Date? = nil,
+                startedAt: Foundation.Date? = nil,
+                finishedAt: Foundation.Date? = nil,
+                cancellationRequestedAt: Foundation.Date? = nil
+            ) {
+                self.runId = runId
+                self.relevanceCommit = relevanceCommit
+                self.phase = phase
+                self.outcome = outcome
+                self.createdAt = createdAt
+                self.assignedAt = assignedAt
+                self.preparingAt = preparingAt
+                self.startedAt = startedAt
+                self.finishedAt = finishedAt
+                self.cancellationRequestedAt = cancellationRequestedAt
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case runId
+                case relevanceCommit
+                case phase
+                case outcome
+                case createdAt
+                case assignedAt
+                case preparingAt
+                case startedAt
+                case finishedAt
+                case cancellationRequestedAt
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.runId = try container.decode(
+                    Swift.String.self,
+                    forKey: .runId
+                )
+                self.relevanceCommit = try container.decodeIfPresent(
+                    Components.Schemas.GitCommit.self,
+                    forKey: .relevanceCommit
+                )
+                self.phase = try container.decode(
+                    Components.Schemas.RunPhase.self,
+                    forKey: .phase
+                )
+                self.outcome = try container.decodeIfPresent(
+                    Components.Schemas.RunOutcome.self,
+                    forKey: .outcome
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.assignedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .assignedAt
+                )
+                self.preparingAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .preparingAt
+                )
+                self.startedAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .startedAt
+                )
+                self.finishedAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .finishedAt
+                )
+                self.cancellationRequestedAt = try container.decodeIfPresent(
+                    Foundation.Date.self,
+                    forKey: .cancellationRequestedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "runId",
+                    "relevanceCommit",
+                    "phase",
+                    "outcome",
+                    "createdAt",
+                    "assignedAt",
+                    "preparingAt",
+                    "startedAt",
+                    "finishedAt",
+                    "cancellationRequestedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TargetReconciliationStatus`.
+        internal struct TargetReconciliationStatus: Codable, Hashable, Sendable {
+            /// Factual comparison of the active Target's desired relevance commit with its last successful sync Run marker. Archived Targets, Targets without a current sync Action, and Targets without a trustworthy successful marker report unknown.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetReconciliationStatus/comparison`.
+            internal enum ComparisonPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case matched = "matched"
+                case different = "different"
+                case unknown = "unknown"
+            }
+            /// Factual comparison of the active Target's desired relevance commit with its last successful sync Run marker. Archived Targets, Targets without a current sync Action, and Targets without a trustworthy successful marker report unknown.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetReconciliationStatus/comparison`.
+            internal var comparison: Components.Schemas.TargetReconciliationStatus.ComparisonPayload
+            /// Most recently assigned Run for the Action whose technical name is exactly sync. A queued cancellation is not an attempt.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetReconciliationStatus/lastAttemptedSync`.
+            internal var lastAttemptedSync: Components.Schemas.TargetSyncRunCheckpoint?
+            /// Most recently assigned sync Run that finished with outcome succeeded.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetReconciliationStatus/lastSuccessfulSync`.
+            internal var lastSuccessfulSync: Components.Schemas.TargetSyncRunCheckpoint?
+            /// Creates a new `TargetReconciliationStatus`.
+            ///
+            /// - Parameters:
+            ///   - comparison: Factual comparison of the active Target's desired relevance commit with its last successful sync Run marker. Archived Targets, Targets without a current sync Action, and Targets without a trustworthy successful marker report unknown.
+            ///   - lastAttemptedSync: Most recently assigned Run for the Action whose technical name is exactly sync. A queued cancellation is not an attempt.
+            ///   - lastSuccessfulSync: Most recently assigned sync Run that finished with outcome succeeded.
+            internal init(
+                comparison: Components.Schemas.TargetReconciliationStatus.ComparisonPayload,
+                lastAttemptedSync: Components.Schemas.TargetSyncRunCheckpoint? = nil,
+                lastSuccessfulSync: Components.Schemas.TargetSyncRunCheckpoint? = nil
+            ) {
+                self.comparison = comparison
+                self.lastAttemptedSync = lastAttemptedSync
+                self.lastSuccessfulSync = lastSuccessfulSync
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case comparison
+                case lastAttemptedSync
+                case lastSuccessfulSync
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.comparison = try container.decode(
+                    Components.Schemas.TargetReconciliationStatus.ComparisonPayload.self,
+                    forKey: .comparison
+                )
+                self.lastAttemptedSync = try container.decodeIfPresent(
+                    Components.Schemas.TargetSyncRunCheckpoint.self,
+                    forKey: .lastAttemptedSync
+                )
+                self.lastSuccessfulSync = try container.decodeIfPresent(
+                    Components.Schemas.TargetSyncRunCheckpoint.self,
+                    forKey: .lastSuccessfulSync
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "comparison",
+                    "lastAttemptedSync",
+                    "lastSuccessfulSync"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TargetStatus`.
+        internal struct TargetStatus: Codable, Hashable, Sendable {
+            /// Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
+            ///
+            /// - Remark: Generated from `#/components/schemas/TargetStatus/desiredCommit`.
+            internal var desiredCommit: Components.Schemas.GitCommit
+            /// - Remark: Generated from `#/components/schemas/TargetStatus/reconciliation`.
+            internal var reconciliation: Components.Schemas.TargetReconciliationStatus
+            /// Creates a new `TargetStatus`.
+            ///
+            /// - Parameters:
+            ///   - desiredCommit: Latest accepted Git commit whose changed paths matched this target's watch patterns, or the commit where the target most recently became active. This is a target-scoped relevance marker for scheduling and Git delivery coalescing, not an applied-infrastructure or Run checkout revision.
+            ///   - reconciliation:
+            internal init(
+                desiredCommit: Components.Schemas.GitCommit,
+                reconciliation: Components.Schemas.TargetReconciliationStatus
+            ) {
+                self.desiredCommit = desiredCommit
+                self.reconciliation = reconciliation
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case desiredCommit
+                case reconciliation
+            }
         }
         /// - Remark: Generated from `#/components/schemas/CatalogName`.
         internal typealias CatalogName = Swift.String
@@ -3922,6 +5164,829 @@ internal enum Operations {
             }
         }
     }
+    /// List active targets
+    ///
+    /// Lists target summaries across active repository catalogs, ordered by display title, repository name, and target name. Search matches target names and titles, repository names, and action names.
+    ///
+    /// - Remark: HTTP `GET /api/v1/targets`.
+    /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)`.
+    internal enum ListTargets {
+        internal static let id: Swift.String = "listTargets"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/targets/GET/query`.
+            internal struct Query: Sendable, Hashable {
+                /// Limit targets to one active repository.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/query/repositoryId`.
+                internal var repositoryId: Swift.String?
+                /// Limit targets to an exact target-level Runtime default.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/query/runtime`.
+                internal var runtime: Components.Schemas.CatalogName?
+                /// Limit targets to an exact target-level Placement default.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/query/placement`.
+                internal var placement: Components.Schemas.CatalogName?
+                /// Case-insensitive target, repository, or action search.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/query/q`.
+                internal var q: Swift.String?
+                /// Maximum number of target summaries to return.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/query/limit`.
+                internal var limit: Swift.Int?
+                /// Zero-based offset into the matching target summaries.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/query/offset`.
+                internal var offset: Swift.Int32?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - repositoryId: Limit targets to one active repository.
+                ///   - runtime: Limit targets to an exact target-level Runtime default.
+                ///   - placement: Limit targets to an exact target-level Placement default.
+                ///   - q: Case-insensitive target, repository, or action search.
+                ///   - limit: Maximum number of target summaries to return.
+                ///   - offset: Zero-based offset into the matching target summaries.
+                internal init(
+                    repositoryId: Swift.String? = nil,
+                    runtime: Components.Schemas.CatalogName? = nil,
+                    placement: Components.Schemas.CatalogName? = nil,
+                    q: Swift.String? = nil,
+                    limit: Swift.Int? = nil,
+                    offset: Swift.Int32? = nil
+                ) {
+                    self.repositoryId = repositoryId
+                    self.runtime = runtime
+                    self.placement = placement
+                    self.q = q
+                    self.limit = limit
+                    self.offset = offset
+                }
+            }
+            internal var query: Operations.ListTargets.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/targets/GET/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListTargets.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListTargets.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.ListTargets.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            internal init(
+                query: Operations.ListTargets.Input.Query = .init(),
+                headers: Operations.ListTargets.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TargetSummaryList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.TargetSummaryList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListTargets.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListTargets.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Active targets matching the requested filters.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListTargets.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.ListTargets.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/400/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListTargets.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListTargets.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// A filter, limit, or offset is invalid.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.ListTargets.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.ListTargets.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Unauthorized: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/401/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/401/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListTargets.Output.Unauthorized.Body
+                /// Creates a new `Unauthorized`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListTargets.Output.Unauthorized.Body) {
+                    self.body = body
+                }
+            }
+            /// A valid product session or bearer credential is required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Operations.ListTargets.Output.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            internal var unauthorized: Operations.ListTargets.Output.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/403/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/403/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListTargets.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListTargets.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// The authenticated principal cannot read product state.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.ListTargets.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            internal var forbidden: Operations.ListTargets.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct MethodNotAllowed: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/405/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/405/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListTargets.Output.MethodNotAllowed.Body
+                /// Creates a new `MethodNotAllowed`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListTargets.Output.MethodNotAllowed.Body) {
+                    self.body = body
+                }
+            }
+            /// The HTTP method is not supported for this resource.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)/responses/405`.
+            ///
+            /// HTTP response code: `405 methodNotAllowed`.
+            case methodNotAllowed(Operations.ListTargets.Output.MethodNotAllowed)
+            /// The associated value of the enum case if `self` is `.methodNotAllowed`.
+            ///
+            /// - Throws: An error if `self` is not `.methodNotAllowed`.
+            /// - SeeAlso: `.methodNotAllowed`.
+            internal var methodNotAllowed: Operations.ListTargets.Output.MethodNotAllowed {
+                get throws {
+                    switch self {
+                    case let .methodNotAllowed(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct InternalServerError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/500/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/GET/responses/500/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListTargets.Output.InternalServerError.Body
+                /// Creates a new `InternalServerError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListTargets.Output.InternalServerError.Body) {
+                    self.body = body
+                }
+            }
+            /// Active targets could not be loaded.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/get(listTargets)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Operations.ListTargets.Output.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Operations.ListTargets.Output.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
+    /// Get a Target
+    ///
+    /// Returns a durable Target with its most recently accepted definition. Archived Targets remain addressable for historical navigation.
+    ///
+    /// - Remark: HTTP `GET /api/v1/targets/{targetId}`.
+    /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)`.
+    internal enum GetTarget {
+        internal static let id: Swift.String = "getTarget"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/path`.
+            internal struct Path: Sendable, Hashable {
+                /// Stable identity of the Target.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/path/targetId`.
+                internal var targetId: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - targetId: Stable identity of the Target.
+                internal init(targetId: Swift.String) {
+                    self.targetId = targetId
+                }
+            }
+            internal var path: Operations.GetTarget.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetTarget.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetTarget.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.GetTarget.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            internal init(
+                path: Operations.GetTarget.Input.Path,
+                headers: Operations.GetTarget.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Target)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.Target {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetTarget.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetTarget.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The Target and its most recently accepted definition.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetTarget.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.GetTarget.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Unauthorized: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/401/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/401/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetTarget.Output.Unauthorized.Body
+                /// Creates a new `Unauthorized`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetTarget.Output.Unauthorized.Body) {
+                    self.body = body
+                }
+            }
+            /// A valid product session or bearer credential is required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Operations.GetTarget.Output.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            internal var unauthorized: Operations.GetTarget.Output.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/403/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/403/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetTarget.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetTarget.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// The authenticated principal cannot read product state.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.GetTarget.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            internal var forbidden: Operations.GetTarget.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/404/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/404/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetTarget.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetTarget.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// The Target does not exist.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.GetTarget.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            internal var notFound: Operations.GetTarget.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct MethodNotAllowed: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/405/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/405/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetTarget.Output.MethodNotAllowed.Body
+                /// Creates a new `MethodNotAllowed`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetTarget.Output.MethodNotAllowed.Body) {
+                    self.body = body
+                }
+            }
+            /// The HTTP method is not supported for this resource.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)/responses/405`.
+            ///
+            /// HTTP response code: `405 methodNotAllowed`.
+            case methodNotAllowed(Operations.GetTarget.Output.MethodNotAllowed)
+            /// The associated value of the enum case if `self` is `.methodNotAllowed`.
+            ///
+            /// - Throws: An error if `self` is not `.methodNotAllowed`.
+            /// - SeeAlso: `.methodNotAllowed`.
+            internal var methodNotAllowed: Operations.GetTarget.Output.MethodNotAllowed {
+                get throws {
+                    switch self {
+                    case let .methodNotAllowed(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct InternalServerError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/500/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/targets/{targetId}/GET/responses/500/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.GetTarget.Output.InternalServerError.Body
+                /// Creates a new `InternalServerError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.GetTarget.Output.InternalServerError.Body) {
+                    self.body = body
+                }
+            }
+            /// The Target could not be loaded.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/targets/{targetId}/get(getTarget)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Operations.GetTarget.Output.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Operations.GetTarget.Output.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
     /// List recent Runs
     ///
     /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
@@ -4332,6 +6397,501 @@ internal enum Operations {
             /// - Throws: An error if `self` is not `.internalServerError`.
             /// - SeeAlso: `.internalServerError`.
             internal var internalServerError: Operations.ListRuns.Output.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
+    /// Create an action run
+    ///
+    /// Resolves an action against the repository's active catalog revision, or the producing revision when explicit artifact inputs are selected, and persists an immutable queued Run. The Run remains pinned to the resolved catalog revision and Git commit even if the repository refreshes later.
+    ///
+    /// - Remark: HTTP `POST /api/v1/runs`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)`.
+    internal enum CreateRun {
+        internal static let id: Swift.String = "createRun"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/runs/POST/header`.
+            internal struct Headers: Sendable, Hashable {
+                /// Optional key that makes retries of the same run request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/header/Idempotency-Key`.
+                internal var idempotencyKey: Swift.String?
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateRun.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: Optional key that makes retries of the same run request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
+                ///   - accept:
+                internal init(
+                    idempotencyKey: Swift.String? = nil,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateRun.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.CreateRun.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/runs/POST/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.RunCreate)
+            }
+            internal var body: Operations.CreateRun.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            internal init(
+                headers: Operations.CreateRun.Input.Headers = .init(),
+                body: Operations.CreateRun.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/201/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.Run)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.Run {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// The queued Run was created or recovered by idempotency key.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.CreateRun.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            internal var created: Operations.CreateRun.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/400/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// The run request or supplied parameters are invalid.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.CreateRun.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.CreateRun.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Unauthorized: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/401/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/401/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.Unauthorized.Body
+                /// Creates a new `Unauthorized`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.Unauthorized.Body) {
+                    self.body = body
+                }
+            }
+            /// A valid product session or bearer credential is required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Operations.CreateRun.Output.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            internal var unauthorized: Operations.CreateRun.Output.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/403/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/403/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// Operator permission and runs-write scope are required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.CreateRun.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            internal var forbidden: Operations.CreateRun.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/404/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/404/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// The active Target, catalog, action, runtime, or placement required by the request does not exist.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.CreateRun.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            internal var notFound: Operations.CreateRun.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct MethodNotAllowed: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/405/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/405/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.MethodNotAllowed.Body
+                /// Creates a new `MethodNotAllowed`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.MethodNotAllowed.Body) {
+                    self.body = body
+                }
+            }
+            /// The HTTP method is not supported for this resource.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/405`.
+            ///
+            /// HTTP response code: `405 methodNotAllowed`.
+            case methodNotAllowed(Operations.CreateRun.Output.MethodNotAllowed)
+            /// The associated value of the enum case if `self` is `.methodNotAllowed`.
+            ///
+            /// - Throws: An error if `self` is not `.methodNotAllowed`.
+            /// - SeeAlso: `.methodNotAllowed`.
+            internal var methodNotAllowed: Operations.CreateRun.Output.MethodNotAllowed {
+                get throws {
+                    switch self {
+                    case let .methodNotAllowed(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Conflict: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/409/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/409/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.Conflict.Body
+                /// Creates a new `Conflict`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.Conflict.Body) {
+                    self.body = body
+                }
+            }
+            /// The idempotency key was already used for another request.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Operations.CreateRun.Output.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            internal var conflict: Operations.CreateRun.Output.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct InternalServerError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/500/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/POST/responses/500/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.CreateRun.Output.InternalServerError.Body
+                /// Creates a new `InternalServerError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.CreateRun.Output.InternalServerError.Body) {
+                    self.body = body
+                }
+            }
+            /// The Run could not be created.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/post(createRun)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Operations.CreateRun.Output.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Operations.CreateRun.Output.InternalServerError {
                 get throws {
                     switch self {
                     case let .internalServerError(response):
@@ -5165,6 +7725,519 @@ internal enum Operations {
             /// - Throws: An error if `self` is not `.internalServerError`.
             /// - SeeAlso: `.internalServerError`.
             internal var internalServerError: Operations.CancelRun.Output.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
+    /// Rerun a finished Run
+    ///
+    /// Creates a new immutable queued Run from a finished Run. Exact mode reuses the original frozen execution snapshot. Latest mode resolves the same target, action, and parameters against the active catalog and current placement configuration. Latest mode is unavailable when the original Run has artifact inputs.
+    ///
+    /// - Remark: HTTP `POST /api/v1/runs/{runId}/rerun`.
+    /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)`.
+    internal enum RerunRun {
+        internal static let id: Swift.String = "rerunRun"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/path`.
+            internal struct Path: Sendable, Hashable {
+                /// Finished Run to execute again.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/path/runId`.
+                internal var runId: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - runId: Finished Run to execute again.
+                internal init(runId: Swift.String) {
+                    self.runId = runId
+                }
+            }
+            internal var path: Operations.RerunRun.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/header`.
+            internal struct Headers: Sendable, Hashable {
+                /// Optional key that makes retries of the same rerun request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/header/Idempotency-Key`.
+                internal var idempotencyKey: Swift.String?
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RerunRun.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - idempotencyKey: Optional key that makes retries of the same rerun request return the originally created Run. Authenticated keys are scoped to the calling principal. Reusing a key for a different request is a conflict.
+                ///   - accept:
+                internal init(
+                    idempotencyKey: Swift.String? = nil,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.RerunRun.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.idempotencyKey = idempotencyKey
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.RerunRun.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/requestBody`.
+            internal enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.RunRerun)
+            }
+            internal var body: Operations.RerunRun.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            internal init(
+                path: Operations.RerunRun.Input.Path,
+                headers: Operations.RerunRun.Input.Headers = .init(),
+                body: Operations.RerunRun.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/201/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.Run)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.Run {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// The queued rerun was created or recovered by idempotency key.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.RerunRun.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            internal var created: Operations.RerunRun.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/400/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/400/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// The request or parameters are invalid for the selected mode.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.RerunRun.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Operations.RerunRun.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Unauthorized: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/401/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/401/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.Unauthorized.Body
+                /// Creates a new `Unauthorized`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.Unauthorized.Body) {
+                    self.body = body
+                }
+            }
+            /// A valid product session or bearer credential is required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Operations.RerunRun.Output.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            internal var unauthorized: Operations.RerunRun.Output.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/403/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/403/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// Operator permission and runs-write scope are required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.RerunRun.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            internal var forbidden: Operations.RerunRun.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/404/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/404/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// The original Run or a current catalog resource required by latest mode does not exist.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.RerunRun.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            internal var notFound: Operations.RerunRun.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct MethodNotAllowed: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/405/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/405/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.MethodNotAllowed.Body
+                /// Creates a new `MethodNotAllowed`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.MethodNotAllowed.Body) {
+                    self.body = body
+                }
+            }
+            /// The HTTP method is not supported.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/405`.
+            ///
+            /// HTTP response code: `405 methodNotAllowed`.
+            case methodNotAllowed(Operations.RerunRun.Output.MethodNotAllowed)
+            /// The associated value of the enum case if `self` is `.methodNotAllowed`.
+            ///
+            /// - Throws: An error if `self` is not `.methodNotAllowed`.
+            /// - SeeAlso: `.methodNotAllowed`.
+            internal var methodNotAllowed: Operations.RerunRun.Output.MethodNotAllowed {
+                get throws {
+                    switch self {
+                    case let .methodNotAllowed(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "methodNotAllowed",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct Conflict: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/409/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/409/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.Conflict.Body
+                /// Creates a new `Conflict`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.Conflict.Body) {
+                    self.body = body
+                }
+            }
+            /// The original Run is unfinished, latest mode cannot reuse its artifact inputs, an exact input is unavailable, or the idempotency key conflicts.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Operations.RerunRun.Output.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            internal var conflict: Operations.RerunRun.Output.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            internal struct InternalServerError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/500/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/runs/{runId}/rerun/POST/responses/500/content/application\/problem+json`.
+                    case applicationProblemJson(Components.Schemas.Problem)
+                    /// The associated value of the enum case if `self` is `.applicationProblemJson`.
+                    ///
+                    /// - Throws: An error if `self` is not `.applicationProblemJson`.
+                    /// - SeeAlso: `.applicationProblemJson`.
+                    internal var applicationProblemJson: Components.Schemas.Problem {
+                        get throws {
+                            switch self {
+                            case let .applicationProblemJson(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.RerunRun.Output.InternalServerError.Body
+                /// Creates a new `InternalServerError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.RerunRun.Output.InternalServerError.Body) {
+                    self.body = body
+                }
+            }
+            /// The rerun could not be created.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/runs/{runId}/rerun/post(rerunRun)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Operations.RerunRun.Output.InternalServerError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Operations.RerunRun.Output.InternalServerError {
                 get throws {
                     switch self {
                     case let .internalServerError(response):

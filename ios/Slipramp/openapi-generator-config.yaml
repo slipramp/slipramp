@@ -6,10 +6,14 @@ namingStrategy: idiomatic
 filter:
   operations:
     - cancelRun
+    - createRun
     - decidePromotion
     - decideRunReview
     - downloadArtifact
     - getInbox
     - getPromotion
     - getRun
+    - getTarget
     - listRuns
+    - listTargets
+    - rerunRun

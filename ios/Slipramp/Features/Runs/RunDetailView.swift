@@ -10,6 +10,7 @@ private final class RunDetailViewModel: ObservableObject {
 
     private let client: SliprampAPIClient
     private let runID: String
+    private let refreshIntervalNanoseconds: UInt64 = 2_000_000_000
 
     init(client: SliprampAPIClient, runID: String, initialRun: Run?) {
         self.client = client
@@ -32,6 +33,27 @@ private final class RunDetailViewModel: ObservableObject {
         }
     }
 
+    func followUntilFinished() async -> Bool {
+        let startedActive = run?.phase != .finished
+
+        while !Task.isCancelled {
+            await load()
+            if run?.phase == .finished {
+                return startedActive
+            }
+
+            do {
+                try await Task.sleep(nanoseconds: refreshIntervalNanoseconds)
+            } catch is CancellationError {
+                return false
+            } catch {
+                return false
+            }
+        }
+
+        return false
+    }
+
     func cancel() async -> Bool {
         guard !isMutating else {
             return false
@@ -49,6 +71,29 @@ private final class RunDetailViewModel: ObservableObject {
                 await load()
             }
             return false
+        }
+    }
+
+    func createRerun(mode: RunRerunMode, idempotencyKey: String) async -> Run? {
+        guard !isMutating else {
+            return nil
+        }
+        isMutating = true
+        operationError = nil
+        defer { isMutating = false }
+
+        do {
+            return try await client.rerunRun(
+                id: runID,
+                mode: mode,
+                idempotencyKey: idempotencyKey
+            )
+        } catch {
+            operationError = error.localizedDescription
+            if case let SliprampAPIError.http(status, _, _) = error, status == 409 {
+                await load()
+            }
+            return nil
         }
     }
 
@@ -92,6 +137,9 @@ struct RunDetailView: View {
     @StateObject private var model: RunDetailViewModel
     @State private var showReviewSheet = false
     @State private var showCancelConfirmation = false
+    @State private var createdRerun: Run?
+    @State private var rerunKey = UUID().uuidString.lowercased()
+    @ScaledMetric(relativeTo: .body) private var actionIconWidth: CGFloat = 20
 
     private let client: SliprampAPIClient
     private let runID: String
@@ -153,28 +201,22 @@ struct RunDetailView: View {
             }
         }
         .task {
-            await model.load()
+            if await model.followUntilFinished() {
+                onRunChanged()
+            }
         }
         .sheet(isPresented: $showReviewSheet) {
             RunReviewDecisionSheet(model: model) {
                 onRunChanged()
             }
         }
-        .confirmationDialog(
-            "Cancel this Run?",
-            isPresented: $showCancelConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Cancel Run", role: .destructive) {
-                Task {
-                    if await model.cancel() {
-                        onRunChanged()
-                    }
-                }
-            }
-            Button("Keep Running", role: .cancel) {}
-        } message: {
-            Text("Queued Runs stop immediately. Active Runs stop after their Controller removes the execution Job.")
+        .navigationDestination(item: $createdRerun) { run in
+            RunDetailView(
+                client: client,
+                runID: run.id,
+                initialRun: run,
+                onRunChanged: onRunChanged
+            )
         }
     }
 
@@ -189,7 +231,19 @@ struct RunDetailView: View {
                 )
             }
             if let state = run.schedulingState {
-                LabeledContent("Scheduling", value: display(state.rawValue))
+                if let blockingRunID = run.blockingRunId {
+                    NavigationLink {
+                        RunDetailView(
+                            client: client,
+                            runID: blockingRunID,
+                            onRunChanged: onRunChanged
+                        )
+                    } label: {
+                        LabeledContent("Scheduling", value: display(state.rawValue))
+                    }
+                } else {
+                    LabeledContent("Scheduling", value: display(state.rawValue))
+                }
             }
             if let state = run.observationState {
                 LabeledContent("Observation", value: display(state.rawValue))
@@ -209,7 +263,35 @@ struct RunDetailView: View {
             NavigationLink {
                 RunLogView(client: client, runID: runID)
             } label: {
-                Label("View live log", systemImage: "terminal")
+                actionLabel("View live log", systemImage: "terminal")
+            }
+
+            if run.phase == .finished {
+                Menu {
+                    Button {
+                        startRerun(.exact)
+                    } label: {
+                        Label(RunRerunMode.exact.displayLabel, systemImage: "arrow.clockwise")
+                            .labelStyle(.titleAndIcon)
+                    }
+
+                    Button {
+                        startRerun(.latest)
+                    } label: {
+                        Label(RunRerunMode.latest.displayLabel, systemImage: "play.fill")
+                            .labelStyle(.titleAndIcon)
+                    }
+                    .disabled(!run.inputs.additionalProperties.isEmpty)
+                } label: {
+                    actionLabel("Run again", systemImage: "arrow.clockwise")
+                }
+                .disabled(model.isMutating)
+
+                if !run.inputs.additionalProperties.isEmpty {
+                    Text("Runs with artifact inputs stay pinned to the producing revision.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if run.canCancel {
@@ -217,11 +299,42 @@ struct RunDetailView: View {
                     model.clearOperationError()
                     showCancelConfirmation = true
                 } label: {
-                    Label("Cancel Run", systemImage: "stop.circle")
+                    actionLabel("Cancel Run", systemImage: "stop.circle")
                 }
                 .disabled(model.isMutating)
+                .confirmationDialog(
+                    "Cancel this Run?",
+                    isPresented: $showCancelConfirmation,
+                    titleVisibility: .visible
+                ) {
+                    Button("Cancel Run", role: .destructive) {
+                        Task {
+                            if await model.cancel() {
+                                onRunChanged()
+                            }
+                        }
+                    }
+                    Button("Keep Running", role: .cancel) {}
+                } message: {
+                    Text(
+                        "Queued Runs stop immediately. Active Runs stop after their Controller "
+                            + "removes the execution Job."
+                    )
+                }
             }
         }
+    }
+
+    private func actionLabel(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: SliprampTheme.Space.small) {
+            Image(systemName: systemImage)
+                .frame(width: actionIconWidth)
+                .accessibilityHidden(true)
+            Text(title)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
     }
 
     private func statusTone(_ run: Run) -> SliprampTone {
@@ -291,6 +404,7 @@ struct RunDetailView: View {
                         showReviewSheet = true
                     } label: {
                         Label("Review Run", systemImage: "checkmark.shield")
+                            .labelStyle(.titleAndIcon)
                     }
                     .disabled(model.isMutating)
                 }
@@ -305,14 +419,49 @@ struct RunDetailView: View {
                 Text(description)
                     .foregroundStyle(.secondary)
             }
-            LabeledContent("Target", value: run.target)
+            NavigationLink {
+                TargetDetailView(
+                    client: client,
+                    targetID: run.targetId,
+                    initialDisplayName: run.target,
+                    onRunChanged: onRunChanged
+                )
+            } label: {
+                LabeledContent("Target", value: run.target)
+            }
             LabeledContent("Action", value: run.action)
             LabeledContent("Runtime", value: run.runtime)
             LabeledContent("Placement", value: run.placement)
             LabeledContent("Cluster", value: run.cluster)
-            LabeledContent("Source", value: run.source.displayLabel)
+            if let promotionID = run.source.promotion?.promotionId {
+                NavigationLink {
+                    PromotionDetailView(
+                        client: client,
+                        promotionID: promotionID,
+                        onPromotionChanged: onRunChanged
+                    )
+                } label: {
+                    LabeledContent("Source", value: run.source.displayLabel)
+                }
+            } else {
+                LabeledContent("Source", value: run.source.displayLabel)
+            }
             if let actor = run.createdBy {
                 LabeledContent("Created by", value: actor.displayName)
+            }
+            if let parentRunID = run.rerunOfRunId, let mode = run.rerunMode {
+                NavigationLink {
+                    RunDetailView(
+                        client: client,
+                        runID: parentRunID,
+                        onRunChanged: onRunChanged
+                    )
+                } label: {
+                    LabeledContent("Run again") {
+                        Text(rerunSourceLabel(mode: mode, parentRunID: parentRunID))
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
             }
             if let value = run.actionDocumentationUrl, let url = URL(string: value) {
                 Link("Action documentation", destination: url)
@@ -341,11 +490,19 @@ struct RunDetailView: View {
             Section("Artifact inputs") {
                 ForEach(inputs.keys.sorted(), id: \.self) { name in
                     if let input = inputs[name] {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(name)
-                            Text("\(input.name) from Run \(input.producerRunId.prefix(8))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        NavigationLink {
+                            RunDetailView(
+                                client: client,
+                                runID: input.producerRunId,
+                                onRunChanged: onRunChanged
+                            )
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(name)
+                                Text("\(input.name) from Run \(input.producerRunId.prefix(8))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }
@@ -426,6 +583,27 @@ struct RunDetailView: View {
             "Rejection canceled this Run before assignment."
         }
     }
+
+    private func startRerun(_ mode: RunRerunMode) {
+        let idempotencyKey = "\(rerunKey)-\(mode.rawValue)"
+        Task {
+            guard let run = await model.createRerun(
+                mode: mode,
+                idempotencyKey: idempotencyKey
+            ) else {
+                return
+            }
+
+            rerunKey = UUID().uuidString.lowercased()
+            onRunChanged()
+            createdRerun = run
+        }
+    }
+
+    private func rerunSourceLabel(mode: RunRerunMode, parentRunID: String) -> String {
+        let relationship = mode == .exact ? "Same revision as" : "Latest revision from"
+        return "\(relationship) Run \(parentRunID.prefix(8))"
+    }
 }
 
 private struct RunReviewDecisionSheet: View {
@@ -470,17 +648,8 @@ private struct RunReviewDecisionSheet: View {
                 }
 
                 Section {
-                    Button(role: .destructive) {
-                        decisionToConfirm = .rejected
-                    } label: {
-                        Label("Reject Run", systemImage: "xmark.circle")
-                    }
-
-                    Button {
-                        decisionToConfirm = .approved
-                    } label: {
-                        Label("Approve Run", systemImage: "checkmark.circle")
-                    }
+                    decisionButton(.rejected)
+                    decisionButton(.approved)
                 }
                 .disabled(model.isMutating || comment.count > 4096)
             }
@@ -499,51 +668,57 @@ private struct RunReviewDecisionSheet: View {
                     }
                 }
             }
-            .confirmationDialog(
-                confirmationTitle,
-                isPresented: confirmationPresented,
-                titleVisibility: .visible
-            ) {
-                if let decision = decisionToConfirm {
-                    Button(
-                        decision == .approved ? "Approve Run" : "Reject Run",
-                        role: decision == .rejected ? .destructive : nil
-                    ) {
-                        decisionToConfirm = nil
-                        Task {
-                            if await model.decideReview(decision: decision, comment: comment) {
-                                onCompleted()
-                                dismiss()
-                            }
-                        }
-                    }
-                }
-                Button("Go Back", role: .cancel) {
-                    decisionToConfirm = nil
-                }
-            } message: {
-                Text(confirmationMessage)
-            }
         }
     }
 
-    private var confirmationPresented: Binding<Bool> {
+    private func confirmationPresented(for decision: RunReviewDecision) -> Binding<Bool> {
         Binding(
-            get: { decisionToConfirm != nil },
+            get: { decisionToConfirm == decision },
             set: { presented in
-                if !presented {
+                if !presented, decisionToConfirm == decision {
                     decisionToConfirm = nil
                 }
             }
         )
     }
 
-    private var confirmationTitle: String {
-        decisionToConfirm == .approved ? "Approve this Run?" : "Reject this Run?"
+    private func decisionButton(_ decision: RunReviewDecision) -> some View {
+        Button(role: decision == .rejected ? .destructive : nil) {
+            decisionToConfirm = decision
+        } label: {
+            Label(
+                decision == .approved ? "Approve Run" : "Reject Run",
+                systemImage: decision == .approved ? "checkmark.circle" : "xmark.circle"
+            )
+            .labelStyle(.titleAndIcon)
+        }
+        .confirmationDialog(
+            decision == .approved ? "Approve this Run?" : "Reject this Run?",
+            isPresented: confirmationPresented(for: decision),
+            titleVisibility: .visible
+        ) {
+            Button(
+                decision == .approved ? "Approve Run" : "Reject Run",
+                role: decision == .rejected ? .destructive : nil
+            ) {
+                decisionToConfirm = nil
+                Task {
+                    if await model.decideReview(decision: decision, comment: comment) {
+                        onCompleted()
+                        dismiss()
+                    }
+                }
+            }
+            Button("Go Back", role: .cancel) {
+                decisionToConfirm = nil
+            }
+        } message: {
+            Text(confirmationMessage(for: decision))
+        }
     }
 
-    private var confirmationMessage: String {
-        if decisionToConfirm == .approved {
+    private func confirmationMessage(for decision: RunReviewDecision) -> String {
+        if decision == .approved {
             return "Approval makes this Run eligible for ordinary assignment."
         }
         return "Rejection cancels this Run before assignment and cannot be undone."

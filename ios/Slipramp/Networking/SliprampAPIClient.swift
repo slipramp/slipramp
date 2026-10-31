@@ -79,6 +79,66 @@ struct SliprampAPIClient: @unchecked Sendable {
         }
     }
 
+    func listTargets(
+        query: String? = nil,
+        limit: Int = 100,
+        offset: Int = 0
+    ) async throws -> TargetList {
+        guard let generatedOffset = Int32(exactly: offset) else {
+            throw SliprampAPIError.invalidPagination
+        }
+
+        let output = try await callGenerated {
+            try await generatedClient.listTargets(
+                query: .init(
+                    q: query,
+                    limit: limit,
+                    offset: generatedOffset
+                )
+            )
+        }
+
+        switch output {
+        case let .ok(response):
+            return try response.body.json
+        case let .badRequest(response):
+            throw try httpError(status: 400, problem: response.body.applicationProblemJson)
+        case let .unauthorized(response):
+            throw try httpError(status: 401, problem: response.body.applicationProblemJson)
+        case let .forbidden(response):
+            throw try httpError(status: 403, problem: response.body.applicationProblemJson)
+        case let .methodNotAllowed(response):
+            throw try httpError(status: 405, problem: response.body.applicationProblemJson)
+        case let .internalServerError(response):
+            throw try httpError(status: 500, problem: response.body.applicationProblemJson)
+        case let .undocumented(statusCode, _):
+            throw SliprampAPIError.http(status: statusCode, title: nil, detail: nil)
+        }
+    }
+
+    func getTarget(id: String) async throws -> CatalogTarget {
+        let output = try await callGenerated {
+            try await generatedClient.getTarget(path: .init(targetId: id))
+        }
+
+        switch output {
+        case let .ok(response):
+            return try response.body.json
+        case let .unauthorized(response):
+            throw try httpError(status: 401, problem: response.body.applicationProblemJson)
+        case let .forbidden(response):
+            throw try httpError(status: 403, problem: response.body.applicationProblemJson)
+        case let .notFound(response):
+            throw try httpError(status: 404, problem: response.body.applicationProblemJson)
+        case let .methodNotAllowed(response):
+            throw try httpError(status: 405, problem: response.body.applicationProblemJson)
+        case let .internalServerError(response):
+            throw try httpError(status: 500, problem: response.body.applicationProblemJson)
+        case let .undocumented(statusCode, _):
+            throw SliprampAPIError.http(status: statusCode, title: nil, detail: nil)
+        }
+    }
+
     func listRuns(limit: Int = 50, offset: Int = 0) async throws -> RunList {
         guard let generatedOffset = Int32(exactly: offset) else {
             throw SliprampAPIError.invalidPagination
@@ -101,6 +161,47 @@ struct SliprampAPIClient: @unchecked Sendable {
             throw try httpError(status: 403, problem: response.body.applicationProblemJson)
         case let .methodNotAllowed(response):
             throw try httpError(status: 405, problem: response.body.applicationProblemJson)
+        case let .internalServerError(response):
+            throw try httpError(status: 500, problem: response.body.applicationProblemJson)
+        case let .undocumented(statusCode, _):
+            throw SliprampAPIError.http(status: statusCode, title: nil, detail: nil)
+        }
+    }
+
+    func createRun(
+        targetID: String,
+        action: String,
+        parameters: [String: ActionParameterValue],
+        idempotencyKey: String
+    ) async throws -> Run {
+        let request = Components.Schemas.RunCreate(
+            targetId: targetID,
+            action: action,
+            parameters: .init(additionalProperties: parameters),
+            inputs: .init()
+        )
+        let output = try await callGenerated {
+            try await generatedClient.createRun(
+                headers: .init(idempotencyKey: idempotencyKey),
+                body: .json(request)
+            )
+        }
+
+        switch output {
+        case let .created(response):
+            return try response.body.json
+        case let .badRequest(response):
+            throw try httpError(status: 400, problem: response.body.applicationProblemJson)
+        case let .unauthorized(response):
+            throw try httpError(status: 401, problem: response.body.applicationProblemJson)
+        case let .forbidden(response):
+            throw try httpError(status: 403, problem: response.body.applicationProblemJson)
+        case let .notFound(response):
+            throw try httpError(status: 404, problem: response.body.applicationProblemJson)
+        case let .methodNotAllowed(response):
+            throw try httpError(status: 405, problem: response.body.applicationProblemJson)
+        case let .conflict(response):
+            throw try httpError(status: 409, problem: response.body.applicationProblemJson)
         case let .internalServerError(response):
             throw try httpError(status: 500, problem: response.body.applicationProblemJson)
         case let .undocumented(statusCode, _):
@@ -139,6 +240,44 @@ struct SliprampAPIClient: @unchecked Sendable {
         switch output {
         case let .ok(response):
             return try response.body.json
+        case let .unauthorized(response):
+            throw try httpError(status: 401, problem: response.body.applicationProblemJson)
+        case let .forbidden(response):
+            throw try httpError(status: 403, problem: response.body.applicationProblemJson)
+        case let .notFound(response):
+            throw try httpError(status: 404, problem: response.body.applicationProblemJson)
+        case let .methodNotAllowed(response):
+            throw try httpError(status: 405, problem: response.body.applicationProblemJson)
+        case let .conflict(response):
+            throw try httpError(status: 409, problem: response.body.applicationProblemJson)
+        case let .internalServerError(response):
+            throw try httpError(status: 500, problem: response.body.applicationProblemJson)
+        case let .undocumented(statusCode, _):
+            throw SliprampAPIError.http(status: statusCode, title: nil, detail: nil)
+        }
+    }
+
+    func rerunRun(
+        id: String,
+        mode: RunRerunMode,
+        idempotencyKey: String
+    ) async throws -> Run {
+        let request = Components.Schemas.RunRerun(mode: mode)
+        let output = try await callGenerated {
+            try await generatedClient.rerunRun(
+                .init(
+                    path: .init(runId: id),
+                    headers: .init(idempotencyKey: idempotencyKey),
+                    body: .json(request)
+                )
+            )
+        }
+
+        switch output {
+        case let .created(response):
+            return try response.body.json
+        case let .badRequest(response):
+            throw try httpError(status: 400, problem: response.body.applicationProblemJson)
         case let .unauthorized(response):
             throw try httpError(status: 401, problem: response.body.applicationProblemJson)
         case let .forbidden(response):
@@ -337,6 +476,7 @@ struct SliprampAPIClient: @unchecked Sendable {
                             }
 
                             hasConnected = true
+                            continuation.yield(.connected(offset: offset))
                             var parser = RunLogSSEParser(offset: offset)
                             var terminal = false
                             for try await byte in bytes {
@@ -350,7 +490,7 @@ struct SliprampAPIClient: @unchecked Sendable {
                                 switch update {
                                 case .sealed, .failed:
                                     terminal = true
-                                case .chunk, .reconnecting:
+                                case .connected, .chunk, .reconnecting:
                                     break
                                 }
                                 if terminal {
@@ -506,7 +646,7 @@ enum SliprampAPIError: LocalizedError, Equatable {
         case .invalidServerURL:
             return "Enter a valid HTTP or HTTPS Slipramp Server URL."
         case .invalidPagination:
-            return "The requested Run page is outside the supported range."
+            return "The requested page is outside the supported range."
         case .invalidResponse:
             return "The Slipramp Server returned an invalid response."
         case let .http(status, title, detail):
