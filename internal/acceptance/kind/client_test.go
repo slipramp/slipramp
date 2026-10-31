@@ -66,7 +66,14 @@ func (s *suite) authenticate(t *testing.T) {
 		t.Fatalf("complete OIDC login returned HTTP %d: %s", oauthResponse.status, oauthResponse.body)
 	}
 
-	client, err := api.NewClientWithResponses(s.serverURL, api.WithHTTPClient(sessionClient))
+	client, err := api.NewClientWithResponses(
+		s.serverURL,
+		api.WithHTTPClient(sessionClient),
+		api.WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
+			request.Header.Set("X-Slipramp-CSRF", "1")
+			return nil
+		}),
+	)
 	if err != nil {
 		t.Fatalf("create session API client: %v", err)
 	}
