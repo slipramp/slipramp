@@ -412,6 +412,7 @@ func (s *suite) testInbox(t *testing.T) {
 	form := url.Values{"problemId": []string{firstProblem}}
 	headers := make(http.Header)
 	headers.Set("Content-Type", "application/x-www-form-urlencoded")
+	headers.Set("Origin", s.webURL)
 	acknowledge := s.httpRequest(t, s.sessionHTTPClient, http.MethodPost, s.webURL+"/?index", "", []byte(form.Encode()), headers)
 	if acknowledge.status < 200 || acknowledge.status >= 400 {
 		t.Fatalf("acknowledge Inbox problem returned HTTP %d: %s", acknowledge.status, acknowledge.body)
