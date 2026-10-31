@@ -33,20 +33,36 @@ spec:
           env:
             - name: SLIPRAMP_API_URL
               value: {{ printf "http://%s:%v" (include "slipramp.serverName" .) .Values.server.service.port | quote }}
+            - name: SLIPRAMP_WEB_TRUST_PROXY_HOPS
+              value: {{ .Values.web.trustedProxyHops | quote }}
           ports:
             - name: http
               containerPort: 3000
               protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: {{ .Values.web.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.web.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.web.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.web.startupProbe.failureThreshold }}
           livenessProbe:
             httpGet:
               path: /
               port: http
-            periodSeconds: 10
+            initialDelaySeconds: {{ .Values.web.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.web.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.web.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.web.livenessProbe.failureThreshold }}
           readinessProbe:
             httpGet:
               path: /
               port: http
-            periodSeconds: 5
+            initialDelaySeconds: {{ .Values.web.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.web.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.web.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.web.readinessProbe.failureThreshold }}
           resources:
             {{- toYaml .Values.web.resources | nindent 12 }}
           volumeMounts:

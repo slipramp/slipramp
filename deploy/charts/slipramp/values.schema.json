@@ -35,6 +35,7 @@
         "notifications",
         "placements",
         "clusters",
+        "startupProbe",
         "livenessProbe",
         "readinessProbe",
         "resources",
@@ -229,6 +230,7 @@
             }
           }
         },
+        "startupProbe": { "$ref": "#/$defs/probe" },
         "livenessProbe": { "$ref": "#/$defs/probe" },
         "readinessProbe": {
           "allOf": [
@@ -254,8 +256,12 @@
       "required": [
         "replicaCount",
         "image",
+        "trustedProxyHops",
         "service",
         "resources",
+        "startupProbe",
+        "livenessProbe",
+        "readinessProbe",
         "podSecurityContext",
         "securityContext",
         "nodeSelector",
@@ -266,8 +272,12 @@
       "properties": {
         "replicaCount": { "type": "integer", "const": 1 },
         "image": { "$ref": "#/$defs/image" },
+        "trustedProxyHops": { "type": "integer", "minimum": 0 },
         "service": { "$ref": "#/$defs/service" },
         "resources": { "type": "object" },
+        "startupProbe": { "$ref": "#/$defs/probe" },
+        "livenessProbe": { "$ref": "#/$defs/probe" },
+        "readinessProbe": { "$ref": "#/$defs/probe" },
         "podSecurityContext": { "type": "object" },
         "securityContext": { "type": "object" },
         "nodeSelector": { "$ref": "#/$defs/stringMap" },
@@ -382,10 +392,17 @@
     "image": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "tag", "pullPolicy"],
+      "required": ["repository", "tag", "digest", "pullPolicy"],
       "properties": {
         "repository": { "type": "string", "minLength": 1, "pattern": "^[^[:space:]]+$" },
         "tag": { "type": "string", "minLength": 1, "not": { "const": "latest" } },
+        "digest": {
+          "type": "string",
+          "oneOf": [
+            { "maxLength": 0 },
+            { "pattern": "^sha256:[a-f0-9]{64}$" }
+          ]
+        },
         "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] }
       }
     },

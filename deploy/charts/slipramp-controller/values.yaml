@@ -10,13 +10,16 @@ maximumActiveRuns: 4
 image:
   repository: ghcr.io/slipramp/slipramp-controller
   tag: "0.1.0"
+  digest: ""
   pullPolicy: IfNotPresent
 checkoutImage:
   repository: ghcr.io/slipramp/slipramp-checkout
   tag: "0.1.0"
+  digest: ""
 harnessImage:
   repository: ghcr.io/slipramp/slipramp-harness
   tag: "0.1.0"
+  digest: ""
 
 metrics:
   port: 9091

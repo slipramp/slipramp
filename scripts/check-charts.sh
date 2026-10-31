@@ -8,6 +8,7 @@ server_chart="$repository_root/deploy/charts/slipramp"
 controller_chart="$repository_root/deploy/charts/slipramp-controller"
 testdata="$repository_root/deploy/charts/testdata"
 test_directory=$(mktemp -d "${TMPDIR:-/tmp}/slipramp-chart-tests.XXXXXX")
+image_digest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 cleanup() {
   rm -rf "$test_directory"
@@ -72,11 +73,26 @@ cmp -s "$server_render" "$server_repeat" || fail "Server chart rendering is not 
 assert_not_contains "$server_render" '^kind: Secret$'
 assert_contains "$server_render" 'name: slipramp-server-secrets'
 assert_contains "$server_render" 'automountServiceAccountToken: false'
+test "$(grep -Ec '^          startupProbe:$' "$server_render")" = 2 || \
+  fail "Server chart did not render startup probes for both components"
 assert_contains "$server_render" 'path: /healthz'
 assert_contains "$server_render" 'path: /readyz'
 assert_contains "$server_render" 'timeoutSeconds: 3'
+assert_contains "$server_render" 'name: SLIPRAMP_WEB_TRUST_PROXY_HOPS'
+assert_contains "$server_render" 'value: "0"'
 assert_not_contains "$server_render" '^kind: (ClusterRole|Role|RoleBinding|ServiceAccount)$'
 assert_not_contains "$server_render" '^kind: (Ingress|HTTPRoute)$'
+
+"$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/slipramp-required.yaml" \
+  --set-string server.image.digest="$image_digest" \
+  --set-string web.image.digest="$image_digest" \
+  >"$test_directory/server-digests.yaml"
+assert_contains "$test_directory/server-digests.yaml" \
+  "image: \"ghcr.io/slipramp/slipramp-server:0.1.0@$image_digest\""
+assert_contains "$test_directory/server-digests.yaml" \
+  "image: \"ghcr.io/slipramp/slipramp-web:0.1.0@$image_digest\""
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
@@ -133,6 +149,8 @@ test "$(grep -Ec '^            pathType: Exact$' "$test_directory/server-schedul
 assert_contains "$test_directory/server-scheduling.yaml" 'topologySpreadConstraints:'
 assert_contains "$test_directory/server-scheduling.yaml" 'name: registry-credentials'
 assert_contains "$test_directory/server-scheduling.yaml" 'kubernetes.io/os: linux'
+assert_contains "$test_directory/server-scheduling.yaml" 'value: "1"'
+assert_contains "$test_directory/server-scheduling.yaml" 'periodSeconds: 15'
 assert_not_contains "$test_directory/server-scheduling.yaml" 'path: /metrics'
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
@@ -210,6 +228,20 @@ assert_contains "$controller_render" 'port: 9091'
 "$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
   --namespace slipramp-system \
   --values "$testdata/controller-required.yaml" \
+  --set-string image.digest="$image_digest" \
+  --set-string checkoutImage.digest="$image_digest" \
+  --set-string harnessImage.digest="$image_digest" \
+  >"$test_directory/controller-digests.yaml"
+assert_contains "$test_directory/controller-digests.yaml" \
+  "image: \"ghcr.io/slipramp/slipramp-controller:0.1.0@$image_digest\""
+assert_contains "$test_directory/controller-digests.yaml" \
+  "value: \"ghcr.io/slipramp/slipramp-checkout:0.1.0@$image_digest\""
+assert_contains "$test_directory/controller-digests.yaml" \
+  "value: \"ghcr.io/slipramp/slipramp-harness:0.1.0@$image_digest\""
+
+"$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
+  --namespace slipramp-system \
+  --values "$testdata/controller-required.yaml" \
   --values "$testdata/controller-metrics.yaml" \
   >"$test_directory/controller-metrics.yaml"
 assert_contains "$test_directory/controller-metrics.yaml" 'prometheus.io/scrape: "true"'
@@ -240,6 +272,9 @@ assert_render_fails "Server replica count greater than one" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" --set server.replicaCount=2
 assert_render_fails "Server latest image" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" --set-string server.image.tag=latest
+assert_render_fails "Server malformed image digest" \
+  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
+  --set-string server.image.digest=sha256:not-a-digest
 assert_render_fails "Server readiness timeout shorter than the application deadline" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" --set server.readinessProbe.timeoutSeconds=2
 assert_render_fails "Missing Server database credential" \
@@ -289,5 +324,8 @@ assert_render_fails "Controller without an execution namespace" \
   invalid "$controller_chart" --values "$testdata/controller-required.yaml" --set-json executionNamespaces='[]'
 assert_render_fails "Controller latest Harness image" \
   invalid "$controller_chart" --values "$testdata/controller-required.yaml" --set-string harnessImage.tag=latest
+assert_render_fails "Controller malformed image digest" \
+  invalid "$controller_chart" --values "$testdata/controller-required.yaml" \
+  --set-string harnessImage.digest=sha256:not-a-digest
 
 printf 'Helm chart checks passed\n'

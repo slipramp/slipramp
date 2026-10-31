@@ -52,7 +52,11 @@ app.kubernetes.io/component: controller
 {{- if eq .tag "latest" -}}
 {{- fail "image tag must not be latest" -}}
 {{- end -}}
+{{- if .digest -}}
+{{- printf "%s:%s@%s" .repository .tag .digest -}}
+{{- else -}}
 {{- printf "%s:%s" .repository .tag -}}
+{{- end -}}
 {{- end }}
 
 {{- define "slipramp-controller.secretName" -}}

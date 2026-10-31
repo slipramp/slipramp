@@ -8,6 +8,7 @@ server:
   image:
     repository: ghcr.io/slipramp/slipramp-server
     tag: "0.1.0"
+    digest: ""
     pullPolicy: IfNotPresent
 
   service:
@@ -83,6 +84,11 @@ server:
   placements: {}
   clusters: {}
 
+  startupProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 60
   livenessProbe:
     initialDelaySeconds: 0
     periodSeconds: 10
@@ -118,12 +124,29 @@ web:
   image:
     repository: ghcr.io/slipramp/slipramp-web
     tag: "0.1.0"
+    digest: ""
     pullPolicy: IfNotPresent
+  trustedProxyHops: 0
   service:
     type: ClusterIP
     port: 3000
     annotations: {}
   resources: {}
+  startupProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 30
+  livenessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 1
+    failureThreshold: 3
+  readinessProbe:
+    initialDelaySeconds: 0
+    periodSeconds: 5
+    timeoutSeconds: 1
+    failureThreshold: 3
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 1000

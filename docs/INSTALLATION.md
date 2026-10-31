@@ -21,7 +21,9 @@ once in each execution Cluster. It requires one stable Cluster name and one or
 more exclusive execution namespaces, creates only namespaced Job/Pod RBAC, and
 fixes the replica count at one. Git and execution Secrets stay in that Cluster.
 Both charts use explicit non-`latest` image tags and expose resources, security
-contexts, image pull Secrets, and focused scheduling settings.
+contexts, image pull Secrets, and focused scheduling settings. Image values may
+add a SHA-256 digest when an installation requires registry-level immutability;
+the rendered reference retains the release tag and resolves the digest.
 
 ## Installing published charts
 

@@ -1590,9 +1590,12 @@ API HTTPRoute exposure. Placement and Kargo integration ConfigMap checksums roll
 the Server on configuration changes; live reload is not part of the contract.
 The Controller chart grants only namespaced Job/Pod access and optional Kargo
 Stage reads.
-Secret-bearing values default to operator-managed Secret references. Images are
-pinned; a `vX.Y.Z` tag publishes matching application images and versioned OCI
-charts to GHCR with tag/chart/application/image versions required to agree.
+Secret-bearing values default to operator-managed Secret references. Component
+probes are explicit, and the web chart requires an exact trusted-proxy hop count
+when a reverse proxy supplies forwarded host and protocol information. Images
+use non-`latest` tags and may additionally pin a SHA-256 digest; a `vX.Y.Z` tag
+publishes matching application images and versioned OCI charts to GHCR with
+tag/chart/application/image versions required to agree.
 
 Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.

@@ -82,6 +82,17 @@ them to a release tag or an immutable registry tag appropriate for the
 installation. The checkout image must contain `/bin/sh`, Git, and SSH; the
 Harness image entrypoint must be `slipramp-harness`.
 
+Each image also accepts an optional SHA-256 digest. When set, the chart renders
+`repository:tag@sha256:...`; the tag remains required for readable manifests
+and release validation while Kubernetes resolves the immutable digest:
+
+```yaml
+image:
+  repository: ghcr.io/slipramp/slipramp-controller
+  tag: 0.1.0
+  digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
 Kargo Stage observation is optional and configured separately from execution
 namespaces. For every distinct configured Stage namespace, the chart creates a
 dedicated Role and RoleBinding. It can get, list, and promote

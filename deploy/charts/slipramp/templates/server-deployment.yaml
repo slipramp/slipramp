@@ -170,6 +170,14 @@ spec:
             - name: metrics
               containerPort: {{ .Values.server.metrics.port }}
               protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: {{ .Values.server.startupProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.server.startupProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.server.startupProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.server.startupProbe.failureThreshold }}
           livenessProbe:
             httpGet:
               path: /healthz

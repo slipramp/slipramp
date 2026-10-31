@@ -19,6 +19,11 @@ server:
         matchLabels:
           app.kubernetes.io/component: server
 web:
+  trustedProxyHops: 1
+  livenessProbe:
+    periodSeconds: 15
+  readinessProbe:
+    periodSeconds: 10
   nodeSelector:
     kubernetes.io/os: linux
   affinity:

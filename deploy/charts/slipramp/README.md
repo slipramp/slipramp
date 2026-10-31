@@ -42,6 +42,19 @@ both `existingSecret.name` and `existingSecret.key` to empty strings. The
 schema rejects setting both paths or neither path. Inline values are visible to
 Helm and should be reserved for disposable environments.
 
+Server and web images accept an optional SHA-256 digest while retaining the
+required release tag for readable manifests and release validation. When a
+digest is set, the chart renders `repository:tag@sha256:...`, and Kubernetes
+resolves the immutable digest:
+
+```yaml
+server:
+  image:
+    repository: ghcr.io/slipramp/slipramp-server
+    tag: 0.1.0
+    digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+```
+
 Repository-refresh credentials are mounted directly from operator-managed
 Secrets. Each Secret can contain a `gitconfig` plus any files it references:
 
@@ -167,9 +180,26 @@ Terminate TLS before exposing Slipramp over an untrusted network.
 
 The Server's liveness probe uses `/healthz`. Readiness uses `/readyz` with a
 three-second Kubernetes timeout because the application bounds its dependency
-checks at two seconds. PostgreSQL, S3, and Slack webhook Secret changes require
-an explicit Server rollout. The chart fixes Server and web replicas at one and
-does not claim high-availability support.
+checks at two seconds. Server and web startup, liveness, and readiness timing is
+configurable under each component's probe values. The default startup probes
+give the Server five minutes and the web process two and a half minutes to
+start before liveness checks begin. PostgreSQL, S3, and Slack webhook Secret
+changes require an explicit Server rollout. The chart fixes Server and web
+replicas at one and does not claim high-availability support.
+
+The web process does not trust forwarded host or protocol headers by default.
+When a known reverse proxy terminates TLS, set `web.trustedProxyHops` to the
+exact number of trusted proxy hops between the client and the web process. For
+example, a Gateway that connects directly to the web Service normally uses:
+
+```yaml
+web:
+  trustedProxyHops: 1
+```
+
+Do not set a larger value than the deployment topology requires; doing so can
+allow a client to supply forwarded values that the web process treats as
+trusted.
 
 The Server also exposes unauthenticated Prometheus/OpenMetrics text at
 `/metrics` on its dedicated `metrics` Service port, defaulting to `9091`. The
