@@ -617,3 +617,9 @@ Rapid file changes are coalesced, and a failed rebuild leaves the last good
 Server binary available. While the repository and database contracts are still
 pre-stable, schema baselines may be rewritten instead of migrated compatibly;
 recreate the local PostgreSQL volume after such a change.
+
+## License
+
+Slipramp software, documentation, and configuration are licensed under the [Apache License 2.0](LICENSE). The production artwork identified in [LICENSE-ARTWORK.md](LICENSE-ARTWORK.md) is licensed separately under [Creative Commons Attribution-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-sa/4.0/).
+
+Neither license grants trademark rights in the Slipramp name, logo, or mascot. See [TRADEMARKS.md](TRADEMARKS.md) for the trademark policy.

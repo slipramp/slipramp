@@ -81,3 +81,5 @@ Use the established names consistently:
 Canonical Slipramp brand and mascot source artwork, prompts, prototypes, and export masters live in the sibling `../slipramp-assets` repository, normally checked out at `~/Workspace/slipramp-assets`. Do not recreate a top-level `assets/` directory here. This repository tracks only production outputs required to build and distribute Slipramp.
 
 Read `../slipramp-assets/AGENTS.md` before changing source artwork. If that workspace is unavailable, do not regenerate or replace source artwork without maintainer direction. Normal builds, tests, and releases must not depend on the sibling checkout.
+
+Production artwork is licensed under CC BY-SA 4.0 as listed in `LICENSE-ARTWORK.md`; the remaining repository content is Apache-2.0. Preserve the artwork attribution and share-alike terms, keep the covered-path list current, and follow `TRADEMARKS.md` when naming or branding derivatives.

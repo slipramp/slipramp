@@ -10,3 +10,7 @@ This repository intentionally contains only the optimized production outputs req
 - Mascot catalogs, presentation code, packaging scripts, and generated Swift code remain with the application.
 
 Do not add a top-level `assets/` directory, source sheets, prompt archives, or design explorations here. Work from the sibling asset repository, export only the production files the application needs, and verify the Web gallery, native catalog, reduced-motion behavior, and ordinary application builds. The application repository must remain fully buildable when the sibling checkout is absent.
+
+## Licensing
+
+The production artwork paths are identified in `LICENSE-ARTWORK.md` and licensed under Creative Commons Attribution-ShareAlike 4.0 International. Preserve the attribution and share-alike terms when exporting or adapting artwork from the sibling repository. Copyright permission does not grant trademark permission; follow `TRADEMARKS.md` when branding a fork or derivative.
