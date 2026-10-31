@@ -28,10 +28,31 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install C toolchain
+      - name: Install Swift and C toolchain dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends file gcc libc6-dev
+          sudo apt-get install --yes --no-install-recommends \
+            binutils \
+            dirmngr \
+            file \
+            gcc \
+            git \
+            gnupg2 \
+            libc6-dev \
+            libcurl4-openssl-dev \
+            libedit2 \
+            libgcc-13-dev \
+            libncurses-dev \
+            libpython3-dev \
+            libsqlite3-0 \
+            libstdc++-13-dev \
+            libxml2-dev \
+            libz3-dev \
+            pkg-config \
+            tzdata \
+            unzip \
+            zip \
+            zlib1g-dev
 
       - uses: actions/setup-node@v6
         with:
@@ -45,24 +66,6 @@ jobs:
         run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
 
       - run: task check
-
-      - name: Upload mascot gallery
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: mascot-site
-          path: web/dist/mascot
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload public site
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-site
-          path: web/dist/site
-          if-no-files-found: error
-          retention-days: 1
 
   integration:
     name: Integration
@@ -123,65 +126,3 @@ jobs:
           if [[ -x .bin/kind ]]; then
             .bin/kind delete cluster --name "$SLIPRAMP_ACCEPTANCE_CLUSTER_NAME"
           fi
-
-  deploy-mascot:
-    name: Deploy mascot gallery
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs:
-      - check
-      - integration
-    runs-on: slipramp-prod
-    environment:
-      name: mascot-production
-      url: https://mascot.slipramp.com
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: mascot-site
-          path: web/dist/mascot
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22.22.0
-
-      - name: Deploy to Cloudflare
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: 4.152.0
-          workingDirectory: web
-          command: deploy --config wrangler.mascot.jsonc
-
-  deploy-site:
-    name: Deploy public site
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs:
-      - check
-      - integration
-    runs-on: slipramp-prod
-    environment:
-      name: site-production
-      url: https://slipramp.com
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: public-site
-          path: web/dist/site
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22.22.0
-
-      - name: Deploy to Cloudflare
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: 4.152.0
-          workingDirectory: web
-          command: deploy --config wrangler.site.jsonc

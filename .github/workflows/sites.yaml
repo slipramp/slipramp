@@ -1,0 +1,87 @@
+name: Deploy sites
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/sites.yaml
+      - .npmrc
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - web/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sites-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-mascot:
+    name: Deploy mascot gallery
+    runs-on: slipramp-prod
+    timeout-minutes: 10
+    environment:
+      name: mascot-production
+      url: https://mascot.slipramp.com
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.22.0
+
+      - name: Install web dependencies
+        run: |
+          npm install --prefix .cache/pnpm --no-save --ignore-scripts pnpm@12.14.0
+          .cache/pnpm/node_modules/.bin/pnpm install \
+            --frozen-lockfile \
+            --store-dir .cache/pnpm-store
+
+      - name: Build mascot gallery
+        run: .cache/pnpm/node_modules/.bin/pnpm --filter @slipramp/web run build:mascot
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.152.0
+          workingDirectory: web
+          command: deploy --config wrangler.mascot.jsonc
+
+  deploy-site:
+    name: Deploy public site
+    runs-on: slipramp-prod
+    timeout-minutes: 10
+    environment:
+      name: mascot-production
+      url: https://slipramp.com
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.22.0
+
+      - name: Install web dependencies
+        run: |
+          npm install --prefix .cache/pnpm --no-save --ignore-scripts pnpm@12.14.0
+          .cache/pnpm/node_modules/.bin/pnpm install \
+            --frozen-lockfile \
+            --store-dir .cache/pnpm-store
+
+      - name: Build public site
+        run: .cache/pnpm/node_modules/.bin/pnpm --filter @slipramp/web run build:site
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.152.0
+          workingDirectory: web
+          command: deploy --config wrangler.site.jsonc
