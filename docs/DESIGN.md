@@ -1421,6 +1421,9 @@ contents retain the product API's operator or administrator requirement. Tool
 handlers call catalog, Run, and Artifact domain services directly rather than
 looping back through HTTP. `create_run` requires a caller-supplied idempotency
 key and records the existing Principal actor with source `mcp`.
+Explicit `create_run` input bindings reuse ordinary Artifact-input resolution,
+pin the consumer to the producer's catalog revision and commit, and return
+their frozen metadata and provenance without embedding contents.
 Each decoded tool call emits one structured operational event with bounded
 result classification, duration, authenticated Principal and credential
 identity, client and protocol identity, and safe resource identifiers. It never

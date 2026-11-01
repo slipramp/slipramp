@@ -45,7 +45,7 @@ func (s *toolServer) register(server *mcp.Server) {
 	addObservedTool(s, server, &mcp.Tool{
 		Name:        "create_run",
 		Title:       "Create a Slipramp Run",
-		Description: "Create an immutable MCP-sourced Run for one Target Action. This may change external infrastructure. Call explain_target_action first and use a unique idempotencyKey.",
+		Description: "Create an immutable MCP-sourced Run for one Target Action, optionally binding declared inputs to retained Artifacts. This may change external infrastructure. Call explain_target_action first and use a unique idempotencyKey.",
 		Annotations: &mcp.ToolAnnotations{
 			DestructiveHint: &destructive,
 			IdempotentHint:  true,
@@ -255,10 +255,11 @@ func (s *toolServer) explainTargetAction(
 }
 
 type createRunInput struct {
-	TargetID       string         `json:"targetId" jsonschema:"Durable Target UUID."`
-	Action         string         `json:"action" jsonschema:"Action name declared on the Target."`
-	Parameters     map[string]any `json:"parameters,omitempty" jsonschema:"Values for parameters declared by the selected Action."`
-	IdempotencyKey string         `json:"idempotencyKey" jsonschema:"Unique key for this logical Run request, up to 128 characters. Reuse only when retrying the identical request."`
+	TargetID       string            `json:"targetId" jsonschema:"Durable Target UUID."`
+	Action         string            `json:"action" jsonschema:"Action name declared on the Target."`
+	Parameters     map[string]any    `json:"parameters,omitempty" jsonschema:"Values for parameters declared by the selected Action."`
+	Inputs         map[string]string `json:"inputs,omitempty" jsonschema:"Explicit bindings from declared input names to retained Artifact UUIDs. Bind every input reported by explain_target_action."`
+	IdempotencyKey string            `json:"idempotencyKey" jsonschema:"Unique key for this logical Run request, up to 128 characters. Reuse only when retrying the identical request."`
 }
 
 func (s *toolServer) createRun(
@@ -282,12 +283,16 @@ func (s *toolServer) createRun(
 	if parameters == nil {
 		parameters = map[string]any{}
 	}
+	inputs, err := artifactInputBindings(input.Inputs)
+	if err != nil {
+		return nil, runOutput{}, err
+	}
 
 	created, err := s.runs.CreateRun(ctx, run.CreateRequest{
 		TargetID:       targetID,
 		ActionName:     action,
 		Parameters:     parameters,
-		Inputs:         map[string]uuid.UUID{},
+		Inputs:         inputs,
 		Source:         run.Source{Type: run.SourceTypeMCP},
 		IdempotencyKey: &input.IdempotencyKey,
 		Actor:          &authentication.Principal,
@@ -297,6 +302,27 @@ func (s *toolServer) createRun(
 	}
 
 	return nil, newRunOutput(created), nil
+}
+
+func artifactInputBindings(values map[string]string) (map[string]uuid.UUID, error) {
+	result := make(map[string]uuid.UUID, len(values))
+	for _, rawName := range slices.Sorted(maps.Keys(values)) {
+		name, err := requiredCatalogName(rawName, "input name")
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := result[name]; exists {
+			return nil, fmt.Errorf("input name %q is bound more than once", name)
+		}
+
+		artifactID, err := requiredUUID(values[rawName], fmt.Sprintf("input %q artifact ID", name))
+		if err != nil {
+			return nil, err
+		}
+		result[name] = artifactID
+	}
+
+	return result, nil
 }
 
 type runIDInput struct {

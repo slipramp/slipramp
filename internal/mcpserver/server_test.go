@@ -343,6 +343,117 @@ func TestHTTPEnforcesAPIKeyScopesAtToolInvocation(t *testing.T) {
 	}
 }
 
+func TestHTTPCreateRunAcceptsArtifactInputs(t *testing.T) {
+	t.Parallel()
+
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1240")
+	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1241")
+	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1242")
+	producerRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1243")
+	artifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1244")
+	consumerRunID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1245")
+	commitSHA := testCommitSHA("c")
+	runs := &recordingRuns{record: run.Run{
+		ID:                consumerRunID,
+		Phase:             run.PhaseQueued,
+		TargetID:          targetID,
+		RepositoryID:      repositoryID,
+		CatalogRevisionID: revisionID,
+		CommitSHA:         commitSHA,
+		TargetName:        "dns",
+		ActionName:        "apply",
+		Parameters:        map[string]any{},
+		PlacementName:     "homelab",
+		ClusterName:       "homelab",
+		Source:            run.Source{Type: run.SourceTypeMCP},
+		Review:            run.Review{State: run.ReviewStateNotRequired},
+		CreatedAt:         time.Date(2026, time.October, 31, 12, 0, 0, 0, time.UTC),
+		Snapshot: run.Snapshot{Inputs: map[string]run.ArtifactInput{
+			"plan": {
+				ArtifactID:        artifactID,
+				ProducerRunID:     producerRunID,
+				Name:              "plan",
+				MediaType:         "application/vnd.slipramp.opentofu-plan+json",
+				SizeBytes:         2048,
+				SHA256:            strings.Repeat("c", 64),
+				Sensitive:         true,
+				RetentionState:    "retained",
+				TargetID:          targetID,
+				RepositoryID:      repositoryID,
+				CatalogRevisionID: revisionID,
+				CommitSHA:         commitSHA,
+				TargetName:        "dns",
+				ActionName:        "preview",
+			},
+		}},
+	}}
+	handler := testHTTPHandler(
+		t,
+		testAuthentication(productidentity.ScopeRead, productidentity.ScopeRunsWrite),
+		nil,
+		runs,
+		nil,
+	)
+	session := connectTestClient(t, handler, testAPIKey)
+
+	result := callTool(t, session, "create_run", map[string]any{
+		"targetId":       targetID.String(),
+		"action":         "apply",
+		"inputs":         map[string]any{"plan": artifactID.String()},
+		"idempotencyKey": "mcp-apply-plan-1",
+	})
+	var created runOutput
+	decodeStructuredContent(t, result, &created)
+
+	if runs.createRequest.Inputs["plan"] != artifactID {
+		t.Errorf("CreateRun inputs = %#v", runs.createRequest.Inputs)
+	}
+	input, found := created.Inputs["plan"]
+	if !found || input.ArtifactID != artifactID.String() ||
+		input.ProducerRunID != producerRunID.String() || input.Action != "preview" || !input.Sensitive {
+		t.Errorf("create_run input output = %#v", created.Inputs)
+	}
+
+	got := callTool(t, session, "get_run", map[string]any{"runId": consumerRunID.String()})
+	var fetched runOutput
+	decodeStructuredContent(t, got, &fetched)
+	if fetched.Inputs["plan"] != input {
+		t.Errorf("get_run input output = %#v, want %#v", fetched.Inputs["plan"], input)
+	}
+}
+
+func TestHTTPCreateRunRejectsInvalidArtifactInputID(t *testing.T) {
+	t.Parallel()
+
+	runs := &recordingRuns{}
+	handler := testHTTPHandler(
+		t,
+		testAuthentication(productidentity.ScopeRunsWrite),
+		nil,
+		runs,
+		nil,
+	)
+	session := connectTestClient(t, handler, testAPIKey)
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "create_run",
+		Arguments: map[string]any{
+			"targetId":       "018f90ff-9fd8-7b5f-b7e1-f32ff54c1240",
+			"action":         "apply",
+			"inputs":         map[string]any{"plan": "not-a-uuid"},
+			"idempotencyKey": "invalid-input",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() result = %#v, want tool error", result)
+	}
+	if runs.createCalls != 0 {
+		t.Errorf("CreateRun calls = %d, want 0", runs.createCalls)
+	}
+}
+
 func TestHTTPEnforcesSensitiveArtifactAuthorization(t *testing.T) {
 	t.Parallel()
 

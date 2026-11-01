@@ -30,34 +30,53 @@ type targetOutput struct {
 }
 
 type runOutput struct {
-	ID                       string         `json:"id"`
-	Phase                    string         `json:"phase"`
-	Outcome                  *string        `json:"outcome,omitempty"`
-	TargetID                 string         `json:"targetId"`
-	RepositoryID             string         `json:"repositoryId"`
-	CatalogRevisionID        string         `json:"catalogRevisionId"`
-	CommitSHA                string         `json:"commitSha"`
-	TargetRelevanceCommitSHA *string        `json:"targetRelevanceCommitSha,omitempty"`
-	Target                   string         `json:"target"`
-	Action                   string         `json:"action"`
-	Parameters               map[string]any `json:"parameters"`
-	Placement                string         `json:"placement"`
-	Cluster                  string         `json:"cluster"`
-	Source                   string         `json:"source"`
-	IdempotencyKey           *string        `json:"idempotencyKey,omitempty"`
-	CreatedBy                *actorOutput   `json:"createdBy,omitempty"`
-	CanceledBy               *actorOutput   `json:"canceledBy,omitempty"`
-	ReviewState              string         `json:"reviewState"`
-	CreatedAt                string         `json:"createdAt"`
-	AssignedAt               *string        `json:"assignedAt,omitempty"`
-	PreparingAt              *string        `json:"preparingAt,omitempty"`
-	StartedAt                *string        `json:"startedAt,omitempty"`
-	FinishedAt               *string        `json:"finishedAt,omitempty"`
-	LastObservedAt           *string        `json:"lastObservedAt,omitempty"`
-	CancellationRequestedAt  *string        `json:"cancellationRequestedAt,omitempty"`
-	OutcomeReason            *string        `json:"outcomeReason,omitempty"`
-	OutcomeMessage           *string        `json:"outcomeMessage,omitempty"`
-	ExitCode                 *int32         `json:"exitCode,omitempty"`
+	ID                       string                            `json:"id"`
+	Phase                    string                            `json:"phase"`
+	Outcome                  *string                           `json:"outcome,omitempty"`
+	TargetID                 string                            `json:"targetId"`
+	RepositoryID             string                            `json:"repositoryId"`
+	CatalogRevisionID        string                            `json:"catalogRevisionId"`
+	CommitSHA                string                            `json:"commitSha"`
+	TargetRelevanceCommitSHA *string                           `json:"targetRelevanceCommitSha,omitempty"`
+	Target                   string                            `json:"target"`
+	Action                   string                            `json:"action"`
+	Parameters               map[string]any                    `json:"parameters"`
+	Inputs                   map[string]runArtifactInputOutput `json:"inputs"`
+	Placement                string                            `json:"placement"`
+	Cluster                  string                            `json:"cluster"`
+	Source                   string                            `json:"source"`
+	IdempotencyKey           *string                           `json:"idempotencyKey,omitempty"`
+	CreatedBy                *actorOutput                      `json:"createdBy,omitempty"`
+	CanceledBy               *actorOutput                      `json:"canceledBy,omitempty"`
+	ReviewState              string                            `json:"reviewState"`
+	CreatedAt                string                            `json:"createdAt"`
+	AssignedAt               *string                           `json:"assignedAt,omitempty"`
+	PreparingAt              *string                           `json:"preparingAt,omitempty"`
+	StartedAt                *string                           `json:"startedAt,omitempty"`
+	FinishedAt               *string                           `json:"finishedAt,omitempty"`
+	LastObservedAt           *string                           `json:"lastObservedAt,omitempty"`
+	CancellationRequestedAt  *string                           `json:"cancellationRequestedAt,omitempty"`
+	OutcomeReason            *string                           `json:"outcomeReason,omitempty"`
+	OutcomeMessage           *string                           `json:"outcomeMessage,omitempty"`
+	ExitCode                 *int32                            `json:"exitCode,omitempty"`
+}
+
+type runArtifactInputOutput struct {
+	ArtifactID               string  `json:"artifactId"`
+	ProducerRunID            string  `json:"producerRunId"`
+	Name                     string  `json:"name"`
+	MediaType                string  `json:"mediaType"`
+	SizeBytes                int64   `json:"sizeBytes"`
+	SHA256                   string  `json:"sha256"`
+	Sensitive                bool    `json:"sensitive"`
+	RetentionState           string  `json:"retentionState"`
+	TargetID                 string  `json:"targetId"`
+	RepositoryID             string  `json:"repositoryId"`
+	CatalogRevisionID        string  `json:"catalogRevisionId"`
+	CommitSHA                string  `json:"commitSha"`
+	TargetRelevanceCommitSHA *string `json:"targetRelevanceCommitSha,omitempty"`
+	Target                   string  `json:"target"`
+	Action                   string  `json:"action"`
 }
 
 type actorOutput struct {
@@ -79,6 +98,7 @@ func newRunOutput(record run.Run) runOutput {
 		Target:                   record.TargetName,
 		Action:                   record.ActionName,
 		Parameters:               record.Parameters,
+		Inputs:                   runArtifactInputs(record.Snapshot.Inputs),
 		Placement:                record.PlacementName,
 		Cluster:                  record.ClusterName,
 		Source:                   string(record.Source.Type),
@@ -97,6 +117,31 @@ func newRunOutput(record run.Run) runOutput {
 		OutcomeMessage:           record.OutcomeMessage,
 		ExitCode:                 record.ExitCode,
 	}
+}
+
+func runArtifactInputs(inputs map[string]run.ArtifactInput) map[string]runArtifactInputOutput {
+	result := make(map[string]runArtifactInputOutput, len(inputs))
+	for name, input := range inputs {
+		result[name] = runArtifactInputOutput{
+			ArtifactID:               input.ArtifactID.String(),
+			ProducerRunID:            input.ProducerRunID.String(),
+			Name:                     input.Name,
+			MediaType:                input.MediaType,
+			SizeBytes:                input.SizeBytes,
+			SHA256:                   input.SHA256,
+			Sensitive:                input.Sensitive,
+			RetentionState:           input.RetentionState,
+			TargetID:                 input.TargetID.String(),
+			RepositoryID:             input.RepositoryID.String(),
+			CatalogRevisionID:        input.CatalogRevisionID.String(),
+			CommitSHA:                input.CommitSHA,
+			TargetRelevanceCommitSHA: input.TargetRelevanceCommitSHA,
+			Target:                   input.TargetName,
+			Action:                   input.ActionName,
+		}
+	}
+
+	return result
 }
 
 func optionalActor(actor *productidentity.ActorSnapshot) *actorOutput {

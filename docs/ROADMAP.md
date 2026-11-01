@@ -216,7 +216,8 @@ It accepts scoped Slipramp API keys or OAuth access tokens, maps them to existin
 Principals, reuses catalog and Run services, and derives the `mcp` Run source.
 The first tool surface lists Targets, explains Actions, creates, reads, or
 cancels Runs, and reads bounded pages of durable logs and Artifact contents
-with existing sensitive-content authorization.
+with existing sensitive-content authorization. Run creation accepts explicit
+Artifact-input bindings and preserves the ordinary producer-revision pinning.
 
 - [x] Add standard OAuth protected-resource discovery and JWT access-token
       validation. The local Keycloak realm is the reference authorization

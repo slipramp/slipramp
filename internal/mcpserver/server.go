@@ -121,7 +121,8 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 			Instructions: "Use list_targets to resolve target IDs. Before create_run, call explain_target_action and review " +
 				"the command, placement, parameters, credentials, inputs, and diagnostics. Never call create_run or " +
 				"cancel_run unless the user clearly requested that change. create_run requires a unique idempotencyKey; " +
-				"reuse it only for the same request. Runs may change external infrastructure. Use read_run_log with " +
+				"reuse it only for the same request. Bind every declared input to a compatible Artifact ID from " +
+				"list_run_artifacts. Runs may change external infrastructure. Use read_run_log with " +
 				"nextOffsetBytes to page durable logs, and list_run_artifacts before reading Artifact contents.",
 			Logger: protocolLogger,
 		},

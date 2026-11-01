@@ -35,8 +35,16 @@ Principal and both
 
 `create_run` requires an `idempotencyKey` of at most 128 characters. Generate a
 new key for each logical Run and reuse it only when retrying the identical
-request. The tool does not currently accept Artifact inputs, so Actions that
-require them must be started through another product interface.
+request. For an Action with Artifact inputs, pass `inputs` as an object mapping
+every declared input name to a retained Artifact UUID. Use
+`list_run_artifacts` on a producing Run to resolve those UUIDs. The ordinary Run
+service verifies that each Artifact is sealed, retained, from the same Target,
+produced by the declared Action, and compatible with the exact catalog
+revision. The resulting Run is pinned to that producing revision and commit.
+
+`create_run` and `get_run` return the frozen input metadata and provenance under
+`inputs`; they never return Artifact contents there. Use `read_artifact` when
+the contents are needed and permitted.
 
 `read_run_log` and `read_artifact` return at most 64 KiB of source bytes per
 call. Their `nextOffsetBytes` values can be supplied as the next call's
