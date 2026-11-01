@@ -1,10 +1,17 @@
 # Slipramp Contributor Instructions
 
-Slipramp is a GitOps-driven infrastructure control plane for homelabs and small teams. Read `docs/DESIGN.md` for the implemented architecture and governing decisions and `docs/ROADMAP.md` for unfinished work. Keep the design consistent when changing a decision, and update the roadmap as work lands.
+Slipramp is a GitOps-driven infrastructure control plane for homelabs and small teams. Consult `docs/DESIGN.md` when changing architecture, domain semantics, or a governing decision. Consult `docs/ROADMAP.md` when landing or rescoping planned work. Update either document when a change would otherwise leave it inaccurate.
 
 ## Project Phase
 
-Slipramp is in early, ongoing development with its core execution and Kargo Promotions capabilities implemented. Its contracts are not yet stable. Do not preserve backwards compatibility or introduce legacy behavior unless explicitly requested. Prefer a clean breaking change over compatibility aliases, deprecated fields, dual code paths, migration shims, legacy API routes, or support for obsolete YAML and database shapes. Update all callers, fixtures, generated code, and documentation together.
+Slipramp is in early, ongoing development with its core execution and Kargo Promotions capabilities implemented. Its contracts are not yet stable. When requested work requires changing a contract, prefer a clean breaking change over compatibility aliases, deprecated fields, dual code paths, migration shims, legacy API routes, or support for obsolete YAML and database shapes. Do not preserve backwards compatibility unless explicitly requested. Update all callers, fixtures, generated code, and documentation together. Contract instability does not justify unrelated changes to stable code.
+
+## Change Scope and Stability
+
+- Keep changes focused on the requested behavior. Do not refactor stable code solely for stylistic consistency or because another organization is arguably cleaner.
+- For cleanup and refactoring work, first identify concrete problems and their evidence. Prefer no change when the benefit is subjective or marginal; an audit that produces no edits is valid.
+- Prefer deleting, reusing, and collapsing mechanisms over adding abstractions. Add a new interface, helper layer, configuration option, or generalized mechanism only when current behavior requires it or when it reduces the total number of concepts.
+- Limit cleanup to the changed feature and the smallest necessary adjacent surface. Avoid unrelated renames, file moves, formatting rewrites, and repository-wide consistency changes.
 
 ## Core Model and Naming
 
