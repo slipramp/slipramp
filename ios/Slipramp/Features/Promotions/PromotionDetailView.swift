@@ -164,6 +164,7 @@ struct PromotionDetailView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                     statusSection(promotion)
+                    kargoOutcomeSection(promotion)
                     contextSection(promotion)
                     revisionSection(promotion)
                     freightSection(promotion)
@@ -231,6 +232,53 @@ struct PromotionDetailView: View {
             }
             if let value = promotion.kargoUrl, let url = URL(string: value) {
                 Link("Open in Kargo", destination: url)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func kargoOutcomeSection(_ promotion: Promotion) -> some View {
+        if promotion.status == .approved || promotion.kargoOutcome != nil {
+            Section("Kargo outcome") {
+                if let outcome = promotion.kargoOutcome {
+                    LabeledContent("Phase") {
+                        SliprampStatusPill(
+                            label: outcome.phase.rawValue,
+                            tone: outcome.phase == .succeeded ? .success : .danger,
+                            symbol: outcome.phase == .succeeded
+                                ? "checkmark.circle.fill" : "xmark.octagon.fill"
+                        )
+                    }
+                    PromotionTimestampRow(label: "Observed", date: outcome.observedAt)
+                    if outcome.phase == .succeeded {
+                        Text(
+                            "Kargo completed this Promotion. This does not independently assert Argo CD health beyond the configured Kargo steps."
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    }
+                    if let diagnostic = outcome.diagnostic {
+                        Text(diagnostic)
+                            .font(.subheadline)
+                            .foregroundStyle(
+                                outcome.phase == .succeeded
+                                    ? Color.secondary : SliprampTone.danger.color
+                            )
+                    } else if outcome.phase != .succeeded {
+                        Text(
+                            "Kargo reached an unsuccessful terminal phase without a diagnostic."
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Label("Approved — Kargo still running", systemImage: "arrow.triangle.2.circlepath")
+                    Text(
+                        "Approval granted permission to proceed. Slipramp is waiting for Kargo to report a terminal Promotion phase."
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                }
             }
         }
     }

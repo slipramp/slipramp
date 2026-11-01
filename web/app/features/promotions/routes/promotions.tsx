@@ -215,9 +215,27 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
       </Table.Td>
       <Table.Td>
         <Group gap="xs" justify="space-between" wrap="nowrap">
-          <Badge color={promotionStatusColor(promotion.status)} variant="light">
-            {promotionStatusLabel(promotion.status)}
-          </Badge>
+          <Stack gap={4}>
+            <Badge color={promotionStatusColor(promotion.status)} variant="light">
+              {promotionStatusLabel(promotion.status)}
+            </Badge>
+            {promotion.status === "approved" ? (
+              <Badge
+                color={
+                  promotion.kargoOutcome?.phase === "Succeeded"
+                    ? "green"
+                    : promotion.kargoOutcome
+                      ? "red"
+                      : "cyan"
+                }
+                variant="light"
+              >
+                {promotion.kargoOutcome
+                  ? `Kargo ${promotion.kargoOutcome.phase.toLocaleLowerCase()}`
+                  : "Kargo running"}
+              </Badge>
+            ) : null}
+          </Stack>
           <KawaiiActivity
             activity={promotionActivity(promotion)}
             animationKey={promotion.id}

@@ -1065,13 +1065,14 @@ export type Promotion = {
   dispatchedAt?: string;
   kargoPromotionUid?: string;
   /**
-   * Next durable inspection time while the materialized resource awaits callback.
+   * Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
    */
   nextReconciliationAt?: string;
   /**
    * Most recent time reconciliation work was claimed by the responsible Controller.
    */
   lastReconciliationAt?: string;
+  kargoOutcome?: KargoPromotionOutcome;
   preparationRunId?: string;
   preparationRun?: Run;
   gitDiffArtifactId?: string;
@@ -1805,24 +1806,31 @@ export type KargoPromotionCreationCommand = {
   freight: string;
 };
 
+export type PromotionSource = "kargo" | "slipramp";
+
 export type KargoPromotionReconciliationCommand = {
   /**
    * Durable Slipramp Promotion identity carried by the stable annotation.
    */
   id: string;
   integration: CatalogName;
+  source: PromotionSource;
   /**
    * Kubernetes namespace containing the Kargo project.
    */
   project: CatalogName;
   /**
+   * Exact Kargo Stage recorded in the durable Promotion snapshot.
+   */
+  stage: string;
+  /**
    * Canonical admission-assigned Kargo Promotion name.
    */
   kargoName: string;
   /**
-   * Kubernetes UID recorded when the Promotion was materialized.
+   * Kubernetes UID already bound to the Promotion, if observed.
    */
-  kargoUid: string;
+  kargoUid?: string;
 };
 
 export type KargoPromotionDispatchReport = {
@@ -1855,13 +1863,13 @@ export type KargoPromotionReconciliationReport = {
    */
   kargoUid: string;
   /**
-   * Terminal Kargo phase observed before callback hydration.
+   * Exact terminal Kargo phase, omitted when only binding Kubernetes identity.
    */
-  phase: "Failed" | "Errored" | "Aborted" | "Succeeded";
+  phase?: "Failed" | "Errored" | "Aborted" | "Succeeded";
   /**
-   * Bounded description of the terminal pre-callback state.
+   * Bounded sanitized terminal diagnostic, when Kargo provides one.
    */
-  diagnostic: string;
+  diagnostic?: string;
 };
 
 /**
@@ -2009,8 +2017,6 @@ export type KargoPromotionResponse = {
   updatedAt: string;
 };
 
-export type PromotionSource = "kargo" | "slipramp";
-
 export type PromotionFreightRequest = {
   origin: string;
   direct: boolean;
@@ -2063,6 +2069,21 @@ export type PromotionRepositorySnapshot = {
 };
 
 export type PromotionPolicyMode = "automatic" | "review-required";
+
+export type KargoPromotionOutcome = {
+  /**
+   * Exact terminal phase reported by Kargo.
+   */
+  phase: "Succeeded" | "Failed" | "Errored" | "Aborted";
+  /**
+   * Time Slipramp accepted the Controller's terminal observation.
+   */
+  observedAt: string;
+  /**
+   * Bounded sanitized Kargo diagnostic, when available.
+   */
+  diagnostic?: string;
+};
 
 export type PromotionDecision = {
   decision: "approved" | "rejected";
@@ -3458,7 +3479,7 @@ export type ReportKargoPromotionReconciliationError =
 
 export type ReportKargoPromotionReconciliationResponses = {
   /**
-   * The terminal phase was recorded or newer callback state already won the race.
+   * The identity or terminal outcome was recorded, or an identical report already exists.
    */
   204: void;
 };

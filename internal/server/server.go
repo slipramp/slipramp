@@ -183,7 +183,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	promotionRequests := promotion.NewRequestService(cfg.KargoIntegrations, persistence.database)
 	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database)
 	promotionDispatches := promotion.NewCreationDispatchService(persistence.database)
-	promotionReconciliations := promotion.NewCreationReconciliationService(persistence.database)
+	promotionReconciliations := promotion.NewReconciliationService(persistence.database)
 	controllerCommands := controllercommand.NewScheduler(runs, promotionDispatches, promotionReconciliations)
 	promotionReviews := promotion.NewReviewService(persistence.database)
 	promotionProjects := promotion.NewProjectService(cfg.KargoIntegrations, persistence.database)

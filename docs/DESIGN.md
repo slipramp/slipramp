@@ -93,7 +93,7 @@ process. Kubernetes is an execution backend, not the product database.
 | Run | An immutable Action execution snapshot plus independently recorded observations |
 | Artifact | Durable Run output, including logs, plans, reports, and diff files |
 | Principal | A durable user or service-account actor authenticated by a session or API key |
-| Promotion | A durable Kargo request, policy snapshot, preparation, and optional decision |
+| Promotion | A durable Kargo request, policy snapshot, preparation, optional decision, and separately observed Kargo outcome |
 | Notification event | An immutable channel-neutral snapshot of a selected durable transition |
 | Notification delivery | Per-destination operational state for one notification event |
 
@@ -156,7 +156,9 @@ Kargo remains authoritative for Freight eligibility, rendering, target-branch
 updates, and downstream reconciliation. Slipramp inventories Stages, snapshots
 policy and request context, optionally prepares review Artifacts through an
 ordinary Run, records decisions, and uses the responsible Controller for the
-small set of Kubernetes operations it cannot perform directly. See
+small set of Kubernetes operations it cannot perform directly. Approval is
+permission to proceed; an independently recorded terminal Kargo phase describes
+what happened afterward without implying additional Argo CD health. See
 [Kargo Promotions](./design/kargo.md).
 
 ### Notification delivery

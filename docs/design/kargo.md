@@ -12,7 +12,10 @@ Promotion admission, and Argo CD reconciliation.
 Slipramp owns observed Stage inventory, optional review policy, durable request
 context, preparation Runs and Artifacts, operator decisions, and operational
 projections. Approval means permission to proceed; it does not claim that Kargo
-pushed or reconciled successfully.
+pushed or reconciled successfully. Slipramp separately records Kargo's exact
+terminal Promotion phase, observation time, and bounded sanitized diagnostic.
+`Succeeded` means the Kargo Promotion completed; it does not independently
+claim Argo CD health beyond the steps enforced by that Promotion.
 
 The Server never receives Kubernetes or Kargo credentials. The Controller for
 the configured Cluster performs the small set of required Kargo API operations
@@ -79,6 +82,8 @@ before asynchronous creation or preparation begins.
 creating --callback--> preparing --> pending --> approved/rejected/expired
     |                       `---------------------------> error
     `--terminal creation or pre-callback result--------> error
+
+approved --Controller observation--> Kargo Succeeded/Failed/Errored/Aborted
 ```
 
 An automatic-policy callback advances directly to `approved`. `creating`
@@ -86,6 +91,13 @@ includes queued Controller delivery, bounded materialization retries, and the
 wait for callback hydration. `preparing` owns one ordinary revision-pinned Run.
 `pending` accepts one operator decision or durable expiry. Terminal failures use
 `error` with a bounded non-sensitive diagnostic.
+
+The review status and Kargo outcome are separate facts. An approved Promotion
+without a terminal outcome remains `approved` and is presented as Kargo still
+in progress. A terminal report adds an immutable outcome without rewriting the
+approval decision or review status. Failed, errored, and aborted outcomes are
+therefore visible on an approved Promotion rather than being collapsed into a
+review failure.
 
 Domain states return as domain responses; expected lifecycle errors are not
 disguised as transport failures. Callback hydration, Controller reports,
@@ -110,11 +122,21 @@ failures do not block later work; invalid or forbidden admission and exhausted
 retry budget move the Promotion to `error`. No separate Kargo client channel,
 impersonation layer, broker, or Job is introduced.
 
-After materialization, fixed-interval pre-callback reconciliation inspects the
-annotated object until callback hydration. Missing or nonterminal state remains
-scheduled. A terminal Kargo phase before callback moves the durable Promotion to
-`error`. Callback hydration and reconciliation reports are serialized so a late
-report cannot overwrite the winning terminal fact.
+The same Controller command scheduler performs fixed-interval reconciliation.
+For a Slipramp-originated request it inspects the exact annotated object before
+callback hydration and, after approval, continues until a terminal Kargo phase
+is recorded. For a Kargo-originated request it resolves the exact snapshotted
+namespace, name, and Stage, binds the first observed Kubernetes UID durably,
+and requires that UID on later observations. Conflicting namespace, name,
+Stage, annotation, or UID evidence is rejected rather than guessed.
+
+Missing and nonterminal state remains scheduled. A terminal Kargo phase before
+callback hydration still moves the unhydrated creation lifecycle to `error`,
+while retaining the Kargo outcome separately. Callback hydration, approval,
+identity binding, and terminal reports lock the same durable Promotion.
+Identical observations are idempotent; a later conflicting phase or identity
+cannot replace the first accepted fact. Only observation and reporting retry:
+the Controller never repeats Kargo Promotion steps.
 
 ## Guarded preparation and decisions
 
@@ -146,8 +168,10 @@ work, but never create a second preparation Run.
 Only pending Promotions accept `approved` or `rejected`. The immutable decision
 records Principal, time, outcome, and optional normalized comment. Identical
 retries are idempotent; conflicting decisions are rejected. Expiry does not
-invent a human actor. Kargo performs the approved target-branch update without
-force and continues its own reconciliation.
+invent a human actor. Approval is permission for Kargo to proceed, not a claim
+of downstream success. Kargo performs the approved target-branch update without
+force and continues its own reconciliation; the separately observed terminal
+outcome records what happened afterward.
 
 ## Candidate branch cleanup
 
@@ -171,6 +195,8 @@ Promotion command.
 Pipeline, Freight availability, health, and branch drift are derived from Stage
 observations and cached read-only Git evidence. They do not create a second
 Promotion lifecycle or query Kargo and Argo CD during ordinary product reads.
+Promotion reads include the durable Kargo outcome already reported by the
+Controller and never cause a live cluster query.
 
 Freight choices come from exact observed upstream Stage or directly requested
 Warehouse evidence, not inferred environment adjacency. Environment order is a

@@ -924,6 +924,31 @@ PromotionRepositorySnapshot:
     checkoutCredentialName:
       type: string
 
+KargoPromotionOutcome:
+  type: object
+  additionalProperties: false
+  required:
+    - phase
+    - observedAt
+  properties:
+    phase:
+      type: string
+      enum:
+        - Succeeded
+        - Failed
+        - Errored
+        - Aborted
+      description: Exact terminal phase reported by Kargo.
+    observedAt:
+      type: string
+      format: date-time
+      description: Time Slipramp accepted the Controller's terminal observation.
+    diagnostic:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Bounded sanitized Kargo diagnostic, when available.
+
 Promotion:
   type: object
   additionalProperties: false
@@ -1012,11 +1037,15 @@ Promotion:
     nextReconciliationAt:
       type: string
       format: date-time
-      description: Next durable inspection time while the materialized resource awaits callback.
+      description: >-
+        Next durable inspection time while the responsible Controller awaits
+        callback hydration or a terminal Kargo outcome.
     lastReconciliationAt:
       type: string
       format: date-time
       description: Most recent time reconciliation work was claimed by the responsible Controller.
+    kargoOutcome:
+      $ref: "#/KargoPromotionOutcome"
     preparationRunId:
       type: string
       format: uuid

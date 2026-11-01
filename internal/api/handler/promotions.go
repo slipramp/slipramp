@@ -31,8 +31,8 @@ type PromotionCreationDispatchService interface {
 	Report(context.Context, string, promotion.CreationDispatchReport) error
 }
 
-type PromotionCreationReconciliationService interface {
-	Report(context.Context, string, promotion.CreationReconciliationReport) error
+type PromotionReconciliationService interface {
+	Report(context.Context, string, promotion.ReconciliationReport) error
 }
 
 type PromotionStageService interface {
@@ -707,6 +707,13 @@ func promotionResponse(
 		DecidedAt:              record.DecidedAt,
 		ExpiresAt:              record.ExpiresAt,
 		UpdatedAt:              record.UpdatedAt,
+	}
+	if record.KargoOutcome != nil {
+		body.KargoOutcome = &api.KargoPromotionOutcome{
+			Phase:      api.KargoPromotionOutcomePhase(record.KargoOutcome.Phase),
+			ObservedAt: record.KargoOutcome.ObservedAt,
+			Diagnostic: record.KargoOutcome.Diagnostic,
+		}
 	}
 	if record.Source == promotion.SourceKargo || record.KargoPromotionUID != nil {
 		body.KargoURL = integrations.KargoPromotionURL(

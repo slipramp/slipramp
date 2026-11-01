@@ -253,6 +253,7 @@ INSERT INTO promotions (
     last_dispatch_at,
     dispatched_at,
     kargo_promotion_uid,
+    next_reconciliation_at,
     preparation_repository_id,
     preparation_catalog_revision_id,
     preparation_run_id,
@@ -290,6 +291,7 @@ INSERT INTO promotions (
     sqlc.narg(last_dispatch_at),
     sqlc.narg(dispatched_at),
     sqlc.narg(kargo_promotion_uid),
+    sqlc.narg(next_reconciliation_at),
     sqlc.narg(preparation_repository_id),
     sqlc.narg(preparation_catalog_revision_id),
     sqlc.narg(preparation_run_id),
@@ -325,9 +327,12 @@ SET request_digest = sqlc.arg(request_digest),
     candidate_branch = sqlc.arg(candidate_branch),
     status = CASE WHEN review_required THEN 'preparing' ELSE 'approved' END,
     next_dispatch_at = NULL,
-    next_reconciliation_at = NULL,
+    next_reconciliation_at = CASE
+        WHEN review_required OR kargo_outcome_phase IS NOT NULL THEN NULL
+        ELSE sqlc.arg(hydrated_at)::timestamptz
+    END,
     message = NULL,
-    updated_at = GREATEST(updated_at, sqlc.arg(hydrated_at))
+    updated_at = GREATEST(updated_at, sqlc.arg(hydrated_at)::timestamptz)
 WHERE id = sqlc.arg(id)
   AND source = 'slipramp'
   AND status = 'creating'
@@ -383,7 +388,8 @@ SET next_dispatch_at = NULL,
     external_promotion_id = sqlc.arg(kargo_name),
     kargo_promotion_uid = sqlc.arg(kargo_promotion_uid),
     next_reconciliation_at = CASE
-        WHEN status = 'creating' THEN COALESCE(next_reconciliation_at, sqlc.arg(dispatched_at))
+        WHEN status IN ('creating', 'approved')
+        THEN COALESCE(next_reconciliation_at, sqlc.arg(dispatched_at))
         ELSE NULL
     END,
     message = CASE WHEN status = 'creating' THEN NULL ELSE message END,
@@ -408,39 +414,60 @@ SET status = 'error',
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
--- name: LockNextPromotionCreationReconciliation :one
+-- name: LockNextPromotionReconciliation :one
 SELECT *
 FROM promotions
-WHERE source = 'slipramp'
-  AND status = 'creating'
-  AND kargo_promotion_uid IS NOT NULL
-  AND next_reconciliation_at <= sqlc.arg(due_at)
+WHERE next_reconciliation_at <= sqlc.arg(due_at)
+  AND kargo_outcome_phase IS NULL
+  AND (
+      (status = 'approved' AND (source = 'kargo' OR kargo_promotion_uid IS NOT NULL))
+      OR (source = 'slipramp' AND status = 'creating' AND kargo_promotion_uid IS NOT NULL)
+  )
   AND stage_snapshot ->> 'cluster' = sqlc.arg(cluster_name)::text
 ORDER BY next_reconciliation_at, created_at, id
 FOR UPDATE SKIP LOCKED
 LIMIT 1;
 
--- name: ClaimPromotionCreationReconciliation :one
+-- name: ClaimPromotionReconciliation :one
 UPDATE promotions
 SET next_reconciliation_at = sqlc.arg(next_reconciliation_at),
     last_reconciliation_at = sqlc.arg(claimed_at)
 WHERE id = sqlc.arg(id)
-  AND source = 'slipramp'
-  AND status = 'creating'
-  AND kargo_promotion_uid IS NOT NULL
+  AND kargo_outcome_phase IS NULL
+  AND (
+      (status = 'approved' AND (source = 'kargo' OR kargo_promotion_uid IS NOT NULL))
+      OR (source = 'slipramp' AND status = 'creating' AND kargo_promotion_uid IS NOT NULL)
+  )
   AND next_reconciliation_at = sqlc.arg(expected_next_reconciliation_at)
 RETURNING *;
 
--- name: RecordTerminalPromotionCreationReconciliation :one
+-- name: BindKargoPromotionReconciliationIdentity :one
 UPDATE promotions
-SET status = 'error',
-    next_reconciliation_at = NULL,
-    message = sqlc.arg(message),
-    updated_at = GREATEST(updated_at, sqlc.arg(reported_at))
+SET kargo_promotion_uid = sqlc.arg(kargo_promotion_uid),
+    updated_at = GREATEST(updated_at, sqlc.arg(observed_at))
 WHERE id = sqlc.arg(id)
-  AND source = 'slipramp'
-  AND status = 'creating'
-  AND request_digest IS NULL
+  AND source = 'kargo'
+  AND kargo_promotion_uid IS NULL
+  AND kargo_outcome_phase IS NULL
+RETURNING *;
+
+-- name: RecordTerminalKargoPromotionOutcome :one
+UPDATE promotions
+SET status = CASE
+        WHEN status = 'creating' AND request_digest IS NULL THEN 'error'
+        ELSE status
+    END,
+    next_reconciliation_at = NULL,
+    kargo_outcome_phase = sqlc.arg(kargo_outcome_phase),
+    kargo_outcome_observed_at = sqlc.arg(kargo_outcome_observed_at),
+    kargo_outcome_diagnostic = sqlc.narg(kargo_outcome_diagnostic),
+    message = CASE
+        WHEN status = 'creating' AND request_digest IS NULL THEN sqlc.narg(kargo_outcome_diagnostic)
+        ELSE message
+    END,
+    updated_at = GREATEST(updated_at, sqlc.arg(kargo_outcome_observed_at))
+WHERE id = sqlc.arg(id)
+  AND kargo_outcome_phase IS NULL
 RETURNING *;
 
 -- name: CountPromotionReviews :one
@@ -616,7 +643,12 @@ UPDATE promotions
 SET status = sqlc.arg(status),
     message = sqlc.narg(message),
     decided_at = sqlc.arg(decided_at),
-    updated_at = sqlc.arg(decided_at)
+    next_reconciliation_at = CASE
+        WHEN sqlc.arg(status)::text = 'approved' AND kargo_outcome_phase IS NULL
+        THEN sqlc.arg(decided_at)::timestamptz
+        ELSE NULL
+    END,
+    updated_at = sqlc.arg(decided_at)::timestamptz
 WHERE id = sqlc.arg(id)
   AND status = 'pending'
 RETURNING *;

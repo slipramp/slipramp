@@ -1489,8 +1489,8 @@ paths:
   /controller/v1/promotions/{promotionId}/reconciliation:
     post:
       operationId: reportKargoPromotionReconciliation
-      summary: Report terminal Kargo Promotion reconciliation
-      description: Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+      summary: Report Kargo Promotion identity or terminal outcome
+      description: Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
       security:
         - ControllerBearer: []
       tags:
@@ -1511,7 +1511,7 @@ paths:
               $ref: '#/components/schemas/KargoPromotionReconciliationReport'
       responses:
         '204':
-          description: The terminal phase was recorded or newer callback state already won the race.
+          description: The identity or terminal outcome was recorded, or an identical report already exists.
         '400':
           description: The reconciliation report is invalid.
           content:
@@ -6584,11 +6584,13 @@ components:
         nextReconciliationAt:
           type: string
           format: date-time
-          description: Next durable inspection time while the materialized resource awaits callback.
+          description: Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
         lastReconciliationAt:
           type: string
           format: date-time
           description: Most recent time reconciliation work was claimed by the responsible Controller.
+        kargoOutcome:
+          $ref: '#/components/schemas/KargoPromotionOutcome'
         preparationRunId:
           type: string
           format: uuid
@@ -8226,14 +8228,20 @@ components:
           minLength: 1
           maxLength: 253
           description: Exact Kargo Freight name to promote.
+    PromotionSource:
+      type: string
+      enum:
+        - kargo
+        - slipramp
     KargoPromotionReconciliationCommand:
       type: object
       required:
         - id
+        - source
         - integration
         - project
+        - stage
         - kargoName
-        - kargoUid
       properties:
         id:
           type: string
@@ -8241,9 +8249,16 @@ components:
           description: Durable Slipramp Promotion identity carried by the stable annotation.
         integration:
           $ref: '#/components/schemas/CatalogName'
+        source:
+          $ref: '#/components/schemas/PromotionSource'
         project:
           $ref: '#/components/schemas/CatalogName'
           description: Kubernetes namespace containing the Kargo project.
+        stage:
+          type: string
+          minLength: 1
+          maxLength: 253
+          description: Exact Kargo Stage recorded in the durable Promotion snapshot.
         kargoName:
           type: string
           minLength: 1
@@ -8253,7 +8268,7 @@ components:
           type: string
           minLength: 1
           maxLength: 200
-          description: Kubernetes UID recorded when the Promotion was materialized.
+          description: Kubernetes UID already bound to the Promotion, if observed.
     KargoPromotionDispatchReport:
       type: object
       required:
@@ -8290,8 +8305,6 @@ components:
       required:
         - kargoName
         - kargoUid
-        - phase
-        - diagnostic
       properties:
         kargoName:
           type: string
@@ -8310,12 +8323,12 @@ components:
             - Errored
             - Aborted
             - Succeeded
-          description: Terminal Kargo phase observed before callback hydration.
+          description: Exact terminal Kargo phase, omitted when only binding Kubernetes identity.
         diagnostic:
           type: string
-          minLength: 1
           maxLength: 4096
-          description: Bounded description of the terminal pre-callback state.
+          minLength: 1
+          description: Bounded sanitized terminal diagnostic, when Kargo provides one.
     ExecutionImages:
       type: object
       additionalProperties: false
@@ -8635,11 +8648,6 @@ components:
         updatedAt:
           type: string
           format: date-time
-    PromotionSource:
-      type: string
-      enum:
-        - kargo
-        - slipramp
     PromotionFreightRequest:
       type: object
       additionalProperties: false
@@ -8811,6 +8819,30 @@ components:
       enum:
         - automatic
         - review-required
+    KargoPromotionOutcome:
+      type: object
+      additionalProperties: false
+      required:
+        - phase
+        - observedAt
+      properties:
+        phase:
+          type: string
+          enum:
+            - Succeeded
+            - Failed
+            - Errored
+            - Aborted
+          description: Exact terminal phase reported by Kargo.
+        observedAt:
+          type: string
+          format: date-time
+          description: Time Slipramp accepted the Controller's terminal observation.
+        diagnostic:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Bounded sanitized Kargo diagnostic, when available.
     PromotionDecision:
       type: object
       additionalProperties: false

@@ -54,7 +54,7 @@ type kargoPromotionReconciler interface {
 	Reconcile(
 		context.Context,
 		api.KargoPromotionReconciliationCommand,
-	) (*kargoPromotionTerminalObservation, error)
+	) (*kargoPromotionObservation, error)
 }
 
 type kargoPromotionMaterialization struct {
@@ -63,11 +63,11 @@ type kargoPromotionMaterialization struct {
 	Created bool
 }
 
-type kargoPromotionTerminalObservation struct {
+type kargoPromotionObservation struct {
 	Name       string
 	UID        string
-	Phase      api.KargoPromotionReconciliationReportPhase
-	Diagnostic string
+	Phase      *api.KargoPromotionReconciliationReportPhase
+	Diagnostic *string
 }
 
 type dynamicKargoPromotionCreator struct {
@@ -175,7 +175,7 @@ func (c *dynamicKargoPromotionCreator) Ensure(
 func (c *dynamicKargoPromotionCreator) Reconcile(
 	ctx context.Context,
 	command api.KargoPromotionReconciliationCommand,
-) (*kargoPromotionTerminalObservation, error) {
+) (*kargoPromotionObservation, error) {
 	integration := string(command.Integration)
 	namespace := string(command.Project)
 	if !slices.Contains(c.allowedNamespaces[integration], namespace) {
@@ -186,62 +186,68 @@ func (c *dynamicKargoPromotionCreator) Reconcile(
 		)
 	}
 
-	items, err := c.promotions.Namespace(namespace).List(ctx, metav1.ListOptions{})
+	object, err := c.promotions.Namespace(namespace).Get(ctx, command.KargoName, metav1.GetOptions{})
 	if err != nil {
-		return nil, classifyKargoPromotionAPIError("list Kargo Promotions for reconciliation", err)
+		return nil, classifyKargoPromotionAPIError("get Kargo Promotion for reconciliation", err)
 	}
-
-	var found *unstructured.Unstructured
-	for index := range items.Items {
-		candidate := &items.Items[index]
-		if candidate.GetAnnotations()[promotionIDAnnotation] != command.ID.String() {
-			continue
-		}
-		if found != nil {
-			return nil, fmt.Errorf("multiple Kargo Promotions claim Slipramp Promotion %s", command.ID)
-		}
-		found = candidate
+	if object.GetName() != command.KargoName || (object.GetNamespace() != "" && object.GetNamespace() != namespace) {
+		return nil, fmt.Errorf("kargo Promotion identity does not match %s/%s", namespace, command.KargoName)
 	}
-	if found == nil {
-		return nil, fmt.Errorf("kargo Promotion for Slipramp Promotion %s was not found", command.ID)
-	}
-	if found.GetName() != command.KargoName || string(found.GetUID()) != command.KargoUID {
+	stage, stageFound, err := unstructured.NestedString(object.Object, "spec", "stage")
+	if err != nil || !stageFound || stage != command.Stage {
 		return nil, fmt.Errorf(
-			"kargo Promotion %s/%s identity does not match canonical name %q and UID %q",
+			"kargo Promotion %s/%s Stage does not match canonical Stage %q",
 			namespace,
-			found.GetName(),
 			command.KargoName,
-			command.KargoUID,
+			command.Stage,
+		)
+	}
+	annotation := object.GetAnnotations()[promotionIDAnnotation]
+	if (command.Source == api.Slipramp && annotation != command.ID.String()) ||
+		(command.Source == api.Kargo && annotation != "" && annotation != command.ID.String()) {
+		return nil, fmt.Errorf(
+			"kargo Promotion %s/%s Slipramp identity annotation conflicts with Promotion %s",
+			namespace,
+			command.KargoName,
+			command.ID,
+		)
+	}
+	uid := string(object.GetUID())
+	if uid == "" {
+		return nil, fmt.Errorf("kargo Promotion %s/%s has no Kubernetes UID", namespace, command.KargoName)
+	}
+	if command.KargoUID != nil && uid != *command.KargoUID {
+		return nil, fmt.Errorf(
+			"kargo Promotion %s/%s UID %q does not match canonical UID %q",
+			namespace,
+			command.KargoName,
+			uid,
+			*command.KargoUID,
 		)
 	}
 
-	phase, foundPhase, err := unstructured.NestedString(found.Object, "status", "phase")
+	observation := &kargoPromotionObservation{Name: command.KargoName, UID: uid}
+	phase, foundPhase, err := unstructured.NestedString(object.Object, "status", "phase")
 	if err != nil {
-		return nil, fmt.Errorf("read Kargo Promotion %s/%s phase: %w", namespace, found.GetName(), err)
+		return nil, fmt.Errorf("read Kargo Promotion %s/%s phase: %w", namespace, command.KargoName, err)
 	}
 	if !foundPhase || !terminalKargoPromotionPhase(phase) {
-		return nil, nil
+		return observation, nil
 	}
-	message, _, err := unstructured.NestedString(found.Object, "status", "message")
+	terminalPhase := api.KargoPromotionReconciliationReportPhase(phase)
+	observation.Phase = &terminalPhase
+	message, _, err := unstructured.NestedString(object.Object, "status", "message")
 	if err != nil {
-		return nil, fmt.Errorf("read Kargo Promotion %s/%s message: %w", namespace, found.GetName(), err)
+		return nil, fmt.Errorf("read Kargo Promotion %s/%s message: %w", namespace, command.KargoName, err)
 	}
-	diagnostic := fmt.Sprintf(
-		"Kargo Promotion %s/%s reached terminal phase %s before Slipramp received its callback.",
-		namespace,
-		found.GetName(),
-		phase,
-	)
 	if strings.TrimSpace(message) != "" {
-		diagnostic += " " + strings.TrimSpace(message)
+		diagnostic := boundedKargoPromotionDiagnostic(message)
+		if diagnostic != "" {
+			observation.Diagnostic = &diagnostic
+		}
 	}
 
-	return &kargoPromotionTerminalObservation{
-		Name:       found.GetName(),
-		UID:        string(found.GetUID()),
-		Phase:      api.KargoPromotionReconciliationReportPhase(phase),
-		Diagnostic: boundedKargoPromotionDiagnostic(diagnostic),
-	}, nil
+	return observation, nil
 }
 
 func terminalKargoPromotionPhase(phase string) bool {
@@ -433,6 +439,9 @@ func (c *Controller) handleKargoPromotionReconciliation(
 	if observation == nil {
 		return nil
 	}
+	if command.KargoUID != nil && observation.Phase == nil {
+		return nil
+	}
 
 	reportErr := c.promotionReconciliationReports.ReportKargoPromotionReconciliation(
 		ctx,
@@ -459,7 +468,7 @@ func (c *Controller) handleKargoPromotionReconciliation(
 	}
 
 	c.logger.Info(
-		"Kargo Promotion terminal phase reconciled",
+		"Kargo Promotion observation reconciled",
 		"promotion_id", command.ID,
 		"kargo_name", observation.Name,
 		"kargo_uid", observation.UID,
@@ -479,9 +488,6 @@ func boundedKargoPromotionDiagnostic(value string) string {
 		return character
 	}, value)
 	value = strings.Join(strings.Fields(value), " ")
-	if value == "" {
-		value = "Kargo Promotion creation failed without a diagnostic."
-	}
 	runes := []rune(value)
 	if len(runes) <= maximumRunes {
 		return value

@@ -291,10 +291,25 @@ func TestKargoPromotionReconcilerReportsOnlyCanonicalTerminalObjects(t *testing.
 				t.Fatalf("Reconcile() error = %v", err)
 			}
 			if observed == nil || observed.Name != command.ExternalName || observed.UID != "promotion-uid" ||
-				observed.Phase != phase || !strings.Contains(observed.Diagnostic, "Kargo terminal detail") {
+				observed.Phase == nil || *observed.Phase != phase || observed.Diagnostic == nil ||
+				!strings.Contains(*observed.Diagnostic, "Kargo terminal detail") {
 				t.Errorf("observation = %#v", observed)
 			}
 		})
+	}
+}
+
+func TestBoundedKargoPromotionDiagnosticSanitizesAndBoundsText(t *testing.T) {
+	t.Parallel()
+
+	if diagnostic := boundedKargoPromotionDiagnostic("\x00\n\t"); diagnostic != "" {
+		t.Errorf("control-only diagnostic = %q, want empty", diagnostic)
+	}
+
+	diagnostic := boundedKargoPromotionDiagnostic("  detail\n" + strings.Repeat("é", 5000) + "  ")
+	if !strings.HasPrefix(diagnostic, "detail ") || len([]rune(diagnostic)) != 4096 ||
+		strings.ContainsAny(diagnostic, "\x00\n\t") {
+		t.Errorf("sanitized diagnostic length = %d, value prefix = %q", len([]rune(diagnostic)), diagnostic[:8])
 	}
 }
 
@@ -314,13 +329,65 @@ func TestKargoPromotionReconcilerIgnoresNonterminalPhaseAndRejectsUIDReplacement
 	)
 
 	observed, err := reconciler.Reconcile(t.Context(), testKargoPromotionReconciliationCommand())
-	if err != nil || observed != nil {
+	if err != nil || observed == nil || observed.Phase != nil || observed.UID != "promotion-uid" {
 		t.Errorf("nonterminal Reconcile() = %#v, %v", observed, err)
 	}
 	replacement := testKargoPromotionReconciliationCommand()
-	replacement.KargoUID = "replacement-uid"
+	replacementUID := "replacement-uid"
+	replacement.KargoUID = &replacementUID
 	if _, err := reconciler.Reconcile(t.Context(), replacement); err == nil {
 		t.Fatal("replacement UID was accepted")
+	}
+}
+
+func TestKargoPromotionReconcilerBindsKargoOriginatedIdentityAndRejectsCoordinateConflicts(t *testing.T) {
+	t.Parallel()
+
+	creation := testKargoPromotionCommand()
+	object := testKargoPromotion(creation, creation.Freight)
+	object.SetUID(types.UID("promotion-uid"))
+	object.SetAnnotations(nil)
+	reconciler := newDynamicKargoPromotionCreator(
+		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
+		newTestKargoDynamicClient(object),
+	)
+	command := testKargoPromotionReconciliationCommand()
+	command.Source = api.Kargo
+	command.KargoUID = nil
+
+	observed, err := reconciler.Reconcile(t.Context(), command)
+	if err != nil || observed == nil || observed.UID != "promotion-uid" || observed.Phase != nil {
+		t.Fatalf("unbound Kargo-originated Reconcile() = %#v, %v", observed, err)
+	}
+
+	conflicts := map[string]func(*api.KargoPromotionReconciliationCommand){
+		"name": func(value *api.KargoPromotionReconciliationCommand) {
+			value.KargoName = "another-promotion"
+		},
+		"namespace": func(value *api.KargoPromotionReconciliationCommand) {
+			value.Project = "another-project"
+		},
+		"Stage": func(value *api.KargoPromotionReconciliationCommand) {
+			value.Stage = "another-stage"
+		},
+	}
+	for name, mutate := range conflicts {
+		t.Run(name, func(t *testing.T) {
+			conflict := command
+			mutate(&conflict)
+			if _, err := reconciler.Reconcile(t.Context(), conflict); err == nil {
+				t.Fatalf("%s conflict was accepted", name)
+			}
+		})
+	}
+
+	object.SetAnnotations(map[string]string{promotionIDAnnotation: uuid.NewString()})
+	conflictingReconciler := newDynamicKargoPromotionCreator(
+		[]promotion.ObserverConfig{{Name: "prod", StageNamespaces: []string{"kargo-core"}}},
+		newTestKargoDynamicClient(object),
+	)
+	if _, err := conflictingReconciler.Reconcile(t.Context(), command); err == nil {
+		t.Fatal("conflicting Slipramp annotation was accepted")
 	}
 }
 
@@ -333,11 +400,13 @@ func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 			t.Parallel()
 
 			command := testKargoPromotionReconciliationCommand()
-			observation := &kargoPromotionTerminalObservation{
+			phase := api.KargoPromotionReconciliationReportPhaseSucceeded
+			diagnostic := "Kargo completed the Promotion."
+			observation := &kargoPromotionObservation{
 				Name:       command.KargoName,
-				UID:        command.KargoUID,
-				Phase:      api.KargoPromotionReconciliationReportPhaseSucceeded,
-				Diagnostic: "terminal before callback",
+				UID:        *command.KargoUID,
+				Phase:      &phase,
+				Diagnostic: &diagnostic,
 			}
 			var reported api.KargoPromotionReconciliationReport
 			app := &Controller{
@@ -345,7 +414,7 @@ func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 				promotionReconciler: kargoPromotionReconcilerFunc(func(
 					context.Context,
 					api.KargoPromotionReconciliationCommand,
-				) (*kargoPromotionTerminalObservation, error) {
+				) (*kargoPromotionObservation, error) {
 					return observation, nil
 				}),
 				promotionReconciliationReports: kargoPromotionReconciliationReporterFunc(func(
@@ -371,10 +440,44 @@ func TestControllerReportsTerminalKargoPromotionReconciliation(t *testing.T) {
 				t.Fatalf("handleKargoPromotionReconciliation() error = %v, want %v", err, wantHandle)
 			}
 			if reported.KargoName != observation.Name || reported.KargoUID != observation.UID ||
-				reported.Phase != observation.Phase || reported.Diagnostic != observation.Diagnostic {
+				reported.Phase == nil || *reported.Phase != *observation.Phase ||
+				reported.Diagnostic == nil || *reported.Diagnostic != *observation.Diagnostic {
 				t.Errorf("report = %#v", reported)
 			}
 		})
+	}
+}
+
+func TestControllerReportsUnboundKargoPromotionIdentity(t *testing.T) {
+	t.Parallel()
+
+	command := testKargoPromotionReconciliationCommand()
+	command.Source = api.Kargo
+	command.KargoUID = nil
+	observation := &kargoPromotionObservation{Name: command.KargoName, UID: "promotion-uid"}
+	var reported api.KargoPromotionReconciliationReport
+	app := &Controller{
+		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		promotionReconciler: kargoPromotionReconcilerFunc(func(
+			context.Context,
+			api.KargoPromotionReconciliationCommand,
+		) (*kargoPromotionObservation, error) {
+			return observation, nil
+		}),
+		promotionReconciliationReports: kargoPromotionReconciliationReporterFunc(func(
+			_ context.Context,
+			_ uuid.UUID,
+			report api.KargoPromotionReconciliationReport,
+		) error {
+			reported = report
+			return nil
+		}),
+	}
+	if err := app.handleKargoPromotionReconciliation(t.Context(), command); err != nil {
+		t.Fatalf("handleKargoPromotionReconciliation() error = %v", err)
+	}
+	if reported.KargoName != command.KargoName || reported.KargoUID != observation.UID || reported.Phase != nil {
+		t.Fatalf("identity report = %#v", reported)
 	}
 }
 
@@ -460,7 +563,7 @@ func TestControllerResumesPollingAfterKargoOperationDeadline(t *testing.T) {
 				app.promotionReconciler = kargoPromotionReconcilerFunc(func(
 					ctx context.Context,
 					_ api.KargoPromotionReconciliationCommand,
-				) (*kargoPromotionTerminalObservation, error) {
+				) (*kargoPromotionObservation, error) {
 					return nil, waitForDeadline(ctx)
 				})
 				var reported bool
@@ -505,12 +608,12 @@ func TestControllerResumesPollingAfterKargoOperationDeadline(t *testing.T) {
 type kargoPromotionReconcilerFunc func(
 	context.Context,
 	api.KargoPromotionReconciliationCommand,
-) (*kargoPromotionTerminalObservation, error)
+) (*kargoPromotionObservation, error)
 
 func (f kargoPromotionReconcilerFunc) Reconcile(
 	ctx context.Context,
 	command api.KargoPromotionReconciliationCommand,
-) (*kargoPromotionTerminalObservation, error) {
+) (*kargoPromotionObservation, error) {
 	return f(ctx, command)
 }
 
@@ -530,13 +633,16 @@ func testKargoPromotionCommand() api.KargoPromotionCreationCommand {
 
 func testKargoPromotionReconciliationCommand() api.KargoPromotionReconciliationCommand {
 	command := testKargoPromotionCommand()
+	uid := "promotion-uid"
 
 	return api.KargoPromotionReconciliationCommand{
 		ID:          command.ID,
+		Source:      api.Slipramp,
 		Integration: command.Integration,
 		Project:     command.Project,
+		Stage:       command.Stage,
 		KargoName:   command.ExternalName,
-		KargoUID:    "promotion-uid",
+		KargoUID:    &uid,
 	}
 }
 

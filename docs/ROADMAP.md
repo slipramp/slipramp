@@ -19,10 +19,9 @@ strict priority order.
 - [ ] Document Stage freshness, preparation and diff failures, review expiry,
       stale target pushes, and operational recovery.
 
-Post-approval push and reconciliation results, same-identity preparation retry,
-policy audit history beyond current attribution, and provider-neutral review
-abstractions remain deferred until an operator need or second integration makes
-their semantics concrete.
+Same-identity preparation retry, policy audit history beyond current
+attribution, and provider-neutral review abstractions remain deferred until an
+operator need or second integration makes their semantics concrete.
 
 ## Git-trigger extensions
 

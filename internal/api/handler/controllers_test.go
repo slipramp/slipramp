@@ -405,12 +405,15 @@ func TestControllerPollReturnsKargoPromotionReconciliation(t *testing.T) {
 	t.Parallel()
 
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1963")
-	selected := promotion.CreationReconciliationCommand{
+	kargoUID := "promotion-uid"
+	selected := promotion.ReconciliationCommand{
 		PromotionID: promotionID,
+		Source:      promotion.SourceSlipramp,
 		Integration: "prod",
 		Project:     "kargo-core",
+		Stage:       "prod",
 		KargoName:   "external-dns-prod.01test.freight",
-		KargoUID:    "promotion-uid",
+		KargoUID:    &kargoUID,
 	}
 	commands := &recordingControllerCommands{command: controllercommand.PromotionReconciliation{Command: selected}}
 	request := httptest.NewRequestWithContext(
@@ -434,7 +437,10 @@ func TestControllerPollReturnsKargoPromotionReconciliation(t *testing.T) {
 	if command.Type != api.ControllerCommandTypeReconcileKargoPromotion ||
 		command.PromotionReconciliation == nil || command.PromotionReconciliation.ID != promotionID ||
 		command.PromotionReconciliation.KargoName != selected.KargoName ||
-		command.PromotionReconciliation.KargoUID != selected.KargoUID {
+		command.PromotionReconciliation.KargoUID == nil ||
+		*command.PromotionReconciliation.KargoUID != *selected.KargoUID ||
+		command.PromotionReconciliation.Stage != selected.Stage ||
+		command.PromotionReconciliation.Source != api.Slipramp {
 		t.Errorf("command = %#v", command)
 	}
 }
@@ -469,8 +475,8 @@ func TestControllerReportsKargoPromotionReconciliation(t *testing.T) {
 		reconciliations.report.PromotionID != promotionID ||
 		reconciliations.report.KargoName != "external-dns-prod.01test.freight" ||
 		reconciliations.report.KargoUID != "promotion-uid" ||
-		reconciliations.report.Phase != promotion.CreationReconciliationSucceeded ||
-		reconciliations.report.Diagnostic != "terminal before callback" {
+		reconciliations.report.Phase == nil || *reconciliations.report.Phase != promotion.KargoPhaseSucceeded ||
+		reconciliations.report.Diagnostic == nil || *reconciliations.report.Diagnostic != "terminal before callback" {
 		t.Errorf("report = %#v for cluster %q", reconciliations.report, reconciliations.reportCluster)
 	}
 	if controllers.calls != 1 {
@@ -1044,7 +1050,7 @@ type recordingPromotionDispatchService struct {
 }
 
 type recordingPromotionReconciliationService struct {
-	report        promotion.CreationReconciliationReport
+	report        promotion.ReconciliationReport
 	reportErr     error
 	reportCalls   int
 	reportCluster string
@@ -1091,7 +1097,7 @@ func (s *recordingPromotionDispatchService) Report(
 func (s *recordingPromotionReconciliationService) Report(
 	_ context.Context,
 	clusterName string,
-	report promotion.CreationReconciliationReport,
+	report promotion.ReconciliationReport,
 ) error {
 	s.reportCalls++
 	s.reportCluster = clusterName
@@ -1116,7 +1122,7 @@ func newPromotionDispatchTestHandler(
 
 func newPromotionReconciliationTestHandler(
 	clusters ClusterService,
-	reconciliations PromotionCreationReconciliationService,
+	reconciliations PromotionReconciliationService,
 ) http.Handler {
 	return NewHTTP(
 		Dependencies{

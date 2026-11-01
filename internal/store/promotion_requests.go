@@ -145,9 +145,12 @@ func (d *Database) acceptPromotionRequest(
 	reviewRequired := policySnapshot.EffectiveMode == promotion.PolicyModeReviewRequired
 	status := promotion.StatusApproved
 	var expiresAt *time.Time
+	var nextReconciliationAt *time.Time
 	if reviewRequired {
 		status = promotion.StatusPreparing
 		expiresAt = new(acceptance.AcceptedAt.Add(acceptance.PendingReviewRetention))
+	} else {
+		nextReconciliationAt = new(acceptance.AcceptedAt)
 	}
 	record := promotion.Promotion{
 		ID:                     acceptance.ID,
@@ -166,6 +169,7 @@ func (d *Database) acceptPromotionRequest(
 		PolicySnapshot:         policySnapshot,
 		ReviewRequired:         reviewRequired,
 		Status:                 status,
+		NextReconciliationAt:   nextReconciliationAt,
 		RequestedByPrincipalID: acceptance.RequestedByPrincipalID,
 		RequestedBySnapshot:    acceptance.RequestedBySnapshot,
 		CreatedAt:              acceptance.AcceptedAt,

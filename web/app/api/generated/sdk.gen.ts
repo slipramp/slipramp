@@ -934,9 +934,9 @@ export const reportKargoPromotionDispatch = <ThrowOnError extends boolean = fals
   });
 
 /**
- * Report terminal Kargo Promotion reconciliation
+ * Report Kargo Promotion identity or terminal outcome
  *
- * Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+ * Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
  */
 export const reportKargoPromotionReconciliation = <ThrowOnError extends boolean = false>(
   options: Options<ReportKargoPromotionReconciliationData, ThrowOnError>,

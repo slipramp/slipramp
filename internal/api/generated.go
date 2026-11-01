@@ -334,6 +334,30 @@ func (e KargoPromotionDispatchReportResult) Valid() bool {
 	}
 }
 
+// Defines values for KargoPromotionOutcomePhase.
+const (
+	KargoPromotionOutcomePhaseAborted   KargoPromotionOutcomePhase = "Aborted"
+	KargoPromotionOutcomePhaseErrored   KargoPromotionOutcomePhase = "Errored"
+	KargoPromotionOutcomePhaseFailed    KargoPromotionOutcomePhase = "Failed"
+	KargoPromotionOutcomePhaseSucceeded KargoPromotionOutcomePhase = "Succeeded"
+)
+
+// Valid indicates whether the value is a known member of the KargoPromotionOutcomePhase enum.
+func (e KargoPromotionOutcomePhase) Valid() bool {
+	switch e {
+	case KargoPromotionOutcomePhaseAborted:
+		return true
+	case KargoPromotionOutcomePhaseErrored:
+		return true
+	case KargoPromotionOutcomePhaseFailed:
+		return true
+	case KargoPromotionOutcomePhaseSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for KargoPromotionReconciliationReportPhase.
 const (
 	KargoPromotionReconciliationReportPhaseAborted   KargoPromotionReconciliationReportPhase = "Aborted"
@@ -2137,6 +2161,21 @@ type KargoPromotionDispatchReport struct {
 // KargoPromotionDispatchReportResult defines model for KargoPromotionDispatchReport.Result.
 type KargoPromotionDispatchReportResult string
 
+// KargoPromotionOutcome defines model for KargoPromotionOutcome.
+type KargoPromotionOutcome struct {
+	// Diagnostic Bounded sanitized Kargo diagnostic, when available.
+	Diagnostic *string `json:"diagnostic,omitempty"`
+
+	// ObservedAt Time Slipramp accepted the Controller's terminal observation.
+	ObservedAt time.Time `json:"observedAt"`
+
+	// Phase Exact terminal phase reported by Kargo.
+	Phase KargoPromotionOutcomePhase `json:"phase"`
+}
+
+// KargoPromotionOutcomePhase Exact terminal phase reported by Kargo.
+type KargoPromotionOutcomePhase string
+
 // KargoPromotionReconciliationCommand defines model for KargoPromotionReconciliationCommand.
 type KargoPromotionReconciliationCommand struct {
 	// ID Durable Slipramp Promotion identity carried by the stable annotation.
@@ -2146,17 +2185,21 @@ type KargoPromotionReconciliationCommand struct {
 	// KargoName Canonical admission-assigned Kargo Promotion name.
 	KargoName string `json:"kargoName"`
 
-	// KargoUID Kubernetes UID recorded when the Promotion was materialized.
-	KargoUID string `json:"kargoUid"`
+	// KargoUID Kubernetes UID already bound to the Promotion, if observed.
+	KargoUID *string `json:"kargoUid,omitempty"`
 
 	// Project Kubernetes namespace containing the Kargo project.
-	Project CatalogName `json:"project"`
+	Project CatalogName     `json:"project"`
+	Source  PromotionSource `json:"source"`
+
+	// Stage Exact Kargo Stage recorded in the durable Promotion snapshot.
+	Stage string `json:"stage"`
 }
 
 // KargoPromotionReconciliationReport defines model for KargoPromotionReconciliationReport.
 type KargoPromotionReconciliationReport struct {
-	// Diagnostic Bounded description of the terminal pre-callback state.
-	Diagnostic string `json:"diagnostic"`
+	// Diagnostic Bounded sanitized terminal diagnostic, when Kargo provides one.
+	Diagnostic *string `json:"diagnostic,omitempty"`
 
 	// KargoName Canonical name of the observed Kargo Promotion.
 	KargoName string `json:"kargoName"`
@@ -2164,11 +2207,11 @@ type KargoPromotionReconciliationReport struct {
 	// KargoUID Kubernetes UID of the observed Kargo Promotion.
 	KargoUID string `json:"kargoUid"`
 
-	// Phase Terminal Kargo phase observed before callback hydration.
-	Phase KargoPromotionReconciliationReportPhase `json:"phase"`
+	// Phase Exact terminal Kargo phase, omitted when only binding Kubernetes identity.
+	Phase *KargoPromotionReconciliationReportPhase `json:"phase,omitempty"`
 }
 
-// KargoPromotionReconciliationReportPhase Terminal Kargo phase observed before callback hydration.
+// KargoPromotionReconciliationReportPhase Exact terminal Kargo phase, omitted when only binding Kubernetes identity.
 type KargoPromotionReconciliationReportPhase string
 
 // KargoPromotionRequest defines model for KargoPromotionRequest.
@@ -2501,23 +2544,24 @@ type ProductPrincipal struct {
 
 // Promotion defines model for Promotion.
 type Promotion struct {
-	ArgoDiffArtifact     *Artifact           `json:"argoDiffArtifact,omitempty"`
-	ArgoDiffArtifactID   *openapi_types.UUID `json:"argoDiffArtifactId,omitempty"`
-	BaseCommit           *GitCommit          `json:"baseCommit,omitempty"`
-	CandidateBranch      *string             `json:"candidateBranch,omitempty"`
-	CandidateCommit      *GitCommit          `json:"candidateCommit,omitempty"`
-	CreatedAt            time.Time           `json:"createdAt"`
-	DecidedAt            *time.Time          `json:"decidedAt,omitempty"`
-	Decision             *PromotionDecision  `json:"decision,omitempty"`
-	DispatchAttemptCount int                 `json:"dispatchAttemptCount"`
-	DispatchedAt         *time.Time          `json:"dispatchedAt,omitempty"`
-	ExpiresAt            *time.Time          `json:"expiresAt,omitempty"`
-	ExternalPromotionID  string              `json:"externalPromotionId"`
-	GitDiffArtifact      *Artifact           `json:"gitDiffArtifact,omitempty"`
-	GitDiffArtifactID    *openapi_types.UUID `json:"gitDiffArtifactId,omitempty"`
-	ID                   openapi_types.UUID  `json:"id"`
-	Integration          CatalogName         `json:"integration"`
-	KargoPromotionUID    *string             `json:"kargoPromotionUid,omitempty"`
+	ArgoDiffArtifact     *Artifact              `json:"argoDiffArtifact,omitempty"`
+	ArgoDiffArtifactID   *openapi_types.UUID    `json:"argoDiffArtifactId,omitempty"`
+	BaseCommit           *GitCommit             `json:"baseCommit,omitempty"`
+	CandidateBranch      *string                `json:"candidateBranch,omitempty"`
+	CandidateCommit      *GitCommit             `json:"candidateCommit,omitempty"`
+	CreatedAt            time.Time              `json:"createdAt"`
+	DecidedAt            *time.Time             `json:"decidedAt,omitempty"`
+	Decision             *PromotionDecision     `json:"decision,omitempty"`
+	DispatchAttemptCount int                    `json:"dispatchAttemptCount"`
+	DispatchedAt         *time.Time             `json:"dispatchedAt,omitempty"`
+	ExpiresAt            *time.Time             `json:"expiresAt,omitempty"`
+	ExternalPromotionID  string                 `json:"externalPromotionId"`
+	GitDiffArtifact      *Artifact              `json:"gitDiffArtifact,omitempty"`
+	GitDiffArtifactID    *openapi_types.UUID    `json:"gitDiffArtifactId,omitempty"`
+	ID                   openapi_types.UUID     `json:"id"`
+	Integration          CatalogName            `json:"integration"`
+	KargoOutcome         *KargoPromotionOutcome `json:"kargoOutcome,omitempty"`
+	KargoPromotionUID    *string                `json:"kargoPromotionUid,omitempty"`
 
 	// KargoURL Direct link to this Promotion in the configured Kargo UI.
 	KargoURL       *string    `json:"kargoUrl,omitempty"`
@@ -2528,7 +2572,7 @@ type Promotion struct {
 	Message              *string    `json:"message,omitempty"`
 	NextDispatchAt       *time.Time `json:"nextDispatchAt,omitempty"`
 
-	// NextReconciliationAt Next durable inspection time while the materialized resource awaits callback.
+	// NextReconciliationAt Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
 	NextReconciliationAt   *time.Time                  `json:"nextReconciliationAt,omitempty"`
 	PolicySnapshot         PromotionStagePolicy        `json:"policySnapshot"`
 	PreparationCompletedAt *time.Time                  `json:"preparationCompletedAt,omitempty"`
@@ -5155,18 +5199,18 @@ type ClientInterface interface {
 	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
 	ReportKargoPromotionDispatch(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReportKargoPromotionReconciliationWithBody Report terminal Kargo Promotion reconciliation
+	// ReportKargoPromotionReconciliationWithBody Report Kargo Promotion identity or terminal outcome
 	//
-	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
 	ReportKargoPromotionReconciliationWithBody(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+	// ReportKargoPromotionReconciliation Report Kargo Promotion identity or terminal outcome
 	//
-	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -6675,9 +6719,9 @@ func (c *Client) ReportKargoPromotionDispatch(ctx context.Context, promotionID o
 	return c.Client.Do(req)
 }
 
-// ReportKargoPromotionReconciliationWithBody Report terminal Kargo Promotion reconciliation
+// ReportKargoPromotionReconciliationWithBody Report Kargo Promotion identity or terminal outcome
 //
-// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 //
 // Takes any type of body and a specified content type.
 //
@@ -6694,9 +6738,9 @@ func (c *Client) ReportKargoPromotionReconciliationWithBody(ctx context.Context,
 	return c.Client.Do(req)
 }
 
-// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+// ReportKargoPromotionReconciliation Report Kargo Promotion identity or terminal outcome
 //
-// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -11646,18 +11690,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /controller/v1/promotions/{promotionId}/dispatch (the `ReportKargoPromotionDispatch` operationId).
 	ReportKargoPromotionDispatchWithResponse(ctx context.Context, promotionID openapi_types.UUID, body ReportKargoPromotionDispatchJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportKargoPromotionDispatchResponse, error)
 
-	// ReportKargoPromotionReconciliationWithBodyWithResponse Report terminal Kargo Promotion reconciliation
+	// ReportKargoPromotionReconciliationWithBodyWithResponse Report Kargo Promotion identity or terminal outcome
 	//
-	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /controller/v1/promotions/{promotionId}/reconciliation (the `ReportKargoPromotionReconciliation` operationId).
 	ReportKargoPromotionReconciliationWithBodyWithResponse(ctx context.Context, promotionID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportKargoPromotionReconciliationResponse, error)
 
-	// ReportKargoPromotionReconciliationWithResponse Report terminal Kargo Promotion reconciliation
+	// ReportKargoPromotionReconciliationWithResponse Report Kargo Promotion identity or terminal outcome
 	//
-	// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+	// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -18646,9 +18690,9 @@ func (c *ClientWithResponses) ReportKargoPromotionDispatchWithResponse(ctx conte
 	return ParseReportKargoPromotionDispatchResponse(rsp)
 }
 
-// ReportKargoPromotionReconciliationWithBodyWithResponse Report terminal Kargo Promotion reconciliation
+// ReportKargoPromotionReconciliationWithBodyWithResponse Report Kargo Promotion identity or terminal outcome
 //
-// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -18661,9 +18705,9 @@ func (c *ClientWithResponses) ReportKargoPromotionReconciliationWithBodyWithResp
 	return ParseReportKargoPromotionReconciliationResponse(rsp)
 }
 
-// ReportKargoPromotionReconciliationWithResponse Report terminal Kargo Promotion reconciliation
+// ReportKargoPromotionReconciliationWithResponse Report Kargo Promotion identity or terminal outcome
 //
-// Reports a terminal phase observed on a materialized operator-started Kargo Promotion before its callback hydrated Slipramp state. Identity is checked against both the canonical Kargo name and Kubernetes UID. Repeating an accepted report is idempotent, and a callback that wins the row lock first cannot be moved backward.
+// Binds the exact Kubernetes UID for a Kargo-originated Promotion or reports a terminal phase for either Promotion source. Identity is checked against the durable namespace, name, Stage, and any previously bound UID. Repeated identity and terminal reports are idempotent; conflicting terminal facts are rejected without changing the immutable approval decision.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -23826,7 +23870,7 @@ type ServerInterface interface {
 	// ReportKargoPromotionDispatch Report Kargo Promotion creation
 	// (POST /controller/v1/promotions/{promotionId}/dispatch)
 	ReportKargoPromotionDispatch(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID)
-	// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+	// ReportKargoPromotionReconciliation Report Kargo Promotion identity or terminal outcome
 	// (POST /controller/v1/promotions/{promotionId}/reconciliation)
 	ReportKargoPromotionReconciliation(w http.ResponseWriter, r *http.Request, promotionID openapi_types.UUID)
 	// GetRunLogCursor Get the durable Run log cursor
@@ -34586,7 +34630,7 @@ type StrictServerInterface interface {
 	// ReportKargoPromotionDispatch Report Kargo Promotion creation
 	// (POST /controller/v1/promotions/{promotionId}/dispatch)
 	ReportKargoPromotionDispatch(ctx context.Context, request ReportKargoPromotionDispatchRequestObject) (ReportKargoPromotionDispatchResponseObject, error)
-	// ReportKargoPromotionReconciliation Report terminal Kargo Promotion reconciliation
+	// ReportKargoPromotionReconciliation Report Kargo Promotion identity or terminal outcome
 	// (POST /controller/v1/promotions/{promotionId}/reconciliation)
 	ReportKargoPromotionReconciliation(ctx context.Context, request ReportKargoPromotionReconciliationRequestObject) (ReportKargoPromotionReconciliationResponseObject, error)
 	// GetRunLogCursor Get the durable Run log cursor

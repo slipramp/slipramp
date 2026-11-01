@@ -80,7 +80,7 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 		t.Fatalf("approved Kargo Promotion = %#v", decisionResponse.JSON200)
 	}
 
-	s.waitForKargoPromotionSucceeded(t, pending.ExternalPromotionID)
+	final := s.waitForPromotionKargoOutcome(t, promotion.ID)
 	targetCommit := strings.TrimSpace(string(s.kubectl(t, "-n", systemNamespace, "exec",
 		"deployment/acceptance-git", "-c", "git", "--",
 		"git", "--git-dir=/srv/repository.git", "rev-parse", "refs/heads/stage/acceptance/acceptance")))
@@ -95,10 +95,10 @@ func (s *suite) testKargoIntegration(t *testing.T) {
 		t.Fatalf("promoted target manifest = %q", targetManifest)
 	}
 
-	final := s.getPromotion(t, promotion.ID)
 	if final.Status != api.PromotionStatusApproved || final.Decision == nil ||
 		final.Decision.Decision != api.PromotionDecisionDecisionApproved || final.KargoPromotionUID == nil ||
-		*final.KargoPromotionUID != *dispatched.KargoPromotionUID {
+		*final.KargoPromotionUID != *dispatched.KargoPromotionUID || final.KargoOutcome == nil ||
+		final.KargoOutcome.Phase != api.KargoPromotionOutcomePhaseSucceeded || final.KargoOutcome.ObservedAt.IsZero() {
 		t.Fatalf("final Kargo Promotion = %#v", final)
 	}
 	t.Logf("Kargo Promotion %s pushed candidate %s to its target branch",
@@ -222,29 +222,33 @@ func (s *suite) waitForKargoCallbackAndPendingPromotion(t *testing.T, promotionI
 	return api.Promotion{}
 }
 
-func (s *suite) waitForKargoPromotionSucceeded(t *testing.T, name string) {
+func (s *suite) waitForPromotionKargoOutcome(t *testing.T, promotionID uuid.UUID) api.Promotion {
 	t.Helper()
 
 	deadline := time.Now().Add(s.timeout)
-	var lastPhase string
-	var lastMessage string
+	var last api.Promotion
 	for time.Now().Before(deadline) {
-		result := s.kubectlResult(t, "-n", "kargo-acceptance", "get", "promotion", name,
-			"-o", "jsonpath={.status.phase}{'\\n'}{.status.message}")
-		if result.exitCode == 0 {
-			parts := strings.SplitN(string(result.stdout), "\n", 2)
-			lastPhase = strings.TrimSpace(parts[0])
-			if len(parts) == 2 {
-				lastMessage = strings.TrimSpace(parts[1])
+		response, err := s.productClient.GetPromotionWithResponse(t.Context(), promotionID)
+		if err == nil && response.JSON200 != nil {
+			last = *response.JSON200
+			if last.Status != api.PromotionStatusApproved {
+				t.Fatalf("approved Promotion %s moved to %s: %#v", promotionID, last.Status, last)
 			}
-			if lastPhase == "Succeeded" {
-				return
+			if last.KargoOutcome == nil {
+				wait(t, time.Second)
+				continue
 			}
-			if slices.Contains([]string{"Failed", "Errored", "Aborted"}, lastPhase) {
-				t.Fatalf("Kargo Promotion %s reached %s: %s", name, lastPhase, lastMessage)
+			if last.KargoOutcome.Phase != api.KargoPromotionOutcomePhaseSucceeded {
+				diagnostic := ""
+				if last.KargoOutcome.Diagnostic != nil {
+					diagnostic = *last.KargoOutcome.Diagnostic
+				}
+				t.Fatalf("Kargo Promotion %s reached %s: %s", promotionID, last.KargoOutcome.Phase, diagnostic)
 			}
+			return last
 		}
 		wait(t, time.Second)
 	}
-	t.Fatalf("Kargo Promotion %s did not succeed; last phase %q: %s", name, lastPhase, lastMessage)
+	t.Fatalf("Promotion %s did not expose a terminal Kargo outcome: %#v", promotionID, last)
+	return api.Promotion{}
 }

@@ -157,11 +157,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       <PageHeader
         actions={promotion.kargoUrl ? <KargoButton url={promotion.kargoUrl} /> : undefined}
         back={<PageBackLink label="Back to promotions" to="/promotions" />}
-        badges={
-          <Badge color={promotionStatusColor(promotion.status)} variant="light">
-            {promotionStatusLabel(promotion.status)}
-          </Badge>
-        }
+        badges={<PromotionStatusBadges promotion={promotion} />}
         details={
           <PageHeaderFacts>
             <PageHeaderFact label="Promotion">
@@ -210,6 +206,7 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
           Slipramp is delivering this request or waiting for Kargo to submit its promotion data.
         </Alert>
       ) : null}
+      <KargoOutcomeNotice promotion={promotion} />
 
       <PromotionContext promotion={promotion} />
       <Preparation promotion={promotion} />
@@ -222,6 +219,68 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
       <DecisionPanel canWrite={canWrite} promotion={promotion} />
     </Stack>
   );
+}
+
+function PromotionStatusBadges({ promotion }: Readonly<{ promotion: Promotion }>) {
+  return (
+    <Group gap="xs">
+      <Badge color={promotionStatusColor(promotion.status)} variant="light">
+        {promotionStatusLabel(promotion.status)}
+      </Badge>
+      {promotion.status === "approved" ? (
+        <Badge color={kargoOutcomeColor(promotion)} variant="light">
+          {kargoOutcomeLabel(promotion)}
+        </Badge>
+      ) : null}
+    </Group>
+  );
+}
+
+function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
+  if (promotion.status === "approved" && !promotion.kargoOutcome) {
+    return (
+      <Alert color="cyan" title="Approved — Kargo still running">
+        Approval granted permission to proceed. Slipramp is waiting for Kargo to report a terminal
+        Promotion phase.
+      </Alert>
+    );
+  }
+  if (!promotion.kargoOutcome) return null;
+
+  const succeeded = promotion.kargoOutcome.phase === "Succeeded";
+  return (
+    <Alert
+      color={succeeded ? "green" : "red"}
+      title={
+        succeeded ? "Kargo Promotion succeeded" : `Kargo Promotion ${promotion.kargoOutcome.phase}`
+      }
+    >
+      <Stack gap="xs">
+        <Text>
+          {succeeded
+            ? "Kargo completed this Promotion. This does not independently assert Argo CD health beyond the configured Kargo steps."
+            : (promotion.kargoOutcome.diagnostic ??
+              "Kargo reached an unsuccessful terminal phase without a diagnostic.")}
+        </Text>
+        {succeeded && promotion.kargoOutcome.diagnostic ? (
+          <Text size="sm">Kargo diagnostic: {promotion.kargoOutcome.diagnostic}</Text>
+        ) : null}
+        <Text c="dimmed" size="sm">
+          Observed <Timestamp value={promotion.kargoOutcome.observedAt} />
+        </Text>
+      </Stack>
+    </Alert>
+  );
+}
+
+function kargoOutcomeColor(promotion: Promotion) {
+  if (!promotion.kargoOutcome) return "cyan";
+  return promotion.kargoOutcome.phase === "Succeeded" ? "green" : "red";
+}
+
+function kargoOutcomeLabel(promotion: Promotion) {
+  if (!promotion.kargoOutcome) return "Kargo running";
+  return `Kargo ${promotion.kargoOutcome.phase.toLocaleLowerCase()}`;
 }
 
 function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {

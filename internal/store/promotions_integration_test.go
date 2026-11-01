@@ -346,6 +346,16 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 		hydrated.RequestedByPrincipalID != operator.ID || hydrated.RequestedBySnapshot != operatorActor {
 		t.Errorf("hydrated automatic Promotion = %#v", hydrated)
 	}
+	if _, err := fixture.database.ClaimPromotionReconciliation(
+		fixture.ctx,
+		promotion.ReconciliationClaim{
+			ClusterName: fixture.stage.ClusterName,
+			ClaimedAt:   callbackAt,
+			Interval:    time.Second,
+		},
+	); !errors.Is(err, promotion.ErrNoReconciliation) {
+		t.Fatalf("pre-identity reconciliation claim error = %v, want no work", err)
+	}
 	knownCandidate, err := fixture.database.GetCommit(fixture.ctx, repository.CommitKey{
 		RepositoryID: fixture.repositoryID,
 		SHA:          hydrated.CandidateRevision,
@@ -1099,6 +1109,62 @@ func TestConcurrentPromotionDecisionsRecordOneImmutableResultIntegration(t *test
 	}
 	if promotion.PromotionStatus(stored.Decision) != current.Status {
 		t.Errorf("decision = %s, Promotion status = %s", stored.Decision, current.Status)
+	}
+}
+
+func TestConcurrentPromotionApprovalAndTerminalReportPreserveBothFactsIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 21, 13, 0, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	pending := preparePromotionForReview(
+		t,
+		fixture,
+		"approval-report-race-01jbe4q8",
+		createdAt.Add(2*time.Minute),
+	)
+	phase := promotion.KargoPhaseFailed
+	diagnostic := "Kargo promotion step failed"
+	report := promotion.ReconciliationReport{
+		PromotionID: pending.ID,
+		ClusterName: pending.StageSnapshot.ClusterName,
+		KargoName:   pending.ExternalPromotionID,
+		KargoUID:    "promotion-uid",
+		Phase:       &phase,
+		Diagnostic:  &diagnostic,
+		ObservedAt:  createdAt.Add(10 * time.Minute),
+	}
+
+	errorsByOperation := make(chan error, 2)
+	go func() {
+		_, _, err := fixture.database.DecidePromotion(fixture.ctx, promotion.Decision{
+			PromotionID:          pending.ID,
+			Decision:             promotion.DecisionApproved,
+			DecidedByPrincipalID: fixture.principal.ID,
+			DecidedBySnapshot:    fixture.actor,
+			DecidedAt:            createdAt.Add(10 * time.Minute),
+		})
+		errorsByOperation <- err
+	}()
+	go func() {
+		_, err := fixture.database.ReportPromotionReconciliation(fixture.ctx, report)
+		errorsByOperation <- err
+	}()
+
+	for range 2 {
+		if err := <-errorsByOperation; err != nil {
+			t.Fatalf("concurrent approval/report error = %v", err)
+		}
+	}
+	current, err := fixture.database.GetPromotion(fixture.ctx, pending.ID)
+	if err != nil {
+		t.Fatalf("GetPromotion() error = %v", err)
+	}
+	decision, err := fixture.database.GetPromotionDecision(fixture.ctx, pending.ID)
+	if err != nil {
+		t.Fatalf("GetPromotionDecision() error = %v", err)
+	}
+	if current.Status != promotion.StatusApproved || decision.Decision != promotion.DecisionApproved ||
+		current.KargoOutcome == nil || current.KargoOutcome.Phase != phase || current.NextReconciliationAt != nil {
+		t.Fatalf("approval/report result = Promotion %#v, decision %#v", current, decision)
 	}
 }
 

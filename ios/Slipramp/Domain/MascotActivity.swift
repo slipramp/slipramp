@@ -100,11 +100,26 @@ enum MascotActivityResolver {
                 description: "Review the prepared changes, then approve or reject this Promotion."
             )
         case .approved:
+            guard let outcome = promotion.kargoOutcome else {
+                return MascotActivity(
+                    animation: .working,
+                    title: "Kargo is carrying it forward",
+                    description: "The Promotion is approved while Kargo continues its steps."
+                )
+            }
+            if outcome.phase == .succeeded {
+                return MascotActivity(
+                    animation: .celebrating,
+                    title: "Kargo Promotion succeeded",
+                    description: "Kargo completed the approved Promotion.",
+                    tone: .success
+                )
+            }
             return MascotActivity(
-                animation: .celebrating,
-                title: "Promotion approved",
-                description: "Kargo can continue with the approved candidate.",
-                tone: .success
+                animation: .frustrated,
+                title: "Kargo Promotion \(outcome.phase.rawValue.lowercased())",
+                description: outcome.diagnostic ?? "Kargo reported an unsuccessful terminal phase.",
+                tone: .error
             )
         case .rejected:
             return MascotActivity(

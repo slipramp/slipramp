@@ -19,7 +19,7 @@ type PromotionCreationSource interface {
 }
 
 type PromotionReconciliationSource interface {
-	Next(context.Context, string) (promotion.CreationReconciliationCommand, error)
+	Next(context.Context, string) (promotion.ReconciliationCommand, error)
 }
 
 // Command identifies the selected operation and retains its domain payload.
@@ -32,7 +32,7 @@ type Assignment struct{ Run run.Run }
 type Cancellation struct{ Run run.Run }
 type PromotionCreation struct{ Command promotion.CreationCommand }
 type PromotionReconciliation struct {
-	Command promotion.CreationReconciliationCommand
+	Command promotion.ReconciliationCommand
 }
 
 func (Assignment) controllerCommand()              {}
@@ -78,7 +78,7 @@ func (s *Scheduler) Next(ctx context.Context, clusterName string) (Command, erro
 		if err == nil {
 			return PromotionReconciliation{Command: command}, nil
 		}
-		if !errors.Is(err, promotion.ErrNoCreationReconciliation) {
+		if !errors.Is(err, promotion.ErrNoReconciliation) {
 			return nil, err
 		}
 	}

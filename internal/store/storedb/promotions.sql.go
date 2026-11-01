@@ -31,6 +31,74 @@ func (q *Queries) ArchiveMissingPromotionStages(ctx context.Context, arg Archive
 	return err
 }
 
+const bindKargoPromotionReconciliationIdentity = `-- name: BindKargoPromotionReconciliationIdentity :one
+UPDATE promotions
+SET kargo_promotion_uid = $1,
+    updated_at = GREATEST(updated_at, $2)
+WHERE id = $3
+  AND source = 'kargo'
+  AND kargo_promotion_uid IS NULL
+  AND kargo_outcome_phase IS NULL
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
+`
+
+type BindKargoPromotionReconciliationIdentityParams struct {
+	KargoPromotionUid *string
+	ObservedAt        pgtype.Timestamptz
+	ID                pgtype.UUID
+}
+
+func (q *Queries) BindKargoPromotionReconciliationIdentity(ctx context.Context, arg BindKargoPromotionReconciliationIdentityParams) (Promotion, error) {
+	row := q.db.QueryRow(ctx, bindKargoPromotionReconciliationIdentity, arg.KargoPromotionUid, arg.ObservedAt, arg.ID)
+	var i Promotion
+	err := row.Scan(
+		&i.ID,
+		&i.Integration,
+		&i.ExternalPromotionID,
+		&i.RequestDigest,
+		&i.StageID,
+		&i.StageSnapshot,
+		&i.RepositoryID,
+		&i.RepositorySnapshot,
+		&i.BaseRevision,
+		&i.CandidateRevision,
+		&i.CandidateBranch,
+		&i.TargetBranch,
+		&i.PolicySnapshot,
+		&i.ReviewRequired,
+		&i.Status,
+		&i.Message,
+		&i.PreparationRepositoryID,
+		&i.PreparationCatalogRevisionID,
+		&i.PreparationRunID,
+		&i.GitDiffArtifactID,
+		&i.ArgoDiffArtifactID,
+		&i.RequestedByPrincipalID,
+		&i.RequestedBySnapshot,
+		&i.CreatedAt,
+		&i.PreparationCompletedAt,
+		&i.DecidedAt,
+		&i.ExpiresAt,
+		&i.UpdatedAt,
+		&i.Source,
+		&i.SourceStageID,
+		&i.SelectedFreightSnapshot,
+		&i.DispatchAttemptCount,
+		&i.NextDispatchAt,
+		&i.LastDispatchAt,
+		&i.DispatchedAt,
+		&i.KargoPromotionUid,
+		&i.NextReconciliationAt,
+		&i.LastReconciliationAt,
+		&i.PreparationFailureCount,
+		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
+	)
+	return i, err
+}
+
 const claimPromotionCreationDispatch = `-- name: ClaimPromotionCreationDispatch :one
 UPDATE promotions
 SET dispatch_attempt_count = dispatch_attempt_count + 1,
@@ -42,7 +110,7 @@ WHERE id = $3
   AND source = 'slipramp'
   AND status = 'creating'
   AND dispatch_attempt_count = $4
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type ClaimPromotionCreationDispatchParams struct {
@@ -101,31 +169,36 @@ func (q *Queries) ClaimPromotionCreationDispatch(ctx context.Context, arg ClaimP
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
 
-const claimPromotionCreationReconciliation = `-- name: ClaimPromotionCreationReconciliation :one
+const claimPromotionReconciliation = `-- name: ClaimPromotionReconciliation :one
 UPDATE promotions
 SET next_reconciliation_at = $1,
     last_reconciliation_at = $2
 WHERE id = $3
-  AND source = 'slipramp'
-  AND status = 'creating'
-  AND kargo_promotion_uid IS NOT NULL
+  AND kargo_outcome_phase IS NULL
+  AND (
+      (status = 'approved' AND (source = 'kargo' OR kargo_promotion_uid IS NOT NULL))
+      OR (source = 'slipramp' AND status = 'creating' AND kargo_promotion_uid IS NOT NULL)
+  )
   AND next_reconciliation_at = $4
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
-type ClaimPromotionCreationReconciliationParams struct {
+type ClaimPromotionReconciliationParams struct {
 	NextReconciliationAt         pgtype.Timestamptz
 	ClaimedAt                    pgtype.Timestamptz
 	ID                           pgtype.UUID
 	ExpectedNextReconciliationAt pgtype.Timestamptz
 }
 
-func (q *Queries) ClaimPromotionCreationReconciliation(ctx context.Context, arg ClaimPromotionCreationReconciliationParams) (Promotion, error) {
-	row := q.db.QueryRow(ctx, claimPromotionCreationReconciliation,
+func (q *Queries) ClaimPromotionReconciliation(ctx context.Context, arg ClaimPromotionReconciliationParams) (Promotion, error) {
+	row := q.db.QueryRow(ctx, claimPromotionReconciliation,
 		arg.NextReconciliationAt,
 		arg.ClaimedAt,
 		arg.ID,
@@ -173,6 +246,9 @@ func (q *Queries) ClaimPromotionCreationReconciliation(ctx context.Context, arg 
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -190,7 +266,7 @@ WHERE id = $5
   AND review_required
   AND status = 'preparing'
   AND preparation_run_id = $6
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type CompletePromotionPreparationParams struct {
@@ -253,6 +329,9 @@ func (q *Queries) CompletePromotionPreparation(ctx context.Context, arg Complete
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -435,6 +514,7 @@ INSERT INTO promotions (
     last_dispatch_at,
     dispatched_at,
     kargo_promotion_uid,
+    next_reconciliation_at,
     preparation_repository_id,
     preparation_catalog_revision_id,
     preparation_run_id,
@@ -483,9 +563,10 @@ INSERT INTO promotions (
     $33,
     $34,
     $35,
-    $36
+    $36,
+    $37
 )
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type CreatePromotionParams struct {
@@ -513,6 +594,7 @@ type CreatePromotionParams struct {
 	LastDispatchAt               pgtype.Timestamptz
 	DispatchedAt                 pgtype.Timestamptz
 	KargoPromotionUid            *string
+	NextReconciliationAt         pgtype.Timestamptz
 	PreparationRepositoryID      pgtype.UUID
 	PreparationCatalogRevisionID pgtype.UUID
 	PreparationRunID             pgtype.UUID
@@ -553,6 +635,7 @@ func (q *Queries) CreatePromotion(ctx context.Context, arg CreatePromotionParams
 		arg.LastDispatchAt,
 		arg.DispatchedAt,
 		arg.KargoPromotionUid,
+		arg.NextReconciliationAt,
 		arg.PreparationRepositoryID,
 		arg.PreparationCatalogRevisionID,
 		arg.PreparationRunID,
@@ -608,6 +691,9 @@ func (q *Queries) CreatePromotion(ctx context.Context, arg CreatePromotionParams
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -622,7 +708,7 @@ SET status = 'error',
 WHERE id = $3
   AND source = 'slipramp'
   AND status = 'creating'
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type ExhaustPromotionCreationDispatchParams struct {
@@ -675,6 +761,9 @@ func (q *Queries) ExhaustPromotionCreationDispatch(ctx context.Context, arg Exha
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -687,7 +776,7 @@ SET status = 'expired',
 WHERE id = $2
   AND status = 'pending'
   AND expires_at <= $1
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type ExpirePendingPromotionParams struct {
@@ -739,6 +828,9 @@ func (q *Queries) ExpirePendingPromotion(ctx context.Context, arg ExpirePendingP
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -750,7 +842,7 @@ SET status = 'expired',
     updated_at = $1
 WHERE status = 'pending'
   AND expires_at <= $1
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 func (q *Queries) ExpirePendingPromotions(ctx context.Context, expiredAt pgtype.Timestamptz) ([]Promotion, error) {
@@ -803,6 +895,9 @@ func (q *Queries) ExpirePendingPromotions(ctx context.Context, expiredAt pgtype.
 			&i.LastReconciliationAt,
 			&i.PreparationFailureCount,
 			&i.NextPreparationAttemptAt,
+			&i.KargoOutcomePhase,
+			&i.KargoOutcomeObservedAt,
+			&i.KargoOutcomeDiagnostic,
 		); err != nil {
 			return nil, err
 		}
@@ -825,7 +920,7 @@ WHERE id = $4
   AND review_required
   AND status = 'preparing'
   AND preparation_run_id = $5
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type FailPromotionPreparationParams struct {
@@ -886,6 +981,9 @@ func (q *Queries) FailPromotionPreparation(ctx context.Context, arg FailPromotio
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -970,7 +1068,7 @@ func (q *Queries) GetLatestKargoStageSnapshot(ctx context.Context, arg GetLatest
 }
 
 const getPromotion = `-- name: GetPromotion :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
 WHERE id = $1
 `
@@ -1019,12 +1117,15 @@ func (q *Queries) GetPromotion(ctx context.Context, id pgtype.UUID) (Promotion, 
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
 
 const getPromotionAwaitingDispatch = `-- name: GetPromotionAwaitingDispatch :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
 WHERE review_required
   AND status = 'preparing'
@@ -1078,6 +1179,9 @@ func (q *Queries) GetPromotionAwaitingDispatch(ctx context.Context, attemptedAt 
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -1206,7 +1310,7 @@ func (q *Queries) GetPromotionStagePolicy(ctx context.Context, stageID pgtype.UU
 }
 
 const getPromotionWithFinishedPreparation = `-- name: GetPromotionWithFinishedPreparation :one
-SELECT promotions.id, promotions.integration, promotions.external_promotion_id, promotions.request_digest, promotions.stage_id, promotions.stage_snapshot, promotions.repository_id, promotions.repository_snapshot, promotions.base_revision, promotions.candidate_revision, promotions.candidate_branch, promotions.target_branch, promotions.policy_snapshot, promotions.review_required, promotions.status, promotions.message, promotions.preparation_repository_id, promotions.preparation_catalog_revision_id, promotions.preparation_run_id, promotions.git_diff_artifact_id, promotions.argo_diff_artifact_id, promotions.requested_by_principal_id, promotions.requested_by_snapshot, promotions.created_at, promotions.preparation_completed_at, promotions.decided_at, promotions.expires_at, promotions.updated_at, promotions.source, promotions.source_stage_id, promotions.selected_freight_snapshot, promotions.dispatch_attempt_count, promotions.next_dispatch_at, promotions.last_dispatch_at, promotions.dispatched_at, promotions.kargo_promotion_uid, promotions.next_reconciliation_at, promotions.last_reconciliation_at, promotions.preparation_failure_count, promotions.next_preparation_attempt_at
+SELECT promotions.id, promotions.integration, promotions.external_promotion_id, promotions.request_digest, promotions.stage_id, promotions.stage_snapshot, promotions.repository_id, promotions.repository_snapshot, promotions.base_revision, promotions.candidate_revision, promotions.candidate_branch, promotions.target_branch, promotions.policy_snapshot, promotions.review_required, promotions.status, promotions.message, promotions.preparation_repository_id, promotions.preparation_catalog_revision_id, promotions.preparation_run_id, promotions.git_diff_artifact_id, promotions.argo_diff_artifact_id, promotions.requested_by_principal_id, promotions.requested_by_snapshot, promotions.created_at, promotions.preparation_completed_at, promotions.decided_at, promotions.expires_at, promotions.updated_at, promotions.source, promotions.source_stage_id, promotions.selected_freight_snapshot, promotions.dispatch_attempt_count, promotions.next_dispatch_at, promotions.last_dispatch_at, promotions.dispatched_at, promotions.kargo_promotion_uid, promotions.next_reconciliation_at, promotions.last_reconciliation_at, promotions.preparation_failure_count, promotions.next_preparation_attempt_at, promotions.kargo_outcome_phase, promotions.kargo_outcome_observed_at, promotions.kargo_outcome_diagnostic
 FROM promotions
 JOIN runs ON runs.id = promotions.preparation_run_id
 WHERE promotions.review_required
@@ -1262,6 +1366,9 @@ func (q *Queries) GetPromotionWithFinishedPreparation(ctx context.Context, attem
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -1274,14 +1381,17 @@ SET request_digest = $1,
     candidate_branch = $4,
     status = CASE WHEN review_required THEN 'preparing' ELSE 'approved' END,
     next_dispatch_at = NULL,
-    next_reconciliation_at = NULL,
+    next_reconciliation_at = CASE
+        WHEN review_required OR kargo_outcome_phase IS NOT NULL THEN NULL
+        ELSE $5::timestamptz
+    END,
     message = NULL,
-    updated_at = GREATEST(updated_at, $5)
+    updated_at = GREATEST(updated_at, $5::timestamptz)
 WHERE id = $6
   AND source = 'slipramp'
   AND status = 'creating'
   AND request_digest IS NULL
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type HydrateOperatorPromotionParams struct {
@@ -1344,6 +1454,9 @@ func (q *Queries) HydrateOperatorPromotion(ctx context.Context, arg HydrateOpera
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -1442,7 +1555,7 @@ func (q *Queries) LinkPromotionPreparationRun(ctx context.Context, arg LinkPromo
 }
 
 const listPromotionReviews = `-- name: ListPromotionReviews :many
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
 WHERE ($1::uuid IS NULL OR repository_id = $1)
   AND (
@@ -1535,6 +1648,9 @@ func (q *Queries) ListPromotionReviews(ctx context.Context, arg ListPromotionRev
 			&i.LastReconciliationAt,
 			&i.PreparationFailureCount,
 			&i.NextPreparationAttemptAt,
+			&i.KargoOutcomePhase,
+			&i.KargoOutcomeObservedAt,
+			&i.KargoOutcomeDiagnostic,
 		); err != nil {
 			return nil, err
 		}
@@ -1761,7 +1877,7 @@ func (q *Queries) LockKargoStageSnapshots(ctx context.Context, integration strin
 }
 
 const lockNextPromotionCreationDispatch = `-- name: LockNextPromotionCreationDispatch :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
 WHERE source = 'slipramp'
   AND status = 'creating'
@@ -1821,30 +1937,35 @@ func (q *Queries) LockNextPromotionCreationDispatch(ctx context.Context, arg Loc
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
 
-const lockNextPromotionCreationReconciliation = `-- name: LockNextPromotionCreationReconciliation :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+const lockNextPromotionReconciliation = `-- name: LockNextPromotionReconciliation :one
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
-WHERE source = 'slipramp'
-  AND status = 'creating'
-  AND kargo_promotion_uid IS NOT NULL
-  AND next_reconciliation_at <= $1
+WHERE next_reconciliation_at <= $1
+  AND kargo_outcome_phase IS NULL
+  AND (
+      (status = 'approved' AND (source = 'kargo' OR kargo_promotion_uid IS NOT NULL))
+      OR (source = 'slipramp' AND status = 'creating' AND kargo_promotion_uid IS NOT NULL)
+  )
   AND stage_snapshot ->> 'cluster' = $2::text
 ORDER BY next_reconciliation_at, created_at, id
 FOR UPDATE SKIP LOCKED
 LIMIT 1
 `
 
-type LockNextPromotionCreationReconciliationParams struct {
+type LockNextPromotionReconciliationParams struct {
 	DueAt       pgtype.Timestamptz
 	ClusterName string
 }
 
-func (q *Queries) LockNextPromotionCreationReconciliation(ctx context.Context, arg LockNextPromotionCreationReconciliationParams) (Promotion, error) {
-	row := q.db.QueryRow(ctx, lockNextPromotionCreationReconciliation, arg.DueAt, arg.ClusterName)
+func (q *Queries) LockNextPromotionReconciliation(ctx context.Context, arg LockNextPromotionReconciliationParams) (Promotion, error) {
+	row := q.db.QueryRow(ctx, lockNextPromotionReconciliation, arg.DueAt, arg.ClusterName)
 	var i Promotion
 	err := row.Scan(
 		&i.ID,
@@ -1887,12 +2008,15 @@ func (q *Queries) LockNextPromotionCreationReconciliation(ctx context.Context, a
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
 
 const lockPendingPromotion = `-- name: LockPendingPromotion :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
 WHERE id = $1
   AND status = 'pending'
@@ -1943,12 +2067,15 @@ func (q *Queries) LockPendingPromotion(ctx context.Context, id pgtype.UUID) (Pro
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
 
 const lockPromotionByExternalIdentity = `-- name: LockPromotionByExternalIdentity :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
 WHERE integration = $1
   AND external_promotion_id = $2
@@ -2004,12 +2131,15 @@ func (q *Queries) LockPromotionByExternalIdentity(ctx context.Context, arg LockP
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
 
 const lockPromotionCreation = `-- name: LockPromotionCreation :one
-SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+SELECT id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 FROM promotions
 WHERE id = $1
 FOR UPDATE
@@ -2059,6 +2189,9 @@ func (q *Queries) LockPromotionCreation(ctx context.Context, id pgtype.UUID) (Pr
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -2070,13 +2203,14 @@ SET next_dispatch_at = NULL,
     external_promotion_id = $2,
     kargo_promotion_uid = $3,
     next_reconciliation_at = CASE
-        WHEN status = 'creating' THEN COALESCE(next_reconciliation_at, $1)
+        WHEN status IN ('creating', 'approved')
+        THEN COALESCE(next_reconciliation_at, $1)
         ELSE NULL
     END,
     message = CASE WHEN status = 'creating' THEN NULL ELSE message END,
     updated_at = GREATEST(updated_at, $1)
 WHERE id = $4
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type RecordCreatedPromotionDispatchParams struct {
@@ -2135,6 +2269,9 @@ func (q *Queries) RecordCreatedPromotionDispatch(ctx context.Context, arg Record
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -2147,7 +2284,7 @@ SET status = 'error',
     message = $1,
     updated_at = $2
 WHERE id = $3
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type RecordFailedPromotionDispatchParams struct {
@@ -2200,6 +2337,9 @@ func (q *Queries) RecordFailedPromotionDispatch(ctx context.Context, arg RecordF
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -2278,7 +2418,7 @@ UPDATE promotions
 SET message = $1,
     updated_at = $2
 WHERE id = $3
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type RecordRetryablePromotionDispatchParams struct {
@@ -2331,31 +2471,47 @@ func (q *Queries) RecordRetryablePromotionDispatch(ctx context.Context, arg Reco
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
 
-const recordTerminalPromotionCreationReconciliation = `-- name: RecordTerminalPromotionCreationReconciliation :one
+const recordTerminalKargoPromotionOutcome = `-- name: RecordTerminalKargoPromotionOutcome :one
 UPDATE promotions
-SET status = 'error',
+SET status = CASE
+        WHEN status = 'creating' AND request_digest IS NULL THEN 'error'
+        ELSE status
+    END,
     next_reconciliation_at = NULL,
-    message = $1,
+    kargo_outcome_phase = $1,
+    kargo_outcome_observed_at = $2,
+    kargo_outcome_diagnostic = $3,
+    message = CASE
+        WHEN status = 'creating' AND request_digest IS NULL THEN $3
+        ELSE message
+    END,
     updated_at = GREATEST(updated_at, $2)
-WHERE id = $3
-  AND source = 'slipramp'
-  AND status = 'creating'
-  AND request_digest IS NULL
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+WHERE id = $4
+  AND kargo_outcome_phase IS NULL
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
-type RecordTerminalPromotionCreationReconciliationParams struct {
-	Message    *string
-	ReportedAt pgtype.Timestamptz
-	ID         pgtype.UUID
+type RecordTerminalKargoPromotionOutcomeParams struct {
+	KargoOutcomePhase      *string
+	KargoOutcomeObservedAt pgtype.Timestamptz
+	KargoOutcomeDiagnostic *string
+	ID                     pgtype.UUID
 }
 
-func (q *Queries) RecordTerminalPromotionCreationReconciliation(ctx context.Context, arg RecordTerminalPromotionCreationReconciliationParams) (Promotion, error) {
-	row := q.db.QueryRow(ctx, recordTerminalPromotionCreationReconciliation, arg.Message, arg.ReportedAt, arg.ID)
+func (q *Queries) RecordTerminalKargoPromotionOutcome(ctx context.Context, arg RecordTerminalKargoPromotionOutcomeParams) (Promotion, error) {
+	row := q.db.QueryRow(ctx, recordTerminalKargoPromotionOutcome,
+		arg.KargoOutcomePhase,
+		arg.KargoOutcomeObservedAt,
+		arg.KargoOutcomeDiagnostic,
+		arg.ID,
+	)
 	var i Promotion
 	err := row.Scan(
 		&i.ID,
@@ -2398,6 +2554,9 @@ func (q *Queries) RecordTerminalPromotionCreationReconciliation(ctx context.Cont
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -2418,7 +2577,7 @@ WHERE id = $4
           AND preparation_catalog_revision_id = $2
       )
   )
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type ReservePromotionPreparationRevisionParams struct {
@@ -2477,6 +2636,9 @@ func (q *Queries) ReservePromotionPreparationRevision(ctx context.Context, arg R
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }
@@ -2486,10 +2648,15 @@ UPDATE promotions
 SET status = $1,
     message = $2,
     decided_at = $3,
-    updated_at = $3
+    next_reconciliation_at = CASE
+        WHEN $1::text = 'approved' AND kargo_outcome_phase IS NULL
+        THEN $3::timestamptz
+        ELSE NULL
+    END,
+    updated_at = $3::timestamptz
 WHERE id = $4
   AND status = 'pending'
-RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at
+RETURNING id, integration, external_promotion_id, request_digest, stage_id, stage_snapshot, repository_id, repository_snapshot, base_revision, candidate_revision, candidate_branch, target_branch, policy_snapshot, review_required, status, message, preparation_repository_id, preparation_catalog_revision_id, preparation_run_id, git_diff_artifact_id, argo_diff_artifact_id, requested_by_principal_id, requested_by_snapshot, created_at, preparation_completed_at, decided_at, expires_at, updated_at, source, source_stage_id, selected_freight_snapshot, dispatch_attempt_count, next_dispatch_at, last_dispatch_at, dispatched_at, kargo_promotion_uid, next_reconciliation_at, last_reconciliation_at, preparation_failure_count, next_preparation_attempt_at, kargo_outcome_phase, kargo_outcome_observed_at, kargo_outcome_diagnostic
 `
 
 type UpdatePromotionDecisionStateParams struct {
@@ -2548,6 +2715,9 @@ func (q *Queries) UpdatePromotionDecisionState(ctx context.Context, arg UpdatePr
 		&i.LastReconciliationAt,
 		&i.PreparationFailureCount,
 		&i.NextPreparationAttemptAt,
+		&i.KargoOutcomePhase,
+		&i.KargoOutcomeObservedAt,
+		&i.KargoOutcomeDiagnostic,
 	)
 	return i, err
 }

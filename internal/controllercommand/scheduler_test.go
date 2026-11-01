@@ -18,7 +18,8 @@ func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
 
 	record := run.Run{ID: uuid.New()}
 	creation := promotion.CreationCommand{PromotionID: uuid.New(), Attempt: 2}
-	reconciliation := promotion.CreationReconciliationCommand{PromotionID: uuid.New(), KargoUID: "promotion-uid"}
+	uid := "promotion-uid"
+	reconciliation := promotion.ReconciliationCommand{PromotionID: uuid.New(), KargoUID: &uid}
 	failure := errors.New("source unavailable")
 	tests := []struct {
 		name              string
@@ -46,12 +47,12 @@ func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
 		},
 		{
 			name: "assignment", cancelError: run.ErrNoRunToCancel, creationError: promotion.ErrNoCreationDispatch,
-			reconcileError: promotion.ErrNoCreationReconciliation,
+			reconcileError: promotion.ErrNoReconciliation,
 			want:           Assignment{Run: record}, wantCalls: "cancel,create,reconcile,assign",
 		},
 		{
 			name: "no work", cancelError: run.ErrNoRunToCancel, creationError: promotion.ErrNoCreationDispatch,
-			reconcileError: promotion.ErrNoCreationReconciliation, assignmentError: run.ErrNoRunAssignment,
+			reconcileError: promotion.ErrNoReconciliation, assignmentError: run.ErrNoRunAssignment,
 			wantCalls: "cancel,create,reconcile,assign",
 		},
 		{
@@ -69,7 +70,7 @@ func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
 		},
 		{
 			name: "assignment failure", cancelError: run.ErrNoRunToCancel,
-			creationError: promotion.ErrNoCreationDispatch, reconcileError: promotion.ErrNoCreationReconciliation,
+			creationError: promotion.ErrNoCreationDispatch, reconcileError: promotion.ErrNoReconciliation,
 			assignmentError: failure, wantError: failure, wantCalls: "cancel,create,reconcile,assign",
 		},
 		{
@@ -122,7 +123,7 @@ func TestSchedulerSelectsCommandsInPriorityOrder(t *testing.T) {
 				reconciliations = schedulerReconciliationSource(func(
 					ctx context.Context,
 					cluster string,
-				) (promotion.CreationReconciliationCommand, error) {
+				) (promotion.ReconciliationCommand, error) {
 					recordCall(ctx, cluster, "reconcile")
 					return reconciliation, test.reconcileError
 				})
@@ -158,11 +159,11 @@ func (s schedulerCreationSource) Next(ctx context.Context, cluster string) (prom
 	return s(ctx, cluster)
 }
 
-type schedulerReconciliationSource func(context.Context, string) (promotion.CreationReconciliationCommand, error)
+type schedulerReconciliationSource func(context.Context, string) (promotion.ReconciliationCommand, error)
 
 func (s schedulerReconciliationSource) Next(
 	ctx context.Context,
 	cluster string,
-) (promotion.CreationReconciliationCommand, error) {
+) (promotion.ReconciliationCommand, error) {
 	return s(ctx, cluster)
 }

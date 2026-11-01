@@ -229,6 +229,9 @@ type Promotion struct {
 	LastReconciliationAt         pgtype.Timestamptz
 	PreparationFailureCount      int32
 	NextPreparationAttemptAt     pgtype.Timestamptz
+	KargoOutcomePhase            *string
+	KargoOutcomeObservedAt       pgtype.Timestamptz
+	KargoOutcomeDiagnostic       *string
 }
 
 type PromotionCandidateBranchCleanup struct {

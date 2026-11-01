@@ -193,6 +193,14 @@ The Controller intentionally creates a Promotion from only its Stage and
 Freight identity; Kargo populates the Stage promotion template and expands
 `PromotionTask` references during admission.
 
+Approval records permission for Kargo to continue; it is not a success result.
+After approval, the responsible Controller keeps observing the exact Kargo
+Promotion until `Succeeded`, `Failed`, `Errored`, or `Aborted`, then reports the
+phase, observation time, and an optional bounded sanitized diagnostic to the
+Server. Until that report arrives, product views show the Promotion as approved
+with Kargo still running. A `Succeeded` outcome describes Kargo's Promotion
+only and does not add an independent Argo CD health check.
+
 ### Kargo Stage metadata
 
 A Stage participates in exactly one integration by setting
@@ -258,7 +266,13 @@ environment variables:
 Each Controller owns its configured execution namespaces and uses
 namespace-scoped RBAC. Git checkout and execution Secrets remain in that
 Cluster. Optional Kargo observers submit complete Stage snapshots only after
-all configured namespace listings succeed.
+all configured namespace listings succeed. The same configured Kargo access is
+used by ordinary outbound Controller commands to create and observe Promotions;
+the Server never receives Kubernetes credentials. Kargo-originated Promotions
+bind their exact namespace, name, Stage, and first observed UID before terminal
+reporting, while Slipramp-originated Promotions also require their stable
+Slipramp annotation. Identity conflicts are left unresolved for operator
+attention rather than guessed.
 The metrics listener is unauthenticated and should remain reachable only from
 the Cluster's trusted monitoring network. It exposes outbound Slipramp HTTP
 client, Go runtime, and process metrics.

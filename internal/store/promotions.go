@@ -628,6 +628,7 @@ func promotionDatabaseParams(
 		LastDispatchAt:               optionalDatabaseTime(record.LastDispatchAt),
 		DispatchedAt:                 optionalDatabaseTime(record.DispatchedAt),
 		KargoPromotionUid:            record.KargoPromotionUID,
+		NextReconciliationAt:         optionalDatabaseTime(record.NextReconciliationAt),
 		PreparationRepositoryID:      optionalDatabaseUUID(record.PreparationRepositoryID),
 		PreparationCatalogRevisionID: optionalDatabaseUUID(record.PreparationCatalogRevisionID),
 		PreparationRunID:             optionalDatabaseUUID(record.PreparationRunID),
@@ -751,6 +752,16 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		DecidedAt:                    applicationTime(row.DecidedAt),
 		ExpiresAt:                    applicationTime(row.ExpiresAt),
 		UpdatedAt:                    row.UpdatedAt.Time.UTC(),
+	}
+	if row.KargoOutcomePhase != nil {
+		if !row.KargoOutcomeObservedAt.Valid {
+			return promotion.Promotion{}, errors.New("decode Promotion Kargo outcome: observation time is missing")
+		}
+		record.KargoOutcome = &promotion.KargoOutcome{
+			Phase:      promotion.KargoPhase(*row.KargoOutcomePhase),
+			ObservedAt: row.KargoOutcomeObservedAt.Time.UTC(),
+			Diagnostic: row.KargoOutcomeDiagnostic,
+		}
 	}
 	if err := decodePromotionSnapshots(row, &record); err != nil {
 		return promotion.Promotion{}, err

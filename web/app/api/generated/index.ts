@@ -316,6 +316,7 @@ export type {
   InputExplanation,
   KargoPromotionCreationCommand,
   KargoPromotionDispatchReport,
+  KargoPromotionOutcome,
   KargoPromotionReconciliationCommand,
   KargoPromotionReconciliationReport,
   KargoPromotionRequest,

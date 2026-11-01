@@ -33,7 +33,7 @@ type Handler struct {
 	promotionRequests        PromotionRequestService
 	promotionCreations       PromotionCreationService
 	promotionDispatches      PromotionCreationDispatchService
-	promotionReconciliations PromotionCreationReconciliationService
+	promotionReconciliations PromotionReconciliationService
 	promotionStages          PromotionStageService
 	promotionReviews         PromotionReviewService
 	promotionProjects        PromotionProjectService
@@ -75,7 +75,7 @@ type Dependencies struct {
 	PromotionRequests        PromotionRequestService
 	PromotionCreations       PromotionCreationService
 	PromotionDispatches      PromotionCreationDispatchService
-	PromotionReconciliations PromotionCreationReconciliationService
+	PromotionReconciliations PromotionReconciliationService
 	PromotionStages          PromotionStageService
 	PromotionReviews         PromotionReviewService
 	PromotionProjects        PromotionProjectService

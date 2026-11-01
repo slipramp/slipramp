@@ -217,10 +217,11 @@ KargoPromotionReconciliationCommand:
   type: object
   required:
     - id
+    - source
     - integration
     - project
+    - stage
     - kargoName
-    - kargoUid
   properties:
     id:
       type: string
@@ -228,9 +229,16 @@ KargoPromotionReconciliationCommand:
       description: Durable Slipramp Promotion identity carried by the stable annotation.
     integration:
       $ref: ./runs.yaml#/CatalogName
+    source:
+      $ref: ./promotions.yaml#/PromotionSource
     project:
       $ref: ./runs.yaml#/CatalogName
       description: Kubernetes namespace containing the Kargo project.
+    stage:
+      type: string
+      minLength: 1
+      maxLength: 253
+      description: Exact Kargo Stage recorded in the durable Promotion snapshot.
     kargoName:
       type: string
       minLength: 1
@@ -240,15 +248,13 @@ KargoPromotionReconciliationCommand:
       type: string
       minLength: 1
       maxLength: 200
-      description: Kubernetes UID recorded when the Promotion was materialized.
+      description: Kubernetes UID already bound to the Promotion, if observed.
 
 KargoPromotionReconciliationReport:
   type: object
   required:
     - kargoName
     - kargoUid
-    - phase
-    - diagnostic
   properties:
     kargoName:
       type: string
@@ -267,12 +273,12 @@ KargoPromotionReconciliationReport:
         - Errored
         - Aborted
         - Succeeded
-      description: Terminal Kargo phase observed before callback hydration.
+      description: Exact terminal Kargo phase, omitted when only binding Kubernetes identity.
     diagnostic:
       type: string
-      minLength: 1
       maxLength: 4096
-      description: Bounded description of the terminal pre-callback state.
+      minLength: 1
+      description: Bounded sanitized terminal diagnostic, when Kargo provides one.
 
 CancelRunCommand:
   type: object

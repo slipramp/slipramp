@@ -382,11 +382,16 @@ test("cancellation intent shows stopping until the Run finishes", () => {
   assert.equal(runActivity({ cancellationRequestedAt, phase: "finished" }), undefined);
 });
 
-test("only creating and preparing Promotions show activity", () => {
+test("active Promotions show creation, preparation, and post-approval Kargo work", () => {
   assert.equal(promotionActivity({ status: "creating" }).animation, "waiting");
   assert.equal(promotionActivity({ status: "preparing" }).animation, "working");
+  assert.equal(promotionActivity({ status: "approved" }).animation, "working");
+  assert.equal(
+    promotionActivity({ kargoOutcome: { phase: "Succeeded" }, status: "approved" }),
+    undefined,
+  );
 
-  for (const status of ["pending", "approved", "rejected", "expired", "error"]) {
+  for (const status of ["pending", "rejected", "expired", "error"]) {
     assert.equal(promotionActivity({ status }), undefined, status);
   }
 });
@@ -399,8 +404,13 @@ test("Promotion details refresh until pending diffs are loaded", () => {
 
   assert.equal(promotionDetailNeedsRefresh({ status: "pending" }, false), true);
   assert.equal(promotionDetailNeedsRefresh({ status: "pending" }, true), false);
+  assert.equal(promotionDetailNeedsRefresh({ status: "approved" }, true), true);
+  assert.equal(
+    promotionDetailNeedsRefresh({ kargoOutcome: { phase: "Succeeded" }, status: "approved" }, true),
+    false,
+  );
 
-  for (const status of ["approved", "rejected", "expired", "error"]) {
+  for (const status of ["rejected", "expired", "error"]) {
     assert.equal(promotionDetailNeedsRefresh({ status }, false), false, status);
   }
 });
@@ -410,18 +420,20 @@ test("Promotion details give every lifecycle status a fitting mascot", () => {
     creating: { animation: "waiting", title: "Making a little momentum" },
     preparing: { animation: "working", title: "Good things are in motion" },
     pending: { animation: "waiting", title: "Ready when you are" },
-    approved: { animation: "celebrating", tone: "success", title: "Promotion approved" },
+    approved: { animation: "celebrating", tone: "success", title: "Kargo Promotion succeeded" },
     rejected: { animation: "frustrated", tone: "error", title: "Promotion rejected" },
     expired: { animation: "phone", tone: "neutral", title: "Review window expired" },
     error: { animation: "frustrated", tone: "error", title: "Promotion failed" },
   };
 
   for (const [status, activity] of Object.entries(expected)) {
+    const promotion =
+      status === "approved" ? { kargoOutcome: { phase: "Succeeded" }, status } : { status };
     assert.deepEqual(
       {
-        animation: promotionDetailActivity({ status }).animation,
-        tone: promotionDetailActivity({ status }).tone,
-        title: promotionDetailActivity({ status }).title,
+        animation: promotionDetailActivity(promotion).animation,
+        tone: promotionDetailActivity(promotion).tone,
+        title: promotionDetailActivity(promotion).title,
       },
       { tone: undefined, ...activity },
       status,

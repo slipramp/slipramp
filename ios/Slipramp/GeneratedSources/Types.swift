@@ -2399,7 +2399,7 @@ internal enum Components {
             internal var dispatchedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/Promotion/kargoPromotionUid`.
             internal var kargoPromotionUid: Swift.String?
-            /// Next durable inspection time while the materialized resource awaits callback.
+            /// Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
             ///
             /// - Remark: Generated from `#/components/schemas/Promotion/nextReconciliationAt`.
             internal var nextReconciliationAt: Foundation.Date?
@@ -2407,6 +2407,8 @@ internal enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Promotion/lastReconciliationAt`.
             internal var lastReconciliationAt: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/Promotion/kargoOutcome`.
+            internal var kargoOutcome: Components.Schemas.KargoPromotionOutcome?
             /// - Remark: Generated from `#/components/schemas/Promotion/preparationRunId`.
             internal var preparationRunId: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Promotion/preparationRun`.
@@ -2463,8 +2465,9 @@ internal enum Components {
             ///   - lastDispatchAt:
             ///   - dispatchedAt:
             ///   - kargoPromotionUid:
-            ///   - nextReconciliationAt: Next durable inspection time while the materialized resource awaits callback.
+            ///   - nextReconciliationAt: Next durable inspection time while the responsible Controller awaits callback hydration or a terminal Kargo outcome.
             ///   - lastReconciliationAt: Most recent time reconciliation work was claimed by the responsible Controller.
+            ///   - kargoOutcome:
             ///   - preparationRunId:
             ///   - preparationRun:
             ///   - gitDiffArtifactId:
@@ -2505,6 +2508,7 @@ internal enum Components {
                 kargoPromotionUid: Swift.String? = nil,
                 nextReconciliationAt: Foundation.Date? = nil,
                 lastReconciliationAt: Foundation.Date? = nil,
+                kargoOutcome: Components.Schemas.KargoPromotionOutcome? = nil,
                 preparationRunId: Swift.String? = nil,
                 preparationRun: Components.Schemas.Run? = nil,
                 gitDiffArtifactId: Swift.String? = nil,
@@ -2545,6 +2549,7 @@ internal enum Components {
                 self.kargoPromotionUid = kargoPromotionUid
                 self.nextReconciliationAt = nextReconciliationAt
                 self.lastReconciliationAt = lastReconciliationAt
+                self.kargoOutcome = kargoOutcome
                 self.preparationRunId = preparationRunId
                 self.preparationRun = preparationRun
                 self.gitDiffArtifactId = gitDiffArtifactId
@@ -2586,6 +2591,7 @@ internal enum Components {
                 case kargoPromotionUid
                 case nextReconciliationAt
                 case lastReconciliationAt
+                case kargoOutcome
                 case preparationRunId
                 case preparationRun
                 case gitDiffArtifactId
@@ -2703,6 +2709,10 @@ internal enum Components {
                     Foundation.Date.self,
                     forKey: .lastReconciliationAt
                 )
+                self.kargoOutcome = try container.decodeIfPresent(
+                    Components.Schemas.KargoPromotionOutcome.self,
+                    forKey: .kargoOutcome
+                )
                 self.preparationRunId = try container.decodeIfPresent(
                     Swift.String.self,
                     forKey: .preparationRunId
@@ -2785,6 +2795,7 @@ internal enum Components {
                     "kargoPromotionUid",
                     "nextReconciliationAt",
                     "lastReconciliationAt",
+                    "kargoOutcome",
                     "preparationRunId",
                     "preparationRun",
                     "gitDiffArtifactId",
@@ -3789,6 +3800,11 @@ internal enum Components {
         }
         /// - Remark: Generated from `#/components/schemas/CatalogName`.
         internal typealias CatalogName = Swift.String
+        /// - Remark: Generated from `#/components/schemas/PromotionSource`.
+        internal enum PromotionSource: String, Codable, Hashable, Sendable, CaseIterable {
+            case kargo = "kargo"
+            case slipramp = "slipramp"
+        }
         /// Actual image identities reported by Kubernetes for the containers that participated in execution. Fields appear as each container starts and are retained as Run provenance.
         ///
         /// - Remark: Generated from `#/components/schemas/ExecutionImages`.
@@ -4271,11 +4287,6 @@ internal enum Components {
             case expired = "expired"
             case error = "error"
         }
-        /// - Remark: Generated from `#/components/schemas/PromotionSource`.
-        internal enum PromotionSource: String, Codable, Hashable, Sendable, CaseIterable {
-            case kargo = "kargo"
-            case slipramp = "slipramp"
-        }
         /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest`.
         internal struct PromotionFreightRequest: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest/origin`.
@@ -4745,6 +4756,70 @@ internal enum Components {
         internal enum PromotionPolicyMode: String, Codable, Hashable, Sendable, CaseIterable {
             case automatic = "automatic"
             case reviewRequired = "review-required"
+        }
+        /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome`.
+        internal struct KargoPromotionOutcome: Codable, Hashable, Sendable {
+            /// Exact terminal phase reported by Kargo.
+            ///
+            /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome/phase`.
+            internal enum PhasePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case succeeded = "Succeeded"
+                case failed = "Failed"
+                case errored = "Errored"
+                case aborted = "Aborted"
+            }
+            /// Exact terminal phase reported by Kargo.
+            ///
+            /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome/phase`.
+            internal var phase: Components.Schemas.KargoPromotionOutcome.PhasePayload
+            /// Time Slipramp accepted the Controller's terminal observation.
+            ///
+            /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome/observedAt`.
+            internal var observedAt: Foundation.Date
+            /// Bounded sanitized Kargo diagnostic, when available.
+            ///
+            /// - Remark: Generated from `#/components/schemas/KargoPromotionOutcome/diagnostic`.
+            internal var diagnostic: Swift.String?
+            /// Creates a new `KargoPromotionOutcome`.
+            ///
+            /// - Parameters:
+            ///   - phase: Exact terminal phase reported by Kargo.
+            ///   - observedAt: Time Slipramp accepted the Controller's terminal observation.
+            ///   - diagnostic: Bounded sanitized Kargo diagnostic, when available.
+            internal init(
+                phase: Components.Schemas.KargoPromotionOutcome.PhasePayload,
+                observedAt: Foundation.Date,
+                diagnostic: Swift.String? = nil
+            ) {
+                self.phase = phase
+                self.observedAt = observedAt
+                self.diagnostic = diagnostic
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case phase
+                case observedAt
+                case diagnostic
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.phase = try container.decode(
+                    Components.Schemas.KargoPromotionOutcome.PhasePayload.self,
+                    forKey: .phase
+                )
+                self.observedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .observedAt
+                )
+                self.diagnostic = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .diagnostic
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "phase",
+                    "observedAt",
+                    "diagnostic"
+                ])
+            }
         }
         /// - Remark: Generated from `#/components/schemas/PromotionDecision`.
         internal struct PromotionDecision: Codable, Hashable, Sendable {

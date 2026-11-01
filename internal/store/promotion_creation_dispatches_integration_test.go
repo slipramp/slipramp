@@ -264,7 +264,7 @@ func TestConcurrentPromotionCreationDispatchClaimsReturnOneCommandIntegration(t 
 	}
 }
 
-func TestPromotionCreationReconciliationLifecycleIntegration(t *testing.T) {
+func TestPromotionReconciliationLifecycleIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 23, 22, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
 	record := createDispatchablePromotion(t, fixture, createdAt.Add(2*time.Minute))
@@ -275,73 +275,152 @@ func TestPromotionCreationReconciliationLifecycleIntegration(t *testing.T) {
 	}
 
 	interval := 15 * time.Second
-	claimed, err := fixture.database.ClaimPromotionCreationReconciliation(
+	claimed, err := fixture.database.ClaimPromotionReconciliation(
 		fixture.ctx,
-		promotion.CreationReconciliationClaim{
+		promotion.ReconciliationClaim{
 			ClusterName: "colo",
 			ClaimedAt:   materializedAt,
 			Interval:    interval,
 		},
 	)
 	if err != nil {
-		t.Fatalf("ClaimPromotionCreationReconciliation() error = %v", err)
+		t.Fatalf("ClaimPromotionReconciliation() error = %v", err)
 	}
 	if claimed.ID != record.ID || claimed.LastReconciliationAt == nil ||
 		!claimed.LastReconciliationAt.Equal(materializedAt) || claimed.NextReconciliationAt == nil ||
 		!claimed.NextReconciliationAt.Equal(materializedAt.Add(interval)) {
 		t.Errorf("reconciliation claim = %#v", claimed)
 	}
-	if _, err := fixture.database.ClaimPromotionCreationReconciliation(
+	if _, err := fixture.database.ClaimPromotionReconciliation(
 		fixture.ctx,
-		promotion.CreationReconciliationClaim{
+		promotion.ReconciliationClaim{
 			ClusterName: "colo",
 			ClaimedAt:   materializedAt.Add(time.Second),
 			Interval:    interval,
 		},
-	); !errors.Is(err, promotion.ErrNoCreationReconciliation) {
+	); !errors.Is(err, promotion.ErrNoReconciliation) {
 		t.Fatalf("early reconciliation claim error = %v", err)
 	}
 
 	diagnostic := "Kargo Promotion kargo-core/external-dns-prod.01test.freight reached terminal phase Failed before Slipramp received its callback."
-	failed, err := fixture.database.ReportPromotionCreationReconciliation(
+	failed, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
-		promotion.CreationReconciliationReport{
-			PromotionID: record.ID,
-			ClusterName: "colo",
-			KargoName:   materialized.ExternalPromotionID,
-			KargoUID:    *materialized.KargoPromotionUID,
-			Phase:       promotion.CreationReconciliationFailed,
-			Diagnostic:  diagnostic,
-			ReportedAt:  materializedAt.Add(2 * time.Second),
-		},
+		terminalPromotionReport(
+			materialized,
+			promotion.KargoPhaseFailed,
+			diagnostic,
+			materializedAt.Add(2*time.Second),
+		),
 	)
 	if err != nil {
-		t.Fatalf("ReportPromotionCreationReconciliation() error = %v", err)
+		t.Fatalf("ReportPromotionReconciliation() error = %v", err)
 	}
 	if failed.Status != promotion.StatusError || failed.NextReconciliationAt != nil ||
-		failed.Message == nil || *failed.Message != diagnostic {
+		failed.Message == nil || *failed.Message != diagnostic || failed.KargoOutcome == nil ||
+		failed.KargoOutcome.Phase != promotion.KargoPhaseFailed ||
+		!failed.KargoOutcome.ObservedAt.Equal(materializedAt.Add(2*time.Second)) {
 		t.Errorf("terminal reconciliation = %#v", failed)
 	}
 
-	repeated, err := fixture.database.ReportPromotionCreationReconciliation(
+	repeated, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
-		promotion.CreationReconciliationReport{
-			PromotionID: record.ID,
-			ClusterName: "colo",
-			KargoName:   materialized.ExternalPromotionID,
-			KargoUID:    *materialized.KargoPromotionUID,
-			Phase:       promotion.CreationReconciliationFailed,
-			Diagnostic:  diagnostic,
-			ReportedAt:  materializedAt.Add(3 * time.Second),
-		},
+		terminalPromotionReport(
+			materialized,
+			promotion.KargoPhaseFailed,
+			"later diagnostic",
+			materializedAt.Add(3*time.Second),
+		),
 	)
 	if err != nil || repeated.Status != promotion.StatusError || repeated.Message == nil ||
-		*repeated.Message != diagnostic {
+		*repeated.Message != diagnostic || repeated.KargoOutcome == nil ||
+		repeated.KargoOutcome.Diagnostic == nil || *repeated.KargoOutcome.Diagnostic != diagnostic ||
+		!repeated.KargoOutcome.ObservedAt.Equal(materializedAt.Add(2*time.Second)) {
 		t.Errorf("repeated reconciliation = %#v, %v", repeated, err)
 	}
 }
 
-func TestPromotionCreationReconciliationIsCallbackRaceSafeIntegration(t *testing.T) {
+func TestPromotionReconciliationRecordsEveryTerminalPhaseIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 23, 22, 30, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	phases := []promotion.KargoPhase{
+		promotion.KargoPhaseSucceeded,
+		promotion.KargoPhaseFailed,
+		promotion.KargoPhaseErrored,
+		promotion.KargoPhaseAborted,
+	}
+	for index, phase := range phases {
+		record := createDispatchablePromotion(t, fixture, createdAt.Add(time.Duration(index+2)*time.Minute))
+		record = materializeOperatorPromotion(t, fixture, record, record.CreatedAt.Add(time.Second))
+		observedAt := record.CreatedAt.Add(2 * time.Second)
+		updated, err := fixture.database.ReportPromotionReconciliation(
+			fixture.ctx,
+			terminalPromotionReport(record, phase, "terminal diagnostic", observedAt),
+		)
+		if err != nil {
+			t.Fatalf("ReportPromotionReconciliation(%s) error = %v", phase, err)
+		}
+		if updated.KargoOutcome == nil || updated.KargoOutcome.Phase != phase ||
+			!updated.KargoOutcome.ObservedAt.Equal(observedAt) {
+			t.Errorf("terminal %s outcome = %#v", phase, updated.KargoOutcome)
+		}
+	}
+}
+
+func TestKargoOriginatedPromotionBindsIdentityBeforeTerminalOutcomeIntegration(t *testing.T) {
+	createdAt := time.Date(2026, time.October, 23, 22, 45, 0, 0, time.UTC)
+	fixture := newPromotionIntegrationFixture(t, createdAt)
+	accepted, err := fixture.database.AcceptPromotionRequest(
+		fixture.ctx,
+		fixture.acceptance(t, fixture.request("external-dns-prod.01test.freight"), createdAt.Add(time.Minute)),
+	)
+	if err != nil {
+		t.Fatalf("AcceptPromotionRequest() error = %v", err)
+	}
+	if accepted.Source != promotion.SourceKargo || accepted.Status != promotion.StatusApproved ||
+		accepted.KargoPromotionUID != nil || accepted.NextReconciliationAt == nil {
+		t.Fatalf("accepted Kargo Promotion = %#v", accepted)
+	}
+
+	uid := "kargo-originated-uid"
+	identity := promotion.ReconciliationReport{
+		PromotionID: accepted.ID,
+		ClusterName: accepted.StageSnapshot.ClusterName,
+		KargoName:   accepted.ExternalPromotionID,
+		KargoUID:    uid,
+		ObservedAt:  accepted.CreatedAt.Add(time.Second),
+	}
+	bound, err := fixture.database.ReportPromotionReconciliation(fixture.ctx, identity)
+	if err != nil {
+		t.Fatalf("identity ReportPromotionReconciliation() error = %v", err)
+	}
+	if bound.KargoPromotionUID == nil || *bound.KargoPromotionUID != uid || bound.KargoOutcome != nil ||
+		bound.NextReconciliationAt == nil {
+		t.Fatalf("bound Kargo Promotion = %#v", bound)
+	}
+	if _, err := fixture.database.ReportPromotionReconciliation(fixture.ctx, identity); err != nil {
+		t.Fatalf("repeated identity report error = %v", err)
+	}
+
+	conflict := identity
+	conflict.KargoUID = "replacement-uid"
+	if _, err := fixture.database.ReportPromotionReconciliation(
+		fixture.ctx,
+		conflict,
+	); !errors.Is(err, promotion.ErrReconciliationConflict) {
+		t.Fatalf("replacement UID error = %v, want conflict", err)
+	}
+
+	phase := promotion.KargoPhaseSucceeded
+	identity.Phase = &phase
+	identity.ObservedAt = accepted.CreatedAt.Add(2 * time.Second)
+	finished, err := fixture.database.ReportPromotionReconciliation(fixture.ctx, identity)
+	if err != nil || finished.KargoOutcome == nil || finished.KargoOutcome.Phase != phase ||
+		finished.NextReconciliationAt != nil {
+		t.Fatalf("terminal Kargo Promotion = %#v, %v", finished, err)
+	}
+}
+
+func TestPromotionReconciliationIsCallbackRaceSafeIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 23, 23, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
 
@@ -353,39 +432,34 @@ func TestPromotionCreationReconciliationIsCallbackRaceSafeIntegration(t *testing
 		callbackWinner.CreatedAt.Add(2*time.Second),
 	)
 	hydrated, err := fixture.database.AcceptPromotionRequest(fixture.ctx, callback)
-	if err != nil || hydrated.Status != promotion.StatusApproved || hydrated.NextReconciliationAt != nil {
+	if err != nil || hydrated.Status != promotion.StatusApproved || hydrated.NextReconciliationAt == nil {
 		t.Fatalf("callback winner = %#v, %v", hydrated, err)
 	}
 	diagnostic := "Kargo Promotion reached terminal phase Succeeded before callback."
-	afterLateReport, err := fixture.database.ReportPromotionCreationReconciliation(
+	afterLateReport, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
-		promotion.CreationReconciliationReport{
-			PromotionID: callbackWinner.ID,
-			ClusterName: "colo",
-			KargoName:   callbackWinner.ExternalPromotionID,
-			KargoUID:    *callbackWinner.KargoPromotionUID,
-			Phase:       promotion.CreationReconciliationSucceeded,
-			Diagnostic:  diagnostic,
-			ReportedAt:  callbackWinner.CreatedAt.Add(3 * time.Second),
-		},
+		terminalPromotionReport(
+			callbackWinner,
+			promotion.KargoPhaseSucceeded,
+			diagnostic,
+			callbackWinner.CreatedAt.Add(3*time.Second),
+		),
 	)
-	if err != nil || afterLateReport.Status != promotion.StatusApproved || afterLateReport.Message != nil {
+	if err != nil || afterLateReport.Status != promotion.StatusApproved || afterLateReport.Message != nil ||
+		afterLateReport.KargoOutcome == nil || afterLateReport.KargoOutcome.Phase != promotion.KargoPhaseSucceeded {
 		t.Errorf("late terminal report = %#v, %v", afterLateReport, err)
 	}
 
 	reportWinner := createDispatchablePromotion(t, fixture, createdAt.Add(4*time.Minute))
 	reportWinner = materializeOperatorPromotion(t, fixture, reportWinner, reportWinner.CreatedAt.Add(time.Second))
-	terminal, err := fixture.database.ReportPromotionCreationReconciliation(
+	terminal, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
-		promotion.CreationReconciliationReport{
-			PromotionID: reportWinner.ID,
-			ClusterName: "colo",
-			KargoName:   reportWinner.ExternalPromotionID,
-			KargoUID:    *reportWinner.KargoPromotionUID,
-			Phase:       promotion.CreationReconciliationErrored,
-			Diagnostic:  diagnostic,
-			ReportedAt:  reportWinner.CreatedAt.Add(2 * time.Second),
-		},
+		terminalPromotionReport(
+			reportWinner,
+			promotion.KargoPhaseErrored,
+			diagnostic,
+			reportWinner.CreatedAt.Add(2*time.Second),
+		),
 	)
 	if err != nil || terminal.Status != promotion.StatusError {
 		t.Fatalf("terminal report winner = %#v, %v", terminal, err)
@@ -403,23 +477,21 @@ func TestPromotionCreationReconciliationIsCallbackRaceSafeIntegration(t *testing
 	}
 }
 
-func TestPromotionCreationReconciliationRejectsIdentityAndClusterConflictsIntegration(t *testing.T) {
+func TestPromotionReconciliationRejectsIdentityAndClusterConflictsIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 24, 0, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
 	record := createDispatchablePromotion(t, fixture, createdAt.Add(2*time.Minute))
 	record = materializeOperatorPromotion(t, fixture, record, record.CreatedAt.Add(time.Second))
 	diagnostic := "terminal before callback"
 
-	report := promotion.CreationReconciliationReport{
-		PromotionID: record.ID,
-		ClusterName: "edge",
-		KargoName:   record.ExternalPromotionID,
-		KargoUID:    *record.KargoPromotionUID,
-		Phase:       promotion.CreationReconciliationAborted,
-		Diagnostic:  diagnostic,
-		ReportedAt:  record.CreatedAt.Add(2 * time.Second),
-	}
-	if _, err := fixture.database.ReportPromotionCreationReconciliation(
+	report := terminalPromotionReport(
+		record,
+		promotion.KargoPhaseAborted,
+		diagnostic,
+		record.CreatedAt.Add(2*time.Second),
+	)
+	report.ClusterName = "edge"
+	if _, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
 		report,
 	); !errors.Is(err, promotion.ErrPromotionNotFound) {
@@ -427,28 +499,28 @@ func TestPromotionCreationReconciliationRejectsIdentityAndClusterConflictsIntegr
 	}
 	report.ClusterName = "colo"
 	report.KargoUID = "replacement-uid"
-	if _, err := fixture.database.ReportPromotionCreationReconciliation(
+	if _, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
 		report,
-	); !errors.Is(err, promotion.ErrCreationReconciliationConflict) {
+	); !errors.Is(err, promotion.ErrReconciliationConflict) {
 		t.Errorf("wrong UID error = %v", err)
 	}
 	report.KargoUID = *record.KargoPromotionUID
 	report.KargoName = "noncanonical-name"
-	if _, err := fixture.database.ReportPromotionCreationReconciliation(
+	if _, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
 		report,
-	); !errors.Is(err, promotion.ErrCreationReconciliationConflict) {
+	); !errors.Is(err, promotion.ErrReconciliationConflict) {
 		t.Errorf("wrong canonical name error = %v", err)
 	}
 }
 
-func TestConcurrentPromotionCreationReconciliationClaimsReturnOneCommandIntegration(t *testing.T) {
+func TestConcurrentPromotionReconciliationClaimsReturnOneCommandIntegration(t *testing.T) {
 	createdAt := time.Date(2026, time.October, 24, 1, 0, 0, 0, time.UTC)
 	fixture := newPromotionIntegrationFixture(t, createdAt)
 	record := createDispatchablePromotion(t, fixture, createdAt.Add(2*time.Minute))
 	record = materializeOperatorPromotion(t, fixture, record, record.CreatedAt.Add(time.Second))
-	claim := promotion.CreationReconciliationClaim{
+	claim := promotion.ReconciliationClaim{
 		ClusterName: "colo",
 		ClaimedAt:   *record.NextReconciliationAt,
 		Interval:    15 * time.Second,
@@ -461,7 +533,7 @@ func TestConcurrentPromotionCreationReconciliationClaimsReturnOneCommandIntegrat
 	results := make(chan result, 2)
 	for range 2 {
 		go func() {
-			claimed, err := fixture.database.ClaimPromotionCreationReconciliation(fixture.ctx, claim)
+			claimed, err := fixture.database.ClaimPromotionReconciliation(fixture.ctx, claim)
 			results <- result{record: claimed, err: err}
 		}()
 	}
@@ -472,7 +544,7 @@ func TestConcurrentPromotionCreationReconciliationClaimsReturnOneCommandIntegrat
 		switch {
 		case result.err == nil && result.record.ID == record.ID:
 			claimedCount++
-		case errors.Is(result.err, promotion.ErrNoCreationReconciliation):
+		case errors.Is(result.err, promotion.ErrNoReconciliation):
 			noWorkCount++
 		default:
 			t.Fatalf("concurrent reconciliation claim = %#v, %v", result.record, result.err)
@@ -519,6 +591,23 @@ func materializeOperatorPromotion(
 	}
 
 	return materialized
+}
+
+func terminalPromotionReport(
+	record promotion.Promotion,
+	phase promotion.KargoPhase,
+	diagnostic string,
+	observedAt time.Time,
+) promotion.ReconciliationReport {
+	return promotion.ReconciliationReport{
+		PromotionID: record.ID,
+		ClusterName: record.StageSnapshot.ClusterName,
+		KargoName:   record.ExternalPromotionID,
+		KargoUID:    *record.KargoPromotionUID,
+		Phase:       &phase,
+		Diagnostic:  &diagnostic,
+		ObservedAt:  observedAt,
+	}
 }
 
 func createDispatchablePromotion(

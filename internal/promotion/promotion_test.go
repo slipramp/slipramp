@@ -37,6 +37,8 @@ func TestPromotionValidateAutomaticApproval(t *testing.T) {
 	promotion.GitDiffArtifactID = nil
 	promotion.ArgoDiffArtifactID = nil
 	promotion.PreparationCompletedAt = nil
+	nextReconciliationAt := promotion.UpdatedAt
+	promotion.NextReconciliationAt = &nextReconciliationAt
 
 	if err := promotion.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)

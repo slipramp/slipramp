@@ -77,6 +77,10 @@ func TestCandidateBranchServiceDeletesOnlyExpiredExactTerminalBranches(t *testin
 	}
 	sha := func(character string) string { return strings.Repeat(character, 40) }
 	reference := func(branch, revision string, status PromotionStatus, updatedAt time.Time) CandidateBranchReference {
+		var kargoOutcomeAt *time.Time
+		if status == StatusApproved {
+			kargoOutcomeAt = &updatedAt
+		}
 		return CandidateBranchReference{
 			PromotionID:       uuid.New(),
 			Integration:       "prod",
@@ -85,6 +89,7 @@ func TestCandidateBranchServiceDeletesOnlyExpiredExactTerminalBranches(t *testin
 			CandidateRevision: revision,
 			Status:            status,
 			UpdatedAt:         updatedAt,
+			KargoOutcomeAt:    kargoOutcomeAt,
 		}
 	}
 	store := &candidateBranchTestStore{

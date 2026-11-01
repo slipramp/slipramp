@@ -399,7 +399,7 @@ export function runResultActivity(
 }
 
 export function promotionActivity(
-  promotion: Pick<Promotion, "status">,
+  promotion: Pick<Promotion, "status" | "kargoOutcome">,
 ): ExecutionActivity | undefined {
   switch (promotion.status) {
     case "creating":
@@ -414,13 +414,22 @@ export function promotionActivity(
         title: "Good things are in motion",
         description: "Preparing the Promotion and its diffs.",
       };
+    case "approved":
+      if (!promotion.kargoOutcome) {
+        return {
+          animation: "working",
+          title: "Kargo is carrying it forward",
+          description: "The Promotion is approved while Kargo continues its steps.",
+        };
+      }
+      return undefined;
     default:
       return undefined;
   }
 }
 
 export function promotionDetailNeedsRefresh(
-  promotion: Pick<Promotion, "status">,
+  promotion: Pick<Promotion, "status" | "kargoOutcome">,
   preparedDiffsLoaded: boolean,
 ): boolean {
   return (
@@ -430,7 +439,7 @@ export function promotionDetailNeedsRefresh(
 }
 
 export function promotionDetailActivity(
-  promotion: Pick<Promotion, "status" | "message">,
+  promotion: Pick<Promotion, "status" | "message" | "kargoOutcome">,
 ): ExecutionActivity | undefined {
   const activity = promotionActivity(promotion);
   if (activity) return activity;
@@ -443,11 +452,20 @@ export function promotionDetailActivity(
         description: "Review the prepared changes, then approve or reject this Promotion.",
       };
     case "approved":
+      if (promotion.kargoOutcome?.phase !== "Succeeded") {
+        return {
+          animation: "frustrated",
+          tone: "error",
+          title: `Kargo Promotion ${promotion.kargoOutcome?.phase.toLocaleLowerCase()}`,
+          description:
+            promotion.kargoOutcome?.diagnostic ?? "Kargo reported an unsuccessful terminal phase.",
+        };
+      }
       return {
         animation: "celebrating",
         tone: "success",
-        title: "Promotion approved",
-        description: "Kargo can continue with the approved candidate.",
+        title: "Kargo Promotion succeeded",
+        description: "Kargo completed the approved Promotion.",
       };
     case "rejected":
       return {

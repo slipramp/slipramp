@@ -331,14 +331,16 @@ func TestServerClientReportsAuthenticatedKargoPromotionReconciliation(t *testing
 	}
 
 	promotionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1965")
+	phase := api.KargoPromotionReconciliationReportPhaseSucceeded
+	diagnostic := "Kargo completed the Promotion."
 	err = client.ReportKargoPromotionReconciliation(
 		t.Context(),
 		promotionID,
 		api.KargoPromotionReconciliationReport{
 			KargoName:  "external-dns-prod.01test.freight",
 			KargoUID:   "promotion-uid",
-			Phase:      api.KargoPromotionReconciliationReportPhaseSucceeded,
-			Diagnostic: "terminal before callback",
+			Phase:      &phase,
+			Diagnostic: &diagnostic,
 		},
 	)
 	if err != nil {

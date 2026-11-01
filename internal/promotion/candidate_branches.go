@@ -32,6 +32,7 @@ type CandidateBranchReference struct {
 	CandidateRevision string
 	Status            PromotionStatus
 	UpdatedAt         time.Time
+	KargoOutcomeAt    *time.Time
 }
 
 type CandidateBranchCleanup struct {
@@ -285,16 +286,18 @@ func classifyCandidateBranch(
 		if _, ok := cleanupIntegrations[reference.Integration]; !ok {
 			return candidateBranchDecision{reason: "cleanup disabled for referencing integration"}
 		}
-		if !reference.Status.Terminal() {
+		if !reference.Status.Terminal() ||
+			(reference.Status == StatusApproved && reference.KargoOutcomeAt == nil) {
 			return candidateBranchDecision{reason: "referenced by nonterminal Promotion"}
 		}
 	}
 
-	latestTerminalAt := references[0].UpdatedAt
+	latestTerminalAt := candidateBranchTerminalAt(references[0])
 	matchingRevision := ""
 	for _, reference := range references {
-		if reference.UpdatedAt.After(latestTerminalAt) {
-			latestTerminalAt = reference.UpdatedAt
+		terminalAt := candidateBranchTerminalAt(reference)
+		if terminalAt.After(latestTerminalAt) {
+			latestTerminalAt = terminalAt
 		}
 		if reference.CandidateRevision == remoteRevision {
 			matchingRevision = reference.CandidateRevision
@@ -311,6 +314,14 @@ func classifyCandidateBranch(
 		cleanup:          true,
 		expectedRevision: matchingRevision,
 	}
+}
+
+func candidateBranchTerminalAt(reference CandidateBranchReference) time.Time {
+	if reference.KargoOutcomeAt != nil {
+		return *reference.KargoOutcomeAt
+	}
+
+	return reference.UpdatedAt
 }
 
 func (s *CandidateBranchService) currentTime() time.Time {

@@ -297,11 +297,11 @@ func (h *Handler) ReportKargoPromotionReconciliation(
 	err = h.promotionReconciliations.Report(
 		ctx,
 		principal.ClusterName,
-		promotion.CreationReconciliationReport{
+		promotion.ReconciliationReport{
 			PromotionID: request.PromotionID,
 			KargoName:   request.Body.KargoName,
 			KargoUID:    request.Body.KargoUID,
-			Phase:       promotion.CreationReconciliationPhase(request.Body.Phase),
+			Phase:       optionalKargoPhase(request.Body.Phase),
 			Diagnostic:  request.Body.Diagnostic,
 		},
 	)
@@ -315,7 +315,7 @@ func (h *Handler) ReportKargoPromotionReconciliation(
 			problem := NewProblem(http.StatusNotFound, "The Promotion is not assigned to this controller's cluster.")
 
 			return api.ReportKargoPromotionReconciliation404ApplicationProblemPlusJSONResponse(problem), nil
-		case errors.Is(err, promotion.ErrCreationReconciliationConflict):
+		case errors.Is(err, promotion.ErrReconciliationConflict):
 			problem := NewProblem(
 				http.StatusConflict,
 				"The reconciliation report conflicts with the canonical Kargo Promotion identity.",
@@ -389,17 +389,28 @@ func createKargoPromotionCommand(command promotion.CreationCommand) api.Controll
 	}
 }
 
-func reconcileKargoPromotionCommand(command promotion.CreationReconciliationCommand) api.ControllerCommand {
+func reconcileKargoPromotionCommand(command promotion.ReconciliationCommand) api.ControllerCommand {
 	return api.ControllerCommand{
 		Type: api.ControllerCommandTypeReconcileKargoPromotion,
 		PromotionReconciliation: &api.KargoPromotionReconciliationCommand{
 			ID:          command.PromotionID,
+			Source:      api.PromotionSource(command.Source),
 			Integration: api.CatalogName(command.Integration),
 			Project:     api.CatalogName(command.Project),
+			Stage:       command.Stage,
 			KargoName:   command.KargoName,
 			KargoUID:    command.KargoUID,
 		},
 	}
+}
+
+func optionalKargoPhase(value *api.KargoPromotionReconciliationReportPhase) *promotion.KargoPhase {
+	if value == nil {
+		return nil
+	}
+
+	phase := promotion.KargoPhase(*value)
+	return &phase
 }
 
 func (h *Handler) controllerCommandResponse(command controllercommand.Command) (api.ControllerCommand, error) {
