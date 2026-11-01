@@ -58,12 +58,14 @@ code, fixtures, and documentation together.
   Artifact flows.
 - [Catalog validation](docs/CATALOG_VALIDATION.md): source-pinned setup,
   validation scopes, hooks, CI, and editor integration.
-- [Design](docs/DESIGN.md): implemented architecture, domain model, trust
-  boundaries, and governing decisions.
+- [Architecture](docs/DESIGN.md): governing decisions, system boundaries, core
+  flows, and links to focused domain contracts.
 - [Roadmap](docs/ROADMAP.md): unfinished product, reliability, and operator
   work.
 - [Development](docs/DEVELOPMENT.md): local services, common tasks, private
   development integrations, generation, and testing.
+- [Brand and mascot assets](docs/ASSETS.md): source ownership, production
+  outputs, generation, and licensing boundaries.
 - [Metrics](docs/METRICS.md): Prometheus endpoints, metric catalog, labels,
   and scrape guidance.
 - [End-to-end acceptance](deploy/e2e/README.md): disposable kind coverage and

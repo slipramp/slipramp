@@ -183,9 +183,10 @@ keys, unsupported versions, invalid durations, and invalid integration values.
 The selected Cluster must be registered in
 `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`. Candidate branch cleanup credential
 names must select entries in `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS`.
-Kargo integration behavior, credential boundaries, Run execution, and artifact
-retention are described in the [design](DESIGN.md). Kargo integration and
-Placement configuration are both loaded once at Server startup.
+Current contracts are documented in [Kargo Promotions](design/kargo.md),
+[Controller execution](design/execution.md), and
+[Logs and Artifacts](design/artifacts.md). Kargo integration and Placement
+configuration are both loaded once at Server startup.
 
 ## Controller configuration
 

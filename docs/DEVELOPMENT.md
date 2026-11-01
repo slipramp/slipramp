@@ -53,6 +53,11 @@ go run ./cmd/slipramp-harness command argument
 
 ## Public sites and mascot
 
+The authenticated application exposes `/mascot` for reviewing the production
+catalog at supported UI sizes. `task mascot:dev` runs the independent public
+gallery locally; its pose pages use `/poses/:pose` and contain no product API
+or control-plane connection.
+
 The `mascot.slipramp.com` custom domain is attached to the `slipramp-mascot`
 Worker once in Cloudflare. Routine `mascot:deploy` and CI deployments update the
 Worker and its static assets without rewriting that zone binding.
