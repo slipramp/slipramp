@@ -14,24 +14,31 @@ import (
 	"github.com/slipramp/slipramp/internal/run"
 )
 
-func createRunToolCallFields(input createRunInput, output runOutput) []any {
-	fields := uuidToolCallField(nil, "target_id", input.TargetID)
+type RunService interface {
+	CreateRun(context.Context, run.CreateRequest) (run.Run, error)
+	GetRun(context.Context, uuid.UUID) (run.Run, error)
+	ListRuns(context.Context, run.RunListFilter) (run.RunList, error)
+	CancelRun(context.Context, run.CancelRequest) (run.Run, error)
+}
+
+func createRunToolCallAttributes(input createRunInput, output runOutput) []any {
+	attributes := appendUUIDToolCallAttribute(nil, "target_id", input.TargetID)
 	if action, err := requiredCatalogName(input.Action, "action"); err == nil {
-		fields = append(fields, "action", action)
+		attributes = append(attributes, "action", action)
 	}
-	fields = uuidToolCallField(fields, "run_id", output.ID)
+	attributes = appendUUIDToolCallAttribute(attributes, "run_id", output.ID)
 
-	return fields
+	return attributes
 }
 
-func runToolCallFields(input runIDInput, _ runOutput) []any {
-	return uuidToolCallField(nil, "run_id", input.RunID)
+func runToolCallAttributes(input runIDInput, _ runOutput) []any {
+	return appendUUIDToolCallAttribute(nil, "run_id", input.RunID)
 }
 
-func listRunsToolCallFields(input listRunsInput, _ runListOutput) []any {
-	fields := uuidToolCallField(nil, "target_id", input.TargetID)
+func listRunsToolCallAttributes(input listRunsInput, _ runListOutput) []any {
+	attributes := appendUUIDToolCallAttribute(nil, "target_id", input.TargetID)
 
-	return uuidToolCallField(fields, "artifact_id", input.InputArtifactID)
+	return appendUUIDToolCallAttribute(attributes, "artifact_id", input.InputArtifactID)
 }
 
 type createRunInput struct {
@@ -42,7 +49,7 @@ type createRunInput struct {
 	IdempotencyKey string            `json:"idempotencyKey" jsonschema:"Unique key for this logical Run request, up to 128 characters. Reuse only when retrying the identical request."`
 }
 
-func (s *toolServer) createRun(
+func (s *toolHandler) createRun(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input createRunInput,
@@ -121,7 +128,7 @@ type listRunsInput struct {
 	Offset          int32  `json:"offset,omitempty" jsonschema:"Zero-based pagination offset."`
 }
 
-func (s *toolServer) listRuns(
+func (s *toolHandler) listRuns(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input listRunsInput,
@@ -193,7 +200,7 @@ func runListFilter(input listRunsInput) (run.RunListFilter, error) {
 	}, nil
 }
 
-func (s *toolServer) getRun(
+func (s *toolHandler) getRun(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input runIDInput,
@@ -217,7 +224,7 @@ func (s *toolServer) getRun(
 	return nil, newRunOutput(record), nil
 }
 
-func (s *toolServer) cancelRun(
+func (s *toolHandler) cancelRun(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input runIDInput,
@@ -248,7 +255,7 @@ func (s *toolServer) cancelRun(
 	return nil, newRunOutput(record), nil
 }
 
-func (s *toolServer) createRunError(err error) error {
+func (s *toolHandler) createRunError(err error) error {
 	switch {
 	case errors.Is(err, run.ErrInvalidRequest),
 		errors.Is(err, run.ErrInvalidParameters),

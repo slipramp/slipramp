@@ -26,7 +26,7 @@ import (
 
 const testAPIKey = "slipramp_key_test"
 
-func TestHTTPRequiresSliprampAPIKey(t *testing.T) {
+func TestHTTPRequiresAuthentication(t *testing.T) {
 	t.Parallel()
 
 	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, nil, nil)
@@ -47,7 +47,7 @@ func TestHTTPRequiresSliprampAPIKey(t *testing.T) {
 	}
 }
 
-func TestHTTPOAuthDiscoveryAndAuthentication(t *testing.T) {
+func TestHTTPOAuth(t *testing.T) {
 	t.Parallel()
 
 	oauthConfig := OAuthConfig{
@@ -67,11 +67,11 @@ func TestHTTPOAuthDiscoveryAndAuthentication(t *testing.T) {
 	}}
 	handler, err := NewHTTP(
 		Dependencies{
-			Authentication: staticAuthenticator{authentication: testAuthentication()},
-			Catalogs:       &recordingCatalogs{},
-			Runs:           &recordingRuns{},
-			Artifacts:      &recordingArtifacts{},
-			OAuthTokens:    oauthVerifier,
+			Authentication:    staticAuthenticator{authentication: testAuthentication()},
+			Catalogs:          &recordingCatalogs{},
+			Runs:              &recordingRuns{},
+			Artifacts:         &recordingArtifacts{},
+			OAuthAccessTokens: oauthVerifier,
 		},
 		Options{ServiceVersion: "test", OAuth: oauthConfig},
 	)
@@ -82,11 +82,11 @@ func TestHTTPOAuthDiscoveryAndAuthentication(t *testing.T) {
 	metadataRequest := httptest.NewRequestWithContext(
 		t.Context(),
 		http.MethodGet,
-		OAuthMetadataURL(oauthConfig.Resource),
+		ProtectedResourceMetadataURL(oauthConfig.Resource),
 		nil,
 	)
 	metadataResponse := httptest.NewRecorder()
-	handler.ServeHTTP(metadataResponse, metadataRequest)
+	ProtectedResourceMetadataHandler(oauthConfig).ServeHTTP(metadataResponse, metadataRequest)
 	if metadataResponse.Code != http.StatusOK {
 		t.Fatalf("metadata status = %d, body = %s", metadataResponse.Code, metadataResponse.Body.String())
 	}
@@ -117,7 +117,7 @@ func TestHTTPOAuthDiscoveryAndAuthentication(t *testing.T) {
 		t.Fatalf("unauthorized status = %d", unauthorizedResponse.Code)
 	}
 	challenge := unauthorizedResponse.Header().Get("WWW-Authenticate")
-	if !strings.Contains(challenge, `resource_metadata="`+OAuthMetadataURL(oauthConfig.Resource)+`"`) {
+	if !strings.Contains(challenge, `resource_metadata="`+ProtectedResourceMetadataURL(oauthConfig.Resource)+`"`) {
 		t.Errorf("WWW-Authenticate = %q", challenge)
 	}
 
@@ -128,7 +128,7 @@ func TestHTTPOAuthDiscoveryAndAuthentication(t *testing.T) {
 	}
 }
 
-func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
+func TestHTTPTools(t *testing.T) {
 	t.Parallel()
 
 	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1201")
@@ -332,33 +332,59 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 	}
 }
 
-func TestHTTPEnforcesAPIKeyScopesAtToolInvocation(t *testing.T) {
+func TestHTTPRejectsInvalidCreateRun(t *testing.T) {
 	t.Parallel()
 
-	runs := &recordingRuns{}
-	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, runs, nil)
-	session := connectTestClient(t, handler, testAPIKey)
-
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "create_run",
-		Arguments: map[string]any{
-			"targetId":       "018f90ff-9fd8-7b5f-b7e1-f32ff54c1201",
-			"action":         "preview",
-			"idempotencyKey": "denied",
+	tests := []struct {
+		name           string
+		authentication productidentity.Authentication
+		arguments      map[string]any
+	}{
+		{
+			name:           "missing write scope",
+			authentication: testAuthentication(productidentity.ScopeRead),
+			arguments: map[string]any{
+				"targetId":       "018f90ff-9fd8-7b5f-b7e1-f32ff54c1201",
+				"action":         "preview",
+				"idempotencyKey": "denied",
+			},
 		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool() error = %v", err)
+		{
+			name:           "malformed Artifact input ID",
+			authentication: testAuthentication(productidentity.ScopeRunsWrite),
+			arguments: map[string]any{
+				"targetId":       "018f90ff-9fd8-7b5f-b7e1-f32ff54c1240",
+				"action":         "apply",
+				"inputs":         map[string]any{"plan": "not-a-uuid"},
+				"idempotencyKey": "invalid-input",
+			},
+		},
 	}
-	if !result.IsError {
-		t.Fatalf("CallTool() result = %#v, want tool error", result)
-	}
-	if runs.createCalls != 0 {
-		t.Errorf("CreateRun calls = %d, want 0", runs.createCalls)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			runs := &recordingRuns{}
+			handler := testHTTPHandler(t, test.authentication, nil, runs, nil)
+			session := connectTestClient(t, handler, testAPIKey)
+			result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+				Name:      "create_run",
+				Arguments: test.arguments,
+			})
+			if err != nil {
+				t.Fatalf("CallTool() error = %v", err)
+			}
+			if !result.IsError {
+				t.Fatalf("CallTool() result = %#v, want tool error", result)
+			}
+			if runs.createCalls != 0 {
+				t.Errorf("CreateRun calls = %d, want 0", runs.createCalls)
+			}
+		})
 	}
 }
 
-func TestHTTPCreateRunAcceptsArtifactInputs(t *testing.T) {
+func TestHTTPCreateRunArtifactInputs(t *testing.T) {
 	t.Parallel()
 
 	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1240")
@@ -437,39 +463,7 @@ func TestHTTPCreateRunAcceptsArtifactInputs(t *testing.T) {
 	}
 }
 
-func TestHTTPCreateRunRejectsInvalidArtifactInputID(t *testing.T) {
-	t.Parallel()
-
-	runs := &recordingRuns{}
-	handler := testHTTPHandler(
-		t,
-		testAuthentication(productidentity.ScopeRunsWrite),
-		nil,
-		runs,
-		nil,
-	)
-	session := connectTestClient(t, handler, testAPIKey)
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name: "create_run",
-		Arguments: map[string]any{
-			"targetId":       "018f90ff-9fd8-7b5f-b7e1-f32ff54c1240",
-			"action":         "apply",
-			"inputs":         map[string]any{"plan": "not-a-uuid"},
-			"idempotencyKey": "invalid-input",
-		},
-	})
-	if err != nil {
-		t.Fatalf("CallTool() error = %v", err)
-	}
-	if !result.IsError {
-		t.Fatalf("CallTool() result = %#v, want tool error", result)
-	}
-	if runs.createCalls != 0 {
-		t.Errorf("CreateRun calls = %d, want 0", runs.createCalls)
-	}
-}
-
-func TestHTTPEnforcesSensitiveArtifactAuthorization(t *testing.T) {
+func TestHTTPSensitiveArtifactAuthorization(t *testing.T) {
 	t.Parallel()
 
 	artifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1220")
@@ -502,7 +496,7 @@ func TestHTTPEnforcesSensitiveArtifactAuthorization(t *testing.T) {
 	}
 }
 
-func TestHTTPLogsAndObservesToolCallsWithoutArgumentsOrSDKLifecycleNoise(t *testing.T) {
+func TestHTTPRecordsToolCallTelemetry(t *testing.T) {
 	t.Parallel()
 
 	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1230")
@@ -525,11 +519,11 @@ func TestHTTPLogsAndObservesToolCallsWithoutArgumentsOrSDKLifecycleNoise(t *test
 	var logs bytes.Buffer
 	handler, err := NewHTTP(
 		Dependencies{
-			Authentication: staticAuthenticator{authentication: authentication},
-			Catalogs:       &recordingCatalogs{},
-			Runs:           runs,
-			Artifacts:      &recordingArtifacts{},
-			ToolCalls:      observer,
+			Authentication:   staticAuthenticator{authentication: authentication},
+			Catalogs:         &recordingCatalogs{},
+			Runs:             runs,
+			Artifacts:        &recordingArtifacts{},
+			ToolCallObserver: observer,
 		},
 		Options{
 			ServiceVersion: "test",
@@ -547,13 +541,31 @@ func TestHTTPLogsAndObservesToolCallsWithoutArgumentsOrSDKLifecycleNoise(t *test
 		"parameters":     map[string]any{"environment": "secret-parameter-marker"},
 		"idempotencyKey": "secret-idempotency-marker",
 	})
+	runs.err = errors.Join(run.ErrInvalidParameters, errors.New("secret-rejected-error-marker"))
+	rejected, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name: "create_run",
+		Arguments: map[string]any{
+			"targetId":       targetID.String(),
+			"action":         "preview",
+			"idempotencyKey": "rejected",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if !rejected.IsError {
+		t.Fatalf("CallTool() result = %#v, want tool error", rejected)
+	}
 
-	if len(observer.calls) != 1 {
-		t.Fatalf("observed tool calls = %d, want 1", len(observer.calls))
+	if len(observer.calls) != 2 {
+		t.Fatalf("observed tool calls = %d, want 2", len(observer.calls))
 	}
 	observed := observer.calls[0]
 	if observed.tool != "create_run" || observed.result != ToolCallSucceeded || observed.duration < 0 {
 		t.Errorf("observed tool call = %#v", observed)
+	}
+	if observer.calls[1].result != ToolCallRejected {
+		t.Errorf("rejected tool call = %#v", observer.calls[1])
 	}
 
 	contents := logs.String()
@@ -581,6 +593,7 @@ func TestHTTPLogsAndObservesToolCallsWithoutArgumentsOrSDKLifecycleNoise(t *test
 		"server session disconnected",
 		"secret-parameter-marker",
 		"secret-idempotency-marker",
+		"secret-rejected-error-marker",
 	} {
 		if strings.Contains(contents, forbidden) {
 			t.Errorf("MCP log contains %q: %s", forbidden, contents)
@@ -588,13 +601,13 @@ func TestHTTPLogsAndObservesToolCallsWithoutArgumentsOrSDKLifecycleNoise(t *test
 	}
 }
 
-func TestToolCallResult(t *testing.T) {
+func TestClassifyToolCall(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name string
 		err  error
-		want ToolCallResult
+		want ToolCallOutcome
 	}{
 		{name: "succeeded", want: ToolCallSucceeded},
 		{name: "rejected", err: errors.New("invalid request"), want: ToolCallRejected},
@@ -604,14 +617,14 @@ func TestToolCallResult(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := toolCallResult(test.err); got != test.want {
-				t.Errorf("toolCallResult() = %q, want %q", got, test.want)
+			if got := classifyToolCall(test.err); got != test.want {
+				t.Errorf("classifyToolCall() = %q, want %q", got, test.want)
 			}
 		})
 	}
 }
 
-func TestSDKLoggerKeepsWarningsAndErrorsOnly(t *testing.T) {
+func TestSDKLoggerLevel(t *testing.T) {
 	t.Parallel()
 
 	var logs bytes.Buffer
@@ -746,7 +759,7 @@ type staticAuthenticator struct {
 
 type observedToolCall struct {
 	tool     string
-	result   ToolCallResult
+	result   ToolCallOutcome
 	duration time.Duration
 }
 
@@ -757,7 +770,7 @@ type recordingToolCallObserver struct {
 func (o *recordingToolCallObserver) ObserveMCPToolCall(
 	_ context.Context,
 	tool string,
-	result ToolCallResult,
+	result ToolCallOutcome,
 	duration time.Duration,
 ) {
 	o.calls = append(o.calls, observedToolCall{tool: tool, result: result, duration: duration})

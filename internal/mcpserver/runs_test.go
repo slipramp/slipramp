@@ -11,7 +11,7 @@ import (
 	"github.com/slipramp/slipramp/internal/run"
 )
 
-func TestHTTPListRunsAcceptsHistoryFilters(t *testing.T) {
+func TestHTTPListRunsFilters(t *testing.T) {
 	t.Parallel()
 
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1250")
@@ -68,44 +68,46 @@ func TestHTTPListRunsAcceptsHistoryFilters(t *testing.T) {
 	}
 }
 
-func TestHTTPListRunsRejectsInvalidFilter(t *testing.T) {
+func TestHTTPListRunsInvalidFilters(t *testing.T) {
 	t.Parallel()
 
-	runs := &recordingRuns{}
-	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, runs, nil)
-	session := connectTestClient(t, handler, testAPIKey)
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "list_runs",
-		Arguments: map[string]any{"targetId": "not-a-uuid"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool() error = %v", err)
+	tests := []struct {
+		name       string
+		arguments  map[string]any
+		serviceErr error
+		wantCalls  int
+	}{
+		{
+			name:      "malformed target ID",
+			arguments: map[string]any{"targetId": "not-a-uuid"},
+		},
+		{
+			name:       "invalid domain filter",
+			arguments:  map[string]any{"phase": "waiting"},
+			serviceErr: run.ErrInvalidRequest,
+			wantCalls:  1,
+		},
 	}
-	if !result.IsError {
-		t.Fatalf("CallTool() result = %#v, want tool error", result)
-	}
-	if runs.listCalls != 0 {
-		t.Errorf("ListRuns calls = %d, want 0", runs.listCalls)
-	}
-}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestHTTPListRunsReturnsServiceValidationErrors(t *testing.T) {
-	t.Parallel()
-
-	runs := &recordingRuns{err: run.ErrInvalidRequest}
-	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, runs, nil)
-	session := connectTestClient(t, handler, testAPIKey)
-	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
-		Name:      "list_runs",
-		Arguments: map[string]any{"phase": "waiting"},
-	})
-	if err != nil {
-		t.Fatalf("CallTool() error = %v", err)
-	}
-	if !result.IsError {
-		t.Fatalf("CallTool() result = %#v, want tool error", result)
-	}
-	if runs.listCalls != 1 {
-		t.Errorf("ListRuns calls = %d, want 1", runs.listCalls)
+			runs := &recordingRuns{err: test.serviceErr}
+			handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, runs, nil)
+			session := connectTestClient(t, handler, testAPIKey)
+			result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+				Name:      "list_runs",
+				Arguments: test.arguments,
+			})
+			if err != nil {
+				t.Fatalf("CallTool() error = %v", err)
+			}
+			if !result.IsError {
+				t.Fatalf("CallTool() result = %#v, want tool error", result)
+			}
+			if runs.listCalls != test.wantCalls {
+				t.Errorf("ListRuns calls = %d, want %d", runs.listCalls, test.wantCalls)
+			}
+		})
 	}
 }

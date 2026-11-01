@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/slipramp/slipramp/internal/artifact"
@@ -23,6 +24,12 @@ const (
 	defaultContentPageSizeBytes int64 = 32 * 1024
 	maximumContentPageSizeBytes int64 = 64 * 1024
 )
+
+type ArtifactService interface {
+	List(context.Context, uuid.UUID) ([]artifact.Record, error)
+	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
+	StreamLog(context.Context, uuid.UUID, int64) (artifact.LogStream, error)
+}
 
 type contentPageInput struct {
 	OffsetBytes int64 `json:"offsetBytes,omitempty" jsonschema:"Zero-based byte offset. Defaults to 0."`
@@ -49,11 +56,11 @@ type readRunLogOutput struct {
 	Failed           bool   `json:"failed"`
 }
 
-func runLogToolCallFields(input readRunLogInput, _ readRunLogOutput) []any {
-	return uuidToolCallField(nil, "run_id", input.RunID)
+func runLogToolCallAttributes(input readRunLogInput, _ readRunLogOutput) []any {
+	return appendUUIDToolCallAttribute(nil, "run_id", input.RunID)
 }
 
-func (s *toolServer) readRunLog(
+func (s *toolHandler) readRunLog(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input readRunLogInput,
@@ -149,16 +156,12 @@ func (s *toolServer) readRunLog(
 	}, nil
 }
 
-type listRunArtifactsInput struct {
-	RunID string `json:"runId" jsonschema:"Run UUID."`
-}
-
 type artifactListOutput struct {
 	Items []artifactOutput `json:"items"`
 }
 
-func runArtifactsToolCallFields(input listRunArtifactsInput, _ artifactListOutput) []any {
-	return uuidToolCallField(nil, "run_id", input.RunID)
+func runArtifactsToolCallAttributes(input runIDInput, _ artifactListOutput) []any {
+	return appendUUIDToolCallAttribute(nil, "run_id", input.RunID)
 }
 
 type artifactOutput struct {
@@ -198,10 +201,10 @@ type artifactReportOutput struct {
 	Summary        any    `json:"summary"`
 }
 
-func (s *toolServer) listRunArtifacts(
+func (s *toolHandler) listRunArtifacts(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
-	input listRunArtifactsInput,
+	input runIDInput,
 ) (*mcp.CallToolResult, artifactListOutput, error) {
 	if _, err := authorize(ctx, productidentity.PermissionRead); err != nil {
 		return nil, artifactListOutput{}, err
@@ -299,11 +302,11 @@ type readArtifactOutput struct {
 	HasMore         bool   `json:"hasMore"`
 }
 
-func artifactToolCallFields(input readArtifactInput, _ readArtifactOutput) []any {
-	return uuidToolCallField(nil, "artifact_id", input.ArtifactID)
+func artifactToolCallAttributes(input readArtifactInput, _ readArtifactOutput) []any {
+	return appendUUIDToolCallAttribute(nil, "artifact_id", input.ArtifactID)
 }
 
-func (s *toolServer) readArtifact(
+func (s *toolHandler) readArtifact(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input readArtifactInput,
@@ -337,7 +340,7 @@ func (s *toolServer) readArtifact(
 		}
 
 		return nil, readArtifactOutput{}, errors.New(
-			"the authenticated API key is not authorized to read sensitive Artifact contents",
+			"the authenticated credential is not authorized to read sensitive Artifact contents",
 		)
 	}
 	if offset > content.Artifact.SizeBytes {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"slices"
 	"strings"
@@ -11,12 +12,14 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/google/uuid"
+	"github.com/modelcontextprotocol/go-sdk/auth"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 
 	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
-var oauthScopes = []productidentity.Scope{
+var oauthScopes = [...]productidentity.Scope{
 	productidentity.ScopeRead,
 	productidentity.ScopeRunsWrite,
 }
@@ -72,12 +75,30 @@ func validateOAuthURL(label string, value string) error {
 	return nil
 }
 
-func OAuthMetadataURL(resource string) string {
+func ProtectedResourceMetadataURL(resource string) string {
+	return protectedResourceMetadataURL(resource).String()
+}
+
+func ProtectedResourceMetadataPath(resource string) string {
+	return protectedResourceMetadataURL(resource).Path
+}
+
+func protectedResourceMetadataURL(resource string) *url.URL {
 	parsed, _ := url.Parse(resource)
-	parsed.Path = "/.well-known/oauth-protected-resource" + parsed.EscapedPath()
+	parsed.Path = "/.well-known/oauth-protected-resource" + parsed.Path
 	parsed.RawPath = ""
 
-	return parsed.String()
+	return parsed
+}
+
+func ProtectedResourceMetadataHandler(cfg OAuthConfig) http.Handler {
+	return auth.ProtectedResourceMetadataHandler(&oauthex.ProtectedResourceMetadata{
+		Resource:               cfg.Resource,
+		AuthorizationServers:   []string{cfg.Issuer},
+		ScopesSupported:        OAuthScopeNames(),
+		BearerMethodsSupported: []string{"header"},
+		ResourceName:           "Slipramp MCP",
+	})
 }
 
 type OAuthAccessTokenVerifier interface {
@@ -108,25 +129,6 @@ func DiscoverOAuthAccessTokenVerifier(
 	provider, err := oidc.NewProvider(ctx, cfg.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("discover MCP OAuth authorization server: %w", err)
-	}
-	var metadata struct {
-		RegistrationEndpoint          string   `json:"registration_endpoint"`
-		ScopesSupported               []string `json:"scopes_supported"`
-		CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported"`
-	}
-	if err := provider.Claims(&metadata); err != nil {
-		return nil, fmt.Errorf("decode MCP OAuth authorization-server metadata: %w", err)
-	}
-	if metadata.RegistrationEndpoint == "" {
-		return nil, errors.New("MCP OAuth authorization server does not advertise dynamic client registration")
-	}
-	if !slices.Contains(metadata.CodeChallengeMethodsSupported, "S256") {
-		return nil, errors.New("MCP OAuth authorization server does not advertise S256 PKCE")
-	}
-	for _, scope := range oauthScopes {
-		if !slices.Contains(metadata.ScopesSupported, string(scope)) {
-			return nil, fmt.Errorf("MCP OAuth authorization server does not advertise scope %q", scope)
-		}
 	}
 
 	return &discoveredOAuthAccessTokenVerifier{

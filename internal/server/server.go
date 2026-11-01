@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"sync"
 	"time"
 
@@ -291,12 +290,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	)
 	mcpHandler, err := mcpserver.NewHTTP(
 		mcpserver.Dependencies{
-			Authentication: productAuthenticationService,
-			Catalogs:       catalogs,
-			Runs:           runs,
-			Artifacts:      artifacts,
-			OAuthTokens:    oauthTokenVerifier,
-			ToolCalls:      metrics,
+			Authentication:    productAuthenticationService,
+			Catalogs:          catalogs,
+			Runs:              runs,
+			Artifacts:         artifacts,
+			OAuthAccessTokens: oauthTokenVerifier,
+			ToolCallObserver:  metrics,
 		},
 		mcpserver.Options{
 			ServiceVersion: serviceVersion,
@@ -313,8 +312,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/mcp", mcpHandler)
 	if cfg.MCP.OAuth.Enabled() {
-		metadataURL, _ := url.Parse(mcpserver.OAuthMetadataURL(cfg.MCP.OAuth.Resource))
-		rootHandler.Handle(metadataURL.Path, mcpHandler)
+		rootHandler.Handle(
+			mcpserver.ProtectedResourceMetadataPath(cfg.MCP.OAuth.Resource),
+			mcpserver.ProtectedResourceMetadataHandler(cfg.MCP.OAuth),
+		)
 	}
 	rootHandler.Handle("/", httpHandler)
 

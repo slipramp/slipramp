@@ -10,31 +10,31 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type ToolCallResult string
+type ToolCallOutcome string
 
 const (
-	ToolCallSucceeded ToolCallResult = "succeeded"
-	ToolCallRejected  ToolCallResult = "rejected"
-	ToolCallFailed    ToolCallResult = "failed"
+	ToolCallSucceeded ToolCallOutcome = "succeeded"
+	ToolCallRejected  ToolCallOutcome = "rejected"
+	ToolCallFailed    ToolCallOutcome = "failed"
 )
 
 type ToolCallObserver interface {
-	ObserveMCPToolCall(context.Context, string, ToolCallResult, time.Duration)
+	ObserveMCPToolCall(context.Context, string, ToolCallOutcome, time.Duration)
 }
 
 type noopToolCallObserver struct{}
 
-func (noopToolCallObserver) ObserveMCPToolCall(context.Context, string, ToolCallResult, time.Duration) {
+func (noopToolCallObserver) ObserveMCPToolCall(context.Context, string, ToolCallOutcome, time.Duration) {
 }
 
-type toolCallFields[Input, Output any] func(Input, Output) []any
+type toolCallAttributes[Input, Output any] func(Input, Output) []any
 
 func addObservedTool[Input, Output any](
-	tools *toolServer,
+	tools *toolHandler,
 	server *mcp.Server,
 	tool *mcp.Tool,
 	handler mcp.ToolHandlerFor[Input, Output],
-	fields toolCallFields[Input, Output],
+	attributes toolCallAttributes[Input, Output],
 ) {
 	mcp.AddTool(
 		server,
@@ -46,7 +46,7 @@ func addObservedTool[Input, Output any](
 		) (*mcp.CallToolResult, Output, error) {
 			startedAt := time.Now()
 			result, output, err := handler(ctx, request, input)
-			observeToolCall(tools, ctx, request, tool.Name, startedAt, input, output, err, fields)
+			observeToolCall(tools, ctx, request, tool.Name, startedAt, input, output, err, attributes)
 
 			return result, output, err
 		},
@@ -54,7 +54,7 @@ func addObservedTool[Input, Output any](
 }
 
 func observeToolCall[Input, Output any](
-	s *toolServer,
+	s *toolHandler,
 	ctx context.Context,
 	request *mcp.CallToolRequest,
 	tool string,
@@ -62,13 +62,13 @@ func observeToolCall[Input, Output any](
 	input Input,
 	output Output,
 	err error,
-	fields toolCallFields[Input, Output],
+	toolAttributes toolCallAttributes[Input, Output],
 ) {
 	duration := time.Since(startedAt)
-	result := toolCallResult(err)
+	outcome := classifyToolCall(err)
 	attributes := []any{
 		"tool", tool,
-		"result", result,
+		"result", outcome,
 		"duration", duration,
 	}
 	if authentication, authenticationErr := currentAuthentication(ctx); authenticationErr == nil {
@@ -92,18 +92,14 @@ func observeToolCall[Input, Output any](
 			attributes = append(attributes, "protocol_version", protocolVersion)
 		}
 	}
-	if fields != nil {
-		attributes = append(attributes, fields(input, output)...)
+	if toolAttributes != nil {
+		attributes = append(attributes, toolAttributes(input, output)...)
 	}
-	if err != nil {
-		attributes = append(attributes, "error", err)
-	}
-
 	s.logger.Info("MCP tool call", attributes...)
-	s.observer.ObserveMCPToolCall(ctx, tool, result, duration)
+	s.observer.ObserveMCPToolCall(ctx, tool, outcome, duration)
 }
 
-func toolCallResult(err error) ToolCallResult {
+func classifyToolCall(err error) ToolCallOutcome {
 	switch {
 	case err == nil:
 		return ToolCallSucceeded

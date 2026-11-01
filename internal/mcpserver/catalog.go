@@ -15,13 +15,13 @@ import (
 	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
-func targetActionToolCallFields(input explainTargetActionInput, _ any) []any {
-	fields := uuidToolCallField(nil, "target_id", input.TargetID)
+func targetActionToolCallAttributes(input explainTargetActionInput, _ any) []any {
+	attributes := appendUUIDToolCallAttribute(nil, "target_id", input.TargetID)
 	if action, err := requiredCatalogName(input.Action, "action"); err == nil {
-		fields = append(fields, "action", action)
+		attributes = append(attributes, "action", action)
 	}
 
-	return fields
+	return attributes
 }
 
 type listTargetsInput struct {
@@ -33,7 +33,12 @@ type listTargetsInput struct {
 	Offset       int32  `json:"offset,omitempty" jsonschema:"Zero-based pagination offset."`
 }
 
-func (s *toolServer) listTargets(
+type CatalogService interface {
+	ExplainAction(context.Context, uuid.UUID, string) (catalog.Explanation, error)
+	ListTargets(context.Context, catalog.TargetListFilter) (catalog.TargetList, error)
+}
+
+func (s *toolHandler) listTargets(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input listTargetsInput,
@@ -130,7 +135,7 @@ type explainTargetActionInput struct {
 	Action   string `json:"action" jsonschema:"Action name declared on the Target."`
 }
 
-func (s *toolServer) explainTargetAction(
+func (s *toolHandler) explainTargetAction(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
 	input explainTargetActionInput,

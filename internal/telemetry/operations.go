@@ -147,12 +147,12 @@ func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
 func (t *Telemetry) ObserveMCPToolCall(
 	ctx context.Context,
 	tool string,
-	result mcpserver.ToolCallResult,
+	outcome mcpserver.ToolCallOutcome,
 	duration time.Duration,
 ) {
 	options := metric.WithAttributes(
 		attribute.String("tool", tool),
-		attribute.String("result", string(result)),
+		attribute.String("result", string(outcome)),
 	)
 	t.operations.mcpToolCalls.Add(ctx, 1, options)
 	t.operations.mcpToolDuration.Record(ctx, duration.Seconds(), options)

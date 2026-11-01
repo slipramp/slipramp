@@ -21,8 +21,10 @@ Controller enrollment-token map stored in the referenced Secret.
 OAuth for remote MCP clients is optional. Set `server.mcp.oauth.issuer` to the
 authorization server issuer and `server.mcp.oauth.resource` to the canonical
 external URL ending in `/mcp`. The authorization server must issue JWT access
-tokens with that exact URL in `aud`, advertise S256 PKCE and dynamic client
-registration, and expose the `slipramp:read` and `slipramp:runs:write` scopes.
+tokens with that exact URL in `aud` and grant the `slipramp:read` and
+`slipramp:runs:write` scopes. Clients that register themselves, including Codex,
+also require compatible dynamic client registration and S256 PKCE support from
+the authorization server.
 The chart routes the resource's path-aware RFC 9728 metadata endpoint to the
 Server alongside `/mcp`.
 

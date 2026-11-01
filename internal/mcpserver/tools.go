@@ -1,6 +1,7 @@
 package mcpserver
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -11,7 +12,9 @@ import (
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 )
 
-type toolServer struct {
+var errInternalToolCall = errors.New("Slipramp could not complete the request") //nolint:staticcheck // Product name.
+
+type toolHandler struct {
 	catalogs  CatalogService
 	runs      RunService
 	artifacts ArtifactService
@@ -19,82 +22,90 @@ type toolServer struct {
 	observer  ToolCallObserver
 }
 
-func (s *toolServer) register(server *mcp.Server) {
+func (s *toolHandler) register(server *mcp.Server) {
 	closedWorld := false
 	destructive := true
 
 	addObservedTool(s, server, &mcp.Tool{
-		Name:        "list_targets",
-		Title:       "List Slipramp Targets",
-		Description: "List active Targets and their available Actions. Use this to resolve a targetId before inspecting or creating a Run.",
+		Name:  "list_targets",
+		Title: "List Slipramp Targets",
+		Description: "List active Targets and their available Actions. Use this to resolve a targetId before " +
+			"inspecting or creating a Run.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, s.listTargets, nil)
 	addObservedTool(s, server, &mcp.Tool{
-		Name:        "explain_target_action",
-		Title:       "Explain a Target Action",
-		Description: "Resolve an Action's effective command, parameters, runtime, placement, credentials, artifacts, inputs, triggers, and diagnostics without executing it.",
+		Name:  "explain_target_action",
+		Title: "Explain a Target Action",
+		Description: "Resolve an Action's effective command, parameters, runtime, placement, credentials, " +
+			"artifacts, inputs, triggers, and diagnostics without executing it.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.explainTargetAction, targetActionToolCallFields)
+	}, s.explainTargetAction, targetActionToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
-		Name:        "create_run",
-		Title:       "Create a Slipramp Run",
-		Description: "Create an immutable MCP-sourced Run for one Target Action, optionally binding declared inputs to retained Artifacts. This may change external infrastructure. Call explain_target_action first and use a unique idempotencyKey.",
+		Name:  "create_run",
+		Title: "Create a Slipramp Run",
+		Description: "Create an immutable MCP-sourced Run for one Target Action, optionally binding declared " +
+			"inputs to retained Artifacts. This may change external infrastructure. Call explain_target_action " +
+			"first and use a unique idempotencyKey.",
 		Annotations: &mcp.ToolAnnotations{
 			DestructiveHint: &destructive,
 			IdempotentHint:  true,
 		},
-	}, s.createRun, createRunToolCallFields)
+	}, s.createRun, createRunToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
 		Name:        "get_run",
 		Title:       "Get a Slipramp Run",
 		Description: "Get the current persisted state and outcome of a Run.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.getRun, runToolCallFields)
+	}, s.getRun, runToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
-		Name:        "list_runs",
-		Title:       "List Slipramp Runs",
-		Description: "List recent Runs in descending creation order, with filters for repository, commit, consumed Artifact, Target, cluster, phase, and review state.",
+		Name:  "list_runs",
+		Title: "List Slipramp Runs",
+		Description: "List recent Runs in descending creation order, with filters for repository, commit, " +
+			"consumed Artifact, Target, cluster, phase, and review state.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.listRuns, listRunsToolCallFields)
+	}, s.listRuns, listRunsToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
-		Name:        "read_run_log",
-		Title:       "Read a Slipramp Run Log",
-		Description: "Read one bounded page of currently durable Run log bytes. Use nextOffsetBytes to continue reading live or retained logs.",
+		Name:  "read_run_log",
+		Title: "Read a Slipramp Run Log",
+		Description: "Read one bounded page of currently durable Run log bytes. Use nextOffsetBytes to continue " +
+			"reading live or retained logs.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.readRunLog, runLogToolCallFields)
+	}, s.readRunLog, runLogToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
 		Name:        "list_run_artifacts",
 		Title:       "List Slipramp Run Artifacts",
 		Description: "List durable Artifact metadata, provenance, and structured report summaries for a Run.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.listRunArtifacts, runArtifactsToolCallFields)
+	}, s.listRunArtifacts, runArtifactsToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
-		Name:        "read_artifact",
-		Title:       "Read a Slipramp Artifact",
-		Description: "Read one bounded page of retained Artifact contents. Sensitive contents require operator or administrator authorization.",
+		Name:  "read_artifact",
+		Title: "Read a Slipramp Artifact",
+		Description: "Read one bounded page of retained Artifact contents. Sensitive contents require operator " +
+			"or administrator authorization.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.readArtifact, artifactToolCallFields)
+	}, s.readArtifact, artifactToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
-		Name:        "cancel_run",
-		Title:       "Cancel a Slipramp Run",
-		Description: "Request cancellation of a queued or active Run. Active execution stops only after its Controller observes the request.",
+		Name:  "cancel_run",
+		Title: "Cancel a Slipramp Run",
+		Description: "Request cancellation of a queued or active Run. Active execution stops only after its " +
+			"Controller observes the request.",
 		Annotations: &mcp.ToolAnnotations{
 			DestructiveHint: &destructive,
 			IdempotentHint:  true,
 		},
-	}, s.cancelRun, runToolCallFields)
+	}, s.cancelRun, runToolCallAttributes)
 }
 
-func uuidToolCallField(fields []any, name, value string) []any {
+func appendUUIDToolCallAttribute(attributes []any, name, value string) []any {
 	parsed, err := requiredUUID(value, name)
 	if err != nil {
-		return fields
+		return attributes
 	}
 
-	return append(fields, name, parsed)
+	return append(attributes, name, parsed)
 }
 
-func (s *toolServer) internalError(operation string, err error) error {
+func (s *toolHandler) internalError(operation string, err error) error {
 	s.logger.Error("handle MCP tool call", "operation", operation, "error", err)
 
 	return errInternalToolCall
