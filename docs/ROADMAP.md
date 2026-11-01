@@ -219,9 +219,10 @@ reads bounded pages of durable logs and Artifact contents with existing
 sensitive-content authorization.
 
 - [ ] Add standard OAuth protected-resource discovery and access-token
-      validation when general remote clients require it. Verify issuer,
-      resource/audience, scopes, and client-registration support with the chosen
-      authorization server at implementation time.
+      validation when general remote clients require it. Use the local Keycloak
+      realm as the reference authorization server and verify issuer,
+      resource/audience, scopes, and client-registration support when this
+      slice is implemented.
 
 Slipramp should act as an OAuth resource server, not an authorization server.
 Browser OIDC support alone does not establish suitable MCP token issuance.

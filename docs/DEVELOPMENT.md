@@ -5,8 +5,8 @@ Run the commands in this guide from the repository root.
 ## Prerequisites
 
 Go 1.27.2, Git, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
-required. Docker is required for the local PostgreSQL, RustFS, Dex, Prometheus,
-and Grafana services.
+required. Docker is required for the local PostgreSQL, RustFS, Keycloak,
+Prometheus, and Grafana services.
 Canonical source artwork is maintained in the sibling `slipramp-assets`
 repository, normally checked out beside this repository.
 ImageMagick and the libwebp command-line tools are required only when packaging
@@ -17,7 +17,7 @@ and pnpm release into the ignored repository cache.
 
 ## Local workflow
 
-The local stack includes a Dex password database and development-only Server
+The local stack includes a Keycloak realm and development-only Server
 configuration for the
 `kcloud-ops` repository and development homelab Controller. Run the Server and
 web process in separate terminals:
@@ -73,7 +73,8 @@ about failures reaching the site.
 
 Open `http://localhost:5173` and sign in with
 `admin@slipramp.local` / `slipramp`. These credentials and the static OIDC
-client secret are only for local development. Dex stores its state in memory.
+client secret are only for local development. Keycloak runs in development mode
+and imports the versioned `slipramp-local` realm when its container is created.
 Prometheus is available at `http://localhost:9090`, and the provisioned
 Slipramp Server dashboard is available anonymously at
 `http://localhost:3000/d/slipramp-server/slipramp-server`. Grafana's local
@@ -124,12 +125,13 @@ bootstrap API key in source control.
 The controller is exercised through unit tests locally and runs with a
 Kubernetes service account in a cluster.
 
-`task local:up` starts PostgreSQL, RustFS, Dex, Prometheus, and Grafana without
-starting the Server. `task integration` intentionally starts only PostgreSQL,
-RustFS, and Dex, so the monitoring images are not part of CI. `task local:down`
-stops the stack while retaining its named volumes. Database migrations live in
-`internal/store/migrations`, queries live in `internal/store/queries`, and
-`task generate` refreshes both sqlc output and the OpenAPI-generated clients.
+`task local:up` starts PostgreSQL, RustFS, Keycloak, Prometheus, and Grafana
+without starting the Server. `task integration` intentionally starts only
+PostgreSQL, RustFS, and Keycloak, so the monitoring images are not part of CI.
+`task local:down` stops the stack while retaining its named volumes. Database
+migrations live in `internal/store/migrations`, queries live in
+`internal/store/queries`, and `task generate` refreshes both sqlc output and the
+OpenAPI-generated clients.
 `task local:server` rebuilds and gracefully restarts the Server after server
 source, Go module, or local Placement changes.
 Rapid file changes are coalesced, and a failed rebuild leaves the last good

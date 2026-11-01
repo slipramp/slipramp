@@ -58,14 +58,19 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  dex:
-    image: ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462
-    command: [dex, serve, /etc/dex/config.yaml]
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:3f3c5f8e03c614774b4bd9173b88391fefa4153bfc010d8012d59ad825377332
+    command:
+      - start-dev
+      - --hostname=http://127.0.0.1:5556
+      - --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_PASSWORD: slipramp-development
+      KC_BOOTSTRAP_ADMIN_USERNAME: slipramp
     ports:
-      - "127.0.0.1:5556:5556"
-      - "127.0.0.1:5558:5558"
+      - "127.0.0.1:5556:8080"
     volumes:
-      - ./local/dex.yaml:/etc/dex/config.yaml:ro
+      - ./local/keycloak-realm.json:/opt/keycloak/data/import/slipramp-local-realm.json:ro
     security_opt:
       - no-new-privileges:true
 

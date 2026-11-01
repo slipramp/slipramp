@@ -61,7 +61,7 @@ health, and the PostgreSQL pool. Its Prometheus data source and dashboard are
 provisioned from `deploy/local/grafana`, so no interactive setup is required.
 
 The monitoring services are developer-only. The integration task starts the
-core PostgreSQL, RustFS, and Dex dependencies directly and does not start or
+core PostgreSQL, RustFS, and Keycloak dependencies directly and does not start or
 pull Prometheus or Grafana in CI.
 
 The Server and each Controller use separate private Prometheus registries, so

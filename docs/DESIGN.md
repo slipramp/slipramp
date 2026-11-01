@@ -856,8 +856,10 @@ One configured OIDC provider is required at startup. The Server uses code flow
 with PKCE, state, nonce, issuer, signature, audience, and time validation. An
 explicit subject-to-role configuration enrolls users and reapplies their role
 on login; unknown subjects are rejected and at least one administrator mapping
-is required. Removing a mapping prevents new logins but does not revoke an
-existing session before its fixed expiry or revocation.
+is required. Local development uses a versioned Keycloak realm as the reference
+provider, but deployments remain provider-neutral. Removing a mapping prevents
+new logins but does not revoke an existing session before its fixed expiry or
+revocation.
 
 Opaque local sessions store only SHA-256 digests and have a default absolute
 lifetime of 12 hours with no idle extension. Browser sessions use the HTTP-only
