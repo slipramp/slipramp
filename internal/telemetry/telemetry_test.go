@@ -16,6 +16,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/gittrigger"
+	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/runreport"
@@ -111,6 +112,18 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		artifact.ReportIngestionSucceeded,
 		80*time.Millisecond,
 	)
+	metrics.ObserveMCPToolCall(
+		t.Context(),
+		"list_targets",
+		mcpserver.ToolCallSucceeded,
+		20*time.Millisecond,
+	)
+	metrics.ObserveMCPToolCall(
+		t.Context(),
+		"create_run",
+		mcpserver.ToolCallRejected,
+		10*time.Millisecond,
+	)
 
 	firstScrape := scrape(t, handler)
 	secondScrape := scrape(t, handler)
@@ -170,6 +183,22 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		"slipramp_artifact_report_ingestions_total",
 		`report_kind="terraform-plan"`,
 		`result="succeeded"`,
+		" 1",
+	)
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_mcp_tool_calls_total",
+		`tool="list_targets"`,
+		`result="succeeded"`,
+		" 1",
+	)
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_mcp_tool_duration_seconds_count",
+		`tool="create_run"`,
+		`result="rejected"`,
 		" 1",
 	)
 	assertMetricLine(

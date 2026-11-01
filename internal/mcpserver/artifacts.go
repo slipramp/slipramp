@@ -49,6 +49,10 @@ type readRunLogOutput struct {
 	Failed           bool   `json:"failed"`
 }
 
+func runLogToolCallFields(input readRunLogInput, _ readRunLogOutput) []any {
+	return uuidToolCallField(nil, "run_id", input.RunID)
+}
+
 func (s *toolServer) readRunLog(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
@@ -151,6 +155,10 @@ type listRunArtifactsInput struct {
 
 type artifactListOutput struct {
 	Items []artifactOutput `json:"items"`
+}
+
+func runArtifactsToolCallFields(input listRunArtifactsInput, _ artifactListOutput) []any {
+	return uuidToolCallField(nil, "run_id", input.RunID)
 }
 
 type artifactOutput struct {
@@ -289,6 +297,10 @@ type readArtifactOutput struct {
 	NextOffsetBytes int64  `json:"nextOffsetBytes"`
 	SizeBytes       int64  `json:"sizeBytes"`
 	HasMore         bool   `json:"hasMore"`
+}
+
+func artifactToolCallFields(input readArtifactInput, _ readArtifactOutput) []any {
+	return uuidToolCallField(nil, "artifact_id", input.ArtifactID)
 }
 
 func (s *toolServer) readArtifact(

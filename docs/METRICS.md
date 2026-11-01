@@ -183,16 +183,20 @@ names, commit SHAs, paths, URLs, diagnostics, and other unbounded values.
 | `slipramp.artifact.reconciliation.items` | `slipramp_artifact_reconciliation_items_total` | counter / `{item}` | `operation=expired|deleted|orphan_deleted` |
 | `slipramp.artifact.report.ingestions` | `slipramp_artifact_report_ingestions_total` | counter / `{report}` | `report_kind=terraform-plan|opentofu-plan|pyinfra-deploy`, `result=succeeded|rejected|failed` |
 | `slipramp.artifact.report.duration` | `slipramp_artifact_report_duration_seconds` | histogram / `s` | same `report_kind` and `result` |
+| `slipramp.mcp.tool.calls` | `slipramp_mcp_tool_calls_total` | counter / `{call}` | `tool=list_targets|explain_target_action|create_run|get_run|read_run_log|list_run_artifacts|read_artifact|cancel_run`, `result=succeeded|rejected|failed` |
+| `slipramp.mcp.tool.duration` | `slipramp_mcp_tool_duration_seconds` | histogram / `s` | same `tool` and `result` |
 
-Every metric in this table is a Slipramp-specific convention. An attempt is
-recorded once, after its durable result is known. Idle polls and normal shutdown
-cancellation do not increment the counters.
+Every metric in this table is a Slipramp-specific convention. Background
+operation attempts are recorded once after their durable result is known; idle
+polls and normal shutdown cancellation do not increment those counters. An MCP
+tool call is recorded once after its handler returns, including caller-visible
+rejections and internal failures.
 
 Repository refresh duration buckets are 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10,
 30, 60, 120, and 300 seconds. Artifact reconciliation uses the same upper
 range with additional 0.005, 0.01, and 0.025 second buckets. Delivery and
-Artifact report ingestion duration buckets are 0.005, 0.01, 0.025, 0.05, 0.1,
-0.25, 0.5, 1, 2.5, 5, 10, and 30 seconds.
+Artifact report ingestion and MCP tool duration buckets are 0.005, 0.01, 0.025,
+0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, and 30 seconds.
 
 ## Go runtime and process metrics
 
@@ -266,7 +270,10 @@ does not emit IDs, Target or Repository names, action names, Git SHAs, URLs,
 paths, notification destinations, diagnostics, or error text as metric
 attributes. The HTTP server route attribute contains only matched route
 templates. HTTP client metrics contain only the single configured Server
-destination and may contain the OTel transport error classification.
+destination and may contain the OTel transport error classification. MCP
+metrics contain only the eight registered tool names and three result classes;
+Principal, credential, client, and resource identifiers remain log fields and
+never become metric attributes.
 
 ## Example alerts
 

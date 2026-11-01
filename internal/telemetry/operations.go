@@ -10,6 +10,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/gittrigger"
+	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/runreport"
@@ -27,6 +28,8 @@ type operationInstruments struct {
 	artifactReconciliationItems    metric.Int64Counter
 	artifactReportIngestions       metric.Int64Counter
 	artifactReportDuration         metric.Float64Histogram
+	mcpToolCalls                   metric.Int64Counter
+	mcpToolDuration                metric.Float64Histogram
 }
 
 func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
@@ -121,8 +124,38 @@ func newOperationInstruments(meter metric.Meter) (operationInstruments, error) {
 	if err != nil {
 		return operationInstruments{}, fmt.Errorf("create Artifact report duration metric: %w", err)
 	}
+	instruments.mcpToolCalls, err = meter.Int64Counter(
+		"slipramp.mcp.tool.calls",
+		metric.WithUnit("{call}"),
+		metric.WithDescription("MCP tool calls by tool and result."),
+	)
+	if err != nil {
+		return operationInstruments{}, fmt.Errorf("create MCP tool calls metric: %w", err)
+	}
+	instruments.mcpToolDuration, err = meter.Float64Histogram(
+		"slipramp.mcp.tool.duration",
+		metric.WithUnit("s"),
+		metric.WithDescription("Duration of MCP tool calls."),
+	)
+	if err != nil {
+		return operationInstruments{}, fmt.Errorf("create MCP tool duration metric: %w", err)
+	}
 
 	return instruments, nil
+}
+
+func (t *Telemetry) ObserveMCPToolCall(
+	ctx context.Context,
+	tool string,
+	result mcpserver.ToolCallResult,
+	duration time.Duration,
+) {
+	options := metric.WithAttributes(
+		attribute.String("tool", tool),
+		attribute.String("result", string(result)),
+	)
+	t.operations.mcpToolCalls.Add(ctx, 1, options)
+	t.operations.mcpToolDuration.Record(ctx, duration.Seconds(), options)
 }
 
 func (t *Telemetry) ObserveReportIngestion(

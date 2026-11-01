@@ -232,6 +232,14 @@ func metricViews() []sdkmetric.View {
 			return false
 		}
 	}
+	mcpToolAttributes := func(value attribute.KeyValue) bool {
+		switch value.Key {
+		case attribute.Key("tool"), attribute.Key("result"):
+			return true
+		default:
+			return false
+		}
+	}
 
 	views := runtimeMetricViews()
 
@@ -278,12 +286,18 @@ func metricViews() []sdkmetric.View {
 			[]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
 			reportIngestionAttributes,
 		),
+		histogramView(
+			"slipramp.mcp.tool.duration",
+			[]float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30},
+			mcpToolAttributes,
+		),
 		attributeView("slipramp.repository.refresh.attempts", resultAttribute),
 		attributeView("slipramp.git_trigger.delivery.attempts", resultAttribute),
 		attributeView("slipramp.notification.delivery.attempts", resultAttribute),
 		attributeView("slipramp.artifact.reconciliation.runs", resultAttribute),
 		attributeView("slipramp.artifact.reconciliation.items", operationAttribute),
 		attributeView("slipramp.artifact.report.ingestions", reportIngestionAttributes),
+		attributeView("slipramp.mcp.tool.calls", mcpToolAttributes),
 	)
 }
 

@@ -50,6 +50,26 @@ the credential still uses the ordinary `slipramp:read` scope, matching the
 product API authorization contract. Expired or deleted contents remain visible
 as metadata but cannot be read.
 
+## Operational telemetry
+
+Every decoded tool invocation emits one structured `MCP tool call` log after
+completion. The event records the fixed tool name, `succeeded`, `rejected`, or
+`failed` result, duration, Principal and credential identifiers, authentication
+method, MCP client name and version, protocol version, and applicable Target,
+Run, Action, or Artifact identifiers. A rejected result is a caller-visible
+authorization, validation, conflict, or not-found outcome; a failed result is
+an internal service failure.
+
+Tool arguments, parameter values, idempotency keys, Bearer credentials, log
+contents, and Artifact contents are never included. The underlying SDK's
+stateless session lifecycle messages are suppressed below warning level because
+each HTTP exchange intentionally creates a short-lived session without a
+session ID.
+
+The Server also exports `slipramp_mcp_tool_calls_total` and
+`slipramp_mcp_tool_duration_seconds` with only fixed `tool` and `result` labels.
+See [METRICS.md](./METRICS.md) for the complete metric contract.
+
 ## Connect Codex with OAuth
 
 Add the remote server without a fixed Bearer token:

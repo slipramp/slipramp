@@ -23,25 +23,26 @@ type toolServer struct {
 	runs      RunService
 	artifacts ArtifactService
 	logger    *slog.Logger
+	observer  ToolCallObserver
 }
 
 func (s *toolServer) register(server *mcp.Server) {
 	closedWorld := false
 	destructive := true
 
-	mcp.AddTool(server, &mcp.Tool{
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "list_targets",
 		Title:       "List Slipramp Targets",
 		Description: "List active Targets and their available Actions. Use this to resolve a targetId before inspecting or creating a Run.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.listTargets)
-	mcp.AddTool(server, &mcp.Tool{
+	}, s.listTargets, nil)
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "explain_target_action",
 		Title:       "Explain a Target Action",
 		Description: "Resolve an Action's effective command, parameters, runtime, placement, credentials, artifacts, inputs, triggers, and diagnostics without executing it.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.explainTargetAction)
-	mcp.AddTool(server, &mcp.Tool{
+	}, s.explainTargetAction, targetActionToolCallFields)
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "create_run",
 		Title:       "Create a Slipramp Run",
 		Description: "Create an immutable MCP-sourced Run for one Target Action. This may change external infrastructure. Call explain_target_action first and use a unique idempotencyKey.",
@@ -49,32 +50,32 @@ func (s *toolServer) register(server *mcp.Server) {
 			DestructiveHint: &destructive,
 			IdempotentHint:  true,
 		},
-	}, s.createRun)
-	mcp.AddTool(server, &mcp.Tool{
+	}, s.createRun, createRunToolCallFields)
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "get_run",
 		Title:       "Get a Slipramp Run",
 		Description: "Get the current persisted state and outcome of a Run.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.getRun)
-	mcp.AddTool(server, &mcp.Tool{
+	}, s.getRun, runToolCallFields)
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "read_run_log",
 		Title:       "Read a Slipramp Run Log",
 		Description: "Read one bounded page of currently durable Run log bytes. Use nextOffsetBytes to continue reading live or retained logs.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.readRunLog)
-	mcp.AddTool(server, &mcp.Tool{
+	}, s.readRunLog, runLogToolCallFields)
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "list_run_artifacts",
 		Title:       "List Slipramp Run Artifacts",
 		Description: "List durable Artifact metadata, provenance, and structured report summaries for a Run.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.listRunArtifacts)
-	mcp.AddTool(server, &mcp.Tool{
+	}, s.listRunArtifacts, runArtifactsToolCallFields)
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "read_artifact",
 		Title:       "Read a Slipramp Artifact",
 		Description: "Read one bounded page of retained Artifact contents. Sensitive contents require operator or administrator authorization.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
-	}, s.readArtifact)
-	mcp.AddTool(server, &mcp.Tool{
+	}, s.readArtifact, artifactToolCallFields)
+	addObservedTool(s, server, &mcp.Tool{
 		Name:        "cancel_run",
 		Title:       "Cancel a Slipramp Run",
 		Description: "Request cancellation of a queued or active Run. Active execution stops only after its Controller observes the request.",
@@ -82,7 +83,39 @@ func (s *toolServer) register(server *mcp.Server) {
 			DestructiveHint: &destructive,
 			IdempotentHint:  true,
 		},
-	}, s.cancelRun)
+	}, s.cancelRun, runToolCallFields)
+}
+
+func targetActionToolCallFields(input explainTargetActionInput, _ any) []any {
+	fields := uuidToolCallField(nil, "target_id", input.TargetID)
+	if action, err := requiredCatalogName(input.Action, "action"); err == nil {
+		fields = append(fields, "action", action)
+	}
+
+	return fields
+}
+
+func createRunToolCallFields(input createRunInput, output runOutput) []any {
+	fields := uuidToolCallField(nil, "target_id", input.TargetID)
+	if action, err := requiredCatalogName(input.Action, "action"); err == nil {
+		fields = append(fields, "action", action)
+	}
+	fields = uuidToolCallField(fields, "run_id", output.ID)
+
+	return fields
+}
+
+func runToolCallFields(input runIDInput, _ runOutput) []any {
+	return uuidToolCallField(nil, "run_id", input.RunID)
+}
+
+func uuidToolCallField(fields []any, name, value string) []any {
+	parsed, err := requiredUUID(value, name)
+	if err != nil {
+		return fields
+	}
+
+	return append(fields, name, parsed)
 }
 
 type listTargetsInput struct {
@@ -349,7 +382,7 @@ func (s *toolServer) createRunError(err error) error {
 func (s *toolServer) internalError(operation string, err error) error {
 	s.logger.Error("handle MCP tool call", "operation", operation, "error", err)
 
-	return errors.New("Slipramp could not complete the request") //nolint:staticcheck // Product name.
+	return errInternalToolCall
 }
 
 func requiredUUID(value, name string) (uuid.UUID, error) {

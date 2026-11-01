@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -374,6 +376,135 @@ func TestHTTPEnforcesSensitiveArtifactAuthorization(t *testing.T) {
 	}
 }
 
+func TestHTTPLogsAndObservesToolCallsWithoutArgumentsOrSDKLifecycleNoise(t *testing.T) {
+	t.Parallel()
+
+	targetID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1230")
+	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1231")
+	authentication := testAuthentication(productidentity.ScopeRead, productidentity.ScopeRunsWrite)
+	runs := &recordingRuns{record: run.Run{
+		ID:            runID,
+		TargetID:      targetID,
+		Parameters:    map[string]any{},
+		Source:        run.Source{Type: run.SourceTypeMCP},
+		Review:        run.Review{State: run.ReviewStateNotRequired},
+		CreatedAt:     time.Date(2026, time.October, 31, 12, 0, 0, 0, time.UTC),
+		Phase:         run.PhaseQueued,
+		TargetName:    "dns",
+		ActionName:    "preview",
+		PlacementName: "homelab",
+		ClusterName:   "homelab",
+	}}
+	observer := &recordingToolCallObserver{}
+	var logs bytes.Buffer
+	handler, err := NewHTTP(
+		Dependencies{
+			Authentication: staticAuthenticator{authentication: authentication},
+			Catalogs:       &recordingCatalogs{},
+			Runs:           runs,
+			Artifacts:      &recordingArtifacts{},
+			ToolCalls:      observer,
+		},
+		Options{
+			ServiceVersion: "test",
+			Logger:         slog.New(slog.NewJSONHandler(&logs, nil)),
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewHTTP() error = %v", err)
+	}
+
+	session := connectTestClient(t, handler, testAPIKey)
+	callTool(t, session, "create_run", map[string]any{
+		"targetId":       targetID.String(),
+		"action":         "preview",
+		"parameters":     map[string]any{"environment": "secret-parameter-marker"},
+		"idempotencyKey": "secret-idempotency-marker",
+	})
+
+	if len(observer.calls) != 1 {
+		t.Fatalf("observed tool calls = %d, want 1", len(observer.calls))
+	}
+	observed := observer.calls[0]
+	if observed.tool != "create_run" || observed.result != ToolCallSucceeded || observed.duration < 0 {
+		t.Errorf("observed tool call = %#v", observed)
+	}
+
+	contents := logs.String()
+	for _, expected := range []string{
+		`"msg":"MCP tool call"`,
+		`"tool":"create_run"`,
+		`"result":"succeeded"`,
+		`"principal_id":"` + authentication.Principal.ID.String() + `"`,
+		`"principal_kind":"service-account"`,
+		`"authentication_method":"api-key"`,
+		`"credential_id":"` + authentication.CredentialID.String() + `"`,
+		`"client_name":"slipramp-test"`,
+		`"client_version":"test"`,
+		`"protocol_version":`,
+		`"target_id":"` + targetID.String() + `"`,
+		`"run_id":"` + runID.String() + `"`,
+	} {
+		if !strings.Contains(contents, expected) {
+			t.Errorf("MCP log does not contain %q: %s", expected, contents)
+		}
+	}
+	for _, forbidden := range []string{
+		"server connecting",
+		"server session connected",
+		"server session disconnected",
+		"secret-parameter-marker",
+		"secret-idempotency-marker",
+	} {
+		if strings.Contains(contents, forbidden) {
+			t.Errorf("MCP log contains %q: %s", forbidden, contents)
+		}
+	}
+}
+
+func TestToolCallResult(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want ToolCallResult
+	}{
+		{name: "succeeded", want: ToolCallSucceeded},
+		{name: "rejected", err: errors.New("invalid request"), want: ToolCallRejected},
+		{name: "failed", err: errInternalToolCall, want: ToolCallFailed},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := toolCallResult(test.err); got != test.want {
+				t.Errorf("toolCallResult() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestSDKLoggerKeepsWarningsAndErrorsOnly(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	logger := sdkLogger(slog.New(slog.NewJSONHandler(&logs, nil)))
+	logger.Info("lifecycle noise")
+	logger.Warn("protocol warning")
+	logger.Error("protocol error")
+
+	contents := logs.String()
+	if strings.Contains(contents, "lifecycle noise") {
+		t.Errorf("SDK log contains Info lifecycle message: %s", contents)
+	}
+	for _, expected := range []string{"protocol warning", "protocol error"} {
+		if !strings.Contains(contents, expected) {
+			t.Errorf("SDK log does not contain %q: %s", expected, contents)
+		}
+	}
+}
+
 func testHTTPHandler(
 	t *testing.T,
 	authentication productidentity.Authentication,
@@ -485,6 +616,25 @@ func testCommitSHA(character string) string {
 type staticAuthenticator struct {
 	authentication productidentity.Authentication
 	err            error
+}
+
+type observedToolCall struct {
+	tool     string
+	result   ToolCallResult
+	duration time.Duration
+}
+
+type recordingToolCallObserver struct {
+	calls []observedToolCall
+}
+
+func (o *recordingToolCallObserver) ObserveMCPToolCall(
+	_ context.Context,
+	tool string,
+	result ToolCallResult,
+	duration time.Duration,
+) {
+	o.calls = append(o.calls, observedToolCall{tool: tool, result: result, duration: duration})
 }
 
 type staticOAuthVerifier struct {

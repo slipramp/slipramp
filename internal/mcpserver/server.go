@@ -29,6 +29,8 @@ const (
 	privateNoStore         = "private, no-store"
 )
 
+var errInternalToolCall = errors.New("Slipramp could not complete the request") //nolint:staticcheck // Product name.
+
 type CredentialAuthenticator interface {
 	AuthenticateAPIKey(context.Context, string) (productidentity.Authentication, error)
 	AuthenticateOAuthAccessToken(
@@ -60,6 +62,7 @@ type Dependencies struct {
 	Runs           RunService
 	Artifacts      ArtifactService
 	OAuthTokens    OAuthAccessTokenVerifier
+	ToolCalls      ToolCallObserver
 }
 
 type Options struct {
@@ -106,7 +109,12 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 		runs:      dependencies.Runs,
 		artifacts: dependencies.Artifacts,
 		logger:    logger,
+		observer:  dependencies.ToolCalls,
 	}
+	if tools.observer == nil {
+		tools.observer = noopToolCallObserver{}
+	}
+	protocolLogger := sdkLogger(logger)
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "slipramp", Version: serviceVersion},
 		&mcp.ServerOptions{
@@ -115,7 +123,7 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 				"cancel_run unless the user clearly requested that change. create_run requires a unique idempotencyKey; " +
 				"reuse it only for the same request. Runs may change external infrastructure. Use read_run_log with " +
 				"nextOffsetBytes to page durable logs, and list_run_artifacts before reading Artifact contents.",
-			Logger: logger,
+			Logger: protocolLogger,
 		},
 	)
 	tools.register(server)
@@ -125,7 +133,7 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 		&mcp.StreamableHTTPOptions{
 			Stateless:    true,
 			JSONResponse: true,
-			Logger:       logger,
+			Logger:       protocolLogger,
 		},
 	)
 	verifier := bearerTokenVerifier(dependencies.Authentication, dependencies.OAuthTokens, logger)

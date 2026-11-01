@@ -296,6 +296,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			Runs:           runs,
 			Artifacts:      artifacts,
 			OAuthTokens:    oauthTokenVerifier,
+			ToolCalls:      metrics,
 		},
 		mcpserver.Options{
 			ServiceVersion: serviceVersion,

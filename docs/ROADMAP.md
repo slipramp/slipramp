@@ -222,6 +222,8 @@ with existing sensitive-content authorization.
       validation. The local Keycloak realm is the reference authorization
       server and exercises issuer, resource audience, scopes, S256 PKCE, and
       anonymous dynamic client registration.
+- [x] Replace stateless SDK session lifecycle noise with safe structured MCP
+      tool-call logs and bounded call-count and duration metrics.
 
 Slipramp should act as an OAuth resource server, not an authorization server.
 Browser OIDC support alone does not establish suitable MCP token issuance.

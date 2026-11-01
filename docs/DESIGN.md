@@ -1421,6 +1421,14 @@ contents retain the product API's operator or administrator requirement. Tool
 handlers call catalog, Run, and Artifact domain services directly rather than
 looping back through HTTP. `create_run` requires a caller-supplied idempotency
 key and records the existing Principal actor with source `mcp`.
+Each decoded tool call emits one structured operational event with bounded
+result classification, duration, authenticated Principal and credential
+identity, client and protocol identity, and safe resource identifiers. It never
+records tool arguments, parameter values, idempotency keys, Bearer credentials,
+or Artifact and log contents. Fixed tool and result labels also feed MCP call
+and duration metrics. SDK stateless session lifecycle logs remain below the
+Server's Info level; SDK warnings and errors are retained. This is ephemeral
+operational telemetry, not a second durable audit model.
 
 Go implements the Server, Controller, Harness, and tools under module
 `github.com/slipramp/slipramp`. PostgreSQL uses pgxpool, embedded Goose migrations
