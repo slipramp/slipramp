@@ -44,23 +44,31 @@ It then verifies the accepted baseline end to end:
   retained in RustFS, and downloaded through the artifact API;
 - zero-byte Git diff uploads and idempotent Promotion polling.
 
-The Kargo cases install minimal Stage and Promotion CRDs plus a Stage fixture.
-The Controller observes that Stage, materializes an operator-started Promotion,
-and reports its Kubernetes UID before a dedicated operator service account with
-only `slipramp:promotions:submit` scope submits the existing callback. The suite
-also uses real Git branches, execution Jobs, and artifact storage. A
-repository-defined Argo CD command fixture validates the injected credential
-and returns a fixed resource diff; the suite does not install Kargo or Argo CD
-controllers or exercise their target-branch push and reconciliation. Those
-behaviors remain part of operational cutover acceptance.
+The default suite's Kargo cases install minimal Stage and Promotion CRDs plus a
+Stage fixture. The Controller observes that Stage, materializes an
+operator-started Promotion, and reports its Kubernetes UID before a dedicated
+operator service account with only `slipramp:promotions:submit` scope submits
+the callback. The suite also uses Git branches, execution Jobs, and artifact
+storage. A repository-defined Argo CD command fixture validates the injected
+credential and returns a fixed resource diff. This keeps the broad acceptance
+suite fast without installing the Kargo or Argo CD controllers.
 
-The cluster and all generated SSH keys are deleted when the test exits. Run it
-from the repository root with Docker, Go, kubectl, Git, and `ssh-keygen`
-available. The Task workflow installs pinned kind and Helm
-binaries:
+A separate Kargo integration suite installs the official Kargo Helm chart at
+the pinned `1.11.4` version, including its admission and defaulting webhooks. It
+creates a Project, Warehouse, reusable `PromotionTask`, and Stage, then verifies
+the complete operator-started flow: Warehouse Freight discovery, Controller
+materialization, Kargo task expansion, candidate-branch creation, Slipramp
+preparation and approval, Promotion resumption, and the exact target-branch
+push. Argo CD reconciliation remains outside this suite.
+
+The cluster and all generated SSH keys and webhook certificates are deleted
+when a test exits. Run the suites from the repository root with Docker, Go,
+kubectl, Git, and `ssh-keygen` available. The Kargo integration suite also
+requires `openssl`. The Task workflow installs pinned kind and Helm binaries:
 
 ```console
 task acceptance:kind
+task acceptance:kargo
 ```
 
 Dex uses its development-only mock connector, so the suite exercises discovery,
@@ -82,14 +90,14 @@ acceptance ports require matching forwards.
 
 Set `SLIPRAMP_ACCEPTANCE_KEEP_CLUSTER=true` to retain the cluster for an
 interactive demo or failure diagnosis. The context is
-`kind-slipramp-acceptance` by default.
+`kind-slipramp-acceptance` for the default suite and
+`kind-slipramp-kargo-acceptance` for the Kargo integration suite by default.
 The cluster name, forwarded Server and web ports, timeout, kind binary, and
 kubectl binary can be overridden with the `SLIPRAMP_ACCEPTANCE_*`,
 `SLIPRAMP_KIND_BIN`, `SLIPRAMP_HELM_BIN`, and `SLIPRAMP_KUBECTL_BIN`
 environment variables read by the Go acceptance suite in
 [`internal/acceptance/kind`](../../../internal/acceptance/kind/suite_test.go).
 
-The `Checks` workflow also runs the suite as an independent, non-blocking job on
-the self-hosted runners. Each CI run uses a unique cluster name and performs an
-unconditional cleanup; the local task remains available for development and
-failure diagnosis.
+The `Checks` workflow runs both suites as independent, non-blocking jobs. Each
+CI run uses a unique cluster name and performs an unconditional cleanup; the
+local tasks remain available for development and failure diagnosis.

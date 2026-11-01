@@ -188,6 +188,11 @@ Current contracts are documented in [Kargo Promotions](design/kargo.md),
 [Logs and Artifacts](design/artifacts.md). Kargo integration and Placement
 configuration are both loaded once at Server startup.
 
+Operator-started Promotions require Kargo's admission and defaulting webhooks.
+The Controller intentionally creates a Promotion from only its Stage and
+Freight identity; Kargo populates the Stage promotion template and expands
+`PromotionTask` references during admission.
+
 ### Kargo Stage metadata
 
 A Stage participates in exactly one integration by setting

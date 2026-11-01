@@ -48,6 +48,7 @@ task release VERSION=<version>
 task check
 task integration
 task acceptance:kind
+task acceptance:kargo
 go run ./cmd/slipramp-harness command argument
 ```
 

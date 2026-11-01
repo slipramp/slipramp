@@ -347,6 +347,16 @@ tasks:
     cmds:
       - go test -v -count=1 -timeout=30m ./internal/acceptance/kind
 
+  acceptance:kargo:
+    desc: Run OSS Kargo integration acceptance in a disposable kind cluster
+    deps: [deps:helm, deps:kind]
+    env:
+      SLIPRAMP_ACCEPTANCE_CLUSTER_NAME: slipramp-kargo-acceptance
+      SLIPRAMP_HELM_BIN: "{{.HELM}}"
+      SLIPRAMP_RUN_KARGO_ACCEPTANCE: "1"
+    cmds:
+      - go test -v -count=1 -timeout=30m ./internal/acceptance/kind -run TestKargoAcceptance
+
   build:
     desc: Build all processes
     deps: [deps]

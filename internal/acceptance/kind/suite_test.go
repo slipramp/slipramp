@@ -16,11 +16,14 @@ import (
 )
 
 const (
-	acceptanceEnvironment = "SLIPRAMP_RUN_KIND_ACCEPTANCE"
-	kindNodeImage         = "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
-	dexImage              = "ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462"
-	systemNamespace       = "slipramp-system"
-	runNamespace          = "slipramp-runs"
+	acceptanceEnvironment      = "SLIPRAMP_RUN_KIND_ACCEPTANCE"
+	kargoAcceptanceEnvironment = "SLIPRAMP_RUN_KARGO_ACCEPTANCE"
+	kargoChart                 = "oci://ghcr.io/akuity/kargo-charts/kargo"
+	kargoChartVersion          = "1.11.4"
+	kindNodeImage              = "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
+	dexImage                   = "ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462"
+	systemNamespace            = "slipramp-system"
+	runNamespace               = "slipramp-runs"
 )
 
 type suite struct {
@@ -42,11 +45,13 @@ type suite struct {
 	cliBin             string
 	processContext     context.Context
 	cancelProcesses    context.CancelFunc
+	kargoIntegration   bool
 
 	clusterCreated bool
 	forwards       map[string]*forward
 
 	fixtureDirectory      string
+	baseCommit            string
 	fixtureCommit         string
 	candidateCommit       string
 	approvedReviewCommit  string
@@ -81,7 +86,7 @@ func TestKindAcceptance(t *testing.T) {
 		t.Skipf("set %s=1 to run the disposable kind acceptance suite", acceptanceEnvironment)
 	}
 
-	s := newSuite(t)
+	s := newSuite(t, false)
 	t.Cleanup(func() { s.cleanup(t) })
 	s.provision(t)
 
@@ -119,7 +124,20 @@ func TestKindAcceptance(t *testing.T) {
 	t.Logf("Rejected review Run:     %s", s.rejectedReviewRun)
 }
 
-func newSuite(t *testing.T) *suite {
+func TestKargoAcceptance(t *testing.T) {
+	if os.Getenv(kargoAcceptanceEnvironment) != "1" {
+		t.Skipf("set %s=1 to run the Kargo acceptance suite", kargoAcceptanceEnvironment)
+	}
+
+	s := newSuite(t, true)
+	t.Cleanup(func() { s.cleanup(t) })
+	s.provision(t)
+	s.testKargoIntegration(t)
+
+	t.Log("Kargo acceptance passed")
+}
+
+func newSuite(t *testing.T, kargoIntegration bool) *suite {
 	t.Helper()
 
 	_, sourceFile, _, ok := runtime.Caller(0)
@@ -158,6 +176,7 @@ func newSuite(t *testing.T) *suite {
 		cliBin:             filepath.Join(temporaryDirectory, "slipramp"),
 		processContext:     suiteContext,
 		cancelProcesses:    cancel,
+		kargoIntegration:   kargoIntegration,
 		forwards:           make(map[string]*forward),
 	}
 }

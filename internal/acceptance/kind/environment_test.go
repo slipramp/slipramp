@@ -34,7 +34,11 @@ func (s *suite) provision(t *testing.T) {
 func (s *suite) requireCommands(t *testing.T) {
 	t.Helper()
 
-	for _, command := range []string{"docker", "git", "go", "ssh-keygen", s.kubectlBin} {
+	commands := []string{"docker", "git", "go", "ssh-keygen", s.kubectlBin}
+	if s.kargoIntegration {
+		commands = append(commands, "openssl")
+	}
+	for _, command := range commands {
 		if _, err := exec.LookPath(command); err != nil {
 			t.Fatalf("required command %q is not available: %v", command, err)
 		}
@@ -144,8 +148,17 @@ func (s *suite) createFixture(t *testing.T) {
 	s.git(t, "config", "user.name", "Slipramp Acceptance")
 	s.git(t, "add", ".")
 	s.git(t, "commit", "--quiet", "-m", "Acceptance fixture")
-	s.fixtureCommit = strings.TrimSpace(string(s.git(t, "rev-parse", "HEAD")))
+	s.baseCommit = strings.TrimSpace(string(s.git(t, "rev-parse", "HEAD")))
 	s.git(t, "branch", "stage/acceptance/acceptance")
+	if s.kargoIntegration {
+		writeFile(t, filepath.Join(s.fixtureDirectory, "review/manifest.yaml"), []byte("image: acceptance:new\n"), 0o644)
+		s.git(t, "commit", "--quiet", "-am", "Update acceptance promotion source")
+		s.fixtureCommit = strings.TrimSpace(string(s.git(t, "rev-parse", "HEAD")))
+		s.createGitBundleAndCredentials(t)
+		return
+	}
+
+	s.fixtureCommit = s.baseCommit
 	s.git(t, "branch", "kargo/promotion/acceptance-empty")
 	s.git(t, "checkout", "--quiet", "-b", "kargo/promotion/acceptance")
 	writeFile(t, filepath.Join(s.fixtureDirectory, "review/manifest.yaml"), []byte("image: acceptance:new\n"), 0o644)
@@ -168,8 +181,13 @@ func (s *suite) createFixture(t *testing.T) {
 	s.git(t, "commit", "--quiet", "-am", "Rejected Run review fixture")
 	s.rejectedReviewCommit = strings.TrimSpace(string(s.git(t, "rev-parse", "HEAD")))
 	s.git(t, "checkout", "--quiet", "main")
-	s.git(t, "bundle", "create", filepath.Join(s.temporaryDirectory, "repository.bundle"), "--all")
+	s.createGitBundleAndCredentials(t)
+}
 
+func (s *suite) createGitBundleAndCredentials(t *testing.T) {
+	t.Helper()
+
+	s.git(t, "bundle", "create", filepath.Join(s.temporaryDirectory, "repository.bundle"), "--all")
 	s.createGitCredentials(t)
 }
 
@@ -235,13 +253,17 @@ func (s *suite) deployFixtures(t *testing.T) {
 	t.Helper()
 
 	t.Log("deploying the acceptance fixtures")
-	s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-api.yaml"))
-	s.kubectl(t,
-		"wait", "--for=condition=Established",
-		"crd/stages.kargo.akuity.io", "crd/freights.kargo.akuity.io", "crd/promotions.kargo.akuity.io",
-		"--timeout="+s.timeout.String(),
-	)
-	s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-stage.yaml"))
+	if s.kargoIntegration {
+		s.installKargo(t)
+	} else {
+		s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-api.yaml"))
+		s.kubectl(t,
+			"wait", "--for=condition=Established",
+			"crd/stages.kargo.akuity.io", "crd/freights.kargo.akuity.io", "crd/promotions.kargo.akuity.io",
+			"--timeout="+s.timeout.String(),
+		)
+		s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-stage.yaml"))
+	}
 
 	s.createConfigMap(t, systemNamespace, "acceptance-repository",
 		"repository.bundle="+filepath.Join(s.temporaryDirectory, "repository.bundle"))
@@ -268,6 +290,108 @@ func (s *suite) deployFixtures(t *testing.T) {
 	for _, deployment := range []string{"acceptance-git", "acceptance-dex"} {
 		s.kubectl(t, "-n", systemNamespace, "rollout", "status", "deployment/"+deployment, "--timeout="+s.timeout.String())
 	}
+}
+
+func (s *suite) installKargo(t *testing.T) {
+	t.Helper()
+
+	t.Logf("installing OSS Kargo %s through its official Helm chart", kargoChartVersion)
+	s.kubectl(t, "create", "namespace", "kargo")
+	caCertificate := s.createKargoWebhookCertificate(t)
+	s.mustRunVisible(t, s.helmBin,
+		"upgrade", "--install", "kargo",
+		kargoChart,
+		"--version", kargoChartVersion,
+		"--kube-context", "kind-"+s.clusterName,
+		"--namespace", "kargo",
+		"--values", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-values.yaml"),
+		"--set-file", "webhooksServer.tls.caBundle="+caCertificate,
+		"--wait", "--timeout", s.timeout.String(),
+	)
+	s.kubectl(t, "apply", "-f", filepath.Join(s.rootDirectory, "deploy/e2e/kind/kargo-integration-project.yaml"))
+	s.kubectl(t, "wait", "--for=jsonpath={.status.phase}=Active", "namespace/kargo-acceptance",
+		"--timeout="+s.timeout.String())
+}
+
+func (s *suite) createKargoWebhookCertificate(t *testing.T) string {
+	t.Helper()
+
+	certificateDirectory := filepath.Join(s.temporaryDirectory, "kargo-webhook-tls")
+	if err := os.MkdirAll(certificateDirectory, 0o755); err != nil {
+		t.Fatalf("create Kargo webhook certificate directory: %v", err)
+	}
+
+	caConfig := filepath.Join(certificateDirectory, "ca.cnf")
+	caKey := filepath.Join(certificateDirectory, "ca.key")
+	caCertificate := filepath.Join(certificateDirectory, "ca.crt")
+	serverConfig := filepath.Join(certificateDirectory, "server.cnf")
+	serverKey := filepath.Join(certificateDirectory, "tls.key")
+	serverRequest := filepath.Join(certificateDirectory, "tls.csr")
+	serverCertificate := filepath.Join(certificateDirectory, "tls.crt")
+
+	writeFile(t, caConfig, []byte(`[req]
+distinguished_name = subject
+x509_extensions = v3_ca
+prompt = no
+
+[subject]
+CN = Slipramp Kargo Acceptance CA
+
+[v3_ca]
+basicConstraints = critical, CA:TRUE
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always, issuer
+`), 0o600)
+	writeFile(t, serverConfig, []byte(`[req]
+distinguished_name = subject
+req_extensions = v3_server
+prompt = no
+
+[subject]
+CN = kargo-webhooks-server.kargo.svc
+
+[v3_server]
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = kargo-webhooks-server
+DNS.2 = kargo-webhooks-server.kargo
+DNS.3 = kargo-webhooks-server.kargo.svc
+DNS.4 = kargo-webhooks-server.kargo.svc.cluster.local
+`), 0o600)
+
+	s.mustRun(t, "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+		"-keyout", caKey,
+		"-out", caCertificate,
+		"-days", "1",
+		"-config", caConfig,
+	)
+	s.mustRun(t, "openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes",
+		"-keyout", serverKey,
+		"-out", serverRequest,
+		"-config", serverConfig,
+	)
+	s.mustRun(t, "openssl", "x509", "-req",
+		"-in", serverRequest,
+		"-CA", caCertificate,
+		"-CAkey", caKey,
+		"-CAcreateserial",
+		"-out", serverCertificate,
+		"-days", "1",
+		"-sha256",
+		"-extensions", "v3_server",
+		"-extfile", serverConfig,
+	)
+	s.createSecretFiles(t, "kargo", "kargo-webhooks-server-cert",
+		"tls.crt="+serverCertificate,
+		"tls.key="+serverKey,
+	)
+
+	return caCertificate
 }
 
 func (s *suite) installSlipramp(t *testing.T) {

@@ -1,0 +1,106 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: acceptance
+  namespace: kargo-acceptance
+spec:
+  interval: 5s
+  freightCreationPolicy: Automatic
+  subscriptions:
+    - git:
+        repoURL: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+        branch: main
+        includePaths:
+          - review/manifest.yaml
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: PromotionTask
+metadata:
+  name: promote-acceptance
+  namespace: kargo-acceptance
+spec:
+  steps:
+    - uses: git-clone
+      as: clone
+      config:
+        repoURL: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+        checkout:
+          - branch: main
+            path: ./src
+          - branch: stage/acceptance/acceptance
+            path: ./out
+            as: target
+    - uses: git-clear
+      config:
+        path: ./out
+    - uses: copy
+      config:
+        inPath: ./src/review/manifest.yaml
+        outPath: ./out/review/manifest.yaml
+    - uses: git-commit
+      as: commit
+      config:
+        path: ./out
+        message: Promote the Kargo integration acceptance fixture
+    - uses: git-push
+      as: candidate
+      config:
+        path: ./out
+        generateTargetBranch: true
+    - uses: http
+      as: slipramp-promotion
+      retry:
+        timeout: 5m
+      config:
+        method: POST
+        url: http://slipramp-server.slipramp-system.svc.cluster.local:8080/api/v1/kargo/acceptance/promotions
+        headers:
+          - name: Content-Type
+            value: application/json
+          - name: Authorization
+            value: Bearer ${{ secret('slipramp-promotions').token }}
+        body: |
+          ${{ quote({
+            "externalPromotionId": ctx.promotion,
+            "project": ctx.project,
+            "stage": ctx.stage,
+            "baseRevision": task.outputs.clone.commits.target,
+            "candidateRevision": task.outputs.candidate.commit,
+            "candidateBranch": task.outputs.candidate.branch
+          }) }}
+        pollInterval: 2s
+        successExpression: response.body?.status == 'approved'
+        failureExpression: response.body?.status == 'rejected' || response.body?.status == 'expired' || response.body?.status == 'error' || response.status >= 400
+        errorExpression: response.body?.message ?? response.body?.detail ?? 'Promotion failed in Slipramp'
+    - uses: git-push
+      config:
+        path: ./out
+        maxAttempts: 1
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: acceptance
+  namespace: kargo-acceptance
+  labels:
+    slipramp.com/integration: acceptance
+  annotations:
+    slipramp.com/promotion-application: acceptance
+    slipramp.com/promotion-environment: acceptance
+    slipramp.com/promotion-repository-url: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+    slipramp.com/promotion-target-branch: stage/acceptance/acceptance
+    slipramp.com/promotion-source-paths: '["review/manifest.yaml"]'
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: acceptance
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - task:
+            name: promote-acceptance
+            kind: PromotionTask
+          as: promotion-process

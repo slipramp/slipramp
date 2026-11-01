@@ -9,6 +9,11 @@ strict priority order.
 
 ## Kargo operations
 
+- [ ] Extend Kargo integration acceptance to Kargo v2 and HTTPS Git
+      credentials, define the supported-version policy, and make the CI lane
+      required after it proves stable.
+- [ ] Add an Argo CD-backed acceptance case for post-push reconciliation and
+      health without coupling ordinary product reads to either dependency.
 - [ ] Enable candidate-branch cleanup per Repository after confirming retention
       and write credentials.
 - [ ] Document Stage freshness, preparation and diff failures, review expiry,

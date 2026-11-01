@@ -100,6 +100,11 @@ Freight. The Controller creates a Kargo Promotion with a stable Slipramp
 annotation, adopts only a matching existing object after ambiguity, and reports
 the admitted Kargo name and UID.
 
+The Controller submits only the Stage and Freight identity. Kargo's enabled
+admission and defaulting webhooks populate the Stage promotion template and
+expand any `PromotionTask` references. Slipramp does not copy, interpret, or
+partially reimplement that Kargo-owned behavior.
+
 Creation uses durable bounded backoff. Transient Kubernetes and transport
 failures do not block later work; invalid or forbidden admission and exhausted
 retry budget move the Promotion to `error`. No separate Kargo client channel,

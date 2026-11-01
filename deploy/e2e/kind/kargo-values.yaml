@@ -1,0 +1,46 @@
+api:
+  enabled: false
+argocd:
+  dataPlane:
+    install: false
+controller:
+  argocd:
+    integrationEnabled: false
+  reconcilers:
+    warehouses:
+      minReconciliationInterval: 1s
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  rollouts:
+    integrationEnabled: false
+externalWebhooksServer:
+  enabled: false
+garbageCollector:
+  enabled: false
+managementController:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+webhooks:
+  register: true
+webhooksServer:
+  enabled: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  tls:
+    selfSignedCert: false
+    secretName: kargo-webhooks-server-cert
