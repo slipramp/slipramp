@@ -37,6 +37,8 @@ const (
 	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
+	serverMCPOAuthIssuerEnvironment               = "SLIPRAMP_MCP_OAUTH_ISSUER"
+	serverMCPOAuthResourceEnvironment             = "SLIPRAMP_MCP_OAUTH_RESOURCE"
 	serverKargoIntegrationsFileEnvironment        = "SLIPRAMP_KARGO_INTEGRATIONS_FILE"
 	serverNotificationPublicURLEnvironment        = "SLIPRAMP_NOTIFICATIONS_PUBLIC_URL"
 	serverNotificationDestinationsEnvironment     = "SLIPRAMP_NOTIFICATIONS_DESTINATIONS"
@@ -99,6 +101,8 @@ integrations:
 		serverOIDCRedirectURLEnvironment:              "https://slipramp.example.com/api/v1/auth/callback",
 		serverOIDCSubjectRolesEnvironment:             `{"admin-subject":"admin","operator-subject":"operator"}`,
 		serverProductSessionLifetimeEnvironment:       "8h",
+		serverMCPOAuthIssuerEnvironment:               "https://identity.example.com/realms/slipramp",
+		serverMCPOAuthResourceEnvironment:             "https://slipramp.example.com/mcp",
 		serverKargoIntegrationsFileEnvironment:        kargoIntegrationsPath,
 	}
 
@@ -199,6 +203,10 @@ integrations:
 	}
 	if cfg.ProductAuthentication.SessionLifetime != 8*time.Hour {
 		t.Errorf("ProductAuthentication.SessionLifetime = %s, want 8h", cfg.ProductAuthentication.SessionLifetime)
+	}
+	if cfg.MCP.OAuth.Issuer != environment[serverMCPOAuthIssuerEnvironment] ||
+		cfg.MCP.OAuth.Resource != environment[serverMCPOAuthResourceEnvironment] {
+		t.Errorf("MCP.OAuth = %#v", cfg.MCP.OAuth)
 	}
 	integration, ok := cfg.KargoIntegrations.Lookup("prod")
 	if !ok || integration.ClusterName != "colo" || integration.UIURL != "https://kargo.example.com" ||
@@ -309,6 +317,16 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 			testcheck.ErrorContains(t, err, test.wantError)
 		})
 	}
+}
+
+func TestLoadServerRejectsPartialMCPOAuthConfiguration(t *testing.T) {
+	t.Parallel()
+
+	environment := requiredServerEnvironment()
+	environment[serverMCPOAuthIssuerEnvironment] = "https://identity.example.com"
+
+	_, err := config.LoadServer(mapEnvironment(environment))
+	testcheck.ErrorContains(t, err, "MCP OAuth resource")
 }
 
 func TestLoadServerNotificationConfiguration(t *testing.T) {

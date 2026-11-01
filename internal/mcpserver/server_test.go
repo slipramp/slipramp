@@ -17,6 +17,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
+	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -41,6 +42,87 @@ func TestHTTPRequiresSliprampAPIKey(t *testing.T) {
 	}
 	if got := response.Header().Get("Cache-Control"); got != privateNoStore {
 		t.Errorf("Cache-Control = %q, want %q", got, privateNoStore)
+	}
+}
+
+func TestHTTPOAuthDiscoveryAndAuthentication(t *testing.T) {
+	t.Parallel()
+
+	oauthConfig := OAuthConfig{
+		Issuer:   "https://identity.example.com/realms/slipramp",
+		Resource: "https://slipramp.example.com/mcp",
+	}
+	oauthVerifier := &staticOAuthVerifier{verified: VerifiedOAuthAccessToken{
+		Credential: productauth.OAuthAccessToken{
+			CredentialID: uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1220"),
+			Profile: productauth.OIDCProfile{
+				Issuer:  oauthConfig.Issuer,
+				Subject: "ada-subject",
+			},
+			Scopes: []productidentity.Scope{productidentity.ScopeRead},
+		},
+		Expiration: time.Now().Add(time.Hour),
+	}}
+	handler, err := NewHTTP(
+		Dependencies{
+			Authentication: staticAuthenticator{authentication: testAuthentication()},
+			Catalogs:       &recordingCatalogs{},
+			Runs:           &recordingRuns{},
+			Artifacts:      &recordingArtifacts{},
+			OAuthTokens:    oauthVerifier,
+		},
+		Options{ServiceVersion: "test", OAuth: oauthConfig},
+	)
+	if err != nil {
+		t.Fatalf("NewHTTP() error = %v", err)
+	}
+
+	metadataRequest := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodGet,
+		OAuthMetadataURL(oauthConfig.Resource),
+		nil,
+	)
+	metadataResponse := httptest.NewRecorder()
+	handler.ServeHTTP(metadataResponse, metadataRequest)
+	if metadataResponse.Code != http.StatusOK {
+		t.Fatalf("metadata status = %d, body = %s", metadataResponse.Code, metadataResponse.Body.String())
+	}
+	var metadata struct {
+		Resource             string   `json:"resource"`
+		AuthorizationServers []string `json:"authorization_servers"`
+		ScopesSupported      []string `json:"scopes_supported"`
+	}
+	if err := json.Unmarshal(metadataResponse.Body.Bytes(), &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Resource != oauthConfig.Resource ||
+		!slices.Equal(metadata.AuthorizationServers, []string{oauthConfig.Issuer}) ||
+		!slices.Equal(metadata.ScopesSupported, OAuthScopeNames()) {
+		t.Errorf("metadata = %#v", metadata)
+	}
+
+	unauthorizedRequest := httptest.NewRequestWithContext(
+		t.Context(),
+		http.MethodPost,
+		"/mcp",
+		bytes.NewBufferString("{}"),
+	)
+	unauthorizedRequest.Header.Set("Content-Type", "application/json")
+	unauthorizedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(unauthorizedResponse, unauthorizedRequest)
+	if unauthorizedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized status = %d", unauthorizedResponse.Code)
+	}
+	challenge := unauthorizedResponse.Header().Get("WWW-Authenticate")
+	if !strings.Contains(challenge, `resource_metadata="`+OAuthMetadataURL(oauthConfig.Resource)+`"`) {
+		t.Errorf("WWW-Authenticate = %q", challenge)
+	}
+
+	session := connectTestClient(t, handler, "oauth-access-token")
+	callTool(t, session, "list_targets", nil)
+	if oauthVerifier.rawToken != "oauth-access-token" {
+		t.Errorf("verified token = %q", oauthVerifier.rawToken)
 	}
 }
 
@@ -405,6 +487,21 @@ type staticAuthenticator struct {
 	err            error
 }
 
+type staticOAuthVerifier struct {
+	verified VerifiedOAuthAccessToken
+	err      error
+	rawToken string
+}
+
+func (v *staticOAuthVerifier) VerifyAccessToken(
+	_ context.Context,
+	rawToken string,
+) (VerifiedOAuthAccessToken, error) {
+	v.rawToken = rawToken
+
+	return v.verified, v.err
+}
+
 func (a staticAuthenticator) AuthenticateAPIKey(
 	_ context.Context,
 	token string,
@@ -417,6 +514,23 @@ func (a staticAuthenticator) AuthenticateAPIKey(
 	}
 
 	return a.authentication, nil
+}
+
+func (a staticAuthenticator) AuthenticateOAuthAccessToken(
+	_ context.Context,
+	token productauth.OAuthAccessToken,
+) (productidentity.Authentication, error) {
+	if a.err != nil {
+		return productidentity.Authentication{}, a.err
+	}
+
+	authentication := a.authentication
+	authentication.Method = productidentity.AuthenticationMethodOAuthToken
+	authentication.CredentialID = token.CredentialID
+	authentication.CredentialLabel = "OAuth access token"
+	authentication.Scopes = token.Scopes
+
+	return authentication, nil
 }
 
 type recordingCatalogs struct {

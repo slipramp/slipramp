@@ -68,6 +68,10 @@ server:
     redirectURL: ""
     subjectRoles: {}
     sessionLifetime: 12h
+  mcp:
+    oauth:
+      issuer: ""
+      resource: ""
   repositoryRefresh:
     interval: 1m
     fetchTimeout: 30s

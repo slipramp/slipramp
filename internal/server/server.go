@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -144,6 +145,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		closeInitialization()
 
 		return nil, fmt.Errorf("initialize product authentication: %w", err)
+	}
+	oauthTokenVerifier, err := mcpserver.DiscoverOAuthAccessTokenVerifier(ctx, cfg.MCP.OAuth)
+	if err != nil {
+		closeInitialization()
+
+		return nil, fmt.Errorf("initialize MCP OAuth: %w", err)
 	}
 	commitHistoryIndexer := repository.NewCommitHistoryIndexer(
 		persistence.database,
@@ -288,10 +295,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			Catalogs:       catalogs,
 			Runs:           runs,
 			Artifacts:      artifacts,
+			OAuthTokens:    oauthTokenVerifier,
 		},
 		mcpserver.Options{
 			ServiceVersion: serviceVersion,
 			Logger:         logger,
+			OAuth:          cfg.MCP.OAuth,
 		},
 	)
 	if err != nil {
@@ -302,6 +311,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 
 	rootHandler := http.NewServeMux()
 	rootHandler.Handle("/mcp", mcpHandler)
+	if cfg.MCP.OAuth.Enabled() {
+		metadataURL, _ := url.Parse(mcpserver.OAuthMetadataURL(cfg.MCP.OAuth.Resource))
+		rootHandler.Handle(metadataURL.Path, mcpHandler)
+	}
 	rootHandler.Handle("/", httpHandler)
 
 	server := newServer(cfg, logger, metrics.InstrumentHTTP(rootHandler))

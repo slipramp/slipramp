@@ -31,6 +31,7 @@
         "artifactTokenSecret",
         "artifacts",
         "oidc",
+        "mcp",
         "repositoryRefresh",
         "kargo",
         "notifications",
@@ -131,6 +132,36 @@
               }
             },
             "sessionLifetime": { "$ref": "#/$defs/duration" }
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["oauth"],
+          "properties": {
+            "oauth": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["issuer", "resource"],
+              "properties": {
+                "issuer": { "type": "string" },
+                "resource": { "type": "string" }
+              },
+              "oneOf": [
+                {
+                  "properties": {
+                    "issuer": { "const": "" },
+                    "resource": { "const": "" }
+                  }
+                },
+                {
+                  "properties": {
+                    "issuer": { "pattern": "^https?://[^[:space:]]+$" },
+                    "resource": { "pattern": "^https?://[^[:space:]]+/mcp$" }
+                  }
+                }
+              ]
+            }
           }
         },
         "repositoryRefresh": {

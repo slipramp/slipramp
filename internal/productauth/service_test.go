@@ -87,6 +87,68 @@ func TestServiceCompletesLoginAndAuthenticatesSession(t *testing.T) {
 	}
 }
 
+func TestServiceAuthenticatesOAuthAccessToken(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 1, 6, 0, 0, 0, time.UTC)
+	displayName := "Ada Lovelace"
+	store := newProductAuthStore()
+	service := newTestService(t, store, &recordingOIDCProvider{}, now)
+	credentialID := uuid.New()
+
+	authentication, err := service.AuthenticateOAuthAccessToken(t.Context(), OAuthAccessToken{
+		CredentialID: credentialID,
+		Profile: OIDCProfile{
+			Issuer:      "https://identity.example.com",
+			Subject:     "ada-subject",
+			DisplayName: &displayName,
+		},
+		Scopes: []productidentity.Scope{productidentity.ScopeRead},
+	})
+	if err != nil {
+		t.Fatalf("AuthenticateOAuthAccessToken() error = %v", err)
+	}
+	if authentication.Method != productidentity.AuthenticationMethodOAuthToken ||
+		authentication.CredentialID != credentialID ||
+		authentication.CredentialLabel != oauthAccessTokenLabel ||
+		!authentication.Authorizes(productidentity.PermissionRead) {
+		t.Errorf("authentication = %#v", authentication)
+	}
+	if authentication.Principal.Kind != productidentity.KindUser ||
+		authentication.Principal.DisplayName != displayName ||
+		authentication.Principal.Role != productidentity.RoleAdmin {
+		t.Errorf("principal = %#v", authentication.Principal)
+	}
+
+	disabledAt := now.Add(time.Minute)
+	principal := store.principals[authentication.Principal.ID]
+	principal.DisabledAt = &disabledAt
+	store.principals[principal.ID] = principal
+	_, err = service.AuthenticateOAuthAccessToken(t.Context(), OAuthAccessToken{
+		CredentialID: uuid.New(),
+		Profile: OIDCProfile{
+			Issuer:  "https://identity.example.com",
+			Subject: "ada-subject",
+		},
+		Scopes: []productidentity.Scope{productidentity.ScopeRead},
+	})
+	if !errors.Is(err, productidentity.ErrUnauthenticated) {
+		t.Errorf("disabled Principal error = %v, want unauthenticated", err)
+	}
+
+	_, err = service.AuthenticateOAuthAccessToken(t.Context(), OAuthAccessToken{
+		CredentialID: uuid.New(),
+		Profile: OIDCProfile{
+			Issuer:  "https://identity.example.com",
+			Subject: "unknown-subject",
+		},
+		Scopes: []productidentity.Scope{productidentity.ScopeRead},
+	})
+	if !errors.Is(err, ErrEnrollmentDenied) {
+		t.Errorf("unenrolled subject error = %v, want enrollment denied", err)
+	}
+}
+
 func TestServiceCompletesNativeLoginWithPKCE(t *testing.T) {
 	t.Parallel()
 

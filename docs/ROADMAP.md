@@ -212,22 +212,20 @@ emergency Principal disable/enable and bulk credential/session revocation, and
 Run attribution are implemented.
 
 The remote MCP adapter is implemented as stateless Streamable HTTP at `/mcp`.
-It accepts scoped Slipramp API keys, maps them to existing Principals, reuses
-catalog and Run services, and derives the `mcp` Run source. The first tool
-surface lists Targets, explains Actions, creates, reads, or cancels Runs, and
-reads bounded pages of durable logs and Artifact contents with existing
-sensitive-content authorization.
+It accepts scoped Slipramp API keys or OAuth access tokens, maps them to existing
+Principals, reuses catalog and Run services, and derives the `mcp` Run source.
+The first tool surface lists Targets, explains Actions, creates, reads, or
+cancels Runs, and reads bounded pages of durable logs and Artifact contents
+with existing sensitive-content authorization.
 
-- [ ] Add standard OAuth protected-resource discovery and access-token
-      validation when general remote clients require it. Use the local Keycloak
-      realm as the reference authorization server and verify issuer,
-      resource/audience, scopes, and client-registration support when this
-      slice is implemented.
+- [x] Add standard OAuth protected-resource discovery and JWT access-token
+      validation. The local Keycloak realm is the reference authorization
+      server and exercises issuer, resource audience, scopes, S256 PKCE, and
+      anonymous dynamic client registration.
 
 Slipramp should act as an OAuth resource server, not an authorization server.
 Browser OIDC support alone does not establish suitable MCP token issuance.
-Static-header clients use a Slipramp API key, but that does not replace standard
-OAuth discovery for general remote clients. Avoid separate MCP users,
+Static-header clients may still use a Slipramp API key. Avoid separate MCP users,
 resource ACL frameworks, or an identity platform without a product requirement.
 Introduce a general administrative audit model only with a coherent set of
 events rather than treating emergency revocation alone as a general audit log.

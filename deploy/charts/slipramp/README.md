@@ -18,6 +18,14 @@ token key, and at least one Placement. The Artifact token key must contain at
 least 32 random bytes. Every Placement's Cluster must also be present in the
 Controller enrollment-token map stored in the referenced Secret.
 
+OAuth for remote MCP clients is optional. Set `server.mcp.oauth.issuer` to the
+authorization server issuer and `server.mcp.oauth.resource` to the canonical
+external URL ending in `/mcp`. The authorization server must issue JWT access
+tokens with that exact URL in `aud`, advertise S256 PKCE and dynamic client
+registration, and expose the `slipramp:read` and `slipramp:runs:write` scopes.
+The chart routes the resource's path-aware RFC 9728 metadata endpoint to the
+Server alongside `/mcp`.
+
 Run scheduling defaults to four active Runs per Cluster. Override that limit
 under `server.clusters.<name>.maximumActiveRuns`; a Placement may set a tighter
 `maximumActiveRuns`. Both limits count assigned, preparing, and running Runs,

@@ -1,9 +1,18 @@
 # Model Context Protocol
 
 Slipramp exposes a remote Model Context Protocol endpoint at `/mcp`. It uses
-stateless Streamable HTTP and a scoped Slipramp API key as a Bearer credential.
-The adapter reuses the same Principals, authorization rules, catalog, Run, and
-Artifact services as the product API.
+stateless Streamable HTTP and accepts either a scoped Slipramp API key or a JWT
+OAuth access token as a Bearer credential. The adapter reuses the same
+Principals, authorization rules, catalog, Run, and Artifact services as the
+product API.
+
+OAuth is optional. When configured, the Server publishes RFC 9728 metadata at
+`/.well-known/oauth-protected-resource/mcp`, advertises `slipramp:read` and
+`slipramp:runs:write`, and directs clients to the configured external
+authorization server. It validates the token signature, issuer, exact `/mcp`
+resource audience, lifetime, subject, and scopes. The authorization-server
+subject must be enrolled in `SLIPRAMP_OIDC_SUBJECT_ROLES`; it resolves to the
+same product Principal as browser OIDC login.
 
 ## Tools and permissions
 
@@ -18,8 +27,9 @@ Artifact services as the product API.
 | `read_artifact`         | Read a bounded retained Artifact content page   | Read                |
 | `cancel_run`            | Request cancellation of a queued or active Run | Run write           |
 
-Permissions intersect the Principal's role and API-key scopes. A fully capable
-key therefore needs an `operator` or `admin` Principal and both
+Permissions intersect the Principal's role and credential scopes. A fully
+capable API key or OAuth token therefore needs an `operator` or `admin`
+Principal and both
 `slipramp:read` and `slipramp:runs:write`. A read-only connection needs a
 `viewer`, `operator`, or `admin` Principal and `slipramp:read`.
 
@@ -36,11 +46,36 @@ returns an empty page so clients can poll without holding a streaming MCP call.
 
 Artifact metadata and non-sensitive contents require ordinary read permission.
 Sensitive contents additionally require an `operator` or `admin` Principal;
-the API key still uses the ordinary `slipramp:read` scope, matching the product
-API authorization contract. Expired or deleted contents remain visible as
-metadata but cannot be read.
+the credential still uses the ordinary `slipramp:read` scope, matching the
+product API authorization contract. Expired or deleted contents remain visible
+as metadata but cannot be read.
 
-## Connect Codex
+## Connect Codex with OAuth
+
+Add the remote server without a fixed Bearer token:
+
+```toml
+[mcp_servers.slipramp]
+url = "https://slipramp.example.com/mcp"
+auth = "oauth"
+scopes = ["slipramp:read", "slipramp:runs:write"]
+```
+
+Then start the authorization-code flow:
+
+```console
+codex mcp login slipramp
+```
+
+Codex follows the protected-resource metadata, uses dynamic client registration
+when the authorization server advertises it, and performs authorization code
+with S256 PKCE. The CLI and IDE extension share the MCP configuration; the IDE
+also presents an **Authenticate** action. See the
+[official Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp).
+Use HTTPS unless the connection already travels over a trusted encrypted network
+such as a tailnet.
+
+## Connect Codex with an API key
 
 Create a user or service-account API key with the required scopes, keep its
 one-time plaintext value outside the repository, and expose it to the local
@@ -64,5 +99,6 @@ Restart the Codex client, then verify the connection with `codex mcp list` or
 Use HTTPS unless the connection already travels over a trusted encrypted
 network such as a tailnet.
 
-The endpoint currently supports API-key Bearer authentication only. It does not
-publish OAuth protected-resource metadata or start an interactive OAuth flow.
+OAuth and API-key authentication can remain enabled together. Tokens that do
+not start with the Slipramp API-key prefix are treated as OAuth access tokens
+only when OAuth configuration is enabled.

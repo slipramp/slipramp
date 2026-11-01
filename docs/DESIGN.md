@@ -828,7 +828,8 @@ already issued to active Runs; those Runs must be canceled and rerun.
 
 The Server owns product authentication. `/api/v1` uses product sessions or API
 keys except the OIDC login/callback boundary and the read-only client-compatibility
-operation. The Streamable HTTP `/mcp` boundary accepts Slipramp API keys only.
+operation. The Streamable HTTP `/mcp` boundary accepts scoped Slipramp API keys
+and OAuth access tokens from one configured authorization server.
 `/controller/v1` and `/execution/v1` retain independent Cluster and Run
 credentials. Execution credentials never become product Principals. `/healthz`,
 `/readyz`, and client compatibility expose only non-sensitive unauthenticated
@@ -1405,16 +1406,21 @@ SDK and exposes `list_targets`, `explain_target_action`, `create_run`,
 `get_run`, `read_run_log`, `list_run_artifacts`, `read_artifact`, and
 `cancel_run`. Log and Artifact reads are bounded, byte-offset pages over the
 existing durable Artifact service; binary content is base64 encoded. Each HTTP
-request authenticates a
-`slipramp_key_...` Bearer credential, maps it to the existing Principal, and
-checks the same role and API-key scopes at tool invocation. Read tools require
-product read permission; Run creation and cancellation require Run-write
-permission. Sensitive Artifact contents retain the product API's operator or
-administrator requirement. Tool handlers call catalog, Run, and Artifact
-domain services directly rather than looping back through HTTP. `create_run` requires a caller-supplied
-idempotency key and records the existing Principal actor with source `mcp`.
-OAuth protected-resource discovery and token validation remain deferred; the
-API-key boundary deliberately does not claim OAuth support.
+request authenticates either a `slipramp_key_...` Bearer credential or a JWT
+OAuth access token. OAuth configuration is optional. When enabled, the Server
+publishes path-aware RFC 9728 protected-resource metadata, points to one
+external authorization-server issuer, and requires discovery metadata with
+dynamic client registration, S256 PKCE, and the two MCP scopes. Access-token
+validation covers the issuer, signature, exact MCP-resource audience, expiry,
+not-before time, subject, and scopes. The subject uses the existing OIDC
+enrollment map and resolves to the same Principal; the authorization server does
+not become a second user store. API-key and OAuth scopes both intersect the
+Principal's role at tool invocation. Read tools require product read permission;
+Run creation and cancellation require Run-write permission. Sensitive Artifact
+contents retain the product API's operator or administrator requirement. Tool
+handlers call catalog, Run, and Artifact domain services directly rather than
+looping back through HTTP. `create_run` requires a caller-supplied idempotency
+key and records the existing Principal actor with source `mcp`.
 
 Go implements the Server, Controller, Harness, and tools under module
 `github.com/slipramp/slipramp`. PostgreSQL uses pgxpool, embedded Goose migrations

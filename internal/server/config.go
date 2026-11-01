@@ -10,6 +10,7 @@ import (
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/auth"
 	"github.com/slipramp/slipramp/internal/cluster"
+	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/metricsserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/objectstore"
@@ -37,6 +38,7 @@ type Config struct {
 	ArtifactReconcileInterval    time.Duration
 	ArtifactOrphanGracePeriod    time.Duration
 	ProductAuthentication        productauth.Config
+	MCP                          mcpserver.Config
 	KargoIntegrations            promotion.IntegrationSet
 	Notifications                notification.Config
 }
@@ -196,6 +198,9 @@ func (c Config) Validate() error {
 
 	if err := c.ProductAuthentication.Validate(); err != nil {
 		return fmt.Errorf("validate product authentication: %w", err)
+	}
+	if err := c.MCP.Validate(); err != nil {
+		return fmt.Errorf("validate MCP configuration: %w", err)
 	}
 
 	return nil

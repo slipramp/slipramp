@@ -30,7 +30,7 @@ spec:
                 port:
                   number: {{ $.Values.web.service.port }}
           {{- end }}
-          {{- range $path := list "/api" "/controller" "/execution" "/mcp" "/healthz" "/readyz" }}
+          {{- range $path := list "/api" "/controller" "/execution" "/mcp" "/.well-known/oauth-protected-resource/mcp" "/healthz" "/readyz" }}
           - path: {{ $path }}
             pathType: Prefix
             backend:

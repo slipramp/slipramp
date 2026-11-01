@@ -54,6 +54,9 @@ func TestDefaultConfig(t *testing.T) {
 			settings.ProductAuthentication.SessionLifetime,
 		)
 	}
+	if settings.MCP.OAuth.Enabled() {
+		t.Errorf("MCP OAuth is enabled by default: %#v", settings.MCP.OAuth)
+	}
 	if settings.Notifications.Retry.MaximumAttempts != 5 ||
 		settings.Notifications.Retry.MaximumBackoff != time.Hour ||
 		settings.Notifications.RetentionPeriod != 30*24*time.Hour {

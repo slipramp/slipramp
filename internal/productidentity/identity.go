@@ -272,16 +272,16 @@ func validateIssuer(value string) error {
 
 func validateScopes(scopes []Scope) error {
 	if len(scopes) == 0 {
-		return fmt.Errorf("%w: at least one API key scope is required", ErrInvalid)
+		return fmt.Errorf("%w: at least one credential scope is required", ErrInvalid)
 	}
 
 	seen := make(map[Scope]struct{}, len(scopes))
 	for _, scope := range scopes {
 		if !scope.valid() {
-			return fmt.Errorf("%w: API key scope %q is invalid", ErrInvalid, scope)
+			return fmt.Errorf("%w: credential scope %q is invalid", ErrInvalid, scope)
 		}
 		if _, found := seen[scope]; found {
-			return fmt.Errorf("%w: API key scope %q is duplicated", ErrInvalid, scope)
+			return fmt.Errorf("%w: credential scope %q is duplicated", ErrInvalid, scope)
 		}
 		seen[scope] = struct{}{}
 	}

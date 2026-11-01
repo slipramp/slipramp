@@ -40,6 +40,8 @@ The Server accepts these environment variables:
 | `SLIPRAMP_OIDC_REDIRECT_URL`                | Required                         | Absolute provider callback URL ending at `/api/v1/auth/callback`                                                           |
 | `SLIPRAMP_OIDC_SUBJECT_ROLES`               | Required                         | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required  |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME`         | `12h`                            | Absolute lifetime of a local browser session                                                                               |
+| `SLIPRAMP_MCP_OAUTH_ISSUER`                 | Unset                            | Optional authorization-server issuer for interactive MCP OAuth; set together with the resource URL                         |
+| `SLIPRAMP_MCP_OAUTH_RESOURCE`               | Unset                            | Canonical external MCP URL ending in `/mcp`; required as the exact OAuth access-token audience                             |
 | `SLIPRAMP_KARGO_INTEGRATIONS_FILE`          | Unset                            | Path to the versioned YAML Kargo integration configuration used for Stage inventory, operator creation, review preparation, health, and optional UI deep links |
 
 The Artifact token key must be supplied explicitly on every Server startup.
@@ -69,9 +71,11 @@ authorization code PKCE, state, nonce, issuer, signature, audience, and token
 time claims; provider access and refresh tokens are not retained. Every product
 API operation requires either a local session or a Slipramp API key and applies
 the principal's global role and, for a key, its scopes. The Streamable HTTP MCP
-endpoint at `/mcp` accepts only Slipramp API keys and applies the same role and
-scope checks to each tool call. See [MCP](./MCP.md) for the tool and Codex
-configuration contract. The web process forwards only the session to SSR API
+endpoint at `/mcp` accepts scoped Slipramp API keys and, when configured, JWT
+OAuth access tokens. Both apply the same Principal role and scope checks to each
+tool call. OAuth identities use the same subject enrollment map as browser
+login. See [MCP](./MCP.md) for the tool and Codex configuration contract. The
+web process forwards only the session to SSR API
 calls, live-log streams, and artifact downloads; it also passes same-origin
 login and callback requests to the Server.
 

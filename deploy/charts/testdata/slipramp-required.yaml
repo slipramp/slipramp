@@ -8,6 +8,10 @@ server:
     redirectURL: https://slipramp.example.com/api/v1/auth/callback
     subjectRoles:
       administrator-subject: admin
+  mcp:
+    oauth:
+      issuer: https://identity.example.com/realms/slipramp
+      resource: https://slipramp.example.com/mcp
   placements:
     primary:
       cluster: primary

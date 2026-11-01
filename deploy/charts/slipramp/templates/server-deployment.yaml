@@ -135,6 +135,12 @@ spec:
               value: {{ .Values.server.oidc.subjectRoles | toJson | quote }}
             - name: SLIPRAMP_PRODUCT_SESSION_LIFETIME
               value: {{ .Values.server.oidc.sessionLifetime | quote }}
+            {{- if .Values.server.mcp.oauth.issuer }}
+            - name: SLIPRAMP_MCP_OAUTH_ISSUER
+              value: {{ .Values.server.mcp.oauth.issuer | quote }}
+            - name: SLIPRAMP_MCP_OAUTH_RESOURCE
+              value: {{ .Values.server.mcp.oauth.resource | quote }}
+            {{- end }}
             - name: SLIPRAMP_PLACEMENTS_FILE
               value: /etc/slipramp/placements.yaml
             - name: SLIPRAMP_REPOSITORY_REFRESH_INTERVAL

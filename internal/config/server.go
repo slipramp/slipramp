@@ -46,6 +46,8 @@ const (
 	serverOIDCRedirectURLEnvironment              = "SLIPRAMP_OIDC_REDIRECT_URL"
 	serverOIDCSubjectRolesEnvironment             = "SLIPRAMP_OIDC_SUBJECT_ROLES"
 	serverProductSessionLifetimeEnvironment       = "SLIPRAMP_PRODUCT_SESSION_LIFETIME"
+	serverMCPOAuthIssuerEnvironment               = "SLIPRAMP_MCP_OAUTH_ISSUER"
+	serverMCPOAuthResourceEnvironment             = "SLIPRAMP_MCP_OAUTH_RESOURCE"
 	serverKargoIntegrationsFileEnvironment        = "SLIPRAMP_KARGO_INTEGRATIONS_FILE"
 	serverNotificationPublicURLEnvironment        = "SLIPRAMP_NOTIFICATIONS_PUBLIC_URL"
 	serverNotificationDestinationsEnvironment     = "SLIPRAMP_NOTIFICATIONS_DESTINATIONS"
@@ -255,6 +257,12 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 		}
 
 		cfg.ProductAuthentication.SessionLifetime = lifetime
+	}
+	if value, ok := lookupEnvironment(serverMCPOAuthIssuerEnvironment); ok {
+		cfg.MCP.OAuth.Issuer = value
+	}
+	if value, ok := lookupEnvironment(serverMCPOAuthResourceEnvironment); ok {
+		cfg.MCP.OAuth.Resource = value
 	}
 	if value, ok := lookupEnvironment(serverKargoIntegrationsFileEnvironment); ok {
 		integrations, err := promotion.LoadIntegrationFile(value)

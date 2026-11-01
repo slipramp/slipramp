@@ -100,6 +100,21 @@ func TestAuthenticationAuthorizesRoleAndCredentialScope(t *testing.T) {
 			want:       true,
 		},
 		{
+			name:       "read OAuth token reads",
+			role:       RoleOperator,
+			method:     AuthenticationMethodOAuthToken,
+			scopes:     []Scope{ScopeRead},
+			permission: PermissionRead,
+			want:       true,
+		},
+		{
+			name:       "read OAuth token cannot create runs",
+			role:       RoleOperator,
+			method:     AuthenticationMethodOAuthToken,
+			scopes:     []Scope{ScopeRead},
+			permission: PermissionRunsWrite,
+		},
+		{
 			name:       "read key cannot create runs",
 			role:       RoleOperator,
 			method:     AuthenticationMethodAPIKey,
@@ -299,6 +314,10 @@ func TestAuthenticationValidate(t *testing.T) {
 	if err := validAPIKey.Validate(); err != nil {
 		t.Fatalf("Validate() all API key scopes error = %v", err)
 	}
+	validOAuthToken := testAuthentication(RoleAdmin, AuthenticationMethodOAuthToken, allScopes)
+	if err := validOAuthToken.Validate(); err != nil {
+		t.Fatalf("Validate() OAuth scopes error = %v", err)
+	}
 
 	tests := []struct {
 		name   string
@@ -348,7 +367,7 @@ func TestAuthenticationValidate(t *testing.T) {
 func testAuthentication(role Role, method AuthenticationMethod, scopes []Scope) Authentication {
 	now := time.Now().UTC()
 	credentialLabel := ""
-	if method == AuthenticationMethodAPIKey {
+	if method == AuthenticationMethodAPIKey || method == AuthenticationMethodOAuthToken {
 		credentialLabel = "automation"
 	}
 

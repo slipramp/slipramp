@@ -9,6 +9,7 @@ import (
 const (
 	AuthenticationMethodWebSession AuthenticationMethod = "web-session"
 	AuthenticationMethodAPIKey     AuthenticationMethod = "api-key"
+	AuthenticationMethodOAuthToken AuthenticationMethod = "oauth-access-token"
 
 	PermissionRead                   Permission = "read"
 	PermissionRunsWrite              Permission = "runs:write"
@@ -54,9 +55,9 @@ func (a Authentication) Validate() error {
 		if len(a.Scopes) != 0 {
 			return fmt.Errorf("%w: web session must not have credential scopes", ErrInvalid)
 		}
-	case AuthenticationMethodAPIKey:
+	case AuthenticationMethodAPIKey, AuthenticationMethodOAuthToken:
 		if err := validateName(
-			"API key authentication label",
+			"credential authentication label",
 			a.CredentialLabel,
 			maximumAPIKeyNameLength,
 		); err != nil {
@@ -80,7 +81,7 @@ func (a Authentication) Authorizes(permission Permission) bool {
 	switch a.Method {
 	case AuthenticationMethodWebSession:
 		return true
-	case AuthenticationMethodAPIKey:
+	case AuthenticationMethodAPIKey, AuthenticationMethodOAuthToken:
 		return scopesAuthorize(a.Scopes, permission)
 	default:
 		return false

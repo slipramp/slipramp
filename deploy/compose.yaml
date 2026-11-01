@@ -63,6 +63,7 @@ services:
     command:
       - start-dev
       - --hostname=http://127.0.0.1:5556
+      - --features=resource-indicators
       - --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_PASSWORD: slipramp-development

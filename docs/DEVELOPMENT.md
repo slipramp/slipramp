@@ -75,6 +75,12 @@ Open `http://localhost:5173` and sign in with
 `admin@slipramp.local` / `slipramp`. These credentials and the static OIDC
 client secret are only for local development. Keycloak runs in development mode
 and imports the versioned `slipramp-local` realm when its container is created.
+The realm also enables the experimental Keycloak resource-indicator feature and
+permits consented dynamic registration of loopback public clients for local MCP
+OAuth testing. Its `slipramp:read` and `slipramp:runs:write` scopes add the exact
+`http://localhost:8080/mcp` audience to access tokens. The versioned `basic`
+client scope supplies the `sub` claim that maps those tokens to the enrolled
+Slipramp Principal.
 Prometheus is available at `http://localhost:9090`, and the provisioned
 Slipramp Server dashboard is available anonymously at
 `http://localhost:3000/d/slipramp-server/slipramp-server`. Grafana's local
