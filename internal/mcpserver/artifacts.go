@@ -17,6 +17,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/run"
 	"github.com/slipramp/slipramp/internal/runreport"
 )
 
@@ -43,9 +44,10 @@ type readRunLogInput struct {
 
 type readRunLogOutput struct {
 	RunID            string `json:"runId"`
-	ArtifactID       string `json:"artifactId"`
-	State            string `json:"state"`
-	RetentionState   string `json:"retentionState"`
+	Available        bool   `json:"available"`
+	ArtifactID       string `json:"artifactId,omitempty"`
+	State            string `json:"state,omitempty"`
+	RetentionState   string `json:"retentionState,omitempty"`
 	Encoding         string `json:"encoding"`
 	Contents         string `json:"contents"`
 	OffsetBytes      int64  `json:"offsetBytes"`
@@ -92,7 +94,27 @@ func (s *toolHandler) readRunLog(
 		}
 	}
 	if logRecord == nil {
-		return nil, readRunLogOutput{}, errors.New("the Run log does not exist yet")
+		record, err := s.runs.GetRun(ctx, runID)
+		if errors.Is(err, run.ErrRunNotFound) {
+			return nil, readRunLogOutput{}, errors.New("the Run does not exist")
+		}
+		if err != nil {
+			return nil, readRunLogOutput{}, s.internalError("get Run for log read", err)
+		}
+		if record.Phase != run.PhaseFinished {
+			return nil, readRunLogOutput{}, errors.New("the Run log does not exist yet")
+		}
+		if offset > 0 {
+			return nil, readRunLogOutput{}, errors.New("offsetBytes exceeds the durable Run log size")
+		}
+
+		return nil, readRunLogOutput{
+			RunID:     runID.String(),
+			Available: false,
+			Encoding:  "utf-8",
+			Contents:  "",
+			Complete:  true,
+		}, nil
 	}
 	if logRecord.RetentionState != artifact.RetentionRetained {
 		return nil, readRunLogOutput{}, errors.New("the Run log contents are no longer retained")
@@ -142,6 +164,7 @@ func (s *toolHandler) readRunLog(
 
 	return nil, readRunLogOutput{
 		RunID:            runID.String(),
+		Available:        true,
 		ArtifactID:       logRecord.ID.String(),
 		State:            string(logRecord.State),
 		RetentionState:   string(logRecord.RetentionState),

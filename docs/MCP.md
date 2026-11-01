@@ -58,6 +58,9 @@ call. Their `nextOffsetBytes` values can be supplied as the next call's
 `offsetBytes` until `hasMore` is false. Text, JSON, and XML use `utf-8` output;
 other content uses `base64`. Reading an open log at its current durable end
 returns an empty page so clients can poll without holding a streaming MCP call.
+If a finished Run never produced a log, such as one canceled before assignment,
+`read_run_log` returns `available: false` with an empty completed page and omits
+the Artifact-specific fields.
 
 Artifact metadata and non-sensitive contents require ordinary read permission.
 Sensitive contents additionally require an `operator` or `admin` Principal;

@@ -309,7 +309,8 @@ func TestHTTPTools(t *testing.T) {
 	})
 	var logPage readRunLogOutput
 	decodeStructuredContent(t, logResult, &logPage)
-	if logPage.Encoding != "utf-8" || logPage.Contents != "preview" || logPage.NextOffsetBytes != 7 ||
+	if !logPage.Available || logPage.Encoding != "utf-8" || logPage.Contents != "preview" ||
+		logPage.NextOffsetBytes != 7 ||
 		!logPage.HasMore || logPage.Complete {
 		t.Errorf("read_run_log output = %#v", logPage)
 	}

@@ -68,7 +68,7 @@ func (s *toolHandler) register(server *mcp.Server) {
 		Name:  "read_run_log",
 		Title: "Read a Slipramp Run Log",
 		Description: "Read one bounded page of currently durable Run log bytes. Use nextOffsetBytes to continue " +
-			"reading live or retained logs.",
+			"reading live or retained logs. A finished Run that produced no log returns an empty completed page.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, s.readRunLog, runLogToolCallAttributes)
 	addObservedTool(s, server, &mcp.Tool{
