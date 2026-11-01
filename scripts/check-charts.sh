@@ -91,9 +91,9 @@ assert_not_contains "$server_render" '^kind: (Ingress|HTTPRoute)$'
   --set-string web.image.digest="$image_digest" \
   >"$test_directory/server-digests.yaml"
 assert_contains "$test_directory/server-digests.yaml" \
-  "image: \"ghcr.io/slipramp/slipramp-server:0.1.0@$image_digest\""
+  "image: \"ghcr.io/slipramp/slipramp-server:0.1.1@$image_digest\""
 assert_contains "$test_directory/server-digests.yaml" \
-  "image: \"ghcr.io/slipramp/slipramp-web:0.1.0@$image_digest\""
+  "image: \"ghcr.io/slipramp/slipramp-web:0.1.1@$image_digest\""
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
@@ -234,11 +234,11 @@ assert_contains "$controller_render" 'port: 9091'
   --set-string harnessImage.digest="$image_digest" \
   >"$test_directory/controller-digests.yaml"
 assert_contains "$test_directory/controller-digests.yaml" \
-  "image: \"ghcr.io/slipramp/slipramp-controller:0.1.0@$image_digest\""
+  "image: \"ghcr.io/slipramp/slipramp-controller:0.1.1@$image_digest\""
 assert_contains "$test_directory/controller-digests.yaml" \
-  "value: \"ghcr.io/slipramp/slipramp-checkout:0.1.0@$image_digest\""
+  "value: \"ghcr.io/slipramp/slipramp-checkout:0.1.1@$image_digest\""
 assert_contains "$test_directory/controller-digests.yaml" \
-  "value: \"ghcr.io/slipramp/slipramp-harness:0.1.0@$image_digest\""
+  "value: \"ghcr.io/slipramp/slipramp-harness:0.1.1@$image_digest\""
 
 "$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
   --namespace slipramp-system \

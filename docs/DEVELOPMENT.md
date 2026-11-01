@@ -43,7 +43,7 @@ task site:build
 task site:deploy
 task generate
 task charts:check
-task charts:package CHART_VERSION=0.1.0
+task charts:package CHART_VERSION=0.1.1
 task check
 task integration
 task acceptance:kind

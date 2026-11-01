@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Slipramp API
-  version: 0.1.0
+  version: 0.1.1
   description: >-
     HTTP API for the Slipramp Server. Responses under /api, /controller, and
     /execution are private and must not be stored by clients or shared caches.

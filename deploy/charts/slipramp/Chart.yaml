@@ -2,8 +2,8 @@ apiVersion: v2
 name: slipramp
 description: Slipramp Server and web application
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.1.1
+appVersion: "0.1.1"
 kubeVersion: ">=1.30.0-0"
 home: https://github.com/slipramp/slipramp
 sources:

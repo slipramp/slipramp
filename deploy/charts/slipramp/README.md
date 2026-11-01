@@ -51,7 +51,7 @@ resolves the immutable digest:
 server:
   image:
     repository: ghcr.io/slipramp/slipramp-server
-    tag: 0.1.0
+    tag: 0.1.1
     digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
@@ -229,7 +229,7 @@ image tag.
 ```console
 helm upgrade --install slipramp \
   oci://ghcr.io/slipramp/slipramp-charts/slipramp \
-  --version 0.1.0 \
+  --version 0.1.1 \
   --namespace slipramp-system --create-namespace \
   --values production-values.yaml
 ```
