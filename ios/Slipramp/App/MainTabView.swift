@@ -42,6 +42,18 @@ struct MainTabView: View {
             }
 
             NavigationStack {
+                PromotionListView(
+                    client: client,
+                    refreshRevision: productDataRevision,
+                    onPromotionChanged: invalidateProductData
+                )
+                .navigationBarTitleDisplayMode(.inline)
+            }
+            .tabItem {
+                Label("Promotions", systemImage: "arrow.up.right.circle")
+            }
+
+            NavigationStack {
                 SettingsView(client: client)
                     .navigationBarTitleDisplayMode(.inline)
             }

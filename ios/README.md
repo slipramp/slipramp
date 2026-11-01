@@ -3,13 +3,14 @@
 The native Slipramp client is an iOS 17 SwiftUI application. It checks one
 Slipramp Server's exact product API contract before revealing authentication,
 then validates an API key, stores the credential in the Keychain, and exposes
-the operational Inbox, recent Runs, Run detail, and
+the operational Inbox, recent Runs, Promotion history, Run detail, and
 reconnectable retained or live Run logs. Operators can approve or reject
 pending Run reviews with an immutable optional comment and can request
 cancellation of unfinished Runs. The Targets tab searches active Targets,
 browses their Actions and execution metadata, and starts parameterized Actions
-that do not require Artifact inputs. Promotion-review Inbox items open a native
-detail that shows frozen Stage, revision, Freight, policy, preparation, and
+that do not require Artifact inputs. Promotion-review Inbox items and entries in
+the Promotions tab open a native detail showing frozen Stage, revision, Freight,
+policy, preparation, and
 sensitive Git and Argo CD diff context before a confirmed decision. Finished
 Runs can be started again from the same frozen revision or the latest catalog
 revision; Runs with Artifact inputs remain pinned to their producing revision.

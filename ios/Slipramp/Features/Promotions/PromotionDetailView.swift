@@ -16,9 +16,10 @@ private final class PromotionDetailViewModel: ObservableObject {
     private let client: SliprampAPIClient
     private let promotionID: String
 
-    init(client: SliprampAPIClient, promotionID: String) {
+    init(client: SliprampAPIClient, promotionID: String, initialPromotion: Promotion?) {
         self.client = client
         self.promotionID = promotionID
+        promotion = initialPromotion
     }
 
     func load() async {
@@ -136,12 +137,17 @@ struct PromotionDetailView: View {
     init(
         client: SliprampAPIClient,
         promotionID: String,
+        initialPromotion: Promotion? = nil,
         onPromotionChanged: @escaping @MainActor () -> Void = {}
     ) {
         self.client = client
         self.onPromotionChanged = onPromotionChanged
         _model = StateObject(
-            wrappedValue: PromotionDetailViewModel(client: client, promotionID: promotionID)
+            wrappedValue: PromotionDetailViewModel(
+                client: client,
+                promotionID: promotionID,
+                initialPromotion: initialPromotion
+            )
         )
     }
 

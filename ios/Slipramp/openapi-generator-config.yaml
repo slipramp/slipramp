@@ -16,6 +16,7 @@ filter:
     - getPromotion
     - getRun
     - getTarget
+    - listPromotions
     - listRuns
     - listRunArtifacts
     - listTargets

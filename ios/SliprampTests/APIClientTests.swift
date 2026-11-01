@@ -490,6 +490,39 @@ final class APIClientTests: XCTestCase {
         XCTAssertTrue(promotion.canDecide)
     }
 
+    func testPromotionListUsesGeneratedOperationAndDecodesHistory() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let promotionID = "45354aa2-a3e1-4b4c-9b2c-a52f46e72cc2"
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/api/v1/promotions")
+            XCTAssertEqual(request.url?.query, "limit=50&offset=0")
+            XCTAssertEqual(
+                request.value(forHTTPHeaderField: "Authorization"),
+                "Bearer slipramp_key_secret"
+            )
+
+            let promotion = self.promotionBody(id: promotionID, status: "pending")
+            let body = Data(
+                "{\"items\":[\(String(decoding: promotion, as: UTF8.self))],\"total\":1,\"limit\":50,\"offset\":0}"
+                    .utf8
+            )
+            return (self.response(for: request, status: 200), body)
+        }
+
+        let list = try await client.listPromotions()
+        XCTAssertEqual(list.total, 1)
+        XCTAssertEqual(list.items.first?.id, promotionID)
+        XCTAssertEqual(list.items.first?.stageSnapshot.application, "slipramp")
+        XCTAssertEqual(list.items.first?.statusLabel, "Pending")
+    }
+
     func testPromotionDecisionSendsCommentAndReturnsImmutableAttribution() async throws {
         let session = makeSession()
         let client = SliprampAPIClient(

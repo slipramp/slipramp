@@ -96,6 +96,13 @@ internal protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/auth/native/exchange`.
     /// - Remark: Generated from `#/paths//api/v1/auth/native/exchange/post(exchangeNativeOIDCLogin)`.
     func exchangeNativeOIDCLogin(_ input: Operations.ExchangeNativeOIDCLogin.Input) async throws -> Operations.ExchangeNativeOIDCLogin.Output
+    /// List Promotions
+    ///
+    /// Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
+    ///
+    /// - Remark: HTTP `GET /api/v1/promotions`.
+    /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)`.
+    func listPromotions(_ input: Operations.ListPromotions.Input) async throws -> Operations.ListPromotions.Output
     /// Get a Promotion
     ///
     /// - Remark: HTTP `GET /api/v1/promotions/{promotionId}`.
@@ -289,6 +296,21 @@ extension APIProtocol {
         try await exchangeNativeOIDCLogin(Operations.ExchangeNativeOIDCLogin.Input(
             headers: headers,
             body: body
+        ))
+    }
+    /// List Promotions
+    ///
+    /// Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
+    ///
+    /// - Remark: HTTP `GET /api/v1/promotions`.
+    /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)`.
+    internal func listPromotions(
+        query: Operations.ListPromotions.Input.Query = .init(),
+        headers: Operations.ListPromotions.Input.Headers = .init()
+    ) async throws -> Operations.ListPromotions.Output {
+        try await listPromotions(Operations.ListPromotions.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// Get a Promotion
@@ -2813,6 +2835,66 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PromotionList`.
+        internal struct PromotionList: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PromotionList/items`.
+            internal var items: [Components.Schemas.Promotion]
+            /// - Remark: Generated from `#/components/schemas/PromotionList/total`.
+            internal var total: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PromotionList/limit`.
+            internal var limit: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PromotionList/offset`.
+            internal var offset: Swift.Int
+            /// Creates a new `PromotionList`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - total:
+            ///   - limit:
+            ///   - offset:
+            internal init(
+                items: [Components.Schemas.Promotion],
+                total: Swift.Int,
+                limit: Swift.Int,
+                offset: Swift.Int
+            ) {
+                self.items = items
+                self.total = total
+                self.limit = limit
+                self.offset = offset
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case items
+                case total
+                case limit
+                case offset
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    [Components.Schemas.Promotion].self,
+                    forKey: .items
+                )
+                self.total = try container.decode(
+                    Swift.Int.self,
+                    forKey: .total
+                )
+                self.limit = try container.decode(
+                    Swift.Int.self,
+                    forKey: .limit
+                )
+                self.offset = try container.decode(
+                    Swift.Int.self,
+                    forKey: .offset
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items",
+                    "total",
+                    "limit",
+                    "offset"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionStagePolicy`.
         internal struct PromotionStagePolicy: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PromotionStagePolicy/configuredMode`.
@@ -4932,6 +5014,10 @@ internal enum Components {
     }
     /// Types generated from the `#/components/parameters` section of the OpenAPI document.
     internal enum Parameters {
+        /// - Remark: Generated from `#/components/parameters/Limit`.
+        internal typealias Limit = Swift.Int
+        /// - Remark: Generated from `#/components/parameters/Offset`.
+        internal typealias Offset = Swift.Int
         /// - Remark: Generated from `#/components/parameters/PromotionId`.
         internal typealias PromotionId = Swift.String
     }
@@ -10440,6 +10526,285 @@ internal enum Operations {
             /// - Throws: An error if `self` is not `.internalServerError`.
             /// - SeeAlso: `.internalServerError`.
             internal var internalServerError: Operations.ExchangeNativeOIDCLogin.Output.InternalServerError {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        internal enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case applicationProblemJson
+            case other(Swift.String)
+            internal init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                case "application/problem+json":
+                    self = .applicationProblemJson
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            internal var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                case .applicationProblemJson:
+                    return "application/problem+json"
+                }
+            }
+            internal static var allCases: [Self] {
+                [
+                    .json,
+                    .applicationProblemJson
+                ]
+            }
+        }
+    }
+    /// List Promotions
+    ///
+    /// Lists Promotions with optional operational and exact commit association filters. A commit matches either the base or candidate revision.
+    ///
+    /// - Remark: HTTP `GET /api/v1/promotions`.
+    /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)`.
+    internal enum ListPromotions {
+        internal static let id: Swift.String = "listPromotions"
+        internal struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query`.
+            internal struct Query: Sendable, Hashable {
+                /// Limit results to one repository.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/repositoryId`.
+                internal var repositoryId: Swift.String?
+                /// Limit results to Promotions whose base or candidate revision matches this full Git object ID. Requires repositoryId.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/commitSha`.
+                internal var commitSha: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/integration`.
+                internal var integration: Components.Schemas.CatalogName?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/project`.
+                internal var project: Components.Schemas.CatalogName?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/application`.
+                internal var application: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/status`.
+                internal var status: Components.Schemas.PromotionStatus?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/cluster`.
+                internal var cluster: Components.Schemas.CatalogName?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/stageId`.
+                internal var stageId: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/limit`.
+                internal var limit: Components.Parameters.Limit?
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/query/offset`.
+                internal var offset: Components.Parameters.Offset?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - repositoryId: Limit results to one repository.
+                ///   - commitSha: Limit results to Promotions whose base or candidate revision matches this full Git object ID. Requires repositoryId.
+                ///   - integration:
+                ///   - project:
+                ///   - application:
+                ///   - status:
+                ///   - cluster:
+                ///   - stageId:
+                ///   - limit:
+                ///   - offset:
+                internal init(
+                    repositoryId: Swift.String? = nil,
+                    commitSha: Swift.String? = nil,
+                    integration: Components.Schemas.CatalogName? = nil,
+                    project: Components.Schemas.CatalogName? = nil,
+                    application: Swift.String? = nil,
+                    status: Components.Schemas.PromotionStatus? = nil,
+                    cluster: Components.Schemas.CatalogName? = nil,
+                    stageId: Swift.String? = nil,
+                    limit: Components.Parameters.Limit? = nil,
+                    offset: Components.Parameters.Offset? = nil
+                ) {
+                    self.repositoryId = repositoryId
+                    self.commitSha = commitSha
+                    self.integration = integration
+                    self.project = project
+                    self.application = application
+                    self.status = status
+                    self.cluster = cluster
+                    self.stageId = stageId
+                    self.limit = limit
+                    self.offset = offset
+                }
+            }
+            internal var query: Operations.ListPromotions.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/promotions/GET/header`.
+            internal struct Headers: Sendable, Hashable {
+                internal var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListPromotions.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                internal init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListPromotions.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            internal var headers: Operations.ListPromotions.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            internal init(
+                query: Operations.ListPromotions.Input.Query = .init(),
+                headers: Operations.ListPromotions.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        internal enum Output: Sendable, Hashable {
+            internal struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/promotions/GET/responses/200/content`.
+                internal enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/promotions/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PromotionList)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    internal var json: Components.Schemas.PromotionList {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                internal var body: Operations.ListPromotions.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                internal init(body: Operations.ListPromotions.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Promotions ordered by creation time descending.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListPromotions.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            internal var ok: Operations.ListPromotions.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request is malformed or invalid.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            internal var badRequest: Components.Responses.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// A valid credential is required.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            internal var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The authenticated principal lacks the required role or scope.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Components.Responses.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            internal var forbidden: Components.Responses.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The operation could not be completed.
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/promotions/get(listPromotions)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses.InternalError)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            internal var internalServerError: Components.Responses.InternalError {
                 get throws {
                     switch self {
                     case let .internalServerError(response):

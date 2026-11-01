@@ -41,6 +41,7 @@
 		100000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000020 /* Assets.xcassets */; };
 		100000000000000000000021 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000021 /* PrivacyInfo.xcprivacy */; };
 		100000000000000000000022 /* ANSITextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000022 /* ANSITextParser.swift */; };
+		100000000000000000000023 /* PromotionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000023 /* PromotionListView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +79,7 @@
 		200000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		200000000000000000000021 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		200000000000000000000022 /* ANSITextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ANSITextParser.swift; sourceTree = "<group>"; };
+		200000000000000000000023 /* PromotionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromotionListView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -245,6 +247,7 @@
 		400000000000000000000010 /* Promotions */ = {
 			isa = PBXGroup;
 			children = (
+				200000000000000000000023 /* PromotionListView.swift */,
 				200000000000000000000014 /* PromotionDetailView.swift */,
 			);
 			path = Promotions;
@@ -369,6 +372,7 @@
 				100000000000000000000010 /* Client.swift in Sources */,
 				100000000000000000000011 /* Types.swift in Sources */,
 				100000000000000000000014 /* PromotionDetailView.swift in Sources */,
+				100000000000000000000023 /* PromotionListView.swift in Sources */,
 				100000000000000000000015 /* SliprampTheme.swift in Sources */,
 				100000000000000000000016 /* SliprampComponents.swift in Sources */,
 				100000000000000000000018 /* TargetListView.swift in Sources */,

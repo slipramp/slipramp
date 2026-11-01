@@ -7,6 +7,7 @@ typealias ServerCompatibility = Components.Schemas.ClientCompatibility
 typealias Artifact = Components.Schemas.Artifact
 typealias ArtifactList = Components.Schemas.ArtifactList
 typealias Promotion = Components.Schemas.Promotion
+typealias PromotionList = Components.Schemas.PromotionList
 typealias PromotionDecisionChoice = Components.Schemas.PromotionDecisionUpdate.DecisionPayload
 typealias Run = Components.Schemas.Run
 typealias RunList = Components.Schemas.RunList

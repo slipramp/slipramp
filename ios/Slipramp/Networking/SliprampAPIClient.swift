@@ -427,6 +427,29 @@ struct SliprampAPIClient: @unchecked Sendable {
         }
     }
 
+    func listPromotions(limit: Int = 50, offset: Int = 0) async throws -> PromotionList {
+        let output = try await callGenerated {
+            try await generatedClient.listPromotions(
+                query: .init(limit: limit, offset: offset)
+            )
+        }
+
+        switch output {
+        case let .ok(response):
+            return try response.body.json
+        case let .badRequest(response):
+            throw try httpError(status: 400, problem: response.body.applicationProblemJson)
+        case let .unauthorized(response):
+            throw try httpError(status: 401, problem: response.body.applicationProblemJson)
+        case let .forbidden(response):
+            throw try httpError(status: 403, problem: response.body.applicationProblemJson)
+        case let .internalServerError(response):
+            throw try httpError(status: 500, problem: response.body.applicationProblemJson)
+        case let .undocumented(statusCode, _):
+            throw SliprampAPIError.http(status: statusCode, title: nil, detail: nil)
+        }
+    }
+
     func getPromotion(id: String) async throws -> Promotion {
         let output = try await callGenerated {
             try await generatedClient.getPromotion(path: .init(promotionId: id))
