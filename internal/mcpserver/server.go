@@ -47,6 +47,7 @@ type CatalogService interface {
 type RunService interface {
 	CreateRun(context.Context, run.CreateRequest) (run.Run, error)
 	GetRun(context.Context, uuid.UUID) (run.Run, error)
+	ListRuns(context.Context, run.RunListFilter) (run.RunList, error)
 	CancelRun(context.Context, run.CancelRequest) (run.Run, error)
 }
 
@@ -118,7 +119,8 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "slipramp", Version: serviceVersion},
 		&mcp.ServerOptions{
-			Instructions: "Use list_targets to resolve target IDs. Before create_run, call explain_target_action and review " +
+			Instructions: "Use list_targets to resolve target IDs and list_runs to discover recent Run IDs. Before " +
+				"create_run, call explain_target_action and review " +
 				"the command, placement, parameters, credentials, inputs, and diagnostics. Never call create_run or " +
 				"cancel_run unless the user clearly requested that change. create_run requires a unique idempotencyKey; " +
 				"reuse it only for the same request. Bind every declared input to a compatible Artifact ID from " +

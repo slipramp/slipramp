@@ -29,6 +29,13 @@ type targetOutput struct {
 	ReconciliationState string   `json:"reconciliationState"`
 }
 
+type runListOutput struct {
+	Items  []runOutput `json:"items"`
+	Limit  int32       `json:"limit"`
+	Offset int32       `json:"offset"`
+	Total  int64       `json:"total"`
+}
+
 type runOutput struct {
 	ID                       string                            `json:"id"`
 	Phase                    string                            `json:"phase"`

@@ -180,6 +180,7 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 			CreatedAt:         time.Date(2026, time.October, 31, 12, 0, 0, 0, time.UTC),
 		},
 	}
+	runs.listed = run.RunList{Items: []run.Run{runs.record}, Total: 1}
 	logContents := []byte("preview output\n")
 	artifactContents := []byte(`{"ok":true}`)
 	digest := strings.Repeat("a", 64)
@@ -237,6 +238,7 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 		"explain_target_action",
 		"get_run",
 		"list_run_artifacts",
+		"list_runs",
 		"list_targets",
 		"read_artifact",
 		"read_run_log",
@@ -245,9 +247,9 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 		t.Fatalf("tools = %v, want %v", toolNames, wantTools)
 	}
 
-	listResult := callTool(t, session, "list_targets", map[string]any{"limit": 10})
+	targetListResult := callTool(t, session, "list_targets", map[string]any{"limit": 10})
 	var listed targetListOutput
-	decodeStructuredContent(t, listResult, &listed)
+	decodeStructuredContent(t, targetListResult, &listed)
 	if listed.Total != 1 || len(listed.Items) != 1 || listed.Items[0].ID != targetID.String() ||
 		!slices.Equal(listed.Items[0].Actions, []string{"apply", "preview"}) {
 		t.Errorf("list_targets output = %#v", listed)
@@ -274,6 +276,19 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 		runs.createRequest.IdempotencyKey == nil ||
 		*runs.createRequest.IdempotencyKey != "mcp-preview-prod-1" {
 		t.Errorf("CreateRun request = %#v", runs.createRequest)
+	}
+
+	runListResult := callTool(t, session, "list_runs", map[string]any{
+		"targetId": targetID.String(),
+		"phase":    "queued",
+		"limit":    10,
+	})
+	var runList runListOutput
+	decodeStructuredContent(t, runListResult, &runList)
+	if runList.Total != 1 || runList.Limit != 10 || len(runList.Items) != 1 ||
+		runList.Items[0].ID != runID.String() || runs.listFilter.TargetID == nil ||
+		*runs.listFilter.TargetID != targetID || runs.listFilter.Phase != run.PhaseQueued {
+		t.Errorf("list_runs output = %#v, filter = %#v", runList, runs.listFilter)
 	}
 
 	got := callTool(t, session, "get_run", map[string]any{"runId": runID.String()})
@@ -817,9 +832,12 @@ func (c *recordingCatalogs) ExplainAction(
 
 type recordingRuns struct {
 	record        run.Run
+	listed        run.RunList
 	err           error
 	createCalls   int
+	listCalls     int
 	createRequest run.CreateRequest
+	listFilter    run.RunListFilter
 	getRunID      uuid.UUID
 	cancelRequest run.CancelRequest
 }
@@ -847,6 +865,13 @@ func (r *recordingRuns) GetRun(_ context.Context, runID uuid.UUID) (run.Run, err
 	r.getRunID = runID
 
 	return r.record, r.err
+}
+
+func (r *recordingRuns) ListRuns(_ context.Context, filter run.RunListFilter) (run.RunList, error) {
+	r.listCalls++
+	r.listFilter = filter
+
+	return r.listed, r.err
 }
 
 func (r *recordingRuns) CancelRun(_ context.Context, request run.CancelRequest) (run.Run, error) {

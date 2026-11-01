@@ -21,6 +21,7 @@ same product Principal as browser OIDC login.
 | `list_targets`          | List active Targets and available Actions      | Read                |
 | `explain_target_action` | Resolve an Action without executing it         | Read                |
 | `create_run`            | Create an immutable Run with source `mcp`      | Run write           |
+| `list_runs`             | List and filter recent Runs                    | Read                |
 | `get_run`               | Read the persisted state and outcome of a Run  | Read                |
 | `read_run_log`          | Read a bounded live or retained log page        | Read                |
 | `list_run_artifacts`    | List Artifact metadata and report summaries     | Read                |
@@ -45,6 +46,12 @@ revision. The resulting Run is pinned to that producing revision and commit.
 `create_run` and `get_run` return the frozen input metadata and provenance under
 `inputs`; they never return Artifact contents there. Use `read_artifact` when
 the contents are needed and permitted.
+
+`list_runs` returns Runs in descending creation order. It supports the same
+repository, commit, consumed Artifact, Target, cluster, phase, and review-state
+filters as the product API, with `limit` and `offset` pagination. A commit
+filter requires `repositoryId` so identical Git object IDs from different
+Repositories never merge their histories.
 
 `read_run_log` and `read_artifact` return at most 64 KiB of source bytes per
 call. Their `nextOffsetBytes` values can be supplied as the next call's

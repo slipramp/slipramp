@@ -51,8 +51,8 @@ code, fixtures, and documentation together.
   identity, and optional Kargo settings.
 - [CLI reference](docs/CLI.md): local catalog validation and explanation, plus
   the remote operator workflow.
-- [MCP](docs/MCP.md): connect Codex to Slipramp Targets and Runs with a scoped
-  API key.
+- [MCP](docs/MCP.md): connect Codex to Slipramp Targets and Runs with OAuth or a
+  scoped API key.
 - [Catalog example](examples/infrastructure-ops/README.md): complete Runtime
   and Target definitions, typed parameters, credentials, triggers, and
   Artifact flows.
