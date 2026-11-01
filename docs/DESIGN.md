@@ -815,6 +815,10 @@ The result is recorded content consumption, not object-store capacity, free
 space, physical allocation, replication overhead, or provider billing. It does
 not inspect the bucket or establish a quota or enforcement policy.
 
+Every Server startup requires an explicit random Artifact-token signing key of
+at least 32 bytes. Rotating it invalidates Artifact upload and input credentials
+already issued to active Runs; those Runs must be canceled and rerun.
+
 ## Product identity and authorization
 
 The Server owns product authentication. `/api/v1` uses product sessions or API
@@ -873,6 +877,8 @@ through OIDC once. The Web then remembers that non-sensitive choice locally and
 starts OIDC automatically on future unauthenticated visits. Explicit logout or
 an unsuccessful OIDC flow forgets the choice so the browser can return to the
 sign-in page instead of immediately starting the same failing flow again.
+Web access logs record the OIDC callback path without its query parameters, so
+authorization codes and state do not reach stdout even for failed callbacks.
 
 The Server marks every product, Controller, and execution API response
 `Cache-Control: private, no-store`. Health and readiness responses are excluded.

@@ -10,6 +10,8 @@ import (
 	"github.com/slipramp/slipramp/internal/testcheck"
 )
 
+const testArtifactTokenSecret = "test-artifact-token-secret-32-bytes"
+
 func TestDefaultConfig(t *testing.T) {
 	t.Parallel()
 
@@ -96,6 +98,13 @@ func TestConfigValidate(t *testing.T) {
 	}{
 		{
 			name: "valid",
+		},
+		{
+			name: "missing artifact token secret",
+			configure: func(settings *Config) {
+				settings.ArtifactTokenSecret = ""
+			},
+			wantError: "artifact token secret",
 		},
 		{
 			name: "missing OIDC provider",
@@ -339,6 +348,7 @@ func TestConfigValidate(t *testing.T) {
 			t.Parallel()
 
 			settings := DefaultConfig()
+			settings.ArtifactTokenSecret = testArtifactTokenSecret
 			configureRequiredOIDC(&settings)
 			if test.configure != nil {
 				test.configure(&settings)

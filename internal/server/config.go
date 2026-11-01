@@ -51,7 +51,6 @@ func DefaultConfig() Config {
 		RepositoryFetchTimeout:       30 * time.Second,
 		Database:                     store.DefaultConfig(),
 		ObjectStore:                  objectstore.DefaultConfig(),
-		ArtifactTokenSecret:          "slipramp-development-artifact-token-secret",
 		ArtifactRetentionPeriod:      artifact.DefaultRetentionPeriod,
 		ArtifactReconcileInterval:    artifact.DefaultReconcileInterval,
 		ArtifactOrphanGracePeriod:    artifact.DefaultOrphanGracePeriod,
@@ -176,7 +175,7 @@ func (c Config) Validate() error {
 	}
 
 	if len(c.ArtifactTokenSecret) < 32 {
-		return fmt.Errorf("artifact token secret must be at least 32 characters")
+		return fmt.Errorf("artifact token secret must contain at least 32 bytes")
 	}
 
 	if c.ArtifactRetentionPeriod <= 0 {

@@ -56,6 +56,7 @@ placements:
                     path: token
 `)
 	environment := map[string]string{
+		serverArtifactTokenSecretEnvironment:        "test-artifact-token-secret-32-bytes",
 		serverControllerEnrollmentTokensEnvironment: `{"colo":"enrollment-token"}`,
 		serverPlacementsFileEnvironment:             path,
 		serverOIDCIssuerEnvironment:                 "https://identity.example.com",

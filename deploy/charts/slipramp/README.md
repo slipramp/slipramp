@@ -15,7 +15,7 @@ template so either configuration change rolls the Deployment.
 Set the external database URL, S3 endpoint and bucket, OIDC provider, explicit
 OIDC subject-role enrollment map, Controller enrollment-token map, Artifact
 token key, and at least one Placement. The Artifact token key must contain at
-least 32 characters. Every Placement's Cluster must also be present in the
+least 32 random bytes. Every Placement's Cluster must also be present in the
 Controller enrollment-token map stored in the referenced Secret.
 
 Run scheduling defaults to four active Runs per Cluster. Override that limit

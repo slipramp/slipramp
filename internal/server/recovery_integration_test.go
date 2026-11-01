@@ -453,6 +453,7 @@ func recoveryIntegrationConfig(t *testing.T) Config {
 	cfg.ObjectStore.Bucket = os.Getenv("TEST_S3_BUCKET")
 	cfg.ObjectStore.AccessKeyID = os.Getenv("TEST_S3_ACCESS_KEY_ID")
 	cfg.ObjectStore.SecretAccessKey = os.Getenv("TEST_S3_SECRET_ACCESS_KEY")
+	cfg.ArtifactTokenSecret = testArtifactTokenSecret
 	cfg.ControllerEnrollmentTokens = map[string]string{
 		recoveryClusterName: recoveryEnrollmentToken,
 	}

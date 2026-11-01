@@ -26,6 +26,7 @@ const (
 	serverS3AccessKeyIDEnvironment                = "SLIPRAMP_S3_ACCESS_KEY_ID"
 	serverS3SecretAccessKeyEnvironment            = "SLIPRAMP_S3_SECRET_ACCESS_KEY"
 	serverS3StartupTimeoutEnvironment             = "SLIPRAMP_S3_STARTUP_TIMEOUT"
+	serverArtifactTokenSecretEnvironment          = "SLIPRAMP_ARTIFACT_TOKEN_SECRET"
 	serverArtifactRetentionPeriodEnvironment      = "SLIPRAMP_ARTIFACT_RETENTION_PERIOD"
 	serverArtifactReconcileIntervalEnvironment    = "SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL"
 	serverArtifactOrphanGracePeriodEnvironment    = "SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD"
@@ -86,6 +87,7 @@ integrations:
 		serverS3AccessKeyIDEnvironment:                "access-key",
 		serverS3SecretAccessKeyEnvironment:            "secret-key",
 		serverS3StartupTimeoutEnvironment:             "9s",
+		serverArtifactTokenSecretEnvironment:          "test-artifact-token-secret-32-bytes",
 		serverArtifactRetentionPeriodEnvironment:      "720h",
 		serverArtifactReconcileIntervalEnvironment:    "30m",
 		serverArtifactOrphanGracePeriodEnvironment:    "48h",
@@ -216,9 +218,11 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 		wantError   string
 	}{
 		{
-			name:        "missing OIDC configuration",
-			environment: map[string]string{},
-			wantError:   "OIDC configuration is required",
+			name: "missing OIDC configuration",
+			environment: map[string]string{
+				serverArtifactTokenSecretEnvironment: "test-artifact-token-secret-32-bytes",
+			},
+			wantError: "OIDC configuration is required",
 		},
 		{
 			name: "malformed shutdown timeout",
@@ -367,10 +371,11 @@ func mapEnvironment(values map[string]string) func(string) (string, bool) {
 
 func requiredServerEnvironment() map[string]string {
 	return map[string]string{
-		serverOIDCIssuerEnvironment:       "https://identity.example.com",
-		serverOIDCClientIDEnvironment:     "slipramp",
-		serverOIDCClientSecretEnvironment: "client-secret",
-		serverOIDCRedirectURLEnvironment:  "https://slipramp.example.com/api/v1/auth/callback",
-		serverOIDCSubjectRolesEnvironment: `{"admin-subject":"admin"}`,
+		serverArtifactTokenSecretEnvironment: "test-artifact-token-secret-32-bytes",
+		serverOIDCIssuerEnvironment:          "https://identity.example.com",
+		serverOIDCClientIDEnvironment:        "slipramp",
+		serverOIDCClientSecretEnvironment:    "client-secret",
+		serverOIDCRedirectURLEnvironment:     "https://slipramp.example.com/api/v1/auth/callback",
+		serverOIDCSubjectRolesEnvironment:    `{"admin-subject":"admin"}`,
 	}
 }

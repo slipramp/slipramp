@@ -29,7 +29,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_S3_ACCESS_KEY_ID`                 | `slipramp`                       | S3 access key ID                                                                                                           |
 | `SLIPRAMP_S3_SECRET_ACCESS_KEY`             | `slipramp-development`           | S3 secret access key                                                                                                       |
 | `SLIPRAMP_S3_STARTUP_TIMEOUT`               | `10s`                            | S3 bucket availability check deadline                                                                                      |
-| `SLIPRAMP_ARTIFACT_TOKEN_SECRET`            | Local development secret         | HMAC key for Run-scoped harness artifact credentials; use at least 32 characters                                           |
+| `SLIPRAMP_ARTIFACT_TOKEN_SECRET`            | Required                         | HMAC key for Run-scoped harness artifact credentials; use at least 32 random bytes                                         |
 | `SLIPRAMP_ARTIFACT_RETENTION_PERIOD`        | `720h`                           | Age after sealing when an artifact becomes eligible for expiration                                                         |
 | `SLIPRAMP_ARTIFACT_RECONCILIATION_INTERVAL` | `1h`                             | Interval between artifact expiration, deletion, and orphan reconciliation passes                                           |
 | `SLIPRAMP_ARTIFACT_ORPHAN_GRACE_PERIOD`     | `24h`                            | Minimum object age before an unreferenced object may be deleted                                                            |
@@ -40,6 +40,11 @@ The Server accepts these environment variables:
 | `SLIPRAMP_OIDC_SUBJECT_ROLES`               | Required                         | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required  |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME`         | `12h`                            | Absolute lifetime of a local browser session                                                                               |
 | `SLIPRAMP_KARGO_INTEGRATIONS_FILE`          | Unset                            | Path to the versioned YAML Kargo integration configuration used for Stage inventory, operator creation, review preparation, health, and optional UI deep links |
+
+The Artifact token key must be supplied explicitly on every Server startup.
+Rotating it invalidates credentials already issued to active Runs, including
+credentials for Artifact uploads and selected Artifact inputs; cancel and rerun
+affected Runs after a rotation.
 
 ### Identity and recovery
 

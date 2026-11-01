@@ -28,6 +28,7 @@ func TestPersistenceIntegration(t *testing.T) {
 	cfg.ObjectStore.Bucket = os.Getenv("TEST_S3_BUCKET")
 	cfg.ObjectStore.AccessKeyID = os.Getenv("TEST_S3_ACCESS_KEY_ID")
 	cfg.ObjectStore.SecretAccessKey = os.Getenv("TEST_S3_SECRET_ACCESS_KEY")
+	cfg.ArtifactTokenSecret = testArtifactTokenSecret
 	configureIntegrationOIDC(t, &cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

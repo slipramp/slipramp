@@ -148,13 +148,10 @@ Kubernetes API access:
 ## Security hardening
 
 The unauthenticated-boundary review completed the session-authenticated CSRF,
-private response caching, and pre-decode request-body protections. The remaining
+private response caching, pre-decode request-body protections, explicit
+Artifact-token signing keys, and OIDC callback query redaction. The remaining
 findings are intentionally retained as explicit follow-up work:
 
-- [ ] Remove the public development fallback for the Run artifact-token signing
-      key. Require every Server startup path to supply an explicit random key of
-      at least 32 bytes, keep test fixtures explicit, and document the effect of
-      key rotation on active Run artifact and input credentials.
 - [ ] Require Controller bearer and enrollment credentials to use one canonical
       encoding of at least 32 random bytes. Reject enrollment-token reuse across
       Clusters and add bounded throttling for failed enrollment and Controller
@@ -163,9 +160,6 @@ findings are intentionally retained as explicit follow-up work:
       transaction pool. Define trustworthy client identification behind the
       supported proxy topology, combine per-client throttling with a global
       bound, and preserve bounded transaction expiry and legitimate concurrency.
-- [ ] Redact OIDC callback query parameters from Web access logs so authorization
-      codes and state never reach stdout, including failed or incomplete callback
-      requests whose transactions may remain replayable.
 
 ## Native iOS client
 

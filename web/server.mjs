@@ -5,6 +5,8 @@ import compression from "compression";
 import express from "express";
 import morgan from "morgan";
 
+import { accessLogURL } from "./app/features/auth/access-log.mjs";
+
 process.env.NODE_ENV ??= "production";
 
 const build = await import("./build/server/index.js");
@@ -32,6 +34,7 @@ app.use(
 app.use(publicPath, express.static(build.assetsBuildDirectory));
 app.use(express.static("public", { maxAge: "1h" }));
 app.use("/.well-known", express.static(path.join(build.assetsBuildDirectory, ".well-known")));
+morgan.token("url", accessLogURL);
 app.use(morgan("tiny"));
 app.all(
   "/{*splat}",
