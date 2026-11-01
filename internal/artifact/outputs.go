@@ -72,7 +72,8 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest) (resultErr 
 	if mediaType == "" {
 		mediaType = "application/octet-stream"
 	}
-	objectKey := outputObjectKey(request.RunID, request.Name, request.SHA256)
+	artifactID := s.newID()
+	objectKey := outputObjectKey(request.RunID, request.Name, artifactID)
 	digest := sha256.New()
 	written, err := s.contents.Put(
 		ctx,
@@ -91,7 +92,7 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest) (resultErr 
 
 	sealedAt := s.now().UTC()
 	record := Artifact{
-		ID:             s.newID(),
+		ID:             artifactID,
 		RunID:          request.RunID,
 		Name:           request.Name,
 		Kind:           KindOutput,
@@ -129,8 +130,8 @@ func (s *Service) Upload(ctx context.Context, request UploadRequest) (resultErr 
 	return nil
 }
 
-func outputObjectKey(runID uuid.UUID, name, digest string) string {
-	return strings.Join([]string{"runs", runID.String(), "artifacts", name, "content-" + digest}, "/")
+func outputObjectKey(runID uuid.UUID, name string, artifactID uuid.UUID) string {
+	return strings.Join([]string{"runs", runID.String(), "artifacts", name, "content-" + artifactID.String()}, "/")
 }
 
 func compareUpload(existing Artifact, request UploadRequest) error {

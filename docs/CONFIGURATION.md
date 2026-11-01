@@ -40,7 +40,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_OIDC_REDIRECT_URL`                | Required                         | Absolute provider callback URL ending at `/api/v1/auth/callback`                                                           |
 | `SLIPRAMP_OIDC_SUBJECT_ROLES`               | Required                         | JSON object mapping explicitly enrolled OIDC subjects to `admin`, `operator`, or `viewer`; at least one admin is required  |
 | `SLIPRAMP_PRODUCT_SESSION_LIFETIME`         | `12h`                            | Absolute lifetime of a local browser session                                                                               |
-| `SLIPRAMP_MCP_OAUTH_ISSUER`                 | Unset                            | Optional authorization-server issuer for interactive MCP OAuth; set together with the resource URL                         |
+| `SLIPRAMP_MCP_OAUTH_ISSUER`                 | Unset                            | Optional MCP OAuth issuer; must exactly match `SLIPRAMP_OIDC_ISSUER` and be set together with the resource URL              |
 | `SLIPRAMP_MCP_OAUTH_RESOURCE`               | Unset                            | Canonical external MCP URL ending in `/mcp`; required as the exact OAuth access-token audience                             |
 | `SLIPRAMP_KARGO_INTEGRATIONS_FILE`          | Unset                            | Path to the versioned YAML Kargo integration configuration used for Stage inventory, operator creation, review preparation, health, and optional UI deep links |
 
@@ -187,6 +187,49 @@ Current contracts are documented in [Kargo Promotions](design/kargo.md),
 [Controller execution](design/execution.md), and
 [Logs and Artifacts](design/artifacts.md). Kargo integration and Placement
 configuration are both loaded once at Server startup.
+
+### Kargo Stage metadata
+
+A Stage participates in exactly one integration by setting
+`slipramp.com/integration` to that integration's name. The Controller reads it
+only in that integration's configured Stage namespaces. Unlabeled Stages and
+Stages labeled for another integration are excluded from its complete snapshot.
+Removing or changing the label archives the Stage in the old integration after
+its next successful snapshot.
+
+Every participating Stage supplies these annotations explicitly:
+
+```yaml
+metadata:
+  labels:
+    slipramp.com/integration: prod
+  annotations:
+    slipramp.com/promotion-application: external-dns
+    slipramp.com/promotion-environment: prod
+    slipramp.com/promotion-repository-url: https://github.com/example/ops.git
+    slipramp.com/promotion-target-branch: environments/production
+    slipramp.com/promotion-source-paths: '["terraform/dns", "config/production.yaml"]'
+```
+
+The Repository URL must exactly match one Repository in the integration's
+allowlist. The application identifies the Argo CD Application used for review.
+The environment selects its presentation order and configured Argo CD endpoint.
+The target branch is the branch Kargo updates. Source paths are a nonempty JSON
+array of distinct, clean repository-relative paths used for branch-drift checks;
+`.` selects the whole repository. Absolute paths and parent traversal are
+invalid. All annotations are required; malformed participating Stages fail the
+whole snapshot so incomplete inventory cannot archive valid Stages. Template
+variables, directory layout, and branch naming conventions are not inferred.
+
+The optional successful-render acknowledgement currently recognizes a succeeded
+last Promotion with `clone` and `commit` output-state aliases (including nested
+aliases ending in `::clone` and `::commit`). The clone output must contain
+`commits["./src"]` and `commits["target"]`; the commit output must contain
+`commit`. These are the acknowledged source, render base, and render result Git
+object IDs. Templates without this output convention still support inventory
+and Promotions, but branch drift remains unknown until valid acknowledgement
+evidence is available. Later failed Promotions preserve the last accepted
+successful acknowledgement.
 
 ## Controller configuration
 

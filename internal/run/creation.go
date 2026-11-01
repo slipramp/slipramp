@@ -32,7 +32,6 @@ type RepositoryService interface {
 
 type CatalogService interface {
 	GetTarget(context.Context, uuid.UUID) (catalog.TargetSummary, error)
-	GetActiveRevision(ctx context.Context, repositoryID uuid.UUID) (catalog.Revision, error)
 	GetRevision(context.Context, uuid.UUID, uuid.UUID) (catalog.Revision, error)
 }
 
@@ -108,17 +107,17 @@ func (s *Service) createRun(
 		pinnedRevisionID = *request.CatalogRevisionID
 	}
 
-	var revision catalog.Revision
 	if pinnedRevisionID == uuid.Nil {
-		revision, err = s.catalogs.GetActiveRevision(ctx, targetRecord.RepositoryID)
-	} else {
-		revision, err = s.catalogs.GetRevision(ctx, targetRecord.RepositoryID, pinnedRevisionID)
+		// Keep the execution definition and Target relevance in the same snapshot
+		// when repository refresh activates a new catalog during Run creation.
+		pinnedRevisionID = targetRecord.CatalogRevisionID
 	}
+	revision, err := s.catalogs.GetRevision(ctx, targetRecord.RepositoryID, pinnedRevisionID)
 	if errors.Is(err, catalog.ErrNotFound) {
 		return Run{}, ErrCatalogNotFound
 	}
 	if err != nil {
-		return Run{}, fmt.Errorf("get active run catalog: %w", err)
+		return Run{}, fmt.Errorf("get run catalog: %w", err)
 	}
 
 	target, found := findTarget(revision.Catalog.Targets, targetRecord.Target.Metadata.Name)

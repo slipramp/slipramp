@@ -53,22 +53,20 @@ func TestNormalizeKargoStage(t *testing.T) {
         "name":"external-dns-prod",
         "uid":"stage-uid",
         "resourceVersion":"42",
-        "labels":{"app":"ignored","env":"prod"},
-        "annotations":{"slipramp.com/promotion-source-paths":"k8s/shared\n../ignored"}
+        "labels":{"slipramp.com/integration":"prod","app":"ignored","env":"ignored"},
+        "annotations":{
+          "slipramp.com/promotion-application":"external-dns-phi",
+          "slipramp.com/promotion-environment":"prod",
+          "slipramp.com/promotion-repository-url":"https://example.com/ops.git",
+          "slipramp.com/promotion-target-branch":"environments/production",
+          "slipramp.com/promotion-source-paths":"[\"terraform/dns\",\"config/production.yaml\"]"
+        }
       },
       "spec":{
         "requestedFreight":[{
           "origin":{"kind":"Warehouse","name":"external-dns"},
           "sources":{"stages":["external-dns-qa"],"direct":false}
-        }],
-        "promotionTemplate":{"spec":{"vars":[
-          {"name":"app","value":"external-dns"},
-          {"name":"argoApp","value":"external-dns-phi"},
-          {"name":"overlay","value":"prod"},
-          {"name":"kustomizePath","value":"network/external-dns"},
-          {"name":"stageBranchKustomization","value":"k8s/kargo/custom-stage.yaml"},
-          {"name":"gitopsRepo","value":"https://example.com/ops.git"}
-        ]}}
+        }]
       },
       "status":{
 		"autoPromotionEnabled":true,
@@ -112,14 +110,12 @@ func TestNormalizeKargoStage(t *testing.T) {
 		t.Errorf("health = %#v, Argo namespace = %v", observed.HealthStatus, observed.ArgoApplicationNamespace)
 	}
 	if observed.RepositoryURL != "https://example.com/ops.git" ||
-		observed.TargetBranch != "stage/external-dns/prod" {
+		observed.TargetBranch != "environments/production" {
 		t.Errorf("branch details = %#v", observed)
 	}
 	wantPaths := []string{
-		"k8s/network/external-dns/base",
-		"k8s/network/external-dns/overlays/prod",
-		"k8s/kargo/custom-stage.yaml",
-		"k8s/shared",
+		"terraform/dns",
+		"config/production.yaml",
 	}
 	if !reflect.DeepEqual(observed.SourcePaths, wantPaths) {
 		t.Errorf("source paths = %#v, want %#v", observed.SourcePaths, wantPaths)
@@ -138,6 +134,22 @@ func TestNormalizeKargoStage(t *testing.T) {
 		valueOrEmpty(observed.SuccessfulRenderAcknowledgement.SourceRevision) != "source-sha" ||
 		valueOrEmpty(observed.SuccessfulRenderAcknowledgement.ResultRevision) != "target-sha" {
 		t.Errorf("successful render acknowledgement = %#v", observed.SuccessfulRenderAcknowledgement)
+	}
+
+	for _, paths := range []string{
+		`"terraform/dns"`, `[]`, `["../outside"]`, `["/absolute"]`, `["config", "config"]`,
+	} {
+		t.Run("invalid source paths "+paths, func(t *testing.T) {
+			t.Parallel()
+
+			invalid := stage.DeepCopy()
+			annotations := invalid.GetAnnotations()
+			annotations[promotionSourcePathsAnnotation] = paths
+			invalid.SetAnnotations(annotations)
+			if _, err := normalizeKargoStage(invalid); err == nil {
+				t.Fatalf("normalizeKargoStage() accepted invalid source paths %s", paths)
+			}
+		})
 	}
 }
 
@@ -234,9 +246,17 @@ func TestKargoStageObserverPaginatesConfiguredNamespaces(t *testing.T) {
 	) (*unstructured.UnstructuredList, error) {
 		requests = append(requests, request{namespace, options.Limit, options.Continue})
 		if namespace == "kargo-core" && options.Continue == "" {
+			unrelated := minimalUnstructuredStage(t, namespace, "unrelated")
+			unrelated.SetLabels(nil)
+			unrelated.SetAnnotations(nil)
+			otherIntegration := minimalUnstructuredStage(t, namespace, "another-integration")
+			otherIntegration.SetLabels(map[string]string{promotionIntegrationLabel: "another"})
+			otherIntegration.SetAnnotations(nil)
 			return &unstructured.UnstructuredList{
 				Object: map[string]any{"metadata": map[string]any{"continue": "next"}},
-				Items:  []unstructured.Unstructured{*minimalUnstructuredStage(t, namespace, "first")},
+				Items: []unstructured.Unstructured{
+					*minimalUnstructuredStage(t, namespace, "first"), *unrelated, *otherIntegration,
+				},
 			}, nil
 		}
 		if namespace == "kargo-core" && options.Continue == "next" {
@@ -279,13 +299,27 @@ func TestKargoStageObserverPaginatesConfiguredNamespaces(t *testing.T) {
 	}
 }
 
-func TestKargoStageObserverRejectsPartialAndCrossNamespaceLists(t *testing.T) {
+func TestKargoStageObserverRejectsInvalidSnapshots(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name   string
 		lister kargoStagePageLister
 	}{
+		{
+			name: "selected Stage lacks explicit context",
+			lister: kargoStagePageListerFunc(func(
+				_ context.Context,
+				namespace string,
+				_ metav1.ListOptions,
+			) (*unstructured.UnstructuredList, error) {
+				stage := minimalUnstructuredStage(t, namespace, "invalid")
+				stage.SetAnnotations(nil)
+				return &unstructured.UnstructuredList{Items: []unstructured.Unstructured{
+					*minimalUnstructuredStage(t, namespace, "valid"), *stage,
+				}}, nil
+			}),
+		},
 		{
 			name: "partial list failure",
 			lister: kargoStagePageListerFunc(func(
@@ -405,12 +439,17 @@ func minimalUnstructuredStage(t *testing.T, namespace string, name string) *unst
 	stage := unstructuredStage(t, `{
       "apiVersion":"kargo.akuity.io/v1alpha1",
       "kind":"Stage",
-      "metadata":{"labels":{"env":"prod"}},
-      "spec":{"promotionTemplate":{"spec":{"vars":[
-        {"name":"app","value":"application"},
-        {"name":"overlay","value":"prod"},
-        {"name":"gitopsRepo","value":"https://example.com/ops.git"}
-      ]}}}
+      "metadata":{
+        "labels":{"slipramp.com/integration":"prod"},
+        "annotations":{
+          "slipramp.com/promotion-application":"application",
+          "slipramp.com/promotion-environment":"prod",
+          "slipramp.com/promotion-repository-url":"https://example.com/ops.git",
+          "slipramp.com/promotion-target-branch":"production",
+          "slipramp.com/promotion-source-paths":"[\"config\"]"
+        }
+      },
+      "spec":{}
     }`)
 	stage.SetNamespace(namespace)
 	stage.SetName(name)

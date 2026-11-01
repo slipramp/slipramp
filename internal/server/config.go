@@ -202,6 +202,9 @@ func (c Config) Validate() error {
 	if err := c.MCP.Validate(); err != nil {
 		return fmt.Errorf("validate MCP configuration: %w", err)
 	}
+	if c.MCP.OAuth.Enabled() && c.MCP.OAuth.Issuer != c.ProductAuthentication.OIDC.Issuer {
+		return fmt.Errorf("MCP OAuth issuer must match the product OIDC issuer")
+	}
 
 	return nil
 }

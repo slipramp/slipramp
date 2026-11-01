@@ -260,11 +260,22 @@ func TestRefresherMatchesDeploymentCLIValidation(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		placement string
-		accepted  bool
+		placement      string
+		parameter      string
+		accepted       bool
+		diagnosticCode string
 	}{
-		"accepted":          {placement: "test", accepted: true},
-		"missing placement": {placement: "missing", accepted: false},
+		"accepted":          {placement: "test", parameter: "3", accepted: true},
+		"missing placement": {placement: "missing", parameter: "3", diagnosticCode: "catalog.placement.not-found"},
+		"NaN trigger parameter": {
+			placement: "test", parameter: ".nan", diagnosticCode: "catalog.trigger.parameters-invalid",
+		},
+		"positive infinite trigger parameter": {
+			placement: "test", parameter: ".inf", diagnosticCode: "catalog.trigger.parameters-invalid",
+		},
+		"negative infinite trigger parameter": {
+			placement: "test", parameter: "-.inf", diagnosticCode: "catalog.trigger.parameters-invalid",
+		},
 	}
 
 	for name, test := range tests {
@@ -277,6 +288,7 @@ func TestRefresherMatchesDeploymentCLIValidation(t *testing.T) {
 				t.Fatalf("os.Mkdir() error = %v", err)
 			}
 			catalogContents := strings.ReplaceAll(parityCatalog, "PLACEMENT", test.placement)
+			catalogContents = strings.ReplaceAll(catalogContents, "PARAMETER", test.parameter)
 			if err := os.WriteFile(
 				filepath.Join(catalogDirectory, "catalog.yaml"),
 				[]byte(catalogContents),
@@ -323,7 +335,8 @@ func TestRefresherMatchesDeploymentCLIValidation(t *testing.T) {
 			)
 			refresher.refreshAll(context.Background())
 
-			serverAccepted := repositories.results[repositoryID].Revision != nil
+			result := repositories.results[repositoryID]
+			serverAccepted := result.Revision != nil
 			cliAccepted := cliCode == cli.ExitValid
 			if serverAccepted != test.accepted || cliAccepted != test.accepted {
 				t.Errorf(
@@ -333,6 +346,12 @@ func TestRefresherMatchesDeploymentCLIValidation(t *testing.T) {
 					test.accepted,
 					stdout.String(),
 				)
+			}
+			if test.diagnosticCode != "" {
+				if result.FailureReason == nil || !strings.Contains(*result.FailureReason, test.diagnosticCode) ||
+					result.Attempt(repositoryID).Outcome != RefreshOutcomeCatalogRejected {
+					t.Errorf("rejected refresh = %#v, want diagnostic %q", result, test.diagnosticCode)
+				}
 			}
 
 			stdout.Reset()
@@ -609,9 +628,19 @@ metadata:
 spec:
   runtime: tools
   placement: PLACEMENT
+  watch: [".slipramp/**"]
   actions:
     inspect:
       command: [inspect]
+      parameters:
+        retries:
+          type: number
+          environment: RETRIES
+      triggers:
+        - name: changed
+          git: {}
+          parameters:
+            retries: PARAMETER
 `
 
 const parityPlacements = `

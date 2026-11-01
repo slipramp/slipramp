@@ -100,7 +100,7 @@ Action scalar overrides replace defaults; credential and resource maps merge by
 key. Resolution copies definitions rather than mutating the catalog, and Runtime
 and Target definitions always come from the same revision.
 
-Parameters are `string`, `boolean`, `number`, or `enum`, with required and enum
+Parameters are `string`, `boolean`, finite `number`, or `enum`, with required and enum
 constraints validated before Run creation. Each parameter maps to exactly one
 environment variable or argument. Arguments append in lexical parameter-name
 order. Unset optional parameters emit nothing. Commands are explicit argument

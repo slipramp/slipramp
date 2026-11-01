@@ -11,8 +11,9 @@ OAuth is optional. When configured, the Server publishes RFC 9728 metadata at
 `slipramp:runs:write`, and directs clients to the configured external
 authorization server. It validates the token signature, issuer, exact `/mcp`
 resource audience, lifetime, subject, and scopes. The authorization-server
-subject must be enrolled in `SLIPRAMP_OIDC_SUBJECT_ROLES`; it resolves to the
-same product Principal as browser OIDC login.
+issuer must exactly match `SLIPRAMP_OIDC_ISSUER`, and the subject must be enrolled
+in `SLIPRAMP_OIDC_SUBJECT_ROLES`; it resolves to the same product Principal as
+browser OIDC login.
 
 ## Tools and permissions
 

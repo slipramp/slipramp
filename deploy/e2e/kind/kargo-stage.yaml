@@ -16,9 +16,13 @@ metadata:
   name: acceptance
   namespace: kargo-acceptance
   labels:
-    env: acceptance
+    slipramp.com/integration: acceptance
   annotations:
-    slipramp.com/promotion-source-paths: review/manifest.yaml
+    slipramp.com/promotion-application: acceptance
+    slipramp.com/promotion-environment: acceptance
+    slipramp.com/promotion-repository-url: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
+    slipramp.com/promotion-target-branch: stage/acceptance/acceptance
+    slipramp.com/promotion-source-paths: '["review/manifest.yaml"]'
 spec:
   requestedFreight:
     - origin:
@@ -27,15 +31,6 @@ spec:
       sources:
         direct: true
         stages: []
-  promotionTemplate:
-    spec:
-      vars:
-        - name: app
-          value: acceptance
-        - name: overlay
-          value: acceptance
-        - name: gitopsRepo
-          value: ssh://git@acceptance-git.slipramp-system.svc.cluster.local:2222/srv/repository.git
 status:
   freightHistory:
     - items:

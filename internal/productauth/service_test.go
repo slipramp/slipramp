@@ -93,7 +93,12 @@ func TestServiceAuthenticatesOAuthAccessToken(t *testing.T) {
 	now := time.Date(2026, time.November, 1, 6, 0, 0, 0, time.UTC)
 	displayName := "Ada Lovelace"
 	store := newProductAuthStore()
-	service := newTestService(t, store, &recordingOIDCProvider{}, now)
+	provider := &recordingOIDCProvider{profile: OIDCProfile{
+		Issuer:      "https://identity.example.com",
+		Subject:     "ada-subject",
+		DisplayName: &displayName,
+	}}
+	service := newTestService(t, store, provider, now)
 	credentialID := uuid.New()
 
 	authentication, err := service.AuthenticateOAuthAccessToken(t.Context(), OAuthAccessToken{
@@ -119,6 +124,18 @@ func TestServiceAuthenticatesOAuthAccessToken(t *testing.T) {
 		authentication.Principal.Role != productidentity.RoleAdmin {
 		t.Errorf("principal = %#v", authentication.Principal)
 	}
+	login, err := service.BeginLogin()
+	if err != nil {
+		t.Fatalf("BeginLogin() error = %v", err)
+	}
+	completion, err := service.CompleteLogin(t.Context(), "authorization-code", login.State, login.State)
+	if err != nil || completion.Session == nil {
+		t.Fatalf("CompleteLogin() = %#v, error = %v", completion, err)
+	}
+	browserAuthentication, err := service.AuthenticateSession(t.Context(), completion.Session.Token)
+	if err != nil || browserAuthentication.Principal.ID != authentication.Principal.ID {
+		t.Fatalf("browser authentication = %#v, error = %v", browserAuthentication, err)
+	}
 
 	disabledAt := now.Add(time.Minute)
 	principal := store.principals[authentication.Principal.ID]
@@ -134,6 +151,23 @@ func TestServiceAuthenticatesOAuthAccessToken(t *testing.T) {
 	})
 	if !errors.Is(err, productidentity.ErrUnauthenticated) {
 		t.Errorf("disabled Principal error = %v, want unauthenticated", err)
+	}
+	_, err = service.AuthenticateSession(t.Context(), completion.Session.Token)
+	if !errors.Is(err, productidentity.ErrUnauthenticated) {
+		t.Errorf("disabled browser Principal error = %v, want unauthenticated", err)
+	}
+	for _, issuer := range []string{"", "https://another-identity.example.com", provider.profile.Issuer + "/"} {
+		_, err = service.AuthenticateOAuthAccessToken(t.Context(), OAuthAccessToken{
+			CredentialID: uuid.New(),
+			Profile:      OIDCProfile{Issuer: issuer, Subject: "ada-subject"},
+			Scopes:       []productidentity.Scope{productidentity.ScopeRunsWrite},
+		})
+		if !errors.Is(err, ErrEnrollmentDenied) {
+			t.Errorf("issuer %q error = %v, want enrollment denied", issuer, err)
+		}
+	}
+	if len(store.principals) != 1 || len(store.identities) != 1 {
+		t.Errorf("created principals=%d identities=%d, want 1 each", len(store.principals), len(store.identities))
 	}
 
 	_, err = service.AuthenticateOAuthAccessToken(t.Context(), OAuthAccessToken{

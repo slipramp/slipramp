@@ -213,10 +213,11 @@ type recordingCatalogs struct {
 }
 
 type pinnedCatalogs struct {
-	active      catalog.Revision
-	pinned      catalog.Revision
-	activeCalls int
-	pinnedCalls int
+	active         catalog.Revision
+	pinned         catalog.Revision
+	targetRevision *catalog.Revision
+	activeCalls    int
+	pinnedCalls    int
 }
 
 func (s *pinnedCatalogs) GetActiveRevision(context.Context, uuid.UUID) (catalog.Revision, error) {
@@ -229,12 +230,16 @@ func (s *pinnedCatalogs) GetTarget(
 	context.Context,
 	uuid.UUID,
 ) (catalog.TargetSummary, error) {
+	revision := s.active
+	if s.targetRevision != nil {
+		revision = *s.targetRevision
+	}
 	return catalog.TargetSummary{
 		ID:                testTargetID,
 		RepositoryID:      testRepositoryID,
-		CatalogRevisionID: s.active.ID,
-		DesiredCommitSHA:  s.active.CommitSHA,
-		Target:            s.active.Catalog.Targets[0],
+		CatalogRevisionID: revision.ID,
+		DesiredCommitSHA:  revision.CommitSHA,
+		Target:            revision.Catalog.Targets[0],
 	}, nil
 }
 

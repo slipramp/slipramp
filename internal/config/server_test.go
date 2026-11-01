@@ -101,7 +101,7 @@ integrations:
 		serverOIDCRedirectURLEnvironment:              "https://slipramp.example.com/api/v1/auth/callback",
 		serverOIDCSubjectRolesEnvironment:             `{"admin-subject":"admin","operator-subject":"operator"}`,
 		serverProductSessionLifetimeEnvironment:       "8h",
-		serverMCPOAuthIssuerEnvironment:               "https://identity.example.com/realms/slipramp",
+		serverMCPOAuthIssuerEnvironment:               "https://identity.example.com",
 		serverMCPOAuthResourceEnvironment:             "https://slipramp.example.com/mcp",
 		serverKargoIntegrationsFileEnvironment:        kargoIntegrationsPath,
 	}

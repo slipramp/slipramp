@@ -86,9 +86,10 @@ API-key rotation is create, update clients, then revoke.
 
 Slipramp is an OAuth resource server, not an authorization server. When MCP
 OAuth is enabled, the Server publishes protected-resource metadata, discovers
-one external issuer, validates signature, issuer, exact resource audience, time,
-subject, and scopes, and maps the subject through the existing OIDC enrollment
-map. The authorization server does not become a second user store.
+the same issuer used for browser OIDC login, validates signature, issuer, exact
+resource audience, time, subject, and scopes, and maps the subject through the
+existing OIDC enrollment map. Configuration and domain authentication reject a
+different issuer so both login methods share one Principal and disabled state.
 
 MCP tools invoke the same domain services and role checks as product requests.
 Read and Run-write scopes remain distinct, and sensitive Artifact access retains

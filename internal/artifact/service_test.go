@@ -6,6 +6,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -205,6 +206,7 @@ func (s *serviceMetadataStore) FailArtifact(_ context.Context, _ uuid.UUID) (Art
 }
 
 type serviceContentStore struct {
+	beforePut func()
 	puts      int
 	key       string
 	contents  string
@@ -280,6 +282,9 @@ func (s *serviceContentStore) Put(
 	size int64,
 	options objectstore.PutOptions,
 ) (int64, error) {
+	if s.beforePut != nil {
+		s.beforePut()
+	}
 	s.puts++
 	s.key = key
 	s.mediaType = options.MediaType
@@ -679,39 +684,81 @@ func (s *blockedLogContentStore) Open(context.Context, string) (objectstore.Obje
 func TestServiceUploadsDeclaredArtifactIdempotently(t *testing.T) {
 	t.Parallel()
 
-	metadata := &serviceMetadataStore{
-		runCluster: "colo",
-		chunks:     map[int64]LogChunk{},
-		context: RunContext{Artifacts: map[string]Declaration{
-			"plan": {MediaType: "application/octet-stream", Sensitive: true},
-		}},
-	}
-	contents := &serviceContentStore{}
-	service := newTestService(metadata, contents)
-	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1501")
-	digest := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+	for _, concurrentContents := range []string{"abc", "bad"} {
+		t.Run("concurrent upload of "+concurrentContents, func(t *testing.T) {
+			t.Parallel()
 
-	request := UploadRequest{
-		RunID: runID, Name: "plan", Body: strings.NewReader("abc"), SizeBytes: 3, SHA256: digest,
-	}
-	if err := service.Upload(context.Background(), request); err != nil {
-		t.Fatalf("Upload() error = %v", err)
-	}
-	request.Body = strings.NewReader("ignored because metadata already exists")
-	if err := service.Upload(context.Background(), request); err != nil {
-		t.Fatalf("repeated Upload() error = %v", err)
-	}
-	if contents.puts != 1 {
-		t.Errorf("content puts = %d, want 1", contents.puts)
-	}
-	if metadata.record == nil || !metadata.record.Sensitive || metadata.record.SHA256 == nil ||
-		*metadata.record.SHA256 != digest {
-		t.Errorf("artifact = %#v", metadata.record)
-	}
+			metadata := &serviceMetadataStore{
+				runCluster: "colo",
+				context: RunContext{Artifacts: map[string]Declaration{
+					"plan": {MediaType: "application/octet-stream", Sensitive: true},
+				}},
+			}
+			firstUploadStarted := make(chan struct{})
+			resumeFirstUpload := make(chan struct{})
+			releaseFirstUpload := sync.OnceFunc(func() { close(resumeFirstUpload) })
+			t.Cleanup(releaseFirstUpload)
+			firstUpload := true
+			contents := &serviceContentStore{beforePut: func() {
+				if firstUpload {
+					firstUpload = false
+					close(firstUploadStarted)
+					<-resumeFirstUpload
+				}
+			}}
+			service := newTestService(metadata, contents)
+			digest := "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+			request := UploadRequest{
+				RunID: uuid.New(), Name: "plan", SizeBytes: 3, SHA256: digest,
+				Body: strings.NewReader(concurrentContents),
+			}
+			concurrentResult := make(chan error, 1)
+			go func() { concurrentResult <- service.Upload(t.Context(), request) }()
+			<-firstUploadStarted
 
-	request.SizeBytes = 4
-	if err := service.Upload(context.Background(), request); !errors.Is(err, ErrChunkConflict) {
-		t.Errorf("conflicting Upload() error = %v", err)
+			acceptedRequest := request
+			acceptedRequest.Body = strings.NewReader("abc")
+			if err := service.Upload(t.Context(), acceptedRequest); err != nil {
+				t.Fatalf("Upload() error = %v", err)
+			}
+			releaseFirstUpload()
+			concurrentErr := <-concurrentResult
+			if concurrentContents == "abc" && concurrentErr != nil {
+				t.Fatalf("concurrent identical Upload() error = %v", concurrentErr)
+			}
+			if concurrentContents == "bad" && !errors.Is(concurrentErr, ErrChunkConflict) {
+				t.Fatalf("concurrent invalid Upload() error = %v", concurrentErr)
+			}
+
+			acceptedRequest.Body = strings.NewReader("ignored because metadata already exists")
+			if err := service.Upload(t.Context(), acceptedRequest); err != nil {
+				t.Fatalf("repeated Upload() error = %v", err)
+			}
+			if contents.puts != 2 || len(contents.objects) != 2 {
+				t.Errorf("content puts = %d, objects = %d, want 2 each", contents.puts, len(contents.objects))
+			}
+			if metadata.record == nil || !metadata.record.Sensitive || metadata.record.SHA256 == nil ||
+				*metadata.record.SHA256 != digest {
+				t.Fatalf("artifact = %#v", metadata.record)
+			}
+			content, err := service.OpenArtifact(t.Context(), metadata.record.ID)
+			if err != nil {
+				t.Fatalf("OpenArtifact() error = %v", err)
+			}
+			body, readErr := io.ReadAll(content.Body)
+			closeErr := content.Body.Close()
+			if err := errors.Join(readErr, closeErr); err != nil {
+				t.Fatalf("read artifact: %v", err)
+			}
+			if string(body) != "abc" {
+				t.Errorf("accepted artifact contents = %q, want abc", body)
+			}
+
+			acceptedRequest.SizeBytes = 4
+			if err := service.Upload(t.Context(), acceptedRequest); !errors.Is(err, ErrChunkConflict) {
+				t.Errorf("conflicting Upload() error = %v", err)
+			}
+		})
 	}
 }
 

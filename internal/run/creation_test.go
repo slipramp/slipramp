@@ -96,29 +96,54 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 func TestCreateRunFreezesTargetRelevanceSeparatelyFromCheckout(t *testing.T) {
 	t.Parallel()
 
-	service, _ := testService(t)
-	desiredCommitSHA := strings.Repeat("b", 40)
-	service.catalogs = &recordingCatalogs{
-		revision:         testRevision(),
-		desiredCommitSHA: desiredCommitSHA,
+	initialRevision := testRevision()
+	refreshedRevision := testRevision()
+	refreshedRevision.ID = uuid.New()
+	refreshedRevision.CommitSHA = strings.Repeat("b", 40)
+	tests := []struct {
+		name         string
+		catalogs     CatalogService
+		wantRevision catalog.Revision
+	}{
+		{
+			name: "unaffected Target retains older relevance",
+			catalogs: &recordingCatalogs{
+				revision:         refreshedRevision,
+				desiredCommitSHA: testCommitSHA,
+			},
+			wantRevision: refreshedRevision,
+		},
+		{
+			name: "refresh activates after Target snapshot was read",
+			catalogs: &pinnedCatalogs{
+				active:         refreshedRevision,
+				pinned:         initialRevision,
+				targetRevision: &initialRevision,
+			},
+			wantRevision: initialRevision,
+		},
 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
 
-	created, err := service.CreateRun(context.Background(), CreateRequest{
-		TargetID:   testTargetID,
-		ActionName: "preview",
-		Parameters: map[string]any{"mode": "safe"},
-		Source:     Source{Type: SourceTypeManual},
-	})
-	if err != nil {
-		t.Fatalf("CreateRun() error = %v", err)
-	}
-	if created.CommitSHA != testCommitSHA || created.TargetRelevanceCommitSHA == nil ||
-		*created.TargetRelevanceCommitSHA != desiredCommitSHA {
-		t.Errorf(
-			"Run commits = checkout %q, relevance %v",
-			created.CommitSHA,
-			created.TargetRelevanceCommitSHA,
-		)
+			service, _ := testService(t)
+			service.catalogs = test.catalogs
+			created, err := service.CreateRun(context.Background(), CreateRequest{
+				TargetID:   testTargetID,
+				ActionName: "preview",
+				Parameters: map[string]any{"mode": "safe"},
+				Source:     Source{Type: SourceTypeManual},
+			})
+			if err != nil {
+				t.Fatalf("CreateRun() error = %v", err)
+			}
+			if created.CatalogRevisionID != test.wantRevision.ID || created.CommitSHA != test.wantRevision.CommitSHA ||
+				created.TargetRelevanceCommitSHA == nil || *created.TargetRelevanceCommitSHA != testCommitSHA {
+				t.Errorf("Run snapshot = catalog %s, checkout %q, relevance %v",
+					created.CatalogRevisionID, created.CommitSHA, created.TargetRelevanceCommitSHA)
+			}
+		})
 	}
 }
 

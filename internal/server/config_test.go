@@ -326,6 +326,21 @@ func TestConfigValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "MCP OAuth shares OIDC issuer",
+			configure: func(settings *Config) {
+				settings.MCP.OAuth.Issuer = settings.ProductAuthentication.OIDC.Issuer
+				settings.MCP.OAuth.Resource = "https://slipramp.example.com/mcp"
+			},
+		},
+		{
+			name: "MCP OAuth has a different issuer",
+			configure: func(settings *Config) {
+				settings.MCP.OAuth.Issuer = "https://another-identity.example.com"
+				settings.MCP.OAuth.Resource = "https://slipramp.example.com/mcp"
+			},
+			wantError: "MCP OAuth issuer must match the product OIDC issuer",
+		},
+		{
 			name: "OIDC provider without administrator",
 			configure: func(settings *Config) {
 				settings.ProductAuthentication.OIDC.Issuer = "https://identity.example.com"

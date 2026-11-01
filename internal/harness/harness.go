@@ -46,6 +46,16 @@ func Run(ctx context.Context, command []string, streams Streams, options Options
 		return 0, errors.New("action command is required")
 	}
 
+	if options.CancellationFile != "" {
+		requested, err := cancellationRequested(options.CancellationFile)
+		if err != nil {
+			return 0, fmt.Errorf("read cancellation file before starting action: %w", err)
+		}
+		if requested {
+			return 128 + int(syscall.SIGTERM), nil
+		}
+	}
+
 	process := exec.CommandContext(ctx, command[0], command[1:]...)
 	process.Stdin = streams.Stdin
 	process.Stdout = streams.Stdout

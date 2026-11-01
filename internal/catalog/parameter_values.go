@@ -3,6 +3,7 @@ package catalog
 import (
 	"fmt"
 	"maps"
+	"math"
 	"slices"
 	"strings"
 )
@@ -21,7 +22,7 @@ func NormalizeParameterValues(values map[string]any) (map[string]any, error) {
 		default:
 			number, ok := parameterNumberValue(value)
 			if !ok {
-				return nil, fmt.Errorf("parameter %q must be a string, boolean, or number", name)
+				return nil, fmt.Errorf("parameter %q must be a string, boolean, or finite number", name)
 			}
 
 			normalized[name] = number
@@ -119,9 +120,10 @@ func validateParameterValue(name string, declaration Parameter, value any) (any,
 func parameterNumberValue(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case float64:
-		return typed, true
+		return typed, !math.IsNaN(typed) && !math.IsInf(typed, 0)
 	case float32:
-		return float64(typed), true
+		number := float64(typed)
+		return number, !math.IsNaN(number) && !math.IsInf(number, 0)
 	case int:
 		return float64(typed), true
 	case int32:

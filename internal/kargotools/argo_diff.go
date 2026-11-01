@@ -24,7 +24,9 @@ func ParseArgoDiff(output []byte) (argodiff.Document, error) {
 		if strings.TrimSpace(current.Diff) == "" {
 			return errors.New("argo CD resource diff has an empty body")
 		}
-		current.VersionMetadataOnly = versionMetadataOnly(current.Diff)
+		// Argo CD text diffs may omit the enclosing YAML structure. A version
+		// label can also be a Service selector, so leaf keys cannot prove that a
+		// change is metadata-only. Keep every resource visible for review.
 		result.Resources = append(result.Resources, *current)
 		body = nil
 		return nil
@@ -94,35 +96,4 @@ func parseArgoDiffHeader(line string) (argodiff.Resource, bool) {
 	}
 
 	return resource, true
-}
-
-func versionMetadataOnly(diff string) bool {
-	versionAnnotations := map[string]struct{}{
-		"app.kubernetes.io/version": {},
-		"helm.sh/chart":             {},
-	}
-	foundChange := false
-	for line := range strings.SplitSeq(diff, "\n") {
-		var changed string
-		switch {
-		case strings.HasPrefix(line, "< "), strings.HasPrefix(line, "> "):
-			changed = line[2:]
-		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"),
-			strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
-			changed = line[1:]
-		default:
-			continue
-		}
-		foundChange = true
-		key, _, ok := strings.Cut(strings.TrimSpace(changed), ":")
-		key = strings.Trim(strings.TrimSpace(key), `"'`)
-		if !ok {
-			return false
-		}
-		if _, ok := versionAnnotations[key]; !ok {
-			return false
-		}
-	}
-
-	return foundChange
 }

@@ -38,9 +38,10 @@ complete downloads.
 
 The Harness uploads only output names frozen into the Run snapshot. The Server
 streams bytes to object storage and commits authoritative metadata only after
-the write and validation succeed. A failed upload leaves no authoritative
-Artifact record; orphan reconciliation removes abandoned objects after a grace
-period and a final PostgreSQL check.
+the write and validation succeed. Each upload attempt writes to its own object
+key so rejected or concurrent requests cannot overwrite accepted contents. A
+failed upload leaves no authoritative Artifact record; orphan reconciliation
+removes abandoned objects after a grace period and a final PostgreSQL check.
 
 An input explicitly selects one retained Artifact. Its declaration names a
 producer Action and compatibility rule. The supported rule is

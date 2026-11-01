@@ -27,10 +27,18 @@ and Argo CD links, and optional candidate-branch cleanup policy. Controller
 configuration selects the Stage namespaces observed for an integration.
 
 An optional Controller observer reads every Stage page from configured
-namespaces and submits complete authenticated snapshots. A partial list is never
-accepted as complete. Repeated snapshot identity is idempotent; successful
-snapshots archive missing Stages while retaining policy and history. Inventory
-failure affects Stage freshness without interrupting ordinary Run delivery.
+namespaces and selects Stages whose `slipramp.com/integration` label equals the
+integration name. Explicit Stage annotations supply application, environment,
+Repository URL, target branch, and source paths; the observer does not infer
+those coordinates from promotion-template variables or repository layout.
+See the [Stage metadata contract](../CONFIGURATION.md#kargo-stage-metadata).
+
+The observer submits complete authenticated snapshots of participating Stages.
+A partial list or malformed participating Stage is never accepted as complete;
+unselected Stages do not affect inventory. Repeated snapshot identity is
+idempotent; successful snapshots archive missing or deselected Stages while
+retaining policy and history. Inventory failure affects Stage freshness without
+interrupting ordinary Run delivery.
 
 Stage identity is `(integration, project, name)`, with project equal to the
 Kubernetes namespace and Cluster supplied by the authenticated Controller.
@@ -118,6 +126,11 @@ bounded Artifacts:
 
 The tools image has no Slipramp API integration; the Harness transfers declared
 Artifacts. Preparation never mutates Git refs or Kubernetes resources.
+
+Argo CD text diffs do not reliably include a changed field's enclosing YAML
+structure. The first-party tools therefore leave all resource changes visible,
+including changes to keys commonly used for version labels; those keys can also
+control selectors or application data.
 
 Successful Run completion plus Artifact validation moves the Promotion to
 `pending`. A failed Run or missing, malformed, oversized, expired, or deleted

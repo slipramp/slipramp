@@ -27,6 +27,9 @@ func (s *Service) AuthenticateOAuthAccessToken(
 	ctx context.Context,
 	token OAuthAccessToken,
 ) (productidentity.Authentication, error) {
+	if token.Profile.Issuer != s.cfg.OIDC.Issuer {
+		return productidentity.Authentication{}, ErrEnrollmentDenied
+	}
 	role, enrolled := s.cfg.OIDC.SubjectRoles[token.Profile.Subject]
 	if !enrolled {
 		return productidentity.Authentication{}, ErrEnrollmentDenied

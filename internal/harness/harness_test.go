@@ -108,46 +108,69 @@ func TestRunForwardsSignals(t *testing.T) {
 func TestRunForwardsCancellationFile(t *testing.T) {
 	t.Setenv("SLIPRAMP_HARNESS_HELPER", "1")
 
-	cancellationFile := t.TempDir() + "/cancellation-requested"
-	if err := os.WriteFile(cancellationFile, []byte("false"), 0o600); err != nil {
-		t.Fatalf("write cancellation file: %v", err)
-	}
-	stdout := newReadyWriter("ready\n")
-	result := make(chan runResult, 1)
-
-	go func() {
-		exitCode, err := Run(
-			context.Background(),
-			helperCommand("signal"),
-			Streams{Stdout: stdout},
-			Options{
-				CancellationFile:         cancellationFile,
-				cancellationPollInterval: time.Millisecond,
-				cancellationGracePeriod:  time.Second,
-			},
-		)
-		result <- runResult{exitCode: exitCode, err: err}
-	}()
-
-	select {
-	case <-stdout.ready:
-	case <-time.After(2 * time.Second):
-		t.Fatal("action did not become ready")
-	}
-	if err := os.WriteFile(cancellationFile, []byte("true\n"), 0o600); err != nil {
-		t.Fatalf("request cancellation: %v", err)
-	}
-
-	select {
-	case received := <-result:
-		if received.err != nil {
-			t.Fatalf("Run() error = %v", received.err)
+	for _, alreadyCanceled := range []bool{false, true} {
+		name := "while running"
+		if alreadyCanceled {
+			name = "before starting"
 		}
-		if received.exitCode != 23 {
-			t.Errorf("Run() exit code = %d, want 23", received.exitCode)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Run() did not forward the cancellation request")
+		t.Run(name, func(t *testing.T) {
+			cancellationFile := t.TempDir() + "/cancellation-requested"
+			initialValue := "false"
+			command := helperCommand("signal")
+			wantExitCode := 23
+			pollInterval := time.Millisecond
+			if alreadyCanceled {
+				initialValue = "true\n"
+				command = helperCommand("echo")
+				wantExitCode = 128 + int(syscall.SIGTERM)
+				pollInterval = time.Second
+			}
+			if err := os.WriteFile(cancellationFile, []byte(initialValue), 0o600); err != nil {
+				t.Fatalf("write cancellation file: %v", err)
+			}
+			stdout := newReadyWriter("ready\n")
+			result := make(chan runResult, 1)
+
+			go func() {
+				exitCode, err := Run(
+					context.Background(),
+					command,
+					Streams{Stdout: stdout},
+					Options{
+						CancellationFile:         cancellationFile,
+						cancellationPollInterval: pollInterval,
+						cancellationGracePeriod:  time.Second,
+					},
+				)
+				result <- runResult{exitCode: exitCode, err: err}
+			}()
+
+			if !alreadyCanceled {
+				select {
+				case <-stdout.ready:
+				case <-time.After(2 * time.Second):
+					t.Fatal("action did not become ready")
+				}
+				if err := os.WriteFile(cancellationFile, []byte("true\n"), 0o600); err != nil {
+					t.Fatalf("request cancellation: %v", err)
+				}
+			}
+
+			select {
+			case received := <-result:
+				if received.err != nil {
+					t.Fatalf("Run() error = %v", received.err)
+				}
+				if received.exitCode != wantExitCode {
+					t.Errorf("Run() exit code = %d, want %d", received.exitCode, wantExitCode)
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("Run() did not honor the cancellation request")
+			}
+			if alreadyCanceled && stdout.String() != "" {
+				t.Errorf("canceled action started: stdout = %q", stdout.String())
+			}
+		})
 	}
 }
 

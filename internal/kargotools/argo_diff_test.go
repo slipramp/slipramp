@@ -35,11 +35,10 @@ func TestParseArgoDiff(t *testing.T) {
 		}
 		want := argodiff.Document{Resources: []argodiff.Resource{
 			{
-				Kind:                "Service",
-				Namespace:           "default",
-				Name:                "api",
-				Diff:                "12c12\n<     app.kubernetes.io/version: v1.21.1\n---\n>     app.kubernetes.io/version: v1.21.2",
-				VersionMetadataOnly: true,
+				Kind:      "Service",
+				Namespace: "default",
+				Name:      "api",
+				Diff:      "12c12\n<     app.kubernetes.io/version: v1.21.1\n---\n>     app.kubernetes.io/version: v1.21.2",
 			},
 			{
 				Group:     "apps",
@@ -59,6 +58,33 @@ func TestParseArgoDiff(t *testing.T) {
 			t.Fatalf("ParseArgoDiff() = %#v, want %#v", got, want)
 		}
 	})
+
+	for _, test := range []struct {
+		name string
+		diff string
+	}{
+		{
+			name: "unified Service selector diff",
+			diff: "@@ -5,3 +5,3 @@\n spec:\n   selector:\n" +
+				"-    app.kubernetes.io/version: stable\n+    app.kubernetes.io/version: canary",
+		},
+		{
+			name: "normal diff without field context",
+			diff: "12c12\n<     helm.sh/chart: stable\n---\n>     helm.sh/chart: canary",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := ParseArgoDiff([]byte("===== /Service default/api ======\n" + test.diff))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got.Resources) != 1 || got.Resources[0].Diff != test.diff || got.Resources[0].VersionMetadataOnly {
+				t.Fatalf("version-key change is not fully visible: %#v", got)
+			}
+		})
+	}
 
 	t.Run("returns an explicit empty result", func(t *testing.T) {
 		t.Parallel()

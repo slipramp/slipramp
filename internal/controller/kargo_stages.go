@@ -24,11 +24,16 @@ import (
 )
 
 const (
-	kargoStageListLimit            = 500
-	kargoFreightListLimit          = 500
-	kargoStageObservationPeriod    = 30 * time.Second
-	maximumKargoHealthStatusLength = 200
-	promotionSourcePathsAnnotation = "slipramp.com/promotion-source-paths"
+	kargoStageListLimit             = 500
+	kargoFreightListLimit           = 500
+	kargoStageObservationPeriod     = 30 * time.Second
+	maximumKargoHealthStatusLength  = 200
+	promotionIntegrationLabel       = "slipramp.com/integration"
+	promotionApplicationAnnotation  = "slipramp.com/promotion-application"
+	promotionEnvironmentAnnotation  = "slipramp.com/promotion-environment"
+	promotionRepositoryAnnotation   = "slipramp.com/promotion-repository-url"
+	promotionTargetBranchAnnotation = "slipramp.com/promotion-target-branch"
+	promotionSourcePathsAnnotation  = "slipramp.com/promotion-source-paths"
 )
 
 var kargoStageResource = schema.GroupVersionResource{
@@ -169,6 +174,9 @@ func (o *kargoStageObserver) observe(ctx context.Context) (api.KargoStageSnapsho
 						namespace,
 					)
 				}
+				if item.GetLabels()[promotionIntegrationLabel] != o.integration {
+					continue
+				}
 				observed, err := normalizeKargoStageWithDirectFreight(item, directFreight)
 				if err != nil {
 					return api.KargoStageSnapshot{}, fmt.Errorf(
@@ -277,14 +285,6 @@ type kargoStage struct {
 				Stages []string `json:"stages"`
 			} `json:"sources"`
 		} `json:"requestedFreight"`
-		PromotionTemplate struct {
-			Spec struct {
-				Variables []struct {
-					Name  string `json:"name"`
-					Value string `json:"value"`
-				} `json:"vars"`
-			} `json:"spec"`
-		} `json:"promotionTemplate"`
 	} `json:"spec"`
 	Status struct {
 		AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
@@ -368,10 +368,13 @@ func normalizeKargoStageWithDirectFreight(
 		return api.PromotionStageObservation{}, fmt.Errorf("decode Stage: %w", err)
 	}
 
-	variables := kargoVariables(raw)
-	application := firstNonempty(variables["argoApp"], variables["app"], item.GetLabels()["app"], item.GetName())
+	annotations := item.GetAnnotations()
+	application := strings.TrimSpace(annotations[promotionApplicationAnnotation])
 	healthStatus, argoApplicationNamespace := kargoStageHealth(raw, application)
-	repositoryURL, targetBranch, sourcePaths := kargoBranchDetails(item, variables)
+	sourcePaths, err := kargoSourcePaths(annotations[promotionSourcePathsAnnotation])
+	if err != nil {
+		return api.PromotionStageObservation{}, err
+	}
 	requestedFreight, err := requestedKargoFreight(raw)
 	if err != nil {
 		return api.PromotionStageObservation{}, err
@@ -382,9 +385,9 @@ func normalizeKargoStageWithDirectFreight(
 		KubernetesUID:        string(item.GetUID()),
 		ResourceVersion:      item.GetResourceVersion(),
 		Application:          application,
-		Environment:          strings.TrimSpace(item.GetLabels()["env"]),
-		RepositoryURL:        repositoryURL,
-		TargetBranch:         targetBranch,
+		Environment:          strings.TrimSpace(annotations[promotionEnvironmentAnnotation]),
+		RepositoryURL:        strings.TrimSpace(annotations[promotionRepositoryAnnotation]),
+		TargetBranch:         strings.TrimSpace(annotations[promotionTargetBranchAnnotation]),
 		SourcePaths:          sourcePaths,
 		RequestedFreight:     requestedFreight,
 		Freight:              currentKargoFreight(raw),
@@ -526,69 +529,27 @@ func requestedKargoFreight(stage kargoStage) ([]api.PromotionFreightRequest, err
 	return requests, nil
 }
 
-func kargoVariables(stage kargoStage) map[string]string {
-	variables := make(map[string]string)
-	for _, variable := range stage.Spec.PromotionTemplate.Spec.Variables {
-		variables[variable.Name] = strings.TrimSpace(variable.Value)
+func kargoSourcePaths(value string) ([]string, error) {
+	var paths []string
+	if err := json.Unmarshal([]byte(value), &paths); err != nil {
+		return nil, fmt.Errorf("%s must be a JSON array of repository-relative paths: %w", promotionSourcePathsAnnotation, err)
 	}
-
-	return variables
-}
-
-func kargoBranchDetails(
-	item *unstructured.Unstructured,
-	variables map[string]string,
-) (string, string, []string) {
-	application := variables["app"]
-	environment := variables["overlay"]
-	if application == "" || environment == "" {
-		return variables["gitopsRepo"], "", nil
+	if len(paths) == 0 {
+		return nil, errors.New("at least one source path is required")
 	}
-
-	kustomizePath := variables["kustomizePath"]
-	if kustomizePath == "" {
-		kustomizePath = application
-	}
-	kustomizePath, ok := cleanRepositoryPath(kustomizePath)
-	if !ok {
-		return variables["gitopsRepo"], "", nil
-	}
-	root := path.Join("k8s", kustomizePath)
-
-	paths := []string{
-		path.Join(root, "base"),
-		path.Join(root, "overlays", environment),
-	}
-	stageBranchKustomization := variables["stageBranchKustomization"]
-	if stageBranchKustomization == "" {
-		stageBranchKustomization = "k8s/kargo/stage-branch/kustomization.yaml"
-	}
-	if cleaned, valid := cleanRepositoryPath(stageBranchKustomization); valid {
-		paths = append(paths, cleaned)
-	}
-	for _, candidate := range strings.FieldsFunc(
-		item.GetAnnotations()[promotionSourcePathsAnnotation],
-		func(value rune) bool { return value == ',' || value == '\n' },
-	) {
-		if cleaned, valid := cleanRepositoryPath(candidate); valid {
-			paths = append(paths, cleaned)
+	seen := make(map[string]struct{}, len(paths))
+	for _, value := range paths {
+		if value == "" || value != strings.TrimSpace(value) || strings.HasPrefix(value, "/") ||
+			path.Clean(value) != value || value == ".." || strings.HasPrefix(value, "../") {
+			return nil, fmt.Errorf("source path %q must be a clean repository-relative path", value)
 		}
+		if _, exists := seen[value]; exists {
+			return nil, fmt.Errorf("source path %q is duplicated", value)
+		}
+		seen[value] = struct{}{}
 	}
 
-	return variables["gitopsRepo"], "stage/" + application + "/" + environment, uniqueStrings(paths)
-}
-
-func cleanRepositoryPath(value string) (string, bool) {
-	value = strings.TrimSpace(value)
-	if value == "" || strings.HasPrefix(value, "/") {
-		return "", false
-	}
-	cleaned := path.Clean(value)
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
-		return "", false
-	}
-
-	return cleaned, true
+	return paths, nil
 }
 
 func uniqueStrings(values []string) []string {

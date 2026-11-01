@@ -289,17 +289,18 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name        string
-		missing     bool
-		status      batchv1.JobStatus
-		podStatus   *corev1.ContainerStatus
-		canceled    bool
-		handleUID   string
-		wantPhase   api.RunObservationPhase
-		wantOutcome *api.RunObservationOutcome
-		wantReason  string
-		wantExit    *int32
-		wantImages  api.ExecutionImages
+		name               string
+		missing            bool
+		status             batchv1.JobStatus
+		statusAfterPodExit *batchv1.JobStatus
+		podStatus          *corev1.ContainerStatus
+		canceled           bool
+		handleUID          string
+		wantPhase          api.RunObservationPhase
+		wantOutcome        *api.RunObservationOutcome
+		wantReason         string
+		wantExit           *int32
+		wantImages         api.ExecutionImages
 	}{
 		{
 			name:      "active Job with pending action",
@@ -350,6 +351,93 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 			wantOutcome: new(api.RunObservationOutcomeTimedOut),
 			wantReason:  "DeadlineExceeded",
 			wantExit:    new(int32(137)),
+		},
+		{
+			name: "deadline termination still running",
+			status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobFailureTarget,
+				Status: corev1.ConditionTrue,
+				Reason: "DeadlineExceeded",
+			}}},
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Running: &corev1.ContainerStateRunning{},
+				},
+			},
+			wantPhase: api.RunObservationPhaseRunning,
+		},
+		{
+			name: "deadline termination before Job failed condition",
+			status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobFailureTarget,
+				Status: corev1.ConditionTrue,
+				Reason: "DeadlineExceeded",
+			}}},
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 143},
+				},
+			},
+			wantPhase:   api.RunObservationPhaseFinished,
+			wantOutcome: new(api.RunObservationOutcomeTimedOut),
+			wantReason:  "DeadlineExceeded",
+			wantExit:    new(int32(143)),
+		},
+		{
+			name: "deadline termination overrides successful signal handler",
+			status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobFailureTarget,
+				Status: corev1.ConditionTrue,
+				Reason: "DeadlineExceeded",
+			}}},
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+				},
+			},
+			wantPhase:   api.RunObservationPhaseFinished,
+			wantOutcome: new(api.RunObservationOutcomeTimedOut),
+			wantReason:  "DeadlineExceeded",
+			wantExit:    new(int32(0)),
+		},
+		{
+			name: "deadline arrives between Job and Pod reads",
+			statusAfterPodExit: &batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobFailureTarget,
+				Status: corev1.ConditionTrue,
+				Reason: "DeadlineExceeded",
+			}}},
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+				},
+			},
+			wantPhase:   api.RunObservationPhaseFinished,
+			wantOutcome: new(api.RunObservationOutcomeTimedOut),
+			wantReason:  "DeadlineExceeded",
+			wantExit:    new(int32(0)),
+		},
+		{
+			name: "pending Job failure overrides successful signal handler",
+			status: batchv1.JobStatus{Conditions: []batchv1.JobCondition{{
+				Type:   batchv1.JobFailureTarget,
+				Status: corev1.ConditionTrue,
+				Reason: "PodFailurePolicy",
+			}}},
+			podStatus: &corev1.ContainerStatus{
+				Name: actionContainerName,
+				State: corev1.ContainerState{
+					Terminated: &corev1.ContainerStateTerminated{ExitCode: 0},
+				},
+			},
+			wantPhase:   api.RunObservationPhaseFinished,
+			wantOutcome: new(api.RunObservationOutcomeFailed),
+			wantReason:  "PodFailurePolicy",
+			wantExit:    new(int32(0)),
 		},
 		{
 			name: "action exited",
@@ -424,6 +512,18 @@ func TestKubernetesRunJobsObservesJobState(t *testing.T) {
 				objects = append(objects, pod)
 			}
 			client := fake.NewClientset(objects...)
+			if test.statusAfterPodExit != nil {
+				jobReads := 0
+				client.PrependReactor("get", "jobs", func(k8stesting.Action) (bool, runtime.Object, error) {
+					jobReads++
+					if jobReads == 1 {
+						return false, nil, nil
+					}
+					updated := job.DeepCopy()
+					updated.Status = *test.statusAfterPodExit
+					return true, updated, nil
+				})
+			}
 			jobs := newKubernetesRunJobs(validConfig(), client.BatchV1(), client.CoreV1())
 
 			observation, err := jobs.Observe(

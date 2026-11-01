@@ -90,7 +90,7 @@ func (r *kubernetesRunJobs) RequestCancellation(
 
 		return cancellationResult{handle: handle}, nil
 	}
-	if terminalJobObservation(job.Status.Conditions, nil) != nil ||
+	if terminalJobObservation(job.Status.Conditions, nil, false) != nil ||
 		actionAlreadyTerminated(pods) {
 		return cancellationResult{handle: handle, jobRetained: true}, nil
 	}
@@ -291,12 +291,11 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 	handle.uid = string(job.UID)
 	uid := new(handle.uid)
 
-	terminal := terminalJobObservation(job.Status.Conditions, uid)
-
 	pods, err := r.executionPods(ctx, handle)
 	if err != nil {
 		return runObservation{}, fmt.Errorf("list execution Pods: %w", err)
 	}
+	terminal := terminalJobObservation(job.Status.Conditions, uid, actionAlreadyTerminated(pods))
 
 	cancellationRequested := false
 	for index := range pods {
@@ -333,6 +332,21 @@ func (r *kubernetesRunJobs) Observe(ctx context.Context, handle jobHandle) (runO
 			}
 			if status.State.Terminated != nil {
 				terminated := status.State.Terminated
+				if terminal == nil {
+					// A deadline may have fired between the Job and Pod reads. Read
+					// its cause after observing termination before trusting the exit code.
+					latest, err := r.jobs.Jobs(handle.namespace).Get(ctx, handle.name, metav1.GetOptions{})
+					if err != nil {
+						return runObservation{}, fmt.Errorf("get execution Job after Action termination: %w", err)
+					}
+					if err := r.validateJobIdentity(handle, latest); err != nil {
+						return runObservation{}, err
+					}
+					terminal = terminalJobObservation(latest.Status.Conditions, uid, true)
+					if terminal != nil {
+						terminal.images = images
+					}
+				}
 				if terminal == nil {
 					observation := terminatedObservation(terminated, uid)
 					observation.images = images
@@ -581,7 +595,11 @@ func (r *kubernetesRunJobs) executionPods(ctx context.Context, handle jobHandle)
 	return pods.Items, nil
 }
 
-func terminalJobObservation(conditions []batchv1.JobCondition, jobUID *string) *runObservation {
+func terminalJobObservation(
+	conditions []batchv1.JobCondition,
+	jobUID *string,
+	actionTerminated bool,
+) *runObservation {
 	for _, condition := range conditions {
 		if condition.Status != corev1.ConditionTrue {
 			continue
@@ -593,7 +611,12 @@ func terminalJobObservation(conditions []batchv1.JobCondition, jobUID *string) *
 		case batchv1.JobComplete:
 			outcome = api.RunObservationOutcomeSucceeded
 			exitCode = new(int32(0))
-		case batchv1.JobFailed:
+		case batchv1.JobFailed, batchv1.JobFailureTarget:
+			// Kubernetes publishes FailureTarget before Failed. Once the Action
+			// stops, preserve that failure even if it handled termination with exit 0.
+			if condition.Type == batchv1.JobFailureTarget && !actionTerminated {
+				continue
+			}
 			if condition.Reason == "DeadlineExceeded" {
 				outcome = api.RunObservationOutcomeTimedOut
 			}

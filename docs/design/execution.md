@@ -89,6 +89,10 @@ The Harness:
 5. preserves the child exit status;
 6. uploads declared output Artifacts.
 
+The Harness checks cancellation before starting the Action, including after
+downloading input Artifacts, and skips execution when cancellation is already
+requested.
+
 The Run-scoped transfer credential is removed from the child environment.
 Artifact transfer failure makes an otherwise successful execution fail and
 never hides a nonzero child exit code. Runtime images and tools require no
@@ -138,6 +142,11 @@ For terminal Jobs, durable log closure and accepted terminal reporting precede
 UID-checked Job deletion. Complete logs seal with size and digest. If the log
 source disappears after a nonempty durable prefix, that prefix becomes an
 explicitly incomplete failed log before terminal reporting and cleanup.
+
+When Kubernetes has marked a Job with `FailureTarget`, a terminated Action
+retains that failure or timeout outcome even if its signal handler exited
+successfully. The pending failure does not finish an Action that is still
+running.
 
 Storage, reporting, or deletion failures retain the Job for recovery. Kubernetes
 TTL cleanup is disabled because it could remove the only remaining log source

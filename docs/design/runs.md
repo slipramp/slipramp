@@ -17,6 +17,9 @@ and freezes:
 - normalized parameters and selected input Artifacts;
 - Run source and optional actor snapshot.
 
+For unpinned requests, catalog resolution uses the immutable revision ID read
+with the Target relevance marker, so concurrent refresh cannot mix the two.
+
 Authenticated idempotency keys are scoped to the submitting Principal. Creation
 and any required parent linkage commit atomically, including Git delivery and
 Promotion preparation linkage. An ambiguous response can therefore be retried
