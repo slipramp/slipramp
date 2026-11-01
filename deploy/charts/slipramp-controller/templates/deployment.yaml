@@ -28,7 +28,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: controller
-          image: {{ include "slipramp-controller.image" .Values.image | quote }}
+          image: {{ include "slipramp-controller.image" (dict "image" .Values.image "appVersion" .Chart.AppVersion) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: metrics
@@ -56,9 +56,9 @@ spec:
                   name: {{ include "slipramp-controller.secretName" (dict "root" . "secret" .Values.credentials.bearerToken) }}
                   key: {{ include "slipramp-controller.secretKey" (dict "secret" .Values.credentials.bearerToken "managedKey" "controller-token") }}
             - name: SLIPRAMP_CONTROLLER_CHECKOUT_IMAGE
-              value: {{ include "slipramp-controller.image" .Values.checkoutImage | quote }}
+              value: {{ include "slipramp-controller.image" (dict "image" .Values.checkoutImage "appVersion" .Chart.AppVersion) | quote }}
             - name: SLIPRAMP_CONTROLLER_HARNESS_IMAGE
-              value: {{ include "slipramp-controller.image" .Values.harnessImage | quote }}
+              value: {{ include "slipramp-controller.image" (dict "image" .Values.harnessImage "appVersion" .Chart.AppVersion) | quote }}
             - name: SLIPRAMP_CONTROLLER_GIT_CREDENTIALS
               value: {{ .Values.gitCredentials | toJson | quote }}
             - name: SLIPRAMP_CONTROLLER_EXECUTION_NAMESPACES

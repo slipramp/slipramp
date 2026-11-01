@@ -42,8 +42,8 @@ both `existingSecret.name` and `existingSecret.key` to empty strings. The
 schema rejects setting both paths or neither path. Inline values are visible to
 Helm and should be reserved for disposable environments.
 
-Server and web images accept an optional SHA-256 digest while retaining the
-required release tag for readable manifests and release validation. When a
+Server and web image tags default to the chart application version and may be
+overridden explicitly. Each image accepts an optional SHA-256 digest. When a
 digest is set, the chart renders `repository:tag@sha256:...`, and Kubernetes
 resolves the immutable digest:
 
@@ -51,7 +51,7 @@ resolves the immutable digest:
 server:
   image:
     repository: ghcr.io/slipramp/slipramp-server
-    tag: 0.1.1
+    tag: <version>
     digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
@@ -227,9 +227,10 @@ version explicitly; the same release version is the default Server and web
 image tag.
 
 ```console
+VERSION=<release-version>
 helm upgrade --install slipramp \
   oci://ghcr.io/slipramp/slipramp-charts/slipramp \
-  --version 0.1.1 \
+  --version "$VERSION" \
   --namespace slipramp-system --create-namespace \
   --values production-values.yaml
 ```

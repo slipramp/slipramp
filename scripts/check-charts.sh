@@ -45,19 +45,24 @@ assert_render_fails() {
 "$helm_bin" lint "$server_chart" --values "$testdata/slipramp-required.yaml"
 "$helm_bin" lint "$controller_chart" --values "$testdata/controller-required.yaml"
 
-chart_version=$(
+server_app_version=$(
   "$helm_bin" show chart "$server_chart" |
-    awk '$1 == "version:" { gsub(/^"|"$/, "", $2); print $2; exit }'
+    awk '$1 == "appVersion:" { gsub(/^"|"$/, "", $2); print $2; exit }'
 )
+controller_app_version=$(
+  "$helm_bin" show chart "$controller_chart" |
+    awk '$1 == "appVersion:" { gsub(/^"|"$/, "", $2); print $2; exit }'
+)
+package_version=0.0.1-test.1
 package_directory="$test_directory/packages"
 SLIPRAMP_HELM_BIN="$helm_bin" \
-  "$repository_root/scripts/package-charts.sh" "$chart_version" "$package_directory"
-test -f "$package_directory/slipramp-$chart_version.tgz" || fail "Server chart was not packaged"
-test -f "$package_directory/slipramp-controller-$chart_version.tgz" || fail "Controller chart was not packaged"
+  "$repository_root/scripts/package-charts.sh" "$package_version" "$package_directory"
+test -f "$package_directory/slipramp-$package_version.tgz" || fail "Server chart was not packaged"
+test -f "$package_directory/slipramp-controller-$package_version.tgz" || fail "Controller chart was not packaged"
 if SLIPRAMP_HELM_BIN="$helm_bin" \
-  "$repository_root/scripts/package-charts.sh" 999.0.0 "$test_directory/invalid-packages" \
+  "$repository_root/scripts/package-charts.sh" not-a-version "$test_directory/invalid-packages" \
   >"$test_directory/invalid-package.out" 2>&1; then
-  fail "Mismatched release version packaged successfully"
+  fail "Invalid release version packaged successfully"
 fi
 
 server_render="$test_directory/server.yaml"
@@ -91,9 +96,20 @@ assert_not_contains "$server_render" '^kind: (Ingress|HTTPRoute)$'
   --set-string web.image.digest="$image_digest" \
   >"$test_directory/server-digests.yaml"
 assert_contains "$test_directory/server-digests.yaml" \
-  "image: \"ghcr.io/slipramp/slipramp-server:0.1.1@$image_digest\""
+  "image: \"ghcr.io/slipramp/slipramp-server:$server_app_version@$image_digest\""
 assert_contains "$test_directory/server-digests.yaml" \
-  "image: \"ghcr.io/slipramp/slipramp-web:0.1.1@$image_digest\""
+  "image: \"ghcr.io/slipramp/slipramp-web:$server_app_version@$image_digest\""
+
+"$helm_bin" template --kube-version 1.30.0 slipramp "$package_directory/slipramp-$package_version.tgz" \
+  --namespace slipramp-system \
+  --values "$testdata/slipramp-required.yaml" \
+  --set-string server.image.digest="$image_digest" \
+  --set-string web.image.digest="$image_digest" \
+  >"$test_directory/server-package.yaml"
+assert_contains "$test_directory/server-package.yaml" \
+  "image: \"ghcr.io/slipramp/slipramp-server:$package_version@$image_digest\""
+assert_contains "$test_directory/server-package.yaml" \
+  "image: \"ghcr.io/slipramp/slipramp-web:$package_version@$image_digest\""
 
 "$helm_bin" template --kube-version 1.30.0 slipramp "$server_chart" \
   --namespace slipramp-system \
@@ -234,11 +250,26 @@ assert_contains "$controller_render" 'port: 9091'
   --set-string harnessImage.digest="$image_digest" \
   >"$test_directory/controller-digests.yaml"
 assert_contains "$test_directory/controller-digests.yaml" \
-  "image: \"ghcr.io/slipramp/slipramp-controller:0.1.1@$image_digest\""
+  "image: \"ghcr.io/slipramp/slipramp-controller:$controller_app_version@$image_digest\""
 assert_contains "$test_directory/controller-digests.yaml" \
-  "value: \"ghcr.io/slipramp/slipramp-checkout:0.1.1@$image_digest\""
+  "value: \"ghcr.io/slipramp/slipramp-checkout:$controller_app_version@$image_digest\""
 assert_contains "$test_directory/controller-digests.yaml" \
-  "value: \"ghcr.io/slipramp/slipramp-harness:0.1.1@$image_digest\""
+  "value: \"ghcr.io/slipramp/slipramp-harness:$controller_app_version@$image_digest\""
+
+"$helm_bin" template --kube-version 1.30.0 slipramp-controller \
+  "$package_directory/slipramp-controller-$package_version.tgz" \
+  --namespace slipramp-system \
+  --values "$testdata/controller-required.yaml" \
+  --set-string image.digest="$image_digest" \
+  --set-string checkoutImage.digest="$image_digest" \
+  --set-string harnessImage.digest="$image_digest" \
+  >"$test_directory/controller-package.yaml"
+assert_contains "$test_directory/controller-package.yaml" \
+  "image: \"ghcr.io/slipramp/slipramp-controller:$package_version@$image_digest\""
+assert_contains "$test_directory/controller-package.yaml" \
+  "value: \"ghcr.io/slipramp/slipramp-checkout:$package_version@$image_digest\""
+assert_contains "$test_directory/controller-package.yaml" \
+  "value: \"ghcr.io/slipramp/slipramp-harness:$package_version@$image_digest\""
 
 "$helm_bin" template --kube-version 1.30.0 slipramp-controller "$controller_chart" \
   --namespace slipramp-system \

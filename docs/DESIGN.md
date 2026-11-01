@@ -1616,7 +1616,10 @@ probes are explicit, and the web chart requires an exact trusted-proxy hop count
 when a reverse proxy supplies forwarded host and protocol information. Images
 use non-`latest` tags and may additionally pin a SHA-256 digest; a `vX.Y.Z` tag
 publishes matching application images and versioned OCI charts to GHCR with
-tag/chart/application/image versions required to agree.
+tag/chart/application/image versions required to agree. Source charts carry
+development metadata; release packaging derives chart metadata and default
+image tags from the Git tag, while API-contract and native-app versions remain
+independent.
 
 Formatting, linting, strict type checks, generated-output freshness, unit/race,
 PostgreSQL/S3 integration, chart render/package checks, and builds run in CI.

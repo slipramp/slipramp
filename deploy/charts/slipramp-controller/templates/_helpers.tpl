@@ -49,13 +49,14 @@ app.kubernetes.io/component: controller
 {{- end }}
 
 {{- define "slipramp-controller.image" -}}
-{{- if eq .tag "latest" -}}
+{{- $tag := default .appVersion .image.tag -}}
+{{- if eq $tag "latest" -}}
 {{- fail "image tag must not be latest" -}}
 {{- end -}}
-{{- if .digest -}}
-{{- printf "%s:%s@%s" .repository .tag .digest -}}
+{{- if .image.digest -}}
+{{- printf "%s:%s@%s" .image.repository $tag .image.digest -}}
 {{- else -}}
-{{- printf "%s:%s" .repository .tag -}}
+{{- printf "%s:%s" .image.repository $tag -}}
 {{- end -}}
 {{- end }}
 

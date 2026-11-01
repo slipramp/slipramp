@@ -328,6 +328,13 @@ tasks:
     cmds:
       - ./scripts/package-charts.sh "{{.CHART_VERSION}}" "{{.ROOT_DIR}}/dist/charts"
 
+  release:
+    desc: Validate and publish a version tag from synchronized main
+    requires:
+      vars: [VERSION]
+    cmds:
+      - ./scripts/release.sh "{{.VERSION}}"
+
   acceptance:kind:
     desc: Run execution and Kargo acceptance in a disposable kind cluster
     deps: [deps:helm, deps:kind]

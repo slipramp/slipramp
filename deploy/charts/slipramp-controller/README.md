@@ -77,19 +77,19 @@ Git checkout credentials always remain cluster-local Secrets; `gitCredentials`
 only maps a logical name to a Secret name and never transmits its contents to
 the Server.
 
-Controller, checkout, and Harness images have explicit non-`latest` tags. Pin
-them to a release tag or an immutable registry tag appropriate for the
+Controller, checkout, and Harness image tags default to the chart application
+version and may be overridden with a non-`latest` tag appropriate for the
 installation. The checkout image must contain `/bin/sh`, Git, and SSH; the
 Harness image entrypoint must be `slipramp-harness`.
 
 Each image also accepts an optional SHA-256 digest. When set, the chart renders
-`repository:tag@sha256:...`; the tag remains required for readable manifests
-and release validation while Kubernetes resolves the immutable digest:
+`repository:tag@sha256:...`; Kubernetes resolves the immutable digest while
+the effective tag keeps the manifest readable:
 
 ```yaml
 image:
   repository: ghcr.io/slipramp/slipramp-controller
-  tag: 0.1.1
+  tag: <version>
   digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 
@@ -115,9 +115,10 @@ version explicitly; the same release version is the default Controller,
 checkout, and Harness image tag.
 
 ```console
+VERSION=<release-version>
 helm upgrade --install slipramp-controller \
   oci://ghcr.io/slipramp/slipramp-charts/slipramp-controller \
-  --version 0.1.1 \
+  --version "$VERSION" \
   --namespace slipramp-system --create-namespace \
   --values cluster-values.yaml
 ```

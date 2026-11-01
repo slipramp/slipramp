@@ -32,8 +32,9 @@ installs pin the chart version; Helm infers the chart name from the final path
 component and does not use `helm repo add` or an `index.yaml`.
 
 ```console
-helm upgrade --install slipramp oci://ghcr.io/slipramp/slipramp-charts/slipramp --version 0.1.1 --namespace slipramp-system --create-namespace --values server-values.yaml
-helm upgrade --install slipramp-controller oci://ghcr.io/slipramp/slipramp-charts/slipramp-controller --version 0.1.1 --namespace slipramp-system --values controller-values.yaml
+VERSION=<release-version>
+helm upgrade --install slipramp oci://ghcr.io/slipramp/slipramp-charts/slipramp --version "$VERSION" --namespace slipramp-system --create-namespace --values server-values.yaml
+helm upgrade --install slipramp-controller oci://ghcr.io/slipramp/slipramp-charts/slipramp-controller --version "$VERSION" --namespace slipramp-system --values controller-values.yaml
 ```
 
 ## Installing from source
@@ -47,14 +48,13 @@ image pull credentials.
 
 ## Publishing a release
 
-To publish a release, update both charts' `version` and `appVersion` fields and
-every default image tag to the same version, then run the package check and
-push the matching Git tag. The release workflow publishes the six images
-first and only pushes the two OCI charts after every image succeeds.
+Chart packages derive their version, application version, and default image
+tags from the requested release tag. To publish a release from a clean `main`
+checkout synchronized with `origin/main`, run the guarded release task. It
+package-checks both charts before creating and pushing the annotated tag. The
+release workflow publishes the six images first and only pushes the two OCI
+charts after every image succeeds.
 
 ```console
-task charts:check
-task charts:package CHART_VERSION=0.1.1
-git tag -a v0.1.1 -m "v0.1.1"
-git push origin v0.1.1
+task release VERSION=<next-version>
 ```
