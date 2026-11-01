@@ -11,5 +11,9 @@ export function runSourceLabel(source: RunSource) {
       : "Promotion";
   }
 
-  return source.type === "api" ? "API" : "Manual";
+  if (source.type === "api") {
+    return "API";
+  }
+
+  return source.type === "mcp" ? "MCP" : "Manual";
 }

@@ -68,9 +68,12 @@ a fixed absolute lifetime and no idle expiry. The callback validates
 authorization code PKCE, state, nonce, issuer, signature, audience, and token
 time claims; provider access and refresh tokens are not retained. Every product
 API operation requires either a local session or a Slipramp API key and applies
-the principal's global role and, for a key, its scopes. The web process forwards
-only the session to SSR API calls, live-log streams, and artifact downloads; it
-also passes same-origin login and callback requests to the Server.
+the principal's global role and, for a key, its scopes. The Streamable HTTP MCP
+endpoint at `/mcp` accepts only Slipramp API keys and applies the same role and
+scope checks to each tool call. See [MCP](./MCP.md) for the tool and Codex
+configuration contract. The web process forwards only the session to SSR API
+calls, live-log streams, and artifact downloads; it also passes same-origin
+login and callback requests to the Server.
 
 Administrators can inspect users and service accounts in the Principal
 inventory, disable or enable a Principal, revoke all of its API keys, and revoke

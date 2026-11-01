@@ -161,6 +161,7 @@ assert_contains "$test_directory/server-scheduling.yaml" '^kind: Ingress$'
 assert_contains "$test_directory/server-scheduling.yaml" 'ingressClassName: nginx'
 assert_contains "$test_directory/server-scheduling.yaml" 'path: /api/v1/auth/login'
 assert_contains "$test_directory/server-scheduling.yaml" 'path: /api/v1/auth/callback'
+assert_contains "$test_directory/server-scheduling.yaml" 'path: /mcp'
 test "$(grep -Ec '^            pathType: Exact$' "$test_directory/server-scheduling.yaml")" = 2 || \
   fail "Server chart did not route both browser OIDC endpoints exactly"
 assert_contains "$test_directory/server-scheduling.yaml" 'topologySpreadConstraints:'
@@ -188,6 +189,7 @@ test "$(grep -Ec '^            type: Exact$' "$test_directory/server-http-route.
 assert_contains "$test_directory/server-http-route.yaml" 'value: /api$'
 assert_contains "$test_directory/server-http-route.yaml" 'value: /controller$'
 assert_contains "$test_directory/server-http-route.yaml" 'value: /execution$'
+assert_contains "$test_directory/server-http-route.yaml" 'value: /mcp$'
 assert_contains "$test_directory/server-http-route.yaml" 'value: /healthz$'
 assert_contains "$test_directory/server-http-route.yaml" 'value: /readyz$'
 assert_not_contains "$test_directory/server-http-route.yaml" 'value: /metrics$'

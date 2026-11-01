@@ -3911,6 +3911,7 @@ internal enum Components {
             internal enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case manual = "manual"
                 case api = "api"
+                case mcp = "mcp"
                 case git = "git"
                 case promotion = "promotion"
             }

@@ -51,6 +51,35 @@ func TestCreateRunUsesPromotionSourceAndRequestingActor(t *testing.T) {
 	}
 }
 
+func TestCreateRunUsesMCPSourceAndRequestingActor(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	actor := productidentity.Principal{
+		ID:          uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1312"),
+		Kind:        productidentity.KindServiceAccount,
+		DisplayName: "Codex",
+		Role:        productidentity.RoleOperator,
+	}
+	idempotencyKey := "mcp-network-preview"
+
+	created, err := service.CreateRun(context.Background(), CreateRequest{
+		TargetID:       testTargetID,
+		ActionName:     "preview",
+		Parameters:     map[string]any{"mode": "safe"},
+		Source:         Source{Type: SourceTypeMCP},
+		IdempotencyKey: &idempotencyKey,
+		Actor:          &actor,
+	})
+	if err != nil {
+		t.Fatalf("CreateRun() error = %v", err)
+	}
+	if created.Source.Type != SourceTypeMCP || created.CreatedBy == nil ||
+		created.CreatedBy.PrincipalID != actor.ID {
+		t.Errorf("MCP Run = %#v", created)
+	}
+}
+
 func TestCreateRunRejectsInvalidSourceMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -107,7 +136,7 @@ func TestCreateRunRejectsInvalidSourceMetadata(t *testing.T) {
 				request.Source = Source{Type: SourceTypeManual}
 				request.IdempotencyKey = nil
 			},
-			want: "manual and API Runs cannot pin",
+			want: "manual, API, and MCP Runs cannot pin",
 		},
 		{
 			name: "manual review requirement",

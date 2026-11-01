@@ -211,17 +211,20 @@ OIDC, local sessions, API keys, service accounts, role/scope enforcement,
 emergency Principal disable/enable and bulk credential/session revocation, and
 Run attribution are implemented.
 
-- [ ] Design a remote MCP adapter against the current transport and authorization
-      specification at implementation time. Verify issuer, resource/audience,
-      scopes, and client-registration support with the chosen authorization server.
-- [ ] Map validated MCP identity to existing Principals and reuse authorization
-      and Run services. Derive an MCP Run source at that boundary; add scopes only
-      when the actual tool surface needs them.
+The remote MCP adapter is implemented as stateless Streamable HTTP at `/mcp`.
+It accepts scoped Slipramp API keys, maps them to existing Principals, reuses
+catalog and Run services, and derives the `mcp` Run source. The first tool
+surface lists Targets, explains Actions, and creates, reads, or cancels Runs.
+
+- [ ] Add standard OAuth protected-resource discovery and access-token
+      validation when general remote clients require it. Verify issuer,
+      resource/audience, scopes, and client-registration support with the chosen
+      authorization server at implementation time.
 
 Slipramp should act as an OAuth resource server, not an authorization server.
 Browser OIDC support alone does not establish suitable MCP token issuance.
-Static-header clients may use a Slipramp API key, but that does not replace
-standard OAuth discovery for general remote clients. Avoid separate MCP users,
+Static-header clients use a Slipramp API key, but that does not replace standard
+OAuth discovery for general remote clients. Avoid separate MCP users,
 resource ACL frameworks, or an identity platform without a product requirement.
 Introduce a general administrative audit model only with a coherent set of
 events rather than treating emergency revocation alone as a general audit log.

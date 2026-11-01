@@ -1905,7 +1905,7 @@ export type RunSource = {
   /**
    * Boundary that submitted the Run.
    */
-  type: "manual" | "api" | "git" | "promotion";
+  type: "manual" | "api" | "mcp" | "git" | "promotion";
   git?: GitRunSource;
   promotion?: PromotionRunSource;
 };

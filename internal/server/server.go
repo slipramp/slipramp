@@ -18,6 +18,7 @@ import (
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/gittrigger"
 	"github.com/slipramp/slipramp/internal/inbox"
+	"github.com/slipramp/slipramp/internal/mcpserver"
 	"github.com/slipramp/slipramp/internal/metricsserver"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/placement"
@@ -281,7 +282,28 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			TrustedProxyHops:           cfg.TrustedProxyHops,
 		},
 	)
-	server := newServer(cfg, logger, metrics.InstrumentHTTP(httpHandler))
+	mcpHandler, err := mcpserver.NewHTTP(
+		mcpserver.Dependencies{
+			Authentication: productAuthenticationService,
+			Catalogs:       catalogs,
+			Runs:           runs,
+		},
+		mcpserver.Options{
+			ServiceVersion: serviceVersion,
+			Logger:         logger,
+		},
+	)
+	if err != nil {
+		closeInitialization()
+
+		return nil, fmt.Errorf("initialize MCP server: %w", err)
+	}
+
+	rootHandler := http.NewServeMux()
+	rootHandler.Handle("/mcp", mcpHandler)
+	rootHandler.Handle("/", httpHandler)
+
+	server := newServer(cfg, logger, metrics.InstrumentHTTP(rootHandler))
 	server.persistence = persistence
 	server.workers = workers
 	server.promotionBranchDrift = promotionBranchDrift

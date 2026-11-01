@@ -1209,6 +1209,7 @@ const (
 	RunSourceTypeAPI       RunSourceType = "api"
 	RunSourceTypeGit       RunSourceType = "git"
 	RunSourceTypeManual    RunSourceType = "manual"
+	RunSourceTypeMcp       RunSourceType = "mcp"
 	RunSourceTypePromotion RunSourceType = "promotion"
 )
 
@@ -1220,6 +1221,8 @@ func (e RunSourceType) Valid() bool {
 	case RunSourceTypeGit:
 		return true
 	case RunSourceTypeManual:
+		return true
+	case RunSourceTypeMcp:
 		return true
 	case RunSourceTypePromotion:
 		return true

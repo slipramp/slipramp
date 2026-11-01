@@ -33,6 +33,7 @@ const (
 
 	SourceTypeManual    SourceType = "manual"
 	SourceTypeAPI       SourceType = "api"
+	SourceTypeMCP       SourceType = "mcp"
 	SourceTypeGit       SourceType = "git"
 	SourceTypePromotion SourceType = "promotion"
 

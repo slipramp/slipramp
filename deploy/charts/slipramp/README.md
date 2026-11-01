@@ -155,9 +155,9 @@ the delivery workers; pending deliveries are never eligible for retention.
 
 The chart can create a `networking.k8s.io/v1` Ingress, a Gateway API
 `gateway.networking.k8s.io/v1` HTTPRoute, or both. Each route sends `/api`,
-`/controller`, `/execution`, `/healthz`, and `/readyz` to the Server and `/` to
-the web process. The two exact browser OIDC paths under `/api/v1/auth` route to
-the web process so it can preserve the single-origin login flow.
+`/controller`, `/execution`, `/mcp`, `/healthz`, and `/readyz` to the Server and
+`/` to the web process. The two exact browser OIDC paths under `/api/v1/auth`
+route to the web process so it can preserve the single-origin login flow.
 
 HTTPRoute support requires Gateway API CRDs and an operator-managed Gateway.
 The chart does not install either. Attach the route through one or more

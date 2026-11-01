@@ -189,6 +189,8 @@ extension Components.Schemas.RunSource {
             "Manual"
         case .api:
             "API"
+        case .mcp:
+            "MCP"
         case .git:
             "Git trigger"
         case .promotion:

@@ -12,9 +12,9 @@ import (
 
 func validateSource(source Source) error {
 	switch source.Type {
-	case SourceTypeManual, SourceTypeAPI:
+	case SourceTypeManual, SourceTypeAPI, SourceTypeMCP:
 		if source.Git != nil || source.Promotion != nil {
-			return errors.New("manual and API sources must not contain automated-source details")
+			return errors.New("manual, API, and MCP sources must not contain automated-source details")
 		}
 	case SourceTypeGit:
 		if source.Git == nil || source.Promotion != nil || source.Git.DeliveryID == uuid.Nil ||
@@ -34,12 +34,12 @@ func validateSource(source Source) error {
 
 func validateSourceRequest(request CreateRequest) error {
 	switch request.Source.Type {
-	case SourceTypeManual, SourceTypeAPI:
+	case SourceTypeManual, SourceTypeAPI, SourceTypeMCP:
 		if request.ReviewRequired {
-			return errors.New("manual and API Runs cannot require Git-trigger review")
+			return errors.New("manual, API, and MCP Runs cannot require Git-trigger review")
 		}
 		if request.CatalogRevisionID != nil {
-			return errors.New("manual and API Runs cannot pin a catalog revision")
+			return errors.New("manual, API, and MCP Runs cannot pin a catalog revision")
 		}
 
 		return nil

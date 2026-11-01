@@ -8387,6 +8387,7 @@ components:
           enum:
             - manual
             - api
+            - mcp
             - git
             - promotion
           description: Boundary that submitted the Run.

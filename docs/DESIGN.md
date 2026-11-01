@@ -828,10 +828,11 @@ already issued to active Runs; those Runs must be canceled and rerun.
 
 The Server owns product authentication. `/api/v1` uses product sessions or API
 keys except the OIDC login/callback boundary and the read-only client-compatibility
-operation; `/controller/v1` and `/execution/v1` retain independent Cluster and
-Run credentials. Execution credentials never become product Principals.
-`/healthz`, `/readyz`, and client compatibility expose only non-sensitive
-unauthenticated information.
+operation. The Streamable HTTP `/mcp` boundary accepts Slipramp API keys only.
+`/controller/v1` and `/execution/v1` retain independent Cluster and Run
+credentials. Execution credentials never become product Principals. `/healthz`,
+`/readyz`, and client compatibility expose only non-sensitive unauthenticated
+information.
 
 Principals are users or service accounts with a stable UUID, display name,
 global role, and disabled state. OIDC identities use `(issuer, subject)`;
@@ -895,7 +896,7 @@ authorization codes and state do not reach stdout even for failed callbacks.
 Server HTTP request logs likewise omit query parameters and record the resolved
 client IP, method, path, status, and duration.
 
-The Server marks every product, Controller, and execution API response
+The Server marks every product, MCP, Controller, and execution API response
 `Cache-Control: private, no-store`. Health and readiness responses are excluded.
 
 The HTTP boundary authenticates product, Controller, and Run credentials before
@@ -938,9 +939,10 @@ and keys are disabled/revoked rather than deleted; sessions are revocable and
 expired sessions may be removed.
 
 Run source and actor are distinct. The Server derives `manual` for session
-requests and `api` for API-key requests. Git sources have no human actor;
-Promotion preparation uses a `promotion` backlink and snapshots the requesting
-service account. Source cannot be chosen in the ordinary Run request body.
+requests, `api` for ordinary API-key requests, and `mcp` at the MCP adapter.
+Git sources have no human actor; Promotion preparation uses a `promotion`
+backlink and snapshots the requesting service account. Source cannot be chosen
+in an ordinary Run request body or MCP tool arguments.
 
 ## Kargo Promotions
 
@@ -1394,6 +1396,19 @@ request/response types, Server interfaces, Controller client, TypeScript types,
 and frontend client. Generated files are never edited manually. Standard Web
 requests use the generated client; the small handwritten SSE transport uses
 generated event types. API errors use RFC 9457 `application/problem+json`.
+
+The remote MCP adapter is a separate protocol boundary at `/mcp`, not an
+OpenAPI endpoint. It uses stateless Streamable HTTP from the official Go MCP
+SDK and exposes `list_targets`, `explain_target_action`, `create_run`,
+`get_run`, and `cancel_run`. Each HTTP request authenticates a
+`slipramp_key_...` Bearer credential, maps it to the existing Principal, and
+checks the same role and API-key scopes at tool invocation. Read tools require
+product read permission; Run creation and cancellation require Run-write
+permission. Tool handlers call catalog and Run domain services directly rather
+than looping back through HTTP. `create_run` requires a caller-supplied
+idempotency key and records the existing Principal actor with source `mcp`.
+OAuth protected-resource discovery and token validation remain deferred; the
+API-key boundary deliberately does not claim OAuth support.
 
 Go implements the Server, Controller, Harness, and tools under module
 `github.com/slipramp/slipramp`. PostgreSQL uses pgxpool, embedded Goose migrations
