@@ -7,11 +7,14 @@ entrypoint = ["./.cache/air/slipramp-server"]
 include_ext = ["go"]
 include_file = ["go.mod", "go.sum", "deploy/local/placements.yaml"]
 exclude_dir = [
+  ".agents",
   ".bin",
   ".cache",
   ".git",
+  ".github",
   "api",
   "assets",
+  "cmd/slipramp",
   "cmd/slipramp-controller",
   "cmd/slipramp-harness",
   "cmd/slipramp-kargo-tools",
@@ -20,7 +23,9 @@ exclude_dir = [
   "dist",
   "docs",
   "examples",
+  "ios",
   "node_modules",
+  "schemas",
   "scripts",
   "web",
 ]
