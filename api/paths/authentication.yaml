@@ -33,6 +33,8 @@ login:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+      "429":
+        $ref: ../components/common.yaml#/RateLimitedResponse
       "503":
         description: Browser authentication is temporarily unavailable.
         content:
@@ -95,6 +97,8 @@ nativeLogin:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+      "429":
+        $ref: ../components/common.yaml#/RateLimitedResponse
       "503":
         description: Native authentication is temporarily unavailable.
         content:

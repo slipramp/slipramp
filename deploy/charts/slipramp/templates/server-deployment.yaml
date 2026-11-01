@@ -77,6 +77,8 @@ spec:
               value: {{ printf ":%d" (.Values.server.metrics.port | int) | quote }}
             - name: SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT
               value: {{ .Values.server.shutdownTimeout | quote }}
+            - name: SLIPRAMP_SERVER_TRUST_PROXY_HOPS
+              value: {{ .Values.server.trustedProxyHops | quote }}
             - name: SLIPRAMP_DATABASE_URL
               valueFrom:
                 secretKeyRef:

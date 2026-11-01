@@ -16,6 +16,7 @@ The Server accepts these environment variables:
 | `SLIPRAMP_SERVER_ADDRESS`                   | `:8080`                          | TCP address on which the Server listens                                                                                    |
 | `SLIPRAMP_SERVER_METRICS_ADDRESS`           | `:9091`                          | Dedicated operational metrics listener address                                                                             |
 | `SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT`          | `10s`                            | Graceful shutdown deadline                                                                                                 |
+| `SLIPRAMP_SERVER_TRUST_PROXY_HOPS`          | `0`                              | Exact trusted proxy hops used to resolve client IPs for HTTP logs and OIDC login-start throttling                           |
 | `SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS`     | `{}`                             | JSON object mapping cluster names to their bootstrap enrollment credentials                                                |
 | `SLIPRAMP_PLACEMENTS_FILE`                  | Unset                            | Path to the versioned YAML placement configuration                                                                         |
 | `SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS`   | `{}`                             | JSON object mapping refresh credential names to mounted Git config files                                                   |
@@ -45,6 +46,12 @@ The Artifact token key must be supplied explicitly on every Server startup.
 Rotating it invalidates credentials already issued to active Runs, including
 credentials for Artifact uploads and selected Artifact inputs; cancel and rerun
 affected Runs after a rotation.
+
+The Server ignores `X-Forwarded-For` by default. Set trusted proxy hops only
+when every request reaches the Server through that exact number of controlled
+proxies. The Web preserves the incoming header when proxying browser OIDC
+requests so the same resolved client IP is available to Server request logs and
+login-start throttling.
 
 ### Identity and recovery
 

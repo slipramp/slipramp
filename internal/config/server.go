@@ -22,6 +22,7 @@ const (
 	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
 	serverMetricsAddressEnvironment               = "SLIPRAMP_SERVER_METRICS_ADDRESS"
 	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
+	serverTrustedProxyHopsEnvironment             = "SLIPRAMP_SERVER_TRUST_PROXY_HOPS"
 	serverControllerEnrollmentTokensEnvironment   = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS"
 	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
 	serverRepositoryRefreshIntervalEnvironment    = "SLIPRAMP_REPOSITORY_REFRESH_INTERVAL"
@@ -88,6 +89,14 @@ func LoadServer(lookupEnvironment func(string) (string, bool)) (server.Config, e
 		}
 
 		cfg.ShutdownTimeout = timeout
+	}
+
+	if value, ok := lookupEnvironment(serverTrustedProxyHopsEnvironment); ok {
+		trustedProxyHops, err := strconv.Atoi(value)
+		if err != nil {
+			return server.Config{}, fmt.Errorf("parse %s: %w", serverTrustedProxyHopsEnvironment, err)
+		}
+		cfg.TrustedProxyHops = trustedProxyHops
 	}
 
 	if value, ok := lookupEnvironment(serverControllerEnrollmentTokensEnvironment); ok {

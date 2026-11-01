@@ -187,19 +187,23 @@ start before liveness checks begin. PostgreSQL, S3, and Slack webhook Secret
 changes require an explicit Server rollout. The chart fixes Server and web
 replicas at one and does not claim high-availability support.
 
-The web process does not trust forwarded host or protocol headers by default.
-When a known reverse proxy terminates TLS, set `web.trustedProxyHops` to the
-exact number of trusted proxy hops between the client and the web process. For
-example, a Gateway that connects directly to the web Service normally uses:
+The Server and web processes do not trust forwarded headers by default. When a
+known reverse proxy terminates TLS, set `server.trustedProxyHops` and
+`web.trustedProxyHops` to the exact number of trusted proxy hops between the
+client and each process. The Web preserves `X-Forwarded-For` while proxying
+browser OIDC requests so the Server can resolve the same client IP for
+login-start throttling and request logs. For example, a Gateway that connects
+directly to both Services normally uses:
 
 ```yaml
+server:
+  trustedProxyHops: 1
 web:
   trustedProxyHops: 1
 ```
 
 Do not set a larger value than the deployment topology requires; doing so can
-allow a client to supply forwarded values that the web process treats as
-trusted.
+allow a client to supply forwarded values that the processes treat as trusted.
 
 The Server also exposes unauthenticated Prometheus/OpenMetrics text at
 `/metrics` on its dedicated `metrics` Service port, defaulting to `9091`. The

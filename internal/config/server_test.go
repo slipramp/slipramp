@@ -14,6 +14,7 @@ const (
 	serverAddressEnvironment                      = "SLIPRAMP_SERVER_ADDRESS"
 	serverMetricsAddressEnvironment               = "SLIPRAMP_SERVER_METRICS_ADDRESS"
 	serverShutdownTimeoutEnvironment              = "SLIPRAMP_SERVER_SHUTDOWN_TIMEOUT"
+	serverTrustedProxyHopsEnvironment             = "SLIPRAMP_SERVER_TRUST_PROXY_HOPS"
 	serverControllerEnrollmentTokensEnvironment   = "SLIPRAMP_CONTROLLER_ENROLLMENT_TOKENS"
 	serverRepositoryRefreshCredentialsEnvironment = "SLIPRAMP_REPOSITORY_REFRESH_CREDENTIALS"
 	serverRepositoryRefreshIntervalEnvironment    = "SLIPRAMP_REPOSITORY_REFRESH_INTERVAL"
@@ -75,6 +76,7 @@ integrations:
 		serverAddressEnvironment:                      "127.0.0.1:9000",
 		serverMetricsAddressEnvironment:               "127.0.0.1:9191",
 		serverShutdownTimeoutEnvironment:              "25s",
+		serverTrustedProxyHopsEnvironment:             "2",
 		serverControllerEnrollmentTokensEnvironment:   `{"colo":"enrollment-token"}`,
 		serverRepositoryRefreshCredentialsEnvironment: `{"github-server":"/var/run/secrets/slipramp/github.gitconfig"}`,
 		serverRepositoryRefreshIntervalEnvironment:    "2m",
@@ -114,6 +116,9 @@ integrations:
 
 	if cfg.ShutdownTimeout != 25*time.Second {
 		t.Errorf("ShutdownTimeout = %s, want %s", cfg.ShutdownTimeout, 25*time.Second)
+	}
+	if cfg.TrustedProxyHops != 2 {
+		t.Errorf("TrustedProxyHops = %d, want 2", cfg.TrustedProxyHops)
 	}
 
 	if cfg.ControllerEnrollmentTokens["colo"] != "enrollment-token" {
@@ -230,6 +235,13 @@ func TestLoadServerRejectsInvalidEnvironment(t *testing.T) {
 				serverShutdownTimeoutEnvironment: "soon",
 			},
 			wantError: serverShutdownTimeoutEnvironment,
+		},
+		{
+			name: "malformed trusted proxy hops",
+			environment: map[string]string{
+				serverTrustedProxyHopsEnvironment: "many",
+			},
+			wantError: serverTrustedProxyHopsEnvironment,
 		},
 		{
 			name: "malformed metrics address",

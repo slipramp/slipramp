@@ -1,6 +1,7 @@
 imagePullSecrets:
   - name: registry-credentials
 server:
+  trustedProxyHops: 1
   nodeSelector:
     kubernetes.io/os: linux
   affinity:

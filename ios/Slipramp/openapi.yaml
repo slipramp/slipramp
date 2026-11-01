@@ -2770,6 +2770,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '500':
           description: The login transaction could not be created.
           content:
@@ -2828,6 +2830,8 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '429':
+          $ref: '#/components/responses/RateLimitedResponse'
         '500':
           description: The login transaction could not be created.
           content:
@@ -9172,6 +9176,18 @@ components:
             $ref: '#/components/schemas/Problem'
     InboxBadRequest:
       description: The request body or problem occurrence IDs are invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    RateLimitedResponse:
+      description: Too many requests were received from this client or across the installation.
+      headers:
+        Retry-After:
+          required: true
+          schema:
+            type: string
+            pattern: ^[1-9][0-9]*$
       content:
         application/problem+json:
           schema:

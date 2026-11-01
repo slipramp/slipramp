@@ -10,6 +10,7 @@ const forwardedResponseHeaders = [
   "cache-control",
   "content-type",
   "location",
+  "retry-after",
   "set-cookie",
 ] as const;
 
@@ -26,6 +27,10 @@ export async function proxyAuthenticationRequest(
   const cookieName =
     path === "/api/v1/auth/callback" ? oidcStateCookieName : productSessionCookieName;
   const headers = new Headers(forwardedCookieHeader(request, cookieName));
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor !== null) {
+    headers.set("x-forwarded-for", forwardedFor);
+  }
   if (path === "/api/v1/auth/logout") {
     headers.set(csrfProtectionHeaderName, csrfProtectionHeaderValue);
   }

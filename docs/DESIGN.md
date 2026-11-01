@@ -873,6 +873,14 @@ product API request authenticated by a browser cookie must include
 Web rejects unsafe requests without a same-host `Origin` before adding the CSRF
 proof to Server requests, so it cannot act as a deputy for cross-site forms.
 
+Anonymous browser and native OIDC login starts are limited to ten per resolved
+client IP per minute and 512 across the installation per ten minutes before any
+transaction is allocated. The existing 1,024-transaction capacity remains a
+final bound. Limited requests return `429` with `Retry-After`; the limiter is
+in-memory because the supported Server topology has one replica. Client IPs use
+the direct peer unless an exact trusted-proxy hop count enables
+`X-Forwarded-For`. The Web preserves that header when proxying browser login.
+
 The Web forwards only the Slipramp session for SSR calls, SSE, and artifact
 downloads and proxies same-origin login/callback requests. It never uses a
 deployment-wide privileged key on behalf of users. The Server remains the
@@ -884,6 +892,8 @@ an unsuccessful OIDC flow forgets the choice so the browser can return to the
 sign-in page instead of immediately starting the same failing flow again.
 Web access logs record the OIDC callback path without its query parameters, so
 authorization codes and state do not reach stdout even for failed callbacks.
+Server HTTP request logs likewise omit query parameters and record the resolved
+client IP, method, path, status, and duration.
 
 The Server marks every product, Controller, and execution API response
 `Cache-Control: private, no-store`. Health and readiness responses are excluded.

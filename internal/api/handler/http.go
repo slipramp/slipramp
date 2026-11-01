@@ -14,10 +14,18 @@ import (
 type HTTPOptions struct {
 	ControllerEnrollmentTokens map[string]string
 	Logger                     *slog.Logger
+	TrustedProxyHops           int
 }
 
 func NewHTTP(dependencies Dependencies, options HTTPOptions) http.Handler {
-	return disablePrivateAPICaching(boundRequestReadTime(newHTTP(dependencies, options)))
+	handler := limitOIDCLoginStarts(
+		newHTTP(dependencies, options),
+		newOIDCLoginStartLimiter(),
+		options.TrustedProxyHops,
+	)
+	handler = logHTTPRequests(handler, options.Logger, options.TrustedProxyHops)
+
+	return disablePrivateAPICaching(boundRequestReadTime(handler))
 }
 
 func newHTTP(dependencies Dependencies, options HTTPOptions) *operationRouter {

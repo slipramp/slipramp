@@ -4401,6 +4401,10 @@ export type BeginOidcLoginErrors = {
    */
   405: Problem;
   /**
+   * Too many requests were received from this client or across the installation.
+   */
+  429: Problem;
+  /**
    * The login transaction could not be created.
    */
   500: Problem;
@@ -4430,6 +4434,10 @@ export type BeginNativeOidcLoginErrors = {
    * The HTTP method is not supported for this resource.
    */
   405: Problem;
+  /**
+   * Too many requests were received from this client or across the installation.
+   */
+  429: Problem;
   /**
    * The login transaction could not be created.
    */

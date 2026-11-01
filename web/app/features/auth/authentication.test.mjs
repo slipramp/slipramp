@@ -186,6 +186,29 @@ test("proxies the OIDC callback with its state cookie and response cookies", asy
   assert.match(response.headers.get("set-cookie"), /^slipramp_session=session-token/);
 });
 
+test("preserves client identity and rate-limit timing for OIDC login", async () => {
+  let upstreamHeaders;
+  const response = await proxyAuthenticationRequest(
+    "/api/v1/auth/login",
+    new Request("http://web.test/api/v1/auth/login", {
+      headers: { "x-forwarded-for": "192.0.2.10" },
+    }),
+    "http://server.test:8080",
+    async (_url, init) => {
+      upstreamHeaders = init.headers;
+
+      return new Response(null, {
+        headers: { "retry-after": "60" },
+        status: 429,
+      });
+    },
+  );
+
+  assert.equal(upstreamHeaders.get("x-forwarded-for"), "192.0.2.10");
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("retry-after"), "60");
+});
+
 test("adds CSRF protection while forwarding logout", async () => {
   let upstreamHeaders;
   const response = await proxyAuthenticationRequest(

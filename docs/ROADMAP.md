@@ -149,17 +149,14 @@ Kubernetes API access:
 
 The unauthenticated-boundary review completed the session-authenticated CSRF,
 private response caching, pre-decode request-body protections, explicit
-Artifact-token signing keys, and OIDC callback query redaction. The remaining
-findings are intentionally retained as explicit follow-up work:
+Artifact-token signing keys, OIDC callback query redaction, and bounded anonymous
+OIDC login starts. The remaining finding is intentionally retained as explicit
+follow-up work:
 
 - [ ] Require Controller bearer and enrollment credentials to use one canonical
       encoding of at least 32 random bytes. Reject enrollment-token reuse across
       Clusters and add bounded throttling for failed enrollment and Controller
       authentication without weakening the existing first-enrollment binding.
-- [ ] Prevent anonymous OIDC login starts from exhausting the global in-memory
-      transaction pool. Define trustworthy client identification behind the
-      supported proxy topology, combine per-client throttling with a global
-      bound, and preserve bounded transaction expiry and legitimate concurrency.
 
 ## Native iOS client
 

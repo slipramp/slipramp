@@ -3785,6 +3785,9 @@ type KargoServiceUnavailable = Problem
 // NotFound An RFC 9457 problem detail.
 type NotFound = Problem
 
+// RateLimitedResponse An RFC 9457 problem detail.
+type RateLimitedResponse = Problem
+
 // RequestTooLargeResponse An RFC 9457 problem detail.
 type RequestTooLargeResponse = Problem
 
@@ -12297,22 +12300,36 @@ type BeginOIDCLoginResponse303Headers struct {
 	SetCookie    string
 }
 
+// BeginOIDCLoginResponse429Headers the declared response headers of an HTTP 429 response for BeginOIDCLogin
+type BeginOIDCLoginResponse429Headers struct {
+	RetryAfter string
+}
+
 type BeginOIDCLoginResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON429 the response for an HTTP 429 `application/problem+json` response
+	ApplicationProblemJSON429 *RateLimitedResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
 	ApplicationProblemJSON503 *Problem
 	// Headers303 the parsed response headers for an HTTP 303 response
 	Headers303 *BeginOIDCLoginResponse303Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *BeginOIDCLoginResponse429Headers
 }
 
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r BeginOIDCLoginResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
+func (r BeginOIDCLoginResponse) GetApplicationProblemJSON429() *RateLimitedResponse {
+	return r.ApplicationProblemJSON429
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -12507,6 +12524,11 @@ type BeginNativeOIDCLoginResponse303Headers struct {
 	SetCookie    string
 }
 
+// BeginNativeOIDCLoginResponse429Headers the declared response headers of an HTTP 429 response for BeginNativeOIDCLogin
+type BeginNativeOIDCLoginResponse429Headers struct {
+	RetryAfter string
+}
+
 type BeginNativeOIDCLoginResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12514,12 +12536,16 @@ type BeginNativeOIDCLoginResponse struct {
 	ApplicationProblemJSON400 *Problem
 	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
 	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON429 the response for an HTTP 429 `application/problem+json` response
+	ApplicationProblemJSON429 *RateLimitedResponse
 	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
 	ApplicationProblemJSON500 *Problem
 	// ApplicationProblemJSON503 the response for an HTTP 503 `application/problem+json` response
 	ApplicationProblemJSON503 *Problem
 	// Headers303 the parsed response headers for an HTTP 303 response
 	Headers303 *BeginNativeOIDCLoginResponse303Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *BeginNativeOIDCLoginResponse429Headers
 }
 
 // GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
@@ -12530,6 +12556,11 @@ func (r BeginNativeOIDCLoginResponse) GetApplicationProblemJSON400() *Problem {
 // GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
 func (r BeginNativeOIDCLoginResponse) GetApplicationProblemJSON405() *Problem {
 	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON429 returns the response for an HTTP 429 `application/problem+json` response
+func (r BeginNativeOIDCLoginResponse) GetApplicationProblemJSON429() *RateLimitedResponse {
+	return r.ApplicationProblemJSON429
 }
 
 // GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
@@ -19300,6 +19331,13 @@ func ParseBeginOIDCLoginResponse(rsp *http.Response) (*BeginOIDCLoginResponse, e
 		}
 		response.ApplicationProblemJSON405 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimitedResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19341,6 +19379,16 @@ func ParseBeginOIDCLoginResponse(rsp *http.Response) (*BeginOIDCLoginResponse, e
 			headers.SetCookie = value
 		}
 		response.Headers303 = &headers
+	case rsp.StatusCode == 429:
+		var headers BeginOIDCLoginResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -19514,6 +19562,13 @@ func ParseBeginNativeOIDCLoginResponse(rsp *http.Response) (*BeginNativeOIDCLogi
 		}
 		response.ApplicationProblemJSON405 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest RateLimitedResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -19555,6 +19610,16 @@ func ParseBeginNativeOIDCLoginResponse(rsp *http.Response) (*BeginNativeOIDCLogi
 			headers.SetCookie = value
 		}
 		response.Headers303 = &headers
+	case rsp.StatusCode == 429:
+		var headers BeginNativeOIDCLoginResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -26938,6 +27003,15 @@ type KargoServiceUnavailableApplicationProblemPlusJSONResponse Problem
 
 type NotFoundApplicationProblemPlusJSONResponse Problem
 
+type RateLimitedResponseResponseHeaders struct {
+	RetryAfter string
+}
+type RateLimitedResponseApplicationProblemPlusJSONResponse struct {
+	Body Problem
+
+	Headers RateLimitedResponseResponseHeaders
+}
+
 type RequestTooLargeResponseApplicationProblemPlusJSONResponse Problem
 
 type UnauthorizedApplicationProblemPlusJSONResponse Problem
@@ -27674,6 +27748,23 @@ func (response BeginOIDCLogin405ApplicationProblemPlusJSONResponse) VisitBeginOI
 	return err
 }
 
+type BeginOIDCLogin429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedResponseApplicationProblemPlusJSONResponse
+}
+
+func (response BeginOIDCLogin429ApplicationProblemPlusJSONResponse) VisitBeginOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type BeginOIDCLogin500ApplicationProblemPlusJSONResponse Problem
 
 func (response BeginOIDCLogin500ApplicationProblemPlusJSONResponse) VisitBeginOIDCLoginResponse(w http.ResponseWriter) error {
@@ -27918,6 +28009,23 @@ func (response BeginNativeOIDCLogin405ApplicationProblemPlusJSONResponse) VisitB
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type BeginNativeOIDCLogin429ApplicationProblemPlusJSONResponse struct {
+	RateLimitedResponseApplicationProblemPlusJSONResponse
+}
+
+func (response BeginNativeOIDCLogin429ApplicationProblemPlusJSONResponse) VisitBeginNativeOIDCLoginResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Retry-After", fmt.Sprint(response.Headers.RetryAfter))
+	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
 	return err
 }

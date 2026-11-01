@@ -24,6 +24,7 @@ type Config struct {
 	Address                      string
 	MetricsAddress               string
 	ShutdownTimeout              time.Duration
+	TrustedProxyHops             int
 	ControllerEnrollmentTokens   map[string]string
 	Placements                   placement.Set
 	RepositoryRefreshCredentials repository.RefreshCredentials
@@ -77,6 +78,9 @@ func (c Config) Validate() error {
 
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("shutdown timeout must be positive")
+	}
+	if c.TrustedProxyHops < 0 {
+		return fmt.Errorf("trusted proxy hops must not be negative")
 	}
 
 	if err := metricsserver.ValidateAddress(c.MetricsAddress); err != nil {

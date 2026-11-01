@@ -20,6 +20,7 @@ server:
     port: 9091
 
   shutdownTimeout: 10s
+  trustedProxyHops: 0
   database:
     url:
       value: ""

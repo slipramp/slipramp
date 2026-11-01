@@ -167,6 +167,13 @@ func TestConfigValidate(t *testing.T) {
 			wantError: "shutdown timeout",
 		},
 		{
+			name: "negative trusted proxy hops",
+			configure: func(settings *Config) {
+				settings.TrustedProxyHops = -1
+			},
+			wantError: "trusted proxy hops",
+		},
+		{
 			name: "invalid repository credential",
 			configure: func(settings *Config) {
 				settings.RepositoryRefreshCredentials["github"] = "relative"

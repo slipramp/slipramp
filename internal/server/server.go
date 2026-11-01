@@ -278,6 +278,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		handler.HTTPOptions{
 			ControllerEnrollmentTokens: cfg.ControllerEnrollmentTokens,
 			Logger:                     logger,
+			TrustedProxyHops:           cfg.TrustedProxyHops,
 		},
 	)
 	server := newServer(cfg, logger, metrics.InstrumentHTTP(httpHandler))

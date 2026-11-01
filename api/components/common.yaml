@@ -144,3 +144,16 @@ RequestTooLargeResponse:
     application/problem+json:
       schema:
         $ref: "#/Problem"
+
+RateLimitedResponse:
+  description: Too many requests were received from this client or across the installation.
+  headers:
+    Retry-After:
+      required: true
+      schema:
+        type: string
+        pattern: ^[1-9][0-9]*$
+  content:
+    application/problem+json:
+      schema:
+        $ref: "#/Problem"
