@@ -15,10 +15,12 @@ Runs can be started again from the same frozen revision or the latest catalog
 revision; Runs with Artifact inputs remain pinned to their producing revision.
 Active Run details refresh until completion. The log view can be opened before
 the execution Job starts and waits for its durable stream, or explains the
-terminal outcome when no log becomes available. Run detail browses Artifact
-metadata and provenance, opens retained sealed content through a verified
-ephemeral system preview, and starts compatible Artifact-input Actions from the
-producing Run with an explicit pinned binding.
+terminal outcome when no log becomes available. It renders standard ANSI
+styling, 256-color, and truecolor output while discarding terminal controls that
+do not belong in a log document. Run detail browses Artifact metadata and
+provenance, opens retained sealed content through a verified ephemeral system
+preview, and starts compatible Artifact-input Actions from the producing Run
+with an explicit pinned binding.
 
 The visual language and extension rules are documented in
 [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md). New screens should compose the shared

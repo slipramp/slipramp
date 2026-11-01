@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @MainActor
 private final class RunLogViewModel: ObservableObject {
@@ -14,7 +15,8 @@ private final class RunLogViewModel: ObservableObject {
         case failed(String)
     }
 
-    @Published private(set) var contents = ""
+    @Published private(set) var contents = AttributedString()
+    @Published private(set) var contentsRevision = 0
     @Published private(set) var status: Status = .connecting
     @Published private(set) var omittedBytes = 0
 
@@ -31,7 +33,8 @@ private final class RunLogViewModel: ObservableObject {
 
     func follow() async {
         visibleData.removeAll(keepingCapacity: true)
-        contents = ""
+        contents = AttributedString()
+        contentsRevision = 0
         omittedBytes = 0
         status = .connecting
 
@@ -93,7 +96,7 @@ private final class RunLogViewModel: ObservableObject {
             case .connected:
                 status = .live
             case let .chunk(data, _):
-                append(data)
+                await append(data)
                 status = .live
             case .reconnecting:
                 status = .reconnecting
@@ -189,15 +192,81 @@ private final class RunLogViewModel: ObservableObject {
         return "\(outcomeMessage) No durable log is available."
     }
 
-    private func append(_ data: Data) {
+    private func append(_ data: Data) async {
         visibleData.append(data)
         if visibleData.count > maximumVisibleBytes {
             let overflow = visibleData.count - maximumVisibleBytes
             visibleData.removeFirst(overflow)
             omittedBytes += overflow
         }
-        contents = String(decoding: visibleData, as: UTF8.self)
+
+        let snapshot = visibleData
+        let segments = await Task.detached(priority: .userInitiated) {
+            let text = String(decoding: snapshot, as: UTF8.self)
+            return ANSITextParser.parse(text)
+        }.value
+        guard !Task.isCancelled else {
+            return
+        }
+
+        contents = attributedText(for: segments)
+        contentsRevision += 1
     }
+}
+
+@MainActor
+private func attributedText(for segments: [ANSITextSegment]) -> AttributedString {
+    let result = NSMutableAttributedString(string: "")
+    let pointSize = UIFont.preferredFont(forTextStyle: .caption1).pointSize
+
+    for segment in segments {
+        let opacity = segment.style.isDim ? 0.65 : 1
+        let foreground = segment.style.foregroundColor ?? .defaultForeground
+        var attributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: segment.style.isHidden
+                ? UIColor.clear
+                : uiColor(foreground, opacity: opacity),
+            .font: ansiFont(for: segment.style, pointSize: pointSize),
+        ]
+
+        if let background = segment.style.backgroundColor {
+            attributes[.backgroundColor] = segment.style.isHidden
+                ? UIColor.clear
+                : uiColor(background, opacity: opacity)
+        }
+        if segment.style.isStrikethrough {
+            attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
+        }
+        if segment.style.isUnderlined {
+            attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        }
+
+        result.append(NSAttributedString(string: segment.text, attributes: attributes))
+    }
+
+    return AttributedString(result)
+}
+
+@MainActor
+private func ansiFont(for style: ANSITextStyle, pointSize: CGFloat) -> UIFont {
+    let weight: UIFont.Weight = style.isBold ? .bold : .regular
+    let font = UIFont.monospacedSystemFont(ofSize: pointSize, weight: weight)
+    guard style.isItalic,
+          let descriptor = font.fontDescriptor.withSymbolicTraits(.traitItalic) else {
+        return font
+    }
+
+    return UIFont(descriptor: descriptor, size: pointSize)
+}
+
+@MainActor
+private func uiColor(_ color: ANSITextColor, opacity: Double) -> UIColor {
+    UIColor(
+        red: CGFloat(color.red) / 255,
+        green: CGFloat(color.green) / 255,
+        blue: CGFloat(color.blue) / 255,
+        alpha: CGFloat(opacity)
+    )
 }
 
 struct RunLogView: View {
@@ -221,7 +290,7 @@ struct RunLogView: View {
                                     .foregroundStyle(SliprampTone.warning.color)
                             }
 
-                            if model.contents.isEmpty {
+                            if model.contents.characters.isEmpty {
                                 Text(emptyMessage)
                                     .foregroundStyle(Color.white.opacity(0.72))
                                     .frame(
@@ -232,7 +301,6 @@ struct RunLogView: View {
                                     .textSelection(.enabled)
                             } else {
                                 Text(model.contents)
-                                    .foregroundStyle(Color.white)
                                     .textSelection(.enabled)
                             }
 
@@ -245,7 +313,7 @@ struct RunLogView: View {
                         .padding(12)
                     }
                     .background(SliprampTheme.logBackground)
-                    .onChange(of: model.contents) {
+                    .onChange(of: model.contentsRevision) {
                         withAnimation(.easeOut(duration: 0.1)) {
                             proxy.scrollTo("log-bottom", anchor: .bottom)
                         }

@@ -286,23 +286,28 @@ require explicit confirmation and refresh the Run, Inbox, and Run history from
 Server-returned state. A visible nonterminal Run detail refreshes every two
 seconds until the Run finishes. Its log view may open at any phase: it follows
 Run state while queued, connects when the Controller creates the durable log,
-then uses the reconnectable stream normally. A terminal Run without a log
-artifact shows the terminal outcome instead of retrying forever. Finished Run
-details offer the same idempotent rerun boundary as the Web: same revision
-reuses the frozen execution snapshot, while latest revision resolves the
-Target, Action, parameters, and Placement from the active catalog. Runs with
-Artifact inputs cannot select latest revision. A successful rerun opens the new
-queued Run and refreshes native Run and Inbox state. Run detail also lists its
-Artifact metadata and provenance. A retained sealed Artifact downloads through
-the generated operation to an ephemeral file, verifies its SHA-256 response and
-metadata digests, opens in the system preview, and is removed when the detail
-leaves the screen. Sensitive content is never fetched until the operator
-explicitly opens it. A successful producing Run offers only the directly
-runnable `artifactConsumers` frozen into its Run projection; a confirmed
-selection creates a new Run with the exact Artifact bound to the declared input
-and opens that Run. Promotion-review Inbox items open a native detail built from
-immutable Stage, Repository, policy, Freight, revision, and preparation
-snapshots. The detail reads the retained sensitive Git and Argo CD artifacts,
+then uses the reconnectable stream normally. It renders the same ANSI SGR color
+and emphasis subset as the Web, including 256-color and truecolor output, and
+discards cursor movement, control strings, and other terminal controls that do
+not belong in a log document. Parsing runs outside SwiftUI rendering and an
+incomplete control sequence remains hidden until a later chunk completes it. A
+terminal Run without a log artifact shows the terminal outcome instead of
+retrying forever. Finished Run details offer the same idempotent rerun boundary
+as the Web: same revision reuses the frozen execution snapshot, while latest
+revision resolves the Target, Action, parameters, and Placement from the active
+catalog. Runs with Artifact inputs cannot select latest revision. A successful
+rerun opens the new queued Run and refreshes native Run and Inbox state. Run
+detail also lists its Artifact metadata and provenance. A retained sealed
+Artifact downloads through the generated operation to an ephemeral file,
+verifies its SHA-256 response and metadata digests, opens in the system preview,
+and is removed when the detail leaves the screen. Sensitive content is never
+fetched until the operator explicitly opens it. A successful producing Run
+offers only the directly runnable `artifactConsumers` frozen into its Run
+projection; a confirmed selection creates a new Run with the exact Artifact
+bound to the declared input and opens that Run. Promotion-review Inbox items
+open a native detail built from immutable Stage, Repository, policy, Freight,
+revision, and preparation snapshots. The detail reads the retained sensitive
+Git and Argo CD artifacts,
 renders Argo resources as structured searchable changes with version-only
 changes hidden initially, and records confirmed approve or reject decisions
 with an optional immutable comment. Promotion mutations refresh the detail and
