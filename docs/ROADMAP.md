@@ -214,7 +214,9 @@ Run attribution are implemented.
 The remote MCP adapter is implemented as stateless Streamable HTTP at `/mcp`.
 It accepts scoped Slipramp API keys, maps them to existing Principals, reuses
 catalog and Run services, and derives the `mcp` Run source. The first tool
-surface lists Targets, explains Actions, and creates, reads, or cancels Runs.
+surface lists Targets, explains Actions, creates, reads, or cancels Runs, and
+reads bounded pages of durable logs and Artifact contents with existing
+sensitive-content authorization.
 
 - [ ] Add standard OAuth protected-resource discovery and access-token
       validation when general remote clients require it. Verify issuer,

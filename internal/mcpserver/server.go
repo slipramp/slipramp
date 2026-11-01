@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
@@ -38,10 +39,17 @@ type RunService interface {
 	CancelRun(context.Context, run.CancelRequest) (run.Run, error)
 }
 
+type ArtifactService interface {
+	List(context.Context, uuid.UUID) ([]artifact.Record, error)
+	OpenArtifact(context.Context, uuid.UUID) (artifact.Content, error)
+	StreamLog(context.Context, uuid.UUID, int64) (artifact.LogStream, error)
+}
+
 type Dependencies struct {
 	Authentication APIKeyAuthenticator
 	Catalogs       CatalogService
 	Runs           RunService
+	Artifacts      ArtifactService
 }
 
 type Options struct {
@@ -59,6 +67,9 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 	if dependencies.Runs == nil {
 		return nil, errors.New("MCP Run service is required")
 	}
+	if dependencies.Artifacts == nil {
+		return nil, errors.New("MCP artifact service is required")
+	}
 
 	logger := options.Logger
 	if logger == nil {
@@ -71,9 +82,10 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 	}
 
 	tools := &toolServer{
-		catalogs: dependencies.Catalogs,
-		runs:     dependencies.Runs,
-		logger:   logger,
+		catalogs:  dependencies.Catalogs,
+		runs:      dependencies.Runs,
+		artifacts: dependencies.Artifacts,
+		logger:    logger,
 	}
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "slipramp", Version: serviceVersion},
@@ -81,7 +93,8 @@ func NewHTTP(dependencies Dependencies, options Options) (http.Handler, error) {
 			Instructions: "Use list_targets to resolve target IDs. Before create_run, call explain_target_action and review " +
 				"the command, placement, parameters, credentials, inputs, and diagnostics. Never call create_run or " +
 				"cancel_run unless the user clearly requested that change. create_run requires a unique idempotencyKey; " +
-				"reuse it only for the same request. Runs may change external infrastructure.",
+				"reuse it only for the same request. Runs may change external infrastructure. Use read_run_log with " +
+				"nextOffsetBytes to page durable logs, and list_run_artifacts before reading Artifact contents.",
 			Logger: logger,
 		},
 	)

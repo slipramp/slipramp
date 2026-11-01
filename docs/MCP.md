@@ -2,8 +2,8 @@
 
 Slipramp exposes a remote Model Context Protocol endpoint at `/mcp`. It uses
 stateless Streamable HTTP and a scoped Slipramp API key as a Bearer credential.
-The adapter reuses the same Principals, authorization rules, catalog service,
-and Run service as the product API.
+The adapter reuses the same Principals, authorization rules, catalog, Run, and
+Artifact services as the product API.
 
 ## Tools and permissions
 
@@ -13,6 +13,9 @@ and Run service as the product API.
 | `explain_target_action` | Resolve an Action without executing it         | Read                |
 | `create_run`            | Create an immutable Run with source `mcp`      | Run write           |
 | `get_run`               | Read the persisted state and outcome of a Run  | Read                |
+| `read_run_log`          | Read a bounded live or retained log page        | Read                |
+| `list_run_artifacts`    | List Artifact metadata and report summaries     | Read                |
+| `read_artifact`         | Read a bounded retained Artifact content page   | Read                |
 | `cancel_run`            | Request cancellation of a queued or active Run | Run write           |
 
 Permissions intersect the Principal's role and API-key scopes. A fully capable
@@ -24,6 +27,18 @@ key therefore needs an `operator` or `admin` Principal and both
 new key for each logical Run and reuse it only when retrying the identical
 request. The tool does not currently accept Artifact inputs, so Actions that
 require them must be started through another product interface.
+
+`read_run_log` and `read_artifact` return at most 64 KiB of source bytes per
+call. Their `nextOffsetBytes` values can be supplied as the next call's
+`offsetBytes` until `hasMore` is false. Text, JSON, and XML use `utf-8` output;
+other content uses `base64`. Reading an open log at its current durable end
+returns an empty page so clients can poll without holding a streaming MCP call.
+
+Artifact metadata and non-sensitive contents require ordinary read permission.
+Sensitive contents additionally require an `operator` or `admin` Principal;
+the API key still uses the ordinary `slipramp:read` scope, matching the product
+API authorization contract. Expired or deleted contents remain visible as
+metadata but cannot be read.
 
 ## Connect Codex
 

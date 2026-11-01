@@ -19,9 +19,10 @@ import (
 )
 
 type toolServer struct {
-	catalogs CatalogService
-	runs     RunService
-	logger   *slog.Logger
+	catalogs  CatalogService
+	runs      RunService
+	artifacts ArtifactService
+	logger    *slog.Logger
 }
 
 func (s *toolServer) register(server *mcp.Server) {
@@ -55,6 +56,24 @@ func (s *toolServer) register(server *mcp.Server) {
 		Description: "Get the current persisted state and outcome of a Run.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
 	}, s.getRun)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "read_run_log",
+		Title:       "Read a Slipramp Run Log",
+		Description: "Read one bounded page of currently durable Run log bytes. Use nextOffsetBytes to continue reading live or retained logs.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
+	}, s.readRunLog)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_run_artifacts",
+		Title:       "List Slipramp Run Artifacts",
+		Description: "List durable Artifact metadata, provenance, and structured report summaries for a Run.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
+	}, s.listRunArtifacts)
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "read_artifact",
+		Title:       "Read a Slipramp Artifact",
+		Description: "Read one bounded page of retained Artifact contents. Sensitive contents require operator or administrator authorization.",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: &closedWorld},
+	}, s.readArtifact)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "cancel_run",
 		Title:       "Cancel a Slipramp Run",

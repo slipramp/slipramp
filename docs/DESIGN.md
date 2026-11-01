@@ -1400,12 +1400,16 @@ generated event types. API errors use RFC 9457 `application/problem+json`.
 The remote MCP adapter is a separate protocol boundary at `/mcp`, not an
 OpenAPI endpoint. It uses stateless Streamable HTTP from the official Go MCP
 SDK and exposes `list_targets`, `explain_target_action`, `create_run`,
-`get_run`, and `cancel_run`. Each HTTP request authenticates a
+`get_run`, `read_run_log`, `list_run_artifacts`, `read_artifact`, and
+`cancel_run`. Log and Artifact reads are bounded, byte-offset pages over the
+existing durable Artifact service; binary content is base64 encoded. Each HTTP
+request authenticates a
 `slipramp_key_...` Bearer credential, maps it to the existing Principal, and
 checks the same role and API-key scopes at tool invocation. Read tools require
 product read permission; Run creation and cancellation require Run-write
-permission. Tool handlers call catalog and Run domain services directly rather
-than looping back through HTTP. `create_run` requires a caller-supplied
+permission. Sensitive Artifact contents retain the product API's operator or
+administrator requirement. Tool handlers call catalog, Run, and Artifact
+domain services directly rather than looping back through HTTP. `create_run` requires a caller-supplied
 idempotency key and records the existing Principal actor with source `mcp`.
 OAuth protected-resource discovery and token validation remain deferred; the
 API-key boundary deliberately does not claim OAuth support.

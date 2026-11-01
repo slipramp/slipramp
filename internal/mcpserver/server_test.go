@@ -4,15 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/slipramp/slipramp/internal/artifact"
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/run"
@@ -23,7 +26,7 @@ const testAPIKey = "slipramp_key_test"
 func TestHTTPRequiresSliprampAPIKey(t *testing.T) {
 	t.Parallel()
 
-	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, nil)
+	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, nil, nil)
 	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", bytes.NewBufferString("{}"))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -48,6 +51,8 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 	repositoryID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1202")
 	revisionID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1203")
 	runID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1204")
+	logID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1205")
+	outputID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1206")
 	authentication := testAuthentication(productidentity.ScopeRead, productidentity.ScopeRunsWrite)
 	catalogs := &recordingCatalogs{
 		targets: catalog.TargetList{
@@ -91,7 +96,46 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 			CreatedAt:         time.Date(2026, time.October, 31, 12, 0, 0, 0, time.UTC),
 		},
 	}
-	handler := testHTTPHandler(t, authentication, catalogs, runs)
+	logContents := []byte("preview output\n")
+	artifactContents := []byte(`{"ok":true}`)
+	digest := strings.Repeat("a", 64)
+	sealedAt := time.Date(2026, time.October, 31, 12, 1, 0, 0, time.UTC)
+	provenance := artifact.Provenance{
+		ProducerRunID:     runID,
+		RepositoryID:      repositoryID,
+		CatalogRevisionID: revisionID,
+		CommitSHA:         testCommitSHA("b"),
+		TargetName:        "dns",
+		ActionName:        "preview",
+	}
+	logArtifact := artifact.Artifact{
+		ID: logID, RunID: runID, Name: "log", Kind: artifact.KindLog,
+		State: artifact.StateSealed, MediaType: "text/plain; charset=utf-8",
+		SizeBytes: int64(len(logContents)), SHA256: &digest,
+		RetentionState: artifact.RetentionRetained, CreatedAt: runs.record.CreatedAt, SealedAt: &sealedAt,
+	}
+	outputArtifact := artifact.Artifact{
+		ID: outputID, RunID: runID, Name: "result", Kind: artifact.KindOutput,
+		State: artifact.StateSealed, MediaType: "application/json",
+		SizeBytes: int64(len(artifactContents)), SHA256: &digest, Sensitive: true,
+		RetentionState: artifact.RetentionRetained, CreatedAt: runs.record.CreatedAt, SealedAt: &sealedAt,
+	}
+	artifacts := &recordingArtifacts{
+		records: []artifact.Record{
+			{
+				Artifact:   logArtifact,
+				Provenance: provenance,
+			},
+			{
+				Artifact:    outputArtifact,
+				Description: "Preview result.",
+				Provenance:  provenance,
+			},
+		},
+		contents: map[uuid.UUID][]byte{outputID: artifactContents},
+		log:      logContents,
+	}
+	handler := testHTTPHandler(t, authentication, catalogs, runs, artifacts)
 	session := connectTestClient(t, handler, testAPIKey)
 
 	tools, err := session.ListTools(t.Context(), nil)
@@ -103,7 +147,16 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 		toolNames = append(toolNames, tool.Name)
 	}
 	slices.Sort(toolNames)
-	wantTools := []string{"cancel_run", "create_run", "explain_target_action", "get_run", "list_targets"}
+	wantTools := []string{
+		"cancel_run",
+		"create_run",
+		"explain_target_action",
+		"get_run",
+		"list_run_artifacts",
+		"list_targets",
+		"read_artifact",
+		"read_run_log",
+	}
 	if !slices.Equal(toolNames, wantTools) {
 		t.Fatalf("tools = %v, want %v", toolNames, wantTools)
 	}
@@ -143,6 +196,36 @@ func TestHTTPExposesCatalogAndRunToolsEndToEnd(t *testing.T) {
 	if got.IsError || runs.getRunID != runID {
 		t.Errorf("get_run result = %#v, requested ID = %s", got, runs.getRunID)
 	}
+	listedArtifactsResult := callTool(t, session, "list_run_artifacts", map[string]any{"runId": runID.String()})
+	var listedArtifacts artifactListOutput
+	decodeStructuredContent(t, listedArtifactsResult, &listedArtifacts)
+	if len(listedArtifacts.Items) != 2 || listedArtifacts.Items[0].Name != "log" ||
+		listedArtifacts.Items[1].ID != outputID.String() || !listedArtifacts.Items[1].Sensitive {
+		t.Errorf("list_run_artifacts output = %#v", listedArtifacts)
+	}
+
+	logResult := callTool(t, session, "read_run_log", map[string]any{
+		"runId":      runID.String(),
+		"limitBytes": 7,
+	})
+	var logPage readRunLogOutput
+	decodeStructuredContent(t, logResult, &logPage)
+	if logPage.Encoding != "utf-8" || logPage.Contents != "preview" || logPage.NextOffsetBytes != 7 ||
+		!logPage.HasMore || logPage.Complete {
+		t.Errorf("read_run_log output = %#v", logPage)
+	}
+
+	artifactResult := callTool(t, session, "read_artifact", map[string]any{
+		"artifactId": outputID.String(),
+		"limitBytes": 5,
+	})
+	var artifactPage readArtifactOutput
+	decodeStructuredContent(t, artifactResult, &artifactPage)
+	if artifactPage.Encoding != "utf-8" || artifactPage.Contents != `{"ok"` ||
+		artifactPage.NextOffsetBytes != 5 || !artifactPage.HasMore {
+		t.Errorf("read_artifact output = %#v", artifactPage)
+	}
+
 	canceled := callTool(t, session, "cancel_run", map[string]any{"runId": runID.String()})
 	if canceled.IsError || runs.cancelRequest.RunID != runID ||
 		runs.cancelRequest.Actor == nil || runs.cancelRequest.Actor.ID != authentication.Principal.ID {
@@ -154,7 +237,7 @@ func TestHTTPEnforcesAPIKeyScopesAtToolInvocation(t *testing.T) {
 	t.Parallel()
 
 	runs := &recordingRuns{}
-	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, runs)
+	handler := testHTTPHandler(t, testAuthentication(productidentity.ScopeRead), nil, runs, nil)
 	session := connectTestClient(t, handler, testAPIKey)
 
 	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
@@ -176,11 +259,45 @@ func TestHTTPEnforcesAPIKeyScopesAtToolInvocation(t *testing.T) {
 	}
 }
 
+func TestHTTPEnforcesSensitiveArtifactAuthorization(t *testing.T) {
+	t.Parallel()
+
+	artifactID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1220")
+	digest := strings.Repeat("b", 64)
+	createdAt := time.Date(2026, time.October, 31, 12, 0, 0, 0, time.UTC)
+	authentication := testAuthentication(productidentity.ScopeRead)
+	authentication.Principal.Role = productidentity.RoleViewer
+	record := artifact.Artifact{
+		ID: artifactID, RunID: uuid.New(), Name: "plan", Kind: artifact.KindOutput,
+		State: artifact.StateSealed, MediaType: "application/json", SizeBytes: 2,
+		SHA256: &digest, Sensitive: true, RetentionState: artifact.RetentionRetained,
+		CreatedAt: createdAt, SealedAt: &createdAt,
+	}
+	artifacts := &recordingArtifacts{
+		records:  []artifact.Record{{Artifact: record}},
+		contents: map[uuid.UUID][]byte{artifactID: []byte("{}")},
+	}
+	handler := testHTTPHandler(t, authentication, nil, nil, artifacts)
+	session := connectTestClient(t, handler, testAPIKey)
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "read_artifact",
+		Arguments: map[string]any{"artifactId": artifactID.String()},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("CallTool() result = %#v, want tool error", result)
+	}
+}
+
 func testHTTPHandler(
 	t *testing.T,
 	authentication productidentity.Authentication,
 	catalogs CatalogService,
 	runs RunService,
+	artifacts ArtifactService,
 ) http.Handler {
 	t.Helper()
 
@@ -190,11 +307,15 @@ func testHTTPHandler(
 	if runs == nil {
 		runs = &recordingRuns{}
 	}
+	if artifacts == nil {
+		artifacts = &recordingArtifacts{}
+	}
 	handler, err := NewHTTP(
 		Dependencies{
 			Authentication: staticAuthenticator{authentication: authentication},
 			Catalogs:       catalogs,
 			Runs:           runs,
+			Artifacts:      artifacts,
 		},
 		Options{ServiceVersion: "test"},
 	)
@@ -237,7 +358,8 @@ func callTool(t *testing.T, session *mcp.ClientSession, name string, arguments m
 		t.Fatalf("CallTool(%q) error = %v", name, err)
 	}
 	if result.IsError {
-		t.Fatalf("CallTool(%q) result = %#v", name, result)
+		encoded, _ := json.Marshal(result.Content)
+		t.Fatalf("CallTool(%q) error content = %s", name, encoded)
 	}
 
 	return result
@@ -356,6 +478,76 @@ func (r *recordingRuns) CancelRun(_ context.Context, request run.CancelRequest) 
 	r.cancelRequest = request
 
 	return r.record, r.err
+}
+
+type recordingArtifacts struct {
+	records  []artifact.Record
+	contents map[uuid.UUID][]byte
+	log      []byte
+	err      error
+}
+
+func (a *recordingArtifacts) List(_ context.Context, _ uuid.UUID) ([]artifact.Record, error) {
+	return slices.Clone(a.records), a.err
+}
+
+func (a *recordingArtifacts) OpenArtifact(_ context.Context, artifactID uuid.UUID) (artifact.Content, error) {
+	if a.err != nil {
+		return artifact.Content{}, a.err
+	}
+	for _, record := range a.records {
+		if record.ID == artifactID {
+			contents, found := a.contents[artifactID]
+			if !found {
+				return artifact.Content{}, artifact.ErrNotFound
+			}
+
+			return artifact.Content{
+				Artifact: record.Artifact,
+				Body:     io.NopCloser(bytes.NewReader(contents)),
+			}, nil
+		}
+	}
+
+	return artifact.Content{}, artifact.ErrNotFound
+}
+
+func (a *recordingArtifacts) StreamLog(
+	_ context.Context,
+	_ uuid.UUID,
+	offset int64,
+) (artifact.LogStream, error) {
+	if a.err != nil {
+		return nil, a.err
+	}
+	if offset < 0 || offset > int64(len(a.log)) {
+		return nil, artifact.ErrInvalid
+	}
+
+	return &staticLogStream{offset: offset, contents: a.log[offset:]}, nil
+}
+
+type staticLogStream struct {
+	offset   int64
+	contents []byte
+	read     bool
+}
+
+func (s *staticLogStream) Next() (artifact.LogStreamChunk, error) {
+	if s.read {
+		return artifact.LogStreamChunk{}, io.EOF
+	}
+	s.read = true
+
+	return artifact.LogStreamChunk{
+		OffsetBytes:     s.offset,
+		NextOffsetBytes: s.offset + int64(len(s.contents)),
+		Contents:        slices.Clone(s.contents),
+	}, nil
+}
+
+func (*staticLogStream) Close() error {
+	return nil
 }
 
 type handlerTransport struct {

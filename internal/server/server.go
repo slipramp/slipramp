@@ -287,6 +287,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			Authentication: productAuthenticationService,
 			Catalogs:       catalogs,
 			Runs:           runs,
+			Artifacts:      artifacts,
 		},
 		mcpserver.Options{
 			ServiceVersion: serviceVersion,
