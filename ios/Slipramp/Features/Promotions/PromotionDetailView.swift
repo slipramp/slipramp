@@ -155,22 +155,11 @@ struct PromotionDetailView: View {
         Group {
             if let promotion = model.promotion {
                 List {
-                    SliprampMascotActivityView(
+                    SliprampMascotActivitySection(
                         activity: MascotActivityResolver.activity(for: promotion),
                         identity: promotion.id
                     )
-                    .listRowInsets(
-                        EdgeInsets(
-                            top: SliprampTheme.Space.small,
-                            leading: SliprampTheme.Space.large,
-                            bottom: SliprampTheme.Space.small,
-                            trailing: SliprampTheme.Space.large
-                        )
-                    )
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
                     statusSection(promotion)
-                    kargoOutcomeSection(promotion)
                     contextSection(promotion)
                     revisionSection(promotion)
                     freightSection(promotion)
@@ -223,8 +212,8 @@ struct PromotionDetailView: View {
             LabeledContent("Status") {
                 SliprampStatusPill(
                     label: promotion.statusLabel,
-                    tone: statusTone(promotion),
-                    symbol: statusSymbol(promotion)
+                    tone: promotion.statusTone,
+                    symbol: promotion.statusSymbol
                 )
             }
             LabeledContent("Source", value: promotion.source.displayLabel)
@@ -239,83 +228,9 @@ struct PromotionDetailView: View {
             if let value = promotion.kargoUrl, let url = URL(string: value) {
                 Link("Open in Kargo", destination: url)
             }
-        }
-    }
-
-    @ViewBuilder
-    private func kargoOutcomeSection(_ promotion: Promotion) -> some View {
-        if promotion.status == .approved || promotion.kargoOutcome != nil {
-            Section("Kargo outcome") {
-                if let outcome = promotion.kargoOutcome {
-                    LabeledContent("Phase") {
-                        SliprampStatusPill(
-                            label: outcome.phase.rawValue,
-                            tone: outcome.phase == .succeeded ? .success : .danger,
-                            symbol: outcome.phase == .succeeded
-                                ? "checkmark.circle.fill" : "xmark.octagon.fill"
-                        )
-                    }
-                    PromotionTimestampRow(label: "Observed", date: outcome.observedAt)
-                    if outcome.phase == .succeeded {
-                        Text(
-                            "Kargo completed this Promotion. This does not independently assert Argo CD health beyond the configured Kargo steps."
-                        )
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    }
-                    if let diagnostic = outcome.diagnostic {
-                        Text(diagnostic)
-                            .font(.subheadline)
-                            .foregroundStyle(
-                                outcome.phase == .succeeded
-                                    ? Color.secondary : SliprampTone.danger.color
-                            )
-                    } else if outcome.phase != .succeeded {
-                        Text(
-                            "Kargo reached an unsuccessful terminal phase without a diagnostic."
-                        )
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Label("Approved — Kargo still running", systemImage: "arrow.triangle.2.circlepath")
-                    Text(
-                        "Approval granted permission to proceed. Slipramp is waiting for Kargo to report a terminal Promotion phase."
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
+            if let value = promotion.argoCdUrl, let url = URL(string: value) {
+                Link("Open in Argo CD", destination: url)
             }
-        }
-    }
-
-    private func statusTone(_ promotion: Promotion) -> SliprampTone {
-        switch promotion.status {
-        case .creating, .preparing:
-            .info
-        case .pending:
-            .warning
-        case .approved:
-            .success
-        case .rejected, .error:
-            .danger
-        case .expired:
-            .neutral
-        }
-    }
-
-    private func statusSymbol(_ promotion: Promotion) -> String {
-        switch promotion.status {
-        case .creating, .preparing:
-            "arrow.triangle.2.circlepath"
-        case .pending:
-            "checkmark.shield.fill"
-        case .approved:
-            "checkmark.circle.fill"
-        case .rejected, .error:
-            "xmark.octagon.fill"
-        case .expired:
-            "clock.badge.xmark"
         }
     }
 

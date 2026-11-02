@@ -8,11 +8,12 @@ struct RunArtifactsSection: View {
     let isLoading: Bool
     let error: String?
     let client: SliprampAPIClient
+    @Binding var isExpanded: Bool
     let onRetry: () -> Void
     let onRunChanged: @MainActor () -> Void
 
     var body: some View {
-        Section("Artifacts") {
+        SliprampCollapsibleSection("Artifacts", isExpanded: $isExpanded) {
             if let error {
                 SliprampCallout(message: error, tone: .danger)
                 Button("Try again", action: onRetry)

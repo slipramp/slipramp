@@ -108,10 +108,15 @@ enum MascotActivityResolver {
                 )
             }
             if outcome.phase == .succeeded {
+                var description = "Kargo completed this Promotion's configured steps. "
+                    + "Slipramp does not separately verify Argo CD application health."
+                if let diagnostic = outcome.diagnostic {
+                    description += " Kargo diagnostic: \(diagnostic)"
+                }
                 return MascotActivity(
                     animation: .celebrating,
                     title: "Kargo Promotion succeeded",
-                    description: "Kargo completed the approved Promotion.",
+                    description: description,
                     tone: .success
                 )
             }

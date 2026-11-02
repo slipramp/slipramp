@@ -159,6 +159,8 @@ struct RunDetailView: View {
     @State private var showCancelConfirmation = false
     @State private var createdRerun: Run?
     @State private var rerunKey = UUID().uuidString.lowercased()
+    @State private var isParametersExpanded = false
+    @State private var isArtifactsExpanded = false
     @ScaledMetric(relativeTo: .body) private var actionIconWidth: CGFloat = 20
 
     private let client: SliprampAPIClient
@@ -184,17 +186,7 @@ struct RunDetailView: View {
             if let run = model.run {
                 List {
                     if let activity = MascotActivityResolver.activity(for: run) {
-                        SliprampMascotActivityView(activity: activity, identity: run.id)
-                            .listRowInsets(
-                                EdgeInsets(
-                                    top: SliprampTheme.Space.small,
-                                    leading: SliprampTheme.Space.large,
-                                    bottom: SliprampTheme.Space.small,
-                                    trailing: SliprampTheme.Space.large
-                                )
-                            )
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
+                        SliprampMascotActivitySection(activity: activity, identity: run.id)
                     }
                     statusSection(run)
                     reviewSection(run)
@@ -207,6 +199,7 @@ struct RunDetailView: View {
                         isLoading: model.isLoadingArtifacts,
                         error: model.artifactError,
                         client: client,
+                        isExpanded: $isArtifactsExpanded,
                         onRetry: {
                             Task { await model.loadArtifacts() }
                         },
@@ -517,7 +510,7 @@ struct RunDetailView: View {
     private func parametersSection(_ run: Run) -> some View {
         let parameters = run.parameters.additionalProperties
         if !parameters.isEmpty {
-            Section("Parameters") {
+            SliprampCollapsibleSection("Parameters", isExpanded: $isParametersExpanded) {
                 ForEach(parameters.keys.sorted(), id: \.self) { name in
                     if let value = parameters[name] {
                         LabeledContent(name, value: value.displayValue)

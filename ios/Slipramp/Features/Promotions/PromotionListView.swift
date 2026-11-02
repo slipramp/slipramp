@@ -121,11 +121,11 @@ private struct PromotionRow: View {
     var body: some View {
         SliprampCard {
             HStack(alignment: .top, spacing: SliprampTheme.Space.medium) {
-                Image(systemName: statusSymbol)
-                    .foregroundStyle(statusTone.color)
+                Image(systemName: promotion.statusSymbol)
+                    .foregroundStyle(promotion.statusTone.color)
                     .font(.headline)
                     .frame(width: 40, height: 40)
-                    .background(statusTone.fill, in: Circle())
+                    .background(promotion.statusTone.fill, in: Circle())
 
                 VStack(alignment: .leading, spacing: SliprampTheme.Space.small) {
                     HStack(alignment: .firstTextBaseline) {
@@ -147,21 +147,11 @@ private struct PromotionRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
 
-                    HStack(spacing: SliprampTheme.Space.small) {
-                        SliprampStatusPill(
-                            label: promotion.statusLabel,
-                            tone: statusTone,
-                            symbol: statusSymbol
-                        )
-
-                        if promotion.status == .approved {
-                            SliprampStatusPill(
-                                label: kargoOutcomeLabel,
-                                tone: kargoOutcomeTone,
-                                symbol: kargoOutcomeSymbol
-                            )
-                        }
-                    }
+                    SliprampStatusPill(
+                        label: promotion.statusLabel,
+                        tone: promotion.statusTone,
+                        symbol: promotion.statusSymbol
+                    )
 
                     Text("\(promotion.source.displayLabel) · \(promotion.requestedBy.displayName)")
                         .font(.caption)
@@ -176,55 +166,43 @@ private struct PromotionRow: View {
             }
         }
     }
+}
 
-    private var statusTone: SliprampTone {
-        switch promotion.status {
+extension Components.Schemas.Promotion {
+    var statusTone: SliprampTone {
+        switch status {
         case .creating, .preparing:
-            .info
-        case .pending:
-            .warning
-        case .approved:
-            .success
-        case .rejected, .error:
-            .danger
-        case .expired:
-            .neutral
-        }
-    }
-
-    private var statusSymbol: String {
-        switch promotion.status {
-        case .creating, .preparing:
-            "arrow.triangle.2.circlepath"
-        case .pending:
-            "checkmark.shield.fill"
-        case .approved:
-            "checkmark.circle.fill"
-        case .rejected, .error:
-            "xmark.octagon.fill"
-        case .expired:
-            "clock.badge.xmark"
-        }
-    }
-
-    private var kargoOutcomeLabel: String {
-        guard let outcome = promotion.kargoOutcome else {
-            return "Kargo running"
-        }
-        return "Kargo \(outcome.phase.rawValue.lowercased())"
-    }
-
-    private var kargoOutcomeTone: SliprampTone {
-        guard let outcome = promotion.kargoOutcome else {
             return .info
+        case .pending:
+            return .warning
+        case .approved:
+            guard let kargoOutcome else {
+                return .info
+            }
+            return kargoOutcome.phase == .succeeded ? .success : .danger
+        case .rejected, .error:
+            return .danger
+        case .expired:
+            return .neutral
         }
-        return outcome.phase == .succeeded ? .success : .danger
     }
 
-    private var kargoOutcomeSymbol: String {
-        guard let outcome = promotion.kargoOutcome else {
+    var statusSymbol: String {
+        switch status {
+        case .creating, .preparing:
             return "arrow.triangle.2.circlepath"
+        case .pending:
+            return "checkmark.shield.fill"
+        case .approved:
+            guard let kargoOutcome else {
+                return "arrow.triangle.2.circlepath"
+            }
+            return kargoOutcome.phase == .succeeded
+                ? "checkmark.circle.fill" : "xmark.octagon.fill"
+        case .rejected, .error:
+            return "xmark.octagon.fill"
+        case .expired:
+            return "clock.badge.xmark"
         }
-        return outcome.phase == .succeeded ? "checkmark.circle.fill" : "xmark.octagon.fill"
     }
 }

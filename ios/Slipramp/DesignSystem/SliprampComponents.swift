@@ -1,6 +1,47 @@
 import SwiftUI
 import UIKit
 
+struct SliprampCollapsibleSection<Content: View>: View {
+    private let title: String
+    @Binding private var isExpanded: Bool
+    private let content: Content
+
+    init(
+        _ title: String,
+        isExpanded: Binding<Bool>,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        _isExpanded = isExpanded
+        self.content = content()
+    }
+
+    var body: some View {
+        Section {
+            if isExpanded {
+                content
+            }
+        } header: {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        }
+    }
+}
+
 struct SliprampScreenBackground: View {
     var decorative = false
 

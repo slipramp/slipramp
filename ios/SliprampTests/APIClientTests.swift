@@ -486,8 +486,46 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(promotion.externalPromotionId, "promote-production-42")
         XCTAssertEqual(promotion.stageSnapshot.environment, "production")
         XCTAssertEqual(promotion.selectedFreight?.name, "freight-42")
-        XCTAssertEqual(promotion.statusLabel, "Pending")
+        XCTAssertEqual(promotion.statusLabel, "Pending review")
+        XCTAssertEqual(
+            promotion.argoCdUrl,
+            "https://argocd.example.com/applications/platform/slipramp"
+        )
         XCTAssertTrue(promotion.canDecide)
+    }
+
+    func testPromotionSucceededPresentationUsesTerminalOutcome() async throws {
+        let session = makeSession()
+        let client = SliprampAPIClient(
+            baseURL: URL(string: "https://slipramp.example")!,
+            token: "slipramp_key_secret",
+            session: session
+        )
+        let promotionID = "45354aa2-a3e1-4b4c-9b2c-a52f46e72cc2"
+
+        StubURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.httpMethod, "GET")
+            XCTAssertEqual(request.url?.path, "/api/v1/promotions/\(promotionID)")
+            return (
+                self.response(for: request, status: 200),
+                self.promotionBody(
+                    id: promotionID,
+                    status: "approved",
+                    outcomePhase: "Succeeded"
+                )
+            )
+        }
+
+        let promotion = try await client.getPromotion(id: promotionID)
+        XCTAssertEqual(promotion.statusLabel, "Succeeded")
+
+        let activity = MascotActivityResolver.activity(for: promotion)
+        XCTAssertEqual(
+            activity.description,
+            "Kargo completed this Promotion's configured steps. "
+                + "Slipramp does not separately verify Argo CD application health. "
+                + "Kargo diagnostic: Application synced."
+        )
     }
 
     func testPromotionListUsesGeneratedOperationAndDecodesHistory() async throws {
@@ -520,7 +558,7 @@ final class APIClientTests: XCTestCase {
         XCTAssertEqual(list.total, 1)
         XCTAssertEqual(list.items.first?.id, promotionID)
         XCTAssertEqual(list.items.first?.stageSnapshot.application, "slipramp")
-        XCTAssertEqual(list.items.first?.statusLabel, "Pending")
+        XCTAssertEqual(list.items.first?.statusLabel, "Pending review")
     }
 
     func testPromotionDecisionSendsCommentAndReturnsImmutableAttribution() async throws {
@@ -556,6 +594,7 @@ final class APIClientTests: XCTestCase {
         )
         XCTAssertEqual(promotion.decision?.decision, .approved)
         XCTAssertEqual(promotion.decision?.decidedBy.displayName, "Ian Operator")
+        XCTAssertEqual(promotion.statusLabel, "Kargo running")
         XCTAssertFalse(promotion.canDecide)
     }
 
@@ -964,7 +1003,12 @@ final class APIClientTests: XCTestCase {
         )
     }
 
-    private func promotionBody(id: String, status: String, decided: Bool = false) -> Data {
+    private func promotionBody(
+        id: String,
+        status: String,
+        decided: Bool = false,
+        outcomePhase: String? = nil
+    ) -> Data {
         let decision = decided
             ? """
             ,"decision": {
@@ -980,6 +1024,15 @@ final class APIClientTests: XCTestCase {
             "decidedAt": "2026-10-30T13:00:00Z"
             """
             : ""
+        let outcome = outcomePhase.map { phase in
+            """
+            ,"kargoOutcome": {
+              "phase": "\(phase)",
+              "observedAt": "2026-10-30T13:05:00Z",
+              "diagnostic": "Application synced."
+            }
+            """
+        } ?? ""
 
         return Data(
             """
@@ -1043,6 +1096,8 @@ final class APIClientTests: XCTestCase {
               "dispatchAttemptCount": 0,
               "gitDiffArtifactId": "2a76876f-bf1b-4851-b401-16c68608962c",
               "argoDiffArtifactId": "28a6a716-6912-49b0-aabc-e41599de592b",
+              "kargoUrl": "https://kargo.example.com/project/platform/promotion/promote-production-42",
+              "argoCdUrl": "https://argocd.example.com/applications/platform/slipramp",
               "requestedBy": {
                 "principalId": "96b1acb7-2b65-4a0f-bae4-a5d9e2d069c0",
                 "kind": "user",
@@ -1051,6 +1106,7 @@ final class APIClientTests: XCTestCase {
               "createdAt": "2026-10-30T12:34:56Z",
               "updatedAt": "2026-10-30T12:45:00Z"
               \(decision)
+              \(outcome)
             }
             """.utf8
         )

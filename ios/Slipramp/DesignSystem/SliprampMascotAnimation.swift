@@ -2,6 +2,20 @@ import ImageIO
 import SwiftUI
 import UIKit
 
+struct SliprampMascotActivitySection: View {
+    let activity: MascotActivity
+    let identity: String
+
+    var body: some View {
+        Section {
+            SliprampMascotActivityView(activity: activity, identity: identity)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+    }
+}
+
 struct SliprampMascotActivityView: View {
     let activity: MascotActivity
     let identity: String

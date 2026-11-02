@@ -91,7 +91,22 @@ extension Components.Schemas.Run: Identifiable {
 
 extension Components.Schemas.Promotion: Identifiable {
     var statusLabel: String {
-        status.rawValue.replacingOccurrences(of: "-", with: " ").capitalized
+        switch status {
+        case .creating:
+            "Creating in Kargo"
+        case .preparing:
+            "Preparing diffs"
+        case .pending:
+            "Pending review"
+        case .approved:
+            kargoOutcome?.phase.rawValue ?? "Kargo running"
+        case .rejected:
+            "Rejected"
+        case .expired:
+            "Expired"
+        case .error:
+            "Failed"
+        }
     }
 
     var canDecide: Bool {
