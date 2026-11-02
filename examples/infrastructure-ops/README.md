@@ -19,10 +19,11 @@ process boundary.
 ## Actions
 
 The Ansible target offers `preview`, fixed-host `canary`, and direct `sync`
-actions through a small repository launcher. It also has a `direct-playbook`
-action that invokes `ansible-playbook` without a launcher or structured report.
-The launcher, inventory, playbook, image pattern, and authoring guidance are
-checked in under [`ansible`](./ansible).
+actions through the product-owned helper in the Runtime image. It also has a
+`direct-playbook` action that invokes `ansible-playbook` without Runner or a
+structured report. The inventory, playbook, derived image pattern, and
+authoring guidance are checked in under [`ansible`](./ansible); operators do
+not copy Slipramp's report protocol into their repositories.
 
 The node_exporter target offers:
 
@@ -106,9 +107,10 @@ ServiceAccount for repositories or actions that should not have that access.
 
 The shared infrastructure toolbox image is an illustrative placeholder and
 must be replaced with an image containing pyinfra, Terraform, kubectl, the
-MinIO client (`mc`), Bash, and SSH. The Ansible Runtime has a separate checked-in
-image pattern, but its example registry reference must still be replaced with a
-digest-pinned image built by the operator. The RustFS state bucket must also be
+MinIO client (`mc`), Bash, and SSH. The Ansible Runtime derives from Slipramp's
+published `ansible-tools` image so an operator can add pinned Galaxy collections
+and their dependencies; its example registry reference must still be replaced
+with a digest-pinned derived image. The RustFS state bucket must also be
 bootstrapped before the remote-backend workflow can run. Those deployment
 details and the omitted non-Ansible workload source are outside this example;
 the checked-in catalog is covered by Go tests.

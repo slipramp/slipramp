@@ -26,22 +26,22 @@ spec:
       description: Runs the playbook in check mode with diffs enabled.
       documentationUrl: https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_checkmode.html
       intent: preview
-      command: [./slipramp/ansible.py, preview, site.yml]
+      command: [slipramp-ansible, preview, site.yml]
     canary:
       title: Apply to one canary host
       description: Reconciles only node01.example.com before a fleet-wide run.
       intent: reconcile
       command:
-        - ./slipramp/ansible.py
+        - slipramp-ansible
         - apply
-        - site.yml
         - --limit
         - node01.example.com
+        - site.yml
     sync:
       title: Apply the host baseline
       description: Directly reconciles the complete managed_nodes inventory group.
       intent: reconcile
-      command: [./slipramp/ansible.py, apply, site.yml]
+      command: [slipramp-ansible, apply, site.yml]
     direct-playbook:
       title: Run Ansible directly
       description: Demonstrates that Runner and structured reporting are optional.

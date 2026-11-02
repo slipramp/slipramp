@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - .github/workflows/images.yaml
+      - build/ansible-tools/**
+      - cmd/slipramp-ansible/**
       - cmd/slipramp-controller/**
       - cmd/slipramp-harness/**
       - cmd/slipramp-kargo-tools/**
@@ -33,6 +35,7 @@ jobs:
       fail-fast: false
       matrix:
         target:
+          - ansible-tools
           - checkout
           - controller
           - harness

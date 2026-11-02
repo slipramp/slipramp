@@ -37,8 +37,8 @@ First-class support should make common Ansible workflows easy and observable
 without narrowing the generic Action model. The reference example is a tested
 starting point, not a required Ansible layout.
 
-- Do not inspect command names or require `ansible-playbook`, Ansible Runner, a
-  launcher, particular Action names, or a report Artifact.
+- Do not inspect command names or require `ansible-playbook`, Ansible Runner,
+  the optional report helper, particular Action names, or a report Artifact.
 - Do not reserve Runtime names, credential names, environment variables,
   inventory locations, image builders, or collection installation strategies.
 - Continue accepting custom Runtime images, direct `ansible-playbook` and
@@ -78,6 +78,7 @@ view, and end-to-end acceptance coverage.
 ### In scope
 
 - A tested reference Runtime image pattern.
+- A versioned, product-owned optional report helper and base Runtime image.
 - Reference SSH private-key and strict known-hosts configuration.
 - Optional Ansible Vault and tool-native cloud credential conventions.
 - Repository-owned inventories, dynamic inventory plugins, playbooks, roles,
@@ -101,8 +102,9 @@ view, and end-to-end acceptance coverage.
 - `ansible-pull`; the Job already receives the exact repository commit.
 - Product-managed nested Podman or Docker execution. An operator-defined Action
   may still use additional process isolation when its Placement permits it.
-- Product-managed Galaxy installation. Repository commands remain free to
-  install dependencies at Run time.
+- Product-managed Galaxy installation into operator repositories or arbitrary
+  Runtime images. Derived images and repository commands remain free to
+  install dependencies at build or Run time.
 - Parsing terminal output as the native report contract. Terminal output
   remains available as the Run log.
 - Storing facts, module return values, diffs, or arbitrary event payload values
@@ -114,28 +116,31 @@ view, and end-to-end acceptance coverage.
 
 ### Runtime image
 
-Provide a tested reference Runtime image pattern containing selected versions
-of:
+Publish a tested `ansible-tools` base Runtime image containing selected
+versions of:
 
 - `ansible-core`;
 - `ansible-runner`;
 - Python and OpenSSH client tools;
-- the repository's required Ansible collections;
-- collection Python or system dependencies.
+- the product-owned `slipramp-ansible` report helper.
 
-The reference may use Ansible Builder, a conventional container build, or an
-existing operator image. Slipramp launches the selected Runtime image directly
-as the Action container. The report-enabled reference uses Ansible Runner in
-local subprocess mode because another execution-environment container is not
-needed for that example. Slipramp does not prevent an operator from choosing a
-different noninteractive entrypoint or additional isolation allowed by the
-Placement.
+Operator images derive from that base to add pinned Galaxy collections and
+their Python or system dependencies. The collection root is an explicit,
+non-root-writable image-extension boundary; the product does not infer or
+install repository dependencies. Ansible Builder, a conventional container
+build, and an unrelated operator image remain valid alternatives.
 
-The reference should pin collections in the image or vendor them in Git for a
-reproducible, offline-capable example. Runtime `ansible-galaxy install` remains
-a supported repository choice. Document its network, availability, and
-reproducibility tradeoffs without adding validation or warnings that reject the
-operator's choice.
+The reference should pin collections in the derived image or install vendored
+collection tarballs for a reproducible, offline-capable build. Run-time
+`ansible-galaxy install` remains a supported repository choice. Document its
+network, availability, and reproducibility tradeoffs without adding catalog
+validation or warnings that reject the operator's choice.
+
+Slipramp launches the selected Runtime image directly as the Action container.
+The report helper launches Ansible Runner as a local subprocess without process
+isolation because another execution-environment container is unnecessary. It
+is not installed through the Harness or Controller, and operators do not copy
+its source or report protocol into their repositories.
 
 ### Credential conventions
 
@@ -210,7 +215,7 @@ spec:
   actions:
     preview:
       intent: preview
-      command: [./slipramp/ansible.sh, preview, site.yml]
+      command: [slipramp-ansible, preview, site.yml]
       artifacts:
         report:
           path: /slipramp/artifacts/ansible-playbook.json
@@ -219,11 +224,11 @@ spec:
     canary:
       intent: reconcile
       command:
-        - ./slipramp/ansible.sh
+        - slipramp-ansible
         - apply
-        - site.yml
         - --limit
         - node01.example.com
+        - site.yml
       artifacts:
         report:
           path: /slipramp/artifacts/ansible-playbook.json
@@ -231,7 +236,7 @@ spec:
           sensitive: true
     sync:
       intent: reconcile
-      command: [./slipramp/ansible.sh, apply, site.yml]
+      command: [slipramp-ansible, apply, site.yml]
       artifacts:
         report:
           path: /slipramp/artifacts/ansible-playbook.json
@@ -248,15 +253,17 @@ Include at least one ordinary Ansible Action that invokes an operator-selected
 entrypoint without declaring a structured report. This proves that the paved
 path does not become a requirement.
 
-### Launcher behavior
+### Optional report helper behavior
 
-Add a small repository-owned launcher for the report-enabled example. Actions
-that do not request a structured report can invoke `ansible-playbook`,
-`ansible`, Ansible Runner, or another repository command directly. When an
-Action declares the Ansible report media type, the reference launcher must:
+Ship `slipramp-ansible` as a product-owned CLI in the optional base Runtime
+image. It owns the stable boundary between ordinary operator content and the
+Slipramp report source contract. Actions that do not request a structured
+report can invoke `ansible-playbook`, `ansible`, Ansible Runner, or another
+repository command directly. When an Action declares the Ansible report media
+type, the reference helper must:
 
 1. Validate the requested mode and arguments.
-2. Invoke Ansible Runner in local subprocess mode.
+2. Invoke Ansible Runner as a local subprocess without process isolation.
 3. Add `--check --diff` only for preview mode.
 4. Leave normal Ansible output connected to stdout and stderr for live logs.
 5. Forward `SIGTERM` and other relevant termination signals to Runner, wait for
@@ -267,10 +274,11 @@ Action declares the Ansible report media type, the reference launcher must:
 7. Fail a successful playbook if report construction fails. Never replace a
    nonzero playbook exit status with a report-packaging status.
 
-The launcher is ordinary repository procedure, not a Slipramp SDK or protocol
-client. Keep it small and test its argument handling, signal forwarding, exit
-status, and report construction independently. Do not add it to the Harness or
-make it a prerequisite for executing Ansible.
+Keep the CLI narrow and test its argument handling, signal forwarding, exit
+status, and report construction independently. Version it with Slipramp's
+published image. Do not add it to the Harness or Controller, make it a
+prerequisite for executing Ansible, or require an operator to embed its
+implementation in a workflow.
 
 ## Optional structured report contract
 
@@ -283,23 +291,50 @@ application/vnd.slipramp.ansible-playbook+json
 ```
 
 An Action opts into native reporting only by declaring an Artifact with this
-media type and producing the corresponding file. The source file is a versioned
-envelope containing:
+media type and producing the corresponding file. The source file uses this
+version 1 envelope:
+
+```json
+{
+  "schemaVersion": 1,
+  "mode": "preview",
+  "versions": {
+    "ansibleCore": "2.21.5",
+    "ansibleRunner": "2.4.3"
+  },
+  "runner": {
+    "status": "successful",
+    "exitCode": 0
+  },
+  "events": []
+}
+```
+
+Its fields contain:
 
 - source schema version;
-- `preview` or `apply` mode selected by the launcher;
-- Ansible Core and Ansible Runner versions when available;
-- Runner status and process exit code as descriptive source fields;
+- `preview` or `apply` mode selected by the helper;
+- optional Ansible Core and Ansible Runner versions when their version commands
+  return recognized bounded output;
+- terminal Runner status (`successful`, `failed`, `timeout`, or `canceled`) and
+  process exit code as descriptive source fields;
 - Runner events ordered by their event counter.
 
 Runner's event payloads remain verbatim in the sensitive source Artifact. The
-Server adapter, not the launcher, owns normalization into the product report.
-The source schema must define behavior for partial event streams and reject
-duplicate or contradictory event counters.
+Server adapter, not the helper, owns normalization into the product report.
+The source may have no events and is partial when it has no final
+`playbook_on_stats` event. Completed events require positive integer counters
+that match their Runner filenames. The producer rejects filename/content
+counter mismatches and duplicate counters; the adapter must enforce the same
+rules without trusting producer validation. Unknown well-formed Runner event
+types remain in the sensitive source and are ignored by projection.
 
-The launcher should construct the JSON document without holding an unbounded
-event set in memory. The initial source-size limit should match existing report
-limits unless fixtures demonstrate that a different bound is necessary.
+The helper writes one event at a time, caps the completed event stream at
+200,000 events, and caps the complete source at the existing 32 MiB report
+source limit. Incomplete Runner `*-partial.json` files are not source events.
+Packaging failure changes a successful playbook exit into helper exit 70 but
+never replaces a nonzero Runner exit. The adapter may impose lower projection
+bounds than the sensitive source permits.
 
 ### Projection
 
@@ -391,7 +426,7 @@ have hosts and operations.
 
 - [x] Add the Ansible Runtime and Target to
       `examples/infrastructure-ops/.slipramp`.
-- [x] Add a minimal inventory, playbook, and launcher fixture.
+- [x] Add a minimal inventory, playbook, and Action fixture.
 - [x] Extend the example Placement and credential documentation.
 - [x] Document image construction, dependency strategies, check-mode limits,
       the reference host-verification setup, Vault, dynamic inventory, cloud
@@ -405,7 +440,10 @@ contract change.
 
 ### Slice 2: report source and backend projection
 
-- [ ] Finalize the versioned source envelope and launcher packaging behavior.
+- [x] Add the optional product-owned helper and published base Runtime image;
+      keep the Harness, Controller, and operator repository free of the report
+      protocol implementation.
+- [x] Finalize the versioned source envelope and helper packaging behavior.
 - [ ] Add success, preview, failure, unreachable, loop, handler, rescue,
       ignored, `no_log`, and partial-run source fixtures.
 - [ ] Implement the bounded `ansible-playbook` adapter under
@@ -457,7 +495,7 @@ First-class Ansible support is complete when all of the following are true:
 
 - A documented example validates and executes without special Controller or
   Server behavior.
-- A direct Ansible Action without Runner, a launcher, or a report remains valid
+- A direct Ansible Action without Runner, the helper, or a report remains valid
   and receives ordinary Run behavior.
 - The same repository can contain independent Ansible and pyinfra Targets.
 - Runtime and Placement credential compatibility validation covers every
@@ -503,11 +541,12 @@ filterable and progressively disclosed. Do not silently truncate a projection;
 reject it with a bounded diagnostic so the source Artifact and normal Run logs
 remain the evidence.
 
-### Cancellation through a launcher
+### Cancellation through the report helper
 
-The Harness signals its direct child. A launcher that waits on Runner must
-forward signals explicitly and still attempt bounded report finalization. Cover
-this with focused launcher tests and a real Job cancellation acceptance case.
+The Harness signals its direct child. The report helper waits on Runner, so it
+must forward signals explicitly and still attempt bounded report finalization.
+Cover this with focused helper tests and a real Job cancellation acceptance
+case.
 
 ### Check-mode overstatement
 
@@ -524,6 +563,7 @@ present it as proof of the exact apply result.
 - [Infrastructure operations example](../../examples/infrastructure-ops/README.md)
 - [Ansible Runner documentation](https://docs.ansible.com/projects/runner/en/latest/)
 - [Ansible Runner event artifacts](https://docs.ansible.com/projects/runner/en/devel/intro/)
+- [Installing collections from requirements files](https://docs.ansible.com/projects/ansible/latest/collections_guide/collections_installing.html#installing-multiple-collections-with-a-requirements-file)
 - [Ansible default callback output](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/default_callback.html)
 - [Ansible SSH connection settings](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/ssh_connection.html)
 - [Ansible Vault password sources](https://docs.ansible.com/projects/ansible/latest/vault_guide/vault_using_encrypted_content.html)

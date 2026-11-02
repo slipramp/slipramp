@@ -21,6 +21,9 @@ RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     -o /out/slipramp-harness ./cmd/slipramp-harness
 RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     go build -trimpath -ldflags="-s -w" \
+    -o /out/slipramp-ansible ./cmd/slipramp-ansible
+RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
+    go build -trimpath -ldflags="-s -w" \
     -o /out/slipramp-kargo-tools ./cmd/slipramp-kargo-tools
 RUN CGO_ENABLED=0 GOARCH="${TARGETARCH}" GOOS="${TARGETOS}" \
     go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" \
@@ -41,6 +44,33 @@ COPY --from=go-build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certif
 COPY --from=go-build /out/slipramp-harness /slipramp-harness
 
 ENTRYPOINT ["/slipramp-harness"]
+
+FROM python:3.13.9-slim-bookworm@sha256:b685a4fa58bb19d1814d78a1ec0f0208f351452724f78b20212c984d6e124a34 AS ansible-tools
+
+COPY build/ansible-tools/requirements.txt /tmp/requirements.txt
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates openssh-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --disable-pip-version-check --no-cache-dir --root-user-action=ignore \
+        --requirement /tmp/requirements.txt \
+    && rm /tmp/requirements.txt \
+    && groupadd --gid 65532 ansible \
+    && useradd --create-home --gid 65532 --no-log-init --shell /usr/sbin/nologin --uid 65532 ansible \
+    && install --directory --owner 65532 --group 65532 /usr/share/ansible/collections \
+    && python -m pip check \
+    && test "$(python -c 'import ansible; print(ansible.__version__)')" = "2.21.5" \
+    && test "$(ansible-runner --version)" = "2.4.3"
+
+COPY --from=go-build /out/slipramp-ansible /usr/local/bin/slipramp-ansible
+
+ENV ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections \
+    HOME=/home/ansible \
+    PYTHONUNBUFFERED=1
+
+USER 65532:65532
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/slipramp-ansible"]
 
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6 AS server
 
