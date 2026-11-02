@@ -128,10 +128,10 @@ func TestPlacementPreflightEndpoints(t *testing.T) {
 	if !ok {
 		t.Fatalf("ListPlacementPreflights() response = %T", listed)
 	}
-	if listResponse.Total != 1 || listResponse.Limit != placement.DefaultPreflightListLimit ||
+	if listResponse.Total != 1 || listResponse.Limit != placement.PreflightHistoryLimit ||
 		len(listResponse.Items) != 1 || listResponse.Items[0].RequestedBy.DisplayName != actor.DisplayName ||
 		service.listFilter.PlacementName != "infrastructure" ||
-		service.listFilter.Limit != placement.DefaultPreflightListLimit {
+		service.listFilter.Limit != placement.PreflightHistoryLimit {
 		t.Errorf("ListPlacementPreflights() = %#v, filter = %#v", listResponse, service.listFilter)
 	}
 }

@@ -111,13 +111,44 @@ func TestPlacementPreflightPersistenceLifecycleIntegration(t *testing.T) {
 		!finished.FinishedAt.Equal(finishedAt) {
 		t.Errorf("finished preflight = %#v", finished)
 	}
+
+	var newestID uuid.UUID
+	retentionReason := "MaterializationFailed"
+	retentionMessage := "The probe Job could not be created."
+	for index := 1; index <= placement.PreflightHistoryLimit; index++ {
+		next := record
+		next.ID = uuid.New()
+		next.CreatedAt = finishedAt.Add(time.Duration(index) * time.Minute)
+		if _, err := database.CreatePlacementPreflight(ctx, next); err != nil {
+			t.Fatalf("create retained preflight %d: %v", index, err)
+		}
+		if _, err := database.RecordPlacementPreflightReport(ctx, placement.PreflightReport{
+			ID:           next.ID,
+			ClusterName:  "colo",
+			State:        placement.PreflightStateFailed,
+			CleanupState: placement.PreflightCleanupNotRequired,
+			Reason:       &retentionReason,
+			Message:      &retentionMessage,
+			ObservedAt:   next.CreatedAt.Add(time.Second),
+		}); err != nil {
+			t.Fatalf("finish retained preflight %d: %v", index, err)
+		}
+		newestID = next.ID
+	}
+
 	history, err := database.ListPlacementPreflights(ctx, placement.PreflightListFilter{
-		PlacementName: "infrastructure", Limit: 10,
+		PlacementName: "infrastructure", Limit: placement.PreflightHistoryLimit,
 	})
 	if err != nil {
 		t.Fatalf("ListPlacementPreflights() error = %v", err)
 	}
-	if history.Total != 1 || len(history.Items) != 1 || history.Items[0].ID != record.ID {
+	if history.Total != placement.PreflightHistoryLimit || len(history.Items) != placement.PreflightHistoryLimit ||
+		history.Items[0].ID != newestID {
 		t.Errorf("history = %#v", history)
+	}
+	for _, retained := range history.Items {
+		if retained.ID == record.ID {
+			t.Errorf("oldest preflight %s was retained", record.ID)
+		}
 	}
 }

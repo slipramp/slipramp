@@ -14,8 +14,7 @@ import (
 )
 
 const (
-	DefaultPreflightListLimit   = 10
-	MaximumPreflightListLimit   = 100
+	PreflightHistoryLimit       = 10
 	DefaultPreflightTimeout     = 2 * time.Minute
 	PreflightDispatchRetryDelay = 30 * time.Second
 
@@ -177,7 +176,7 @@ func (s *PreflightService) List(ctx context.Context, filter PreflightListFilter)
 	if _, found := s.placements.Lookup(filter.PlacementName); !found {
 		return PreflightList{}, ErrPreflightPlacementNotFound
 	}
-	if filter.Limit < 1 || filter.Limit > MaximumPreflightListLimit || filter.Offset < 0 {
+	if filter.Limit < 1 || filter.Limit > PreflightHistoryLimit || filter.Offset < 0 {
 		return PreflightList{}, fmt.Errorf("%w: invalid list window", ErrPreflightInvalid)
 	}
 

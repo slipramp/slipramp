@@ -162,6 +162,15 @@ func (d *Database) RecordPlacementPreflightReport(
 	if err != nil {
 		return placement.Preflight{}, fmt.Errorf("record Placement preflight report: %w", err)
 	}
+	if report.State != placement.PreflightStateRunning {
+		_, err := queries.PrunePlacementPreflightHistory(ctx, storedb.PrunePlacementPreflightHistoryParams{
+			PlacementName: current.Snapshot.PlacementName,
+			RetainCount:   placement.PreflightHistoryLimit,
+		})
+		if err != nil {
+			return placement.Preflight{}, fmt.Errorf("prune Placement preflight history: %w", err)
+		}
+	}
 	if err := transaction.Commit(ctx); err != nil {
 		return placement.Preflight{}, fmt.Errorf("commit Placement preflight report: %w", err)
 	}

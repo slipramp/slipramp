@@ -330,3 +330,28 @@ func (q *Queries) MarkPlacementPreflightRunning(ctx context.Context, arg MarkPla
 	)
 	return i, err
 }
+
+const prunePlacementPreflightHistory = `-- name: PrunePlacementPreflightHistory :execrows
+DELETE FROM placement_preflights AS history
+WHERE history.id IN (
+    SELECT candidate.id
+    FROM placement_preflights AS candidate
+    WHERE candidate.placement_name = $1
+      AND candidate.state IN ('succeeded', 'failed')
+    ORDER BY candidate.created_at DESC, candidate.id DESC
+    OFFSET $2
+)
+`
+
+type PrunePlacementPreflightHistoryParams struct {
+	PlacementName string
+	RetainCount   int32
+}
+
+func (q *Queries) PrunePlacementPreflightHistory(ctx context.Context, arg PrunePlacementPreflightHistoryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, prunePlacementPreflightHistory, arg.PlacementName, arg.RetainCount)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

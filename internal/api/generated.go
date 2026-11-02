@@ -4974,7 +4974,7 @@ type ClientInterface interface {
 
 	// ListPlacementPreflights List Placement preflight probes
 	//
-	// Lists durable probe results for the configured Placement, newest first.
+	// Lists retained probe results for the configured Placement, newest first.
 	//
 	// Corresponds with GET /api/v1/placements/{placementName}/preflights (the `ListPlacementPreflights` operationId).
 	ListPlacementPreflights(ctx context.Context, placementName CatalogName, params *ListPlacementPreflightsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5966,7 +5966,7 @@ func (c *Client) GetPlacement(ctx context.Context, placementName CatalogName, re
 
 // ListPlacementPreflights List Placement preflight probes
 //
-// Lists durable probe results for the configured Placement, newest first.
+// Lists retained probe results for the configured Placement, newest first.
 //
 // Corresponds with GET /api/v1/placements/{placementName}/preflights (the `ListPlacementPreflights` operationId).
 func (c *Client) ListPlacementPreflights(ctx context.Context, placementName CatalogName, params *ListPlacementPreflightsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -11671,7 +11671,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListPlacementPreflightsWithResponse List Placement preflight probes
 	//
-	// Lists durable probe results for the configured Placement, newest first.
+	// Lists retained probe results for the configured Placement, newest first.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18620,7 +18620,7 @@ func (c *ClientWithResponses) GetPlacementWithResponse(ctx context.Context, plac
 
 // ListPlacementPreflightsWithResponse List Placement preflight probes
 //
-// Lists durable probe results for the configured Placement, newest first.
+// Lists retained probe results for the configured Placement, newest first.
 //
 // Returns a wrapper object for the known response body format(s).
 //

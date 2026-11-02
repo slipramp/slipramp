@@ -865,7 +865,7 @@ export const getPlacement = <ThrowOnError extends boolean = false>(
 /**
  * List Placement preflight probes
  *
- * Lists durable probe results for the configured Placement, newest first.
+ * Lists retained probe results for the configured Placement, newest first.
  */
 export const listPlacementPreflights = <ThrowOnError extends boolean = false>(
   options: Options<ListPlacementPreflightsData, ThrowOnError>,

@@ -84,3 +84,14 @@ SET state = sqlc.arg(state),
     diagnostics = sqlc.arg(diagnostics)
 WHERE id = sqlc.arg(id)
 RETURNING *;
+
+-- name: PrunePlacementPreflightHistory :execrows
+DELETE FROM placement_preflights AS history
+WHERE history.id IN (
+    SELECT candidate.id
+    FROM placement_preflights AS candidate
+    WHERE candidate.placement_name = sqlc.arg(placement_name)
+      AND candidate.state IN ('succeeded', 'failed')
+    ORDER BY candidate.created_at DESC, candidate.id DESC
+    OFFSET sqlc.arg(retain_count)
+);

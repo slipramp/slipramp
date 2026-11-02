@@ -46,7 +46,6 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
     listPlacementPreflights({
       client,
       path: { placementName: params.placementName },
-      query: { limit: 10 },
     }),
     getProductPrincipal(context),
   ]);

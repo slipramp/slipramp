@@ -15,10 +15,10 @@ func (h *Handler) ListPlacementPreflights(
 ) (api.ListPlacementPreflightsResponseObject, error) {
 	limitValue := request.Params.Limit
 	if limitValue == nil {
-		limitValue = new(placement.DefaultPreflightListLimit)
+		limitValue = new(placement.PreflightHistoryLimit)
 	}
 	limit, offset, windowErr := listWindow(limitValue, request.Params.Offset)
-	if windowErr != nil || limit > placement.MaximumPreflightListLimit {
+	if windowErr != nil || limit > placement.PreflightHistoryLimit {
 		return api.ListPlacementPreflights400ApplicationProblemPlusJSONResponse(
 			NewProblem(http.StatusBadRequest, "The preflight list window is invalid."),
 		), nil

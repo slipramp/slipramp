@@ -139,6 +139,9 @@ resolve a catalog, clone Git, invoke an Action, stream a Run log, or consume Run
 scheduling capacity. Only one preflight may be active for a Placement at a
 time. The request snapshots the effective Placement configuration and the
 requesting Principal; a later configuration reload does not change that probe.
+The Server retains the ten newest completed preflights for each Placement and
+prunes older records in the same transaction that accepts a terminal report.
+Active preflights are never subject to history pruning.
 
 The responsible Controller receives the preflight through its existing
 outbound command poll. It creates a deterministic Job in the Placement

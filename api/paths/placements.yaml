@@ -126,7 +126,7 @@ placementPreflights:
   get:
     operationId: listPlacementPreflights
     summary: List Placement preflight probes
-    description: Lists durable probe results for the configured Placement, newest first.
+    description: Lists retained probe results for the configured Placement, newest first.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -142,7 +142,7 @@ placementPreflights:
         schema:
           type: integer
           minimum: 1
-          maximum: 100
+          maximum: 10
           default: 10
       - name: offset
         in: query
