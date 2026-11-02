@@ -15,6 +15,7 @@ import {
   TextInput,
   Title,
 } from "@mantine/core";
+import { IconExternalLink } from "@tabler/icons-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Form, Link, useNavigation } from "react-router";
 
@@ -155,9 +156,32 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
   return (
     <Stack gap="lg">
       <PageHeader
-        actions={promotion.kargoUrl ? <KargoButton url={promotion.kargoUrl} /> : undefined}
+        actions={
+          promotion.kargoUrl || promotion.argoCdUrl ? (
+            <Group gap="sm">
+              {promotion.kargoUrl ? <KargoButton url={promotion.kargoUrl} /> : null}
+              {promotion.argoCdUrl ? (
+                <Button
+                  component="a"
+                  href={promotion.argoCdUrl}
+                  leftSection={<IconExternalLink aria-hidden size={16} />}
+                  rel="noreferrer"
+                  size="compact-md"
+                  target="_blank"
+                  variant="light"
+                >
+                  Open in Argo CD
+                </Button>
+              ) : null}
+            </Group>
+          ) : undefined
+        }
         back={<PageBackLink label="Back to promotions" to="/promotions" />}
-        badges={<PromotionStatusBadges promotion={promotion} />}
+        badges={
+          <Badge color={promotionStatusColor(promotion)} variant="light">
+            {promotionStatusLabel(promotion)}
+          </Badge>
+        }
         details={
           <PageHeaderFacts>
             <PageHeaderFact label="Promotion">
@@ -221,25 +245,10 @@ export default function PromotionDetail({ actionData, loaderData }: Route.Compon
   );
 }
 
-function PromotionStatusBadges({ promotion }: Readonly<{ promotion: Promotion }>) {
-  return (
-    <Group gap="xs">
-      <Badge color={promotionStatusColor(promotion.status)} variant="light">
-        {promotionStatusLabel(promotion.status)}
-      </Badge>
-      {promotion.status === "approved" ? (
-        <Badge color={kargoOutcomeColor(promotion)} variant="light">
-          {kargoOutcomeLabel(promotion)}
-        </Badge>
-      ) : null}
-    </Group>
-  );
-}
-
 function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
   if (promotion.status === "approved" && !promotion.kargoOutcome) {
     return (
-      <Alert color="cyan" title="Approved — Kargo still running">
+      <Alert className={styles.outcomeNotice} color="cyan" title="Approved — Kargo still running">
         Approval granted permission to proceed. Slipramp is waiting for Kargo to report a terminal
         Promotion phase.
       </Alert>
@@ -250,6 +259,7 @@ function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
   const succeeded = promotion.kargoOutcome.phase === "Succeeded";
   return (
     <Alert
+      className={styles.outcomeNotice}
       color={succeeded ? "green" : "red"}
       title={
         succeeded ? "Kargo Promotion succeeded" : `Kargo Promotion ${promotion.kargoOutcome.phase}`
@@ -258,7 +268,7 @@ function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
       <Stack gap="xs">
         <Text>
           {succeeded
-            ? "Kargo completed this Promotion. This does not independently assert Argo CD health beyond the configured Kargo steps."
+            ? "Kargo completed this Promotion's configured steps. Slipramp does not separately verify Argo CD application health."
             : (promotion.kargoOutcome.diagnostic ??
               "Kargo reached an unsuccessful terminal phase without a diagnostic.")}
         </Text>
@@ -271,16 +281,6 @@ function KargoOutcomeNotice({ promotion }: Readonly<{ promotion: Promotion }>) {
       </Stack>
     </Alert>
   );
-}
-
-function kargoOutcomeColor(promotion: Promotion) {
-  if (!promotion.kargoOutcome) return "cyan";
-  return promotion.kargoOutcome.phase === "Succeeded" ? "green" : "red";
-}
-
-function kargoOutcomeLabel(promotion: Promotion) {
-  if (!promotion.kargoOutcome) return "Kargo running";
-  return `Kargo ${promotion.kargoOutcome.phase.toLocaleLowerCase()}`;
 }
 
 function PromotionContext({ promotion }: Readonly<{ promotion: Promotion }>) {

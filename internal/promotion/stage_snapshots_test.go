@@ -109,9 +109,11 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 	stage.SourcePaths[0] = "changed"
 	stage.RequestedFreight[0].SourceStages[0] = "changed"
 	*stage.Freight.Items[0].Artifacts[0].Repository = "changed"
+	*stage.ArgoApplicationNamespace = "changed"
 	stage.SuccessfulRenderAcknowledgement.SourceRevision = "changed"
 	if frozen.SourcePaths[0] != "k8s/external-dns/base" || frozen.RequestedFreight[0].SourceStages[0] != "app-qa" ||
 		*frozen.Freight.Items[0].Artifacts[0].Repository != "ghcr.io/example/app" ||
+		*frozen.ArgoApplicationNamespace != "argocd" ||
 		frozen.SuccessfulRenderAcknowledgement.SourceRevision != "observed" {
 		t.Errorf("Promotion snapshot changed with observed Stage = %#v", frozen)
 	}

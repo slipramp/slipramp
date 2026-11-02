@@ -259,17 +259,24 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 	}
 }
 
-func TestOperatorPromotionKargoLinkRequiresSuccessfulDispatch(t *testing.T) {
+func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.T) {
 	t.Parallel()
 
+	argoNamespace := "argocd"
 	record := promotion.Promotion{
 		Source:              promotion.SourceSlipramp,
 		Integration:         "prod",
 		ExternalPromotionID: "external-dns-prod-slipramp-018f90ff-9fd8-7b5f-b7e1-f32ff54c1930",
-		StageSnapshot:       promotion.PromotionStageSnapshot{Project: "kargo-core", Name: "external-dns-prod"},
-		RepositorySnapshot:  promotion.PromotionRepositorySnapshot{Name: "ops"},
-		PolicySnapshot:      promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
-		Status:              promotion.StatusPreparing,
+		StageSnapshot: promotion.PromotionStageSnapshot{
+			Project:                  "kargo-core",
+			Name:                     "external-dns-prod",
+			Application:              "external-dns",
+			Environment:              "prod",
+			ArgoApplicationNamespace: &argoNamespace,
+		},
+		RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops"},
+		PolicySnapshot:     promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
+		Status:             promotion.StatusPreparing,
 		RequestedBySnapshot: productidentity.ActorSnapshot{
 			PrincipalID: uuid.New(),
 			Kind:        productidentity.KindUser,
@@ -277,7 +284,10 @@ func TestOperatorPromotionKargoLinkRequiresSuccessfulDispatch(t *testing.T) {
 		},
 	}
 	record.RequestedByPrincipalID = record.RequestedBySnapshot.PrincipalID
-	integrations := promotion.IntegrationSet{"prod": {UIURL: "https://kargo.example.com"}}
+	integrations := promotion.IntegrationSet{"prod": {
+		UIURL:        "https://kargo.example.com",
+		ArgoCDUIURLs: map[string]string{"prod": "https://argocd.example.com"},
+	}}
 
 	body, err := promotionResponse(promotion.PromotionReview{Promotion: record}, nil, integrations)
 	if err != nil {
@@ -285,6 +295,10 @@ func TestOperatorPromotionKargoLinkRequiresSuccessfulDispatch(t *testing.T) {
 	}
 	if body.KargoURL != nil {
 		t.Errorf("undispatched operator Promotion KargoURL = %q", *body.KargoURL)
+	}
+	if body.ArgoCdURL == nil || *body.ArgoCdURL !=
+		"https://argocd.example.com/applications/argocd/external-dns" {
+		t.Errorf("Promotion ArgoCdURL = %v", body.ArgoCdURL)
 	}
 
 	uid := "promotion-uid"

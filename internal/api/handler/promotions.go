@@ -722,6 +722,16 @@ func promotionResponse(
 			record.ExternalPromotionID,
 		)
 	}
+	argoApplicationNamespace := ""
+	if record.StageSnapshot.ArgoApplicationNamespace != nil {
+		argoApplicationNamespace = *record.StageSnapshot.ArgoApplicationNamespace
+	}
+	body.ArgoCdURL = integrations.ArgoCDApplicationURL(
+		record.Integration,
+		record.StageSnapshot.Environment,
+		argoApplicationNamespace,
+		record.StageSnapshot.Application,
+	)
 	if review.Decision != nil {
 		decidedBy := apiRunActor(&review.Decision.DecidedBySnapshot)
 		if decidedBy == nil {

@@ -25,6 +25,7 @@ type PromotionStageSnapshot struct {
 	SourcePaths                     []string                         `json:"sourcePaths"`
 	RequestedFreight                []FreightRequest                 `json:"requestedFreight"`
 	Freight                         Freight                          `json:"freight"`
+	ArgoApplicationNamespace        *string                          `json:"argoApplicationNamespace,omitempty"`
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
 	LastObservedAt                  time.Time                        `json:"lastObservedAt"`
 }
@@ -68,6 +69,7 @@ func (s Stage) PromotionSnapshot() PromotionStageSnapshot {
 		SourcePaths:                     slices.Clone(s.SourcePaths),
 		RequestedFreight:                cloneFreightRequests(s.RequestedFreight),
 		Freight:                         cloneFreight(s.Freight),
+		ArgoApplicationNamespace:        cloneOptionalString(s.ArgoApplicationNamespace),
 		SuccessfulRenderAcknowledgement: cloneRenderAcknowledgement(s.SuccessfulRenderAcknowledgement),
 		LastObservedAt:                  s.LastObservedAt,
 	}

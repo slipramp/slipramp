@@ -1090,6 +1090,10 @@ export type Promotion = {
    * Direct link to this Promotion in the configured Kargo UI.
    */
   kargoUrl?: string;
+  /**
+   * Direct link to the snapshotted Stage Application in the configured Argo CD UI.
+   */
+  argoCdUrl?: string;
 };
 
 export type PromotionCreate = {

@@ -2461,6 +2461,10 @@ internal enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Promotion/kargoUrl`.
             internal var kargoUrl: Swift.String?
+            /// Direct link to the snapshotted Stage Application in the configured Argo CD UI.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Promotion/argoCdUrl`.
+            internal var argoCdUrl: Swift.String?
             /// Creates a new `Promotion`.
             ///
             /// - Parameters:
@@ -2504,6 +2508,7 @@ internal enum Components {
             ///   - expiresAt:
             ///   - updatedAt:
             ///   - kargoUrl: Direct link to this Promotion in the configured Kargo UI.
+            ///   - argoCdUrl: Direct link to the snapshotted Stage Application in the configured Argo CD UI.
             internal init(
                 id: Swift.String,
                 source: Components.Schemas.PromotionSource,
@@ -2544,7 +2549,8 @@ internal enum Components {
                 decidedAt: Foundation.Date? = nil,
                 expiresAt: Foundation.Date? = nil,
                 updatedAt: Foundation.Date,
-                kargoUrl: Swift.String? = nil
+                kargoUrl: Swift.String? = nil,
+                argoCdUrl: Swift.String? = nil
             ) {
                 self.id = id
                 self.source = source
@@ -2586,6 +2592,7 @@ internal enum Components {
                 self.expiresAt = expiresAt
                 self.updatedAt = updatedAt
                 self.kargoUrl = kargoUrl
+                self.argoCdUrl = argoCdUrl
             }
             internal enum CodingKeys: String, CodingKey {
                 case id
@@ -2628,6 +2635,7 @@ internal enum Components {
                 case expiresAt
                 case updatedAt
                 case kargoUrl
+                case argoCdUrl
             }
             internal init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -2791,6 +2799,10 @@ internal enum Components {
                     Swift.String.self,
                     forKey: .kargoUrl
                 )
+                self.argoCdUrl = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .argoCdUrl
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
                     "source",
@@ -2831,7 +2843,8 @@ internal enum Components {
                     "decidedAt",
                     "expiresAt",
                     "updatedAt",
-                    "kargoUrl"
+                    "kargoUrl",
+                    "argoCdUrl"
                 ])
             }
         }

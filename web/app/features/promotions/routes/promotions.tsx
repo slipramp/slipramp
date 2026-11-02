@@ -215,27 +215,9 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
       </Table.Td>
       <Table.Td>
         <Group gap="xs" justify="space-between" wrap="nowrap">
-          <Stack gap={4}>
-            <Badge color={promotionStatusColor(promotion.status)} variant="light">
-              {promotionStatusLabel(promotion.status)}
-            </Badge>
-            {promotion.status === "approved" ? (
-              <Badge
-                color={
-                  promotion.kargoOutcome?.phase === "Succeeded"
-                    ? "green"
-                    : promotion.kargoOutcome
-                      ? "red"
-                      : "cyan"
-                }
-                variant="light"
-              >
-                {promotion.kargoOutcome
-                  ? `Kargo ${promotion.kargoOutcome.phase.toLocaleLowerCase()}`
-                  : "Kargo running"}
-              </Badge>
-            ) : null}
-          </Stack>
+          <Badge color={promotionStatusColor(promotion)} variant="light">
+            {promotionStatusLabel(promotion)}
+          </Badge>
           <KawaiiActivity
             activity={promotionActivity(promotion)}
             animationKey={promotion.id}
@@ -273,14 +255,17 @@ function PromotionRow({ promotion }: Readonly<{ promotion: Promotion }>) {
   );
 }
 
-export function promotionStatusColor(status: PromotionStatus) {
-  switch (status) {
+export function promotionStatusColor(promotion: Pick<Promotion, "status" | "kargoOutcome">) {
+  if (promotion.status === "approved") {
+    if (!promotion.kargoOutcome) return "cyan";
+    return promotion.kargoOutcome.phase === "Succeeded" ? "green" : "red";
+  }
+
+  switch (promotion.status) {
     case "creating":
       return "cyan";
     case "pending":
       return "yellow";
-    case "approved":
-      return "green";
     case "rejected":
     case "error":
       return "red";
@@ -291,16 +276,18 @@ export function promotionStatusColor(status: PromotionStatus) {
   }
 }
 
-export function promotionStatusLabel(status: PromotionStatus) {
-  switch (status) {
+export function promotionStatusLabel(promotion: Pick<Promotion, "status" | "kargoOutcome">) {
+  if (promotion.status === "approved") {
+    return promotion.kargoOutcome ? promotion.kargoOutcome.phase : "Kargo running";
+  }
+
+  switch (promotion.status) {
     case "creating":
       return "Creating in Kargo";
     case "pending":
       return "Pending review";
     case "preparing":
       return "Preparing diffs";
-    case "approved":
-      return "Approved";
     case "rejected":
       return "Rejected";
     case "expired":

@@ -450,3 +450,13 @@ test("Promotion failure and expiry mascots preserve terminal diagnostics", () =>
     );
   }
 });
+
+test("successful Promotion mascots include the Kargo outcome context", () => {
+  assert.equal(
+    promotionDetailActivity({
+      kargoOutcome: { diagnostic: "Application synced.", phase: "Succeeded" },
+      status: "approved",
+    }).description,
+    "Kargo completed this Promotion's configured steps. Slipramp does not separately verify Argo CD application health. Kargo diagnostic: Application synced.",
+  );
+});

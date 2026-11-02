@@ -465,7 +465,15 @@ export function promotionDetailActivity(
         animation: "celebrating",
         tone: "success",
         title: "Kargo Promotion succeeded",
-        description: "Kargo completed the approved Promotion.",
+        description: [
+          "Kargo completed this Promotion's configured steps.",
+          "Slipramp does not separately verify Argo CD application health.",
+          promotion.kargoOutcome.diagnostic
+            ? `Kargo diagnostic: ${promotion.kargoOutcome.diagnostic}`
+            : undefined,
+        ]
+          .filter(Boolean)
+          .join(" "),
       };
     case "rejected":
       return {

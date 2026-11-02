@@ -6629,6 +6629,10 @@ components:
           type: string
           format: uri
           description: Direct link to this Promotion in the configured Kargo UI.
+        argoCdUrl:
+          type: string
+          format: uri
+          description: Direct link to the snapshotted Stage Application in the configured Argo CD UI.
     PromotionCreate:
       type: object
       additionalProperties: false

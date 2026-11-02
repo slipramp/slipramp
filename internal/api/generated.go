@@ -2544,6 +2544,8 @@ type ProductPrincipal struct {
 
 // Promotion defines model for Promotion.
 type Promotion struct {
+	// ArgoCdURL Direct link to the snapshotted Stage Application in the configured Argo CD UI.
+	ArgoCdURL            *string                `json:"argoCdUrl,omitempty"`
 	ArgoDiffArtifact     *Artifact              `json:"argoDiffArtifact,omitempty"`
 	ArgoDiffArtifactID   *openapi_types.UUID    `json:"argoDiffArtifactId,omitempty"`
 	BaseCommit           *GitCommit             `json:"baseCommit,omitempty"`
