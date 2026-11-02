@@ -178,6 +178,25 @@ type OidcIdentity struct {
 	UpdatedAt           pgtype.Timestamptz
 }
 
+type PlacementPreflight struct {
+	ID                     pgtype.UUID
+	PlacementName          string
+	ClusterName            string
+	PlacementSnapshot      []byte
+	State                  string
+	CleanupState           string
+	RequestedByPrincipalID pgtype.UUID
+	RequestedBySnapshot    []byte
+	CreatedAt              pgtype.Timestamptz
+	StartedAt              pgtype.Timestamptz
+	FinishedAt             pgtype.Timestamptz
+	LastDispatchedAt       pgtype.Timestamptz
+	JobUid                 *string
+	Reason                 *string
+	Message                *string
+	Diagnostics            []byte
+}
+
 type Principal struct {
 	ID          pgtype.UUID
 	Kind        string

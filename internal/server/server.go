@@ -184,7 +184,13 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 	promotionCreations := promotion.NewCreationService(cfg.KargoIntegrations, persistence.database)
 	promotionDispatches := promotion.NewCreationDispatchService(persistence.database)
 	promotionReconciliations := promotion.NewReconciliationService(persistence.database)
-	controllerCommands := controllercommand.NewScheduler(runs, promotionDispatches, promotionReconciliations)
+	placementPreflights := placement.NewPreflightService(cfg.Placements, clusters, persistence.database)
+	controllerCommands := controllercommand.NewScheduler(
+		runs,
+		placementPreflights,
+		promotionDispatches,
+		promotionReconciliations,
+	)
 	promotionReviews := promotion.NewReviewService(persistence.database)
 	promotionProjects := promotion.NewProjectService(cfg.KargoIntegrations, persistence.database)
 	promotionPipelines := promotion.NewFreightPipelineService(cfg.KargoIntegrations, persistence.database)
@@ -259,6 +265,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			ServiceVersion:           serviceVersion,
 			Clusters:                 clusters,
 			Placements:               placement.NewInventoryService(cfg.Placements, clusters, persistence.database),
+			PlacementPreflights:      placementPreflights,
 			ControllerIdentities:     identities,
 			ControllerCommands:       controllerCommands,
 			Repositories:             repositories,

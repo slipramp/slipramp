@@ -58,6 +58,12 @@ type controllerAPI interface {
 		body api.ReportRunObservationJSONRequestBody,
 		reqEditors ...api.RequestEditorFn,
 	) (*api.ReportRunObservationResponse, error)
+	ReportPlacementPreflightWithResponse(
+		ctx context.Context,
+		preflightID uuid.UUID,
+		body api.ReportPlacementPreflightJSONRequestBody,
+		reqEditors ...api.RequestEditorFn,
+	) (*api.ReportPlacementPreflightResponse, error)
 	ReportKargoPromotionDispatchWithResponse(
 		ctx context.Context,
 		promotionID uuid.UUID,
@@ -249,6 +255,27 @@ func (c *serverClient) ReportObservation(ctx context.Context, runID uuid.UUID, o
 	default:
 		return newServerResponseError("report Run observation", response.StatusCode())
 	}
+}
+
+func (c *serverClient) ReportPlacementPreflight(
+	ctx context.Context,
+	preflightID uuid.UUID,
+	report api.PlacementPreflightReport,
+) error {
+	response, err := c.api.ReportPlacementPreflightWithResponse(
+		ctx,
+		preflightID,
+		report,
+		controllerAuthorization(c.bearerToken),
+	)
+	if err != nil {
+		return serverRequestError("report Placement preflight", err)
+	}
+	if response.StatusCode() != http.StatusNoContent {
+		return newServerResponseError("report Placement preflight", response.StatusCode())
+	}
+
+	return nil
 }
 
 func (c *serverClient) ReportKargoPromotionDispatch(

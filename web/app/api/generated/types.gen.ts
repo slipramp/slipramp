@@ -572,6 +572,36 @@ export type PlacementDetail = {
   configurationChecksum: string;
 };
 
+export type PlacementPreflight = {
+  id: string;
+  placementName: CatalogName;
+  cluster: CatalogName;
+  /**
+   * Placement configuration version captured when the probe was requested.
+   */
+  configurationChecksum: string;
+  state: "queued" | "running" | "succeeded" | "failed";
+  cleanupState: "pending" | "not-required" | "succeeded" | "failed";
+  requestedBy: RunActor;
+  createdAt: string;
+  startedAt?: string;
+  finishedAt?: string;
+  jobUid?: string;
+  reason?: string;
+  /**
+   * Bounded, sanitized result detail.
+   */
+  message?: string;
+  diagnostics?: Array<PlacementPreflightDiagnostic>;
+};
+
+export type PlacementPreflightList = {
+  items: Array<PlacementPreflight>;
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export type RunAssignment = {
   /**
    * Stable Run identity used to derive Kubernetes object names.
@@ -612,7 +642,12 @@ export type CancelRunCommand = {
 };
 
 export type ControllerCommand = {
-  type: "run-assignment" | "cancel-run" | "create-kargo-promotion" | "reconcile-kargo-promotion";
+  type:
+    | "run-assignment"
+    | "cancel-run"
+    | "create-kargo-promotion"
+    | "reconcile-kargo-promotion"
+    | "placement-preflight";
   /**
    * Present when type is run-assignment.
    */
@@ -629,6 +664,39 @@ export type ControllerCommand = {
    * Present when type is reconcile-kargo-promotion.
    */
   promotionReconciliation?: KargoPromotionReconciliationCommand;
+  /**
+   * Present when type is placement-preflight.
+   */
+  placementPreflight?: PlacementPreflightCommand;
+};
+
+export type PlacementPreflightCommand = {
+  id: string;
+  placementName: CatalogName;
+  configurationChecksum: string;
+  cluster: CatalogName;
+  jobNamespace: CatalogName;
+  serviceAccountName?: string;
+  timeoutSeconds: number;
+  resources?: ResourceRequirements;
+  nodeSelector?: {
+    [key: string]: string;
+  };
+  /**
+   * Validated Placement PodTemplateSpec extensions.
+   */
+  podTemplate?: {
+    [key: string]: unknown;
+  };
+};
+
+export type PlacementPreflightReport = {
+  state: "running" | "succeeded" | "failed";
+  cleanupState: "pending" | "not-required" | "succeeded" | "failed";
+  jobUid?: string;
+  reason?: string;
+  message?: string;
+  diagnostics?: Array<PlacementPreflightDiagnostic>;
 };
 
 export type RunObservation = {
@@ -1698,6 +1766,14 @@ export type PlacementResourceRequirements = {
   limits: {
     [key: string]: string;
   };
+};
+
+export type PlacementPreflightDiagnostic = {
+  reason: string;
+  message: string;
+  count: number;
+  firstObservedAt?: string;
+  lastObservedAt?: string;
 };
 
 export type RunAssignmentRepository = {
@@ -3286,6 +3362,107 @@ export type GetPlacementResponses = {
 
 export type GetPlacementResponse = GetPlacementResponses[keyof GetPlacementResponses];
 
+export type ListPlacementPreflightsData = {
+  body?: never;
+  path: {
+    placementName: CatalogName;
+  };
+  query?: {
+    limit?: number;
+    offset?: number;
+  };
+  url: "/api/v1/placements/{placementName}/preflights";
+};
+
+export type ListPlacementPreflightsErrors = {
+  /**
+   * The list window is invalid.
+   */
+  400: Problem;
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot read product state.
+   */
+  403: Problem;
+  /**
+   * The Placement is not configured.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * Placement preflights could not be loaded.
+   */
+  500: Problem;
+};
+
+export type ListPlacementPreflightsError =
+  ListPlacementPreflightsErrors[keyof ListPlacementPreflightsErrors];
+
+export type ListPlacementPreflightsResponses = {
+  /**
+   * Placement preflight history.
+   */
+  200: PlacementPreflightList;
+};
+
+export type ListPlacementPreflightsResponse =
+  ListPlacementPreflightsResponses[keyof ListPlacementPreflightsResponses];
+
+export type CreatePlacementPreflightData = {
+  body?: never;
+  path: {
+    placementName: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/placements/{placementName}/preflights";
+};
+
+export type CreatePlacementPreflightErrors = {
+  /**
+   * A valid product session or bearer credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal cannot start probes.
+   */
+  403: Problem;
+  /**
+   * The Placement is not configured.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The Controller is unreachable or this Placement already has an active preflight.
+   */
+  409: Problem;
+  /**
+   * The preflight could not be created.
+   */
+  500: Problem;
+};
+
+export type CreatePlacementPreflightError =
+  CreatePlacementPreflightErrors[keyof CreatePlacementPreflightErrors];
+
+export type CreatePlacementPreflightResponses = {
+  /**
+   * The preflight was durably queued.
+   */
+  201: PlacementPreflight;
+};
+
+export type CreatePlacementPreflightResponse =
+  CreatePlacementPreflightResponses[keyof CreatePlacementPreflightResponses];
+
 export type EnrollControllerData = {
   body: ControllerEnrollment;
   path?: never;
@@ -3546,6 +3723,59 @@ export type ReportRunObservationResponses = {
 
 export type ReportRunObservationResponse =
   ReportRunObservationResponses[keyof ReportRunObservationResponses];
+
+export type ReportPlacementPreflightData = {
+  body: PlacementPreflightReport;
+  path: {
+    preflightId: string;
+  };
+  query?: never;
+  url: "/controller/v1/placement-preflights/{preflightId}/report";
+};
+
+export type ReportPlacementPreflightErrors = {
+  /**
+   * The report is invalid.
+   */
+  400: Problem;
+  /**
+   * The Controller credential is missing or invalid.
+   */
+  401: Problem;
+  /**
+   * The preflight is not assigned to this Controller's Cluster.
+   */
+  404: Problem;
+  /**
+   * The HTTP method is not supported for this resource.
+   */
+  405: Problem;
+  /**
+   * The report conflicts with the durable preflight identity or terminal result.
+   */
+  409: Problem;
+  /**
+   * The request body exceeds the accepted size limit.
+   */
+  413: Problem;
+  /**
+   * The report could not be recorded.
+   */
+  500: Problem;
+};
+
+export type ReportPlacementPreflightError =
+  ReportPlacementPreflightErrors[keyof ReportPlacementPreflightErrors];
+
+export type ReportPlacementPreflightResponses = {
+  /**
+   * The report was recorded or was already reflected in terminal state.
+   */
+  204: void;
+};
+
+export type ReportPlacementPreflightResponse =
+  ReportPlacementPreflightResponses[keyof ReportPlacementPreflightResponses];
 
 export type AppendRunLogChunkData = {
   body: Blob | File;

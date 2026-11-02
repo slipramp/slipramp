@@ -2,11 +2,94 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/placement"
 )
+
+func (h *Handler) ListPlacementPreflights(
+	ctx context.Context,
+	request api.ListPlacementPreflightsRequestObject,
+) (api.ListPlacementPreflightsResponseObject, error) {
+	limitValue := request.Params.Limit
+	if limitValue == nil {
+		limitValue = new(placement.DefaultPreflightListLimit)
+	}
+	limit, offset, windowErr := listWindow(limitValue, request.Params.Offset)
+	if windowErr != nil || limit > placement.MaximumPreflightListLimit {
+		return api.ListPlacementPreflights400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, "The preflight list window is invalid."),
+		), nil
+	}
+
+	records, err := h.placementPreflights.List(ctx, placement.PreflightListFilter{
+		PlacementName: string(request.PlacementName),
+		Limit:         int32(limit),
+		Offset:        int32(offset),
+	})
+	if errors.Is(err, placement.ErrPreflightPlacementNotFound) {
+		return api.ListPlacementPreflights404ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusNotFound, "The Placement is not configured."),
+		), nil
+	}
+	if errors.Is(err, placement.ErrPreflightInvalid) {
+		return api.ListPlacementPreflights400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, err.Error()),
+		), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]api.PlacementPreflight, 0, len(records.Items))
+	for _, record := range records.Items {
+		items = append(items, placementPreflightResponse(record))
+	}
+
+	return api.ListPlacementPreflights200JSONResponse{
+		Items:  items,
+		Total:  int(records.Total),
+		Limit:  limit,
+		Offset: offset,
+	}, nil
+}
+
+func (h *Handler) CreatePlacementPreflight(
+	ctx context.Context,
+	request api.CreatePlacementPreflightRequestObject,
+) (api.CreatePlacementPreflightResponseObject, error) {
+	created, err := h.placementPreflights.Create(
+		ctx,
+		string(request.PlacementName),
+		currentProductPrincipal(ctx),
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, placement.ErrPreflightPlacementNotFound):
+			return api.CreatePlacementPreflight404ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusNotFound, "The Placement is not configured."),
+			), nil
+		case errors.Is(err, placement.ErrPreflightControllerUnreachable):
+			return api.CreatePlacementPreflight409ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusConflict, "The Placement Controller is unreachable."),
+			), nil
+		case errors.Is(err, placement.ErrPreflightActive):
+			return api.CreatePlacementPreflight409ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusConflict, "The Placement already has an active preflight."),
+			), nil
+		case errors.Is(err, placement.ErrPreflightInvalid):
+			return api.CreatePlacementPreflight409ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusConflict, err.Error()),
+			), nil
+		default:
+			return nil, err
+		}
+	}
+
+	return api.CreatePlacementPreflight201JSONResponse(placementPreflightResponse(created)), nil
+}
 
 func (h *Handler) ListPlacements(
 	ctx context.Context,
@@ -87,4 +170,42 @@ func placementResponse(configured placement.InventoryPlacement) api.Placement {
 	}
 
 	return response
+}
+
+func placementPreflightResponse(record placement.Preflight) api.PlacementPreflight {
+	diagnostics := make([]api.PlacementPreflightDiagnostic, 0, len(record.Diagnostics))
+	for _, diagnostic := range record.Diagnostics {
+		diagnostics = append(diagnostics, api.PlacementPreflightDiagnostic{
+			Reason:          diagnostic.Reason,
+			Message:         diagnostic.Message,
+			Count:           diagnostic.Count,
+			FirstObservedAt: diagnostic.FirstObservedAt,
+			LastObservedAt:  diagnostic.LastObservedAt,
+		})
+	}
+	var responseDiagnostics *[]api.PlacementPreflightDiagnostic
+	if len(diagnostics) > 0 {
+		responseDiagnostics = &diagnostics
+	}
+
+	return api.PlacementPreflight{
+		ID:                    record.ID,
+		PlacementName:         api.CatalogName(record.Snapshot.PlacementName),
+		Cluster:               api.CatalogName(record.Snapshot.ClusterName),
+		ConfigurationChecksum: record.Snapshot.ConfigurationChecksum,
+		State:                 api.PlacementPreflightState(record.State),
+		CleanupState:          api.PlacementPreflightCleanupState(record.CleanupState),
+		RequestedBy: api.RunActor{
+			PrincipalID: record.RequestedBy.PrincipalID,
+			Kind:        api.RunActorKind(record.RequestedBy.Kind),
+			DisplayName: record.RequestedBy.DisplayName,
+		},
+		CreatedAt:   record.CreatedAt,
+		StartedAt:   record.StartedAt,
+		FinishedAt:  record.FinishedAt,
+		JobUID:      record.JobUID,
+		Reason:      record.Reason,
+		Message:     record.Message,
+		Diagnostics: responseDiagnostics,
+	}
 }

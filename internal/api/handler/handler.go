@@ -7,6 +7,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/readiness"
 )
@@ -20,6 +21,7 @@ type Handler struct {
 	serviceVersion           string
 	clusters                 ClusterService
 	placements               PlacementService
+	placementPreflights      PlacementPreflightService
 	identities               ControllerIdentityService
 	controllerCommands       ControllerCommandService
 	repositories             RepositoryService
@@ -53,6 +55,12 @@ type PlacementService interface {
 	Inventory(ctx context.Context) (placement.Inventory, error)
 }
 
+type PlacementPreflightService interface {
+	Create(context.Context, string, *productidentity.Principal) (placement.Preflight, error)
+	List(context.Context, placement.PreflightListFilter) (placement.PreflightList, error)
+	Report(context.Context, placement.PreflightReport) (placement.Preflight, error)
+}
+
 type ProductAuthenticationService interface {
 	BrowserAuthenticationService
 	AccessService
@@ -62,6 +70,7 @@ type Dependencies struct {
 	ServiceVersion           string
 	Clusters                 ClusterService
 	Placements               PlacementService
+	PlacementPreflights      PlacementPreflightService
 	ControllerIdentities     ControllerIdentityService
 	ControllerCommands       ControllerCommandService
 	Repositories             RepositoryService
@@ -98,6 +107,7 @@ func newHandler(dependencies Dependencies) *Handler {
 		serviceVersion:           serviceVersion,
 		clusters:                 dependencies.Clusters,
 		placements:               dependencies.Placements,
+		placementPreflights:      dependencies.PlacementPreflights,
 		identities:               dependencies.ControllerIdentities,
 		controllerCommands:       dependencies.ControllerCommands,
 		repositories:             dependencies.Repositories,

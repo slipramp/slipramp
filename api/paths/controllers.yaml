@@ -395,6 +395,71 @@ runObservations:
             schema:
               $ref: ../components/common.yaml#/Problem
 
+placementPreflightReport:
+  post:
+    operationId: reportPlacementPreflight
+    summary: Report Placement preflight progress or completion
+    description: >-
+      Records an idempotent probe observation from the Controller assigned to
+      the Placement's Cluster. Terminal reports include cleanup state.
+    security:
+      - ControllerBearer: []
+    tags: [Controllers]
+    parameters:
+      - name: preflightId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/controllers.yaml#/PlacementPreflightReport
+    responses:
+      "204":
+        description: The report was recorded or was already reflected in terminal state.
+      "400":
+        description: The report is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: The Controller credential is missing or invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The preflight is not assigned to this Controller's Cluster.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The report conflicts with the durable preflight identity or terminal result.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "413":
+        $ref: ../components/common.yaml#/RequestTooLargeResponse
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The report could not be recorded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+
 runLogChunks:
   post:
     operationId: appendRunLogChunk

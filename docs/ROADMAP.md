@@ -53,14 +53,12 @@ returns bounded, sanitized results through the existing outbound protocol.
       accepted revisions. Show whether every required logical credential is
       offered by a Placement while keeping this static result distinct from live
       Secret checks.
-- [ ] Add an explicit, operator-started preflight command. Define idempotency,
-      authorization, timeouts, concurrency, durable result history, and behavior
-      when the selected Controller is disconnected.
-- [ ] Check namespace ownership, service-account and referenced Secret
-      existence, required Secret keys, Controller and workload RBAC, and
-      representative pod admission. Treat image pullability as an optional,
-      explicitly cleaned-up active probe, and report unsupported or
-      inconclusive checks separately from failures.
+
+The explicit Placement preflight is a representative, actively cleaned-up Job.
+Keep it distinct from catalog-aware compatibility: it verifies Placement-level
+launch, observation, and cleanup, not arbitrary Action images, Git access, or
+credential contents. Add Action-specific probes only when an operator workflow
+requires their stronger side effects and semantics.
 
 ## Reliability and operator guidance
 

@@ -1320,6 +1320,137 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /api/v1/placements/{placementName}/preflights:
+    get:
+      operationId: listPlacementPreflights
+      summary: List Placement preflight probes
+      description: Lists durable probe results for the configured Placement, newest first.
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Placements
+      parameters:
+        - name: placementName
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Placement preflight history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlacementPreflightList'
+        '400':
+          description: The list window is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: A valid product session or bearer credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The authenticated principal cannot read product state.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The Placement is not configured.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '405':
+          description: The HTTP method is not supported for this resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: Placement preflights could not be loaded.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    post:
+      operationId: createPlacementPreflight
+      summary: Start a Placement preflight probe
+      description: Starts an explicit active probe using the Placement's execution namespace, service account, pod policy, resource defaults, and responsible Controller. The probe never creates a Run or invokes a repository Action.
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Placements
+      parameters:
+        - name: placementName
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+      responses:
+        '201':
+          description: The preflight was durably queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlacementPreflight'
+        '401':
+          description: A valid product session or bearer credential is required.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: The authenticated principal cannot start probes.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The Placement is not configured.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '405':
+          description: The HTTP method is not supported for this resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The Controller is unreachable or this Placement already has an active preflight.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The preflight could not be created.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /controller/v1/enroll:
     post:
       operationId: enrollController
@@ -1610,6 +1741,69 @@ paths:
           $ref: '#/components/responses/RequestTooLargeResponse'
         '500':
           description: The Run observation could not be recorded.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /controller/v1/placement-preflights/{preflightId}/report:
+    post:
+      operationId: reportPlacementPreflight
+      summary: Report Placement preflight progress or completion
+      description: Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+      security:
+        - ControllerBearer: []
+      tags:
+        - Controllers
+      parameters:
+        - name: preflightId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlacementPreflightReport'
+      responses:
+        '204':
+          description: The report was recorded or was already reflected in terminal state.
+        '400':
+          description: The report is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          description: The Controller credential is missing or invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: The preflight is not assigned to this Controller's Cluster.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '405':
+          description: The HTTP method is not supported for this resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The report conflicts with the durable preflight identity or terminal result.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestTooLargeResponse'
+        '500':
+          description: The report could not be recorded.
           content:
             application/problem+json:
               schema:
@@ -5484,6 +5678,95 @@ components:
           type: string
           pattern: ^[0-9a-f]{64}$
           description: SHA-256 checksum of the validated effective Placement set.
+    PlacementPreflight:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - placementName
+        - cluster
+        - configurationChecksum
+        - state
+        - cleanupState
+        - requestedBy
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        placementName:
+          $ref: '#/components/schemas/CatalogName'
+        cluster:
+          $ref: '#/components/schemas/CatalogName'
+        configurationChecksum:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+          description: Placement configuration version captured when the probe was requested.
+        state:
+          type: string
+          enum:
+            - queued
+            - running
+            - succeeded
+            - failed
+        cleanupState:
+          type: string
+          enum:
+            - pending
+            - not-required
+            - succeeded
+            - failed
+        requestedBy:
+          $ref: '#/components/schemas/RunActor'
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        finishedAt:
+          type: string
+          format: date-time
+        jobUid:
+          type: string
+          minLength: 1
+          maxLength: 200
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Bounded, sanitized result detail.
+        diagnostics:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/PlacementPreflightDiagnostic'
+    PlacementPreflightList:
+      type: object
+      additionalProperties: false
+      required:
+        - items
+        - total
+        - limit
+        - offset
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlacementPreflight'
+        total:
+          type: integer
+          minimum: 0
+        limit:
+          type: integer
+          minimum: 1
+        offset:
+          type: integer
+          minimum: 0
     RunAssignment:
       type: object
       required:
@@ -5555,6 +5838,7 @@ components:
             - cancel-run
             - create-kargo-promotion
             - reconcile-kargo-promotion
+            - placement-preflight
         assignment:
           $ref: '#/components/schemas/RunAssignment'
           description: Present when type is run-assignment.
@@ -5567,6 +5851,88 @@ components:
         promotionReconciliation:
           $ref: '#/components/schemas/KargoPromotionReconciliationCommand'
           description: Present when type is reconcile-kargo-promotion.
+        placementPreflight:
+          $ref: '#/components/schemas/PlacementPreflightCommand'
+          description: Present when type is placement-preflight.
+    PlacementPreflightCommand:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - placementName
+        - configurationChecksum
+        - cluster
+        - jobNamespace
+        - timeoutSeconds
+      properties:
+        id:
+          type: string
+          format: uuid
+        placementName:
+          $ref: '#/components/schemas/CatalogName'
+        configurationChecksum:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        cluster:
+          $ref: '#/components/schemas/CatalogName'
+        jobNamespace:
+          $ref: '#/components/schemas/CatalogName'
+        serviceAccountName:
+          type: string
+          minLength: 1
+          maxLength: 253
+        timeoutSeconds:
+          type: integer
+          format: int32
+          minimum: 10
+          maximum: 600
+        resources:
+          $ref: '#/components/schemas/ResourceRequirements'
+        nodeSelector:
+          type: object
+          additionalProperties:
+            type: string
+        podTemplate:
+          type: object
+          additionalProperties: true
+          description: Validated Placement PodTemplateSpec extensions.
+    PlacementPreflightReport:
+      type: object
+      additionalProperties: false
+      required:
+        - state
+        - cleanupState
+      properties:
+        state:
+          type: string
+          enum:
+            - running
+            - succeeded
+            - failed
+        cleanupState:
+          type: string
+          enum:
+            - pending
+            - not-required
+            - succeeded
+            - failed
+        jobUid:
+          type: string
+          minLength: 1
+          maxLength: 200
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        diagnostics:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/PlacementPreflightDiagnostic'
     RunObservation:
       type: object
       required:
@@ -8045,6 +8411,32 @@ components:
           additionalProperties:
             type: string
             minLength: 1
+    PlacementPreflightDiagnostic:
+      type: object
+      additionalProperties: false
+      required:
+        - reason
+        - message
+        - count
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        count:
+          type: integer
+          format: int32
+          minimum: 1
+        firstObservedAt:
+          type: string
+          format: date-time
+        lastObservedAt:
+          type: string
+          format: date-time
     RunAssignmentRepository:
       type: object
       required:

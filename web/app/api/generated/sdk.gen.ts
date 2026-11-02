@@ -28,6 +28,9 @@ import type {
   CreateApiKeyData,
   CreateApiKeyErrors,
   CreateApiKeyResponses,
+  CreatePlacementPreflightData,
+  CreatePlacementPreflightErrors,
+  CreatePlacementPreflightResponses,
   CreatePrincipalApiKeyData,
   CreatePrincipalApiKeyErrors,
   CreatePrincipalApiKeyResponses,
@@ -127,6 +130,9 @@ import type {
   ListNotificationDeliveriesData,
   ListNotificationDeliveriesErrors,
   ListNotificationDeliveriesResponses,
+  ListPlacementPreflightsData,
+  ListPlacementPreflightsErrors,
+  ListPlacementPreflightsResponses,
   ListPlacementsData,
   ListPlacementsErrors,
   ListPlacementsResponses,
@@ -187,6 +193,9 @@ import type {
   ReportKargoPromotionReconciliationData,
   ReportKargoPromotionReconciliationErrors,
   ReportKargoPromotionReconciliationResponses,
+  ReportPlacementPreflightData,
+  ReportPlacementPreflightErrors,
+  ReportPlacementPreflightResponses,
   ReportRunObservationData,
   ReportRunObservationErrors,
   ReportRunObservationResponses,
@@ -854,6 +863,64 @@ export const getPlacement = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Placement preflight probes
+ *
+ * Lists durable probe results for the configured Placement, newest first.
+ */
+export const listPlacementPreflights = <ThrowOnError extends boolean = false>(
+  options: Options<ListPlacementPreflightsData, ThrowOnError>,
+): RequestResult<ListPlacementPreflightsResponses, ListPlacementPreflightsErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListPlacementPreflightsResponses,
+    ListPlacementPreflightsErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/placements/{placementName}/preflights",
+    ...options,
+  });
+
+/**
+ * Start a Placement preflight probe
+ *
+ * Starts an explicit active probe using the Placement's execution namespace, service account, pod policy, resource defaults, and responsible Controller. The probe never creates a Run or invokes a repository Action.
+ */
+export const createPlacementPreflight = <ThrowOnError extends boolean = false>(
+  options: Options<CreatePlacementPreflightData, ThrowOnError>,
+): RequestResult<CreatePlacementPreflightResponses, CreatePlacementPreflightErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CreatePlacementPreflightResponses,
+    CreatePlacementPreflightErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/placements/{placementName}/preflights",
+    ...options,
+  });
+
+/**
  * Enroll a cluster controller
  *
  * Uses a cluster-scoped enrollment credential to bind a controller-generated bearer credential to its cluster. Repeating an enrollment with the same credential digest is idempotent.
@@ -986,6 +1053,34 @@ export const reportRunObservation = <ThrowOnError extends boolean = false>(
       },
     ],
     url: "/controller/v1/runs/{runId}/observations",
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+  });
+
+/**
+ * Report Placement preflight progress or completion
+ *
+ * Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+ */
+export const reportPlacementPreflight = <ThrowOnError extends boolean = false>(
+  options: Options<ReportPlacementPreflightData, ThrowOnError>,
+): RequestResult<ReportPlacementPreflightResponses, ReportPlacementPreflightErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ReportPlacementPreflightResponses,
+    ReportPlacementPreflightErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        key: "ControllerBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/controller/v1/placement-preflights/{preflightId}/report",
     ...options,
     headers: {
       "Content-Type": "application/json",

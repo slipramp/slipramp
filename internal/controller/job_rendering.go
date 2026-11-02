@@ -56,7 +56,7 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 		)
 	}
 
-	template, err := assignmentPodTemplate(assignment.Placement.PodTemplate)
+	template, err := podTemplateFromAPI(assignment.Placement.PodTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -162,24 +162,24 @@ func runJobName(runID uuid.UUID) string {
 	return "slipramp-run-" + runID.String()
 }
 
-func assignmentPodTemplate(encoded *map[string]any) (corev1.PodTemplateSpec, error) {
+func podTemplateFromAPI(encoded *map[string]any) (corev1.PodTemplateSpec, error) {
 	if encoded == nil {
 		return corev1.PodTemplateSpec{}, nil
 	}
 
 	data, err := json.Marshal(encoded)
 	if err != nil {
-		return corev1.PodTemplateSpec{}, fmt.Errorf("encode assignment pod template: %w", err)
+		return corev1.PodTemplateSpec{}, fmt.Errorf("encode pod template: %w", err)
 	}
 
 	var template corev1.PodTemplateSpec
 	if err := json.Unmarshal(data, &template); err != nil {
-		return corev1.PodTemplateSpec{}, fmt.Errorf("decode assignment pod template: %w", err)
+		return corev1.PodTemplateSpec{}, fmt.Errorf("decode pod template: %w", err)
 	}
 
 	if len(template.Spec.Containers) != 0 ||
 		len(template.Spec.InitContainers) != 0 {
-		return corev1.PodTemplateSpec{}, fmt.Errorf("assignment pod template must not define containers")
+		return corev1.PodTemplateSpec{}, fmt.Errorf("pod template must not define containers")
 	}
 
 	return template, nil
@@ -459,26 +459,14 @@ func boundCredential(
 
 func assignmentResources(assignment api.RunAssignment) (corev1.ResourceRequirements, error) {
 	resources := catalog.MergeResources(
-		assignmentResourceValues(assignment.Placement.Resources),
-		assignmentResourceValues(assignment.Action.Resources),
+		resourceRequirementValues(assignment.Placement.Resources),
+		resourceRequirementValues(assignment.Action.Resources),
 	)
 
-	parsedRequests, err := parseResourceList("request", resources.Requests)
-	if err != nil {
-		return corev1.ResourceRequirements{}, err
-	}
-	parsedLimits, err := parseResourceList("limit", resources.Limits)
-	if err != nil {
-		return corev1.ResourceRequirements{}, err
-	}
-
-	return corev1.ResourceRequirements{
-		Requests: parsedRequests,
-		Limits:   parsedLimits,
-	}, nil
+	return parseResourceRequirements(resources)
 }
 
-func assignmentResourceValues(resources *api.ResourceRequirements) catalog.ResourceRequirements {
+func resourceRequirementValues(resources *api.ResourceRequirements) catalog.ResourceRequirements {
 	if resources == nil {
 		return catalog.ResourceRequirements{}
 	}
@@ -487,6 +475,22 @@ func assignmentResourceValues(resources *api.ResourceRequirements) catalog.Resou
 		Requests: cloneOptionalMap(resources.Requests),
 		Limits:   cloneOptionalMap(resources.Limits),
 	}
+}
+
+func parseResourceRequirements(resources catalog.ResourceRequirements) (corev1.ResourceRequirements, error) {
+	requests, err := parseResourceList("request", resources.Requests)
+	if err != nil {
+		return corev1.ResourceRequirements{}, err
+	}
+	limits, err := parseResourceList("limit", resources.Limits)
+	if err != nil {
+		return corev1.ResourceRequirements{}, err
+	}
+
+	return corev1.ResourceRequirements{
+		Requests: requests,
+		Limits:   limits,
+	}, nil
 }
 
 func parseResourceList(kind string, values map[string]string) (corev1.ResourceList, error) {

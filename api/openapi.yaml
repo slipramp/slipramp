@@ -48,6 +48,8 @@ paths:
     $ref: ./paths/placements.yaml#/placements
   /api/v1/placements/{placementName}:
     $ref: ./paths/placements.yaml#/placement
+  /api/v1/placements/{placementName}/preflights:
+    $ref: ./paths/placements.yaml#/placementPreflights
   /controller/v1/enroll:
     $ref: ./paths/controllers.yaml#/enroll
   /controller/v1/poll:
@@ -58,6 +60,8 @@ paths:
     $ref: ./paths/controllers.yaml#/promotionReconciliation
   /controller/v1/runs/{runId}/observations:
     $ref: ./paths/controllers.yaml#/runObservations
+  /controller/v1/placement-preflights/{preflightId}/report:
+    $ref: ./paths/controllers.yaml#/placementPreflightReport
   /controller/v1/runs/{runId}/log-chunks:
     $ref: ./paths/controllers.yaml#/runLogChunks
   /controller/v1/runs/{runId}/log:
@@ -252,12 +256,20 @@ components:
       $ref: ./components/placements.yaml#/PlacementList
     PlacementDetail:
       $ref: ./components/placements.yaml#/PlacementDetail
+    PlacementPreflight:
+      $ref: ./components/placements.yaml#/PlacementPreflight
+    PlacementPreflightList:
+      $ref: ./components/placements.yaml#/PlacementPreflightList
     RunAssignment:
       $ref: ./components/controllers.yaml#/RunAssignment
     CancelRunCommand:
       $ref: ./components/controllers.yaml#/CancelRunCommand
     ControllerCommand:
       $ref: ./components/controllers.yaml#/ControllerCommand
+    PlacementPreflightCommand:
+      $ref: ./components/controllers.yaml#/PlacementPreflightCommand
+    PlacementPreflightReport:
+      $ref: ./components/controllers.yaml#/PlacementPreflightReport
     RunObservation:
       $ref: ./components/controllers.yaml#/RunObservation
     ControllerEnrollment:

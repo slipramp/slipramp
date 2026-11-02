@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -16,6 +17,10 @@ type RunSource interface {
 
 type PromotionCreationSource interface {
 	Next(context.Context, string) (promotion.CreationCommand, error)
+}
+
+type PlacementPreflightSource interface {
+	Next(context.Context, string) (placement.Preflight, error)
 }
 
 type PromotionReconciliationSource interface {
@@ -34,24 +39,28 @@ type PromotionCreation struct{ Command promotion.CreationCommand }
 type PromotionReconciliation struct {
 	Command promotion.ReconciliationCommand
 }
+type PlacementPreflight struct{ Preflight placement.Preflight }
 
 func (Assignment) controllerCommand()              {}
 func (Cancellation) controllerCommand()            {}
 func (PromotionCreation) controllerCommand()       {}
 func (PromotionReconciliation) controllerCommand() {}
+func (PlacementPreflight) controllerCommand()      {}
 
 type Scheduler struct {
 	runs            RunSource
+	preflights      PlacementPreflightSource
 	creations       PromotionCreationSource
 	reconciliations PromotionReconciliationSource
 }
 
 func NewScheduler(
 	runs RunSource,
+	preflights PlacementPreflightSource,
 	creations PromotionCreationSource,
 	reconciliations PromotionReconciliationSource,
 ) *Scheduler {
-	return &Scheduler{runs: runs, creations: creations, reconciliations: reconciliations}
+	return &Scheduler{runs: runs, preflights: preflights, creations: creations, reconciliations: reconciliations}
 }
 
 func (s *Scheduler) Next(ctx context.Context, clusterName string) (Command, error) {
@@ -61,6 +70,16 @@ func (s *Scheduler) Next(ctx context.Context, clusterName string) (Command, erro
 	}
 	if !errors.Is(err, run.ErrNoRunToCancel) {
 		return nil, err
+	}
+
+	if s.preflights != nil {
+		preflight, err := s.preflights.Next(ctx, clusterName)
+		if err == nil {
+			return PlacementPreflight{Preflight: preflight}, nil
+		}
+		if !errors.Is(err, placement.ErrNoPreflightCommand) {
+			return nil, err
+		}
 	}
 
 	if s.creations != nil {

@@ -46,6 +46,8 @@ var productOperationPermissions = map[string]productidentity.Permission{
 	"ListClusters":                   productidentity.PermissionRead,
 	"ListPlacements":                 productidentity.PermissionRead,
 	"GetPlacement":                   productidentity.PermissionRead,
+	"ListPlacementPreflights":        productidentity.PermissionRead,
+	"CreatePlacementPreflight":       productidentity.PermissionRunsWrite,
 	"GetInbox":                       productidentity.PermissionRead,
 	"ListNotificationDeliveries":     productidentity.PermissionRead,
 	"AcknowledgeInboxProblems":       productidentity.PermissionInboxWrite,

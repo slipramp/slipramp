@@ -61,6 +61,10 @@ type kargoPromotionReconciliationReporter interface {
 	) error
 }
 
+type placementPreflightReporter interface {
+	ReportPlacementPreflight(context.Context, uuid.UUID, api.PlacementPreflightReport) error
+}
+
 type runLogReporter interface {
 	GetLogCursor(context.Context, uuid.UUID) (logCursor, error)
 	AppendLogChunk(context.Context, uuid.UUID, int64, []byte) error
@@ -90,8 +94,10 @@ type Controller struct {
 	reports                        runObservationReporter
 	promotionReports               kargoPromotionDispatchReporter
 	promotionReconciliationReports kargoPromotionReconciliationReporter
+	preflightReports               placementPreflightReporter
 	logs                           runLogReporter
 	jobs                           runJobs
+	preflightJobs                  placementPreflightJobs
 	retryDelay                     time.Duration
 	observeEvery                   time.Duration
 	heartbeatEvery                 time.Duration
@@ -104,6 +110,9 @@ type Controller struct {
 	promotions                     kargoPromotionCreator
 	promotionReconciler            kargoPromotionReconciler
 	workers                        sync.WaitGroup
+	preflightMutex                 sync.Mutex
+	activePreflights               map[uuid.UUID]struct{}
+	preflightSlots                 chan struct{}
 	stop                           context.CancelCauseFunc
 	metrics                        componentRunner
 }
@@ -147,13 +156,17 @@ func New(
 		reports:                        server,
 		promotionReports:               server,
 		promotionReconciliationReports: server,
+		preflightReports:               server,
 		logs:                           server,
 		jobs:                           newKubernetesRunJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
+		preflightJobs:                  newKubernetesPlacementPreflightJobs(cfg, kubeClient.BatchV1(), kubeClient.CoreV1()),
 		retryDelay:                     pollRetryDelay,
 		observeEvery:                   jobObservationPeriod,
 		heartbeatEvery:                 observationHeartbeatPeriod,
 		now:                            time.Now,
 		activeRuns:                     make(map[uuid.UUID]*runWorker),
+		activePreflights:               make(map[uuid.UUID]struct{}),
+		preflightSlots:                 make(chan struct{}, 1),
 		runSlots:                       make(chan struct{}, cfg.MaximumActiveRuns),
 	}
 	if settings.metricsHandler != nil {
@@ -325,6 +338,7 @@ func (c *Controller) handleCommand(ctx context.Context, command api.ControllerCo
 		command.Cancel != nil,
 		command.Promotion != nil,
 		command.PromotionReconciliation != nil,
+		command.PlacementPreflight != nil,
 	} {
 		if present {
 			payloads++
@@ -359,6 +373,13 @@ func (c *Controller) handleCommand(ctx context.Context, command api.ControllerCo
 		}
 
 		return c.handleKargoPromotionReconciliation(ctx, *command.PromotionReconciliation)
+	case api.ControllerCommandTypePlacementPreflight:
+		if command.PlacementPreflight == nil {
+			return invalidServerResponse("poll Controller command", "Placement preflight payload is missing")
+		}
+
+		c.handlePlacementPreflight(ctx, *command.PlacementPreflight)
+		return nil
 	default:
 		return invalidServerResponse("poll Controller command", "command type is unsupported")
 	}

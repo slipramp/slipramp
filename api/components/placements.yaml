@@ -113,3 +113,121 @@ PlacementDetail:
       type: string
       pattern: ^[0-9a-f]{64}$
       description: SHA-256 checksum of the validated effective Placement set.
+
+PlacementPreflight:
+  type: object
+  additionalProperties: false
+  required:
+    - id
+    - placementName
+    - cluster
+    - configurationChecksum
+    - state
+    - cleanupState
+    - requestedBy
+    - createdAt
+  properties:
+    id:
+      type: string
+      format: uuid
+    placementName:
+      $ref: ./runs.yaml#/CatalogName
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    configurationChecksum:
+      type: string
+      pattern: ^[0-9a-f]{64}$
+      description: Placement configuration version captured when the probe was requested.
+    state:
+      type: string
+      enum:
+        - queued
+        - running
+        - succeeded
+        - failed
+    cleanupState:
+      type: string
+      enum:
+        - pending
+        - not-required
+        - succeeded
+        - failed
+    requestedBy:
+      $ref: ./runs.yaml#/RunActor
+    createdAt:
+      type: string
+      format: date-time
+    startedAt:
+      type: string
+      format: date-time
+    finishedAt:
+      type: string
+      format: date-time
+    jobUid:
+      type: string
+      minLength: 1
+      maxLength: 200
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 200
+    message:
+      type: string
+      minLength: 1
+      maxLength: 4096
+      description: Bounded, sanitized result detail.
+    diagnostics:
+      type: array
+      maxItems: 20
+      items:
+        $ref: "#/PlacementPreflightDiagnostic"
+
+PlacementPreflightDiagnostic:
+  type: object
+  additionalProperties: false
+  required:
+    - reason
+    - message
+    - count
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 200
+    message:
+      type: string
+      minLength: 1
+      maxLength: 1024
+    count:
+      type: integer
+      format: int32
+      minimum: 1
+    firstObservedAt:
+      type: string
+      format: date-time
+    lastObservedAt:
+      type: string
+      format: date-time
+
+PlacementPreflightList:
+  type: object
+  additionalProperties: false
+  required:
+    - items
+    - total
+    - limit
+    - offset
+  properties:
+    items:
+      type: array
+      items:
+        $ref: "#/PlacementPreflight"
+    total:
+      type: integer
+      minimum: 0
+    limit:
+      type: integer
+      minimum: 1
+    offset:
+      type: integer
+      minimum: 0

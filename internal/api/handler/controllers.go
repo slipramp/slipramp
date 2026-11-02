@@ -16,6 +16,7 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/controllercommand"
 	"github.com/slipramp/slipramp/internal/controlleridentity"
+	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -229,6 +230,69 @@ func (h *Handler) ReportRunObservation(
 	return api.ReportRunObservation204Response{}, nil
 }
 
+func (h *Handler) ReportPlacementPreflight(
+	ctx context.Context,
+	request api.ReportPlacementPreflightRequestObject,
+) (api.ReportPlacementPreflightResponseObject, error) {
+	principal, err := controllerPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if request.Body == nil {
+		return api.ReportPlacementPreflight400ApplicationProblemPlusJSONResponse(
+			NewProblem(http.StatusBadRequest, "A Placement preflight report is required."),
+		), nil
+	}
+
+	diagnostics := make([]placement.PreflightDiagnostic, 0)
+	if request.Body.Diagnostics != nil {
+		for _, diagnostic := range *request.Body.Diagnostics {
+			diagnostics = append(diagnostics, placement.PreflightDiagnostic{
+				Reason:          diagnostic.Reason,
+				Message:         diagnostic.Message,
+				Count:           diagnostic.Count,
+				FirstObservedAt: diagnostic.FirstObservedAt,
+				LastObservedAt:  diagnostic.LastObservedAt,
+			})
+		}
+	}
+
+	_, err = h.placementPreflights.Report(ctx, placement.PreflightReport{
+		ID:           request.PreflightID,
+		ClusterName:  principal.ClusterName,
+		State:        placement.PreflightState(request.Body.State),
+		CleanupState: placement.PreflightCleanupState(request.Body.CleanupState),
+		JobUID:       request.Body.JobUID,
+		Reason:       request.Body.Reason,
+		Message:      request.Body.Message,
+		Diagnostics:  diagnostics,
+		ObservedAt:   h.now().UTC(),
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, placement.ErrPreflightInvalid):
+			return api.ReportPlacementPreflight400ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusBadRequest, err.Error()),
+			), nil
+		case errors.Is(err, placement.ErrPreflightNotFound):
+			return api.ReportPlacementPreflight404ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusNotFound, "The preflight is not assigned to this Controller's Cluster."),
+			), nil
+		case errors.Is(err, placement.ErrPreflightConflict):
+			return api.ReportPlacementPreflight409ApplicationProblemPlusJSONResponse(
+				NewProblem(http.StatusConflict, "The report conflicts with the durable preflight result."),
+			), nil
+		default:
+			return nil, err
+		}
+	}
+	if err := h.clusters.RecordControllerContact(ctx, principal.ClusterName); err != nil {
+		return nil, err
+	}
+
+	return api.ReportPlacementPreflight204Response{}, nil
+}
+
 func (h *Handler) ReportKargoPromotionDispatch(
 	ctx context.Context,
 	request api.ReportKargoPromotionDispatchRequestObject,
@@ -404,6 +468,32 @@ func reconcileKargoPromotionCommand(command promotion.ReconciliationCommand) api
 	}
 }
 
+func placementPreflightCommand(record placement.Preflight) (api.ControllerCommand, error) {
+	podTemplate, err := assignmentPodTemplateResponse(record.Snapshot.PodTemplate)
+	if err != nil {
+		return api.ControllerCommand{}, err
+	}
+	resources := api.ResourceRequirements{
+		Requests: optionalStringMap(record.Snapshot.Resources.Requests),
+		Limits:   optionalStringMap(record.Snapshot.Resources.Limits),
+	}
+	return api.ControllerCommand{
+		Type: api.ControllerCommandTypePlacementPreflight,
+		PlacementPreflight: &api.PlacementPreflightCommand{
+			ID:                    record.ID,
+			PlacementName:         api.CatalogName(record.Snapshot.PlacementName),
+			ConfigurationChecksum: record.Snapshot.ConfigurationChecksum,
+			Cluster:               api.CatalogName(record.Snapshot.ClusterName),
+			JobNamespace:          api.CatalogName(record.Snapshot.JobNamespace),
+			ServiceAccountName:    optionalString(record.Snapshot.ServiceAccountName),
+			TimeoutSeconds:        int32(placement.DefaultPreflightTimeout.Seconds()),
+			Resources:             &resources,
+			NodeSelector:          optionalStringMap(record.Snapshot.NodeSelector),
+			PodTemplate:           podTemplate,
+		},
+	}, nil
+}
+
 func optionalKargoPhase(value *api.KargoPromotionReconciliationReportPhase) *promotion.KargoPhase {
 	if value == nil {
 		return nil
@@ -421,6 +511,8 @@ func (h *Handler) controllerCommandResponse(command controllercommand.Command) (
 		return createKargoPromotionCommand(selected.Command), nil
 	case controllercommand.PromotionReconciliation:
 		return reconcileKargoPromotionCommand(selected.Command), nil
+	case controllercommand.PlacementPreflight:
+		return placementPreflightCommand(selected.Preflight)
 	case controllercommand.Assignment:
 		assignment, err := h.runAssignmentResponse(selected.Run)
 		if err != nil {

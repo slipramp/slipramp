@@ -121,3 +121,136 @@ placement:
           application/problem+json:
             schema:
               $ref: ../components/common.yaml#/Problem
+
+placementPreflights:
+  get:
+    operationId: listPlacementPreflights
+    summary: List Placement preflight probes
+    description: Lists durable probe results for the configured Placement, newest first.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Placements]
+    parameters:
+      - name: placementName
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+      - name: offset
+        in: query
+        schema:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+    responses:
+      "200":
+        description: Placement preflight history.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/placements.yaml#/PlacementPreflightList
+      "400":
+        description: The list window is invalid.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot read product state.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Placement is not configured.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: Placement preflights could not be loaded.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+  post:
+    operationId: createPlacementPreflight
+    summary: Start a Placement preflight probe
+    description: >-
+      Starts an explicit active probe using the Placement's execution namespace,
+      service account, pod policy, resource defaults, and responsible Controller.
+      The probe never creates a Run or invokes a repository Action.
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Placements]
+    parameters:
+      - name: placementName
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    responses:
+      "201":
+        description: The preflight was durably queued.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/placements.yaml#/PlacementPreflight
+      "401":
+        description: A valid product session or bearer credential is required.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "403":
+        description: The authenticated principal cannot start probes.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "404":
+        description: The Placement is not configured.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "409":
+        description: The Controller is unreachable or this Placement already has an active preflight.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "405":
+        description: The HTTP method is not supported for this resource.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem
+      "500":
+        description: The preflight could not be created.
+        content:
+          application/problem+json:
+            schema:
+              $ref: ../components/common.yaml#/Problem

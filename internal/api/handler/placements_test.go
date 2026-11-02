@@ -6,9 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/cluster"
 	"github.com/slipramp/slipramp/internal/placement"
+	"github.com/slipramp/slipramp/internal/productidentity"
 )
 
 func TestListPlacements(t *testing.T) {
@@ -69,6 +72,67 @@ func TestListPlacements(t *testing.T) {
 		item.Resources.Requests["cpu"] != "100m" || item.Resources.Limits["memory"] != "1Gi" ||
 		len(item.CredentialNames) != 1 || item.CredentialNames[0] != "cloud" || item.TargetCount != 4 {
 		t.Errorf("ListPlacements() item = %#v", item)
+	}
+}
+
+func TestPlacementPreflightEndpoints(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 1, 12, 0, 0, 0, time.UTC)
+	actor := productidentity.ActorSnapshot{
+		PrincipalID: uuid.New(), Kind: productidentity.KindUser, DisplayName: "Operator",
+	}
+	record := placement.Preflight{
+		ID: uuid.New(),
+		Snapshot: placement.PreflightSnapshot{
+			PlacementName: "infrastructure", ClusterName: "colo",
+			ConfigurationChecksum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		},
+		State: placement.PreflightStateQueued, CleanupState: placement.PreflightCleanupPending,
+		RequestedBy: actor, CreatedAt: now,
+	}
+	service := &recordingPlacementPreflightService{
+		created: record,
+		listed:  placement.PreflightList{Items: []placement.Preflight{record}, Total: 1},
+	}
+	handler := newHandler(Dependencies{PlacementPreflights: service})
+	principal := productidentity.Principal{
+		ID: actor.PrincipalID, Kind: actor.Kind, DisplayName: actor.DisplayName,
+	}
+	ctx := context.WithValue(context.Background(), productAuthenticationContextKey{}, productidentity.Authentication{
+		Principal: principal,
+	})
+
+	created, err := handler.CreatePlacementPreflight(ctx, api.CreatePlacementPreflightRequestObject{
+		PlacementName: "infrastructure",
+	})
+	if err != nil {
+		t.Fatalf("CreatePlacementPreflight() error = %v", err)
+	}
+	createdResponse, ok := created.(api.CreatePlacementPreflight201JSONResponse)
+	if !ok {
+		t.Fatalf("CreatePlacementPreflight() response = %T", created)
+	}
+	if createdResponse.ID != record.ID || service.createdPlacementName != "infrastructure" ||
+		service.createdBy == nil || service.createdBy.ID != principal.ID {
+		t.Errorf("CreatePlacementPreflight() = %#v, service = %#v", createdResponse, service)
+	}
+
+	listed, err := handler.ListPlacementPreflights(ctx, api.ListPlacementPreflightsRequestObject{
+		PlacementName: "infrastructure",
+	})
+	if err != nil {
+		t.Fatalf("ListPlacementPreflights() error = %v", err)
+	}
+	listResponse, ok := listed.(api.ListPlacementPreflights200JSONResponse)
+	if !ok {
+		t.Fatalf("ListPlacementPreflights() response = %T", listed)
+	}
+	if listResponse.Total != 1 || listResponse.Limit != placement.DefaultPreflightListLimit ||
+		len(listResponse.Items) != 1 || listResponse.Items[0].RequestedBy.DisplayName != actor.DisplayName ||
+		service.listFilter.PlacementName != "infrastructure" ||
+		service.listFilter.Limit != placement.DefaultPreflightListLimit {
+		t.Errorf("ListPlacementPreflights() = %#v, filter = %#v", listResponse, service.listFilter)
 	}
 }
 
@@ -147,6 +211,40 @@ func TestGetPlacementReturnsNotFound(t *testing.T) {
 type staticPlacementService struct {
 	inventory placement.Inventory
 	err       error
+}
+
+type recordingPlacementPreflightService struct {
+	created              placement.Preflight
+	listed               placement.PreflightList
+	createdPlacementName string
+	createdBy            *productidentity.Principal
+	listFilter           placement.PreflightListFilter
+	err                  error
+}
+
+func (s *recordingPlacementPreflightService) Create(
+	_ context.Context,
+	placementName string,
+	principal *productidentity.Principal,
+) (placement.Preflight, error) {
+	s.createdPlacementName = placementName
+	s.createdBy = principal
+	return s.created, s.err
+}
+
+func (s *recordingPlacementPreflightService) List(
+	_ context.Context,
+	filter placement.PreflightListFilter,
+) (placement.PreflightList, error) {
+	s.listFilter = filter
+	return s.listed, s.err
+}
+
+func (s *recordingPlacementPreflightService) Report(
+	context.Context,
+	placement.PreflightReport,
+) (placement.Preflight, error) {
+	return placement.Preflight{}, s.err
 }
 
 func (s *staticPlacementService) Inventory(context.Context) (placement.Inventory, error) {

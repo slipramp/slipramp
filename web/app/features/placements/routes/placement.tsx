@@ -1,11 +1,32 @@
-import { Alert, Anchor, Badge, Code, Group, Paper, SimpleGrid, Stack, Text } from "@mantine/core";
-import { Link } from "react-router";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Code,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+} from "@mantine/core";
+import { IconActivityHeartbeat } from "@tabler/icons-react";
+import { Link, useFetcher } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { getPlacement } from "~/api/generated";
+import {
+  createPlacementPreflight,
+  getPlacement,
+  listPlacementPreflights,
+  type PlacementPreflight,
+} from "~/api/generated";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
+import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { PageBackLink } from "~/shared/page-back-link";
+import { problemDetail } from "~/shared/form-data";
 import { CodeList, ResourceRequirementsTable, TechnicalValue } from "~/shared/technical-definition";
 import { pageTitle } from "~/shared/page-title";
 
@@ -16,20 +37,50 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
-  const result = await getPlacement({
-    client: createServerAPIClient(request, context),
-    path: { placementName: params.placementName },
-  });
+  const client = createServerAPIClient(request, context);
+  const [result, preflights, principal] = await Promise.all([
+    getPlacement({
+      client,
+      path: { placementName: params.placementName },
+    }),
+    listPlacementPreflights({
+      client,
+      path: { placementName: params.placementName },
+      query: { limit: 10 },
+    }),
+    getProductPrincipal(context),
+  ]);
 
   return {
     available: result.data !== undefined || result.response?.status === 404,
     detail: result.data,
     error:
       result.error?.detail ?? result.error?.title ?? "The Placement inventory could not be loaded.",
+    preflights: preflights.data?.items ?? [],
+    preflightsAvailable: preflights.data !== undefined || preflights.response?.status === 404,
+    principal,
   };
 }
 
-export default function PlacementDetail({ loaderData }: Route.ComponentProps) {
+export async function action({ context, params, request }: Route.ActionArgs) {
+  const result = await createPlacementPreflight({
+    client: createServerAPIClient(request, context),
+    path: { placementName: params.placementName },
+  });
+  if (result.data) {
+    return { preflight: result.data };
+  }
+
+  return { error: problemDetail(result.error, "The Placement preflight could not be started.") };
+}
+
+export default function PlacementDetail({ actionData, loaderData }: Route.ComponentProps) {
+  const preflightFetcher = useFetcher<typeof action>();
+  const activePreflight = loaderData.preflights.find(
+    (preflight) => preflight.state === "queued" || preflight.state === "running",
+  );
+  useActivityRefresh(activePreflight !== undefined);
+
   if (!loaderData.detail) {
     return (
       <Stack gap="md">
@@ -47,10 +98,30 @@ export default function PlacementDetail({ loaderData }: Route.ComponentProps) {
   }
 
   const { configurationChecksum, placement } = loaderData.detail;
+  const canStartPreflight =
+    loaderData.principal?.role === "operator" || loaderData.principal?.role === "admin";
+  const operationData = preflightFetcher.data ?? actionData;
+  const preflightSubmitting = preflightFetcher.state !== "idle";
 
   return (
     <Stack gap="lg">
       <PageHeader
+        actions={
+          canStartPreflight ? (
+            <preflightFetcher.Form method="post">
+              <Button
+                disabled={placement.controllerConnectionState !== "connected" || !!activePreflight}
+                leftSection={<IconActivityHeartbeat size={16} />}
+                loading={preflightSubmitting}
+                size="compact-md"
+                type="submit"
+                variant="light"
+              >
+                {activePreflight ? "Preflight active" : "Start preflight"}
+              </Button>
+            </preflightFetcher.Form>
+          ) : null
+        }
         back={<PageBackLink label="Back to Placements" to="/placements" />}
         badges={
           <Badge
@@ -99,6 +170,17 @@ export default function PlacementDetail({ loaderData }: Route.ComponentProps) {
             : "The Controller for this Placement's Cluster has never checked in."}
         </Alert>
       ) : null}
+
+      {operationData?.error ? (
+        <Alert color="red" title="Preflight could not start">
+          {operationData.error}
+        </Alert>
+      ) : null}
+
+      <PlacementPreflightHistory
+        available={loaderData.preflightsAvailable}
+        preflights={loaderData.preflights}
+      />
 
       <Paper p="lg" withBorder>
         <Stack gap="lg">
@@ -155,5 +237,127 @@ export default function PlacementDetail({ loaderData }: Route.ComponentProps) {
         </Stack>
       </Paper>
     </Stack>
+  );
+}
+
+function PlacementPreflightHistory({
+  available,
+  preflights,
+}: Readonly<{ available: boolean; preflights: PlacementPreflight[] }>) {
+  const latest = preflights[0];
+
+  return (
+    <Paper p="lg" withBorder>
+      <Stack gap="lg">
+        <SectionHeader
+          description="Active probe Jobs verify that this Placement can launch, observe, and clean up a workload. They do not run repository Actions or validate Action credentials."
+          title="Placement preflight"
+        />
+        {!available ? (
+          <Alert color="red" title="Preflight history unavailable">
+            The Server could not load preflight history.
+          </Alert>
+        ) : preflights.length === 0 ? (
+          <Text c="dimmed" size="sm">
+            No preflight has been requested for this Placement.
+          </Text>
+        ) : (
+          <Stack gap="md">
+            {latest ? <LatestPreflight preflight={latest} /> : null}
+            <Table.ScrollContainer minWidth={680} type="native">
+              <Table verticalSpacing="sm">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Result</Table.Th>
+                    <Table.Th>Requested</Table.Th>
+                    <Table.Th>Requested by</Table.Th>
+                    <Table.Th>Cleanup</Table.Th>
+                    <Table.Th>Reason</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {preflights.map((preflight) => (
+                    <Table.Tr key={preflight.id}>
+                      <Table.Td>
+                        <PreflightBadge state={preflight.state} />
+                      </Table.Td>
+                      <Table.Td>
+                        <Timestamp size="sm" value={preflight.createdAt} />
+                      </Table.Td>
+                      <Table.Td>
+                        <Text size="sm">{preflight.requestedBy.displayName}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge
+                          color={preflight.cleanupState === "failed" ? "red" : "gray"}
+                          variant="default"
+                        >
+                          {preflight.cleanupState}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text c={preflight.reason ? undefined : "dimmed"} size="sm">
+                          {preflight.reason ?? "—"}
+                        </Text>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          </Stack>
+        )}
+      </Stack>
+    </Paper>
+  );
+}
+
+function LatestPreflight({ preflight }: Readonly<{ preflight: PlacementPreflight }>) {
+  return (
+    <Alert
+      color={
+        preflight.state === "succeeded" ? "green" : preflight.state === "failed" ? "red" : "blue"
+      }
+      title={
+        <Group gap="xs">
+          <PreflightBadge state={preflight.state} />
+          <Text fw={700}>Latest preflight</Text>
+          <RelativeTime c="dimmed" size="sm" value={preflight.finishedAt ?? preflight.createdAt} />
+        </Group>
+      }
+    >
+      <Stack gap="xs">
+        <Text size="sm">
+          {preflight.message ??
+            (preflight.state === "queued"
+              ? "Waiting for the responsible Controller to accept the probe."
+              : "The Controller is running the probe Job.")}
+        </Text>
+        {preflight.diagnostics?.map((diagnostic, index) => (
+          <Text key={`${diagnostic.reason}-${index}`} size="sm">
+            <Text component="span" fw={700} inherit>
+              {diagnostic.reason}:
+            </Text>{" "}
+            {diagnostic.message}
+            {diagnostic.count > 1 ? ` (${diagnostic.count} times)` : ""}
+          </Text>
+        ))}
+      </Stack>
+    </Alert>
+  );
+}
+
+function PreflightBadge({ state }: Readonly<{ state: PlacementPreflight["state"] }>) {
+  const presentation = {
+    queued: { color: "gray", label: "Queued" },
+    running: { color: "blue", label: "Running" },
+    succeeded: { color: "green", label: "Succeeded" },
+    failed: { color: "red", label: "Failed" },
+  }[state];
+
+  return (
+    <Badge color={presentation.color} variant="light">
+      {presentation.label}
+    </Badge>
   );
 }

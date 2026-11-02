@@ -104,6 +104,15 @@ func ControllerAuthentication(authenticator ControllerAuthenticator) api.StrictM
 						)
 					},
 				)
+			case api.ReportPlacementPreflightRequestObject:
+				return authenticateControllerRequest(
+					ctx, writer, request, value, authenticator, next,
+					func() any {
+						return api.ReportPlacementPreflight401ApplicationProblemPlusJSONResponse(
+							controllerUnauthorizedProblem(),
+						)
+					},
+				)
 			case api.ReportKargoPromotionDispatchRequestObject:
 				return authenticateControllerRequest(
 					ctx,

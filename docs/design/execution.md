@@ -131,6 +131,39 @@ arbitrary pod-template content. It reports Server configuration plus Controller
 observation; it does not contact Kubernetes or claim that referenced cluster
 objects exist.
 
+## Placement preflight
+
+An operator may explicitly start an active preflight for a connected
+Placement. A preflight is a durable product record, not a Run: it does not
+resolve a catalog, clone Git, invoke an Action, stream a Run log, or consume Run
+scheduling capacity. Only one preflight may be active for a Placement at a
+time. The request snapshots the effective Placement configuration and the
+requesting Principal; a later configuration reload does not change that probe.
+
+The responsible Controller receives the preflight through its existing
+outbound command poll. It creates a deterministic Job in the Placement
+namespace using the Placement service account, pod-template policy, node
+selector, and resource defaults. The harmless probe command runs in the pinned
+checkout image, whose shell support is already part of the Controller contract.
+The probe has a bounded active deadline and does not mount Placement credential
+Secrets or use repository, Runtime, Harness, or Artifact access.
+
+The Controller records the admitted Job UID, observes it to a terminal state,
+and reports bounded warning Events as sanitized diagnostics. It deletes the Job
+with a UID precondition and foreground propagation, then confirms deletion.
+Probe outcome and cleanup outcome are distinct durable facts; inability to
+clean up makes the overall preflight fail. Command redelivery and repeated
+reports are idempotent. A Controller restart reuses a matching deterministic
+Job, while an ambiguous delete-before-report may harmlessly execute the probe
+again.
+
+Creating a preflight while the Controller is unreachable is rejected rather
+than leaving an indefinitely queued probe. A successful preflight establishes
+only that Slipramp can launch, observe, and clean up this representative
+Placement workload. It does not establish that a particular Action image, Git
+credential, logical credential binding, Secret key, external network path, or
+infrastructure command will work.
+
 ## Cancellation and recovery
 
 Queued cancellation finishes in PostgreSQL without Controller work. Once a Job

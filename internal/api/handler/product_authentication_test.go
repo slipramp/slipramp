@@ -521,6 +521,7 @@ func TestEveryGeneratedOperationHasAuthenticationBoundary(t *testing.T) {
 		"ReplaceKargoStageSnapshot":          {},
 		"ReportKargoPromotionDispatch":       {},
 		"ReportKargoPromotionReconciliation": {},
+		"ReportPlacementPreflight":           {},
 		"AppendRunLogChunk":                  {},
 		"FailRunLog":                         {},
 		"GetRunLogCursor":                    {},

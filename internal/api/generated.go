@@ -152,6 +152,7 @@ func (e ClusterConnectionState) Valid() bool {
 const (
 	ControllerCommandTypeCancelRun               ControllerCommandType = "cancel-run"
 	ControllerCommandTypeCreateKargoPromotion    ControllerCommandType = "create-kargo-promotion"
+	ControllerCommandTypePlacementPreflight      ControllerCommandType = "placement-preflight"
 	ControllerCommandTypeReconcileKargoPromotion ControllerCommandType = "reconcile-kargo-promotion"
 	ControllerCommandTypeRunAssignment           ControllerCommandType = "run-assignment"
 )
@@ -162,6 +163,8 @@ func (e ControllerCommandType) Valid() bool {
 	case ControllerCommandTypeCancelRun:
 		return true
 	case ControllerCommandTypeCreateKargoPromotion:
+		return true
+	case ControllerCommandTypePlacementPreflight:
 		return true
 	case ControllerCommandTypeReconcileKargoPromotion:
 		return true
@@ -568,6 +571,99 @@ func (e PlacementControllerConnectionState) Valid() bool {
 	case PlacementControllerConnectionStateConnected:
 		return true
 	case PlacementControllerConnectionStateUnreachable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementPreflightCleanupState.
+const (
+	PlacementPreflightCleanupStateFailed      PlacementPreflightCleanupState = "failed"
+	PlacementPreflightCleanupStateNotRequired PlacementPreflightCleanupState = "not-required"
+	PlacementPreflightCleanupStatePending     PlacementPreflightCleanupState = "pending"
+	PlacementPreflightCleanupStateSucceeded   PlacementPreflightCleanupState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the PlacementPreflightCleanupState enum.
+func (e PlacementPreflightCleanupState) Valid() bool {
+	switch e {
+	case PlacementPreflightCleanupStateFailed:
+		return true
+	case PlacementPreflightCleanupStateNotRequired:
+		return true
+	case PlacementPreflightCleanupStatePending:
+		return true
+	case PlacementPreflightCleanupStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementPreflightState.
+const (
+	PlacementPreflightStateFailed    PlacementPreflightState = "failed"
+	PlacementPreflightStateQueued    PlacementPreflightState = "queued"
+	PlacementPreflightStateRunning   PlacementPreflightState = "running"
+	PlacementPreflightStateSucceeded PlacementPreflightState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the PlacementPreflightState enum.
+func (e PlacementPreflightState) Valid() bool {
+	switch e {
+	case PlacementPreflightStateFailed:
+		return true
+	case PlacementPreflightStateQueued:
+		return true
+	case PlacementPreflightStateRunning:
+		return true
+	case PlacementPreflightStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementPreflightReportCleanupState.
+const (
+	PlacementPreflightReportCleanupStateFailed      PlacementPreflightReportCleanupState = "failed"
+	PlacementPreflightReportCleanupStateNotRequired PlacementPreflightReportCleanupState = "not-required"
+	PlacementPreflightReportCleanupStatePending     PlacementPreflightReportCleanupState = "pending"
+	PlacementPreflightReportCleanupStateSucceeded   PlacementPreflightReportCleanupState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the PlacementPreflightReportCleanupState enum.
+func (e PlacementPreflightReportCleanupState) Valid() bool {
+	switch e {
+	case PlacementPreflightReportCleanupStateFailed:
+		return true
+	case PlacementPreflightReportCleanupStateNotRequired:
+		return true
+	case PlacementPreflightReportCleanupStatePending:
+		return true
+	case PlacementPreflightReportCleanupStateSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementPreflightReportState.
+const (
+	PlacementPreflightReportStateFailed    PlacementPreflightReportState = "failed"
+	PlacementPreflightReportStateRunning   PlacementPreflightReportState = "running"
+	PlacementPreflightReportStateSucceeded PlacementPreflightReportState = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the PlacementPreflightReportState enum.
+func (e PlacementPreflightReportState) Valid() bool {
+	switch e {
+	case PlacementPreflightReportStateFailed:
+		return true
+	case PlacementPreflightReportStateRunning:
+		return true
+	case PlacementPreflightReportStateSucceeded:
 		return true
 	default:
 		return false
@@ -1753,6 +1849,9 @@ type ControllerCommand struct {
 	// Cancel Present when type is cancel-run.
 	Cancel *CancelRunCommand `json:"cancel,omitempty"`
 
+	// PlacementPreflight Present when type is placement-preflight.
+	PlacementPreflight *PlacementPreflightCommand `json:"placementPreflight,omitempty"`
+
 	// Promotion Present when type is create-kargo-promotion.
 	Promotion *KargoPromotionCreationCommand `json:"promotion,omitempty"`
 
@@ -2475,6 +2574,83 @@ type PlacementList struct {
 	Offset                int         `json:"offset"`
 	Total                 int         `json:"total"`
 }
+
+// PlacementPreflight defines model for PlacementPreflight.
+type PlacementPreflight struct {
+	CleanupState PlacementPreflightCleanupState `json:"cleanupState"`
+	Cluster      CatalogName                    `json:"cluster"`
+
+	// ConfigurationChecksum Placement configuration version captured when the probe was requested.
+	ConfigurationChecksum string                          `json:"configurationChecksum"`
+	CreatedAt             time.Time                       `json:"createdAt"`
+	Diagnostics           *[]PlacementPreflightDiagnostic `json:"diagnostics,omitempty"`
+	FinishedAt            *time.Time                      `json:"finishedAt,omitempty"`
+	ID                    openapi_types.UUID              `json:"id"`
+	JobUID                *string                         `json:"jobUid,omitempty"`
+
+	// Message Bounded, sanitized result detail.
+	Message       *string                 `json:"message,omitempty"`
+	PlacementName CatalogName             `json:"placementName"`
+	Reason        *string                 `json:"reason,omitempty"`
+	RequestedBy   RunActor                `json:"requestedBy"`
+	StartedAt     *time.Time              `json:"startedAt,omitempty"`
+	State         PlacementPreflightState `json:"state"`
+}
+
+// PlacementPreflightCleanupState defines model for PlacementPreflight.CleanupState.
+type PlacementPreflightCleanupState string
+
+// PlacementPreflightState defines model for PlacementPreflight.State.
+type PlacementPreflightState string
+
+// PlacementPreflightCommand defines model for PlacementPreflightCommand.
+type PlacementPreflightCommand struct {
+	Cluster               CatalogName        `json:"cluster"`
+	ConfigurationChecksum string             `json:"configurationChecksum"`
+	ID                    openapi_types.UUID `json:"id"`
+	JobNamespace          CatalogName        `json:"jobNamespace"`
+	NodeSelector          *map[string]string `json:"nodeSelector,omitempty"`
+	PlacementName         CatalogName        `json:"placementName"`
+
+	// PodTemplate Validated Placement PodTemplateSpec extensions.
+	PodTemplate        *map[string]interface{} `json:"podTemplate,omitempty"`
+	Resources          *ResourceRequirements   `json:"resources,omitempty"`
+	ServiceAccountName *string                 `json:"serviceAccountName,omitempty"`
+	TimeoutSeconds     int32                   `json:"timeoutSeconds"`
+}
+
+// PlacementPreflightDiagnostic defines model for PlacementPreflightDiagnostic.
+type PlacementPreflightDiagnostic struct {
+	Count           int32      `json:"count"`
+	FirstObservedAt *time.Time `json:"firstObservedAt,omitempty"`
+	LastObservedAt  *time.Time `json:"lastObservedAt,omitempty"`
+	Message         string     `json:"message"`
+	Reason          string     `json:"reason"`
+}
+
+// PlacementPreflightList defines model for PlacementPreflightList.
+type PlacementPreflightList struct {
+	Items  []PlacementPreflight `json:"items"`
+	Limit  int                  `json:"limit"`
+	Offset int                  `json:"offset"`
+	Total  int                  `json:"total"`
+}
+
+// PlacementPreflightReport defines model for PlacementPreflightReport.
+type PlacementPreflightReport struct {
+	CleanupState PlacementPreflightReportCleanupState `json:"cleanupState"`
+	Diagnostics  *[]PlacementPreflightDiagnostic      `json:"diagnostics,omitempty"`
+	JobUID       *string                              `json:"jobUid,omitempty"`
+	Message      *string                              `json:"message,omitempty"`
+	Reason       *string                              `json:"reason,omitempty"`
+	State        PlacementPreflightReportState        `json:"state"`
+}
+
+// PlacementPreflightReportCleanupState defines model for PlacementPreflightReport.CleanupState.
+type PlacementPreflightReportCleanupState string
+
+// PlacementPreflightReportState defines model for PlacementPreflightReport.State.
+type PlacementPreflightReportState string
 
 // PlacementResourceRequirements defines model for PlacementResourceRequirements.
 type PlacementResourceRequirements struct {
@@ -3915,6 +4091,12 @@ type ListPlacementsParams struct {
 	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListPlacementPreflightsParams defines parameters for ListPlacementPreflights.
+type ListPlacementPreflightsParams struct {
+	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListPrincipalsParams defines parameters for ListPrincipals.
 type ListPrincipalsParams struct {
 	Limit  *int   `form:"limit,omitempty" json:"limit,omitempty"`
@@ -4150,6 +4332,9 @@ type EnrollControllerJSONRequestBody = ControllerEnrollment
 
 // ReplaceKargoStageSnapshotJSONRequestBody defines body for ReplaceKargoStageSnapshot for application/json ContentType.
 type ReplaceKargoStageSnapshotJSONRequestBody = KargoStageSnapshot
+
+// ReportPlacementPreflightJSONRequestBody defines body for ReportPlacementPreflight for application/json ContentType.
+type ReportPlacementPreflightJSONRequestBody = PlacementPreflightReport
 
 // ReportKargoPromotionDispatchJSONRequestBody defines body for ReportKargoPromotionDispatch for application/json ContentType.
 type ReportKargoPromotionDispatchJSONRequestBody = KargoPromotionDispatchReport
@@ -4787,6 +4972,20 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 	GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListPlacementPreflights List Placement preflight probes
+	//
+	// Lists durable probe results for the configured Placement, newest first.
+	//
+	// Corresponds with GET /api/v1/placements/{placementName}/preflights (the `ListPlacementPreflights` operationId).
+	ListPlacementPreflights(ctx context.Context, placementName CatalogName, params *ListPlacementPreflightsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreatePlacementPreflight Start a Placement preflight probe
+	//
+	// Starts an explicit active probe using the Placement's execution namespace, service account, pod policy, resource defaults, and responsible Controller. The probe never creates a Run or invokes a repository Action.
+	//
+	// Corresponds with POST /api/v1/placements/{placementName}/preflights (the `CreatePlacementPreflight` operationId).
+	CreatePlacementPreflight(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListPrincipals List product principals
 	//
 	// Corresponds with GET /api/v1/principals (the `ListPrincipals` operationId).
@@ -5175,6 +5374,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /controller/v1/kargo/{integration}/stages (the `ReplaceKargoStageSnapshot` operationId).
 	ReplaceKargoStageSnapshot(ctx context.Context, integration CatalogName, body ReplaceKargoStageSnapshotJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportPlacementPreflightWithBody Report Placement preflight progress or completion
+	//
+	// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+	ReportPlacementPreflightWithBody(ctx context.Context, preflightID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ReportPlacementPreflight Report Placement preflight progress or completion
+	//
+	// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+	ReportPlacementPreflight(ctx context.Context, preflightID openapi_types.UUID, body ReportPlacementPreflightJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PollForControllerCommand Poll for a controller command
 	//
@@ -5737,6 +5954,40 @@ func (c *Client) ListPlacements(ctx context.Context, params *ListPlacementsParam
 // Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 func (c *Client) GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetPlacementRequest(c.Server, placementName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListPlacementPreflights List Placement preflight probes
+//
+// Lists durable probe results for the configured Placement, newest first.
+//
+// Corresponds with GET /api/v1/placements/{placementName}/preflights (the `ListPlacementPreflights` operationId).
+func (c *Client) ListPlacementPreflights(ctx context.Context, placementName CatalogName, params *ListPlacementPreflightsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPlacementPreflightsRequest(c.Server, placementName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// CreatePlacementPreflight Start a Placement preflight probe
+//
+// Starts an explicit active probe using the Placement's execution namespace, service account, pod policy, resource defaults, and responsible Controller. The probe never creates a Run or invokes a repository Action.
+//
+// Corresponds with POST /api/v1/placements/{placementName}/preflights (the `CreatePlacementPreflight` operationId).
+func (c *Client) CreatePlacementPreflight(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreatePlacementPreflightRequest(c.Server, placementName)
 	if err != nil {
 		return nil, err
 	}
@@ -6656,6 +6907,44 @@ func (c *Client) ReplaceKargoStageSnapshotWithBody(ctx context.Context, integrat
 // Corresponds with PUT /controller/v1/kargo/{integration}/stages (the `ReplaceKargoStageSnapshot` operationId).
 func (c *Client) ReplaceKargoStageSnapshot(ctx context.Context, integration CatalogName, body ReplaceKargoStageSnapshotJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewReplaceKargoStageSnapshotRequest(c.Server, integration, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportPlacementPreflightWithBody Report Placement preflight progress or completion
+//
+// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+func (c *Client) ReportPlacementPreflightWithBody(ctx context.Context, preflightID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportPlacementPreflightRequestWithBody(c.Server, preflightID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ReportPlacementPreflight Report Placement preflight progress or completion
+//
+// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+func (c *Client) ReportPlacementPreflight(ctx context.Context, preflightID openapi_types.UUID, body ReportPlacementPreflightJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewReportPlacementPreflightRequest(c.Server, preflightID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -8026,6 +8315,113 @@ func NewGetPlacementRequest(server string, placementName CatalogName) (*http.Req
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListPlacementPreflightsRequest constructs an http.Request for the ListPlacementPreflights method
+func NewListPlacementPreflightsRequest(server string, placementName CatalogName, params *ListPlacementPreflightsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "placementName", placementName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/placements/%s/preflights", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreatePlacementPreflightRequest constructs an http.Request for the CreatePlacementPreflight method
+func NewCreatePlacementPreflightRequest(server string, placementName CatalogName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "placementName", placementName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/placements/%s/preflights", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -10438,6 +10834,53 @@ func NewReplaceKargoStageSnapshotRequestWithBody(server string, integration Cata
 	return req, nil
 }
 
+// NewReportPlacementPreflightRequest calls the generic ReportPlacementPreflight builder with application/json body
+func NewReportPlacementPreflightRequest(server string, preflightID openapi_types.UUID, body ReportPlacementPreflightJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewReportPlacementPreflightRequestWithBody(server, preflightID, "application/json", bodyReader)
+}
+
+// NewReportPlacementPreflightRequestWithBody constructs an http.Request for the ReportPlacementPreflight method, with any body, and a specified content type
+func NewReportPlacementPreflightRequestWithBody(server string, preflightID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "preflightId", preflightID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/controller/v1/placement-preflights/%s/report", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewPollForControllerCommandRequest constructs an http.Request for the PollForControllerCommand method
 func NewPollForControllerCommandRequest(server string, params *PollForControllerCommandParams) (*http.Request, error) {
 	var err error
@@ -11226,6 +11669,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 	GetPlacementWithResponse(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*GetPlacementResponse, error)
 
+	// ListPlacementPreflightsWithResponse List Placement preflight probes
+	//
+	// Lists durable probe results for the configured Placement, newest first.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/placements/{placementName}/preflights (the `ListPlacementPreflights` operationId).
+	ListPlacementPreflightsWithResponse(ctx context.Context, placementName CatalogName, params *ListPlacementPreflightsParams, reqEditors ...RequestEditorFn) (*ListPlacementPreflightsResponse, error)
+
+	// CreatePlacementPreflightWithResponse Start a Placement preflight probe
+	//
+	// Starts an explicit active probe using the Placement's execution namespace, service account, pod policy, resource defaults, and responsible Controller. The probe never creates a Run or invokes a repository Action.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/placements/{placementName}/preflights (the `CreatePlacementPreflight` operationId).
+	CreatePlacementPreflightWithResponse(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*CreatePlacementPreflightResponse, error)
+
 	// ListPrincipalsWithResponse List product principals
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -11664,6 +12125,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /controller/v1/kargo/{integration}/stages (the `ReplaceKargoStageSnapshot` operationId).
 	ReplaceKargoStageSnapshotWithResponse(ctx context.Context, integration CatalogName, body ReplaceKargoStageSnapshotJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceKargoStageSnapshotResponse, error)
+
+	// ReportPlacementPreflightWithBodyWithResponse Report Placement preflight progress or completion
+	//
+	// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+	ReportPlacementPreflightWithBodyWithResponse(ctx context.Context, preflightID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportPlacementPreflightResponse, error)
+
+	// ReportPlacementPreflightWithResponse Report Placement preflight progress or completion
+	//
+	// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+	ReportPlacementPreflightWithResponse(ctx context.Context, preflightID openapi_types.UUID, body ReportPlacementPreflightJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportPlacementPreflightResponse, error)
 
 	// PollForControllerCommandWithResponse Poll for a controller command
 	//
@@ -13460,6 +13939,172 @@ func (r GetPlacementResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetPlacementResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListPlacementPreflightsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PlacementPreflightList
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListPlacementPreflightsResponse) GetJSON200() *PlacementPreflightList {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListPlacementPreflightsResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListPlacementPreflightsResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListPlacementPreflightsResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListPlacementPreflightsResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ListPlacementPreflightsResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListPlacementPreflightsResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ListPlacementPreflightsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListPlacementPreflightsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListPlacementPreflightsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListPlacementPreflightsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type CreatePlacementPreflightResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *PlacementPreflight
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r CreatePlacementPreflightResponse) GetJSON201() *PlacementPreflight {
+	return r.JSON201
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r CreatePlacementPreflightResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r CreatePlacementPreflightResponse) GetApplicationProblemJSON403() *Problem {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r CreatePlacementPreflightResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r CreatePlacementPreflightResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r CreatePlacementPreflightResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r CreatePlacementPreflightResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r CreatePlacementPreflightResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r CreatePlacementPreflightResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreatePlacementPreflightResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r CreatePlacementPreflightResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16633,6 +17278,89 @@ func (r ReplaceKargoStageSnapshotResponse) ContentType() string {
 	return ""
 }
 
+type ReportPlacementPreflightResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationProblemJSON400 *Problem
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Problem
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *Problem
+	// ApplicationProblemJSON405 the response for an HTTP 405 `application/problem+json` response
+	ApplicationProblemJSON405 *Problem
+	// ApplicationProblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationProblemJSON409 *Problem
+	// ApplicationProblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationProblemJSON413 *RequestTooLargeResponse
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *Problem
+}
+
+// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ReportPlacementPreflightResponse) GetApplicationProblemJSON400() *Problem {
+	return r.ApplicationProblemJSON400
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ReportPlacementPreflightResponse) GetApplicationProblemJSON401() *Problem {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ReportPlacementPreflightResponse) GetApplicationProblemJSON404() *Problem {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON405 returns the response for an HTTP 405 `application/problem+json` response
+func (r ReportPlacementPreflightResponse) GetApplicationProblemJSON405() *Problem {
+	return r.ApplicationProblemJSON405
+}
+
+// GetApplicationProblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r ReportPlacementPreflightResponse) GetApplicationProblemJSON409() *Problem {
+	return r.ApplicationProblemJSON409
+}
+
+// GetApplicationProblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r ReportPlacementPreflightResponse) GetApplicationProblemJSON413() *RequestTooLargeResponse {
+	return r.ApplicationProblemJSON413
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ReportPlacementPreflightResponse) GetApplicationProblemJSON500() *Problem {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ReportPlacementPreflightResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ReportPlacementPreflightResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ReportPlacementPreflightResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ReportPlacementPreflightResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PollForControllerCommandResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -17890,6 +18618,36 @@ func (c *ClientWithResponses) GetPlacementWithResponse(ctx context.Context, plac
 	return ParseGetPlacementResponse(rsp)
 }
 
+// ListPlacementPreflightsWithResponse List Placement preflight probes
+//
+// Lists durable probe results for the configured Placement, newest first.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/placements/{placementName}/preflights (the `ListPlacementPreflights` operationId).
+func (c *ClientWithResponses) ListPlacementPreflightsWithResponse(ctx context.Context, placementName CatalogName, params *ListPlacementPreflightsParams, reqEditors ...RequestEditorFn) (*ListPlacementPreflightsResponse, error) {
+	rsp, err := c.ListPlacementPreflights(ctx, placementName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListPlacementPreflightsResponse(rsp)
+}
+
+// CreatePlacementPreflightWithResponse Start a Placement preflight probe
+//
+// Starts an explicit active probe using the Placement's execution namespace, service account, pod policy, resource defaults, and responsible Controller. The probe never creates a Run or invokes a repository Action.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/placements/{placementName}/preflights (the `CreatePlacementPreflight` operationId).
+func (c *ClientWithResponses) CreatePlacementPreflightWithResponse(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*CreatePlacementPreflightResponse, error) {
+	rsp, err := c.CreatePlacementPreflight(ctx, placementName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreatePlacementPreflightResponse(rsp)
+}
+
 // ListPrincipalsWithResponse List product principals
 //
 // Returns a wrapper object for the known response body format(s).
@@ -18645,6 +19403,36 @@ func (c *ClientWithResponses) ReplaceKargoStageSnapshotWithResponse(ctx context.
 		return nil, err
 	}
 	return ParseReplaceKargoStageSnapshotResponse(rsp)
+}
+
+// ReportPlacementPreflightWithBodyWithResponse Report Placement preflight progress or completion
+//
+// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+func (c *ClientWithResponses) ReportPlacementPreflightWithBodyWithResponse(ctx context.Context, preflightID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ReportPlacementPreflightResponse, error) {
+	rsp, err := c.ReportPlacementPreflightWithBody(ctx, preflightID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportPlacementPreflightResponse(rsp)
+}
+
+// ReportPlacementPreflightWithResponse Report Placement preflight progress or completion
+//
+// Records an idempotent probe observation from the Controller assigned to the Placement's Cluster. Terminal reports include cleanup state.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /controller/v1/placement-preflights/{preflightId}/report (the `ReportPlacementPreflight` operationId).
+func (c *ClientWithResponses) ReportPlacementPreflightWithResponse(ctx context.Context, preflightID openapi_types.UUID, body ReportPlacementPreflightJSONRequestBody, reqEditors ...RequestEditorFn) (*ReportPlacementPreflightResponse, error) {
+	rsp, err := c.ReportPlacementPreflight(ctx, preflightID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseReportPlacementPreflightResponse(rsp)
 }
 
 // PollForControllerCommandWithResponse Poll for a controller command
@@ -20320,6 +21108,142 @@ func ParseGetPlacementResponse(rsp *http.Response) (*GetPlacementResponse, error
 			return nil, err
 		}
 		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListPlacementPreflightsResponse parses an HTTP response from a ListPlacementPreflightsWithResponse call
+func ParseListPlacementPreflightsResponse(rsp *http.Response) (*ListPlacementPreflightsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListPlacementPreflightsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PlacementPreflightList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreatePlacementPreflightResponse parses an HTTP response from a CreatePlacementPreflightWithResponse call
+func ParseCreatePlacementPreflightResponse(rsp *http.Response) (*CreatePlacementPreflightResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreatePlacementPreflightResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest PlacementPreflight
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest Problem
@@ -22954,6 +23878,77 @@ func ParseReplaceKargoStageSnapshotResponse(rsp *http.Response) (*ReplaceKargoSt
 	return response, nil
 }
 
+// ParseReportPlacementPreflightResponse parses an HTTP response from a ReportPlacementPreflightWithResponse call
+func ParseReportPlacementPreflightResponse(rsp *http.Response) (*ReportPlacementPreflightResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ReportPlacementPreflightResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 405:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON405 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest RequestTooLargeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePollForControllerCommandResponse parses an HTTP response from a PollForControllerCommandWithResponse call
 func ParsePollForControllerCommandResponse(rsp *http.Response) (*PollForControllerCommandResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23749,6 +24744,12 @@ type ServerInterface interface {
 	// GetPlacement Get a configured execution Placement
 	// (GET /api/v1/placements/{placementName})
 	GetPlacement(w http.ResponseWriter, r *http.Request, placementName CatalogName)
+	// ListPlacementPreflights List Placement preflight probes
+	// (GET /api/v1/placements/{placementName}/preflights)
+	ListPlacementPreflights(w http.ResponseWriter, r *http.Request, placementName CatalogName, params ListPlacementPreflightsParams)
+	// CreatePlacementPreflight Start a Placement preflight probe
+	// (POST /api/v1/placements/{placementName}/preflights)
+	CreatePlacementPreflight(w http.ResponseWriter, r *http.Request, placementName CatalogName)
 	// ListPrincipals List product principals
 	// (GET /api/v1/principals)
 	ListPrincipals(w http.ResponseWriter, r *http.Request, params ListPrincipalsParams)
@@ -23866,6 +24867,9 @@ type ServerInterface interface {
 	// ReplaceKargoStageSnapshot Submit one complete observed Kargo Stage snapshot
 	// (PUT /controller/v1/kargo/{integration}/stages)
 	ReplaceKargoStageSnapshot(w http.ResponseWriter, r *http.Request, integration CatalogName)
+	// ReportPlacementPreflight Report Placement preflight progress or completion
+	// (POST /controller/v1/placement-preflights/{preflightId}/report)
+	ReportPlacementPreflight(w http.ResponseWriter, r *http.Request, preflightID openapi_types.UUID)
 	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/poll)
 	PollForControllerCommand(w http.ResponseWriter, r *http.Request, params PollForControllerCommandParams)
@@ -24649,6 +25653,87 @@ func (siw *ServerInterfaceWrapper) GetPlacement(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPlacement(w, r, placementName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPlacementPreflights operation middleware
+func (siw *ServerInterfaceWrapper) ListPlacementPreflights(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "placementName" -------------
+	var placementName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "placementName", r.PathValue("placementName"), &placementName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placementName", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPlacementPreflightsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPlacementPreflights(w, r, placementName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreatePlacementPreflight operation middleware
+func (siw *ServerInterfaceWrapper) CreatePlacementPreflight(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "placementName" -------------
+	var placementName CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "placementName", r.PathValue("placementName"), &placementName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "placementName", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreatePlacementPreflight(w, r, placementName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -26476,6 +27561,32 @@ func (siw *ServerInterfaceWrapper) ReplaceKargoStageSnapshot(w http.ResponseWrit
 	handler.ServeHTTP(w, r)
 }
 
+// ReportPlacementPreflight operation middleware
+func (siw *ServerInterfaceWrapper) ReportPlacementPreflight(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "preflightId" -------------
+	var preflightID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "preflightId", r.PathValue("preflightId"), &preflightID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "preflightId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportPlacementPreflight(w, r, preflightID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PollForControllerCommand operation middleware
 func (siw *ServerInterfaceWrapper) PollForControllerCommand(w http.ResponseWriter, r *http.Request) {
 
@@ -26976,11 +28087,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/clusters", wrapper.ListClusters)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements", wrapper.ListPlacements)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements/{placementName}", wrapper.GetPlacement)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/placements/{placementName}/preflights", wrapper.ListPlacementPreflights)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/placements/{placementName}/preflights", wrapper.CreatePlacementPreflight)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/enroll", wrapper.EnrollController)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/poll", wrapper.PollForControllerCommand)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/promotions/{promotionId}/dispatch", wrapper.ReportKargoPromotionDispatch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/promotions/{promotionId}/reconciliation", wrapper.ReportKargoPromotionReconciliation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/observations", wrapper.ReportRunObservation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/placement-preflights/{preflightId}/report", wrapper.ReportPlacementPreflight)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log-chunks", wrapper.AppendRunLogChunk)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.GetRunLogCursor)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/controller/v1/runs/{runId}/log", wrapper.SealRunLog)
@@ -29103,6 +30217,219 @@ func (response GetPlacement405ApplicationProblemPlusJSONResponse) VisitGetPlacem
 type GetPlacement500ApplicationProblemPlusJSONResponse Problem
 
 func (response GetPlacement500ApplicationProblemPlusJSONResponse) VisitGetPlacementResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementPreflightsRequestObject struct {
+	PlacementName CatalogName `json:"placementName"`
+	Params        ListPlacementPreflightsParams
+}
+
+type ListPlacementPreflightsResponseObject interface {
+	VisitListPlacementPreflightsResponse(w http.ResponseWriter) error
+}
+
+type ListPlacementPreflights200JSONResponse PlacementPreflightList
+
+func (response ListPlacementPreflights200JSONResponse) VisitListPlacementPreflightsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementPreflights400ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacementPreflights400ApplicationProblemPlusJSONResponse) VisitListPlacementPreflightsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementPreflights401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacementPreflights401ApplicationProblemPlusJSONResponse) VisitListPlacementPreflightsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementPreflights403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacementPreflights403ApplicationProblemPlusJSONResponse) VisitListPlacementPreflightsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementPreflights404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacementPreflights404ApplicationProblemPlusJSONResponse) VisitListPlacementPreflightsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementPreflights405ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacementPreflights405ApplicationProblemPlusJSONResponse) VisitListPlacementPreflightsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListPlacementPreflights500ApplicationProblemPlusJSONResponse Problem
+
+func (response ListPlacementPreflights500ApplicationProblemPlusJSONResponse) VisitListPlacementPreflightsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlacementPreflightRequestObject struct {
+	PlacementName CatalogName `json:"placementName"`
+}
+
+type CreatePlacementPreflightResponseObject interface {
+	VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error
+}
+
+type CreatePlacementPreflight201JSONResponse PlacementPreflight
+
+func (response CreatePlacementPreflight201JSONResponse) VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlacementPreflight401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePlacementPreflight401ApplicationProblemPlusJSONResponse) VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlacementPreflight403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePlacementPreflight403ApplicationProblemPlusJSONResponse) VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlacementPreflight404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePlacementPreflight404ApplicationProblemPlusJSONResponse) VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlacementPreflight405ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePlacementPreflight405ApplicationProblemPlusJSONResponse) VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlacementPreflight409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePlacementPreflight409ApplicationProblemPlusJSONResponse) VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreatePlacementPreflight500ApplicationProblemPlusJSONResponse Problem
+
+func (response CreatePlacementPreflight500ApplicationProblemPlusJSONResponse) VisitCreatePlacementPreflightResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -33313,6 +34640,123 @@ func (response ReplaceKargoStageSnapshot500ApplicationProblemPlusJSONResponse) V
 	return err
 }
 
+type ReportPlacementPreflightRequestObject struct {
+	PreflightID openapi_types.UUID `json:"preflightId"`
+	Body        *ReportPlacementPreflightJSONRequestBody
+}
+
+type ReportPlacementPreflightResponseObject interface {
+	VisitReportPlacementPreflightResponse(w http.ResponseWriter) error
+}
+
+type ReportPlacementPreflight204Response struct {
+}
+
+func (response ReportPlacementPreflight204Response) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportPlacementPreflight400ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportPlacementPreflight400ApplicationProblemPlusJSONResponse) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportPlacementPreflight401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportPlacementPreflight401ApplicationProblemPlusJSONResponse) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportPlacementPreflight404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportPlacementPreflight404ApplicationProblemPlusJSONResponse) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportPlacementPreflight405ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportPlacementPreflight405ApplicationProblemPlusJSONResponse) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(405)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportPlacementPreflight409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportPlacementPreflight409ApplicationProblemPlusJSONResponse) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportPlacementPreflight413ApplicationProblemPlusJSONResponse struct {
+	RequestTooLargeResponseApplicationProblemPlusJSONResponse
+}
+
+func (response ReportPlacementPreflight413ApplicationProblemPlusJSONResponse) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportPlacementPreflight500ApplicationProblemPlusJSONResponse Problem
+
+func (response ReportPlacementPreflight500ApplicationProblemPlusJSONResponse) VisitReportPlacementPreflightResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type PollForControllerCommandRequestObject struct {
 	Params PollForControllerCommandParams
 }
@@ -34509,6 +35953,12 @@ type StrictServerInterface interface {
 	// GetPlacement Get a configured execution Placement
 	// (GET /api/v1/placements/{placementName})
 	GetPlacement(ctx context.Context, request GetPlacementRequestObject) (GetPlacementResponseObject, error)
+	// ListPlacementPreflights List Placement preflight probes
+	// (GET /api/v1/placements/{placementName}/preflights)
+	ListPlacementPreflights(ctx context.Context, request ListPlacementPreflightsRequestObject) (ListPlacementPreflightsResponseObject, error)
+	// CreatePlacementPreflight Start a Placement preflight probe
+	// (POST /api/v1/placements/{placementName}/preflights)
+	CreatePlacementPreflight(ctx context.Context, request CreatePlacementPreflightRequestObject) (CreatePlacementPreflightResponseObject, error)
 	// ListPrincipals List product principals
 	// (GET /api/v1/principals)
 	ListPrincipals(ctx context.Context, request ListPrincipalsRequestObject) (ListPrincipalsResponseObject, error)
@@ -34626,6 +36076,9 @@ type StrictServerInterface interface {
 	// ReplaceKargoStageSnapshot Submit one complete observed Kargo Stage snapshot
 	// (PUT /controller/v1/kargo/{integration}/stages)
 	ReplaceKargoStageSnapshot(ctx context.Context, request ReplaceKargoStageSnapshotRequestObject) (ReplaceKargoStageSnapshotResponseObject, error)
+	// ReportPlacementPreflight Report Placement preflight progress or completion
+	// (POST /controller/v1/placement-preflights/{preflightId}/report)
+	ReportPlacementPreflight(ctx context.Context, request ReportPlacementPreflightRequestObject) (ReportPlacementPreflightResponseObject, error)
 	// PollForControllerCommand Poll for a controller command
 	// (POST /controller/v1/poll)
 	PollForControllerCommand(ctx context.Context, request PollForControllerCommandRequestObject) (PollForControllerCommandResponseObject, error)
@@ -35282,6 +36735,59 @@ func (sh *strictHandler) GetPlacement(w http.ResponseWriter, r *http.Request, pl
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetPlacementResponseObject); ok {
 		if err := validResponse.VisitGetPlacementResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListPlacementPreflights operation middleware
+func (sh *strictHandler) ListPlacementPreflights(w http.ResponseWriter, r *http.Request, placementName CatalogName, params ListPlacementPreflightsParams) {
+	var request ListPlacementPreflightsRequestObject
+
+	request.PlacementName = placementName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListPlacementPreflights(ctx, request.(ListPlacementPreflightsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListPlacementPreflights")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListPlacementPreflightsResponseObject); ok {
+		if err := validResponse.VisitListPlacementPreflightsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreatePlacementPreflight operation middleware
+func (sh *strictHandler) CreatePlacementPreflight(w http.ResponseWriter, r *http.Request, placementName CatalogName) {
+	var request CreatePlacementPreflightRequestObject
+
+	request.PlacementName = placementName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreatePlacementPreflight(ctx, request.(CreatePlacementPreflightRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreatePlacementPreflight")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreatePlacementPreflightResponseObject); ok {
+		if err := validResponse.VisitCreatePlacementPreflightResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -36392,6 +37898,39 @@ func (sh *strictHandler) ReplaceKargoStageSnapshot(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ReplaceKargoStageSnapshotResponseObject); ok {
 		if err := validResponse.VisitReplaceKargoStageSnapshotResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportPlacementPreflight operation middleware
+func (sh *strictHandler) ReportPlacementPreflight(w http.ResponseWriter, r *http.Request, preflightID openapi_types.UUID) {
+	var request ReportPlacementPreflightRequestObject
+
+	request.PreflightID = preflightID
+
+	var body ReportPlacementPreflightJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportPlacementPreflight(ctx, request.(ReportPlacementPreflightRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportPlacementPreflight")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportPlacementPreflightResponseObject); ok {
+		if err := validResponse.VisitReportPlacementPreflightResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
