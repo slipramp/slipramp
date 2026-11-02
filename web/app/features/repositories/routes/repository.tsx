@@ -11,12 +11,12 @@ import { Link, Outlet, useFetcher, useLocation } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
-  getCurrentPrincipal,
   listRepositories,
   listRepositoryRefreshAttempts,
   refreshRepository,
   type Repository,
 } from "~/api/generated";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts } from "~/shared/page";
 import { formValue, problemDetail } from "~/shared/form-data";
@@ -36,9 +36,9 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [repositoriesResult, principalResult] = await Promise.all([
+  const [repositoriesResult, principal] = await Promise.all([
     listRepositories({ client, query: { limit: 200 } }),
-    getCurrentPrincipal({ client }),
+    getProductPrincipal(context),
   ]);
   const repository = repositoriesResult.data?.items.find((item) => item.id === params.repositoryId);
   const attemptsResult = repository?.refresh.failureReason
@@ -52,7 +52,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   return {
     apiAvailable: repositoriesResult.data !== undefined,
     latestRefreshOutcome: attemptsResult?.data?.items[0]?.outcome,
-    principal: principalResult.data,
+    principal,
     repository,
   };
 }

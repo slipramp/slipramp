@@ -6,7 +6,6 @@ import { apiKeyCreateBody } from "~/features/access/api-key-form";
 import { createServerAPIClient } from "~/api/client.server";
 import {
   createPrincipalApiKey,
-  getCurrentPrincipal,
   getPrincipal,
   listPrincipalApiKeys,
   revokeApiKey,
@@ -15,6 +14,7 @@ import {
   updatePrincipal,
 } from "~/api/generated";
 import { APIKeyForm, APIKeyTable, CreatedToken } from "~/features/access/access";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { useActionSuccessToast } from "~/shared/action-notifications";
 import { Datestamp } from "~/shared/display-values";
 import { ListPagination } from "~/shared/list-controls";
@@ -36,8 +36,8 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [currentPrincipalResult, principalResult, keysResult] = await Promise.all([
-    getCurrentPrincipal({ client }),
+  const [currentPrincipal, principalResult, keysResult] = await Promise.all([
+    getProductPrincipal(context),
     getPrincipal({ client, path: { principalId: params.principalId } }),
     listPrincipalApiKeys({
       client,
@@ -57,7 +57,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
   return {
     apiKeys: keysResult.data?.items ?? [],
     apiKeysAvailable: keysResult.data !== undefined,
-    currentPrincipal: currentPrincipalResult.data,
+    currentPrincipal,
     loadedAt: Date.now(),
     page,
     principalAvailable:

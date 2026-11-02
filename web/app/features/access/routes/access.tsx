@@ -3,8 +3,9 @@ import { redirect } from "react-router";
 
 import { apiKeyCreateBody } from "~/features/access/api-key-form";
 import { createServerAPIClient } from "~/api/client.server";
-import { createApiKey, getCurrentPrincipal, listApiKeys, revokeApiKey } from "~/api/generated";
+import { createApiKey, listApiKeys, revokeApiKey } from "~/api/generated";
 import { APIKeyForm, APIKeyTable, CreatedToken } from "~/features/access/access";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { useActionSuccessToast } from "~/shared/action-notifications";
 import { PageHeader } from "~/shared/page";
 import { ListPagination } from "~/shared/list-controls";
@@ -24,8 +25,8 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [principalResult, apiKeysResult] = await Promise.all([
-    getCurrentPrincipal({ client }),
+  const [principal, apiKeysResult] = await Promise.all([
+    getProductPrincipal(context),
     listApiKeys({ client, query: { limit: pageSize, offset: (page - 1) * pageSize } }),
   ]);
 
@@ -43,7 +44,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     apiKeysAvailable: apiKeysResult.data !== undefined,
     loadedAt: Date.now(),
     page,
-    principal: principalResult.data,
+    principal,
     total: apiKeysResult.data?.total ?? 0,
   };
 }

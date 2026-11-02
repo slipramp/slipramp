@@ -2,8 +2,9 @@ import { Alert, Anchor, Badge, Paper, Stack, Table, Text, Title } from "@mantine
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
-import { createServiceAccount, getCurrentPrincipal, listPrincipals } from "~/api/generated";
+import { createServiceAccount, listPrincipals } from "~/api/generated";
 import { ServiceAccountForm } from "~/features/access/access";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { useActionSuccessToast } from "~/shared/action-notifications";
 import { Datestamp } from "~/shared/display-values";
 import { Identity } from "~/shared/identity";
@@ -25,8 +26,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const page = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const principalResult = await getCurrentPrincipal({ client });
-  const currentPrincipal = principalResult.data;
+  const currentPrincipal = await getProductPrincipal(context);
   if (currentPrincipal?.role !== "admin") {
     return { available: true, currentPrincipal, page, principals: [], total: 0 };
   }

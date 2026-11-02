@@ -23,12 +23,12 @@ import { proxyArtifactDownload } from "~/api/artifact-download.server";
 import { createServerAPIClient, getServerAPIURL } from "~/api/client.server";
 import {
   decidePromotion,
-  getCurrentPrincipal,
   getPromotion,
   type GitCommit,
   type ProductPrincipal,
   type Promotion,
 } from "~/api/generated";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { useActionSuccessToast } from "~/shared/action-notifications";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
@@ -65,12 +65,11 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [promotionResult, principalResult] = await Promise.all([
+  const [promotionResult, principal] = await Promise.all([
     getPromotion({ client, path: { promotionId: params.promotionId } }),
-    getCurrentPrincipal({ client }),
+    getProductPrincipal(context),
   ]);
   const promotion = promotionResult.data;
-  const principal = principalResult.data;
 
   let gitDiff: ArtifactText = {};
   let argoDiff: ArtifactText = {};

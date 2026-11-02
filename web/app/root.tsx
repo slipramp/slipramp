@@ -26,10 +26,12 @@ import {
   useRouteError,
 } from "react-router";
 
-import { createServerAPIClient } from "~/api/client.server";
 import { csrfProtectionMiddleware } from "~/api/csrf.server";
-import { getCurrentPrincipal } from "~/api/generated";
 import { shouldAutomaticallyBeginOIDCLogin } from "~/api/request-auth.server";
+import {
+  getProductAuthentication,
+  productAuthenticationMiddleware,
+} from "~/features/auth/product-authentication.server";
 import { ProductShell } from "~/features/shell/product-shell";
 import { pageTitle } from "~/shared/page-title";
 import { serverPerformanceMiddleware } from "~/features/performance/performance.server";
@@ -38,11 +40,10 @@ import { ThemePresetScript } from "~/features/shell/theme-preset";
 
 import type { Route } from "./+types/root";
 
-const authenticationProxyPaths = new Set(["/api/v1/auth/login", "/api/v1/auth/callback"]);
-
 export const middleware: Route.MiddlewareFunction[] = [
   csrfProtectionMiddleware,
   serverPerformanceMiddleware,
+  productAuthenticationMiddleware,
 ];
 
 export function meta() {
@@ -59,22 +60,14 @@ export function headers() {
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {
-  if (authenticationProxyPaths.has(new URL(request.url).pathname)) {
-    return { authentication: "passthrough", principal: undefined } as const;
-  }
-
-  const result = await getCurrentPrincipal({ client: createServerAPIClient(request, context) });
-  if (result.data) {
-    return { authentication: "authenticated", principal: result.data } as const;
-  }
-  if (result.response?.status === 401) {
+  const authentication = await getProductAuthentication(context);
+  if (authentication.authentication === "required") {
     if (shouldAutomaticallyBeginOIDCLogin(request)) {
       return redirect("/api/v1/auth/login");
     }
-
-    return { authentication: "required", principal: undefined } as const;
   }
-  return { authentication: "unavailable", principal: undefined } as const;
+
+  return authentication;
 }
 
 export function Layout({ children }: Readonly<{ children: ReactNode }>) {

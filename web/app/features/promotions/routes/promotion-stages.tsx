@@ -19,13 +19,13 @@ import { Form, Link, redirect, useNavigation, useSearchParams } from "react-rout
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
-  getCurrentPrincipal,
   listPromotionStages,
   updatePromotionStagePolicy,
   type ProductPrincipal,
   type PromotionStage,
   type PromotionPolicyMode,
 } from "~/api/generated";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { RelativeTime } from "~/shared/display-values";
 import { Identity } from "~/shared/identity";
 import { KargoLink } from "~/features/promotions/kargo-link";
@@ -54,7 +54,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const cluster = optionalValue(url.searchParams.get("cluster"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [stagesResult, principalResult] = await Promise.all([
+  const [stagesResult, principal] = await Promise.all([
     listPromotionStages({
       client,
       query: {
@@ -67,7 +67,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         project,
       },
     }),
-    getCurrentPrincipal({ client }),
+    getProductPrincipal(context),
   ]);
 
   if (stagesResult.data) {
@@ -87,7 +87,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     error: stagesResult.error?.detail ?? stagesResult.error?.title,
     integration,
     page: requestedPage,
-    principal: principalResult.data,
+    principal,
     project,
     stages: stagesResult.data?.items ?? [],
     total: stagesResult.data?.total ?? 0,

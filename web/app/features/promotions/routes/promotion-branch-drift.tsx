@@ -3,7 +3,6 @@ import { useState } from "react";
 import { redirect } from "react-router";
 import { createServerAPIClient } from "~/api/client.server";
 import {
-  getCurrentPrincipal,
   listPromotionBranchDrift,
   listRepositories,
   type GitCommit,
@@ -11,6 +10,7 @@ import {
   type PromotionBranchDriftStage,
   type PromotionBranchDriftStatus,
 } from "~/api/generated";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
 import { CommitReference } from "~/features/commits/git-commit";
 import { KargoLink } from "~/features/promotions/kargo-link";
@@ -47,7 +47,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const status = optionalStatus(url.searchParams.get("status"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [result, principalResult, repositoriesResult] = await Promise.all([
+  const [result, principal, repositoriesResult] = await Promise.all([
     listPromotionBranchDrift({
       client,
       query: {
@@ -60,7 +60,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         status,
       },
     }),
-    getCurrentPrincipal({ client }),
+    getProductPrincipal(context),
     listRepositories({ client, query: { limit: 200 } }),
   ]);
 
@@ -80,7 +80,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     integration,
     page: requestedPage,
     project,
-    principal: principalResult.data,
+    principal,
     repositories: result.data?.items ?? [],
     repositoryIds: Object.fromEntries(
       (repositoriesResult.data?.items ?? []).map((item) => [item.name, item.id]),

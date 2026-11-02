@@ -24,12 +24,12 @@ import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
 import {
-  getCurrentPrincipal,
   listPromotionPipelines,
   type PromotionPipelineAttention,
   type PromotionPipeline,
   type PromotionPipelineStage,
 } from "~/api/generated";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { KargoLink } from "~/features/promotions/kargo-link";
 import { ListPagination, SearchParamFilters } from "~/shared/list-controls";
 import { formatTimestamp } from "~/shared/display";
@@ -74,7 +74,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const attention = optionalAttention(url.searchParams.get("attention"));
   const requestedPage = pageFromSearchParam(url.searchParams.get("page"), pageSize);
   const client = createServerAPIClient(request, context);
-  const [result, principalResult] = await Promise.all([
+  const [result, principal] = await Promise.all([
     listPromotionPipelines({
       client,
       query: {
@@ -88,7 +88,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
         attention,
       },
     }),
-    getCurrentPrincipal({ client }),
+    getProductPrincipal(context),
   ]);
 
   if (result.data) {
@@ -109,7 +109,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     page: requestedPage,
     pipelines: result.data?.items ?? [],
     project,
-    principal: principalResult.data,
+    principal,
     repository,
     attention,
     total: result.data?.total ?? 0,

@@ -47,7 +47,6 @@ import {
   createRun,
   decideRunReview,
   getArtifactReport,
-  getCurrentPrincipal,
   getRun,
   getTarget,
   listRunArtifacts,
@@ -59,6 +58,7 @@ import {
   type RunArtifactConsumer,
   type RunArtifactInput,
 } from "~/api/generated";
+import { getProductPrincipal } from "~/features/auth/product-authentication.server";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { ContextValue } from "~/shared/context-value";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
@@ -97,10 +97,10 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [runResult, artifactResult, principalResult] = await Promise.all([
+  const [runResult, artifactResult, principal] = await Promise.all([
     getRun({ client, path: { runId: params.runId } }),
     listRunArtifacts({ client, path: { runId: params.runId } }),
-    getCurrentPrincipal({ client }),
+    getProductPrincipal(context),
   ]);
   const artifacts = artifactResult.data?.items ?? [];
   const applyArtifact = runResult.data
@@ -114,7 +114,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       artifacts
         .filter((artifact) => artifact.report !== undefined)
         .map(async (artifact): Promise<ReportLoad> => {
-          const requestState = reportDetailRequestState(artifact, principalResult.data);
+          const requestState = reportDetailRequestState(artifact, principal);
           if (requestState !== "request") {
             return { artifactId: artifact.id, state: requestState };
           }
@@ -147,7 +147,7 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
       consumerRunsResult === undefined || consumerRunsResult.data !== undefined,
     artifacts,
     otherActions: otherTargetActions(activeTarget?.spec.actions, runResult.data?.action ?? ""),
-    principal: principalResult.data,
+    principal,
     reportLoads,
     repositoryName: targetResult?.data?.repositoryName,
     rerunKey: crypto.randomUUID(),
