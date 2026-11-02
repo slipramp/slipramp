@@ -43,6 +43,12 @@ execution without requiring a trigger.
 - [ ] Reassess semantic `catalog diff` for comparing complete resolved catalogs
       rather than YAML text.
 
+## Ansible integration
+
+- [ ] Deliver the runnable example, native structured report, Web experience,
+      and end-to-end acceptance described in the
+      [first-class Ansible support plan](./plans/ansible.md).
+
 ## Placement inventory and Controller preflight
 
 Live preflight must preserve the Server's lack of Kubernetes credentials and
