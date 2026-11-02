@@ -1,6 +1,6 @@
 # First-class Ansible support
 
-Status: proposed
+Status: in progress
 Last updated: 2026-11-01
 
 This document is the implementation plan for making Ansible a first-class
@@ -389,16 +389,16 @@ have hosts and operations.
 
 ### Slice 1: runnable example and authoring guidance
 
-- [ ] Add the Ansible Runtime and Target to
+- [x] Add the Ansible Runtime and Target to
       `examples/infrastructure-ops/.slipramp`.
-- [ ] Add a minimal inventory, playbook, and launcher fixture.
-- [ ] Extend the example Placement and credential documentation.
-- [ ] Document image construction, dependency strategies, check-mode limits,
+- [x] Add a minimal inventory, playbook, and launcher fixture.
+- [x] Extend the example Placement and credential documentation.
+- [x] Document image construction, dependency strategies, check-mode limits,
       the reference host-verification setup, Vault, dynamic inventory, cloud
       credentials, and the operator's available alternatives.
-- [ ] Include and test a direct Ansible Action without Runner or a report.
-- [ ] Extend catalog example tests.
-- [ ] Verify both portable and deployment catalog validation.
+- [x] Include and test a direct Ansible Action without Runner or a report.
+- [x] Extend catalog example tests.
+- [x] Verify both portable and deployment catalog validation.
 
 This slice should require no Server, Controller, Harness, API, or database
 contract change.

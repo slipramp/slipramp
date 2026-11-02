@@ -1,6 +1,60 @@
 apiVersion: slipramp.com/v1alpha1
 kind: Target
 metadata:
+  name: ansible-baseline
+  title: Ansible host baseline
+spec:
+  path: ansible
+  watch:
+    - ansible/**
+  runtime: ansible
+  placement: infrastructure-admin
+  credentials:
+    ssh: ansible-ssh
+    ssh-known-hosts: ssh-known-hosts
+  timeout: 30m
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: "1"
+      memory: 512Mi
+  actions:
+    preview:
+      title: Preview the host baseline
+      description: Runs the playbook in check mode with diffs enabled.
+      documentationUrl: https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_checkmode.html
+      intent: preview
+      command: [./slipramp/ansible.py, preview, site.yml]
+    canary:
+      title: Apply to one canary host
+      description: Reconciles only node01.example.com before a fleet-wide run.
+      intent: reconcile
+      command:
+        - ./slipramp/ansible.py
+        - apply
+        - site.yml
+        - --limit
+        - node01.example.com
+    sync:
+      title: Apply the host baseline
+      description: Directly reconciles the complete managed_nodes inventory group.
+      intent: reconcile
+      command: [./slipramp/ansible.py, apply, site.yml]
+    direct-playbook:
+      title: Run Ansible directly
+      description: Demonstrates that Runner and structured reporting are optional.
+      intent: reconcile
+      command:
+        - ansible-playbook
+        - --inventory
+        - inventory/hosts.yml
+        - site.yml
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
   name: node-exporter
   title: Fleet node_exporter
 spec:

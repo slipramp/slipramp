@@ -1,6 +1,35 @@
 apiVersion: slipramp.com/v1alpha1
 kind: Runtime
 metadata:
+  name: ansible
+  title: Ansible operations image
+spec:
+  image: registry.example.com/ansible-operations:v1.0.0
+  workingDirectory: /workspace
+  environment:
+    ANSIBLE_HOST_KEY_CHECKING: "true"
+    ANSIBLE_PRIVATE_KEY_FILE: /run/slipramp/credentials/ssh/id_ed25519
+    ANSIBLE_SSH_COMMON_ARGS: >-
+      -o UserKnownHostsFile=/run/slipramp/credentials/ssh/known_hosts
+      -o StrictHostKeyChecking=yes
+    PYTHONUNBUFFERED: "1"
+  credentials:
+    ssh:
+      inject:
+        files:
+          - key: SSH_PRIVATE_KEY
+            path: /run/slipramp/credentials/ssh/id_ed25519
+            mode: 0444
+    ssh-known-hosts:
+      inject:
+        files:
+          - key: known_hosts
+            path: /run/slipramp/credentials/ssh/known_hosts
+            mode: 0444
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
   name: pyinfra
   title: pyinfra operations image
 spec:

@@ -1,8 +1,9 @@
 # Infrastructure operations catalog example
 
-This directory sketches how three representative infrastructure workloads can
+This directory sketches how four representative infrastructure workloads can
 fit Slipramp's current catalog model:
 
+- `ansible-baseline` applies a small host baseline through Ansible.
 - `node-exporter` manages node_exporter on a pyinfra inventory group.
 - `rustfs-buckets` manages RustFS buckets and bucket-scoped IAM users with
   Terraform.
@@ -16,6 +17,12 @@ not copied into this example; the two launchers only document the expected
 process boundary.
 
 ## Actions
+
+The Ansible target offers `preview`, fixed-host `canary`, and direct `sync`
+actions through a small repository launcher. It also has a `direct-playbook`
+action that invokes `ansible-playbook` without a launcher or structured report.
+The launcher, inventory, playbook, image pattern, and authoring guidance are
+checked in under [`ansible`](./ansible).
 
 The node_exporter target offers:
 
@@ -68,8 +75,9 @@ execution cluster:
 
 | Credential source | Secret keys | Runtime use |
 | --- | --- | --- |
+| `ansible-ssh` | `SSH_PRIVATE_KEY` | Ansible managed-host SSH |
 | `operations` | `SSH_PRIVATE_KEY`, `TF_VAR_access_key`, `TF_VAR_secret_key`, `TF_STATE_ACCESS_KEY`, `TF_STATE_SECRET_KEY` | Host SSH and both RustFS credential pairs |
-| `ssh-known-hosts` | `known_hosts` | Strict host verification for Kubernetes upgrades |
+| `ssh-known-hosts` | `known_hosts` | Strict host verification for Ansible and Kubernetes upgrades |
 
 Secret values stay in the execution cluster. The catalog contains only the
 logical bindings and injection conventions.
@@ -96,9 +104,11 @@ ServiceAccount for repositories or actions that should not have that access.
 
 ## Prototype gaps
 
-The runtime image is an illustrative placeholder and must be replaced with an
-image containing pyinfra, Terraform, kubectl, the MinIO client (`mc`), Bash,
-and SSH. The RustFS state bucket must also be bootstrapped before the
-remote-backend workflow can run. Those deployment details and the omitted
-workload source are outside this example; the checked-in catalog is covered by
-a Go test.
+The shared infrastructure toolbox image is an illustrative placeholder and
+must be replaced with an image containing pyinfra, Terraform, kubectl, the
+MinIO client (`mc`), Bash, and SSH. The Ansible Runtime has a separate checked-in
+image pattern, but its example registry reference must still be replaced with a
+digest-pinned image built by the operator. The RustFS state bucket must also be
+bootstrapped before the remote-backend workflow can run. Those deployment
+details and the omitted non-Ansible workload source are outside this example;
+the checked-in catalog is covered by Go tests.

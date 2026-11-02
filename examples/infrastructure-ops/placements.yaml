@@ -14,6 +14,9 @@ placements:
         cpu: "2"
         memory: 2Gi
     credentials:
+      ansible-ssh:
+        secretRef:
+          name: infrastructure-ansible-ssh
       operations:
         secretRef:
           name: infrastructure-operations

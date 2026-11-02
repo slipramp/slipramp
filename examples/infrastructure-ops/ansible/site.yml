@@ -1,0 +1,12 @@
+---
+- name: Apply the example host baseline
+  hosts: managed_nodes
+  become: true
+  tasks:
+    - name: Record the managed baseline version
+      ansible.builtin.copy:
+        content: "managed by Slipramp\n"
+        dest: /etc/slipramp-baseline
+        group: root
+        mode: "0644"
+        owner: root
