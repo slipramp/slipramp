@@ -87,6 +87,8 @@ func TestCreateRunFreezesResolvedExecution(t *testing.T) {
 		created.Snapshot.Action.Command[1] != "plan" ||
 		created.Snapshot.Action.Timeout != "30m" ||
 		created.Snapshot.Placement.JobNamespace != "slipramp-jobs" ||
+		len(created.Snapshot.Placement.ActionVolumes) != 1 ||
+		len(created.Snapshot.Placement.ActionVolumeMounts) != 1 ||
 		created.Snapshot.Placement.Credentials["backend"].SecretName !=
 			"terraform-backend" {
 		t.Errorf("frozen snapshot = %#v", created.Snapshot)

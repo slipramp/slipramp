@@ -127,6 +127,8 @@ type checksumPlacement struct {
 	NodeSelector       map[string]string       `json:"nodeSelector,omitempty"`
 	Credentials        map[string]string       `json:"credentials,omitempty"`
 	PodTemplate        *corev1.PodTemplateSpec `json:"podTemplate,omitempty"`
+	ActionVolumes      []corev1.Volume         `json:"actionVolumes,omitempty"`
+	ActionVolumeMounts []corev1.VolumeMount    `json:"actionVolumeMounts,omitempty"`
 }
 
 type checksumResources struct {
@@ -153,9 +155,11 @@ func configurationChecksum(configurations map[string]Config) (string, error) {
 				Requests: cfg.Resources.Requests,
 				Limits:   cfg.Resources.Limits,
 			},
-			NodeSelector: cfg.NodeSelector,
-			Credentials:  credentials,
-			PodTemplate:  cfg.PodTemplate,
+			NodeSelector:       cfg.NodeSelector,
+			Credentials:        credentials,
+			PodTemplate:        cfg.PodTemplate,
+			ActionVolumes:      cfg.ActionVolumes,
+			ActionVolumeMounts: cfg.ActionVolumeMounts,
 		})
 	}
 
@@ -175,6 +179,16 @@ func cloneConfig(cfg Config) Config {
 	cfg.NodeSelector = maps.Clone(cfg.NodeSelector)
 	cfg.Credentials = maps.Clone(cfg.Credentials)
 	cfg.PodTemplate = cfg.PodTemplate.DeepCopy()
+	actionVolumes := make([]corev1.Volume, len(cfg.ActionVolumes))
+	for index := range cfg.ActionVolumes {
+		actionVolumes[index] = *cfg.ActionVolumes[index].DeepCopy()
+	}
+	cfg.ActionVolumes = actionVolumes
+	actionVolumeMounts := make([]corev1.VolumeMount, len(cfg.ActionVolumeMounts))
+	for index := range cfg.ActionVolumeMounts {
+		actionVolumeMounts[index] = *cfg.ActionVolumeMounts[index].DeepCopy()
+	}
+	cfg.ActionVolumeMounts = actionVolumeMounts
 
 	return cfg
 }

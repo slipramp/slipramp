@@ -1845,6 +1845,18 @@ export type RunAssignmentPlacement = {
   podTemplate?: {
     [key: string]: unknown;
   };
+  /**
+   * Operator-defined Kubernetes volumes exposed only to the Action container.
+   */
+  actionVolumes?: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Operator-defined mounts for the Placement action volumes.
+   */
+  actionVolumeMounts?: Array<{
+    [key: string]: unknown;
+  }>;
 };
 
 export type RunArtifactAccess = {

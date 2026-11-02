@@ -306,6 +306,8 @@ type PlacementSnapshot struct {
 	NodeSelector       map[string]string             `json:"nodeSelector,omitempty"`
 	Credentials        map[string]CredentialSnapshot `json:"credentials,omitempty"`
 	PodTemplate        *corev1.PodTemplateSpec       `json:"podTemplate,omitempty"`
+	ActionVolumes      []corev1.Volume               `json:"actionVolumes,omitempty"`
+	ActionVolumeMounts []corev1.VolumeMount          `json:"actionVolumeMounts,omitempty"`
 }
 
 type CredentialSnapshot struct {

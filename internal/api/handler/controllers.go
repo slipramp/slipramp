@@ -536,6 +536,20 @@ func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, erro
 	if err != nil {
 		return api.RunAssignment{}, err
 	}
+	actionVolumes, err := assignmentKubernetesObjects(
+		"action volumes",
+		record.Snapshot.Placement.ActionVolumes,
+	)
+	if err != nil {
+		return api.RunAssignment{}, err
+	}
+	actionVolumeMounts, err := assignmentKubernetesObjects(
+		"action volume mounts",
+		record.Snapshot.Placement.ActionVolumeMounts,
+	)
+	if err != nil {
+		return api.RunAssignment{}, err
+	}
 
 	return api.RunAssignment{
 		ID:                record.ID,
@@ -547,9 +561,14 @@ func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, erro
 			Name: api.CatalogName(record.Snapshot.Target.Metadata.Name),
 			Path: optionalString(record.Snapshot.Target.Spec.Path),
 		},
-		Action:    assignmentActionResponse(record.Snapshot.Action),
-		Runtime:   assignmentRuntimeResponse(record.Snapshot.Runtime),
-		Placement: assignmentPlacementResponse(record.Snapshot.Placement, podTemplate),
+		Action:  assignmentActionResponse(record.Snapshot.Action),
+		Runtime: assignmentRuntimeResponse(record.Snapshot.Runtime),
+		Placement: assignmentPlacementResponse(
+			record.Snapshot.Placement,
+			podTemplate,
+			actionVolumes,
+			actionVolumeMounts,
+		),
 		ArtifactAccess: api.RunArtifactAccess{
 			Token: token,
 		},
@@ -612,6 +631,8 @@ func assignmentRuntimeResponse(runtime catalog.Runtime) api.RunAssignmentRuntime
 func assignmentPlacementResponse(
 	placement run.PlacementSnapshot,
 	podTemplate *map[string]any,
+	actionVolumes *[]map[string]any,
+	actionVolumeMounts *[]map[string]any,
 ) api.RunAssignmentPlacement {
 	credentials := make(map[string]api.RunAssignmentCredential, len(placement.Credentials))
 	for name, credential := range placement.Credentials {
@@ -630,7 +651,27 @@ func assignmentPlacementResponse(
 		NodeSelector:       optionalStringMap(placement.NodeSelector),
 		Credentials:        optionalMap(credentials),
 		PodTemplate:        podTemplate,
+		ActionVolumes:      actionVolumes,
+		ActionVolumeMounts: actionVolumeMounts,
 	}
+}
+
+func assignmentKubernetesObjects[T any](subject string, values []T) (*[]map[string]any, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return nil, fmt.Errorf("encode run assignment %s: %w", subject, err)
+	}
+
+	var decoded []map[string]any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		return nil, fmt.Errorf("decode run assignment %s: %w", subject, err)
+	}
+
+	return &decoded, nil
 }
 
 func assignmentPodTemplateResponse(podTemplate *corev1.PodTemplateSpec) (*map[string]any, error) {

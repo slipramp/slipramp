@@ -555,6 +555,18 @@ RunAssignmentPlacement:
       type: object
       additionalProperties: true
       description: Validated placement PodTemplateSpec extensions.
+    actionVolumes:
+      type: array
+      description: Operator-defined Kubernetes volumes exposed only to the Action container.
+      items:
+        type: object
+        additionalProperties: true
+    actionVolumeMounts:
+      type: array
+      description: Operator-defined mounts for the Placement action volumes.
+      items:
+        type: object
+        additionalProperties: true
 
 RunAssignmentCredential:
   type: object

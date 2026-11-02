@@ -109,6 +109,7 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 	}
 	if !hasMount(action, "/home/ops/.ssh/id_ed25519", true) ||
 		!hasMount(action, "/var/run/ssh-extensions", false) ||
+		!hasNamedMount(action, "vault-secrets", "/run/operator/vault", true) ||
 		!hasMount(action, artifactWorkspaceMountPath, false) ||
 		!hasMount(action, runStateMountPath, false) {
 		t.Errorf("credential mounts = %#v", action.VolumeMounts)
@@ -116,10 +117,16 @@ func TestRenderJobBuildsFrozenRun(t *testing.T) {
 	if !hasMount(checkout, artifactWorkspaceMountPath, false) {
 		t.Errorf("checkout mounts = %#v", checkout.VolumeMounts)
 	}
+	if hasNamedMount(checkout, "vault-secrets", "/run/operator/vault", true) {
+		t.Errorf("checkout received operator Action mount = %#v", checkout.VolumeMounts)
+	}
 	if !hasEmptyDirVolume(pod.Spec.Volumes, artifactWorkspaceVolumeName) {
 		t.Errorf("Pod volumes = %#v", pod.Spec.Volumes)
 	}
 	if !hasCancellationVolume(pod.Spec.Volumes) {
+		t.Errorf("Pod volumes = %#v", pod.Spec.Volumes)
+	}
+	if !hasCSIVolume(pod.Spec.Volumes, "vault-secrets", "secrets-store.csi.k8s.io") {
 		t.Errorf("Pod volumes = %#v", pod.Spec.Volumes)
 	}
 }
@@ -145,6 +152,26 @@ func TestRenderJobRejectsInvalidAssignment(t *testing.T) {
 				assignment.Placement.Cluster = "edge"
 			},
 			want: "does not match",
+		},
+		{
+			name: "action mount references unknown volume",
+			configure: func(_ *Config, assignment *api.RunAssignment) {
+				mounts := []map[string]any{{
+					"name": "missing", "mountPath": "/run/operator/missing",
+				}}
+				assignment.Placement.ActionVolumeMounts = &mounts
+			},
+			want: "undeclared action volume",
+		},
+		{
+			name: "action mount conflicts with owned path",
+			configure: func(_ *Config, assignment *api.RunAssignment) {
+				mounts := []map[string]any{{
+					"name": "vault-secrets", "mountPath": "/workspace",
+				}}
+				assignment.Placement.ActionVolumeMounts = &mounts
+			},
+			want: "conflicts with an owned mount",
 		},
 	}
 
@@ -219,7 +246,20 @@ func testRunAssignment(t *testing.T) api.RunAssignment {
       "terraform-backend":{"secretName":"terraform-backend"},
       "ssh-deploy-key":{"secretName":"ssh-deploy-key"}
     },
-    "podTemplate":{"metadata":{"labels":{"example.com/placement":"admin"}},"spec":{"runtimeClassName":"kata"}}
+    "podTemplate":{"metadata":{"labels":{"example.com/placement":"admin"}},"spec":{"runtimeClassName":"kata"}},
+    "actionVolumes":[{
+      "name":"vault-secrets",
+      "csi":{
+        "driver":"secrets-store.csi.k8s.io",
+        "readOnly":true,
+        "volumeAttributes":{"secretProviderClass":"infrastructure"}
+      }
+    }],
+    "actionVolumeMounts":[{
+      "name":"vault-secrets",
+      "mountPath":"/run/operator/vault",
+      "readOnly":true
+    }]
   }
 }`
 
@@ -257,6 +297,26 @@ func hasSecretEnvironment(container corev1.Container, name string, secretName st
 func hasMount(container corev1.Container, mountPath string, subPath bool) bool {
 	for _, mount := range container.VolumeMounts {
 		if mount.MountPath == mountPath && (mount.SubPath != "") == subPath {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasNamedMount(container corev1.Container, name, mountPath string, readOnly bool) bool {
+	for _, mount := range container.VolumeMounts {
+		if mount.Name == name && mount.MountPath == mountPath && mount.ReadOnly == readOnly {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasCSIVolume(volumes []corev1.Volume, name, driver string) bool {
+	for _, volume := range volumes {
+		if volume.Name == name && volume.CSI != nil && volume.CSI.Driver == driver {
 			return true
 		}
 	}

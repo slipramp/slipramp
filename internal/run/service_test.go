@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/notification"
@@ -33,6 +34,13 @@ func testService(t *testing.T) (*Service, *recordingRuns) {
 					SecretRef: placement.SecretReference{Name: "terraform-backend"},
 				},
 			},
+			ActionVolumes: []corev1.Volume{{
+				Name:     "tool-cache",
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			}},
+			ActionVolumeMounts: []corev1.VolumeMount{{
+				Name: "tool-cache", MountPath: "/var/cache/tool",
+			}},
 		},
 	})
 	if err != nil {

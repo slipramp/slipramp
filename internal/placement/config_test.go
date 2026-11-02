@@ -76,6 +76,13 @@ func TestConfigValidate(t *testing.T) {
 						SecretRef: SecretReference{Name: "terraform.backend"},
 					},
 				}
+				cfg.ActionVolumes = []corev1.Volume{{
+					Name:     "tool-cache",
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				}}
+				cfg.ActionVolumeMounts = []corev1.VolumeMount{{
+					Name: "tool-cache", MountPath: "/var/cache/tool",
+				}}
 			},
 		},
 		{
@@ -209,6 +216,48 @@ func TestConfigValidate(t *testing.T) {
 				}
 			},
 			wantError: "secret name",
+		},
+		{
+			name: "action volume without source",
+			configure: func(cfg *Config) {
+				cfg.ActionVolumes = []corev1.Volume{{Name: "tool-cache"}}
+				cfg.ActionVolumeMounts = []corev1.VolumeMount{{
+					Name: "tool-cache", MountPath: "/var/cache/tool",
+				}}
+			},
+			wantError: "must define a volume source",
+		},
+		{
+			name: "action volume mount without volume",
+			configure: func(cfg *Config) {
+				cfg.ActionVolumeMounts = []corev1.VolumeMount{{
+					Name: "tool-cache", MountPath: "/var/cache/tool",
+				}}
+			},
+			wantError: "undeclared action volume",
+		},
+		{
+			name: "action volume without mount",
+			configure: func(cfg *Config) {
+				cfg.ActionVolumes = []corev1.Volume{{
+					Name:     "tool-cache",
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				}}
+			},
+			wantError: "has no action volume mount",
+		},
+		{
+			name: "unclean action volume mount path",
+			configure: func(cfg *Config) {
+				cfg.ActionVolumes = []corev1.Volume{{
+					Name:     "tool-cache",
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				}}
+				cfg.ActionVolumeMounts = []corev1.VolumeMount{{
+					Name: "tool-cache", MountPath: "/var/cache/../tool",
+				}}
+			},
+			wantError: "absolute clean path",
 		},
 		{
 			name: "long secret name",

@@ -61,7 +61,9 @@ Each execution uses a deterministically named Job with:
 - a pinned checkout image with Git, shell, and SSH support that runs the mounted
   Harness executable;
 - an Action container from the resolved Runtime;
-- private volumes for checkout, credentials, and declared Artifact transfer.
+- private volumes for checkout, credentials, and declared Artifact transfer;
+- optional operator-defined Action volumes and mounts from the resolved
+  Placement.
 
 The checkout container clones the exact commit into a Pod-local volume. The
 Action container mounts it at the Runtime working directory, or `/workspace`,
@@ -71,7 +73,10 @@ Harness.
 Placement policy owns service account, resources, security context, node
 selection, and permitted pod extensions. Extensions cannot replace
 Slipramp-owned containers, init containers, restart policy, service account,
-node selector, or deadline.
+node selector, or deadline. Placement Action volumes use Kubernetes Volume and
+VolumeMount contracts, are frozen into the Run snapshot, and mount only into
+the Action container. Repository catalog resources cannot add or override
+them.
 
 The Controller records the first Kubernetes `status.imageID` observed for the
 Harness, checkout, and Action roles. A conflicting later identity is rejected.
@@ -111,8 +116,10 @@ Execution credentials are resolved in three layers:
 
 Jobs reference Kubernetes Secrets directly. Values never pass through product
 state. Environment names and mount paths cannot collide. Placement pod
-extensions may use projected tokens, CSI volumes, and other cluster-native
-mechanisms.
+extensions may use admission-injected workload identity. Operator-owned Action
+volumes and mounts provide explicit projected tokens, CSI volumes, persistent
+volumes, and other cluster-native filesystem mechanisms without exposing them
+to checkout or Harness containers.
 
 Git checkout uses its own mapping from logical credential names to local Secrets
 with conventional Git configuration, SSH private key, and known-hosts entries.

@@ -133,6 +133,17 @@ placements:
           azure.workload.identity/use: "true"
       spec:
         runtimeClassName: kata
+    actionVolumes:
+      - name: operator-secrets
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: infrastructure-credentials
+    actionVolumeMounts:
+      - name: operator-secrets
+        mountPath: /run/operator/secrets
+        readOnly: true
     credentials:
       terraform-backend:
         secretRef:
@@ -143,7 +154,12 @@ The loader rejects unknown fields, duplicate keys, unsupported versions, and
 invalid Kubernetes names or resource quantities. The optional `podTemplate`
 accepts Kubernetes pod metadata and spec extensions, but cannot replace
 Slipramp-owned containers, init containers, restart policy, service account,
-node selector, or run deadline.
+node selector, or run deadline. `actionVolumes` and `actionVolumeMounts` accept
+Kubernetes Volume and VolumeMount objects owned by the operator. They are
+frozen into each Run and exposed only to its Action container, never checkout,
+Harness installation, or Placement preflight containers. Every mount must
+reference a declared Action volume, and neither names nor mount paths may
+conflict with Slipramp-owned execution resources.
 Cluster scheduling defaults to four active Runs. A configured Cluster maximum
 replaces that default, and a Placement maximum must be no larger than its
 configured Cluster maximum.

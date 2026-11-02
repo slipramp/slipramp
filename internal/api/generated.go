@@ -3601,11 +3601,16 @@ type RunAssignmentCredential struct {
 
 // RunAssignmentPlacement defines model for RunAssignmentPlacement.
 type RunAssignmentPlacement struct {
-	Cluster      CatalogName                         `json:"cluster"`
-	Credentials  *map[string]RunAssignmentCredential `json:"credentials,omitempty"`
-	JobNamespace CatalogName                         `json:"jobNamespace"`
-	Name         CatalogName                         `json:"name"`
-	NodeSelector *map[string]string                  `json:"nodeSelector,omitempty"`
+	// ActionVolumeMounts Operator-defined mounts for the Placement action volumes.
+	ActionVolumeMounts *[]map[string]interface{} `json:"actionVolumeMounts,omitempty"`
+
+	// ActionVolumes Operator-defined Kubernetes volumes exposed only to the Action container.
+	ActionVolumes *[]map[string]interface{}           `json:"actionVolumes,omitempty"`
+	Cluster       CatalogName                         `json:"cluster"`
+	Credentials   *map[string]RunAssignmentCredential `json:"credentials,omitempty"`
+	JobNamespace  CatalogName                         `json:"jobNamespace"`
+	Name          CatalogName                         `json:"name"`
+	NodeSelector  *map[string]string                  `json:"nodeSelector,omitempty"`
 
 	// PodTemplate Validated placement PodTemplateSpec extensions.
 	PodTemplate        *map[string]interface{} `json:"podTemplate,omitempty"`

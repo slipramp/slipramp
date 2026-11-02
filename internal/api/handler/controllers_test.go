@@ -276,7 +276,9 @@ func TestControllerPollReturnsFrozenRunAssignmentImmediately(t *testing.T) {
 	}
 	if assignment.Placement.JobNamespace != "slipramp-runs" ||
 		assignment.Placement.Credentials == nil ||
-		assignment.Placement.PodTemplate == nil {
+		assignment.Placement.PodTemplate == nil ||
+		assignment.Placement.ActionVolumes == nil ||
+		assignment.Placement.ActionVolumeMounts == nil {
 		t.Errorf("placement = %#v", assignment.Placement)
 	}
 	if assignment.ArtifactAccess.Token != "run-token" {
@@ -1309,6 +1311,13 @@ func runAssignmentRecord() run.Run {
 					"terraform-backend": {SecretName: "terraform-backend"},
 				},
 				PodTemplate: podTemplate,
+				ActionVolumes: []corev1.Volume{{
+					Name:     "tool-cache",
+					EmptyDir: &corev1.EmptyDirVolumeSource{},
+				}},
+				ActionVolumeMounts: []corev1.VolumeMount{{
+					Name: "tool-cache", MountPath: "/var/cache/tool",
+				}},
 			},
 		},
 	}

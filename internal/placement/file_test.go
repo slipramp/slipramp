@@ -5,6 +5,46 @@ import (
 	"testing"
 )
 
+func TestDecodeActionVolumes(t *testing.T) {
+	t.Parallel()
+
+	configured, err := Decode(strings.NewReader(`
+apiVersion: slipramp.com/v1alpha1
+kind: PlacementConfig
+placements:
+  infrastructure:
+    cluster: colo
+    jobNamespace: slipramp-runs
+    actionVolumes:
+      - name: vault-secrets
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: infrastructure
+    actionVolumeMounts:
+      - name: vault-secrets
+        mountPath: /run/operator/vault
+        readOnly: true
+`))
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+
+	placement, found := configured.Lookup("infrastructure")
+	if !found || len(placement.ActionVolumes) != 1 || len(placement.ActionVolumeMounts) != 1 {
+		t.Fatalf("Placement action volumes = %#v, mounts = %#v", placement.ActionVolumes, placement.ActionVolumeMounts)
+	}
+	volume := placement.ActionVolumes[0]
+	if volume.CSI == nil || volume.CSI.Driver != "secrets-store.csi.k8s.io" ||
+		volume.CSI.VolumeAttributes["secretProviderClass"] != "infrastructure" {
+		t.Errorf("Action volume = %#v", volume)
+	}
+	if mount := placement.ActionVolumeMounts[0]; mount.MountPath != "/run/operator/vault" || !mount.ReadOnly {
+		t.Errorf("Action volume mount = %#v", mount)
+	}
+}
+
 func TestDecodeRunCapacity(t *testing.T) {
 	t.Parallel()
 

@@ -296,9 +296,11 @@ func placementSnapshot(name string, cfg placement.Config) PlacementSnapshot {
 			Requests: maps.Clone(cfg.Resources.Requests),
 			Limits:   maps.Clone(cfg.Resources.Limits),
 		},
-		NodeSelector: cfg.NodeSelector,
-		Credentials:  credentials,
-		PodTemplate:  cfg.PodTemplate,
+		NodeSelector:       cfg.NodeSelector,
+		Credentials:        credentials,
+		PodTemplate:        cfg.PodTemplate,
+		ActionVolumes:      cfg.ActionVolumes,
+		ActionVolumeMounts: cfg.ActionVolumeMounts,
 	}
 }
 

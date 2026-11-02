@@ -43,6 +43,8 @@ type filePlacement struct {
 	NodeSelector       map[string]string         `yaml:"nodeSelector,omitempty"`
 	Credentials        map[string]fileCredential `yaml:"credentials,omitempty"`
 	PodTemplate        yaml.Node                 `yaml:"podTemplate,omitempty"`
+	ActionVolumes      yaml.Node                 `yaml:"actionVolumes,omitempty"`
+	ActionVolumeMounts yaml.Node                 `yaml:"actionVolumeMounts,omitempty"`
 }
 
 type fileResourceRequirements struct {
@@ -120,6 +122,22 @@ func Decode(input io.Reader) (Set, error) {
 		if err != nil {
 			return Set{}, err
 		}
+		actionVolumes, err := decodeFileKubernetesValue[[]corev1.Volume](
+			name,
+			"action volumes",
+			input.ActionVolumes,
+		)
+		if err != nil {
+			return Set{}, err
+		}
+		actionVolumeMounts, err := decodeFileKubernetesValue[[]corev1.VolumeMount](
+			name,
+			"action volume mounts",
+			input.ActionVolumeMounts,
+		)
+		if err != nil {
+			return Set{}, err
+		}
 
 		credentials := make(map[string]CredentialSource, len(input.Credentials))
 		for credentialName, source := range input.Credentials {
@@ -138,13 +156,45 @@ func Decode(input io.Reader) (Set, error) {
 				Requests: input.Resources.Requests,
 				Limits:   input.Resources.Limits,
 			},
-			NodeSelector: input.NodeSelector,
-			Credentials:  credentials,
-			PodTemplate:  podTemplate,
+			NodeSelector:       input.NodeSelector,
+			Credentials:        credentials,
+			PodTemplate:        podTemplate,
+			ActionVolumes:      actionVolumes,
+			ActionVolumeMounts: actionVolumeMounts,
 		}
 	}
 
 	return NewSetWithClusterLimits(configured, clusterMaximumActiveRuns)
+}
+
+func decodeFileKubernetesValue[T any](placementName, subject string, node yaml.Node) (T, error) {
+	var zero T
+	if node.Kind == 0 {
+		return zero, nil
+	}
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!null" {
+		return zero, fmt.Errorf("placement %q %s must not be null", placementName, subject)
+	}
+
+	var value any
+	if err := node.Decode(&value); err != nil {
+		return zero, fmt.Errorf("placement %q %s: %w", placementName, subject, err)
+	}
+
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return zero, fmt.Errorf("encode placement %q %s: %w", placementName, subject, err)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+
+	var decoded T
+	if err := decoder.Decode(&decoded); err != nil {
+		return zero, fmt.Errorf("decode placement %q %s: %w", placementName, subject, err)
+	}
+
+	return decoded, nil
 }
 
 func positiveMaximumActiveRuns(subject, name string, value *int32) (int32, error) {

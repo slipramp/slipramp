@@ -4,6 +4,7 @@ package placement
 import (
 	"fmt"
 	"maps"
+	"path"
 	"reflect"
 	"slices"
 	"time"
@@ -26,6 +27,8 @@ type Config struct {
 	NodeSelector       map[string]string
 	Credentials        map[string]CredentialSource
 	PodTemplate        *corev1.PodTemplateSpec
+	ActionVolumes      []corev1.Volume
+	ActionVolumeMounts []corev1.VolumeMount
 }
 
 type ResourceRequirements struct {
@@ -81,6 +84,10 @@ func (c Config) Validate() error {
 		return err
 	}
 
+	if err := validateActionVolumes(c.ActionVolumes, c.ActionVolumeMounts); err != nil {
+		return err
+	}
+
 	for _, credentialName := range slices.Sorted(maps.Keys(c.Credentials)) {
 		if err := kubevalidate.DNSLabel("credential source name", credentialName); err != nil {
 			return err
@@ -92,6 +99,56 @@ func (c Config) Validate() error {
 			secretName,
 		); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func validateActionVolumes(volumes []corev1.Volume, mounts []corev1.VolumeMount) error {
+	declared := make(map[string]struct{}, len(volumes))
+	for index, volume := range volumes {
+		subject := fmt.Sprintf("action volume %d", index+1)
+		if err := kubevalidate.DNSLabel(subject+" name", volume.Name); err != nil {
+			return err
+		}
+		if _, found := declared[volume.Name]; found {
+			return fmt.Errorf("action volume name %q is duplicated", volume.Name)
+		}
+		if reflect.DeepEqual(volume.VolumeSource, corev1.VolumeSource{}) {
+			return fmt.Errorf("%s %q must define a volume source", subject, volume.Name)
+		}
+		declared[volume.Name] = struct{}{}
+	}
+
+	used := make(map[string]struct{}, len(mounts))
+	mountPaths := make(map[string]string, len(mounts))
+	for index, mount := range mounts {
+		subject := fmt.Sprintf("action volume mount %d", index+1)
+		if _, found := declared[mount.Name]; !found {
+			return fmt.Errorf("%s references undeclared action volume %q", subject, mount.Name)
+		}
+		if !path.IsAbs(mount.MountPath) || path.Clean(mount.MountPath) != mount.MountPath {
+			return fmt.Errorf("%s path %q must be an absolute clean path", subject, mount.MountPath)
+		}
+		if previous, found := mountPaths[mount.MountPath]; found {
+			return fmt.Errorf(
+				"%s path %q conflicts with action volume %q",
+				subject,
+				mount.MountPath,
+				previous,
+			)
+		}
+		if mount.SubPath != "" && mount.SubPathExpr != "" {
+			return fmt.Errorf("%s must not define both subPath and subPathExpr", subject)
+		}
+		mountPaths[mount.MountPath] = mount.Name
+		used[mount.Name] = struct{}{}
+	}
+
+	for _, name := range slices.Sorted(maps.Keys(declared)) {
+		if _, found := used[name]; !found {
+			return fmt.Errorf("action volume %q has no action volume mount", name)
 		}
 	}
 

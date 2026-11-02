@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -60,6 +61,20 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 	if err != nil {
 		return nil, err
 	}
+	actionVolumes, err := kubernetesObjectsFromAPI[corev1.Volume](
+		"action volumes",
+		assignment.Placement.ActionVolumes,
+	)
+	if err != nil {
+		return nil, err
+	}
+	actionVolumeMounts, err := kubernetesObjectsFromAPI[corev1.VolumeMount](
+		"action volume mounts",
+		assignment.Placement.ActionVolumeMounts,
+	)
+	if err != nil {
+		return nil, err
+	}
 
 	labels := map[string]string{
 		managedByLabel: managedByLabelValue,
@@ -115,6 +130,10 @@ func renderJob(config Config, assignment api.RunAssignment) (*batchv1.Job, error
 		return nil, err
 	}
 	volumes = append(volumes, credentialVolumes...)
+	volumes = append(volumes, actionVolumes...)
+	if err := appendActionVolumeMounts(&action, actionVolumes, actionVolumeMounts); err != nil {
+		return nil, err
+	}
 
 	if err := appendOwnedVolumes(&template.Spec, volumes); err != nil {
 		return nil, err
@@ -183,6 +202,27 @@ func podTemplateFromAPI(encoded *map[string]any) (corev1.PodTemplateSpec, error)
 	}
 
 	return template, nil
+}
+
+func kubernetesObjectsFromAPI[T any](subject string, encoded *[]map[string]any) ([]T, error) {
+	if encoded == nil {
+		return nil, nil
+	}
+
+	data, err := json.Marshal(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("encode assignment %s: %w", subject, err)
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+
+	var values []T
+	if err := decoder.Decode(&values); err != nil {
+		return nil, fmt.Errorf("decode assignment %s: %w", subject, err)
+	}
+
+	return values, nil
 }
 
 func checkoutContainer(config Config, assignment api.RunAssignment) (corev1.Container, []corev1.Volume, error) {
@@ -540,6 +580,34 @@ func appendOwnedVolumes(spec *corev1.PodSpec, volumes []corev1.Volume) error {
 		}
 		existing[volume.Name] = struct{}{}
 		spec.Volumes = append(spec.Volumes, volume)
+	}
+
+	return nil
+}
+
+func appendActionVolumeMounts(
+	container *corev1.Container,
+	volumes []corev1.Volume,
+	mounts []corev1.VolumeMount,
+) error {
+	declared := make(map[string]struct{}, len(volumes))
+	for _, volume := range volumes {
+		declared[volume.Name] = struct{}{}
+	}
+
+	mountPaths := make(map[string]struct{}, len(container.VolumeMounts)+len(mounts))
+	for _, mount := range container.VolumeMounts {
+		mountPaths[mount.MountPath] = struct{}{}
+	}
+	for _, mount := range mounts {
+		if _, found := declared[mount.Name]; !found {
+			return fmt.Errorf("action volume mount references undeclared action volume %q", mount.Name)
+		}
+		if _, found := mountPaths[mount.MountPath]; found {
+			return fmt.Errorf("action volume mount path %q conflicts with an owned mount", mount.MountPath)
+		}
+		mountPaths[mount.MountPath] = struct{}{}
+		container.VolumeMounts = append(container.VolumeMounts, mount)
 	}
 
 	return nil

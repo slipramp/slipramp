@@ -32,7 +32,14 @@ func (b explanationBuilder) explainPlacement(result *Explanation, cfg *placement
 			selector = map[string]string{}
 		}
 		result.Placement.NodeSelector = explained(selector, b.placementOrigin("nodeSelector"))
-		result.Placement.PodExtensions = explained(cfg.PodTemplate != nil, b.placementOrigin("podTemplate"))
+		podExtensionsOrigin := b.placementOrigin("podTemplate")
+		if cfg.PodTemplate == nil && len(cfg.ActionVolumes) > 0 {
+			podExtensionsOrigin = b.placementOrigin("actionVolumes")
+		}
+		result.Placement.PodExtensions = explained(
+			cfg.PodTemplate != nil || len(cfg.ActionVolumes) > 0,
+			podExtensionsOrigin,
+		)
 		result.Timeout = explained("", systemOrigin("timeout"))
 		if cfg.Timeout > 0 {
 			result.Timeout = explained(cfg.Timeout.String(), b.placementOrigin("timeout"))

@@ -22,6 +22,16 @@ func TestSetOwnsConfig(t *testing.T) {
 			PodTemplate: &corev1.PodTemplateSpec{
 				Labels: map[string]string{"identity": "enabled"},
 			},
+			ActionVolumes: []corev1.Volume{{
+				Name: "operator-data",
+				CSI: &corev1.CSIVolumeSource{
+					Driver:           "example.com/operator",
+					VolumeAttributes: map[string]string{"profile": "production"},
+				},
+			}},
+			ActionVolumeMounts: []corev1.VolumeMount{{
+				Name: "operator-data", MountPath: "/run/operator", ReadOnly: true,
+			}},
 		},
 	}
 
@@ -42,6 +52,8 @@ func TestSetOwnsConfig(t *testing.T) {
 
 	cfg.Resources.Requests["cpu"] = "2"
 	cfg.PodTemplate.Labels["identity"] = "disabled"
+	cfg.ActionVolumes[0].CSI.VolumeAttributes["profile"] = "development"
+	cfg.ActionVolumeMounts[0].MountPath = "/run/changed"
 	cfg, _ = placements.Lookup("infrastructure")
 	if cfg.Resources.Requests["cpu"] != "100m" {
 		t.Errorf("Resources.Requests[cpu] = %q, want %q", cfg.Resources.Requests["cpu"], "100m")
@@ -49,6 +61,10 @@ func TestSetOwnsConfig(t *testing.T) {
 
 	if cfg.PodTemplate.Labels["identity"] != "enabled" {
 		t.Errorf("PodTemplate.Labels[identity] = %q, want %q", cfg.PodTemplate.Labels["identity"], "enabled")
+	}
+	if cfg.ActionVolumes[0].CSI.VolumeAttributes["profile"] != "production" ||
+		cfg.ActionVolumeMounts[0].MountPath != "/run/operator" {
+		t.Errorf("Action volume configuration was mutated: %#v %#v", cfg.ActionVolumes, cfg.ActionVolumeMounts)
 	}
 }
 
