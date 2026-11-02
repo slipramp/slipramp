@@ -130,11 +130,19 @@ func TestIntegrationSetBuildsArgoCDApplicationLinks(t *testing.T) {
 		*applicationURL != "https://argocd.example.com/console/applications/argocd/external-dns" {
 		t.Errorf("ArgoCDApplicationURL() = %v", applicationURL)
 	}
+	applicationURL = integrations.ArgoCDApplicationURL("prod", "prod", "", "external-dns")
+	if applicationURL == nil ||
+		*applicationURL != "https://argocd.example.com/console/applications/external-dns" {
+		t.Errorf("ArgoCDApplicationURL() without namespace = %v", applicationURL)
+	}
 	if integrations.ArgoCDApplicationURL("prod", "homelab", "argocd", "external-dns") != nil {
 		t.Error("ArgoCDApplicationURL() returned a URL for an unconfigured environment")
 	}
 	if integrations.ArgoCDApplicationURL("missing", "prod", "argocd", "external-dns") != nil {
 		t.Error("ArgoCDApplicationURL() returned a URL for an unknown integration")
+	}
+	if integrations.ArgoCDApplicationURL("prod", "prod", "argocd", "") != nil {
+		t.Error("ArgoCDApplicationURL() returned a URL without an Application")
 	}
 }
 

@@ -237,7 +237,7 @@ func (s IntegrationSet) ArgoCDApplicationURL(
 	application string,
 ) *string {
 	config, ok := s.Lookup(integration)
-	if !ok || namespace == "" || application == "" {
+	if !ok || application == "" {
 		return nil
 	}
 	uiURL := config.ArgoCDUIURLs[environment]
@@ -245,7 +245,12 @@ func (s IntegrationSet) ArgoCDApplicationURL(
 		return nil
 	}
 
-	value, err := url.JoinPath(uiURL, "applications", namespace, application)
+	pathSegments := []string{"applications"}
+	if namespace != "" {
+		pathSegments = append(pathSegments, namespace)
+	}
+	pathSegments = append(pathSegments, application)
+	value, err := url.JoinPath(uiURL, pathSegments...)
 	if err != nil {
 		return nil
 	}
