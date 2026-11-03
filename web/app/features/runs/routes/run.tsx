@@ -67,6 +67,7 @@ import { Identity } from "~/shared/identity";
 import { KawaiiActivity } from "~/features/mascot/kawaii-activity";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
+import { AnsiblePlaybookReportView } from "~/features/runs/ansible-playbook-report-view";
 import { RunLogViewer } from "~/features/runs/run-log-viewer";
 import { PyinfraDeployReportView } from "~/features/runs/pyinfra-deploy-report-view";
 import { InfrastructurePlanReportView } from "~/features/runs/terraform-plan-report-view";
@@ -534,6 +535,16 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
           if (artifact.report?.kind === "pyinfra-deploy") {
             return (
               <PyinfraDeployReportView
+                artifact={artifact}
+                canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
+                key={artifact.id}
+                load={load}
+              />
+            );
+          }
+          if (artifact.report?.kind === "ansible-playbook") {
+            return (
+              <AnsiblePlaybookReportView
                 artifact={artifact}
                 canReadContents={canReadArtifactContents(artifact, loaderData.principal)}
                 key={artifact.id}

@@ -457,11 +457,11 @@ contract change.
 
 ### Slice 3: Web report experience
 
-- [ ] Add Ansible summary and detail view models.
-- [ ] Add recap, grouping, filtering, redaction, partial-report, and expired
+- [x] Add Ansible summary and detail view models.
+- [x] Add recap, grouping, filtering, redaction, partial-report, and expired
       detail presentation.
-- [ ] Connect the report view to the Run page report-kind switch.
-- [ ] Add focused TypeScript tests for summaries, grouping, filtering, and
+- [x] Connect the report view to the Run page report-kind switch.
+- [x] Add focused TypeScript tests for summaries, grouping, filtering, and
       redaction.
 - [ ] Verify keyboard navigation, screen-reader labels, narrow layouts, and
       large-report behavior.
