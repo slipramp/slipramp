@@ -682,7 +682,7 @@ func (s *suite) assertHealthy(t *testing.T) {
 		t.Fatalf("get health: %v", err)
 	}
 	requireStatus(t, response.StatusCode(), response.Body, http.StatusOK)
-	if response.JSON200 == nil || response.JSON200.Status != api.Ok {
+	if response.JSON200 == nil || response.JSON200.Status != api.HealthResponseStatusOk {
 		t.Fatalf("health response = %#v", response.JSON200)
 	}
 }

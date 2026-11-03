@@ -448,12 +448,12 @@ contract change.
       ignored, `no_log`, and partial-run source fixtures.
 - [x] Implement the bounded `ansible-playbook` adapter under
       `internal/runreport`.
-- [ ] Add adapter registry, projection encoding, persistence, and rejection
+- [x] Add adapter registry, projection encoding, persistence, and rejection
       tests.
-- [ ] Add the report-kind database constraint migration.
-- [ ] Extend OpenAPI report schemas and regenerate all clients.
-- [ ] Extend API report conversion and handler tests.
-- [ ] Extend report-ingestion metrics and documentation.
+- [x] Add the report-kind database constraint migration.
+- [x] Extend OpenAPI report schemas and regenerate all clients.
+- [x] Extend API report conversion and handler tests.
+- [x] Extend report-ingestion metrics and documentation.
 
 ### Slice 3: Web report experience
 
@@ -479,7 +479,7 @@ contract change.
 - [ ] Verify `no_log` values and injected secrets never enter the projection,
       API summary, structured logs, or diagnostics.
 - [ ] Verify no implicit retry and ordinary Target serialization.
-- [ ] Update `docs/design/artifacts.md` when the adapter lands.
+- [x] Update `docs/design/artifacts.md` when the adapter lands.
 - [ ] Update other current design, example, installation, and development
       documentation affected by the final implementation.
 - [ ] Remove the completed Ansible roadmap entry and delete this plan once all

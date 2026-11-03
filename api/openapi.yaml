@@ -328,6 +328,24 @@ components:
       $ref: ./components/run-reports.yaml#/PyinfraOperation
     PyinfraOperationResult:
       $ref: ./components/run-reports.yaml#/PyinfraOperationResult
+    AnsiblePlaybookReportSummary:
+      $ref: ./components/run-reports.yaml#/AnsiblePlaybookReportSummary
+    AnsiblePlaybookReport:
+      $ref: ./components/run-reports.yaml#/AnsiblePlaybookReport
+    AnsibleRunnerSummary:
+      $ref: ./components/run-reports.yaml#/AnsibleRunnerSummary
+    AnsiblePlaybookSummary:
+      $ref: ./components/run-reports.yaml#/AnsiblePlaybookSummary
+    AnsibleOutcomeCounts:
+      $ref: ./components/run-reports.yaml#/AnsibleOutcomeCounts
+    AnsibleHostTotals:
+      $ref: ./components/run-reports.yaml#/AnsibleHostTotals
+    AnsiblePlay:
+      $ref: ./components/run-reports.yaml#/AnsiblePlay
+    AnsibleTask:
+      $ref: ./components/run-reports.yaml#/AnsibleTask
+    AnsibleTaskResult:
+      $ref: ./components/run-reports.yaml#/AnsibleTaskResult
     LogCursor:
       $ref: ./components/artifacts.yaml#/LogCursor
     LogEvent:

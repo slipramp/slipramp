@@ -187,6 +187,72 @@ func TestServiceProjectsPyinfraDeployReport(t *testing.T) {
 	}
 }
 
+func TestServiceProjectsAnsiblePlaybookReport(t *testing.T) {
+	t.Parallel()
+
+	source := ansibleReportSource()
+	request := reportUploadRequest(source)
+	metadata := reportTestMetadata()
+	metadata.context.Artifacts[request.Name] = Declaration{
+		MediaType: runreport.AnsiblePlaybookMediaType,
+		Sensitive: true,
+	}
+	contents := &serviceContentStore{}
+	service := newTestService(metadata, contents)
+
+	if err := service.Upload(context.Background(), request); err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	if metadata.record == nil {
+		t.Fatal("Upload() did not persist Artifact metadata")
+	}
+	reportMetadata := metadata.reports[metadata.record.ID]
+	if reportMetadata.Kind != runreport.AnsiblePlaybookKind || reportMetadata.Mode != runreport.ApplyMode {
+		t.Fatalf("stored report metadata = %#v", reportMetadata)
+	}
+	projection := contents.objects[reportMetadata.ProjectionObjectKey]
+	if projection == "" || strings.Contains(projection, "source-only-secret") {
+		t.Fatalf("stored projection = %q", projection)
+	}
+	content, err := service.OpenReport(context.Background(), metadata.record.ID)
+	if err != nil {
+		t.Fatalf("OpenReport() error = %v", err)
+	}
+	report, ok := content.Report.(*runreport.AnsiblePlaybookReport)
+	if !ok || !report.Summary.Complete || report.Summary.Results.OK != 1 ||
+		len(report.Plays) != 1 || len(report.Plays[0].Tasks) != 1 || !report.Plays[0].Tasks[0].Redacted {
+		t.Fatalf("OpenReport() report = %#v", content.Report)
+	}
+}
+
+func TestServiceRejectsMalformedAnsiblePlaybookReport(t *testing.T) {
+	t.Parallel()
+
+	source := []byte(`{"schemaVersion":1`)
+	request := reportUploadRequest(source)
+	metadata := reportTestMetadata()
+	metadata.context.Artifacts[request.Name] = Declaration{
+		MediaType: runreport.AnsiblePlaybookMediaType,
+		Sensitive: true,
+	}
+	contents := &serviceContentStore{}
+	observer := &recordingReportIngestionObserver{}
+	service := newTestService(metadata, contents)
+	service.reportObserver = observer
+
+	err := service.Upload(context.Background(), request)
+	if !errors.Is(err, ErrInvalid) {
+		t.Fatalf("Upload() error = %v, want invalid report", err)
+	}
+	if metadata.record != nil || len(metadata.reports) != 0 || contents.puts != 1 {
+		t.Errorf("rejected report = record %#v, reports %#v, puts %d", metadata.record, metadata.reports, contents.puts)
+	}
+	if !slices.Equal(observer.kinds, []runreport.ReportKind{runreport.AnsiblePlaybookKind}) ||
+		!slices.Equal(observer.outcomes, []ReportIngestionOutcome{ReportIngestionRejected}) {
+		t.Errorf("report ingestion observations = kinds %v, outcomes %v", observer.kinds, observer.outcomes)
+	}
+}
+
 func TestServiceLeavesReportObjectsForReconciliationAfterFailure(t *testing.T) {
 	t.Parallel()
 
@@ -278,6 +344,37 @@ func reportUploadRequest(source []byte) UploadRequest {
 		SizeBytes: int64(len(source)),
 		SHA256:    hex.EncodeToString(digest[:]),
 	}
+}
+
+func ansibleReportSource() []byte {
+	return []byte(`{
+		"schemaVersion":1,
+		"mode":"apply",
+		"versions":{"ansibleCore":"2.21.5","ansibleRunner":"2.4.3"},
+		"runner":{"status":"successful","exitCode":0},
+		"events":[
+			{"counter":1,"uuid":"play-event","event":"playbook_on_play_start","event_data":{
+				"uuid":"play","name":"Configure credentials","play":"Configure credentials","play_uuid":"play"
+			}},
+			{"counter":2,"uuid":"task-event","event":"playbook_on_task_start","event_data":{
+				"play":"Configure credentials","play_uuid":"play","task":"Install source-only-secret-token",
+				"task_uuid":"task","task_action":"source-only-secret-action",
+				"task_path":"/workspace/ansible/source-only-secret-path.yml:3"
+			}},
+			{"counter":3,"uuid":"result-event","event":"runner_on_ok","event_data":{
+				"play":"Configure credentials","play_uuid":"play","task":"Install source-only-secret-token",
+				"task_uuid":"task","task_action":"source-only-secret-action",
+				"task_path":"/workspace/ansible/source-only-secret-path.yml:3","host":"node01.example.com",
+				"res":{"censored":"the output has been hidden","future_secret":"source-only-secret-result"}
+			}},
+			{"counter":4,"uuid":"stats-event","event":"playbook_on_stats","event_data":{
+				"changed":{"node01.example.com":0},"dark":{"node01.example.com":0},
+				"failures":{"node01.example.com":0},"ignored":{"node01.example.com":0},
+				"ok":{"node01.example.com":1},"processed":{"node01.example.com":1},
+				"rescued":{"node01.example.com":0},"skipped":{"node01.example.com":0}
+			}}
+		]
+	}`)
 }
 
 type recordingReportIngestionObserver struct {

@@ -1799,6 +1799,8 @@ internal enum Components {
         }
         /// - Remark: Generated from `#/components/schemas/RunReportSummary`.
         internal enum RunReportSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/RunReportSummary/AnsiblePlaybookReportSummary`.
+            case ansiblePlaybook(Components.Schemas.AnsiblePlaybookReportSummary)
             /// - Remark: Generated from `#/components/schemas/RunReportSummary/OpenTofuPlanReportSummary`.
             case opentofuPlan(Components.Schemas.OpenTofuPlanReportSummary)
             /// - Remark: Generated from `#/components/schemas/RunReportSummary/PyinfraDeployReportSummary`.
@@ -1815,6 +1817,8 @@ internal enum Components {
                     forKey: .kind
                 )
                 switch discriminator {
+                case "ansible-playbook":
+                    self = .ansiblePlaybook(try .init(from: decoder))
                 case "opentofu-plan":
                     self = .opentofuPlan(try .init(from: decoder))
                 case "pyinfra-deploy":
@@ -1831,6 +1835,8 @@ internal enum Components {
             }
             internal func encode(to encoder: any Swift.Encoder) throws {
                 switch self {
+                case let .ansiblePlaybook(value):
+                    try value.encode(to: encoder)
                 case let .opentofuPlan(value):
                     try value.encode(to: encoder)
                 case let .pyinfraDeploy(value):
@@ -1851,6 +1857,7 @@ internal enum Components {
                 case terraformPlan = "terraform-plan"
                 case opentofuPlan = "opentofu-plan"
                 case pyinfraDeploy = "pyinfra-deploy"
+                case ansiblePlaybook = "ansible-playbook"
             }
             /// - Remark: Generated from `#/components/schemas/RunReportEnvelope/kind`.
             internal var kind: Components.Schemas.RunReportEnvelope.KindPayload
@@ -2371,6 +2378,224 @@ internal enum Components {
                 case failedHostOperations
                 case unchangedHostOperations
                 case failedHosts
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary`.
+        internal struct AnsiblePlaybookReportSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value1`.
+            internal var value1: Components.Schemas.RunReportEnvelope
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value2`.
+            internal struct Value2Payload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value2/kind`.
+                internal enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case ansiblePlaybook = "ansible-playbook"
+                }
+                /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value2/kind`.
+                internal var kind: Components.Schemas.AnsiblePlaybookReportSummary.Value2Payload.KindPayload
+                /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value2/mode`.
+                internal enum ModePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case preview = "preview"
+                    case apply = "apply"
+                }
+                /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value2/mode`.
+                internal var mode: Components.Schemas.AnsiblePlaybookReportSummary.Value2Payload.ModePayload
+                /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value2/summary`.
+                internal var summary: Components.Schemas.AnsiblePlaybookSummary
+                /// Creates a new `Value2Payload`.
+                ///
+                /// - Parameters:
+                ///   - kind:
+                ///   - mode:
+                ///   - summary:
+                internal init(
+                    kind: Components.Schemas.AnsiblePlaybookReportSummary.Value2Payload.KindPayload,
+                    mode: Components.Schemas.AnsiblePlaybookReportSummary.Value2Payload.ModePayload,
+                    summary: Components.Schemas.AnsiblePlaybookSummary
+                ) {
+                    self.kind = kind
+                    self.mode = mode
+                    self.summary = summary
+                }
+                internal enum CodingKeys: String, CodingKey {
+                    case kind
+                    case mode
+                    case summary
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookReportSummary/value2`.
+            internal var value2: Components.Schemas.AnsiblePlaybookReportSummary.Value2Payload
+            /// Creates a new `AnsiblePlaybookReportSummary`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            internal init(
+                value1: Components.Schemas.RunReportEnvelope,
+                value2: Components.Schemas.AnsiblePlaybookReportSummary.Value2Payload
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                self.value1 = try .init(from: decoder)
+                self.value2 = try .init(from: decoder)
+            }
+            internal func encode(to encoder: any Swift.Encoder) throws {
+                try self.value1.encode(to: encoder)
+                try self.value2.encode(to: encoder)
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookSummary`.
+        internal struct AnsiblePlaybookSummary: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookSummary/complete`.
+            internal var complete: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookSummary/hosts`.
+            internal var hosts: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookSummary/plays`.
+            internal var plays: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookSummary/tasks`.
+            internal var tasks: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookSummary/results`.
+            internal var results: Components.Schemas.AnsibleOutcomeCounts
+            /// - Remark: Generated from `#/components/schemas/AnsiblePlaybookSummary/hostTotals`.
+            internal var hostTotals: [Components.Schemas.AnsibleHostTotals]
+            /// Creates a new `AnsiblePlaybookSummary`.
+            ///
+            /// - Parameters:
+            ///   - complete:
+            ///   - hosts:
+            ///   - plays:
+            ///   - tasks:
+            ///   - results:
+            ///   - hostTotals:
+            internal init(
+                complete: Swift.Bool,
+                hosts: Swift.Int,
+                plays: Swift.Int,
+                tasks: Swift.Int,
+                results: Components.Schemas.AnsibleOutcomeCounts,
+                hostTotals: [Components.Schemas.AnsibleHostTotals]
+            ) {
+                self.complete = complete
+                self.hosts = hosts
+                self.plays = plays
+                self.tasks = tasks
+                self.results = results
+                self.hostTotals = hostTotals
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case complete
+                case hosts
+                case plays
+                case tasks
+                case results
+                case hostTotals
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AnsibleOutcomeCounts`.
+        internal struct AnsibleOutcomeCounts: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AnsibleOutcomeCounts/total`.
+            internal var total: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleOutcomeCounts/ok`.
+            internal var ok: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleOutcomeCounts/changed`.
+            internal var changed: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleOutcomeCounts/failed`.
+            internal var failed: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleOutcomeCounts/unreachable`.
+            internal var unreachable: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleOutcomeCounts/skipped`.
+            internal var skipped: Swift.Int
+            /// Creates a new `AnsibleOutcomeCounts`.
+            ///
+            /// - Parameters:
+            ///   - total:
+            ///   - ok:
+            ///   - changed:
+            ///   - failed:
+            ///   - unreachable:
+            ///   - skipped:
+            internal init(
+                total: Swift.Int,
+                ok: Swift.Int,
+                changed: Swift.Int,
+                failed: Swift.Int,
+                unreachable: Swift.Int,
+                skipped: Swift.Int
+            ) {
+                self.total = total
+                self.ok = ok
+                self.changed = changed
+                self.failed = failed
+                self.unreachable = unreachable
+                self.skipped = skipped
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case total
+                case ok
+                case changed
+                case failed
+                case unreachable
+                case skipped
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals`.
+        internal struct AnsibleHostTotals: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/host`.
+            internal var host: Swift.String
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/ok`.
+            internal var ok: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/changed`.
+            internal var changed: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/failed`.
+            internal var failed: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/unreachable`.
+            internal var unreachable: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/skipped`.
+            internal var skipped: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/rescued`.
+            internal var rescued: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/AnsibleHostTotals/ignored`.
+            internal var ignored: Swift.Int
+            /// Creates a new `AnsibleHostTotals`.
+            ///
+            /// - Parameters:
+            ///   - host:
+            ///   - ok:
+            ///   - changed:
+            ///   - failed:
+            ///   - unreachable:
+            ///   - skipped:
+            ///   - rescued:
+            ///   - ignored:
+            internal init(
+                host: Swift.String,
+                ok: Swift.Int,
+                changed: Swift.Int,
+                failed: Swift.Int,
+                unreachable: Swift.Int,
+                skipped: Swift.Int,
+                rescued: Swift.Int,
+                ignored: Swift.Int
+            ) {
+                self.host = host
+                self.ok = ok
+                self.changed = changed
+                self.failed = failed
+                self.unreachable = unreachable
+                self.skipped = skipped
+                self.rescued = rescued
+                self.ignored = ignored
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case host
+                case ok
+                case changed
+                case failed
+                case unreachable
+                case skipped
+                case rescued
+                case ignored
             }
         }
         /// - Remark: Generated from `#/components/schemas/Promotion`.

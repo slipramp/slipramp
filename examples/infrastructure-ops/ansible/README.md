@@ -6,11 +6,11 @@ and catalog Actions. Slipramp supplies the exact Git commit, Placement,
 credentials, logs, Run history, and the optional report helper without
 interpreting the playbook.
 
-The catalog does not declare the planned native Ansible report media type yet.
-The `slipramp-ansible` helper writes its tested source envelope, but the Artifact
-will remain unadvertised until the bounded Server adapter lands. The
-`direct-playbook` Action demonstrates that neither Runner nor structured
-reporting is required.
+The `preview`, `canary`, and `sync` Actions declare the helper's source envelope
+as a sensitive `application/vnd.slipramp.ansible-playbook+json` Artifact. The
+Server projects only bounded, value-free play, task, host, and outcome data for
+structured display. The `direct-playbook` Action demonstrates that neither
+Runner nor structured reporting is required.
 
 ## Runtime image
 
@@ -127,9 +127,11 @@ a successful playbook exit to helper exit 70, but never hides a nonzero Runner
 exit.
 
 Runner events may contain module results, diffs, facts, output, and secret
-values. Declare this source file sensitive when the report media type is
-enabled. Only the future bounded Server projection is suitable for ordinary
-structured display.
+values. The example therefore declares this source file sensitive. The Server
+projection allowlists structural identifiers, normalized outcomes, counters,
+and host totals; it excludes arbitrary module values and treats `no_log` as a
+hard task-level redaction boundary. Only that projection is suitable for
+ordinary structured display.
 
 ## SSH and other credentials
 

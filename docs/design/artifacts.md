@@ -60,11 +60,14 @@ Artifacts are sensitive because tool output may contain secret values. An
 adapter validates the source and produces a bounded, versioned, value-free
 projection for product summaries and structured detail.
 
-Current adapters cover Terraform plan JSON, OpenTofu plan JSON, and pyinfra
-deploy output. Terraform and OpenTofu remain distinct tools and media types even
-when they share a compatible projection model. Projections retain tool identity,
-version, mode, aggregate counts, and normalized changes while excluding
-provider values and other unnecessary source data.
+Current adapters cover Terraform plan JSON, OpenTofu plan JSON, pyinfra deploy
+output, and Ansible playbook event reports. Terraform and OpenTofu remain
+distinct tools and media types even when they share a compatible projection
+model. Projections retain tool identity, version, mode, aggregate counts, and
+normalized changes while excluding provider values and other unnecessary
+source data. The Ansible projection retains bounded play, task, host, and
+outcome structure, excludes arbitrary module result values, and hard-redacts
+tasks whose results indicate `no_log`.
 
 The original source remains the immutable Artifact. PostgreSQL stores report
 kind, projection version, bounded summary, and projection object metadata; the

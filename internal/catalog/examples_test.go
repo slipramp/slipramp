@@ -89,10 +89,14 @@ func TestInfrastructureOpsExample(t *testing.T) {
 		if !reflect.DeepEqual(action.Command, wantCommand) {
 			t.Errorf("ansible %s command = %#v, want %#v", name, action.Command, wantCommand)
 		}
-	}
-	for name, action := range ansible.Spec.Actions {
-		if len(action.Artifacts) != 0 {
-			t.Errorf("ansible action %q advertises artifacts before the report contract: %#v", name, action.Artifacts)
+		report, found := action.Artifacts["report"]
+		if !found {
+			t.Errorf("ansible %s report artifact not found", name)
+			continue
+		}
+		if report.Path != "/slipramp/artifacts/ansible-playbook.json" ||
+			report.MediaType != "application/vnd.slipramp.ansible-playbook+json" || !report.Sensitive {
+			t.Errorf("ansible %s report artifact = %#v", name, report)
 		}
 	}
 

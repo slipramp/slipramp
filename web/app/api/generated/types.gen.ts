@@ -948,12 +948,15 @@ export type RunReportSummary =
     } & OpenTofuPlanReportSummary)
   | ({
       kind: "pyinfra-deploy";
-    } & PyinfraDeployReportSummary);
+    } & PyinfraDeployReportSummary)
+  | ({
+      kind: "ansible-playbook";
+    } & AnsiblePlaybookReportSummary);
 
 export type RunReportEnvelope = {
   artifactId: string;
   runId: string;
-  kind: "terraform-plan" | "opentofu-plan" | "pyinfra-deploy";
+  kind: "terraform-plan" | "opentofu-plan" | "pyinfra-deploy" | "ansible-playbook";
   schemaVersion: number;
   adapterVersion: number;
   tool: string;
@@ -971,7 +974,10 @@ export type RunReport =
     } & OpenTofuPlanReport)
   | ({
       kind: "pyinfra-deploy";
-    } & PyinfraDeployReport);
+    } & PyinfraDeployReport)
+  | ({
+      kind: "ansible-playbook";
+    } & AnsiblePlaybookReport);
 
 export type TerraformPlanReportSummary = RunReportEnvelope & {
   kind: "terraform-plan";
@@ -1094,6 +1100,80 @@ export type PyinfraOperationResult = {
   changedHosts: PyinfraHostList;
   failedHosts: PyinfraHostList;
   unchangedHosts: PyinfraHostList;
+};
+
+export type AnsiblePlaybookReportSummary = RunReportEnvelope & {
+  kind: "ansible-playbook";
+  mode: "preview" | "apply";
+  summary: AnsiblePlaybookSummary;
+};
+
+export type AnsiblePlaybookReport = RunReportEnvelope & {
+  kind: "ansible-playbook";
+  mode: "preview" | "apply";
+  runner: AnsibleRunnerSummary;
+  summary: AnsiblePlaybookSummary;
+  plays: Array<AnsiblePlay>;
+};
+
+export type AnsibleRunnerSummary = {
+  version?: string;
+  status: "successful" | "failed" | "timeout" | "canceled";
+  exitCode: number;
+};
+
+export type AnsiblePlaybookSummary = {
+  complete: boolean;
+  hosts: number;
+  plays: number;
+  tasks: number;
+  results: AnsibleOutcomeCounts;
+  hostTotals: Array<AnsibleHostTotals>;
+};
+
+export type AnsibleOutcomeCounts = {
+  total: number;
+  ok: number;
+  changed: number;
+  failed: number;
+  unreachable: number;
+  skipped: number;
+};
+
+export type AnsibleHostTotals = {
+  host: string;
+  ok: number;
+  changed: number;
+  failed: number;
+  unreachable: number;
+  skipped: number;
+  rescued: number;
+  ignored: number;
+};
+
+export type AnsiblePlay = {
+  order: number;
+  id: string;
+  name: string;
+  tasks: Array<AnsibleTask>;
+};
+
+export type AnsibleTask = {
+  order: number;
+  id: string;
+  name: string;
+  action: string;
+  sourcePath?: string;
+  redacted: boolean;
+  results: Array<AnsibleTaskResult>;
+};
+
+export type AnsibleTaskResult = {
+  order: number;
+  host: string;
+  outcome: "ok" | "changed" | "failed" | "unreachable" | "skipped";
+  loopItem: boolean;
+  ignoredFailure: boolean;
 };
 
 export type LogCursor = {

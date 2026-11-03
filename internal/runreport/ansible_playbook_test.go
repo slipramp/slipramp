@@ -142,6 +142,14 @@ func TestDecodeAnsiblePlaybookFixtures(t *testing.T) {
 			if err := decoded.Validate(); err != nil {
 				t.Fatalf("round-trip report validation error = %v", err)
 			}
+
+			projection, err := DecodeProjection(AnsiblePlaybookKind, bytes.NewReader(encoded))
+			if err != nil {
+				t.Fatalf("DecodeProjection() error = %v", err)
+			}
+			if _, ok := projection.(*AnsiblePlaybookReport); !ok {
+				t.Fatalf("DecodeProjection() = %T", projection)
+			}
 		})
 	}
 }
@@ -345,6 +353,16 @@ func TestAnsiblePlaybookAdapter(t *testing.T) {
 	}
 	if _, ok := report.(*AnsiblePlaybookReport); !ok {
 		t.Fatalf("adapter.Decode() = %T", report)
+	}
+}
+
+func TestAnsiblePlaybookAdapterRegistry(t *testing.T) {
+	t.Parallel()
+
+	adapter, found := AdapterForMediaType(AnsiblePlaybookMediaType + "; charset=utf-8")
+	if !found || adapter.Kind() != AnsiblePlaybookKind ||
+		adapter.MaximumSourceSizeBytes() != MaximumAnsiblePlaybookSourceSizeBytes {
+		t.Fatalf("AdapterForMediaType() = %#v, %t", adapter, found)
 	}
 }
 

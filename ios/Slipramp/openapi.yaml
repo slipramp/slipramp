@@ -6352,12 +6352,14 @@ components:
         - $ref: '#/components/schemas/TerraformPlanReportSummary'
         - $ref: '#/components/schemas/OpenTofuPlanReportSummary'
         - $ref: '#/components/schemas/PyinfraDeployReportSummary'
+        - $ref: '#/components/schemas/AnsiblePlaybookReportSummary'
       discriminator:
         propertyName: kind
         mapping:
           terraform-plan: '#/components/schemas/TerraformPlanReportSummary'
           opentofu-plan: '#/components/schemas/OpenTofuPlanReportSummary'
           pyinfra-deploy: '#/components/schemas/PyinfraDeployReportSummary'
+          ansible-playbook: '#/components/schemas/AnsiblePlaybookReportSummary'
     RunReportEnvelope:
       type: object
       required:
@@ -6382,6 +6384,7 @@ components:
             - terraform-plan
             - opentofu-plan
             - pyinfra-deploy
+            - ansible-playbook
         schemaVersion:
           type: integer
           minimum: 1
@@ -6409,12 +6412,14 @@ components:
         - $ref: '#/components/schemas/TerraformPlanReport'
         - $ref: '#/components/schemas/OpenTofuPlanReport'
         - $ref: '#/components/schemas/PyinfraDeployReport'
+        - $ref: '#/components/schemas/AnsiblePlaybookReport'
       discriminator:
         propertyName: kind
         mapping:
           terraform-plan: '#/components/schemas/TerraformPlanReport'
           opentofu-plan: '#/components/schemas/OpenTofuPlanReport'
           pyinfra-deploy: '#/components/schemas/PyinfraDeployReport'
+          ansible-playbook: '#/components/schemas/AnsiblePlaybookReport'
     TerraformPlanReportSummary:
       allOf:
         - $ref: '#/components/schemas/RunReportEnvelope'
@@ -6825,6 +6830,276 @@ components:
           $ref: '#/components/schemas/PyinfraHostList'
         unchangedHosts:
           $ref: '#/components/schemas/PyinfraHostList'
+    AnsiblePlaybookReportSummary:
+      allOf:
+        - $ref: '#/components/schemas/RunReportEnvelope'
+        - type: object
+          required:
+            - kind
+            - mode
+            - summary
+          properties:
+            kind:
+              type: string
+              enum:
+                - ansible-playbook
+            mode:
+              type: string
+              enum:
+                - preview
+                - apply
+            summary:
+              $ref: '#/components/schemas/AnsiblePlaybookSummary'
+    AnsiblePlaybookReport:
+      allOf:
+        - $ref: '#/components/schemas/RunReportEnvelope'
+        - type: object
+          required:
+            - kind
+            - mode
+            - runner
+            - summary
+            - plays
+          properties:
+            kind:
+              type: string
+              enum:
+                - ansible-playbook
+            mode:
+              type: string
+              enum:
+                - preview
+                - apply
+            runner:
+              $ref: '#/components/schemas/AnsibleRunnerSummary'
+            summary:
+              $ref: '#/components/schemas/AnsiblePlaybookSummary'
+            plays:
+              type: array
+              maxItems: 1000
+              items:
+                $ref: '#/components/schemas/AnsiblePlay'
+    AnsibleRunnerSummary:
+      type: object
+      required:
+        - status
+        - exitCode
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 128
+        status:
+          type: string
+          enum:
+            - successful
+            - failed
+            - timeout
+            - canceled
+        exitCode:
+          type: integer
+          minimum: 0
+          maximum: 255
+    AnsiblePlaybookSummary:
+      type: object
+      required:
+        - complete
+        - hosts
+        - plays
+        - tasks
+        - results
+        - hostTotals
+      properties:
+        complete:
+          type: boolean
+        hosts:
+          type: integer
+          minimum: 0
+          maximum: 128
+        plays:
+          type: integer
+          minimum: 0
+          maximum: 1000
+        tasks:
+          type: integer
+          minimum: 0
+          maximum: 20000
+        results:
+          $ref: '#/components/schemas/AnsibleOutcomeCounts'
+        hostTotals:
+          type: array
+          maxItems: 128
+          items:
+            $ref: '#/components/schemas/AnsibleHostTotals'
+    AnsibleOutcomeCounts:
+      type: object
+      required:
+        - total
+        - ok
+        - changed
+        - failed
+        - unreachable
+        - skipped
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        ok:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        changed:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        failed:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        unreachable:
+          type: integer
+          minimum: 0
+          maximum: 100000
+        skipped:
+          type: integer
+          minimum: 0
+          maximum: 100000
+    AnsibleHostTotals:
+      type: object
+      required:
+        - host
+        - ok
+        - changed
+        - failed
+        - unreachable
+        - skipped
+        - rescued
+        - ignored
+      properties:
+        host:
+          type: string
+          minLength: 1
+          maxLength: 253
+        ok:
+          type: integer
+          minimum: 0
+          maximum: 200000
+        changed:
+          type: integer
+          minimum: 0
+          maximum: 200000
+        failed:
+          type: integer
+          minimum: 0
+          maximum: 200000
+        unreachable:
+          type: integer
+          minimum: 0
+          maximum: 200000
+        skipped:
+          type: integer
+          minimum: 0
+          maximum: 200000
+        rescued:
+          type: integer
+          minimum: 0
+          maximum: 200000
+        ignored:
+          type: integer
+          minimum: 0
+          maximum: 200000
+    AnsiblePlay:
+      type: object
+      required:
+        - order
+        - id
+        - name
+        - tasks
+      properties:
+        order:
+          type: integer
+          minimum: 1
+          maximum: 200000
+        id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        tasks:
+          type: array
+          maxItems: 20000
+          items:
+            $ref: '#/components/schemas/AnsibleTask'
+    AnsibleTask:
+      type: object
+      required:
+        - order
+        - id
+        - name
+        - action
+        - redacted
+        - results
+      properties:
+        order:
+          type: integer
+          minimum: 1
+          maximum: 200000
+        id:
+          type: string
+          minLength: 1
+          maxLength: 256
+        name:
+          type: string
+          minLength: 1
+          maxLength: 512
+        action:
+          type: string
+          minLength: 1
+          maxLength: 256
+        sourcePath:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        redacted:
+          type: boolean
+        results:
+          type: array
+          maxItems: 100000
+          items:
+            $ref: '#/components/schemas/AnsibleTaskResult'
+    AnsibleTaskResult:
+      type: object
+      required:
+        - order
+        - host
+        - outcome
+        - loopItem
+        - ignoredFailure
+      properties:
+        order:
+          type: integer
+          minimum: 1
+          maximum: 200000
+        host:
+          type: string
+          minLength: 1
+          maxLength: 253
+        outcome:
+          type: string
+          enum:
+            - ok
+            - changed
+            - failed
+            - unreachable
+            - skipped
+        loopItem:
+          type: boolean
+        ignoredFailure:
+          type: boolean
     LogCursor:
       type: object
       required:

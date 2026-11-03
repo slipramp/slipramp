@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	TerraformPlanMediaType = "application/vnd.slipramp.terraform-plan+json"
-	OpenTofuPlanMediaType  = "application/vnd.slipramp.opentofu-plan+json"
-	PyinfraDeployMediaType = "application/vnd.slipramp.pyinfra-deploy+json"
+	TerraformPlanMediaType   = "application/vnd.slipramp.terraform-plan+json"
+	OpenTofuPlanMediaType    = "application/vnd.slipramp.opentofu-plan+json"
+	PyinfraDeployMediaType   = "application/vnd.slipramp.pyinfra-deploy+json"
+	AnsiblePlaybookMediaType = "application/vnd.slipramp.ansible-playbook+json"
 
 	TerraformPlanKind ReportKind = "terraform-plan"
 	OpenTofuPlanKind  ReportKind = "opentofu-plan"
@@ -86,17 +87,20 @@ var openTofuPlanReportAdapter registeredAdapter = infrastructurePlanAdapter{
 	tool: "opentofu",
 }
 var pyinfraDeployReportAdapter registeredAdapter = pyinfraDeployAdapter{}
+var ansiblePlaybookReportAdapter registeredAdapter = ansiblePlaybookAdapter{}
 
 var adaptersByMediaType = map[string]registeredAdapter{
-	TerraformPlanMediaType: terraformPlanReportAdapter,
-	OpenTofuPlanMediaType:  openTofuPlanReportAdapter,
-	PyinfraDeployMediaType: pyinfraDeployReportAdapter,
+	TerraformPlanMediaType:   terraformPlanReportAdapter,
+	OpenTofuPlanMediaType:    openTofuPlanReportAdapter,
+	PyinfraDeployMediaType:   pyinfraDeployReportAdapter,
+	AnsiblePlaybookMediaType: ansiblePlaybookReportAdapter,
 }
 
 var adaptersByKind = map[ReportKind]registeredAdapter{
-	TerraformPlanKind: terraformPlanReportAdapter,
-	OpenTofuPlanKind:  openTofuPlanReportAdapter,
-	PyinfraDeployKind: pyinfraDeployReportAdapter,
+	TerraformPlanKind:   terraformPlanReportAdapter,
+	OpenTofuPlanKind:    openTofuPlanReportAdapter,
+	PyinfraDeployKind:   pyinfraDeployReportAdapter,
+	AnsiblePlaybookKind: ansiblePlaybookReportAdapter,
 }
 
 func AdapterForMediaType(value string) (Adapter, bool) {

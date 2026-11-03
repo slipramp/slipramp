@@ -112,6 +112,12 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		artifact.ReportIngestionSucceeded,
 		80*time.Millisecond,
 	)
+	metrics.ObserveReportIngestion(
+		t.Context(),
+		runreport.AnsiblePlaybookKind,
+		artifact.ReportIngestionSucceeded,
+		85*time.Millisecond,
+	)
 	metrics.ObserveMCPToolCall(
 		t.Context(),
 		"list_targets",
@@ -214,6 +220,14 @@ func TestTelemetryExportsPrivateSemanticMetrics(t *testing.T) {
 		firstScrape,
 		"slipramp_artifact_report_ingestions_total",
 		`report_kind="opentofu-plan"`,
+		`result="succeeded"`,
+		" 1",
+	)
+	assertMetricLine(
+		t,
+		firstScrape,
+		"slipramp_artifact_report_ingestions_total",
+		`report_kind="ansible-playbook"`,
 		`result="succeeded"`,
 		" 1",
 	)

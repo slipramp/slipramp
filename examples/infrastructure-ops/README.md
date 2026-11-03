@@ -19,11 +19,13 @@ process boundary.
 ## Actions
 
 The Ansible target offers `preview`, fixed-host `canary`, and direct `sync`
-actions through the product-owned helper in the Runtime image. It also has a
-`direct-playbook` action that invokes `ansible-playbook` without Runner or a
-structured report. The inventory, playbook, derived image pattern, and
-authoring guidance are checked in under [`ansible`](./ansible); operators do
-not copy Slipramp's report protocol into their repositories.
+actions through the product-owned helper in the Runtime image. Those Actions
+publish a sensitive native Ansible report whose bounded projection is available
+for structured display. The target also has a `direct-playbook` action that
+invokes `ansible-playbook` without Runner or a structured report. The inventory,
+playbook, derived image pattern, and authoring guidance are checked in under
+[`ansible`](./ansible); operators do not copy Slipramp's report protocol into
+their repositories.
 
 The node_exporter target offers:
 

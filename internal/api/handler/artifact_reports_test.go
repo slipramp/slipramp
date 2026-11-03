@@ -226,6 +226,48 @@ func TestPyinfraDeployReportResponses(t *testing.T) {
 	}
 }
 
+func TestAnsiblePlaybookReportResponses(t *testing.T) {
+	t.Parallel()
+
+	content := handlerAnsibleReportContent(t)
+	response, err := runReportResponse(content)
+	if err != nil {
+		t.Fatalf("runReportResponse() error = %v", err)
+	}
+	report, err := response.AsAnsiblePlaybookReport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Mode != api.AnsiblePlaybookReportModeApply ||
+		report.Runner.Status != api.AnsibleRunnerSummaryStatusSuccessful ||
+		report.Summary.Results.Ok != 1 || len(report.Summary.HostTotals) != 1 ||
+		len(report.Plays) != 1 || len(report.Plays[0].Tasks) != 1 {
+		t.Fatalf("runReportResponse() report = %#v", report)
+	}
+	task := report.Plays[0].Tasks[0]
+	if !task.Redacted || task.Name != "[redacted]" || task.Action != "[redacted]" ||
+		task.SourcePath != nil || len(task.Results) != 1 ||
+		task.Results[0].Outcome != api.AnsibleTaskResultOutcomeOk {
+		t.Errorf("runReportResponse() redacted task = %#v", task)
+	}
+
+	artifactResponse, err := artifactResponse(artifact.Record{
+		Artifact: content.Artifact,
+		Report:   &content.Metadata,
+	}, api.GitCommit{})
+	if err != nil {
+		t.Fatalf("artifactResponse() error = %v", err)
+	}
+	summary, err := artifactResponse.Report.AsAnsiblePlaybookReportSummary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Mode != api.AnsiblePlaybookReportSummaryModeApply || !summary.Summary.Complete ||
+		summary.Summary.Hosts != 1 || summary.Summary.HostTotals[0].Host != "node01.example.com" {
+		t.Errorf("artifactResponse() summary = %#v", summary)
+	}
+}
+
 func handlerReportContent(t *testing.T) artifact.ReportContent {
 	t.Helper()
 
@@ -309,6 +351,51 @@ func handlerPyinfraReportContent(t *testing.T, results string) artifact.ReportCo
 		runreport.PyinfraDeployMediaType,
 		"runs/report/artifacts/deploy-report/reports/pyinfra-deploy-v1.json",
 		time.Date(2026, time.October, 29, 16, 0, 0, 0, time.UTC),
+	)
+}
+
+func handlerAnsibleReportContent(t *testing.T) artifact.ReportContent {
+	t.Helper()
+
+	report, err := runreport.DecodeAnsiblePlaybook(strings.NewReader(`{
+		"schemaVersion":1,
+		"mode":"apply",
+		"versions":{"ansibleCore":"2.21.5","ansibleRunner":"2.4.3"},
+		"runner":{"status":"successful","exitCode":0},
+		"events":[
+			{"counter":1,"uuid":"play-event","event":"playbook_on_play_start","event_data":{
+				"uuid":"play","name":"Configure credentials","play":"Configure credentials","play_uuid":"play"
+			}},
+			{"counter":2,"uuid":"task-event","event":"playbook_on_task_start","event_data":{
+				"play":"Configure credentials","play_uuid":"play","task":"Install source-only-secret-token",
+				"task_uuid":"task","task_action":"source-only-secret-action",
+				"task_path":"/workspace/ansible/source-only-secret-path.yml:3"
+			}},
+			{"counter":3,"uuid":"result-event","event":"runner_on_ok","event_data":{
+				"play":"Configure credentials","play_uuid":"play","task":"Install source-only-secret-token",
+				"task_uuid":"task","task_action":"source-only-secret-action",
+				"task_path":"/workspace/ansible/source-only-secret-path.yml:3","host":"node01.example.com",
+				"res":{"censored":"the output has been hidden","future_secret":"source-only-secret-result"}
+			}},
+			{"counter":4,"uuid":"stats-event","event":"playbook_on_stats","event_data":{
+				"changed":{"node01.example.com":0},"dark":{"node01.example.com":0},
+				"failures":{"node01.example.com":0},"ignored":{"node01.example.com":0},
+				"ok":{"node01.example.com":1},"processed":{"node01.example.com":1},
+				"rescued":{"node01.example.com":0},"skipped":{"node01.example.com":0}
+			}}
+		]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return newHandlerReportContent(
+		t,
+		&report,
+		"ansible-report",
+		runreport.AnsiblePlaybookMediaType,
+		"runs/report/artifacts/ansible-report/reports/ansible-playbook-v1.json",
+		time.Date(2026, time.November, 2, 16, 0, 0, 0, time.UTC),
 	)
 }
 

@@ -37,6 +37,123 @@ func (e ActionTriggerReview) Valid() bool {
 	}
 }
 
+// Defines values for AnsiblePlaybookReportKind.
+const (
+	AnsiblePlaybookReportKindAnsiblePlaybook AnsiblePlaybookReportKind = "ansible-playbook"
+)
+
+// Valid indicates whether the value is a known member of the AnsiblePlaybookReportKind enum.
+func (e AnsiblePlaybookReportKind) Valid() bool {
+	switch e {
+	case AnsiblePlaybookReportKindAnsiblePlaybook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AnsiblePlaybookReportMode.
+const (
+	AnsiblePlaybookReportModeApply   AnsiblePlaybookReportMode = "apply"
+	AnsiblePlaybookReportModePreview AnsiblePlaybookReportMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the AnsiblePlaybookReportMode enum.
+func (e AnsiblePlaybookReportMode) Valid() bool {
+	switch e {
+	case AnsiblePlaybookReportModeApply:
+		return true
+	case AnsiblePlaybookReportModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AnsiblePlaybookReportSummaryKind.
+const (
+	AnsiblePlaybookReportSummaryKindAnsiblePlaybook AnsiblePlaybookReportSummaryKind = "ansible-playbook"
+)
+
+// Valid indicates whether the value is a known member of the AnsiblePlaybookReportSummaryKind enum.
+func (e AnsiblePlaybookReportSummaryKind) Valid() bool {
+	switch e {
+	case AnsiblePlaybookReportSummaryKindAnsiblePlaybook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AnsiblePlaybookReportSummaryMode.
+const (
+	AnsiblePlaybookReportSummaryModeApply   AnsiblePlaybookReportSummaryMode = "apply"
+	AnsiblePlaybookReportSummaryModePreview AnsiblePlaybookReportSummaryMode = "preview"
+)
+
+// Valid indicates whether the value is a known member of the AnsiblePlaybookReportSummaryMode enum.
+func (e AnsiblePlaybookReportSummaryMode) Valid() bool {
+	switch e {
+	case AnsiblePlaybookReportSummaryModeApply:
+		return true
+	case AnsiblePlaybookReportSummaryModePreview:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AnsibleRunnerSummaryStatus.
+const (
+	AnsibleRunnerSummaryStatusCanceled   AnsibleRunnerSummaryStatus = "canceled"
+	AnsibleRunnerSummaryStatusFailed     AnsibleRunnerSummaryStatus = "failed"
+	AnsibleRunnerSummaryStatusSuccessful AnsibleRunnerSummaryStatus = "successful"
+	AnsibleRunnerSummaryStatusTimeout    AnsibleRunnerSummaryStatus = "timeout"
+)
+
+// Valid indicates whether the value is a known member of the AnsibleRunnerSummaryStatus enum.
+func (e AnsibleRunnerSummaryStatus) Valid() bool {
+	switch e {
+	case AnsibleRunnerSummaryStatusCanceled:
+		return true
+	case AnsibleRunnerSummaryStatusFailed:
+		return true
+	case AnsibleRunnerSummaryStatusSuccessful:
+		return true
+	case AnsibleRunnerSummaryStatusTimeout:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AnsibleTaskResultOutcome.
+const (
+	AnsibleTaskResultOutcomeChanged     AnsibleTaskResultOutcome = "changed"
+	AnsibleTaskResultOutcomeFailed      AnsibleTaskResultOutcome = "failed"
+	AnsibleTaskResultOutcomeOk          AnsibleTaskResultOutcome = "ok"
+	AnsibleTaskResultOutcomeSkipped     AnsibleTaskResultOutcome = "skipped"
+	AnsibleTaskResultOutcomeUnreachable AnsibleTaskResultOutcome = "unreachable"
+)
+
+// Valid indicates whether the value is a known member of the AnsibleTaskResultOutcome enum.
+func (e AnsibleTaskResultOutcome) Valid() bool {
+	switch e {
+	case AnsibleTaskResultOutcomeChanged:
+		return true
+	case AnsibleTaskResultOutcomeFailed:
+		return true
+	case AnsibleTaskResultOutcomeOk:
+		return true
+	case AnsibleTaskResultOutcomeSkipped:
+		return true
+	case AnsibleTaskResultOutcomeUnreachable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ArtifactKind.
 const (
 	Log    ArtifactKind = "log"
@@ -195,13 +312,13 @@ func (e DependencyStatus) Valid() bool {
 
 // Defines values for HealthResponseStatus.
 const (
-	Ok HealthResponseStatus = "ok"
+	HealthResponseStatusOk HealthResponseStatus = "ok"
 )
 
 // Valid indicates whether the value is a known member of the HealthResponseStatus enum.
 func (e HealthResponseStatus) Valid() bool {
 	switch e {
-	case Ok:
+	case HealthResponseStatusOk:
 		return true
 	default:
 		return false
@@ -1227,14 +1344,17 @@ func (e RunPhase) Valid() bool {
 
 // Defines values for RunReportEnvelopeKind.
 const (
-	RunReportEnvelopeKindOpentofuPlan  RunReportEnvelopeKind = "opentofu-plan"
-	RunReportEnvelopeKindPyinfraDeploy RunReportEnvelopeKind = "pyinfra-deploy"
-	RunReportEnvelopeKindTerraformPlan RunReportEnvelopeKind = "terraform-plan"
+	RunReportEnvelopeKindAnsiblePlaybook RunReportEnvelopeKind = "ansible-playbook"
+	RunReportEnvelopeKindOpentofuPlan    RunReportEnvelopeKind = "opentofu-plan"
+	RunReportEnvelopeKindPyinfraDeploy   RunReportEnvelopeKind = "pyinfra-deploy"
+	RunReportEnvelopeKindTerraformPlan   RunReportEnvelopeKind = "terraform-plan"
 )
 
 // Valid indicates whether the value is a known member of the RunReportEnvelopeKind enum.
 func (e RunReportEnvelopeKind) Valid() bool {
 	switch e {
+	case RunReportEnvelopeKindAnsiblePlaybook:
+		return true
 	case RunReportEnvelopeKindOpentofuPlan:
 		return true
 	case RunReportEnvelopeKindPyinfraDeploy:
@@ -1657,6 +1777,121 @@ type ActionTrigger struct {
 
 // ActionTriggerReview Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
 type ActionTriggerReview string
+
+// AnsibleHostTotals defines model for AnsibleHostTotals.
+type AnsibleHostTotals struct {
+	Changed     int    `json:"changed"`
+	Failed      int    `json:"failed"`
+	Host        string `json:"host"`
+	Ignored     int    `json:"ignored"`
+	Ok          int    `json:"ok"`
+	Rescued     int    `json:"rescued"`
+	Skipped     int    `json:"skipped"`
+	Unreachable int    `json:"unreachable"`
+}
+
+// AnsibleOutcomeCounts defines model for AnsibleOutcomeCounts.
+type AnsibleOutcomeCounts struct {
+	Changed     int `json:"changed"`
+	Failed      int `json:"failed"`
+	Ok          int `json:"ok"`
+	Skipped     int `json:"skipped"`
+	Total       int `json:"total"`
+	Unreachable int `json:"unreachable"`
+}
+
+// AnsiblePlay defines model for AnsiblePlay.
+type AnsiblePlay struct {
+	ID    string        `json:"id"`
+	Name  string        `json:"name"`
+	Order int           `json:"order"`
+	Tasks []AnsibleTask `json:"tasks"`
+}
+
+// AnsiblePlaybookReport defines model for AnsiblePlaybookReport.
+type AnsiblePlaybookReport struct {
+	AdapterVersion int                       `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID        `json:"artifactId"`
+	CreatedAt      time.Time                 `json:"createdAt"`
+	Kind           AnsiblePlaybookReportKind `json:"kind"`
+	Mode           AnsiblePlaybookReportMode `json:"mode"`
+	Plays          []AnsiblePlay             `json:"plays"`
+	RunID          openapi_types.UUID        `json:"runId"`
+	Runner         AnsibleRunnerSummary      `json:"runner"`
+	SchemaVersion  int                       `json:"schemaVersion"`
+	Summary        AnsiblePlaybookSummary    `json:"summary"`
+	Tool           string                    `json:"tool"`
+	ToolVersion    *string                   `json:"toolVersion,omitempty"`
+}
+
+// AnsiblePlaybookReportKind defines model for AnsiblePlaybookReport.Kind.
+type AnsiblePlaybookReportKind string
+
+// AnsiblePlaybookReportMode defines model for AnsiblePlaybookReport.Mode.
+type AnsiblePlaybookReportMode string
+
+// AnsiblePlaybookReportSummary defines model for AnsiblePlaybookReportSummary.
+type AnsiblePlaybookReportSummary struct {
+	AdapterVersion int                              `json:"adapterVersion"`
+	ArtifactID     openapi_types.UUID               `json:"artifactId"`
+	CreatedAt      time.Time                        `json:"createdAt"`
+	Kind           AnsiblePlaybookReportSummaryKind `json:"kind"`
+	Mode           AnsiblePlaybookReportSummaryMode `json:"mode"`
+	RunID          openapi_types.UUID               `json:"runId"`
+	SchemaVersion  int                              `json:"schemaVersion"`
+	Summary        AnsiblePlaybookSummary           `json:"summary"`
+	Tool           string                           `json:"tool"`
+	ToolVersion    *string                          `json:"toolVersion,omitempty"`
+}
+
+// AnsiblePlaybookReportSummaryKind defines model for AnsiblePlaybookReportSummary.Kind.
+type AnsiblePlaybookReportSummaryKind string
+
+// AnsiblePlaybookReportSummaryMode defines model for AnsiblePlaybookReportSummary.Mode.
+type AnsiblePlaybookReportSummaryMode string
+
+// AnsiblePlaybookSummary defines model for AnsiblePlaybookSummary.
+type AnsiblePlaybookSummary struct {
+	Complete   bool                 `json:"complete"`
+	HostTotals []AnsibleHostTotals  `json:"hostTotals"`
+	Hosts      int                  `json:"hosts"`
+	Plays      int                  `json:"plays"`
+	Results    AnsibleOutcomeCounts `json:"results"`
+	Tasks      int                  `json:"tasks"`
+}
+
+// AnsibleRunnerSummary defines model for AnsibleRunnerSummary.
+type AnsibleRunnerSummary struct {
+	ExitCode int                        `json:"exitCode"`
+	Status   AnsibleRunnerSummaryStatus `json:"status"`
+	Version  *string                    `json:"version,omitempty"`
+}
+
+// AnsibleRunnerSummaryStatus defines model for AnsibleRunnerSummary.Status.
+type AnsibleRunnerSummaryStatus string
+
+// AnsibleTask defines model for AnsibleTask.
+type AnsibleTask struct {
+	Action     string              `json:"action"`
+	ID         string              `json:"id"`
+	Name       string              `json:"name"`
+	Order      int                 `json:"order"`
+	Redacted   bool                `json:"redacted"`
+	Results    []AnsibleTaskResult `json:"results"`
+	SourcePath *string             `json:"sourcePath,omitempty"`
+}
+
+// AnsibleTaskResult defines model for AnsibleTaskResult.
+type AnsibleTaskResult struct {
+	Host           string                   `json:"host"`
+	IgnoredFailure bool                     `json:"ignoredFailure"`
+	LoopItem       bool                     `json:"loopItem"`
+	Order          int                      `json:"order"`
+	Outcome        AnsibleTaskResultOutcome `json:"outcome"`
+}
+
+// AnsibleTaskResultOutcome defines model for AnsibleTaskResult.Outcome.
+type AnsibleTaskResultOutcome string
 
 // Artifact defines model for Artifact.
 type Artifact struct {
@@ -4543,6 +4778,40 @@ func (t *RunReport) MergePyinfraDeployReport(v PyinfraDeployReport) error {
 	return err
 }
 
+// AsAnsiblePlaybookReport returns the union data inside the RunReport as a AnsiblePlaybookReport
+func (t RunReport) AsAnsiblePlaybookReport() (AnsiblePlaybookReport, error) {
+	var body AnsiblePlaybookReport
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAnsiblePlaybookReport overwrites any union data inside the RunReport as the provided AnsiblePlaybookReport
+func (t *RunReport) FromAnsiblePlaybookReport(v AnsiblePlaybookReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"ansible-playbook"}`))
+	t.union = b
+	return err
+}
+
+// MergeAnsiblePlaybookReport performs a merge with any union data inside the RunReport, using the provided AnsiblePlaybookReport
+func (t *RunReport) MergeAnsiblePlaybookReport(v AnsiblePlaybookReport) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"ansible-playbook"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RunReport) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"kind"`
@@ -4557,6 +4826,8 @@ func (t RunReport) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "ansible-playbook":
+		return t.AsAnsiblePlaybookReport()
 	case "opentofu-plan":
 		return t.AsOpenTofuPlanReport()
 	case "pyinfra-deploy":
@@ -4680,6 +4951,40 @@ func (t *RunReportSummary) MergePyinfraDeployReportSummary(v PyinfraDeployReport
 	return err
 }
 
+// AsAnsiblePlaybookReportSummary returns the union data inside the RunReportSummary as a AnsiblePlaybookReportSummary
+func (t RunReportSummary) AsAnsiblePlaybookReportSummary() (AnsiblePlaybookReportSummary, error) {
+	var body AnsiblePlaybookReportSummary
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAnsiblePlaybookReportSummary overwrites any union data inside the RunReportSummary as the provided AnsiblePlaybookReportSummary
+func (t *RunReportSummary) FromAnsiblePlaybookReportSummary(v AnsiblePlaybookReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"ansible-playbook"}`))
+	t.union = b
+	return err
+}
+
+// MergeAnsiblePlaybookReportSummary performs a merge with any union data inside the RunReportSummary, using the provided AnsiblePlaybookReportSummary
+func (t *RunReportSummary) MergeAnsiblePlaybookReportSummary(v AnsiblePlaybookReportSummary) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"kind":"ansible-playbook"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t RunReportSummary) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"kind"`
@@ -4694,6 +4999,8 @@ func (t RunReportSummary) ValueByDiscriminator() (interface{}, error) {
 		return nil, err
 	}
 	switch discriminator {
+	case "ansible-playbook":
+		return t.AsAnsiblePlaybookReportSummary()
 	case "opentofu-plan":
 		return t.AsOpenTofuPlanReportSummary()
 	case "pyinfra-deploy":

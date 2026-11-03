@@ -50,6 +50,8 @@ func reportSummaryResponse(record artifact.Record) (*api.RunReportSummary, error
 		return infrastructurePlanReportSummaryResponse(record)
 	case runreport.PyinfraDeployKind:
 		return pyinfraDeployReportSummaryResponse(record)
+	case runreport.AnsiblePlaybookKind:
+		return ansiblePlaybookReportSummaryResponse(record)
 	default:
 		return nil, fmt.Errorf("run report kind %q is not supported", record.Report.Kind)
 	}
@@ -61,6 +63,8 @@ func runReportResponse(content artifact.ReportContent) (api.RunReport, error) {
 		return infrastructurePlanReportResponse(content, report)
 	case *runreport.PyinfraDeployReport:
 		return pyinfraDeployReportResponse(content, report)
+	case *runreport.AnsiblePlaybookReport:
+		return ansiblePlaybookReportResponse(content, report)
 	default:
 		return api.RunReport{}, fmt.Errorf("run report kind %q is not supported", content.Metadata.Kind)
 	}
@@ -274,6 +278,153 @@ func pyinfraOperationResponses(operations []runreport.PyinfraOperation) []api.Py
 			}
 		}
 		result = append(result, response)
+	}
+
+	return result
+}
+
+func ansiblePlaybookReportSummaryResponse(record artifact.Record) (*api.RunReportSummary, error) {
+	summary, err := ansiblePlaybookSummaryResponse(record.Report.Summary)
+	if err != nil {
+		return nil, err
+	}
+	body := api.AnsiblePlaybookReportSummary{
+		ArtifactID:     record.ID,
+		RunID:          record.RunID,
+		Kind:           api.AnsiblePlaybookReportSummaryKind(record.Report.Kind),
+		SchemaVersion:  record.Report.SchemaVersion,
+		AdapterVersion: record.Report.AdapterVersion,
+		Tool:           record.Report.Tool,
+		ToolVersion:    optionalString(record.Report.ToolVersion),
+		Mode:           api.AnsiblePlaybookReportSummaryMode(record.Report.Mode),
+		CreatedAt:      record.Report.CreatedAt,
+		Summary:        summary,
+	}
+	response := &api.RunReportSummary{}
+	if err := response.FromAnsiblePlaybookReportSummary(body); err != nil {
+		return nil, fmt.Errorf("encode Ansible playbook report summary response: %w", err)
+	}
+
+	return response, nil
+}
+
+func ansiblePlaybookReportResponse(
+	content artifact.ReportContent,
+	report *runreport.AnsiblePlaybookReport,
+) (api.RunReport, error) {
+	if report == nil {
+		return api.RunReport{}, errors.New("ansible playbook report is missing")
+	}
+	summary, err := ansiblePlaybookSummaryResponse(&report.Summary)
+	if err != nil {
+		return api.RunReport{}, err
+	}
+	body := api.AnsiblePlaybookReport{
+		ArtifactID:     content.Artifact.ID,
+		RunID:          content.Artifact.RunID,
+		Kind:           api.AnsiblePlaybookReportKind(report.Kind),
+		SchemaVersion:  report.SchemaVersion,
+		AdapterVersion: report.AdapterVersion,
+		Tool:           report.Tool,
+		ToolVersion:    optionalString(report.ToolVersion),
+		Mode:           api.AnsiblePlaybookReportMode(report.Mode),
+		CreatedAt:      content.Metadata.CreatedAt,
+		Runner: api.AnsibleRunnerSummary{
+			Version:  optionalString(report.Runner.Version),
+			Status:   api.AnsibleRunnerSummaryStatus(report.Runner.Status),
+			ExitCode: report.Runner.ExitCode,
+		},
+		Summary: summary,
+		Plays:   ansiblePlayResponses(report.Plays),
+	}
+	response := api.RunReport{}
+	if err := response.FromAnsiblePlaybookReport(body); err != nil {
+		return api.RunReport{}, fmt.Errorf("encode Ansible playbook report response: %w", err)
+	}
+
+	return response, nil
+}
+
+func ansiblePlaybookSummaryResponse(value runreport.Summary) (api.AnsiblePlaybookSummary, error) {
+	summary, ok := value.(*runreport.AnsiblePlaybookSummary)
+	if !ok {
+		return api.AnsiblePlaybookSummary{}, fmt.Errorf("run report summary type %T is not supported", value)
+	}
+	if summary == nil {
+		return api.AnsiblePlaybookSummary{}, errors.New("ansible playbook report summary is missing")
+	}
+
+	return api.AnsiblePlaybookSummary{
+		Complete: summary.Complete,
+		Hosts:    summary.Hosts,
+		Plays:    summary.Plays,
+		Tasks:    summary.Tasks,
+		Results: api.AnsibleOutcomeCounts{
+			Total:       summary.Results.Total,
+			Ok:          summary.Results.OK,
+			Changed:     summary.Results.Changed,
+			Failed:      summary.Results.Failed,
+			Unreachable: summary.Results.Unreachable,
+			Skipped:     summary.Results.Skipped,
+		},
+		HostTotals: ansibleHostTotalResponses(summary.HostTotals),
+	}, nil
+}
+
+func ansibleHostTotalResponses(totals []runreport.AnsibleHostTotals) []api.AnsibleHostTotals {
+	result := make([]api.AnsibleHostTotals, 0, len(totals))
+	for _, total := range totals {
+		result = append(result, api.AnsibleHostTotals{
+			Host:        total.Host,
+			Ok:          total.OK,
+			Changed:     total.Changed,
+			Failed:      total.Failed,
+			Unreachable: total.Unreachable,
+			Skipped:     total.Skipped,
+			Rescued:     total.Rescued,
+			Ignored:     total.Ignored,
+		})
+	}
+
+	return result
+}
+
+func ansiblePlayResponses(plays []runreport.AnsiblePlay) []api.AnsiblePlay {
+	result := make([]api.AnsiblePlay, 0, len(plays))
+	for _, play := range plays {
+		result = append(result, api.AnsiblePlay{
+			Order: play.Order,
+			ID:    play.ID,
+			Name:  play.Name,
+			Tasks: ansibleTaskResponses(play.Tasks),
+		})
+	}
+
+	return result
+}
+
+func ansibleTaskResponses(tasks []runreport.AnsibleTask) []api.AnsibleTask {
+	result := make([]api.AnsibleTask, 0, len(tasks))
+	for _, task := range tasks {
+		results := make([]api.AnsibleTaskResult, 0, len(task.Results))
+		for _, taskResult := range task.Results {
+			results = append(results, api.AnsibleTaskResult{
+				Order:          taskResult.Order,
+				Host:           taskResult.Host,
+				Outcome:        api.AnsibleTaskResultOutcome(taskResult.Outcome),
+				LoopItem:       taskResult.LoopItem,
+				IgnoredFailure: taskResult.IgnoredFailure,
+			})
+		}
+		result = append(result, api.AnsibleTask{
+			Order:      task.Order,
+			ID:         task.ID,
+			Name:       task.Name,
+			Action:     task.Action,
+			SourcePath: optionalString(task.SourcePath),
+			Redacted:   task.Redacted,
+			Results:    results,
+		})
 	}
 
 	return result

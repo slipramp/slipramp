@@ -457,6 +457,101 @@ func TestPyinfraArtifactReportPersistenceIntegration(t *testing.T) {
 	}
 }
 
+func TestAnsibleArtifactReportPersistenceIntegration(t *testing.T) {
+	ctx, _, database := openIntegrationDatabase(t)
+	defer database.Close()
+
+	createdAt := time.Date(2026, time.November, 2, 16, 0, 0, 0, time.UTC)
+	runID := createArtifactTestRun(t, ctx, database, createdAt)
+	envelope := runreport.ReportEnvelope{
+		Kind:           runreport.AnsiblePlaybookKind,
+		SchemaVersion:  runreport.AnsiblePlaybookSchemaVersion,
+		AdapterVersion: runreport.AnsiblePlaybookAdapterVersion,
+		Tool:           "ansible",
+		ToolVersion:    "2.21.5",
+		Mode:           runreport.ApplyMode,
+	}
+	report := runreport.AnsiblePlaybookReport{
+		ReportEnvelope: envelope,
+		Runner: runreport.AnsibleRunnerSummary{
+			Version:  "2.4.3",
+			Status:   runreport.AnsibleRunnerStatusSuccessful,
+			ExitCode: 0,
+		},
+		Summary: runreport.AnsiblePlaybookSummary{
+			Complete: true,
+			Hosts:    1,
+			Plays:    1,
+			Tasks:    1,
+			Results:  runreport.AnsibleOutcomeCounts{Total: 1, OK: 1},
+			HostTotals: []runreport.AnsibleHostTotals{{
+				Host: "web-1",
+				OK:   1,
+			}},
+		},
+		Plays: []runreport.AnsiblePlay{{
+			Order: 1,
+			ID:    "play",
+			Name:  "Configure web host",
+			Tasks: []runreport.AnsibleTask{{
+				Order:  2,
+				ID:     "task",
+				Name:   "Install package",
+				Action: "package",
+				Results: []runreport.AnsibleTaskResult{{
+					Order:   3,
+					Host:    "web-1",
+					Outcome: runreport.AnsibleOutcomeOK,
+				}},
+			}},
+		}},
+	}
+	projection, err := runreport.Encode(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := strings.Repeat("c", 64)
+	objectKey := "runs/report/artifacts/ansible-report/content-a"
+	record := artifact.Artifact{
+		ID:             uuid.New(),
+		RunID:          runID,
+		Name:           "ansible-report",
+		Kind:           artifact.KindOutput,
+		State:          artifact.StateSealed,
+		MediaType:      runreport.AnsiblePlaybookMediaType,
+		SizeBytes:      1024,
+		SHA256:         &digest,
+		Sensitive:      true,
+		ObjectKey:      &objectKey,
+		RetentionState: artifact.RetentionRetained,
+		CreatedAt:      createdAt,
+		SealedAt:       &createdAt,
+	}
+	metadata, err := runreport.NewArtifactReport(
+		record.ID,
+		report,
+		"runs/report/artifacts/ansible-report/reports/ansible-playbook-v1-a.json",
+		projection,
+		createdAt,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := database.CreateArtifactWithReport(ctx, record, metadata); err != nil {
+		t.Fatalf("CreateArtifactWithReport() error = %v", err)
+	}
+
+	loaded, err := database.GetArtifactReport(ctx, record.ID)
+	if err != nil {
+		t.Fatalf("GetArtifactReport() error = %v", err)
+	}
+	summary, ok := loaded.Summary.(*runreport.AnsiblePlaybookSummary)
+	if !ok || loaded.Kind != runreport.AnsiblePlaybookKind || loaded.Mode != runreport.ApplyMode ||
+		!summary.Complete || summary.Results.OK != 1 || summary.HostTotals[0].Host != "web-1" {
+		t.Errorf("GetArtifactReport() = %#v", loaded)
+	}
+}
+
 func TestArtifactPersistenceIntegration(t *testing.T) {
 	ctx, _, database := openIntegrationDatabase(t)
 	defer database.Close()
