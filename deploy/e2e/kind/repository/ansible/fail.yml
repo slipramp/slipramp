@@ -1,0 +1,8 @@
+---
+- name: Exercise a failed playbook
+  hosts: managed_hosts
+  gather_facts: false
+  tasks:
+    - name: Record exactly one failed execution attempt
+      ansible.builtin.shell: printf 'attempt\n' >> /tmp/slipramp-ansible-failure-attempts; exit 23
+      changed_when: false

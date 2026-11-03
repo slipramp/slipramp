@@ -1,0 +1,17 @@
+---
+- name: Apply the acceptance baseline
+  hosts: managed_hosts
+  gather_facts: false
+  tasks:
+    - name: Write the managed-host marker
+      ansible.builtin.copy:
+        content: "managed by Slipramp Ansible acceptance\n"
+        dest: /tmp/slipramp-ansible-marker
+        mode: "0600"
+
+    - name: Install the injected canary secret
+      ansible.builtin.copy:
+        content: "{{ lookup('ansible.builtin.env', 'ACCEPTANCE_MANAGED_SECRET') }}"
+        dest: /tmp/slipramp-ansible-secret
+        mode: "0600"
+      no_log: true

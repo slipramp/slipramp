@@ -27,6 +27,11 @@ It then verifies the accepted baseline end to end:
   digest-verified through the CLI;
 - promotion of that plan through CLI Artifact input selection into an apply Run
   pinned to its commit and catalog revision;
+- a pinned, non-root Ansible Core and Runner image executing against a separate
+  generated-key SSH host with strict trusted-host verification, including
+  preview, apply, failure, unreachable-host, cancellation, partial structured
+  reports, `no_log` and injected-secret redaction, no implicit retry, ordinary
+  Target serialization, and a direct non-report `ansible-playbook` Action;
 - default per-Target serialization plus CLI queued and running cancellation,
   including the unsuccessful terminal-wait exit contract;
 - controller and Server restart recovery while Runs are active;

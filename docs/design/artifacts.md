@@ -83,6 +83,15 @@ kind, projection version, bounded summary, and projection object metadata; the
 object store holds source and projection bytes. Reading projection detail or
 source content uses sensitive-Artifact authorization.
 
+The Web presents Ansible recap totals and complete or partial status before
+progressively disclosing play, task, and per-host outcomes in event order. It
+supports bounded filtering and pagination, collapses successful unchanged
+tasks by default for large reports, preserves redaction labels, and keeps batch
+host results keyboard and screen-reader navigable. When projection detail or
+source content has expired, retained summary metadata remains visible with an
+explicit expiry notice; source download continues to require sensitive
+Artifact authorization while retained.
+
 Reports are descriptive output. They do not determine Run outcome, prove
 infrastructure state, or create an approval gate.
 

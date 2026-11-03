@@ -143,18 +143,22 @@ ordinary structured display.
 
 The Runtime declares separate `ssh` and `ssh-known-hosts` logical credentials.
 The Target maps them to the example Placement's `ansible-ssh` and
-`ssh-known-hosts` sources. At execution time they become:
+`ssh-known-hosts` sources. The pinned Ansible Core version receives the private
+key through `ANSIBLE_PRIVATE_KEY` and manages its own temporary SSH agent, while
+the trusted host keys are mounted at:
 
 ```text
-/run/slipramp/credentials/ssh/id_ed25519
 /run/slipramp/credentials/ssh/known_hosts
 ```
 
-Runtime environment variables point Ansible at both files and require strict
+This avoids weakening OpenSSH's private-key file permission checks when the
+Runtime runs as a non-root user against a read-only Kubernetes Secret volume.
+Runtime environment variables enable the managed agent and require strict
 host-key checking. Populate `known_hosts` from a trusted provisioning channel;
 do not use a Run-time `ssh-keyscan` of the same untrusted endpoint as a trust
-decision. SSH certificates, agents, alternate connection plugins, and
-inventory variables remain valid alternatives.
+decision. File-based keys prepared with owner-only permissions, externally
+managed agents, SSH certificates, alternate connection plugins, and inventory
+variables remain valid alternatives.
 
 Vault is intentionally absent because this playbook does not use it. A Target
 that needs Vault can inject a password or password-client script through

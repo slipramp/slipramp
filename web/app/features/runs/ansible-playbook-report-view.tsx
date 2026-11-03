@@ -276,7 +276,7 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
             }}
           />
         ) : null}
-        <Text c="dimmed" size="xs">
+        <Text aria-live="polite" c="dimmed" size="xs">
           Showing {paginated.totalTasks.toLocaleString()} of {report.summary.tasks.toLocaleString()}{" "}
           tasks.
           {!showUnchanged && unchangedResults > 0 && !outcomes.includes("ok")
@@ -289,7 +289,7 @@ function AnsiblePlaybookDetail({ report }: Readonly<{ report: AnsiblePlaybookRep
       </Stack>
 
       {paginated.totalTasks === 0 ? (
-        <Text c="dimmed" size="sm">
+        <Text aria-live="polite" c="dimmed" size="sm">
           No playbook tasks match the current filters.
         </Text>
       ) : (
@@ -325,7 +325,13 @@ function AnsiblePlayGroup({ play }: Readonly<{ play: AnsiblePlaybookReport["play
           {play.tasks.length.toLocaleString()} {play.tasks.length === 1 ? "task" : "tasks"}
         </Badge>
       </Group>
-      <Accordion multiple onChange={setExpandedTasks} value={expandedTasks} variant="separated">
+      <Accordion
+        aria-label={`Tasks in ${play.name}`}
+        multiple
+        onChange={setExpandedTasks}
+        value={expandedTasks}
+        variant="separated"
+      >
         {play.tasks.map((task) => (
           <AnsibleTaskItem expanded={expandedTasks.includes(task.id)} key={task.id} task={task} />
         ))}
@@ -423,6 +429,7 @@ function AnsibleTaskResults({ task }: Readonly<{ task: AnsibleTask }>) {
       </Table.ScrollContainer>
       {hiddenResults > 0 ? (
         <Button
+          aria-label={`Show the next ${Math.min(ansibleResultBatchSize, hiddenResults).toLocaleString()} results for ${task.name}`}
           onClick={() => setLimit((value) => value + ansibleResultBatchSize)}
           size="compact-sm"
           style={{ alignSelf: "flex-start" }}

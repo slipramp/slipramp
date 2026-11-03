@@ -1,0 +1,7 @@
+---
+- name: Exercise cancellation and partial reporting
+  hosts: managed_hosts
+  gather_facts: false
+  tasks:
+    - name: Wait until Slipramp cancels the Run
+      ansible.builtin.command: sleep 120

@@ -103,6 +103,26 @@ Artifact transfer failure makes an otherwise successful execution fail and
 never hides a nonzero child exit code. Runtime images and tools require no
 Slipramp libraries or protocol support.
 
+## Optional tool adapters
+
+Tool-specific Runtime images and commands remain optional conventions layered
+on the generic Action contract. Slipramp publishes a versioned `ansible-tools`
+base image with pinned Ansible Core, Ansible Runner, Python, OpenSSH client
+tools, and the `slipramp-ansible` report helper. Operators may derive from it to
+add pinned collections and dependencies, or use an unrelated image and invoke
+`ansible-playbook`, `ansible`, Runner, a task runner, or another noninteractive
+entrypoint directly. Inventories, playbooks, roles, connection plugins, and
+dependency installation remain repository and Runtime concerns.
+
+`slipramp-ansible` runs Ansible Runner locally without nested container
+isolation. Preview mode adds Ansible's `--check --diff`; apply mode does not.
+The helper keeps ordinary Ansible output on the Run log, forwards termination
+signals, preserves Runner's exit status, and packages available events into the
+declared report after success, failure, unreachable hosts, or cancellation. A
+packaging failure overrides only an otherwise successful command. The helper
+is not part of the Harness or Controller, and Jobs retain `backoffLimit: 0`, so
+Slipramp never retries a playbook implicitly.
+
 ## Credential injection
 
 Execution credentials are resolved in three layers:
@@ -124,6 +144,13 @@ to checkout or Harness containers.
 Git checkout uses its own mapping from logical credential names to local Secrets
 with conventional Git configuration, SSH private key, and known-hosts entries.
 These credentials are mounted only for checkout.
+
+The Ansible reference Runtime uses Ansible Core's managed SSH-agent support to
+consume a private key from a Secret-backed environment variable while running
+as a non-root user. It mounts `known_hosts` separately and configures OpenSSH to
+require that trusted file. This is a tested convention, not product policy;
+owner-only key files, external agents, certificates, workload identity, and
+alternate connection plugins remain valid Runtime choices.
 
 ## Placement inventory
 

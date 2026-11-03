@@ -8,7 +8,7 @@ spec:
   workingDirectory: /workspace
   environment:
     ANSIBLE_HOST_KEY_CHECKING: "true"
-    ANSIBLE_PRIVATE_KEY_FILE: /run/slipramp/credentials/ssh/id_ed25519
+    ANSIBLE_SSH_AGENT: auto
     ANSIBLE_SSH_COMMON_ARGS: >-
       -o UserKnownHostsFile=/run/slipramp/credentials/ssh/known_hosts
       -o StrictHostKeyChecking=yes
@@ -16,10 +16,9 @@ spec:
   credentials:
     ssh:
       inject:
-        files:
-          - key: SSH_PRIVATE_KEY
-            path: /run/slipramp/credentials/ssh/id_ed25519
-            mode: 0444
+        environment:
+          ANSIBLE_PRIVATE_KEY:
+            key: SSH_PRIVATE_KEY
     ssh-known-hosts:
       inject:
         files:

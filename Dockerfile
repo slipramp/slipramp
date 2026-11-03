@@ -114,6 +114,15 @@ RUN apk add --no-cache ca-certificates git openssh-server \
     && printf 'git:acceptance-disabled-password\n' | chpasswd \
     && mkdir -p /run/sshd
 
+FROM python:3.13.9-slim-bookworm@sha256:b685a4fa58bb19d1814d78a1ec0f0208f351452724f78b20212c984d6e124a34 AS acceptance-ssh
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends openssh-server \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --no-log-init --shell /bin/sh --uid 1000 ansible \
+    && printf 'ansible:acceptance-disabled-password\n' | chpasswd \
+    && mkdir -p /run/sshd
+
 FROM node:24-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS web-build
 
 WORKDIR /src

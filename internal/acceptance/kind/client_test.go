@@ -154,16 +154,18 @@ func (s *suite) registerRepository(t *testing.T) {
 		t.Fatalf("catalog commit = %s, want %s", s.catalogRevision.Commit.Sha, s.fixtureCommit)
 	}
 	if !containsTargetDefinition(s.catalogRevision.Targets, "acceptance") ||
-		!containsRuntime(s.catalogRevision.Runtimes, "acceptance") {
-		t.Fatalf("catalog omitted acceptance Target or Runtime: %#v", s.catalogRevision)
+		!containsTargetDefinition(s.catalogRevision.Targets, "ansible-acceptance") ||
+		!containsRuntime(s.catalogRevision.Runtimes, "acceptance") ||
+		!containsRuntime(s.catalogRevision.Runtimes, "ansible-acceptance") {
+		t.Fatalf("catalog omitted acceptance or Ansible Target or Runtime: %#v", s.catalogRevision)
 	}
 
 	var targets api.TargetSummaryList
 	s.mustProductCLIJSON(t, &targets, "target", "list",
 		"--repository-id", s.repositoryID.String(),
 		"--all", "--limit", "1", "--format", "json")
-	if targets.Limit != 1 || targets.Offset != 0 || targets.Total != 2 {
-		t.Fatalf("CLI Target pagination = limit %d offset %d total %d, want 1/0/2", targets.Limit, targets.Offset, targets.Total)
+	if targets.Limit != 1 || targets.Offset != 0 || targets.Total != 3 {
+		t.Fatalf("CLI Target pagination = limit %d offset %d total %d, want 1/0/3", targets.Limit, targets.Offset, targets.Total)
 	}
 	names := make([]string, 0, len(targets.Items))
 	for _, target := range targets.Items {
@@ -171,10 +173,14 @@ func (s *suite) registerRepository(t *testing.T) {
 		if target.Name == "acceptance" {
 			s.targetID = target.ID
 		}
+		if target.Name == "ansible-acceptance" {
+			s.ansibleTargetID = target.ID
+		}
 	}
 	slices.Sort(names)
-	if !slices.Equal(names, []string{"acceptance", "kargo-promotions"}) || s.targetID == uuid.Nil {
-		t.Fatalf("CLI Targets = %v, want acceptance and kargo-promotions", names)
+	if !slices.Equal(names, []string{"acceptance", "ansible-acceptance", "kargo-promotions"}) ||
+		s.targetID == uuid.Nil || s.ansibleTargetID == uuid.Nil {
+		t.Fatalf("CLI Targets = %v, want acceptance, ansible-acceptance, and kargo-promotions", names)
 	}
 
 	var target api.Target
@@ -376,8 +382,20 @@ func (s *suite) createRun(
 	idempotencyKey string,
 ) api.Run {
 	t.Helper()
+	return s.createRunForTarget(t, s.targetID, action, parameters, inputs, idempotencyKey)
+}
 
-	request := api.RunCreate{TargetID: s.targetID, Action: action}
+func (s *suite) createRunForTarget(
+	t *testing.T,
+	targetID uuid.UUID,
+	action string,
+	parameters map[string]api.ParameterValue,
+	inputs map[string]uuid.UUID,
+	idempotencyKey string,
+) api.Run {
+	t.Helper()
+
+	request := api.RunCreate{TargetID: targetID, Action: action}
 	if parameters != nil {
 		request.Parameters = &parameters
 	}

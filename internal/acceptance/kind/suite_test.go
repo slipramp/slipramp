@@ -24,6 +24,7 @@ const (
 	dexImage                   = "ghcr.io/dexidp/dex:v2.45.1@sha256:8499afd690c437f52301efd2b05b2455da5bd2dfc20332cd697dc9937f808462"
 	systemNamespace            = "slipramp-system"
 	runNamespace               = "slipramp-runs"
+	ansibleAcceptanceSecret    = "ansible-acceptance-secret-must-stay-redacted"
 )
 
 type suite struct {
@@ -62,6 +63,7 @@ type suite struct {
 	repositoryID          uuid.UUID
 	catalogRevision       api.CatalogRevision
 	targetID              uuid.UUID
+	ansibleTargetID       uuid.UUID
 	previewRunID          uuid.UUID
 	applyRunID            uuid.UUID
 	rerunID               uuid.UUID
@@ -92,6 +94,7 @@ func TestKindAcceptance(t *testing.T) {
 
 	scenarios := []scenario{
 		{name: "operator CLI", run: s.testOperatorCLI},
+		{name: "Ansible", run: s.testAnsible},
 		{name: "cancellation", run: s.testCancellation},
 		{name: "Controller restart recovery", run: s.testControllerRestartRecovery},
 		{name: "Server restart recovery", run: s.testServerRestartRecovery},

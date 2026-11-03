@@ -172,3 +172,27 @@ test("paginates tasks while preserving play grouping and event order", () => {
     [{ name: "Configure database", tasks: ["Reach database", "Started before cancellation"] }],
   );
 });
+
+test("bounds large-report pages and slices play groups at page boundaries", () => {
+  const largePlay = {
+    id: "play-large",
+    name: "Large play",
+    order: 1,
+    tasks: Array.from({ length: 205 }, (_, index) =>
+      task(index + 2, `Task ${index + 1}`, "ansible.builtin.command", [
+        result(index + 300, `host-${index + 1}`, "changed"),
+      ]),
+    ),
+  };
+
+  const middle = paginateAnsiblePlays([largePlay], 2);
+  assert.equal(middle.page, 2);
+  assert.equal(middle.totalPages, 3);
+  assert.equal(middle.plays[0].tasks.length, 100);
+  assert.equal(middle.plays[0].tasks[0].name, "Task 101");
+
+  const bounded = paginateAnsiblePlays([largePlay], 99);
+  assert.equal(bounded.page, 3);
+  assert.equal(bounded.plays[0].tasks.length, 5);
+  assert.equal(bounded.plays[0].tasks[4].name, "Task 205");
+});

@@ -68,6 +68,9 @@ server:
       serviceAccountName: slipramp-runner
       timeout: 2m
       credentials:
+        ansible-managed-host:
+          secretRef:
+            name: acceptance-ansible-managed-host
         review-git:
           secretRef:
             name: acceptance-git-client
@@ -80,7 +83,7 @@ server:
           memory: 16Mi
         limits:
           cpu: 250m
-          memory: 128Mi
+          memory: 512Mi
   clusters:
     kind:
       maximumActiveRuns: 4

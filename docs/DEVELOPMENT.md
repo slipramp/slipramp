@@ -52,6 +52,13 @@ task acceptance:kargo
 go run ./cmd/slipramp-harness command argument
 ```
 
+`task acceptance:kind` also builds the pinned `ansible-tools` Runtime and a
+separate disposable SSH managed host. Its Ansible scenario covers strict host
+verification, preview and apply, failure and unreachable outcomes,
+cancellation, structured report retention, secret redaction, serialization,
+and the direct non-report path. The generated client and host keys exist only
+for that disposable cluster.
+
 ## Public sites and mascot
 
 The authenticated application exposes `/mascot` for reviewing the production

@@ -43,9 +43,10 @@ helm upgrade --install slipramp-controller oci://ghcr.io/slipramp/slipramp-chart
 Source checkouts remain installable from `deploy/charts/slipramp` and
 `deploy/charts/slipramp-controller`. GHCR creates new container packages as
 private by default. After the first release, a maintainer must verify that the
-six image packages and two chart packages are public for anonymous installs.
-Private packages require `helm registry login ghcr.io` and matching Kubernetes
-image pull credentials.
+seven image packages and two chart packages are public for anonymous installs.
+The seventh image is the optional `slipramp-ansible-tools` base Runtime; the
+charts do not install or require it. Private packages require
+`helm registry login ghcr.io` and matching Kubernetes image pull credentials.
 
 ## Publishing a release
 
@@ -53,7 +54,7 @@ Chart packages derive their version, application version, and default image
 tags from the requested release tag. To publish a release from a clean `main`
 checkout synchronized with `origin/main`, run the guarded release task. It
 package-checks both charts before creating and pushing the annotated tag. The
-release workflow publishes the six images first and only pushes the two OCI
+release workflow publishes the seven images first and only pushes the two OCI
 charts after every image succeeds.
 
 ```console

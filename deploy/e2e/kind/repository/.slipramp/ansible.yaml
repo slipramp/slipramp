@@ -1,0 +1,90 @@
+apiVersion: slipramp.com/v1alpha1
+kind: Runtime
+metadata:
+  name: ansible-acceptance
+spec:
+  image: slipramp-ansible-tools:acceptance
+  workingDirectory: /workspace
+  environment:
+    ANSIBLE_CONFIG: /workspace/ansible/ansible.cfg
+    ANSIBLE_HOST_KEY_CHECKING: "true"
+    ANSIBLE_SSH_AGENT: auto
+    ANSIBLE_SSH_COMMON_ARGS: -o BatchMode=yes -o ConnectTimeout=3 -o UserKnownHostsFile=/run/slipramp/credentials/managed-host/known_hosts -o StrictHostKeyChecking=yes
+  credentials:
+    managed-host:
+      inject:
+        environment:
+          ACCEPTANCE_MANAGED_SECRET:
+            key: canary-secret
+          ANSIBLE_PRIVATE_KEY:
+            key: ssh-privatekey
+        files:
+          - key: known_hosts
+            path: /run/slipramp/credentials/managed-host/known_hosts
+            mode: 0444
+---
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: ansible-acceptance
+  title: Disposable Ansible managed-host acceptance
+spec:
+  path: ansible
+  watch:
+    - ansible/**
+  runtime: ansible-acceptance
+  placement: acceptance
+  credentials:
+    managed-host: ansible-managed-host
+  timeout: 2m
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  actions:
+    preview:
+      intent: preview
+      command: [slipramp-ansible, preview, site.yml]
+      artifacts:
+        report:
+          path: /slipramp/artifacts/ansible-playbook.json
+          mediaType: application/vnd.slipramp.ansible-playbook+json
+          sensitive: true
+    apply:
+      intent: reconcile
+      command: [slipramp-ansible, apply, site.yml]
+      artifacts:
+        report:
+          path: /slipramp/artifacts/ansible-playbook.json
+          mediaType: application/vnd.slipramp.ansible-playbook+json
+          sensitive: true
+    fail:
+      intent: operation
+      command: [slipramp-ansible, apply, fail.yml]
+      artifacts:
+        report:
+          path: /slipramp/artifacts/ansible-playbook.json
+          mediaType: application/vnd.slipramp.ansible-playbook+json
+          sensitive: true
+    unreachable:
+      intent: operation
+      command: [slipramp-ansible, apply, unreachable.yml]
+      artifacts:
+        report:
+          path: /slipramp/artifacts/ansible-playbook.json
+          mediaType: application/vnd.slipramp.ansible-playbook+json
+          sensitive: true
+    cancel:
+      intent: operation
+      command: [slipramp-ansible, apply, cancel.yml]
+      artifacts:
+        report:
+          path: /slipramp/artifacts/ansible-playbook.json
+          mediaType: application/vnd.slipramp.ansible-playbook+json
+          sensitive: true
+    direct:
+      intent: operation
+      command: [ansible-playbook, --inventory, inventory/hosts.yml, --limit, managed, site.yml]

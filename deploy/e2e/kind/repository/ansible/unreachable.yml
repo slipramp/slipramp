@@ -1,0 +1,7 @@
+---
+- name: Exercise an unreachable host
+  hosts: unavailable_hosts
+  gather_facts: false
+  tasks:
+    - name: Contact the unavailable host
+      ansible.builtin.ping:
