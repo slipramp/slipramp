@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "mode": "preview",
+  "versions": {
+    "ansibleCore": "2.21.5",
+    "ansibleRunner": "2.4.3"
+  },
+  "runner": {
+    "status": "successful",
+    "exitCode": 0
+  },
+  "events": [
+    {
+      "counter": 1,
+      "uuid": "preview-play-event",
+      "event": "playbook_on_play_start",
+      "event_data": {
+        "uuid": "preview-play",
+        "name": "Preview baseline",
+        "play": "Preview baseline",
+        "play_uuid": "preview-play"
+      }
+    },
+    {
+      "counter": 2,
+      "uuid": "preview-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Preview baseline",
+        "play_uuid": "preview-play",
+        "task": "Preview configuration",
+        "task_uuid": "preview-task",
+        "task_action": "ansible.builtin.copy",
+        "task_path": "site.yml:7"
+      }
+    },
+    {
+      "counter": 3,
+      "uuid": "preview-result-event",
+      "event": "runner_on_ok",
+      "event_data": {
+        "play": "Preview baseline",
+        "play_uuid": "preview-play",
+        "task": "Preview configuration",
+        "task_uuid": "preview-task",
+        "task_action": "ansible.builtin.copy",
+        "task_path": "site.yml:7",
+        "host": "node01.example.com",
+        "res": {
+          "changed": true,
+          "diff": {
+            "before": "source-only-before",
+            "after": "source-only-after"
+          }
+        }
+      }
+    },
+    {
+      "counter": 4,
+      "uuid": "preview-stats-event",
+      "event": "playbook_on_stats",
+      "event_data": {
+        "changed": {"node01.example.com": 1},
+        "dark": {"node01.example.com": 0},
+        "failures": {"node01.example.com": 0},
+        "ignored": {"node01.example.com": 0},
+        "ok": {"node01.example.com": 1},
+        "processed": {"node01.example.com": 1},
+        "rescued": {"node01.example.com": 0},
+        "skipped": {"node01.example.com": 0}
+      }
+    }
+  ]
+}

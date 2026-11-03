@@ -1,7 +1,7 @@
 # First-class Ansible support
 
 Status: in progress
-Last updated: 2026-11-01
+Last updated: 2026-11-02
 
 This document is the implementation plan for making Ansible a first-class
 Slipramp tool integration. It records intended work, not current product
@@ -444,9 +444,9 @@ contract change.
       keep the Harness, Controller, and operator repository free of the report
       protocol implementation.
 - [x] Finalize the versioned source envelope and helper packaging behavior.
-- [ ] Add success, preview, failure, unreachable, loop, handler, rescue,
+- [x] Add success, preview, failure, unreachable, loop, handler, rescue,
       ignored, `no_log`, and partial-run source fixtures.
-- [ ] Implement the bounded `ansible-playbook` adapter under
+- [x] Implement the bounded `ansible-playbook` adapter under
       `internal/runreport`.
 - [ ] Add adapter registry, projection encoding, persistence, and rejection
       tests.

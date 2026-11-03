@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "mode": "apply",
+  "versions": {
+    "ansibleCore": "2.21.5",
+    "ansibleRunner": "2.4.3"
+  },
+  "runner": {
+    "status": "successful",
+    "exitCode": 0
+  },
+  "events": [
+    {
+      "counter": 1,
+      "uuid": "secret-play-event",
+      "event": "playbook_on_play_start",
+      "event_data": {
+        "uuid": "secret-play",
+        "name": "Configure credentials",
+        "play": "Configure credentials",
+        "play_uuid": "secret-play"
+      }
+    },
+    {
+      "counter": 2,
+      "uuid": "secret-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Configure credentials",
+        "play_uuid": "secret-play",
+        "task": "Install source-only-secret-token",
+        "task_uuid": "secret-task",
+        "task_action": "source-only-secret-action",
+        "task_path": "/workspace/ansible/source-only-secret-path.yml:3",
+        "task_args": "content=source-only-secret-value"
+      }
+    },
+    {
+      "counter": 3,
+      "uuid": "secret-result-event",
+      "event": "runner_on_ok",
+      "stdout": "ok: [node01.example.com] => source-only-secret-stdout",
+      "event_data": {
+        "play": "Configure credentials",
+        "play_uuid": "secret-play",
+        "task": "Install source-only-secret-token",
+        "task_uuid": "secret-task",
+        "task_action": "source-only-secret-action",
+        "task_path": "/workspace/ansible/source-only-secret-path.yml:3",
+        "host": "node01.example.com",
+        "res": {
+          "censored": "the output has been hidden because no_log was specified",
+          "future_secret": "source-only-secret-result"
+        }
+      }
+    },
+    {
+      "counter": 4,
+      "uuid": "secret-stats-event",
+      "event": "playbook_on_stats",
+      "event_data": {
+        "changed": {"node01.example.com": 0},
+        "dark": {"node01.example.com": 0},
+        "failures": {"node01.example.com": 0},
+        "ignored": {"node01.example.com": 0},
+        "ok": {"node01.example.com": 1},
+        "processed": {"node01.example.com": 1},
+        "rescued": {"node01.example.com": 0},
+        "skipped": {"node01.example.com": 0}
+      }
+    }
+  ]
+}

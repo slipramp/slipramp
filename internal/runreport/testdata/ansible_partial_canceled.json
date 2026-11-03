@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "mode": "apply",
+  "versions": {
+    "ansibleCore": "2.21.5",
+    "ansibleRunner": "2.4.3"
+  },
+  "runner": {
+    "status": "canceled",
+    "exitCode": 143
+  },
+  "events": [
+    {
+      "counter": 1,
+      "uuid": "partial-play-event",
+      "event": "playbook_on_play_start",
+      "event_data": {
+        "uuid": "partial-play",
+        "name": "Partial apply",
+        "play": "Partial apply",
+        "play_uuid": "partial-play"
+      }
+    },
+    {
+      "counter": 2,
+      "uuid": "partial-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Partial apply",
+        "play_uuid": "partial-play",
+        "task": "Apply baseline",
+        "task_uuid": "partial-task",
+        "task_action": "ansible.builtin.copy",
+        "task_path": "/workspace/ansible/site.yml:5"
+      }
+    },
+    {
+      "counter": 3,
+      "uuid": "partial-result-event",
+      "event": "runner_on_ok",
+      "event_data": {
+        "play": "Partial apply",
+        "play_uuid": "partial-play",
+        "task": "Apply baseline",
+        "task_uuid": "partial-task",
+        "task_action": "ansible.builtin.copy",
+        "task_path": "/workspace/ansible/site.yml:5",
+        "host": "node01.example.com",
+        "res": {"changed": true}
+      }
+    }
+  ]
+}

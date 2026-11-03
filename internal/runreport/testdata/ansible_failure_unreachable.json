@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "mode": "apply",
+  "versions": {
+    "ansibleCore": "2.21.5",
+    "ansibleRunner": "2.4.3"
+  },
+  "runner": {
+    "status": "failed",
+    "exitCode": 2
+  },
+  "events": [
+    {
+      "counter": 1,
+      "uuid": "failure-play-event",
+      "event": "playbook_on_play_start",
+      "event_data": {
+        "uuid": "failure-play",
+        "name": "Exercise failures",
+        "play": "Exercise failures",
+        "play_uuid": "failure-play"
+      }
+    },
+    {
+      "counter": 2,
+      "uuid": "failure-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Fail before rescue",
+        "task_uuid": "failure-task",
+        "task_action": "ansible.builtin.command",
+        "task_path": "/workspace/ansible/site.yml:10"
+      }
+    },
+    {
+      "counter": 3,
+      "uuid": "failure-result-event",
+      "event": "runner_on_failed",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Fail before rescue",
+        "task_uuid": "failure-task",
+        "task_action": "ansible.builtin.command",
+        "task_path": "/workspace/ansible/site.yml:10",
+        "host": "node01.example.com",
+        "ignore_errors": false,
+        "res": {
+          "changed": false,
+          "msg": "source-only-failure-message",
+          "exception": "source-only-exception"
+        }
+      }
+    },
+    {
+      "counter": 4,
+      "uuid": "rescue-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Recover service",
+        "task_uuid": "rescue-task",
+        "task_action": "ansible.builtin.service",
+        "task_path": "/workspace/ansible/site.yml:14"
+      }
+    },
+    {
+      "counter": 5,
+      "uuid": "rescue-result-event",
+      "event": "runner_on_ok",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Recover service",
+        "task_uuid": "rescue-task",
+        "task_action": "ansible.builtin.service",
+        "task_path": "/workspace/ansible/site.yml:14",
+        "host": "node01.example.com",
+        "res": {"changed": true}
+      }
+    },
+    {
+      "counter": 6,
+      "uuid": "ignored-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Optional probe",
+        "task_uuid": "ignored-task",
+        "task_action": "ansible.builtin.command",
+        "task_path": "/workspace/ansible/site.yml:18"
+      }
+    },
+    {
+      "counter": 7,
+      "uuid": "ignored-result-event",
+      "event": "runner_on_failed",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Optional probe",
+        "task_uuid": "ignored-task",
+        "task_action": "ansible.builtin.command",
+        "task_path": "/workspace/ansible/site.yml:18",
+        "host": "node01.example.com",
+        "ignore_errors": true,
+        "res": {
+          "changed": false,
+          "msg": "source-only-ignored-message"
+        }
+      }
+    },
+    {
+      "counter": 8,
+      "uuid": "unreachable-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Contact host",
+        "task_uuid": "unreachable-task",
+        "task_action": "ansible.builtin.ping",
+        "task_path": "/workspace/ansible/site.yml:22"
+      }
+    },
+    {
+      "counter": 9,
+      "uuid": "unreachable-result-event",
+      "event": "runner_on_unreachable",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Contact host",
+        "task_uuid": "unreachable-task",
+        "task_action": "ansible.builtin.ping",
+        "task_path": "/workspace/ansible/site.yml:22",
+        "host": "node02.example.com",
+        "res": {
+          "changed": false,
+          "msg": "source-only-unreachable-message"
+        }
+      }
+    },
+    {
+      "counter": 10,
+      "uuid": "skipped-task-event",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Skip optional configuration",
+        "task_uuid": "skipped-task",
+        "task_action": "ansible.builtin.copy",
+        "task_path": "/workspace/ansible/site.yml:26"
+      }
+    },
+    {
+      "counter": 11,
+      "uuid": "skipped-result-event",
+      "event": "runner_on_skipped",
+      "event_data": {
+        "play": "Exercise failures",
+        "play_uuid": "failure-play",
+        "task": "Skip optional configuration",
+        "task_uuid": "skipped-task",
+        "task_action": "ansible.builtin.copy",
+        "task_path": "/workspace/ansible/site.yml:26",
+        "host": "node01.example.com"
+      }
+    },
+    {
+      "counter": 12,
+      "uuid": "failure-stats-event",
+      "event": "playbook_on_stats",
+      "event_data": {
+        "changed": {
+          "node01.example.com": 1,
+          "node02.example.com": 0
+        },
+        "dark": {
+          "node01.example.com": 0,
+          "node02.example.com": 1
+        },
+        "failures": {
+          "node01.example.com": 0,
+          "node02.example.com": 0
+        },
+        "ignored": {
+          "node01.example.com": 1,
+          "node02.example.com": 0
+        },
+        "ok": {
+          "node01.example.com": 1,
+          "node02.example.com": 0
+        },
+        "processed": {
+          "node01.example.com": 1,
+          "node02.example.com": 1
+        },
+        "rescued": {
+          "node01.example.com": 1,
+          "node02.example.com": 0
+        },
+        "skipped": {
+          "node01.example.com": 1,
+          "node02.example.com": 0
+        }
+      }
+    }
+  ]
+}

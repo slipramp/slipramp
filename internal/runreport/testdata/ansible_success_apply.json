@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 1,
+  "mode": "apply",
+  "versions": {
+    "ansibleCore": "2.21.5",
+    "ansibleRunner": "2.4.3"
+  },
+  "runner": {
+    "status": "successful",
+    "exitCode": 0
+  },
+  "events": [
+    {
+      "counter": 1,
+      "uuid": "event-play-main",
+      "event": "playbook_on_play_start",
+      "event_data": {
+        "uuid": "play-main",
+        "name": "Configure web hosts",
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "future_field": "ignored"
+      }
+    },
+    {
+      "counter": 2,
+      "uuid": "event-task-package",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Install web package",
+        "task_uuid": "task-package",
+        "task_action": "ansible.builtin.package",
+        "task_path": "/workspace/ansible/site.yml:4",
+        "task_args": "name=source-only-package"
+      }
+    },
+    {
+      "counter": 3,
+      "uuid": "event-package-node01",
+      "event": "runner_on_ok",
+      "stdout": "changed: [node01.example.com] source-only-stdout",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Install web package",
+        "task_uuid": "task-package",
+        "task_action": "ansible.builtin.package",
+        "task_path": "/workspace/ansible/site.yml:4",
+        "host": "node01.example.com",
+        "res": {
+          "changed": true,
+          "invocation": {
+            "module_args": {
+              "password": "source-only-secret"
+            }
+          },
+          "diff": {
+            "after": "source-only-diff"
+          }
+        }
+      }
+    },
+    {
+      "counter": 4,
+      "uuid": "event-package-node02",
+      "event": "runner_on_ok",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Install web package",
+        "task_uuid": "task-package",
+        "task_action": "ansible.builtin.package",
+        "task_path": "/workspace/ansible/site.yml:4",
+        "host": "node02.example.com",
+        "res": {
+          "changed": false,
+          "ansible_facts": {
+            "source_only_fact": "do-not-project"
+          }
+        }
+      }
+    },
+    {
+      "counter": 5,
+      "uuid": "event-task-sites",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Write virtual hosts",
+        "task_uuid": "task-sites",
+        "task_action": "ansible.builtin.template",
+        "task_path": "/workspace/ansible/roles/web/tasks/main.yml:12"
+      }
+    },
+    {
+      "counter": 6,
+      "uuid": "event-sites-one",
+      "event": "runner_item_on_ok",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Write virtual hosts",
+        "task_uuid": "task-sites",
+        "task_action": "ansible.builtin.template",
+        "task_path": "/workspace/ansible/roles/web/tasks/main.yml:12",
+        "host": "node01.example.com",
+        "res": {
+          "changed": true,
+          "item": "source-only-loop-item"
+        }
+      }
+    },
+    {
+      "counter": 7,
+      "uuid": "event-sites-two",
+      "event": "runner_item_on_ok",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Write virtual hosts",
+        "task_uuid": "task-sites",
+        "task_action": "ansible.builtin.template",
+        "task_path": "/workspace/ansible/roles/web/tasks/main.yml:12",
+        "host": "node01.example.com",
+        "res": {
+          "changed": false,
+          "item": "source-only-loop-item-two"
+        }
+      }
+    },
+    {
+      "counter": 8,
+      "uuid": "event-sites-total",
+      "event": "runner_on_ok",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Write virtual hosts",
+        "task_uuid": "task-sites",
+        "task_action": "ansible.builtin.template",
+        "task_path": "/workspace/ansible/roles/web/tasks/main.yml:12",
+        "host": "node01.example.com",
+        "res": {
+          "changed": true,
+          "results": [
+            {"password": "source-only-nested-result"}
+          ]
+        }
+      }
+    },
+    {
+      "counter": 9,
+      "uuid": "event-handler-notify",
+      "event": "playbook_on_notify",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "host": "node01.example.com",
+        "handler": "Restart web service"
+      }
+    },
+    {
+      "counter": 10,
+      "uuid": "event-task-handler",
+      "event": "playbook_on_task_start",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Restart web service",
+        "task_uuid": "task-handler",
+        "task_action": "ansible.builtin.service",
+        "task_path": "/workspace/ansible/roles/web/handlers/main.yml:2",
+        "is_conditional": true
+      }
+    },
+    {
+      "counter": 11,
+      "uuid": "event-handler-result",
+      "event": "runner_on_ok",
+      "event_data": {
+        "play": "Configure web hosts",
+        "play_uuid": "play-main",
+        "task": "Restart web service",
+        "task_uuid": "task-handler",
+        "task_action": "ansible.builtin.service",
+        "task_path": "/workspace/ansible/roles/web/handlers/main.yml:2",
+        "host": "node01.example.com",
+        "res": {
+          "changed": true
+        }
+      }
+    },
+    {
+      "counter": 12,
+      "uuid": "event-future",
+      "event": "runner_on_future_event",
+      "stdout": "source-only-future-stdout",
+      "event_data": {
+        "arbitrary": {
+          "secret": "source-only-future-secret"
+        }
+      }
+    },
+    {
+      "counter": 13,
+      "uuid": "event-stats",
+      "event": "playbook_on_stats",
+      "event_data": {
+        "changed": {
+          "node01.example.com": 3,
+          "node02.example.com": 0
+        },
+        "dark": {
+          "node01.example.com": 0,
+          "node02.example.com": 0
+        },
+        "failures": {
+          "node01.example.com": 0,
+          "node02.example.com": 0
+        },
+        "ignored": {
+          "node01.example.com": 0,
+          "node02.example.com": 0
+        },
+        "ok": {
+          "node01.example.com": 3,
+          "node02.example.com": 1
+        },
+        "processed": {
+          "node01.example.com": 1,
+          "node02.example.com": 1
+        },
+        "rescued": {
+          "node01.example.com": 0,
+          "node02.example.com": 0
+        },
+        "skipped": {
+          "node01.example.com": 0,
+          "node02.example.com": 0
+        },
+        "artifact_data": {
+          "source_only_custom_stat": "do-not-project"
+        }
+      }
+    }
+  ]
+}
