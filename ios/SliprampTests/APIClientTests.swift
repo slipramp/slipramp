@@ -922,7 +922,7 @@ final class APIClientTests: XCTestCase {
 
         var body = Data()
         var buffer = [UInt8](repeating: 0, count: 4096)
-        while stream.hasBytesAvailable {
+        while true {
             let count = stream.read(&buffer, maxLength: buffer.count)
             if count < 0 {
                 throw try XCTUnwrap(stream.streamError)
