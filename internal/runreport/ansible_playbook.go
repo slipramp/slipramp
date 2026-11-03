@@ -190,8 +190,6 @@ func (r AnsiblePlaybookReport) Validate() error {
 	taskIDs := make(map[string]struct{})
 	resultHosts := make(map[string]struct{})
 	counts := AnsibleOutcomeCounts{}
-	taskCount := 0
-	resultCount := 0
 	previousPlayOrder := 0
 	for playIndex, play := range r.Plays {
 		field := fmt.Sprintf("plays[%d]", playIndex)
@@ -218,10 +216,6 @@ func (r AnsiblePlaybookReport) Validate() error {
 				return fmt.Errorf("%s.id is duplicated", taskField)
 			}
 			taskIDs[task.ID] = struct{}{}
-			taskCount++
-			if taskCount > MaximumAnsiblePlaybookTasks {
-				return fmt.Errorf("report must contain at most %d tasks", MaximumAnsiblePlaybookTasks)
-			}
 
 			previousResultOrder := 0
 			for resultIndex, result := range task.Results {
@@ -233,10 +227,6 @@ func (r AnsiblePlaybookReport) Validate() error {
 					return fmt.Errorf("%s.results must use event order", taskField)
 				}
 				previousResultOrder = result.Order
-				resultCount++
-				if resultCount > MaximumAnsiblePlaybookResults {
-					return fmt.Errorf("report must contain at most %d host-task results", MaximumAnsiblePlaybookResults)
-				}
 				counts.add(result.Outcome)
 				resultHosts[result.Host] = struct{}{}
 			}
@@ -245,7 +235,7 @@ func (r AnsiblePlaybookReport) Validate() error {
 	if err := r.Summary.Validate(); err != nil {
 		return err
 	}
-	if r.Summary.Plays != len(r.Plays) || r.Summary.Tasks != taskCount || r.Summary.Results != counts {
+	if r.Summary.Plays != len(r.Plays) || r.Summary.Tasks != totalTasks || r.Summary.Results != counts {
 		return errors.New("ansible playbook summary does not match report detail")
 	}
 	summaryHosts := make(map[string]struct{}, len(r.Summary.HostTotals))

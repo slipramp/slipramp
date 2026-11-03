@@ -13,12 +13,15 @@ import (
 	"unicode/utf8"
 )
 
+const ansiblePlaybookSourceSchemaVersion = 2
+
 type ansiblePlaybookSource struct {
-	SchemaVersion int                    `json:"schemaVersion"`
-	Mode          ReportMode             `json:"mode"`
-	Versions      *ansibleVersionsSource `json:"versions"`
-	Runner        *ansibleRunnerSource   `json:"runner"`
-	Events        []json.RawMessage      `json:"events"`
+	SchemaVersion       int                    `json:"schemaVersion"`
+	RepositoryDirectory string                 `json:"repositoryDirectory"`
+	Mode                ReportMode             `json:"mode"`
+	Versions            *ansibleVersionsSource `json:"versions"`
+	Runner              *ansibleRunnerSource   `json:"runner"`
+	Events              []json.RawMessage      `json:"events"`
 }
 
 type ansibleVersionsSource struct {
@@ -129,10 +132,11 @@ func DecodeAnsiblePlaybook(source io.Reader) (AnsiblePlaybookReport, error) {
 		Plays: []AnsiblePlay{},
 	}
 	builder := ansibleReportBuilder{
-		report:       &report,
-		playIndexes:  make(map[string]int),
-		taskIndexes:  make(map[string]ansibleTaskIndex),
-		partialHosts: make(map[string]*AnsibleHostTotals),
+		report:              &report,
+		repositoryDirectory: document.RepositoryDirectory,
+		playIndexes:         make(map[string]int),
+		taskIndexes:         make(map[string]ansibleTaskIndex),
+		hosts:               make(map[string]struct{}),
 	}
 
 	previousCounter := 0
@@ -178,11 +182,19 @@ func DecodeAnsiblePlaybook(source io.Reader) (AnsiblePlaybookReport, error) {
 }
 
 func validateAnsibleSourceEnvelope(source ansiblePlaybookSource) error {
-	if source.SchemaVersion != AnsiblePlaybookSchemaVersion {
+	if source.SchemaVersion != ansiblePlaybookSourceSchemaVersion {
 		return fmt.Errorf("ansible playbook source schema version %d is not supported", source.SchemaVersion)
 	}
 	if source.Mode != PreviewMode && source.Mode != ApplyMode {
 		return errors.New("ansible playbook source mode must be preview or apply")
+	}
+	if err := validateAnsibleRequiredText(
+		"repositoryDirectory", source.RepositoryDirectory, maximumAnsibleRawPathLength,
+	); err != nil {
+		return err
+	}
+	if !path.IsAbs(source.RepositoryDirectory) || path.Clean(source.RepositoryDirectory) != source.RepositoryDirectory {
+		return errors.New("repositoryDirectory must be an absolute clean path")
 	}
 	if source.Versions == nil {
 		return errors.New("ansible playbook source versions are required")
@@ -223,14 +235,14 @@ type ansibleTaskIndex struct {
 }
 
 type ansibleReportBuilder struct {
-	report       *AnsiblePlaybookReport
-	playIndexes  map[string]int
-	taskIndexes  map[string]ansibleTaskIndex
-	partialHosts map[string]*AnsibleHostTotals
-	stats        *ansibleStatsSource
-	results      AnsibleOutcomeCounts
-	tasks        int
-	resultCount  int
+	report              *AnsiblePlaybookReport
+	repositoryDirectory string
+	playIndexes         map[string]int
+	taskIndexes         map[string]ansibleTaskIndex
+	hosts               map[string]struct{}
+	stats               *ansibleStatsSource
+	results             AnsibleOutcomeCounts
+	tasks               int
 }
 
 func (b *ansibleReportBuilder) consume(index int, event ansibleEventSource) error {
@@ -304,9 +316,12 @@ func (b *ansibleReportBuilder) consumeResult(index int, event ansibleEventSource
 		IgnoredFailure: ignored,
 	}
 
-	b.resultCount++
-	if b.resultCount > MaximumAnsiblePlaybookResults {
+	if b.results.Total >= MaximumAnsiblePlaybookResults {
 		return fmt.Errorf("report must contain at most %d host-task results", MaximumAnsiblePlaybookResults)
+	}
+	b.hosts[result.Host] = struct{}{}
+	if len(b.hosts) > MaximumAnsiblePlaybookHosts {
+		return fmt.Errorf("report must contain at most %d hosts", MaximumAnsiblePlaybookHosts)
 	}
 	task := &b.report.Plays[taskIndex.play].Tasks[taskIndex.task]
 	if noLog {
@@ -314,9 +329,6 @@ func (b *ansibleReportBuilder) consumeResult(index int, event ansibleEventSource
 	}
 	task.Results = append(task.Results, result)
 	b.results.add(outcome)
-	if err := b.addPartialHostResult(result); err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -333,10 +345,11 @@ func decodeAnsibleEventData(index int, encoded json.RawMessage, destination any)
 }
 
 func decodeAnsibleResult(index int, encoded json.RawMessage, event string) (ansibleResultSource, error) {
-	if event == "runner_on_skipped" || event == "runner_item_on_skipped" {
-		return ansibleResultSource{}, nil
-	}
 	if encoded == nil || bytes.Equal(bytes.TrimSpace(encoded), []byte("null")) {
+		// Runner omits res for ordinary skips; loop-item skips can carry censored results.
+		if event == "runner_on_skipped" || event == "runner_item_on_skipped" {
+			return ansibleResultSource{}, nil
+		}
 		return ansibleResultSource{}, fmt.Errorf("events[%d].event_data.res is required", index)
 	}
 
@@ -399,7 +412,7 @@ func (b *ansibleReportBuilder) ensureTask(order int, data ansibleEventDataSource
 		if task.Redacted {
 			return location, nil
 		}
-		if err := mergeAnsibleTaskPresentation(task, data); err != nil {
+		if err := mergeAnsibleTaskPresentation(task, data, b.repositoryDirectory); err != nil {
 			return ansibleTaskIndex{}, err
 		}
 
@@ -416,7 +429,7 @@ func (b *ansibleReportBuilder) ensureTask(order int, data ansibleEventDataSource
 	if err := validateAnsibleRequiredText("task action", data.TaskAction, maximumAnsibleActionLength); err != nil {
 		return ansibleTaskIndex{}, err
 	}
-	sourcePath, err := normalizeAnsibleSourcePath(data.TaskPath)
+	sourcePath, err := normalizeAnsibleSourcePath(data.TaskPath, b.repositoryDirectory)
 	if err != nil {
 		return ansibleTaskIndex{}, err
 	}
@@ -436,7 +449,7 @@ func (b *ansibleReportBuilder) ensureTask(order int, data ansibleEventDataSource
 	return location, nil
 }
 
-func mergeAnsibleTaskPresentation(task *AnsibleTask, data ansibleEventDataSource) error {
+func mergeAnsibleTaskPresentation(task *AnsibleTask, data ansibleEventDataSource, repositoryDirectory string) error {
 	name := firstNonempty(data.Task, data.Name)
 	if name != "" {
 		if err := validateAnsibleRequiredText("task name", name, maximumAnsibleNameLength); err != nil {
@@ -455,7 +468,7 @@ func mergeAnsibleTaskPresentation(task *AnsibleTask, data ansibleEventDataSource
 		}
 	}
 	if data.TaskPath != "" {
-		sourcePath, err := normalizeAnsibleSourcePath(data.TaskPath)
+		sourcePath, err := normalizeAnsibleSourcePath(data.TaskPath, repositoryDirectory)
 		if err != nil {
 			return err
 		}
@@ -474,37 +487,6 @@ func redactAnsibleTask(task *AnsibleTask) {
 	task.Redacted = true
 }
 
-func (b *ansibleReportBuilder) addPartialHostResult(result AnsibleTaskResult) error {
-	totals, found := b.partialHosts[result.Host]
-	if !found {
-		if len(b.partialHosts) >= MaximumAnsiblePlaybookHosts {
-			return fmt.Errorf("report must contain at most %d hosts", MaximumAnsiblePlaybookHosts)
-		}
-		totals = &AnsibleHostTotals{Host: result.Host}
-		b.partialHosts[result.Host] = totals
-	}
-
-	switch result.Outcome {
-	case AnsibleOutcomeOK:
-		totals.OK++
-	case AnsibleOutcomeChanged:
-		totals.OK++
-		totals.Changed++
-	case AnsibleOutcomeFailed:
-		if result.IgnoredFailure {
-			totals.Ignored++
-		} else {
-			totals.Failed++
-		}
-	case AnsibleOutcomeUnreachable:
-		totals.Unreachable++
-	case AnsibleOutcomeSkipped:
-		totals.Skipped++
-	}
-
-	return nil
-}
-
 func (b *ansibleReportBuilder) finish() error {
 	var hostTotals []AnsibleHostTotals
 	if b.stats != nil {
@@ -513,23 +495,8 @@ func (b *ansibleReportBuilder) finish() error {
 		if err != nil {
 			return err
 		}
-		statsHosts := make(map[string]struct{}, len(hostTotals))
-		for _, totals := range hostTotals {
-			statsHosts[totals.Host] = struct{}{}
-		}
-		for host := range b.partialHosts {
-			if _, found := statsHosts[host]; !found {
-				return fmt.Errorf("result host %q is missing from final playbook stats", host)
-			}
-		}
 	} else {
-		hostTotals = make([]AnsibleHostTotals, 0, len(b.partialHosts))
-		for _, totals := range b.partialHosts {
-			hostTotals = append(hostTotals, *totals)
-		}
-		slices.SortFunc(hostTotals, func(left, right AnsibleHostTotals) int {
-			return strings.Compare(left.Host, right.Host)
-		})
+		hostTotals = calculatePartialAnsibleHostTotals(b.report.Plays)
 	}
 
 	b.report.Summary = AnsiblePlaybookSummary{
@@ -545,6 +512,9 @@ func (b *ansibleReportBuilder) finish() error {
 }
 
 func projectAnsibleStats(stats ansibleStatsSource) ([]AnsibleHostTotals, error) {
+	if len(stats.Processed) > MaximumAnsiblePlaybookHosts {
+		return nil, fmt.Errorf("report must contain at most %d hosts", MaximumAnsiblePlaybookHosts)
+	}
 	for _, required := range []struct {
 		name   string
 		values map[string]int
@@ -561,68 +531,36 @@ func projectAnsibleStats(stats ansibleStatsSource) ([]AnsibleHostTotals, error) 
 		if required.values == nil {
 			return nil, fmt.Errorf("playbook_on_stats event_data.%s is required", required.name)
 		}
-	}
-
-	hosts := make(map[string]*AnsibleHostTotals)
-	add := func(
-		field string,
-		values map[string]int,
-		allowNewHost bool,
-		assign func(*AnsibleHostTotals, int),
-	) error {
-		for host, count := range values {
-			if err := validateAnsibleRequiredText(field+" host", host, maximumAnsibleHostNameLength); err != nil {
-				return err
-			}
+		for host, count := range required.values {
 			if count < 0 || count > MaximumAnsiblePlaybookEvents {
-				return fmt.Errorf("playbook_on_stats event_data.%s counts are outside report bounds", field)
+				return nil, fmt.Errorf(
+					"playbook_on_stats event_data.%s counts are outside report bounds", required.name,
+				)
 			}
-			totals, found := hosts[host]
-			if !found {
-				if !allowNewHost {
-					return fmt.Errorf("playbook_on_stats event_data.%s host %q is missing from processed", field, host)
-				}
-				if len(hosts) >= MaximumAnsiblePlaybookHosts {
-					return fmt.Errorf("report must contain at most %d hosts", MaximumAnsiblePlaybookHosts)
-				}
-				totals = &AnsibleHostTotals{Host: host}
-				hosts[host] = totals
+			if _, found := stats.Processed[host]; !found {
+				return nil, fmt.Errorf(
+					"playbook_on_stats event_data.%s host %q is missing from processed", required.name, host,
+				)
 			}
-			assign(totals, count)
-		}
-
-		return nil
-	}
-
-	for _, item := range []struct {
-		name         string
-		values       map[string]int
-		allowNewHost bool
-		assign       func(*AnsibleHostTotals, int)
-	}{
-		{
-			name: "processed", values: stats.Processed, allowNewHost: true,
-			assign: func(_ *AnsibleHostTotals, _ int) {},
-		},
-		{name: "ok", values: stats.OK, assign: func(t *AnsibleHostTotals, value int) { t.OK = value }},
-		{name: "changed", values: stats.Changed, assign: func(t *AnsibleHostTotals, value int) { t.Changed = value }},
-		{name: "failures", values: stats.Failures, assign: func(t *AnsibleHostTotals, value int) { t.Failed = value }},
-		{name: "dark", values: stats.Dark, assign: func(t *AnsibleHostTotals, value int) { t.Unreachable = value }},
-		{name: "skipped", values: stats.Skipped, assign: func(t *AnsibleHostTotals, value int) { t.Skipped = value }},
-		{name: "rescued", values: stats.Rescued, assign: func(t *AnsibleHostTotals, value int) { t.Rescued = value }},
-		{name: "ignored", values: stats.Ignored, assign: func(t *AnsibleHostTotals, value int) { t.Ignored = value }},
-	} {
-		if err := add(item.name, item.values, item.allowNewHost, item.assign); err != nil {
-			return nil, err
 		}
 	}
 
-	result := make([]AnsibleHostTotals, 0, len(hosts))
-	for _, totals := range hosts {
+	result := make([]AnsibleHostTotals, 0, len(stats.Processed))
+	for host := range stats.Processed {
+		totals := AnsibleHostTotals{
+			Host:        host,
+			OK:          stats.OK[host],
+			Changed:     stats.Changed[host],
+			Failed:      stats.Failures[host],
+			Unreachable: stats.Dark[host],
+			Skipped:     stats.Skipped[host],
+			Rescued:     stats.Rescued[host],
+			Ignored:     stats.Ignored[host],
+		}
 		if err := totals.validate("playbook_on_stats"); err != nil {
 			return nil, err
 		}
-		result = append(result, *totals)
+		result = append(result, totals)
 	}
 	slices.SortFunc(result, func(left, right AnsibleHostTotals) int {
 		return strings.Compare(left.Host, right.Host)
@@ -660,7 +598,7 @@ func firstNonempty(values ...string) string {
 	return ""
 }
 
-func normalizeAnsibleSourcePath(value string) (string, error) {
+func normalizeAnsibleSourcePath(value, repositoryDirectory string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
@@ -669,15 +607,9 @@ func normalizeAnsibleSourcePath(value string) (string, error) {
 	}
 
 	value = stripAnsiblePathPosition(value)
-	if strings.HasPrefix(value, "/") {
-		relative := ""
-		for _, marker := range []string{"/workspace/", "/project/"} {
-			if markerIndex := strings.LastIndex(value, marker); markerIndex >= 0 {
-				relative = value[markerIndex+len(marker):]
-				break
-			}
-		}
-		if relative == "" {
+	if path.IsAbs(value) {
+		relative, inside := strings.CutPrefix(value, strings.TrimSuffix(repositoryDirectory, "/")+"/")
+		if !inside {
 			return "", nil
 		}
 		value = relative

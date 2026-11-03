@@ -292,11 +292,12 @@ application/vnd.slipramp.ansible-playbook+json
 
 An Action opts into native reporting only by declaring an Artifact with this
 media type and producing the corresponding file. The source file uses this
-version 1 envelope:
+version 2 envelope:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "repositoryDirectory": "/workspace",
   "mode": "preview",
   "versions": {
     "ansibleCore": "2.21.5",
@@ -313,6 +314,8 @@ version 1 envelope:
 Its fields contain:
 
 - source schema version;
+- absolute repository directory used to resolve task paths, discovered from the
+  nearest Git root or falling back to the project directory for standalone use;
 - `preview` or `apply` mode selected by the helper;
 - optional Ansible Core and Ansible Runner versions when their version commands
   return recognized bounded output;

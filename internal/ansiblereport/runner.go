@@ -1,6 +1,7 @@
 package ansiblereport
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -36,12 +37,13 @@ type Config struct {
 	Signals          <-chan os.Signal
 }
 
-func Launch(ctx context.Context, config Config) (int, error) {
+func Run(ctx context.Context, config Config) (int, error) {
 	resolved, err := resolveConfig(config)
 	if err != nil {
 		return 64, err
 	}
 
+	repositoryDirectory := findRepositoryDirectory(resolved.ProjectDirectory)
 	versions := detectVersions(ctx, resolved.RunnerBinary, resolved.PlaybookBinary)
 	temporaryDirectory, err := os.MkdirTemp("", "slipramp-ansible-*")
 	if err != nil {
@@ -82,19 +84,31 @@ func Launch(ctx context.Context, config Config) (int, error) {
 		Destination:             resolved.ReportPath,
 		Mode:                    resolved.Mode,
 		RunnerArtifactDirectory: runnerArtifactDirectory,
+		RepositoryDirectory:     repositoryDirectory,
 		RunnerExitCodeFallback:  result.runnerExitCode,
 		Canceled:                result.signal != 0,
 		Versions:                versions,
 	})
 	if packageErr != nil {
 		if result.exitCode == 0 {
-			return 70, fmt.Errorf("package Ansible report: %w", packageErr)
+			result.exitCode = 70
 		}
-
 		return result.exitCode, fmt.Errorf("package Ansible report: %w", packageErr)
 	}
 
 	return result.exitCode, nil
+}
+
+// Standalone playbooks use the project directory; Git checkouts use the nearest repository root.
+func findRepositoryDirectory(projectDirectory string) string {
+	for directory := projectDirectory; ; directory = filepath.Dir(directory) {
+		if _, err := os.Stat(filepath.Join(directory, ".git")); err == nil {
+			return directory
+		}
+		if filepath.Dir(directory) == directory {
+			return projectDirectory
+		}
+	}
 }
 
 func resolveConfig(config Config) (Config, error) {
@@ -294,12 +308,14 @@ func boundedVersionOutput(ctx context.Context, binary string, arguments ...strin
 	defer cancel()
 
 	command := exec.CommandContext(versionContext, binary, arguments...)
-	output, err := command.Output()
-	if err != nil || len(output) > 4*1024 {
+	var output bytes.Buffer
+	command.Stdout = &boundedWriter{destination: &output, maximum: 4 * 1024}
+	command.Stderr = io.Discard
+	if err := command.Run(); err != nil {
 		return ""
 	}
 
-	return string(output)
+	return output.String()
 }
 
 func sanitizeVersion(value string) string {

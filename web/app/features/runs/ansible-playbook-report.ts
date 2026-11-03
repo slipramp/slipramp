@@ -1,5 +1,4 @@
 import type {
-  AnsibleHostTotals,
   AnsibleOutcomeCounts,
   AnsiblePlay,
   AnsiblePlaybookSummary,
@@ -17,24 +16,22 @@ export type AnsibleCountBadge = {
   label: string;
 };
 
-export type AnsibleTaskPresentation = {
-  action: string;
-  name: string;
-  sourcePath?: string;
-};
-
 export function ansibleSummaryBadges(summary: AnsiblePlaybookSummary): AnsibleCountBadge[] {
-  const rescued = sumAnsibleHostTotal(summary.hostTotals, "rescued");
-  const ignored = sumAnsibleHostTotal(summary.hostTotals, "ignored");
-
-  return [
-    { color: "yellow", count: summary.results.changed, label: "changed" },
-    { color: "red", count: summary.results.failed, label: "failed" },
-    { color: "orange", count: summary.results.unreachable, label: "unreachable" },
-    { color: "gray", count: summary.results.skipped, label: "skipped" },
-    { color: "cyan", count: rescued, label: "rescued" },
-    { color: "violet", count: ignored, label: "ignored" },
-  ].filter((badge) => badge.count > 0);
+  return (
+    [
+      { color: "yellow", label: "changed" },
+      { color: "red", label: "failed" },
+      { color: "orange", label: "unreachable" },
+      { color: "gray", label: "skipped" },
+      { color: "cyan", label: "rescued" },
+      { color: "violet", label: "ignored" },
+    ] as const
+  )
+    .map((badge) => ({
+      ...badge,
+      count: summary.hostTotals.reduce((sum, host) => sum + host[badge.label], 0),
+    }))
+    .filter((badge) => badge.count > 0);
 }
 
 export function ansibleOutcomeBadges(counts: AnsibleOutcomeCounts): AnsibleCountBadge[] {
@@ -59,14 +56,6 @@ export function countAnsibleOutcomes(results: AnsibleTaskResult[]): AnsibleOutco
   for (const result of results) counts[result.outcome]++;
 
   return counts;
-}
-
-export function ansibleTaskPresentation(task: AnsibleTask): AnsibleTaskPresentation {
-  if (task.redacted) {
-    return { action: "[redacted]", name: "[redacted]" };
-  }
-
-  return { action: task.action, name: task.name, sourcePath: task.sourcePath };
 }
 
 export function countAnsibleUnchangedResults(plays: AnsiblePlay[]) {
@@ -101,13 +90,8 @@ export function filterAnsiblePlays(
     const tasks: AnsibleTask[] = [];
 
     for (const task of play.tasks) {
-      const presentation = ansibleTaskPresentation(task);
       const taskMatches =
-        playMatches ||
-        matchesAnsibleKeywords(
-          [presentation.name, presentation.action, presentation.sourcePath],
-          keywords,
-        );
+        playMatches || matchesAnsibleKeywords([task.name, task.action, task.sourcePath], keywords);
       const results = task.results.filter((result) => {
         if (result.outcome === "ok" && !showUnchanged && !task.redacted) return false;
         if (outcomes.size > 0 && !outcomes.has(result.outcome)) return false;
@@ -167,10 +151,6 @@ export function paginateAnsiblePlays(
 
 export function isAnsibleOutcome(value: string): value is AnsibleOutcome {
   return ["ok", "changed", "failed", "unreachable", "skipped"].includes(value);
-}
-
-function sumAnsibleHostTotal(totals: AnsibleHostTotals[], field: "rescued" | "ignored") {
-  return totals.reduce((sum, host) => sum + host[field], 0);
 }
 
 function matchesAnsibleKeywords(values: Array<string | undefined>, keywords: string[]) {

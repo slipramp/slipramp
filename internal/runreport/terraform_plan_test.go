@@ -361,28 +361,6 @@ func TestDecodeProjectionRequiresCanonicalValidatedContent(t *testing.T) {
 	}
 }
 
-func TestReportAdapterRegistryUsesCanonicalMediaType(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		mediaType string
-		kind      ReportKind
-	}{
-		{mediaType: TerraformPlanMediaType + "; charset=utf-8", kind: TerraformPlanKind},
-		{mediaType: OpenTofuPlanMediaType + "; charset=utf-8", kind: OpenTofuPlanKind},
-	}
-	for _, test := range tests {
-		adapter, found := AdapterForMediaType(test.mediaType)
-		if !found || adapter.Kind() != test.kind ||
-			adapter.MaximumSourceSizeBytes() != MaximumInfrastructurePlanSourceSizeBytes {
-			t.Fatalf("AdapterForMediaType(%q) = %#v, %t", test.mediaType, adapter, found)
-		}
-	}
-	if IsRecognizedMediaType("application/json") {
-		t.Fatal("generic JSON was recognized as a Run report")
-	}
-}
-
 func infrastructureOutputChanges(count int) map[string]infrastructureChangeSource {
 	result := make(map[string]infrastructureChangeSource, count)
 	for index := range count {

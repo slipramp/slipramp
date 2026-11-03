@@ -43,15 +43,6 @@ def write_artifacts(directory: Path, status: str, exit_code: int, partial: bool)
     ]
     if partial:
         events = events[:1]
-    elif os.environ.get("FAKE_ANSIBLE_DUPLICATE_COUNTER") == "1":
-        events.append(
-            {
-                "counter": 1,
-                "uuid": "event-duplicate",
-                "event": "verbose",
-                "event_data": {},
-            },
-        )
     for event in reversed(events):
         path = event_directory / f"{event['counter']}-{event['uuid']}.json"
         path.write_text(json.dumps(event), encoding="utf-8")

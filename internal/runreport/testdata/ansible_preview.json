@@ -1,5 +1,6 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "repositoryDirectory": "/workspace",
   "mode": "preview",
   "versions": {
     "ansibleCore": "2.21.5",

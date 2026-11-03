@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   ansibleSummaryBadges,
-  ansibleTaskPresentation,
   countAnsibleUnchangedResults,
   filterAnsiblePlays,
   paginateAnsiblePlays,
@@ -59,13 +58,13 @@ const plays = [
   },
 ];
 
-test("builds the compact Ansible recap without unchanged results", () => {
+test("builds recap badges from host totals rather than loop and rescued result events", () => {
   const badges = ansibleSummaryBadges({
     complete: true,
     hostTotals: [
       {
         changed: 1,
-        failed: 1,
+        failed: 0,
         host: "web-1",
         ignored: 1,
         ok: 2,
@@ -86,7 +85,7 @@ test("builds the compact Ansible recap without unchanged results", () => {
     ],
     hosts: 2,
     plays: 2,
-    results: { changed: 1, failed: 1, ok: 2, skipped: 1, total: 6, unreachable: 1 },
+    results: { changed: 3, failed: 2, ok: 2, skipped: 1, total: 9, unreachable: 1 },
     tasks: 5,
   });
 
@@ -94,7 +93,6 @@ test("builds the compact Ansible recap without unchanged results", () => {
     badges.map(({ count, label }) => ({ count, label })),
     [
       { count: 1, label: "changed" },
-      { count: 1, label: "failed" },
       { count: 1, label: "unreachable" },
       { count: 1, label: "skipped" },
       { count: 3, label: "rescued" },
@@ -132,16 +130,20 @@ test("filters Ansible detail by play, task, action, host, and outcome", () => {
     }).flatMap((play) => play.tasks.map((entry) => entry.name)),
     ["Wait for endpoint", "Reach database"],
   );
+  assert.deepEqual(
+    filterAnsiblePlays(plays, {
+      keyword: "",
+      outcomes: ["ok"],
+      showUnchanged: false,
+    }).flatMap((play) => play.tasks.map((entry) => entry.name)),
+    ["Check service"],
+  );
 });
 
 test("hides unchanged detail by default while retaining partial and redacted tasks", () => {
-  const redacted = task(
-    13,
-    "source-only-secret-name",
-    "source-only-secret-action",
-    [result(14, "db-1", "ok")],
-    { redacted: true, sourcePath: "source-only-secret-path.yml:3" },
-  );
+  const redacted = task(13, "[redacted]", "[redacted]", [result(14, "db-1", "ok")], {
+    redacted: true,
+  });
   const withRedaction = [{ ...plays[1], tasks: [...plays[1].tasks, redacted] }];
   const filtered = filterAnsiblePlays(withRedaction, {
     keyword: "",
@@ -151,34 +153,9 @@ test("hides unchanged detail by default while retaining partial and redacted tas
 
   assert.deepEqual(
     filtered[0].tasks.map((entry) => entry.name),
-    ["Reach database", "Started before cancellation", "source-only-secret-name"],
-  );
-  assert.deepEqual(ansibleTaskPresentation(redacted), {
-    action: "[redacted]",
-    name: "[redacted]",
-  });
-  assert.deepEqual(
-    filterAnsiblePlays(withRedaction, {
-      keyword: "source-only-secret",
-      outcomes: [],
-      showUnchanged: true,
-    }),
-    [],
+    ["Reach database", "Started before cancellation", "[redacted]"],
   );
   assert.equal(countAnsibleUnchangedResults(withRedaction), 0);
-});
-
-test("an explicit ok outcome filter reveals unchanged detail", () => {
-  const filtered = filterAnsiblePlays(plays, {
-    keyword: "",
-    outcomes: ["ok"],
-    showUnchanged: false,
-  });
-
-  assert.deepEqual(
-    filtered.flatMap((play) => play.tasks.map((entry) => entry.name)),
-    ["Check service"],
-  );
 });
 
 test("paginates tasks while preserving play grouping and event order", () => {

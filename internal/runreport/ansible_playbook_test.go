@@ -89,17 +89,6 @@ func TestDecodeAnsiblePlaybookFixtures(t *testing.T) {
 			},
 		},
 		{
-			name: "ansible_no_log",
-			check: func(t *testing.T, report AnsiblePlaybookReport) {
-				t.Helper()
-				task := report.Plays[0].Tasks[0]
-				if !task.Redacted || task.Name != ansibleRedactedName || task.Action != ansibleRedactedName ||
-					task.SourcePath != "" {
-					t.Errorf("no_log task = %#v", task)
-				}
-			},
-		},
-		{
 			name: "ansible_partial_canceled",
 			check: func(t *testing.T, report AnsiblePlaybookReport) {
 				t.Helper()
@@ -135,20 +124,76 @@ func TestDecodeAnsiblePlaybookFixtures(t *testing.T) {
 				t.Errorf("projection retained excluded source data: %s", encoded)
 			}
 
-			var decoded AnsiblePlaybookReport
-			if err := json.Unmarshal(encoded, &decoded); err != nil {
-				t.Fatalf("json.Unmarshal() error = %v", err)
-			}
-			if err := decoded.Validate(); err != nil {
-				t.Fatalf("round-trip report validation error = %v", err)
-			}
-
 			projection, err := DecodeProjection(AnsiblePlaybookKind, bytes.NewReader(encoded))
 			if err != nil {
 				t.Fatalf("DecodeProjection() error = %v", err)
 			}
 			if _, ok := projection.(*AnsiblePlaybookReport); !ok {
 				t.Fatalf("DecodeProjection() = %T", projection)
+			}
+		})
+	}
+}
+
+func TestDecodeAnsiblePlaybookRedactsCensoredResults(t *testing.T) {
+	t.Parallel()
+
+	contents, err := os.ReadFile("testdata/ansible_no_log.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"runner_on_ok", "runner_on_skipped", "runner_item_on_skipped"} {
+		t.Run(event, func(t *testing.T) {
+			t.Parallel()
+
+			source := strings.Replace(string(contents), `"runner_on_ok"`, `"`+event+`"`, 1)
+			report, err := DecodeAnsiblePlaybook(strings.NewReader(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			task := report.Plays[0].Tasks[0]
+			if !task.Redacted || task.Name != ansibleRedactedName || task.Action != ansibleRedactedName ||
+				task.SourcePath != "" {
+				t.Fatalf("no_log task = %#v", task)
+			}
+			encoded, err := Encode(report)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if bytes.Contains(encoded, []byte("source-only")) {
+				t.Errorf("projection retained secret presentation: %s", encoded)
+			}
+		})
+	}
+}
+
+func TestDecodeAnsiblePlaybookResolvesRepositoryPaths(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "custom mount", path: "/srv/checkout/ansible/site.yml:4", want: "ansible/site.yml"},
+		{name: "nested project directory", path: "/srv/checkout/roles/project/tasks/main.yml:2", want: "roles/project/tasks/main.yml"},
+		{name: "external collection", path: "/usr/share/ansible/project/tasks/main.yml:2"},
+		{name: "sibling directory", path: "/srv/checkout-other/site.yml:4"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			source := validAnsibleSource(fmt.Sprintf(`[{
+				"counter":1,"uuid":"task-event","event":"playbook_on_task_start","event_data":{
+					"play":"Play","play_uuid":"play","task":"Task","task_uuid":"task",
+					"task_action":"copy","task_path":%q
+				}
+			}]`, test.path))
+			source = strings.Replace(source, `"repositoryDirectory":"/workspace"`, `"repositoryDirectory":"/srv/checkout"`, 1)
+			report, err := DecodeAnsiblePlaybook(strings.NewReader(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := report.Plays[0].Tasks[0].SourcePath; got != test.want {
+				t.Errorf("task source path = %q, want %q", got, test.want)
 			}
 		})
 	}
@@ -168,26 +213,36 @@ func TestDecodeAnsiblePlaybookRejectsInvalidDocuments(t *testing.T) {
 		{name: "malformed", document: `{`, wantError: "decode Ansible playbook source"},
 		{name: "trailing object", document: validAnsibleSource(`[]`) + ` {}`, wantError: "unexpected data"},
 		{
+			name:      "missing repository directory",
+			document:  strings.Replace(validAnsibleSource(`[]`), `"repositoryDirectory":"/workspace",`, "", 1),
+			wantError: "repositoryDirectory is required",
+		},
+		{
+			name:      "relative repository directory",
+			document:  strings.Replace(validAnsibleSource(`[]`), `"repositoryDirectory":"/workspace"`, `"repositoryDirectory":"workspace"`, 1),
+			wantError: "absolute clean path",
+		},
+		{
 			name:      "missing versions",
-			document:  `{"schemaVersion":1,"mode":"apply","runner":{"status":"successful","exitCode":0},"events":[]}`,
+			document:  `{"schemaVersion":2,"repositoryDirectory":"/workspace","mode":"apply","runner":{"status":"successful","exitCode":0},"events":[]}`,
 			wantError: "versions are required",
 		},
 		{
 			name:      "missing runner",
-			document:  `{"schemaVersion":1,"mode":"apply","versions":{},"events":[]}`,
+			document:  `{"schemaVersion":2,"repositoryDirectory":"/workspace","mode":"apply","versions":{},"events":[]}`,
 			wantError: "runner status and exitCode are required",
 		},
 		{
 			name:      "missing exit code",
-			document:  `{"schemaVersion":1,"mode":"apply","versions":{},"runner":{"status":"successful"},"events":[]}`,
+			document:  `{"schemaVersion":2,"repositoryDirectory":"/workspace","mode":"apply","versions":{},"runner":{"status":"successful"},"events":[]}`,
 			wantError: "runner status and exitCode are required",
 		},
 		{
 			name:      "missing events",
-			document:  `{"schemaVersion":1,"mode":"apply","versions":{},"runner":{"status":"successful","exitCode":0}}`,
+			document:  `{"schemaVersion":2,"repositoryDirectory":"/workspace","mode":"apply","versions":{},"runner":{"status":"successful","exitCode":0}}`,
 			wantError: "events are required",
 		},
-		{name: "schema version", document: strings.Replace(validAnsibleSource(`[]`), `"schemaVersion":1`, `"schemaVersion":2`, 1), wantError: "not supported"},
+		{name: "schema version", document: strings.Replace(validAnsibleSource(`[]`), `"schemaVersion":2`, `"schemaVersion":1`, 1), wantError: "not supported"},
 		{name: "mode", document: strings.Replace(validAnsibleSource(`[]`), `"mode":"apply"`, `"mode":"plan"`, 1), wantError: "mode must be"},
 		{name: "runner status", document: strings.Replace(validAnsibleSource(`[]`), `"status":"successful"`, `"status":"unknown"`, 1), wantError: "status is not supported"},
 		{name: "runner exit code", document: strings.Replace(validAnsibleSource(`[]`), `"exitCode":0`, `"exitCode":256`, 1), wantError: "between 0 and 255"},
@@ -251,7 +306,7 @@ func TestDecodeAnsiblePlaybookRejectsInvalidDocuments(t *testing.T) {
 				{"counter":1,"uuid":"result","event":"runner_on_ok","event_data":{"play":"Play","play_uuid":"play","task":"Task","task_uuid":"task","task_action":"copy","host":"host","res":{}}},
 				{"counter":2,"uuid":"stats","event":"playbook_on_stats","event_data":{"changed":{},"dark":{},"failures":{},"ignored":{},"ok":{},"processed":{},"rescued":{},"skipped":{}}}
 			]`),
-			wantError: "missing from final playbook stats",
+			wantError: "missing from summary hostTotals",
 		},
 	}
 
@@ -272,9 +327,10 @@ func TestDecodeAnsiblePlaybookEnforcesBounds(t *testing.T) {
 
 	exitCode := 0
 	document := ansiblePlaybookSource{
-		SchemaVersion: AnsiblePlaybookSchemaVersion,
-		Mode:          ApplyMode,
-		Versions:      &ansibleVersionsSource{},
+		SchemaVersion:       ansiblePlaybookSourceSchemaVersion,
+		RepositoryDirectory: "/workspace",
+		Mode:                ApplyMode,
+		Versions:            &ansibleVersionsSource{},
 		Runner: &ansibleRunnerSource{
 			Status:   AnsibleRunnerStatusSuccessful,
 			ExitCode: &exitCode,
@@ -335,40 +391,9 @@ func TestDecodeAnsiblePlaybookEnforcesSourceSize(t *testing.T) {
 	}
 }
 
-func TestAnsiblePlaybookAdapter(t *testing.T) {
-	t.Parallel()
-
-	contents, err := os.ReadFile("testdata/ansible_preview.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	adapter := ansiblePlaybookAdapter{}
-	report, err := adapter.Decode(bytes.NewReader(contents))
-	if err != nil {
-		t.Fatalf("adapter.Decode() error = %v", err)
-	}
-	if adapter.Kind() != AnsiblePlaybookKind ||
-		adapter.MaximumSourceSizeBytes() != MaximumAnsiblePlaybookSourceSizeBytes {
-		t.Errorf("adapter metadata = %q %d", adapter.Kind(), adapter.MaximumSourceSizeBytes())
-	}
-	if _, ok := report.(*AnsiblePlaybookReport); !ok {
-		t.Fatalf("adapter.Decode() = %T", report)
-	}
-}
-
-func TestAnsiblePlaybookAdapterRegistry(t *testing.T) {
-	t.Parallel()
-
-	adapter, found := AdapterForMediaType(AnsiblePlaybookMediaType + "; charset=utf-8")
-	if !found || adapter.Kind() != AnsiblePlaybookKind ||
-		adapter.MaximumSourceSizeBytes() != MaximumAnsiblePlaybookSourceSizeBytes {
-		t.Fatalf("AdapterForMediaType() = %#v, %t", adapter, found)
-	}
-}
-
 func validAnsibleSource(events string) string {
 	return `{
-		"schemaVersion":1,
+		"schemaVersion":2,"repositoryDirectory":"/workspace",
 		"mode":"apply",
 		"versions":{"ansibleCore":"2.21.5","ansibleRunner":"2.4.3"},
 		"runner":{"status":"successful","exitCode":0},

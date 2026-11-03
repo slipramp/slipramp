@@ -69,6 +69,15 @@ source data. The Ansible projection retains bounded play, task, host, and
 outcome structure, excludes arbitrary module result values, and hard-redacts
 tasks whose results indicate `no_log`.
 
+The Ansible runtime helper records the checkout's repository directory in its
+version 2 source envelope. The adapter uses that directory to make task paths
+repository-relative and omits paths outside it; it does not infer the checkout
+location from container path names. The Server owns task redaction, so clients
+render the validated projection directly. Host recap totals and host-task event
+counts are separate: loops, rescued failures, and ignored failures can make
+them differ. The projection schema remains version 1; source and projection
+versions evolve independently.
+
 The original source remains the immutable Artifact. PostgreSQL stores report
 kind, projection version, bounded summary, and projection object metadata; the
 object store holds source and projection bytes. Reading projection detail or

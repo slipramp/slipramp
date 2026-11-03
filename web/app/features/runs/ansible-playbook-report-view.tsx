@@ -30,7 +30,6 @@ import {
   ANSIBLE_TASK_PAGE_SIZE,
   ansibleOutcomeBadges,
   ansibleSummaryBadges,
-  ansibleTaskPresentation,
   countAnsibleOutcomes,
   countAnsibleUnchangedResults,
   filterAnsiblePlays,
@@ -336,7 +335,6 @@ function AnsiblePlayGroup({ play }: Readonly<{ play: AnsiblePlaybookReport["play
 }
 
 function AnsibleTaskItem({ expanded, task }: Readonly<{ expanded: boolean; task: AnsibleTask }>) {
-  const presentation = ansibleTaskPresentation(task);
   const badges = ansibleOutcomeBadges(countAnsibleOutcomes(task.results));
   const ignoredFailures = task.results.filter((result) => result.ignoredFailure).length;
 
@@ -346,7 +344,7 @@ function AnsibleTaskItem({ expanded, task }: Readonly<{ expanded: boolean; task:
         <Group align="flex-start" justify="space-between" pr="sm" wrap="wrap">
           <Stack gap={3} style={{ flex: "1 1 20rem", minWidth: 0 }}>
             <Group gap="xs" wrap="wrap">
-              <Text fw={600}>{presentation.name}</Text>
+              <Text fw={600}>{task.name}</Text>
               {task.redacted ? (
                 <Badge color="yellow" variant="light">
                   no_log redacted
@@ -354,10 +352,10 @@ function AnsibleTaskItem({ expanded, task }: Readonly<{ expanded: boolean; task:
               ) : null}
             </Group>
             <Group gap="xs" wrap="wrap">
-              <Code>{presentation.action}</Code>
-              {presentation.sourcePath ? (
+              <Code>{task.action}</Code>
+              {task.sourcePath ? (
                 <Text c="dimmed" size="xs" style={{ overflowWrap: "anywhere" }}>
-                  {presentation.sourcePath}
+                  {task.sourcePath}
                 </Text>
               ) : null}
             </Group>

@@ -34,6 +34,7 @@ func TestPackageSource(t *testing.T) {
 		Destination:             destination,
 		Mode:                    ModePreview,
 		RunnerArtifactDirectory: runnerArtifacts,
+		RepositoryDirectory:     "/workspace",
 		RunnerExitCodeFallback:  1,
 		Versions: Versions{
 			AnsibleCore:   "2.21.5",
@@ -44,15 +45,8 @@ func TestPackageSource(t *testing.T) {
 		t.Fatalf("PackageSource() error = %v", err)
 	}
 
-	contents, err := os.ReadFile(destination)
-	if err != nil {
-		t.Fatalf("os.ReadFile() error = %v", err)
-	}
-	var source Source
-	if err := json.Unmarshal(contents, &source); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
-	if source.SchemaVersion != SourceSchemaVersion || source.Mode != ModePreview {
+	source := readSource(t, destination)
+	if source.SchemaVersion != SourceSchemaVersion || source.Mode != ModePreview || source.RepositoryDirectory != "/workspace" {
 		t.Errorf("source envelope = version %d mode %q", source.SchemaVersion, source.Mode)
 	}
 	if source.Versions.AnsibleCore != "2.21.5" || source.Versions.AnsibleRunner != "2.4.3" {
@@ -82,6 +76,7 @@ func TestPackageSourceUsesPartialFallback(t *testing.T) {
 		Destination:             destination,
 		Mode:                    ModeApply,
 		RunnerArtifactDirectory: runnerArtifacts,
+		RepositoryDirectory:     "/workspace",
 		RunnerExitCodeFallback:  143,
 		Canceled:                true,
 	})
@@ -89,14 +84,7 @@ func TestPackageSourceUsesPartialFallback(t *testing.T) {
 		t.Fatalf("PackageSource() error = %v", err)
 	}
 
-	contents, err := os.ReadFile(destination)
-	if err != nil {
-		t.Fatalf("os.ReadFile() error = %v", err)
-	}
-	var source Source
-	if err := json.Unmarshal(contents, &source); err != nil {
-		t.Fatalf("json.Unmarshal() error = %v", err)
-	}
+	source := readSource(t, destination)
 	if source.Runner.Status != RunnerStatusCanceled || source.Runner.ExitCode != 143 {
 		t.Errorf("source Runner result = %#v", source.Runner)
 	}
@@ -160,6 +148,7 @@ func TestPackageSourceRejectsInvalidEvents(t *testing.T) {
 				Destination:             destination,
 				Mode:                    ModeApply,
 				RunnerArtifactDirectory: runnerArtifacts,
+				RepositoryDirectory:     "/workspace",
 			})
 			if err == nil || !strings.Contains(err.Error(), test.wantError) {
 				t.Fatalf("PackageSource() error = %v, want %q", err, test.wantError)

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	SourceSchemaVersion   = 1
+	SourceSchemaVersion   = 2
 	MaximumSourceSize     = 32 * 1024 * 1024
 	MaximumSourceEvents   = 200_000
 	DefaultReportPath     = "/slipramp/artifacts/ansible-playbook.json"
@@ -52,18 +52,19 @@ type RunnerResult struct {
 	ExitCode int          `json:"exitCode"`
 }
 
-type Source struct {
-	SchemaVersion int               `json:"schemaVersion"`
-	Mode          Mode              `json:"mode"`
-	Versions      Versions          `json:"versions"`
-	Runner        RunnerResult      `json:"runner"`
-	Events        []json.RawMessage `json:"events"`
+type sourceEnvelope struct {
+	SchemaVersion       int          `json:"schemaVersion"`
+	RepositoryDirectory string       `json:"repositoryDirectory"`
+	Mode                Mode         `json:"mode"`
+	Versions            Versions     `json:"versions"`
+	Runner              RunnerResult `json:"runner"`
 }
 
 type PackageConfig struct {
 	Destination             string
 	Mode                    Mode
 	RunnerArtifactDirectory string
+	RepositoryDirectory     string
 	RunnerExitCodeFallback  int
 	Canceled                bool
 	Versions                Versions
@@ -79,6 +80,9 @@ func PackageSource(config PackageConfig) error {
 	if config.RunnerArtifactDirectory == "" {
 		return errors.New("runner artifact directory is required")
 	}
+	if !filepath.IsAbs(config.RepositoryDirectory) || filepath.Clean(config.RepositoryDirectory) != config.RepositoryDirectory {
+		return errors.New("repository directory must be an absolute clean path")
+	}
 
 	runner, err := readRunnerResult(config)
 	if err != nil {
@@ -89,16 +93,12 @@ func PackageSource(config PackageConfig) error {
 		return err
 	}
 
-	header := struct {
-		SchemaVersion int          `json:"schemaVersion"`
-		Mode          Mode         `json:"mode"`
-		Versions      Versions     `json:"versions"`
-		Runner        RunnerResult `json:"runner"`
-	}{
-		SchemaVersion: SourceSchemaVersion,
-		Mode:          config.Mode,
-		Versions:      config.Versions,
-		Runner:        runner,
+	header := sourceEnvelope{
+		SchemaVersion:       SourceSchemaVersion,
+		RepositoryDirectory: config.RepositoryDirectory,
+		Mode:                config.Mode,
+		Versions:            config.Versions,
+		Runner:              runner,
 	}
 	encodedHeader, err := json.Marshal(header)
 	if err != nil {
@@ -116,7 +116,8 @@ func PackageSource(config PackageConfig) error {
 	temporaryPath := temporary.Name()
 	defer func() { _ = os.Remove(temporaryPath) }()
 
-	output := &boundedWriter{destination: bufio.NewWriter(temporary), maximum: MaximumSourceSize}
+	buffered := bufio.NewWriter(temporary)
+	output := &boundedWriter{destination: buffered, maximum: MaximumSourceSize}
 	prefix := append(encodedHeader[:len(encodedHeader)-1], []byte(",\"events\":[")...)
 	if _, err := output.Write(prefix); err != nil {
 		_ = temporary.Close()
@@ -143,7 +144,7 @@ func PackageSource(config PackageConfig) error {
 		_ = temporary.Close()
 		return err
 	}
-	if err := output.Flush(); err != nil {
+	if err := buffered.Flush(); err != nil {
 		_ = temporary.Close()
 		return fmt.Errorf("flush Ansible report: %w", err)
 	}
@@ -331,21 +332,17 @@ func readSourceEvent(event sourceEventFile) ([]byte, error) {
 }
 
 type boundedWriter struct {
-	destination *bufio.Writer
+	destination io.Writer
 	written     int
 	maximum     int
 }
 
 func (w *boundedWriter) Write(contents []byte) (int, error) {
 	if w.written+len(contents) > w.maximum {
-		return 0, fmt.Errorf("ansible report exceeds %d bytes", w.maximum)
+		return 0, fmt.Errorf("ansible output exceeds %d bytes", w.maximum)
 	}
 	n, err := w.destination.Write(contents)
 	w.written += n
 
 	return n, err
-}
-
-func (w *boundedWriter) Flush() error {
-	return w.destination.Flush()
 }

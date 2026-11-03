@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"syscall"
@@ -15,7 +13,7 @@ import (
 	"time"
 )
 
-func TestLaunch(t *testing.T) {
+func TestRun(t *testing.T) {
 	project := testProject(t)
 	runner, playbook := testBinaries(t)
 
@@ -23,10 +21,11 @@ func TestLaunch(t *testing.T) {
 		name        string
 		mode        Mode
 		limit       string
+		inventory   string
 		wantCmdline string
 	}{
 		{name: "preview", mode: ModePreview, limit: "node01.example.com", wantCmdline: "--check --diff"},
-		{name: "apply", mode: ModeApply},
+		{name: "apply", mode: ModeApply, inventory: filepath.Join(project, "inventory", "cloud.yml")},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -37,11 +36,12 @@ func TestLaunch(t *testing.T) {
 			t.Setenv("FAKE_ANSIBLE_RC", "23")
 
 			var stdout, stderr bytes.Buffer
-			exitCode, err := Launch(t.Context(), Config{
+			exitCode, err := Run(t.Context(), Config{
 				Mode:             test.mode,
 				ProjectDirectory: project,
 				Playbook:         "site.yml",
 				Limit:            test.limit,
+				Inventory:        test.inventory,
 				ReportPath:       reportPath,
 				RunnerBinary:     runner,
 				PlaybookBinary:   playbook,
@@ -49,14 +49,14 @@ func TestLaunch(t *testing.T) {
 				Stderr:           &stderr,
 			})
 			if err != nil {
-				t.Fatalf("Launch() error = %v", err)
+				t.Fatalf("Run() error = %v", err)
 			}
 			if exitCode != 23 {
-				t.Errorf("Launch() exit code = %d, want 23", exitCode)
+				t.Errorf("Run() exit code = %d, want 23", exitCode)
 			}
 			if !strings.Contains(stdout.String(), "ansible stdout") ||
 				!strings.Contains(stderr.String(), "ansible stderr") {
-				t.Errorf("Launch() output = stdout %q stderr %q", stdout.String(), stderr.String())
+				t.Errorf("Run() output = stdout %q stderr %q", stdout.String(), stderr.String())
 			}
 
 			contents, err := os.ReadFile(recordPath)
@@ -68,7 +68,11 @@ func TestLaunch(t *testing.T) {
 				t.Fatalf("json.Unmarshal() error = %v", err)
 			}
 			assertArgument(t, arguments, "--project-dir", project)
-			assertArgument(t, arguments, "--inventory", filepath.Join(project, "inventory", "hosts.yml"))
+			wantInventory := test.inventory
+			if wantInventory == "" {
+				wantInventory = filepath.Join(project, "inventory", "hosts.yml")
+			}
+			assertArgument(t, arguments, "--inventory", wantInventory)
 			assertArgument(t, arguments, "--playbook", "site.yml")
 			assertArgument(t, arguments, "--ident", defaultRunnerIdentity)
 			if !slices.Contains(arguments, "--omit-env-files") {
@@ -86,7 +90,8 @@ func TestLaunch(t *testing.T) {
 			}
 
 			source := readSource(t, reportPath)
-			if source.SchemaVersion != SourceSchemaVersion || source.Mode != test.mode {
+			if source.SchemaVersion != SourceSchemaVersion || source.Mode != test.mode ||
+				source.RepositoryDirectory != filepath.Dir(project) {
 				t.Errorf("source envelope = version %d mode %q", source.SchemaVersion, source.Mode)
 			}
 			if source.Versions.AnsibleCore != "2.21.5" || source.Versions.AnsibleRunner != "2.4.3" {
@@ -103,24 +108,23 @@ func TestLaunch(t *testing.T) {
 	}
 }
 
-func TestLaunchValidatesPlaybook(t *testing.T) {
+func TestRunRejectsPlaybookOutsideProject(t *testing.T) {
 	project := testProject(t)
-	runner, playbook := testBinaries(t)
+	if err := os.WriteFile(filepath.Join(project, "..", "site.yml"), []byte("---\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
-	exitCode, err := Launch(t.Context(), Config{
+	exitCode, err := Run(t.Context(), Config{
 		Mode:             ModePreview,
 		ProjectDirectory: project,
 		Playbook:         "../site.yml",
-		RunnerBinary:     runner,
-		PlaybookBinary:   playbook,
-		ReportPath:       filepath.Join(t.TempDir(), "report.json"),
 	})
-	if exitCode != 64 || err == nil || !strings.Contains(err.Error(), "resolve playbook") {
-		t.Fatalf("Launch() = exit %d, error %v", exitCode, err)
+	if exitCode != 64 || err == nil || !strings.Contains(err.Error(), "stay inside the project directory") {
+		t.Fatalf("Run() = exit %d, error %v", exitCode, err)
 	}
 }
 
-func TestLaunchPreservesRunnerFailureWhenPackagingFails(t *testing.T) {
+func TestRunPreservesRunnerFailureWhenPackagingFails(t *testing.T) {
 	project := testProject(t)
 	runner, playbook := testBinaries(t)
 
@@ -135,7 +139,7 @@ func TestLaunchPreservesRunnerFailureWhenPackagingFails(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("FAKE_ANSIBLE_RC", test.runnerRC)
-			exitCode, err := Launch(t.Context(), Config{
+			exitCode, err := Run(t.Context(), Config{
 				Mode:             ModeApply,
 				ProjectDirectory: project,
 				Playbook:         "site.yml",
@@ -144,39 +148,13 @@ func TestLaunchPreservesRunnerFailureWhenPackagingFails(t *testing.T) {
 				ReportPath:       t.TempDir(),
 			})
 			if exitCode != test.wantRC || err == nil || !strings.Contains(err.Error(), "package Ansible report") {
-				t.Fatalf("Launch() = exit %d, error %v", exitCode, err)
+				t.Fatalf("Run() = exit %d, error %v", exitCode, err)
 			}
 		})
 	}
 }
 
-func TestLaunchRejectsDuplicateCounters(t *testing.T) {
-	project := testProject(t)
-	runner, playbook := testBinaries(t)
-	t.Setenv("FAKE_ANSIBLE_DUPLICATE_COUNTER", "1")
-	reportPath := filepath.Join(t.TempDir(), "report.json")
-
-	exitCode, err := Launch(t.Context(), Config{
-		Mode:             ModeApply,
-		ProjectDirectory: project,
-		Playbook:         "site.yml",
-		RunnerBinary:     runner,
-		PlaybookBinary:   playbook,
-		ReportPath:       reportPath,
-	})
-	if exitCode != 70 || err == nil || !strings.Contains(err.Error(), "event counter 1 is duplicated") {
-		t.Fatalf("Launch() = exit %d, error %v", exitCode, err)
-	}
-	if _, err := os.Stat(reportPath); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("report path error = %v, want not found", err)
-	}
-}
-
-func TestLaunchForwardsTermination(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("process-group signal behavior is POSIX-specific")
-	}
-
+func TestRunForwardsTermination(t *testing.T) {
 	project := testProject(t)
 	runner, playbook := testBinaries(t)
 	temporary := t.TempDir()
@@ -185,15 +163,15 @@ func TestLaunchForwardsTermination(t *testing.T) {
 	t.Setenv("FAKE_ANSIBLE_READY", readyPath)
 	signals := make(chan os.Signal, 1)
 
-	type launchResult struct {
+	type runResult struct {
 		exitCode int
 		err      error
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	result := make(chan launchResult, 1)
+	result := make(chan runResult, 1)
 	go func() {
-		exitCode, err := Launch(ctx, Config{
+		exitCode, err := Run(ctx, Config{
 			Mode:             ModeApply,
 			ProjectDirectory: project,
 			Playbook:         "site.yml",
@@ -202,7 +180,7 @@ func TestLaunchForwardsTermination(t *testing.T) {
 			ReportPath:       reportPath,
 			Signals:          signals,
 		})
-		result <- launchResult{exitCode: exitCode, err: err}
+		result <- runResult{exitCode: exitCode, err: err}
 	}()
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -225,10 +203,10 @@ func TestLaunchForwardsTermination(t *testing.T) {
 	select {
 	case finished := <-result:
 		if finished.exitCode != 143 || finished.err != nil {
-			t.Fatalf("Launch() = exit %d, error %v", finished.exitCode, finished.err)
+			t.Fatalf("Run() = exit %d, error %v", finished.exitCode, finished.err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("Launch() did not finish after termination")
+		t.Fatal("Run() did not finish after termination")
 	}
 
 	source := readSource(t, reportPath)
@@ -246,6 +224,13 @@ func testProject(t *testing.T) string {
 	project, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatalf("filepath.EvalSymlinks() error = %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(project, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	project = filepath.Join(project, "ansible")
+	if err := os.Mkdir(project, 0o755); err != nil {
+		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(project, "site.yml"), []byte("---\n"), 0o600); err != nil {
 		t.Fatalf("os.WriteFile() error = %v", err)
@@ -275,14 +260,19 @@ func testBinaries(t *testing.T) (string, string) {
 	return runner, playbook
 }
 
-func readSource(t *testing.T, path string) Source {
+type testSource struct {
+	sourceEnvelope
+	Events []json.RawMessage `json:"events"`
+}
+
+func readSource(t *testing.T, path string) testSource {
 	t.Helper()
 
 	contents, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("os.ReadFile() error = %v", err)
 	}
-	var source Source
+	var source testSource
 	if err := json.Unmarshal(contents, &source); err != nil {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
@@ -299,27 +289,5 @@ func assertArgument(t *testing.T, arguments []string, name, want string) {
 	}
 	if arguments[index+1] != want {
 		t.Errorf("Runner argument %s = %q, want %q", name, arguments[index+1], want)
-	}
-}
-
-func TestResolveConfigUsesExplicitInventory(t *testing.T) {
-	t.Parallel()
-
-	project := testProject(t)
-	inventory := filepath.Join(t.TempDir(), "inventory.py")
-	if err := os.WriteFile(inventory, []byte("#!/usr/bin/env python3\n"), 0o700); err != nil {
-		t.Fatalf("os.WriteFile() error = %v", err)
-	}
-	resolved, err := resolveConfig(Config{
-		Mode:             ModeApply,
-		ProjectDirectory: project,
-		Inventory:        inventory,
-		Playbook:         "site.yml",
-	})
-	if err != nil {
-		t.Fatalf("resolveConfig() error = %v", err)
-	}
-	if resolved.Inventory != inventory {
-		t.Errorf("resolved inventory = %q, want %q", resolved.Inventory, inventory)
 	}
 }

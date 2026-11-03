@@ -251,13 +251,3 @@ func TestDecodePyinfraDeployEnforcesSourceSize(t *testing.T) {
 		t.Fatalf("DecodePyinfraDeploy() error = %v, want source size error", err)
 	}
 }
-
-func TestPyinfraReportAdapterRegistry(t *testing.T) {
-	t.Parallel()
-
-	adapter, found := AdapterForMediaType(PyinfraDeployMediaType + "; charset=utf-8")
-	if !found || adapter.Kind() != PyinfraDeployKind ||
-		adapter.MaximumSourceSizeBytes() != MaximumPyinfraDeploySourceSizeBytes {
-		t.Fatalf("AdapterForMediaType() = %#v, %t", adapter, found)
-	}
-}

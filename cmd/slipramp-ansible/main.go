@@ -53,7 +53,7 @@ func run(
 	}
 	config.Playbook = flags.Arg(0)
 
-	exitCode, err := ansiblereport.Launch(ctx, config)
+	exitCode, err := ansiblereport.Run(ctx, config)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, err)
 	}

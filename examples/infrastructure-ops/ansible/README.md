@@ -95,11 +95,12 @@ Slipramp does not turn preview into an approval requirement.
 
 After Runner exits, `slipramp-ansible` writes
 `/slipramp/artifacts/ansible-playbook.json` atomically. Its `--report` option can
-select another path for local tests. The schema version 1 envelope is:
+select another path for local tests. The schema version 2 envelope is:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "repositoryDirectory": "/workspace",
   "mode": "preview",
   "versions": {
     "ansibleCore": "2.21.5",
@@ -118,6 +119,11 @@ select another path for local tests. The schema version 1 envelope is:
 helper's exit status. `events` contains the completed Runner JSON events ordered
 by their positive integer `counter`. A missing final `playbook_on_stats` event
 represents a partial stream rather than a packaging failure.
+
+`repositoryDirectory` records the nearest Git repository root above the project
+directory, or the project directory for a standalone playbook. The Server uses
+it to resolve repository-relative task paths, including with custom Runtime
+working directories, and omits paths outside that directory.
 
 The helper rejects malformed event JSON, filename/content counter mismatches,
 duplicate counters, more than 200,000 completed events, and a source document

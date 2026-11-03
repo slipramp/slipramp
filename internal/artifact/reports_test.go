@@ -225,34 +225,6 @@ func TestServiceProjectsAnsiblePlaybookReport(t *testing.T) {
 	}
 }
 
-func TestServiceRejectsMalformedAnsiblePlaybookReport(t *testing.T) {
-	t.Parallel()
-
-	source := []byte(`{"schemaVersion":1`)
-	request := reportUploadRequest(source)
-	metadata := reportTestMetadata()
-	metadata.context.Artifacts[request.Name] = Declaration{
-		MediaType: runreport.AnsiblePlaybookMediaType,
-		Sensitive: true,
-	}
-	contents := &serviceContentStore{}
-	observer := &recordingReportIngestionObserver{}
-	service := newTestService(metadata, contents)
-	service.reportObserver = observer
-
-	err := service.Upload(context.Background(), request)
-	if !errors.Is(err, ErrInvalid) {
-		t.Fatalf("Upload() error = %v, want invalid report", err)
-	}
-	if metadata.record != nil || len(metadata.reports) != 0 || contents.puts != 1 {
-		t.Errorf("rejected report = record %#v, reports %#v, puts %d", metadata.record, metadata.reports, contents.puts)
-	}
-	if !slices.Equal(observer.kinds, []runreport.ReportKind{runreport.AnsiblePlaybookKind}) ||
-		!slices.Equal(observer.outcomes, []ReportIngestionOutcome{ReportIngestionRejected}) {
-		t.Errorf("report ingestion observations = kinds %v, outcomes %v", observer.kinds, observer.outcomes)
-	}
-}
-
 func TestServiceLeavesReportObjectsForReconciliationAfterFailure(t *testing.T) {
 	t.Parallel()
 
@@ -268,6 +240,19 @@ func TestServiceLeavesReportObjectsForReconciliationAfterFailure(t *testing.T) {
 		{
 			name:        "malformed source",
 			source:      []byte(`{"format_version":`),
+			wantPuts:    1,
+			wantOutcome: ReportIngestionRejected,
+			wantInvalid: true,
+		},
+		{
+			name:   "malformed Ansible source",
+			source: []byte(`{"schemaVersion":2`),
+			configure: func(metadata *serviceMetadataStore, _ *serviceContentStore) {
+				metadata.context.Artifacts["plan-report"] = Declaration{
+					MediaType: runreport.AnsiblePlaybookMediaType,
+					Sensitive: true,
+				}
+			},
 			wantPuts:    1,
 			wantOutcome: ReportIngestionRejected,
 			wantInvalid: true,
@@ -348,7 +333,7 @@ func reportUploadRequest(source []byte) UploadRequest {
 
 func ansibleReportSource() []byte {
 	return []byte(`{
-		"schemaVersion":1,
+		"schemaVersion":2,"repositoryDirectory":"/workspace",
 		"mode":"apply",
 		"versions":{"ansibleCore":"2.21.5","ansibleRunner":"2.4.3"},
 		"runner":{"status":"successful","exitCode":0},

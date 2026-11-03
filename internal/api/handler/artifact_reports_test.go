@@ -358,7 +358,7 @@ func handlerAnsibleReportContent(t *testing.T) artifact.ReportContent {
 	t.Helper()
 
 	report, err := runreport.DecodeAnsiblePlaybook(strings.NewReader(`{
-		"schemaVersion":1,
+		"schemaVersion":2,"repositoryDirectory":"/workspace",
 		"mode":"apply",
 		"versions":{"ansibleCore":"2.21.5","ansibleRunner":"2.4.3"},
 		"runner":{"status":"successful","exitCode":0},
