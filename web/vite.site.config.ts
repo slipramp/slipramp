@@ -30,6 +30,11 @@ function cloudflareHeaders(): Plugin {
   };
 }
 
+const figmaAllowedHost =
+  process.env.FIGMA && process.env.FIGMA_PUBLIC_URL
+    ? new URL(process.env.FIGMA_PUBLIC_URL).hostname
+    : undefined;
+
 export default defineConfig({
   build: {
     emptyOutDir: true,
@@ -45,4 +50,5 @@ export default defineConfig({
   plugins: [cloudflareHeaders()],
   publicDir: fileURLToPath(new URL("./public", import.meta.url)),
   root: fileURLToPath(new URL("./site", import.meta.url)),
+  server: figmaAllowedHost ? { allowedHosts: [figmaAllowedHost] } : undefined,
 });

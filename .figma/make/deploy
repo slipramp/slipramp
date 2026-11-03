@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pnpm --dir web run build:site
+[[ -d "web/dist/site" ]] || {
+  echo "Expected build output at web/dist/site" >&2
+  exit 1
+}
+figma make deploy --build-dir "web/dist/site"
