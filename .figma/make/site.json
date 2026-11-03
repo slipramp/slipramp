@@ -1,0 +1,10 @@
+{
+  "description": "Prepares imported projects for verification and deployment, helping developers validate production and preview setups before launch.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

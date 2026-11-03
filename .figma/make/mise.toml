@@ -1,0 +1,5 @@
+# Auto-generated during Figma make bootstrap because this project shipped no mise config.
+[tools]
+node = "22.22.0"
+"npm:pnpm" = "12.14.0"
+go = "1.27.2"
