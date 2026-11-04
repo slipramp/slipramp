@@ -1,0 +1,140 @@
+:root {
+  --site-shell-ink: #513b49;
+  --site-shell-muted: #866676;
+  --site-shell-sakura-dark: #b53268;
+  --site-shell-line: #f1d8e6;
+  --site-shell-cream: #fffdf8;
+}
+
+.shell {
+  width: min(1160px, calc(100% - 3rem));
+  margin-inline: auto;
+}
+
+.site-header {
+  position: relative;
+  z-index: 20;
+  border-bottom: 1px solid rgb(241 216 230 / 82%);
+  background: rgb(255 250 253 / 91%);
+  backdrop-filter: blur(16px);
+}
+
+.nav-shell {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.68rem;
+  color: var(--site-shell-ink);
+  font-size: 1.18rem;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  text-decoration: none;
+}
+
+.brand img {
+  display: block;
+  object-fit: contain;
+}
+
+.nav-shell nav,
+.footer-shell nav {
+  display: flex;
+  align-items: center;
+  gap: clamp(1rem, 3vw, 2rem);
+}
+
+.nav-shell nav a,
+.footer-shell nav a {
+  color: #735968;
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.nav-shell nav a:hover,
+.footer-shell nav a:hover,
+.nav-shell nav a[aria-current="page"],
+.footer-shell nav a[aria-current="page"] {
+  color: var(--site-shell-sakura-dark);
+}
+
+.nav-shell .nav-github {
+  padding: 0.62rem 0.95rem;
+  border: 1px solid var(--site-shell-line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 70%);
+  color: var(--site-shell-ink);
+}
+
+.site-footer {
+  border-top: 1px solid var(--site-shell-line);
+  background: var(--site-shell-cream);
+}
+
+.footer-shell {
+  display: grid;
+  min-height: 110px;
+  align-items: center;
+  gap: 1.5rem;
+  grid-template-columns: auto 1fr auto;
+}
+
+.footer-shell p {
+  margin: 0;
+  color: var(--site-shell-muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@media (width < 62rem) {
+  .footer-shell {
+    padding-block: 1.8rem;
+    grid-template-columns: 1fr auto;
+  }
+
+  .footer-shell p {
+    grid-row: 2;
+    text-align: left;
+  }
+}
+
+@media (width < 44rem) {
+  .shell {
+    width: min(100% - 2rem, 1160px);
+  }
+
+  .nav-shell {
+    min-height: 66px;
+  }
+
+  .nav-shell nav a:not(.nav-github, [aria-current="page"]) {
+    display: none;
+  }
+
+  .nav-shell nav {
+    gap: 0.7rem;
+  }
+
+  .footer-shell {
+    display: flex;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .footer-shell nav {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header {
+    backdrop-filter: none;
+  }
+}

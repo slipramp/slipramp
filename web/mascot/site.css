@@ -2,23 +2,6 @@
   min-height: 100vh;
 }
 
-.mascot-site-nav {
-  position: sticky;
-  z-index: 20;
-  top: 0;
-  border-bottom: 1px solid var(--slipramp-border);
-  background: var(--slipramp-header);
-  backdrop-filter: blur(16px);
-}
-
-.mascot-site-brand {
-  letter-spacing: -0.025em;
-}
-
-.mascot-site-github {
-  color: var(--mantine-color-text);
-}
-
 .mascot-site-content {
   padding-block: clamp(0.5rem, 1.5vw, 1rem) 4rem;
 }
@@ -52,12 +35,6 @@
   filter: drop-shadow(0 18px 24px rgb(181 50 104 / 16%));
 }
 
-.mascot-site-footer {
-  padding-block: 1.5rem;
-  border-top: 1px solid var(--slipramp-border);
-  background: rgb(255 250 253 / 70%);
-}
-
 @media (width < 48em) {
   .mascot-site-hero-copy h1 {
     max-width: none;
@@ -66,11 +43,5 @@
   .mascot-site-hero-image {
     width: min(100%, 19rem);
     margin-inline: auto;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mascot-site-nav {
-    backdrop-filter: none;
   }
 }

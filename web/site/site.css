@@ -51,71 +51,6 @@ a:focus-visible {
   outline-offset: 4px;
 }
 
-.shell {
-  width: min(1160px, calc(100% - 3rem));
-  margin-inline: auto;
-}
-
-.site-header {
-  position: relative;
-  z-index: 20;
-  border-bottom: 1px solid rgb(241 216 230 / 82%);
-  background: rgb(255 250 253 / 91%);
-  backdrop-filter: blur(16px);
-}
-
-.nav-shell {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.68rem;
-  font-size: 1.18rem;
-  font-weight: 780;
-  letter-spacing: -0.035em;
-  text-decoration: none;
-}
-
-.brand img {
-  object-fit: contain;
-}
-
-.nav-shell nav,
-.footer-shell nav {
-  display: flex;
-  align-items: center;
-  gap: clamp(1rem, 3vw, 2rem);
-}
-
-.nav-shell nav a,
-.footer-shell nav a {
-  color: #735968;
-  font-size: 0.9rem;
-  font-weight: 650;
-  text-decoration: none;
-}
-
-.nav-shell nav a:hover,
-.footer-shell nav a:hover,
-.nav-shell nav a[aria-current="page"],
-.footer-shell nav a[aria-current="page"] {
-  color: var(--sakura-dark);
-}
-
-.nav-shell .nav-github {
-  padding: 0.62rem 0.95rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgb(255 255 255 / 70%);
-  color: var(--ink);
-}
-
 .hero {
   container-type: inline-size;
   display: grid;
@@ -428,26 +363,6 @@ h3 {
   margin-bottom: 2.2rem;
 }
 
-footer {
-  border-top: 1px solid var(--line);
-  background: var(--cream);
-}
-
-.footer-shell {
-  display: grid;
-  min-height: 110px;
-  align-items: center;
-  gap: 1.5rem;
-  grid-template-columns: auto 1fr auto;
-}
-
-.footer-shell p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  text-align: center;
-}
-
 .policy-page {
   padding-block: clamp(1.75rem, 3vw, 2.5rem) clamp(6rem, 12vw, 10rem);
 }
@@ -553,35 +468,9 @@ footer {
   .privacy-copy {
     max-width: 40rem;
   }
-
-  .footer-shell {
-    padding-block: 1.8rem;
-    grid-template-columns: 1fr auto;
-  }
-
-  .footer-shell p {
-    grid-row: 2;
-    text-align: left;
-  }
 }
 
 @media (width < 44rem) {
-  .shell {
-    width: min(100% - 2rem, 1160px);
-  }
-
-  .nav-shell {
-    min-height: 66px;
-  }
-
-  .nav-shell nav a:not(.nav-github, [aria-current="page"]) {
-    display: none;
-  }
-
-  .nav-shell nav {
-    gap: 0.7rem;
-  }
-
   .hero {
     gap: 3rem;
     padding-block: 2.5rem 4.5rem;
@@ -636,16 +525,6 @@ footer {
     margin-inline: 1rem;
   }
 
-  .footer-shell {
-    display: flex;
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .footer-shell nav {
-    flex-wrap: wrap;
-  }
-
   .policy-header h1 {
     font-size: clamp(3.4rem, 18vw, 5.2rem);
   }
@@ -662,9 +541,5 @@ footer {
 
   .button:hover {
     transform: none;
-  }
-
-  .site-header {
-    backdrop-filter: none;
   }
 }

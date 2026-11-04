@@ -1,10 +1,10 @@
 import "@fontsource-variable/manrope/wght.css";
 import "@mantine/core/styles.css";
 import "../app/app.css";
+import "../shared/site-shell.css";
 import "./site.css";
 
 import {
-  Anchor,
   Badge,
   Box,
   Container,
@@ -16,10 +16,10 @@ import {
   Text,
   Title,
 } from "@mantine/core";
-import { IconBrandGithub, IconSparkles } from "@tabler/icons-react";
+import { IconSparkles } from "@tabler/icons-react";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Link, Route, Routes, useParams } from "react-router";
+import { BrowserRouter, Route, Routes, useParams } from "react-router";
 
 import mascotUrl from "~/features/mascot/assets/slipramp-mascot.webp";
 import { MascotGallery, MascotPoseDetail, mascotPoseCount } from "~/features/mascot/mascot-gallery";
@@ -31,34 +31,24 @@ document.documentElement.dataset.sliprampTheme = "kawaii";
 function MascotSite() {
   return (
     <Box className="mascot-site">
-      <Box className="mascot-site-nav" component="header">
-        <Container size="xl">
-          <Group h={64} justify="space-between" wrap="nowrap">
-            <Anchor component={Link} to="/" underline="never">
-              <Group gap="sm" wrap="nowrap">
-                <Image alt="" aria-hidden="true" h={34} src="/slipramp-mark.png" w={34} />
-                <Text className="mascot-site-brand" fw={750} size="lg">
-                  Slipramp
-                </Text>
-              </Group>
-            </Anchor>
-            <Anchor
-              className="mascot-site-github"
-              href="https://github.com/slipramp/slipramp"
-              rel="noreferrer"
-              target="_blank"
-              underline="never"
-            >
-              <Group gap={6} wrap="nowrap">
-                <IconBrandGithub aria-hidden="true" size={19} stroke={1.8} />
-                <Text component="span" fw={650} visibleFrom="xs">
-                  View on GitHub
-                </Text>
-              </Group>
-            </Anchor>
-          </Group>
-        </Container>
-      </Box>
+      <header className="site-header">
+        <div className="shell nav-shell">
+          <a aria-label="Slipramp home" className="brand" href="https://slipramp.com/">
+            <img alt="" aria-hidden="true" height="36" src="/slipramp-mark.png" width="36" />
+            <span>Slipramp</span>
+          </a>
+          <nav aria-label="Primary navigation">
+            <a href="https://slipramp.com/#how-it-works">How it works</a>
+            <a href="https://slipramp.com/privacy/">Privacy</a>
+            <a aria-current="page" href="/">
+              Mascot
+            </a>
+            <a className="nav-github" href="https://github.com/slipramp/slipramp">
+              GitHub
+            </a>
+          </nav>
+        </div>
+      </header>
 
       <Container className="mascot-site-content" component="main" size="xl">
         <Routes>
@@ -68,18 +58,22 @@ function MascotSite() {
         </Routes>
       </Container>
 
-      <Box className="mascot-site-footer" component="footer">
-        <Container size="xl">
-          <Group gap="xs" justify="space-between">
-            <Text c="dimmed" size="sm">
-              Built for Slipramp, a GitOps-driven infrastructure control plane.
-            </Text>
-            <Text c="dimmed" size="sm">
-              Activity respects reduced-motion preferences.
-            </Text>
-          </Group>
-        </Container>
-      </Box>
+      <footer className="site-footer">
+        <div className="shell footer-shell">
+          <a aria-label="Slipramp home" className="brand" href="https://slipramp.com/">
+            <img alt="" aria-hidden="true" height="30" src="/slipramp-mark.png" width="30" />
+            <span>Slipramp</span>
+          </a>
+          <p>GitOps-driven infrastructure control for homelabs and teams.</p>
+          <nav aria-label="Footer navigation">
+            <a href="https://github.com/slipramp/slipramp">GitHub</a>
+            <a aria-current="page" href="/">
+              Mascot
+            </a>
+            <a href="https://slipramp.com/privacy/">Privacy</a>
+          </nav>
+        </div>
+      </footer>
     </Box>
   );
 }
