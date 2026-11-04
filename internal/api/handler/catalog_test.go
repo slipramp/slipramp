@@ -19,6 +19,28 @@ import (
 	"github.com/slipramp/slipramp/internal/run"
 )
 
+func TestCatalogTriggersResponseProjectsGitAndScheduleVariants(t *testing.T) {
+	t.Parallel()
+
+	response, err := catalogTriggersResponse([]catalog.Trigger{
+		{Name: "on-change", Git: &catalog.GitTrigger{}},
+		{
+			Name:       "nightly-preview",
+			Schedule:   &catalog.ScheduleTrigger{Cron: "0 3 * * *"},
+			Parameters: map[string]any{"refresh": true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("catalogTriggersResponse() error = %v", err)
+	}
+	if response == nil || len(*response) != 2 || (*response)[0].Git == nil ||
+		(*response)[0].Schedule != nil || (*response)[1].Git != nil ||
+		(*response)[1].Schedule == nil || (*response)[1].Schedule.Cron != "0 3 * * *" ||
+		(*response)[1].Parameters == nil {
+		t.Errorf("trigger response = %#v", response)
+	}
+}
+
 func TestGetRepositoryCatalogReturnsActiveRevision(t *testing.T) {
 	t.Parallel()
 

@@ -620,6 +620,8 @@ export type {
   RuntimeCredential,
   RuntimeExplanation,
   RuntimeSpec,
+  ScheduleRunSource,
+  ScheduleTrigger,
   SealRunLogData,
   SealRunLogError,
   SealRunLogErrors,

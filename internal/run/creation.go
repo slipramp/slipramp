@@ -129,6 +129,9 @@ func (s *Service) createRun(
 	if !found {
 		return Run{}, ErrActionNotFound
 	}
+	if err := validateScheduledTriggerRequest(action, request.Source, parameters); err != nil {
+		return Run{}, err
+	}
 
 	if err := validateArtifactInputs(action, inputs); err != nil {
 		return Run{}, err

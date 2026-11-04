@@ -1,13 +1,13 @@
 # Runs and scheduling
 
-This document defines immutable Run creation, scheduling, reconciliation, rerun,
-and Git-trigger contracts. [Controller execution](./execution.md) defines local
+This document defines immutable Run creation, scheduling, reconciliation,
+rerun, Git-trigger, and scheduled-trigger contracts. [Controller execution](./execution.md) defines local
 Job behavior; [Logs and Artifacts](./artifacts.md) defines durable output.
 
 ## Immutable creation
 
-Manual, API, MCP, Git-trigger, and Promotion preparation requests use one Run
-creation service. A request selects a durable Target UUID and Action name. The
+Manual, API, MCP, Git-trigger, scheduled-trigger, and Promotion preparation
+requests use one Run creation service. A request selects a durable Target UUID and Action name. The
 service resolves the active catalog, validates parameters and Artifact bindings,
 and freezes:
 
@@ -26,9 +26,9 @@ Promotion preparation linkage. An ambiguous response can therefore be retried
 without producing a detached execution.
 
 Run source and actor are separate facts. Browser requests use `manual`, ordinary
-API-key requests use `api`, MCP uses `mcp`, Git deliveries have no human actor,
-and Promotion preparation records its Promotion source. Clients cannot choose a
-source value directly.
+API-key requests use `api`, MCP uses `mcp`, Git deliveries and scheduled Runs
+have no human actor, and Promotion preparation records its Promotion source.
+Clients cannot choose a source value directly.
 
 ## Scheduling and lifecycle
 
@@ -118,6 +118,37 @@ Creation failures retain bounded diagnostics, attempt count, and next due time.
 Bounded exponential backoff isolates a failing delivery so later eligible work
 continues. Exhaustion produces terminal failure history. Retrying a delivery may
 create its immutable Run; it never retries the Run's infrastructure command.
+
+## Scheduled Action triggers
+
+A named Action trigger may instead declare `schedule.cron` with optional static
+parameters. Cron uses exactly five fields—minute, hour, day of month, month, and
+day of week—and is always evaluated in UTC. Timezone configuration and
+seconds-level schedules are not supported. A trigger selects exactly one of
+`git` or `schedule`; `review: required` remains Git-only. Scheduled Actions may
+have any intent but cannot require Artifact inputs. Static parameters use the
+ordinary catalog parameter normalization and validation rules.
+
+The Server keeps the next future occurrence for each active named schedule. On
+startup and whenever a Target's active catalog revision changes, it calculates
+only the next occurrence after the current time. It never replays missed
+occurrences. Removing or changing a schedule changes only future evaluation and
+does not mutate or cancel Runs already created.
+
+At an occurrence, the scheduler asks the ordinary Run creation service to
+resolve the currently active Target and catalog and freeze the normal immutable
+snapshot. The Run source records the trigger name and scheduled UTC timestamp;
+there is no human actor. A deterministic occurrence idempotency key and the Run
+insert transaction prevent duplicate creation across repeated evaluation or a
+Server restart near the occurrence.
+
+If the previous Run from the same Target, Action, and named schedule is still
+unfinished, including queued, the occurrence is skipped. Queued or active Runs
+from other sources do not suppress creation; normal Target serialization may
+still keep the new scheduled Run queued. A creation failure is logged with
+bounded, non-sensitive context and is not retried. The next cron occurrence is
+the next attempt. Scheduled triggers add no delivery API, distributed lease,
+leader election, Kubernetes scheduling, notifications, or retention behavior.
 
 ## Optional Run review
 

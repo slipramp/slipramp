@@ -7958,6 +7958,17 @@ components:
       type: object
       additionalProperties: false
       description: Runs the action when a newly accepted repository head changes a path matching the containing target's watch patterns.
+    ScheduleTrigger:
+      type: object
+      additionalProperties: false
+      required:
+        - cron
+      properties:
+        cron:
+          type: string
+          minLength: 1
+          pattern: ^\S+(?:\s+\S+){4}$
+          description: 'Five-field cron expression evaluated in UTC: minute, hour, day-of-month, month, and day-of-week.'
     ParameterValue:
       oneOf:
         - type: string
@@ -7966,9 +7977,10 @@ components:
           format: double
     ActionTrigger:
       type: object
+      additionalProperties: false
       required:
         - name
-        - git
+      description: Exactly one of git or schedule is present.
       properties:
         name:
           type: string
@@ -7977,6 +7989,8 @@ components:
           pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
         git:
           $ref: '#/components/schemas/GitTrigger'
+        schedule:
+          $ref: '#/components/schemas/ScheduleTrigger'
         review:
           type: string
           enum:
@@ -9064,6 +9078,18 @@ components:
           type: string
           format: uuid
           description: Stable Git-trigger delivery identity used for Run idempotency.
+    ScheduleRunSource:
+      type: object
+      required:
+        - triggerName
+        - scheduledAt
+      properties:
+        triggerName:
+          $ref: '#/components/schemas/CatalogName'
+        scheduledAt:
+          type: string
+          format: date-time
+          description: UTC cron occurrence that caused the Run.
     PromotionRunSource:
       type: object
       additionalProperties: false
@@ -9085,10 +9111,13 @@ components:
             - api
             - mcp
             - git
+            - schedule
             - promotion
           description: Boundary that submitted the Run.
         git:
           $ref: '#/components/schemas/GitRunSource'
+        schedule:
+          $ref: '#/components/schemas/ScheduleRunSource'
         promotion:
           $ref: '#/components/schemas/PromotionRunSource'
     RunReview:

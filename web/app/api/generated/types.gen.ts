@@ -1533,11 +1533,22 @@ export type GitTrigger = {
   [key: string]: never;
 };
 
+export type ScheduleTrigger = {
+  /**
+   * Five-field cron expression evaluated in UTC: minute, hour, day-of-month, month, and day-of-week.
+   */
+  cron: string;
+};
+
 export type ParameterValue = string | boolean | number;
 
+/**
+ * Exactly one of git or schedule is present.
+ */
 export type ActionTrigger = {
   name: string;
-  git: GitTrigger;
+  git?: GitTrigger;
+  schedule?: ScheduleTrigger;
   /**
    * Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
    */
@@ -2077,6 +2088,14 @@ export type GitRunSource = {
   deliveryId: string;
 };
 
+export type ScheduleRunSource = {
+  triggerName: CatalogName;
+  /**
+   * UTC cron occurrence that caused the Run.
+   */
+  scheduledAt: string;
+};
+
 export type PromotionRunSource = {
   promotionId: string;
 };
@@ -2085,8 +2104,9 @@ export type RunSource = {
   /**
    * Boundary that submitted the Run.
    */
-  type: "manual" | "api" | "mcp" | "git" | "promotion";
+  type: "manual" | "api" | "mcp" | "git" | "schedule" | "promotion";
   git?: GitRunSource;
+  schedule?: ScheduleRunSource;
   promotion?: PromotionRunSource;
 };
 

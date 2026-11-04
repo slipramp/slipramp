@@ -35,6 +35,7 @@ const (
 	SourceTypeAPI       SourceType = "api"
 	SourceTypeMCP       SourceType = "mcp"
 	SourceTypeGit       SourceType = "git"
+	SourceTypeSchedule  SourceType = "schedule"
 	SourceTypePromotion SourceType = "promotion"
 
 	RerunModeExact  RerunMode = "exact"
@@ -81,6 +82,8 @@ var (
 	ErrReviewConflict      = errors.New("run review decision conflicts with current state")
 	ErrIdempotencyConflict = errors.New("run idempotency key conflict")
 	ErrGitRunSuperseded    = errors.New("git-triggered run superseded by a newer desired commit")
+	ErrScheduleOverlap     = errors.New("previous run from the named schedule is unfinished")
+	ErrScheduleNotFound    = errors.New("scheduled trigger not found in active catalog")
 )
 
 type Phase string
@@ -108,12 +111,18 @@ const (
 type Source struct {
 	Type      SourceType          `json:"type"`
 	Git       *GitRunSource       `json:"git,omitempty"`
+	Schedule  *ScheduleRunSource  `json:"schedule,omitempty"`
 	Promotion *PromotionRunSource `json:"promotion,omitempty"`
 }
 
 type GitRunSource struct {
 	TriggerName string    `json:"triggerName"`
 	DeliveryID  uuid.UUID `json:"deliveryId"`
+}
+
+type ScheduleRunSource struct {
+	TriggerName string    `json:"triggerName"`
+	ScheduledAt time.Time `json:"scheduledAt"`
 }
 
 type PromotionRunSource struct {

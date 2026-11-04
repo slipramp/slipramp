@@ -277,7 +277,7 @@ func TestValidateOperatorFacingMetadata(t *testing.T) {
 	runValidationTests(t, tests)
 }
 
-func TestValidateGitTriggers(t *testing.T) {
+func TestValidateTriggers(t *testing.T) {
 	t.Parallel()
 
 	addTrigger := func(input *catalog.Catalog, trigger catalog.Trigger) {
@@ -303,6 +303,67 @@ func TestValidateGitTriggers(t *testing.T) {
 					Review: catalog.TriggerReviewRequired,
 				})
 			},
+		},
+		{
+			name: "scheduled trigger",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:     "nightly-preview",
+					Schedule: &catalog.ScheduleTrigger{Cron: "0 3 * * *"},
+				})
+			},
+		},
+		{
+			name: "invalid scheduled cron field count",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:     "nightly-preview",
+					Schedule: &catalog.ScheduleTrigger{Cron: "0 3 * * * *"},
+				})
+			},
+			wantError: "invalid five-field cron expression",
+		},
+		{
+			name: "scheduled cron timezone rejected",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:     "nightly-preview",
+					Schedule: &catalog.ScheduleTrigger{Cron: "CRON_TZ=America/Denver 0 3 * * *"},
+				})
+			},
+			wantError: "expected exactly five fields",
+		},
+		{
+			name: "invalid scheduled cron value",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:     "nightly-preview",
+					Schedule: &catalog.ScheduleTrigger{Cron: "60 3 * * *"},
+				})
+			},
+			wantError: "end of range (60) above maximum (59)",
+		},
+		{
+			name: "trigger variant exclusivity",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:     "ambiguous",
+					Git:      &catalog.GitTrigger{},
+					Schedule: &catalog.ScheduleTrigger{Cron: "0 3 * * *"},
+				})
+			},
+			wantError: "must declare exactly one of git or schedule",
+		},
+		{
+			name: "scheduled review rejected",
+			configure: func(input *catalog.Catalog) {
+				addTrigger(input, catalog.Trigger{
+					Name:     "nightly-preview",
+					Schedule: &catalog.ScheduleTrigger{Cron: "0 3 * * *"},
+					Review:   catalog.TriggerReviewRequired,
+				})
+			},
+			wantError: "review is Git-only",
 		},
 		{
 			name: "invalid review",
@@ -336,7 +397,7 @@ func TestValidateGitTriggers(t *testing.T) {
 			configure: func(input *catalog.Catalog) {
 				addTrigger(input, catalog.Trigger{Name: "reconcile"})
 			},
-			wantError: "must declare git",
+			wantError: "must declare exactly one of git or schedule",
 		},
 		{
 			name: "empty watch",
@@ -374,12 +435,43 @@ func TestValidateGitTriggers(t *testing.T) {
 			wantError: `parameter "region" is not declared by the action`,
 		},
 		{
+			name: "scheduled static parameters",
+			configure: func(input *catalog.Catalog) {
+				action := input.Targets[0].Spec.Actions["preview"]
+				action.Parameters = map[string]catalog.Parameter{
+					"refresh": {
+						Type:        catalog.ParameterTypeBoolean,
+						Environment: "TF_REFRESH",
+					},
+				}
+				input.Targets[0].Spec.Actions["preview"] = action
+				addTrigger(input, catalog.Trigger{
+					Name:       "nightly-preview",
+					Schedule:   &catalog.ScheduleTrigger{Cron: "0 3 * * *"},
+					Parameters: map[string]any{"refresh": true},
+				})
+			},
+		},
+		{
 			name: "artifact inputs",
 			configure: func(input *catalog.Catalog) {
 				addPreviewAndApply(input)
 				input.Targets[0].Spec.Watch = []string{"infrastructure/network/**"}
 				action := input.Targets[0].Spec.Actions["apply"]
 				action.Triggers = []catalog.Trigger{{Name: "apply", Git: &catalog.GitTrigger{}}}
+				input.Targets[0].Spec.Actions["apply"] = action
+			},
+			wantError: "cannot invoke an action with artifact inputs",
+		},
+		{
+			name: "scheduled artifact inputs",
+			configure: func(input *catalog.Catalog) {
+				addPreviewAndApply(input)
+				action := input.Targets[0].Spec.Actions["apply"]
+				action.Triggers = []catalog.Trigger{{
+					Name:     "nightly-apply",
+					Schedule: &catalog.ScheduleTrigger{Cron: "0 3 * * *"},
+				}}
 				input.Targets[0].Spec.Actions["apply"] = action
 			},
 			wantError: "cannot invoke an action with artifact inputs",

@@ -507,6 +507,8 @@ func catalogTriggersResponse(triggers []catalog.Trigger) (*[]api.ActionTrigger, 
 	result := make([]api.ActionTrigger, 0, len(triggers))
 	for _, trigger := range triggers {
 		var parameters *map[string]api.ParameterValue
+		var git *api.GitTrigger
+		var schedule *api.ScheduleTrigger
 		var review *api.ActionTriggerReview
 		if len(trigger.Parameters) > 0 {
 			converted, err := runParameterResponse(trigger.Parameters)
@@ -519,10 +521,17 @@ func catalogTriggersResponse(triggers []catalog.Trigger) (*[]api.ActionTrigger, 
 			converted := api.ActionTriggerReview(trigger.Review)
 			review = &converted
 		}
+		if trigger.Git != nil {
+			git = &api.GitTrigger{}
+		}
+		if trigger.Schedule != nil {
+			schedule = &api.ScheduleTrigger{Cron: trigger.Schedule.Cron}
+		}
 
 		result = append(result, api.ActionTrigger{
 			Name:       api.CatalogName(trigger.Name),
-			Git:        api.GitTrigger{},
+			Git:        git,
+			Schedule:   schedule,
 			Review:     review,
 			Parameters: parameters,
 		})

@@ -209,6 +209,8 @@ extension Components.Schemas.RunSource {
             "MCP"
         case .git:
             "Git trigger"
+        case .schedule:
+            schedule.map { "Schedule · \($0.triggerName)" } ?? "Schedule"
         case .promotion:
             "Promotion"
         }

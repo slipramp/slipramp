@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/slipramp/slipramp/internal/cronexpr"
 	"github.com/slipramp/slipramp/internal/kubevalidate"
 	"github.com/slipramp/slipramp/internal/placement"
 )
@@ -425,11 +426,25 @@ func validateTriggers(target Target, actionName string, action Action) []validat
 			seen[trigger.Name] = index
 		}
 
-		if trigger.Git == nil {
+		variantCount := 0
+		if trigger.Git != nil {
+			variantCount++
+		}
+		if trigger.Schedule != nil {
+			variantCount++
+		}
+		if variantCount == 0 {
 			findings = append(findings, validationFinding{
 				fieldPath: basePath,
 				code:      "catalog.trigger.source-required",
-				err:       fmt.Errorf("action %q trigger %q must declare git", actionName, trigger.Name),
+				err:       fmt.Errorf("action %q trigger %q must declare exactly one of git or schedule", actionName, trigger.Name),
+			})
+		}
+		if variantCount > 1 {
+			findings = append(findings, validationFinding{
+				fieldPath: basePath,
+				code:      "catalog.trigger.source-exclusive",
+				err:       fmt.Errorf("action %q trigger %q must declare exactly one of git or schedule", actionName, trigger.Name),
 			})
 		}
 		if trigger.Review != "" && trigger.Review != TriggerReviewRequired {
@@ -455,6 +470,31 @@ func validateTriggers(target Target, actionName string, action Action) []validat
 				),
 			})
 		}
+		if trigger.Schedule != nil {
+			if _, err := cronexpr.Parse(trigger.Schedule.Cron); err != nil {
+				findings = append(findings, validationFinding{
+					fieldPath: basePath + ".schedule.cron",
+					code:      "catalog.trigger.schedule-cron-invalid",
+					err: fmt.Errorf(
+						"action %q scheduled trigger %q has invalid cron: %w",
+						actionName,
+						trigger.Name,
+						err,
+					),
+				})
+			}
+			if trigger.Review != "" {
+				findings = append(findings, validationFinding{
+					fieldPath: basePath + ".review",
+					code:      "catalog.trigger.review-git-only",
+					err: fmt.Errorf(
+						"action %q scheduled trigger %q cannot require review; review is Git-only",
+						actionName,
+						trigger.Name,
+					),
+				})
+			}
+		}
 		if _, err := NormalizeAndValidateParameterValues(action.Parameters, trigger.Parameters); err != nil {
 			code := "catalog.trigger.parameters-invalid"
 			if strings.Contains(err.Error(), "required parameter") {
@@ -464,19 +504,19 @@ func validateTriggers(target Target, actionName string, action Action) []validat
 				fieldPath: basePath + ".parameters",
 				code:      code,
 				err: fmt.Errorf(
-					"action %q Git trigger %q has invalid parameters: %w",
+					"action %q trigger %q has invalid parameters: %w",
 					actionName,
 					trigger.Name,
 					err,
 				),
 			})
 		}
-		if trigger.Git != nil && len(action.Inputs) > 0 {
+		if variantCount > 0 && len(action.Inputs) > 0 {
 			findings = append(findings, validationFinding{
-				fieldPath: basePath + ".git",
+				fieldPath: basePath,
 				code:      "catalog.trigger.artifact-inputs-unsupported",
 				err: fmt.Errorf(
-					"action %q Git trigger %q cannot invoke an action with artifact inputs",
+					"action %q trigger %q cannot invoke an action with artifact inputs",
 					actionName,
 					trigger.Name,
 				),

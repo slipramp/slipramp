@@ -91,9 +91,26 @@ func configurePresentationMetadata(resource *jsonschema.Schema) {
 	boundedString(artifact.Properties["description"], catalog.PresentationDescriptionMaxLength)
 
 	trigger := action.Properties["triggers"].Items
+	trigger.OneOf = []*jsonschema.Schema{
+		{
+			Required: []string{"git"},
+			Not:      &jsonschema.Schema{Required: []string{"schedule"}},
+		},
+		{
+			Required: []string{"schedule"},
+			Not: &jsonschema.Schema{AnyOf: []*jsonschema.Schema{
+				{Required: []string{"git"}},
+				{Required: []string{"review"}},
+			}},
+		},
+	}
 	trigger.Properties["review"].Description =
 		"Requires an operator decision before a Git-triggered Run becomes eligible for assignment."
 	trigger.Properties["review"].Enum = []any{catalog.TriggerReviewRequired}
+	schedule := trigger.Properties["schedule"]
+	schedule.Description = "Runs the Action on a five-field cron expression evaluated in UTC."
+	schedule.Properties["cron"].Description = "Five-field UTC cron expression: minute hour day-of-month month day-of-week."
+	schedule.Properties["cron"].Pattern = `^\S+(?:\s+\S+){4}$`
 }
 
 func boundedString(schema *jsonschema.Schema, maximum int) {

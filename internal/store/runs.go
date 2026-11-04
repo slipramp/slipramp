@@ -219,6 +219,9 @@ func (d *Database) CreateRun(
 	}()
 
 	queries := d.queries.WithTx(transaction)
+	if err := rejectScheduledRunOverlap(ctx, queries, record); err != nil {
+		return run.Run{}, err
+	}
 	if record.Source.Type == run.SourceTypeGit {
 		superseded, err := supersedeStaleGitRun(ctx, queries, record)
 		if err != nil {

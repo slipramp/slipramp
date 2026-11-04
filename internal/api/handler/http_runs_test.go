@@ -109,6 +109,25 @@ func TestCreateRunReturnsQueuedRun(t *testing.T) {
 	}
 }
 
+func TestAPIRunSourceProjectsScheduledOccurrence(t *testing.T) {
+	t.Parallel()
+
+	scheduledAt := time.Date(2026, time.November, 3, 3, 0, 0, 0, time.UTC)
+	projected := apiRunSource(run.Source{
+		Type: run.SourceTypeSchedule,
+		Schedule: &run.ScheduleRunSource{
+			TriggerName: "nightly-preview",
+			ScheduledAt: scheduledAt,
+		},
+	})
+	if projected.Type != api.RunSourceTypeSchedule || projected.Schedule == nil ||
+		projected.Schedule.TriggerName != "nightly-preview" ||
+		!projected.Schedule.ScheduledAt.Equal(scheduledAt) || projected.Git != nil ||
+		projected.Promotion != nil {
+		t.Errorf("scheduled Run source response = %#v", projected)
+	}
+}
+
 func TestAuthenticatedRunOperationsRecordBrowserActor(t *testing.T) {
 	t.Parallel()
 

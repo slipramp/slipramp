@@ -3517,6 +3517,33 @@ internal enum Components {
                 try decoder.ensureNoAdditionalProperties(knownKeys: [])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ScheduleTrigger`.
+        internal struct ScheduleTrigger: Codable, Hashable, Sendable {
+            /// Five-field cron expression evaluated in UTC: minute, hour, day-of-month, month, and day-of-week.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScheduleTrigger/cron`.
+            internal var cron: Swift.String
+            /// Creates a new `ScheduleTrigger`.
+            ///
+            /// - Parameters:
+            ///   - cron: Five-field cron expression evaluated in UTC: minute, hour, day-of-month, month, and day-of-week.
+            internal init(cron: Swift.String) {
+                self.cron = cron
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case cron
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.cron = try container.decode(
+                    Swift.String.self,
+                    forKey: .cron
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "cron"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ParameterValue`.
         internal enum ParameterValue: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ParameterValue/case1`.
@@ -3562,12 +3589,16 @@ internal enum Components {
                 }
             }
         }
+        /// Exactly one of git or schedule is present.
+        ///
         /// - Remark: Generated from `#/components/schemas/ActionTrigger`.
         internal struct ActionTrigger: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ActionTrigger/name`.
             internal var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ActionTrigger/git`.
-            internal var git: Components.Schemas.GitTrigger
+            internal var git: Components.Schemas.GitTrigger?
+            /// - Remark: Generated from `#/components/schemas/ActionTrigger/schedule`.
+            internal var schedule: Components.Schemas.ScheduleTrigger?
             /// Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
             ///
             /// - Remark: Generated from `#/components/schemas/ActionTrigger/review`.
@@ -3603,24 +3634,58 @@ internal enum Components {
             /// - Parameters:
             ///   - name:
             ///   - git:
+            ///   - schedule:
             ///   - review: Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
             ///   - parameters:
             internal init(
                 name: Swift.String,
-                git: Components.Schemas.GitTrigger,
+                git: Components.Schemas.GitTrigger? = nil,
+                schedule: Components.Schemas.ScheduleTrigger? = nil,
                 review: Components.Schemas.ActionTrigger.ReviewPayload? = nil,
                 parameters: Components.Schemas.ActionTrigger.ParametersPayload? = nil
             ) {
                 self.name = name
                 self.git = git
+                self.schedule = schedule
                 self.review = review
                 self.parameters = parameters
             }
             internal enum CodingKeys: String, CodingKey {
                 case name
                 case git
+                case schedule
                 case review
                 case parameters
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.git = try container.decodeIfPresent(
+                    Components.Schemas.GitTrigger.self,
+                    forKey: .git
+                )
+                self.schedule = try container.decodeIfPresent(
+                    Components.Schemas.ScheduleTrigger.self,
+                    forKey: .schedule
+                )
+                self.review = try container.decodeIfPresent(
+                    Components.Schemas.ActionTrigger.ReviewPayload.self,
+                    forKey: .review
+                )
+                self.parameters = try container.decodeIfPresent(
+                    Components.Schemas.ActionTrigger.ParametersPayload.self,
+                    forKey: .parameters
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "name",
+                    "git",
+                    "schedule",
+                    "review",
+                    "parameters"
+                ])
             }
         }
         /// - Remark: Generated from `#/components/schemas/Action`.
@@ -4214,6 +4279,31 @@ internal enum Components {
                 case deliveryId
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ScheduleRunSource`.
+        internal struct ScheduleRunSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ScheduleRunSource/triggerName`.
+            internal var triggerName: Components.Schemas.CatalogName
+            /// UTC cron occurrence that caused the Run.
+            ///
+            /// - Remark: Generated from `#/components/schemas/ScheduleRunSource/scheduledAt`.
+            internal var scheduledAt: Foundation.Date
+            /// Creates a new `ScheduleRunSource`.
+            ///
+            /// - Parameters:
+            ///   - triggerName:
+            ///   - scheduledAt: UTC cron occurrence that caused the Run.
+            internal init(
+                triggerName: Components.Schemas.CatalogName,
+                scheduledAt: Foundation.Date
+            ) {
+                self.triggerName = triggerName
+                self.scheduledAt = scheduledAt
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case triggerName
+                case scheduledAt
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionRunSource`.
         internal struct PromotionRunSource: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PromotionRunSource/promotionId`.
@@ -4249,6 +4339,7 @@ internal enum Components {
                 case api = "api"
                 case mcp = "mcp"
                 case git = "git"
+                case schedule = "schedule"
                 case promotion = "promotion"
             }
             /// Boundary that submitted the Run.
@@ -4257,6 +4348,8 @@ internal enum Components {
             internal var _type: Components.Schemas.RunSource._TypePayload
             /// - Remark: Generated from `#/components/schemas/RunSource/git`.
             internal var git: Components.Schemas.GitRunSource?
+            /// - Remark: Generated from `#/components/schemas/RunSource/schedule`.
+            internal var schedule: Components.Schemas.ScheduleRunSource?
             /// - Remark: Generated from `#/components/schemas/RunSource/promotion`.
             internal var promotion: Components.Schemas.PromotionRunSource?
             /// Creates a new `RunSource`.
@@ -4264,19 +4357,23 @@ internal enum Components {
             /// - Parameters:
             ///   - _type: Boundary that submitted the Run.
             ///   - git:
+            ///   - schedule:
             ///   - promotion:
             internal init(
                 _type: Components.Schemas.RunSource._TypePayload,
                 git: Components.Schemas.GitRunSource? = nil,
+                schedule: Components.Schemas.ScheduleRunSource? = nil,
                 promotion: Components.Schemas.PromotionRunSource? = nil
             ) {
                 self._type = _type
                 self.git = git
+                self.schedule = schedule
                 self.promotion = promotion
             }
             internal enum CodingKeys: String, CodingKey {
                 case _type = "type"
                 case git
+                case schedule
                 case promotion
             }
         }

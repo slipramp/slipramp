@@ -81,6 +81,13 @@ func renderRunSource(source api.RunSource) string {
 	if source.Git != nil {
 		result += fmt.Sprintf(" (trigger %s, delivery %s)", source.Git.TriggerName, source.Git.DeliveryID)
 	}
+	if source.Schedule != nil {
+		result += fmt.Sprintf(
+			" (trigger %s, scheduled %s)",
+			source.Schedule.TriggerName,
+			source.Schedule.ScheduledAt.Format(time.RFC3339),
+		)
+	}
 	if source.Promotion != nil {
 		result += fmt.Sprintf(" (Promotion %s)", source.Promotion.PromotionID)
 	}

@@ -81,6 +81,10 @@ func cloneTriggers(input []Trigger) []Trigger {
 		if trigger.Git != nil {
 			cloned[index].Git = &GitTrigger{}
 		}
+		if trigger.Schedule != nil {
+			schedule := *trigger.Schedule
+			cloned[index].Schedule = &schedule
+		}
 	}
 
 	return cloned

@@ -23,13 +23,13 @@ Same-identity preparation retry, policy audit history beyond current
 attribution, and provider-neutral review abstractions remain deferred until an
 operator need or second integration makes their semantics concrete.
 
-## Git-trigger extensions
+## Automatic-trigger extensions
 
 - [ ] Design branch filters, trigger-specific path overrides, dynamic
       parameters, configurable delivery policies, per-commit delivery, and
       provider-specific integrations only as concrete use cases require them.
-- [ ] Define missed-event and overlap semantics before adding scheduled or
-      webhook triggers.
+- [ ] Define missed-event, overlap, authentication, and retry semantics before
+      adding webhook triggers.
 
 All trigger adapters must use ordinary Run creation and preserve manual and API
 execution without requiring a trigger.

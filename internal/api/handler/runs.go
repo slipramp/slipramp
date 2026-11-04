@@ -476,6 +476,12 @@ func apiRunSource(source run.Source) api.RunSource {
 			DeliveryID:  source.Git.DeliveryID,
 		}
 	}
+	if source.Schedule != nil {
+		response.Schedule = &api.ScheduleRunSource{
+			TriggerName: api.CatalogName(source.Schedule.TriggerName),
+			ScheduledAt: source.Schedule.ScheduledAt,
+		}
+	}
 	if source.Promotion != nil {
 		response.Promotion = &api.PromotionRunSource{
 			PromotionID: source.Promotion.PromotionID,

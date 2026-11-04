@@ -418,6 +418,24 @@
                           ],
                           "additionalProperties": false
                         },
+                        "schedule": {
+                          "type": [
+                            "null",
+                            "object"
+                          ],
+                          "properties": {
+                            "cron": {
+                              "type": "string",
+                              "description": "Five-field UTC cron expression: minute hour day-of-month month day-of-week.",
+                              "pattern": "^\\S+(?:\\s+\\S+){4}$"
+                            }
+                          },
+                          "description": "Runs the Action on a five-field cron expression evaluated in UTC.",
+                          "required": [
+                            "cron"
+                          ],
+                          "additionalProperties": false
+                        },
                         "review": {
                           "type": "string",
                           "description": "Requires an operator decision before a Git-triggered Run becomes eligible for assignment.",
@@ -433,7 +451,38 @@
                       "required": [
                         "name"
                       ],
-                      "additionalProperties": false
+                      "additionalProperties": false,
+                      "oneOf": [
+                        {
+                          "required": [
+                            "git"
+                          ],
+                          "not": {
+                            "required": [
+                              "schedule"
+                            ]
+                          }
+                        },
+                        {
+                          "required": [
+                            "schedule"
+                          ],
+                          "not": {
+                            "anyOf": [
+                              {
+                                "required": [
+                                  "git"
+                                ]
+                              },
+                              {
+                                "required": [
+                                  "review"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
                     }
                   }
                 },

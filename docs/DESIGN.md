@@ -106,6 +106,12 @@ Actions are independent executions. Multi-step procedures belong in the invoked
 script, task runner, or container rather than a Slipramp workflow graph. A Run
 records its source; there is no separate invocation resource.
 
+Repository-defined Action triggers may react to accepted Git changes or a
+five-field UTC cron schedule. Both create ordinary immutable Runs through the
+same creation service. Scheduled Runs resolve the active Target and catalog at
+their occurrence; they do not introduce a workflow, delivery, or retention
+subsystem.
+
 `sync` is an optional recognized Action name. It supplies factual reconciliation
 checkpoints when present, but Targets without it remain valid. Slipramp compares
 immutable desired and successful markers and never claims continuous
@@ -114,7 +120,7 @@ infrastructure convergence.
 ## State and consistency
 
 PostgreSQL transactions join state changes that must not diverge: catalog
-activation and Target updates, Run creation and trigger linkage, terminal Run
+activation and Target updates, Run creation and any required source linkage, terminal Run
 observations and reconciliation checkpoints, Promotion transitions and
 preparation linkage, and notification events with intended deliveries.
 

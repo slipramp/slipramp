@@ -417,10 +417,13 @@ RunSource:
         - api
         - mcp
         - git
+        - schedule
         - promotion
       description: Boundary that submitted the Run.
     git:
       $ref: "#/GitRunSource"
+    schedule:
+      $ref: "#/ScheduleRunSource"
     promotion:
       $ref: ./promotions.yaml#/PromotionRunSource
 
@@ -436,6 +439,19 @@ GitRunSource:
       type: string
       format: uuid
       description: Stable Git-trigger delivery identity used for Run idempotency.
+
+ScheduleRunSource:
+  type: object
+  required:
+    - triggerName
+    - scheduledAt
+  properties:
+    triggerName:
+      $ref: "#/CatalogName"
+    scheduledAt:
+      type: string
+      format: date-time
+      description: UTC cron occurrence that caused the Run.
 
 RunActor:
   type: object

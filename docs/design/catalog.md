@@ -113,6 +113,22 @@ uses current validated Placement configuration. Explanations do not render
 Jobs, inspect Secrets or images, select Artifact contents, or execute Actions.
 Run creation remains the authoritative validation boundary.
 
+An Action trigger has a DNS-label name, selects exactly one source variant, and
+may supply static parameters validated by those same parameter rules. A `git`
+trigger reacts to the containing Target's `watch` paths and may opt into Run
+review. A `schedule` trigger supplies a validated five-field UTC cron
+expression. Both variants reject Actions that require Artifact inputs;
+scheduled triggers also reject `review` because Run review remains Git-only.
+
+```yaml
+triggers:
+  - name: nightly-preview
+    schedule:
+      cron: "0 3 * * *"
+    parameters:
+      refresh: true
+```
+
 ## Commit metadata
 
 Commit metadata is presentation data, separate from exact execution SHAs.

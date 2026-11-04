@@ -11,6 +11,12 @@ export function runSourceLabel(source: RunSource) {
       : "Promotion";
   }
 
+  if (source.type === "schedule") {
+    return source.schedule
+      ? `Schedule · ${source.schedule.triggerName} · ${source.schedule.scheduledAt}`
+      : "Schedule";
+  }
+
   if (source.type === "api") {
     return "API";
   }

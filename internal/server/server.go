@@ -27,6 +27,7 @@ import (
 	"github.com/slipramp/slipramp/internal/readiness"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
+	"github.com/slipramp/slipramp/internal/scheduletrigger"
 	"github.com/slipramp/slipramp/internal/telemetry"
 )
 
@@ -165,6 +166,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		logger,
 		gittrigger.WithDeliveryObserver(metrics),
 	)
+	scheduleTriggerScheduler := scheduletrigger.NewScheduler(
+		catalogs,
+		runs,
+		scheduletrigger.DefaultEvaluationInterval,
+		logger,
+	)
 	artifactReconciler := artifact.NewReconciler(
 		persistence.database,
 		persistence.artifactContents,
@@ -232,6 +239,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		repositoryRefresher.Run,
 		commitHistoryIndexer.Run,
 		gitTriggerDispatcher.Run,
+		scheduleTriggerScheduler.Run,
 		artifactReconciler.Run,
 		notificationDispatcher.Run,
 		notificationRetention.Run,

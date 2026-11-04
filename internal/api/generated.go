@@ -1451,6 +1451,7 @@ const (
 	RunSourceTypeManual    RunSourceType = "manual"
 	RunSourceTypeMcp       RunSourceType = "mcp"
 	RunSourceTypePromotion RunSourceType = "promotion"
+	RunSourceTypeSchedule  RunSourceType = "schedule"
 )
 
 // Valid indicates whether the value is a known member of the RunSourceType enum.
@@ -1465,6 +1466,8 @@ func (e RunSourceType) Valid() bool {
 	case RunSourceTypeMcp:
 		return true
 	case RunSourceTypePromotion:
+		return true
+	case RunSourceTypeSchedule:
 		return true
 	default:
 		return false
@@ -1764,15 +1767,16 @@ type Action struct {
 	Triggers *[]ActionTrigger `json:"triggers,omitempty"`
 }
 
-// ActionTrigger defines model for ActionTrigger.
+// ActionTrigger Exactly one of git or schedule is present.
 type ActionTrigger struct {
 	// Git Runs the action when a newly accepted repository head changes a path matching the containing target's watch patterns.
-	Git        GitTrigger                 `json:"git"`
+	Git        *GitTrigger                `json:"git,omitempty"`
 	Name       string                     `json:"name"`
 	Parameters *map[string]ParameterValue `json:"parameters,omitempty"`
 
 	// Review Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
-	Review *ActionTriggerReview `json:"review,omitempty"`
+	Review   *ActionTriggerReview `json:"review,omitempty"`
+	Schedule *ScheduleTrigger     `json:"schedule,omitempty"`
 }
 
 // ActionTriggerReview Requires an operator decision before a Git-triggered Run becomes eligible for assignment. Absence preserves direct execution.
@@ -2166,7 +2170,9 @@ type ExplainedActionTrigger struct {
 	Provenance       []ExplanationOrigin `json:"provenance"`
 	Resolved         bool                `json:"resolved"`
 	UnresolvedReason *string             `json:"unresolvedReason,omitempty"`
-	Value            ActionTrigger       `json:"value"`
+
+	// Value Exactly one of git or schedule is present.
+	Value ActionTrigger `json:"value"`
 }
 
 // ExplainedArtifact defines model for ExplainedArtifact.
@@ -3999,6 +4005,7 @@ type RunReviewState string
 type RunSource struct {
 	Git       *GitRunSource       `json:"git,omitempty"`
 	Promotion *PromotionRunSource `json:"promotion,omitempty"`
+	Schedule  *ScheduleRunSource  `json:"schedule,omitempty"`
 
 	// Type Boundary that submitted the Run.
 	Type RunSourceType `json:"type"`
@@ -4041,6 +4048,19 @@ type RuntimeSpec struct {
 	Environment      *map[string]string            `json:"environment,omitempty"`
 	Image            string                        `json:"image"`
 	WorkingDirectory *string                       `json:"workingDirectory,omitempty"`
+}
+
+// ScheduleRunSource defines model for ScheduleRunSource.
+type ScheduleRunSource struct {
+	// ScheduledAt UTC cron occurrence that caused the Run.
+	ScheduledAt time.Time   `json:"scheduledAt"`
+	TriggerName CatalogName `json:"triggerName"`
+}
+
+// ScheduleTrigger defines model for ScheduleTrigger.
+type ScheduleTrigger struct {
+	// Cron Five-field cron expression evaluated in UTC: minute, hour, day-of-month, month, and day-of-week.
+	Cron string `json:"cron"`
 }
 
 // ServiceAccountCreate defines model for ServiceAccountCreate.

@@ -285,7 +285,9 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
     applySelection.artifact.retentionState === "retained";
   const resultActivity = runResultActivity(run);
   const activity = resultActivity ?? runActivity(run);
-  const actor = run.createdBy?.displayName ?? (run.source.type === "git" ? "Automation" : "System");
+  const actor =
+    run.createdBy?.displayName ??
+    (run.source.type === "git" || run.source.type === "schedule" ? "Automation" : "System");
   const rerunSubmitting =
     navigation.state === "submitting" &&
     (navigation.formData?.get("intent") === "rerun-exact" ||

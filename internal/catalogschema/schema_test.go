@@ -39,6 +39,34 @@ func TestPublishedSchemaAcceptsCatalogExamples(t *testing.T) {
 	}
 }
 
+func TestPublishedSchemaAcceptsScheduledTrigger(t *testing.T) {
+	t.Parallel()
+
+	resolved := loadPublishedSchema(t)
+	var document any
+	if err := yaml.Unmarshal([]byte(`
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  actions:
+    inspect:
+      command: [inspect]
+      triggers:
+        - name: nightly-inspect
+          schedule:
+            cron: "0 3 * * *"
+          parameters:
+            refresh: true
+`), &document); err != nil {
+		t.Fatalf("yaml.Unmarshal() error = %v", err)
+	}
+	if err := resolved.Validate(document); err != nil {
+		t.Errorf("scheduled trigger does not match published schema: %v", err)
+	}
+}
+
 func TestPublishedSchemaRejectsStructuralErrors(t *testing.T) {
 	t.Parallel()
 
@@ -110,6 +138,50 @@ spec:
         - name: inspect-on-change
           git: {}
           review: optional
+`,
+		"multiple trigger variants": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  actions:
+    inspect:
+      command: [inspect]
+      triggers:
+        - name: ambiguous
+          git: {}
+          schedule:
+            cron: "0 3 * * *"
+`,
+		"scheduled review": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  actions:
+    inspect:
+      command: [inspect]
+      triggers:
+        - name: nightly
+          schedule:
+            cron: "0 3 * * *"
+          review: required
+`,
+		"six-field schedule": `
+apiVersion: slipramp.com/v1alpha1
+kind: Target
+metadata:
+  name: operations
+spec:
+  actions:
+    inspect:
+      command: [inspect]
+      triggers:
+        - name: nightly
+          schedule:
+            cron: "0 0 3 * * *"
 `,
 	}
 

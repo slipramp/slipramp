@@ -113,15 +113,21 @@ type Action struct {
 
 // Trigger declares one named source of automatic action Runs.
 type Trigger struct {
-	Name       string         `json:"name"                 yaml:"name"`
-	Git        *GitTrigger    `json:"git,omitempty"        yaml:"git,omitempty"`
-	Review     string         `json:"review,omitempty"     yaml:"review,omitempty"`
-	Parameters map[string]any `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+	Name       string           `json:"name"                 yaml:"name"`
+	Git        *GitTrigger      `json:"git,omitempty"        yaml:"git,omitempty"`
+	Schedule   *ScheduleTrigger `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+	Review     string           `json:"review,omitempty"     yaml:"review,omitempty"`
+	Parameters map[string]any   `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 }
 
 // GitTrigger uses the containing target's watch patterns. It is intentionally
 // empty until Git-specific filtering has an accepted product contract.
 type GitTrigger struct{}
+
+// ScheduleTrigger evaluates a five-field cron expression in UTC.
+type ScheduleTrigger struct {
+	Cron string `json:"cron" yaml:"cron"`
+}
 
 type ResourceRequirements struct {
 	Requests map[string]string `json:"requests,omitempty" yaml:"requests,omitempty"`

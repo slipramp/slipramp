@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -13,16 +14,22 @@ import (
 func validateSource(source Source) error {
 	switch source.Type {
 	case SourceTypeManual, SourceTypeAPI, SourceTypeMCP:
-		if source.Git != nil || source.Promotion != nil {
+		if source.Git != nil || source.Schedule != nil || source.Promotion != nil {
 			return errors.New("manual, API, and MCP sources must not contain automated-source details")
 		}
 	case SourceTypeGit:
-		if source.Git == nil || source.Promotion != nil || source.Git.DeliveryID == uuid.Nil ||
+		if source.Git == nil || source.Schedule != nil || source.Promotion != nil || source.Git.DeliveryID == uuid.Nil ||
 			strings.TrimSpace(source.Git.TriggerName) == "" {
 			return errors.New("git source requires a trigger name and delivery ID")
 		}
+	case SourceTypeSchedule:
+		if source.Schedule == nil || source.Git != nil || source.Promotion != nil ||
+			strings.TrimSpace(source.Schedule.TriggerName) == "" || !validScheduleTime(source.Schedule.ScheduledAt) {
+			return errors.New("schedule source requires a trigger name and minute-aligned UTC scheduled timestamp")
+		}
 	case SourceTypePromotion:
-		if source.Promotion == nil || source.Git != nil || source.Promotion.PromotionID == uuid.Nil {
+		if source.Promotion == nil || source.Git != nil || source.Schedule != nil ||
+			source.Promotion.PromotionID == uuid.Nil {
 			return errors.New("promotion source requires a Promotion ID")
 		}
 	default:
@@ -55,6 +62,29 @@ func validateSourceRequest(request CreateRequest) error {
 		if request.IdempotencyKey == nil || *request.IdempotencyKey != deliveryKey {
 			return errors.New("git-triggered Runs must use the delivery ID as their idempotency key")
 		}
+	case SourceTypeSchedule:
+		if request.Actor != nil {
+			return errors.New("scheduled Runs must not have an actor")
+		}
+		if request.ReviewRequired {
+			return errors.New("scheduled Runs cannot require Git-trigger review")
+		}
+		if request.CatalogRevisionID != nil {
+			return errors.New("scheduled Runs must resolve the active catalog at creation time")
+		}
+		if len(request.Inputs) > 0 {
+			return errors.New("scheduled Runs cannot select artifact inputs")
+		}
+
+		occurrenceKey := ScheduleOccurrenceIdempotencyKey(
+			request.TargetID,
+			request.ActionName,
+			request.Source.Schedule.TriggerName,
+			request.Source.Schedule.ScheduledAt,
+		)
+		if request.IdempotencyKey == nil || *request.IdempotencyKey != occurrenceKey {
+			return errors.New("scheduled Runs must use their occurrence identity as the idempotency key")
+		}
 	case SourceTypePromotion:
 		if request.ReviewRequired {
 			return errors.New("promotion Runs cannot require Git-trigger review")
@@ -73,6 +103,15 @@ func validateSourceRequest(request CreateRequest) error {
 	}
 
 	return nil
+}
+
+func validScheduleTime(value time.Time) bool {
+	if value.IsZero() || value.Second() != 0 || value.Nanosecond() != 0 {
+		return false
+	}
+	_, offset := value.Zone()
+
+	return offset == 0
 }
 
 func actorSnapshot(principal *productidentity.Principal) (*productidentity.ActorSnapshot, error) {

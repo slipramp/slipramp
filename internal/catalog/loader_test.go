@@ -78,6 +78,11 @@ spec:
             auto-approve: true
             retries: 3
             message: reconcile
+        - name: nightly-preview
+          schedule:
+            cron: "0 3 * * *"
+          parameters:
+            environment: production
       artifacts:
         plan:
           description: Binary Terraform execution plan.
@@ -131,11 +136,16 @@ spec:
 		!plan.Sensitive {
 		t.Errorf("Target = %#v", target)
 	}
-	if len(preview.Triggers) != 1 ||
+	if len(preview.Triggers) != 2 ||
 		preview.Triggers[0].Name != "reconcile-on-change" ||
 		preview.Triggers[0].Git == nil ||
 		preview.Triggers[0].Review != catalog.TriggerReviewRequired {
 		t.Errorf("Action triggers = %#v", preview.Triggers)
+	}
+	if preview.Triggers[1].Name != "nightly-preview" ||
+		preview.Triggers[1].Schedule == nil ||
+		preview.Triggers[1].Schedule.Cron != "0 3 * * *" {
+		t.Errorf("scheduled Action trigger = %#v", preview.Triggers[1])
 	}
 	triggerParameters := preview.Triggers[0].Parameters
 	if triggerParameters["environment"] != "production" ||
@@ -242,10 +252,10 @@ spec:
     sync:
       command: [sync]
       triggers:
-        - name: nightly
-          schedule: {}
+        - name: external
+          webhook: {}
 `,
-			wantError: `field schedule not found`,
+			wantError: `field webhook not found`,
 		},
 		{
 			name: "unsupported Git trigger filter",

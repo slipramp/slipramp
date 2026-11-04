@@ -525,7 +525,7 @@ function ActionDetail({
           columns={["Trigger", "Event", "Static parameters"]}
           rows={triggers.map((trigger) => [
             trigger.name,
-            "Git change",
+            trigger.schedule ? `UTC cron · ${trigger.schedule.cron}` : "Git change",
             trigger.parameters ? JSON.stringify(trigger.parameters) : "—",
           ])}
           title="Triggers"

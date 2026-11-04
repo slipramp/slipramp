@@ -335,7 +335,12 @@ function HistoryTable({
                     )}
                     <Identity
                       avatarSize={22}
-                      name={run.createdBy?.displayName ?? "System"}
+                      name={
+                        run.createdBy?.displayName ??
+                        (run.source.type === "git" || run.source.type === "schedule"
+                          ? "Automation"
+                          : "System")
+                      }
                       nameProps={{ c: "dimmed", fw: 500, size: "xs" }}
                     />
                   </Stack>

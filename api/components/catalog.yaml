@@ -1109,9 +1109,10 @@ Action:
 
 ActionTrigger:
   type: object
+  additionalProperties: false
   required:
     - name
-    - git
+  description: Exactly one of git or schedule is present.
   properties:
     name:
       type: string
@@ -1120,6 +1121,8 @@ ActionTrigger:
       pattern: ^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$
     git:
       $ref: "#/GitTrigger"
+    schedule:
+      $ref: "#/ScheduleTrigger"
     review:
       type: string
       enum:
@@ -1138,6 +1141,20 @@ GitTrigger:
   description: >-
     Runs the action when a newly accepted repository head changes a path
     matching the containing target's watch patterns.
+
+ScheduleTrigger:
+  type: object
+  additionalProperties: false
+  required:
+    - cron
+  properties:
+    cron:
+      type: string
+      minLength: 1
+      pattern: ^\S+(?:\s+\S+){4}$
+      description: >-
+        Five-field cron expression evaluated in UTC: minute, hour,
+        day-of-month, month, and day-of-week.
 
 ResourceRequirements:
   type: object
