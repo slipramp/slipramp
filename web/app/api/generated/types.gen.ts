@@ -2078,6 +2078,8 @@ export type LogSeal = {
   sha256: string;
 };
 
+export type RunSourceType = "manual" | "api" | "mcp" | "git" | "schedule" | "promotion";
+
 export type RunReviewState = "not-required" | "pending" | "approved" | "rejected";
 
 export type GitRunSource = {
@@ -2104,7 +2106,7 @@ export type RunSource = {
   /**
    * Boundary that submitted the Run.
    */
-  type: "manual" | "api" | "mcp" | "git" | "schedule" | "promotion";
+  type: RunSourceType;
   git?: GitRunSource;
   schedule?: ScheduleRunSource;
   promotion?: PromotionRunSource;
@@ -4190,6 +4192,18 @@ export type ListRunsData = {
      * Limit results to one durable Target.
      */
     targetId?: string;
+    /**
+     * Limit results to one Action name.
+     */
+    action?: CatalogName;
+    /**
+     * Limit results to one Run source type.
+     */
+    source?: RunSourceType;
+    /**
+     * Limit results to one automatic trigger name. Requires source to be git or schedule.
+     */
+    triggerName?: CatalogName;
     /**
      * Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
      */

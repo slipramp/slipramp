@@ -411,14 +411,7 @@ RunSource:
     - type
   properties:
     type:
-      type: string
-      enum:
-        - manual
-        - api
-        - mcp
-        - git
-        - schedule
-        - promotion
+      $ref: "#/RunSourceType"
       description: Boundary that submitted the Run.
     git:
       $ref: "#/GitRunSource"
@@ -426,6 +419,16 @@ RunSource:
       $ref: "#/ScheduleRunSource"
     promotion:
       $ref: ./promotions.yaml#/PromotionRunSource
+
+RunSourceType:
+  type: string
+  enum:
+    - manual
+    - api
+    - mcp
+    - git
+    - schedule
+    - promotion
 
 GitRunSource:
   type: object

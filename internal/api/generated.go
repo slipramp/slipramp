@@ -4011,7 +4011,7 @@ type RunSource struct {
 	Type RunSourceType `json:"type"`
 }
 
-// RunSourceType Boundary that submitted the Run.
+// RunSourceType defines model for RunSourceType.
 type RunSourceType string
 
 // Runtime defines model for Runtime.
@@ -4457,6 +4457,15 @@ type ListRunsParams struct {
 
 	// TargetID Limit results to one durable Target.
 	TargetID *openapi_types.UUID `form:"targetId,omitempty" json:"targetId,omitempty"`
+
+	// Action Limit results to one Action name.
+	Action *CatalogName `form:"action,omitempty" json:"action,omitempty"`
+
+	// Source Limit results to one Run source type.
+	Source *RunSourceType `form:"source,omitempty" json:"source,omitempty"`
+
+	// TriggerName Limit results to one automatic trigger name. Requires source to be git or schedule.
+	TriggerName *CatalogName `form:"triggerName,omitempty" json:"triggerName,omitempty"`
 
 	// CommitSha Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
 	CommitSha *string `form:"commitSha,omitempty" json:"commitSha,omitempty"`
@@ -5557,7 +5566,7 @@ type ClientInterface interface {
 
 	// ListRuns List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
 	//
 	// Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 	ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6899,7 +6908,7 @@ func (c *Client) TestRepositoryConnection(ctx context.Context, body TestReposito
 
 // ListRuns List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
 //
 // Corresponds with GET /api/v1/runs (the `ListRuns` operationId).
 func (c *Client) ListRuns(ctx context.Context, params *ListRunsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10410,6 +10419,42 @@ func NewListRunsRequest(server string, params *ListRunsParams) (*http.Request, e
 
 		}
 
+		if params.Action != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "action", *params.Action, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Source != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "source", *params.Source, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.TriggerName != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "triggerName", *params.TriggerName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if params.CommitSha != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "commitSha", *params.CommitSha, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
@@ -12292,7 +12337,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListRunsWithResponse List recent Runs
 	//
-	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+	// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19451,7 +19496,7 @@ func (c *ClientWithResponses) TestRepositoryConnectionWithResponse(ctx context.C
 
 // ListRunsWithResponse List recent Runs
 //
-// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -27316,6 +27361,45 @@ func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Reque
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "targetId"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "action" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "source" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "source", r.URL.Query(), &params.Source, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "source"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "source", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "triggerName" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "triggerName", r.URL.Query(), &params.TriggerName, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "triggerName"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "triggerName", Err: err})
 		}
 		return
 	}

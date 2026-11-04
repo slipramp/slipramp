@@ -616,6 +616,7 @@ export type {
   RunReviewDecisionRequest,
   RunReviewState,
   RunSource,
+  RunSourceType,
   Runtime,
   RuntimeCredential,
   RuntimeExplanation,

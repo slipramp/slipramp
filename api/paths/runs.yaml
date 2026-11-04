@@ -4,8 +4,8 @@ runs:
     summary: List recent Runs
     description: >-
       Lists Runs in descending creation order with offset pagination.
-      Repository, commit, input artifact, target, cluster, phase, and review
-      state filters scope execution history.
+      Repository, commit, input artifact, target, Action, source, trigger,
+      cluster, phase, and review state filters scope execution history.
     security:
       - ProductSession: []
       - ProductBearer: []
@@ -26,6 +26,26 @@ runs:
         schema:
           type: string
           format: uuid
+      - name: action
+        in: query
+        required: false
+        description: Limit results to one Action name.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: source
+        in: query
+        required: false
+        description: Limit results to one Run source type.
+        schema:
+          $ref: ../components/runs.yaml#/RunSourceType
+      - name: triggerName
+        in: query
+        required: false
+        description: >-
+          Limit results to one automatic trigger name. Requires source to be
+          git or schedule.
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
       - name: commitSha
         in: query
         required: false

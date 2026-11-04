@@ -185,6 +185,18 @@ func (h *Handler) ListRuns(
 	if request.Params.CommitSha != nil {
 		commitSHA = *request.Params.CommitSha
 	}
+	actionName := ""
+	if request.Params.Action != nil {
+		actionName = string(*request.Params.Action)
+	}
+	sourceType := run.SourceType("")
+	if request.Params.Source != nil {
+		sourceType = run.SourceType(*request.Params.Source)
+	}
+	triggerName := ""
+	if request.Params.TriggerName != nil {
+		triggerName = string(*request.Params.TriggerName)
+	}
 	offset := int32(0)
 	if request.Params.Offset != nil {
 		if *request.Params.Offset < 0 || *request.Params.Offset > run.MaximumRunListOffset {
@@ -200,6 +212,9 @@ func (h *Handler) ListRuns(
 		run.RunListFilter{
 			RepositoryID:    request.Params.RepositoryID,
 			TargetID:        request.Params.TargetID,
+			ActionName:      actionName,
+			SourceType:      sourceType,
+			TriggerName:     triggerName,
 			CommitSHA:       commitSHA,
 			InputArtifactID: request.Params.InputArtifactID,
 			ClusterName:     clusterName,

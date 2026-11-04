@@ -168,6 +168,9 @@ type RerunRequest struct {
 type RunListFilter struct {
 	RepositoryID    *uuid.UUID
 	TargetID        *uuid.UUID
+	ActionName      string
+	SourceType      SourceType
+	TriggerName     string
 	CommitSHA       string
 	InputArtifactID *uuid.UUID
 	ClusterName     string

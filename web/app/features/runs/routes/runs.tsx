@@ -9,6 +9,7 @@ import {
   type Cluster,
   type Repository,
   type Run,
+  type RunSourceType,
 } from "~/api/generated";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
 import { RelativeTime, Timestamp } from "~/shared/display-values";
@@ -37,6 +38,9 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const repositoryId = optionalSearchValue(url, "repositoryId");
   const targetId = optionalSearchValue(url, "targetId");
+  const action = optionalSearchValue(url, "action");
+  const source = optionalRunSource(url.searchParams.get("source"));
+  const triggerName = optionalSearchValue(url, "triggerName");
   const cluster = optionalSearchValue(url, "cluster");
   const phase = optionalRunPhase(url.searchParams.get("phase"));
   const reviewState = optionalRunReviewState(url.searchParams.get("reviewState"));
@@ -47,13 +51,16 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     listRuns({
       client,
       query: {
+        action,
         cluster,
         limit: pageSize,
         offset,
         phase,
         reviewState,
         repositoryId,
+        source,
         targetId,
+        triggerName,
       },
     }),
     listRepositories({ client, query: { limit: 200 } }),
@@ -63,6 +70,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   if (!initialRunsResult.data) {
     return {
       available: false,
+      action,
       cluster,
       clusters: clustersResult.data?.items ?? [],
       error:
@@ -75,8 +83,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
       reviewState,
       repositories: repositoriesResult.data?.items ?? [],
       runs: [],
+      source,
       targetId,
       total: 0,
+      triggerName,
     };
   }
 
@@ -93,6 +103,7 @@ export async function loader({ context, request }: Route.LoaderArgs) {
 
   return {
     available: true,
+    action,
     cluster,
     clusters: clustersResult.data?.items ?? [],
     error: undefined,
@@ -102,8 +113,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     reviewState,
     repositories: repositoriesResult.data?.items ?? [],
     runs: initialRunsResult.data.items,
+    source,
     targetId,
     total: initialRunsResult.data.total,
+    triggerName,
   };
 }
 
@@ -117,13 +130,16 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
       <PageHeader description="Immutable action executions, newest first." title="Run history" />
 
       <HistoryFilters
+        action={loaderData.action}
         cluster={loaderData.cluster}
         clusters={loaderData.clusters}
         phase={loaderData.phase}
         repositoryId={loaderData.repositoryId}
         repositories={loaderData.repositories}
         reviewState={loaderData.reviewState}
+        source={loaderData.source}
         targetId={loaderData.targetId}
+        triggerName={loaderData.triggerName}
       />
 
       {!loaderData.available ? (
@@ -149,21 +165,27 @@ export default function RunHistory({ loaderData }: Route.ComponentProps) {
 }
 
 function HistoryFilters({
+  action,
   cluster,
   clusters,
   phase,
   repositoryId,
   repositories,
   reviewState,
+  source,
   targetId,
+  triggerName,
 }: Readonly<{
+  action?: string;
   cluster?: string;
   clusters: Cluster[];
   phase?: Run["phase"];
   repositoryId?: string;
   repositories: Repository[];
   reviewState?: Run["review"]["state"];
+  source?: RunSourceType;
   targetId?: string;
+  triggerName?: string;
 }>) {
   return (
     <SearchParamFilters
@@ -190,6 +212,47 @@ function HistoryFilters({
           name: "targetId",
           placeholder: "Target UUID",
           value: targetId,
+        },
+        {
+          active: Boolean(action),
+          kind: "text",
+          label: "Action",
+          maxLength: 63,
+          name: "action",
+          placeholder: "Action name",
+          value: action,
+        },
+        {
+          active: Boolean(source),
+          clearWhenEmpty: ["triggerName"],
+          data: triggerName
+            ? [
+                { label: "Git", value: "git" },
+                { label: "Schedule", value: "schedule" },
+              ]
+            : [
+                { label: "All sources", value: "" },
+                { label: "Manual", value: "manual" },
+                { label: "API", value: "api" },
+                { label: "MCP", value: "mcp" },
+                { label: "Git", value: "git" },
+                { label: "Schedule", value: "schedule" },
+                { label: "Promotion", value: "promotion" },
+              ],
+          kind: "select",
+          label: "Source",
+          name: "source",
+          value: source,
+        },
+        {
+          active: Boolean(triggerName),
+          disabled: source !== "git" && source !== "schedule",
+          kind: "text",
+          label: "Trigger",
+          maxLength: 63,
+          name: "triggerName",
+          placeholder: "Trigger name",
+          value: triggerName,
         },
         {
           active: Boolean(cluster),
@@ -393,6 +456,20 @@ function optionalRunReviewState(value: string | null): Run["review"]["state"] | 
     case "pending":
     case "approved":
     case "rejected":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function optionalRunSource(value: string | null): RunSourceType | undefined {
+  switch (value) {
+    case "manual":
+    case "api":
+    case "mcp":
+    case "git":
+    case "schedule":
+    case "promotion":
       return value;
     default:
       return undefined;

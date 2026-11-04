@@ -55,6 +55,19 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 	if filter.CommitSHA != "" {
 		commitSHA = &filter.CommitSHA
 	}
+	var actionName *string
+	if filter.ActionName != "" {
+		actionName = &filter.ActionName
+	}
+	var sourceType *string
+	if filter.SourceType != "" {
+		value := string(filter.SourceType)
+		sourceType = &value
+	}
+	var triggerName *string
+	if filter.TriggerName != "" {
+		triggerName = &filter.TriggerName
+	}
 	var clusterName *string
 	if filter.ClusterName != "" {
 		clusterName = &filter.ClusterName
@@ -73,6 +86,9 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 	query := storedb.ListRunsParams{
 		RepositoryID:    repositoryID,
 		TargetID:        optionalDatabaseUUID(filter.TargetID),
+		ActionName:      actionName,
+		SourceType:      sourceType,
+		TriggerName:     triggerName,
 		CommitSha:       commitSHA,
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
 		ClusterName:     clusterName,
@@ -91,6 +107,9 @@ func (d *Database) ListRuns(ctx context.Context, filter run.RunListFilter) (run.
 	total, err := d.queries.CountRuns(ctx, storedb.CountRunsParams{
 		RepositoryID:    repositoryID,
 		TargetID:        optionalDatabaseUUID(filter.TargetID),
+		ActionName:      actionName,
+		SourceType:      sourceType,
+		TriggerName:     triggerName,
 		CommitSha:       commitSHA,
 		InputArtifactID: optionalDatabaseUUID(filter.InputArtifactID),
 		ClusterName:     clusterName,

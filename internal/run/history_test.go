@@ -22,6 +22,9 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 		RunListFilter{
 			RepositoryID:    &repositoryID,
 			TargetID:        &testTargetID,
+			ActionName:      "sync",
+			SourceType:      SourceTypeSchedule,
+			TriggerName:     "nightly-sync",
 			CommitSHA:       testCommitSHA,
 			InputArtifactID: &inputArtifactID,
 			ClusterName:     "colo",
@@ -42,11 +45,69 @@ func TestListRunsAppliesDefaultsAndFilters(t *testing.T) {
 		*runs.listFilter.InputArtifactID != inputArtifactID ||
 		runs.listFilter.TargetID == nil ||
 		*runs.listFilter.TargetID != testTargetID ||
+		runs.listFilter.ActionName != "sync" ||
+		runs.listFilter.SourceType != SourceTypeSchedule ||
+		runs.listFilter.TriggerName != "nightly-sync" ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != PhaseRunning ||
 		runs.listFilter.ReviewState != ReviewStatePending ||
 		runs.listFilter.Limit != DefaultRunListLimit {
 		t.Errorf("ListRuns() filter = %#v", runs.listFilter)
+	}
+}
+
+func TestListRunsRejectsInvalidSource(t *testing.T) {
+	t.Parallel()
+
+	service, _ := testService(t)
+	_, err := service.ListRuns(context.Background(), RunListFilter{SourceType: "webhook"})
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("ListRuns() error = %v, want invalid request", err)
+	}
+}
+
+func TestListRunsRejectsTriggerWithoutNamedAutomaticSource(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		sourceType SourceType
+	}{
+		{name: "missing source"},
+		{name: "manual source", sourceType: SourceTypeManual},
+		{name: "API source", sourceType: SourceTypeAPI},
+		{name: "MCP source", sourceType: SourceTypeMCP},
+		{name: "Promotion source", sourceType: SourceTypePromotion},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			service, _ := testService(t)
+			_, err := service.ListRuns(context.Background(), RunListFilter{
+				SourceType:  test.sourceType,
+				TriggerName: "nightly-sync",
+			})
+			if !errors.Is(err, ErrInvalidRequest) {
+				t.Fatalf("ListRuns() error = %v, want invalid request", err)
+			}
+		})
+	}
+}
+
+func TestListRunsAcceptsTriggerWithNamedAutomaticSource(t *testing.T) {
+	t.Parallel()
+
+	for _, sourceType := range []SourceType{SourceTypeGit, SourceTypeSchedule} {
+		service, _ := testService(t)
+		_, err := service.ListRuns(context.Background(), RunListFilter{
+			SourceType:  sourceType,
+			TriggerName: "nightly-sync",
+		})
+		if err != nil {
+			t.Fatalf("ListRuns() source %q error = %v", sourceType, err)
+		}
 	}
 }
 

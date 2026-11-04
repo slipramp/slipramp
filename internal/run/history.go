@@ -35,6 +35,19 @@ func (s *Service) ListRuns(ctx context.Context, filter RunListFilter) (RunList, 
 	if filter.TargetID != nil && *filter.TargetID == uuid.Nil {
 		return RunList{}, fmt.Errorf("%w: Target ID must not be empty", ErrInvalidRequest)
 	}
+	if filter.ActionName != strings.TrimSpace(filter.ActionName) {
+		return RunList{}, fmt.Errorf("%w: action name must not have surrounding whitespace", ErrInvalidRequest)
+	}
+	if filter.SourceType != "" && !validRunListSourceType(filter.SourceType) {
+		return RunList{}, fmt.Errorf("%w: source is invalid", ErrInvalidRequest)
+	}
+	if filter.TriggerName != strings.TrimSpace(filter.TriggerName) {
+		return RunList{}, fmt.Errorf("%w: trigger name must not have surrounding whitespace", ErrInvalidRequest)
+	}
+	if filter.TriggerName != "" &&
+		filter.SourceType != SourceTypeGit && filter.SourceType != SourceTypeSchedule {
+		return RunList{}, fmt.Errorf("%w: trigger name requires a git or schedule source", ErrInvalidRequest)
+	}
 	if filter.InputArtifactID != nil && *filter.InputArtifactID == uuid.Nil {
 		return RunList{}, fmt.Errorf("%w: input artifact ID must not be empty", ErrInvalidRequest)
 	}
@@ -83,6 +96,16 @@ func validReviewState(state ReviewState) bool {
 func validPhase(phase Phase) bool {
 	switch phase {
 	case PhaseQueued, PhaseAssigned, PhasePreparing, PhaseRunning, PhaseFinished:
+		return true
+	default:
+		return false
+	}
+}
+
+func validRunListSourceType(sourceType SourceType) bool {
+	switch sourceType {
+	case SourceTypeManual, SourceTypeAPI, SourceTypeMCP,
+		SourceTypeGit, SourceTypeSchedule, SourceTypePromotion:
 		return true
 	default:
 		return false

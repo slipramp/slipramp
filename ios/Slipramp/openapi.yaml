@@ -2181,7 +2181,7 @@ paths:
     get:
       operationId: listRuns
       summary: List recent Runs
-      description: Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+      description: Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
       security:
         - ProductSession: []
         - ProductBearer: []
@@ -2202,6 +2202,24 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: action
+          in: query
+          required: false
+          description: Limit results to one Action name.
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: source
+          in: query
+          required: false
+          description: Limit results to one Run source type.
+          schema:
+            $ref: '#/components/schemas/RunSourceType'
+        - name: triggerName
+          in: query
+          required: false
+          description: Limit results to one automatic trigger name. Requires source to be git or schedule.
+          schema:
+            $ref: '#/components/schemas/CatalogName'
         - name: commitSha
           in: query
           required: false
@@ -9059,6 +9077,15 @@ components:
         sha256:
           type: string
           pattern: ^[0-9a-f]{64}$
+    RunSourceType:
+      type: string
+      enum:
+        - manual
+        - api
+        - mcp
+        - git
+        - schedule
+        - promotion
     RunReviewState:
       type: string
       enum:
@@ -9105,14 +9132,7 @@ components:
         - type
       properties:
         type:
-          type: string
-          enum:
-            - manual
-            - api
-            - mcp
-            - git
-            - schedule
-            - promotion
+          $ref: '#/components/schemas/RunSourceType'
           description: Boundary that submitted the Run.
         git:
           $ref: '#/components/schemas/GitRunSource'

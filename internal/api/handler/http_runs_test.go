@@ -368,6 +368,7 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 			"&commitSha=0123456789abcdef0123456789abcdef01234567"+
 			"&inputArtifactId="+inputArtifactID.String()+
 			"&targetId="+targetID.String()+
+			"&action=apply&source=schedule&triggerName=nightly-apply"+
 			"&cluster=colo&phase=running&reviewState=pending&limit=12&offset=4",
 		nil,
 	)
@@ -384,6 +385,9 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 		runs.listFilter.InputArtifactID == nil ||
 		*runs.listFilter.InputArtifactID != inputArtifactID ||
 		runs.listFilter.TargetID == nil || *runs.listFilter.TargetID != targetID ||
+		runs.listFilter.ActionName != "apply" ||
+		runs.listFilter.SourceType != run.SourceTypeSchedule ||
+		runs.listFilter.TriggerName != "nightly-apply" ||
 		runs.listFilter.ClusterName != "colo" ||
 		runs.listFilter.Phase != run.PhaseRunning ||
 		runs.listFilter.ReviewState != run.ReviewStatePending ||
@@ -409,6 +413,29 @@ func TestListRunsReturnsFilteredHistory(t *testing.T) {
 	if result.Items[1].Outcome == nil ||
 		*result.Items[1].Outcome != api.RunOutcomeSucceeded {
 		t.Errorf("older outcome = %v", result.Items[1].Outcome)
+	}
+}
+
+func TestListRunsRejectsTriggerWithoutNamedAutomaticSource(t *testing.T) {
+	t.Parallel()
+
+	runs := &recordingRunService{listError: run.ErrInvalidRequest}
+	request := httptest.NewRequestWithContext(
+		context.Background(),
+		http.MethodGet,
+		"/api/v1/runs?source=manual&triggerName=nightly-apply",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	newAdminTestHandler(
+		&recordingClusterService{}, nil, nil, nil, runs, nil, nil,
+	).ServeHTTP(response, request)
+
+	assertProblem(t, response, http.StatusBadRequest)
+	if runs.listFilter.SourceType != run.SourceTypeManual ||
+		runs.listFilter.TriggerName != "nightly-apply" {
+		t.Errorf("list filter = %#v", runs.listFilter)
 	}
 }
 

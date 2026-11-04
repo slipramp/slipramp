@@ -39,10 +39,20 @@ import { pageTitle } from "~/shared/page-title";
 import { targetFilterPath } from "~/features/targets/target-filter";
 import { CommitReference } from "~/features/commits/git-commit";
 import { Timestamp } from "~/shared/display-values";
+import { shortIdentifier } from "~/shared/display";
 import { PageBackLink } from "~/shared/page-back-link";
 import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/shared/page";
 import { RecentRuns, recentRunLimit } from "~/features/runs/recent-runs";
 import { RunHistoryButton } from "~/features/runs/run-history-button";
+import { useActivityRefresh } from "~/features/shell/activity-refresh";
+import {
+  loadLatestScheduledRuns,
+  scheduledActionDefinitions,
+  scheduledActionsDescription,
+  scheduledRunHistoryPath,
+  scheduledRunPresentation,
+  type ScheduledActionRun,
+} from "~/features/targets/scheduled-actions";
 import {
   reconciliationPresentation,
   showLastAttemptedSync,
@@ -68,8 +78,22 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export async function loader({ context, params, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [targetResult, runsResult] = await Promise.all([
-    getTarget({ client, path: { targetId: params.targetId } }),
+  const targetResult = await getTarget({ client, path: { targetId: params.targetId } });
+  if (!targetResult.data) {
+    return {
+      error:
+        targetResult.error?.detail ??
+        targetResult.error?.title ??
+        "The target definition could not be loaded.",
+      recentRuns: [],
+      runsAvailable: false,
+      scheduledRuns: [],
+      target: undefined,
+    };
+  }
+
+  const definitions = scheduledActionDefinitions(targetResult.data.definition);
+  const [runsResult, scheduledRuns] = await Promise.all([
     listRuns({
       client,
       query: {
@@ -77,15 +101,28 @@ export async function loader({ context, params, request }: Route.LoaderArgs) {
         targetId: params.targetId,
       },
     }),
+    loadLatestScheduledRuns(definitions, async (definition) => {
+      const result = await listRuns({
+        client,
+        query: {
+          action: definition.actionName,
+          limit: 1,
+          source: "schedule",
+          targetId: params.targetId,
+          triggerName: definition.triggerName,
+        },
+      });
+      if (!result.data) throw new Error("scheduled Run history unavailable");
+
+      return result.data.items[0];
+    }),
   ]);
 
   return {
-    error:
-      targetResult.error?.detail ??
-      targetResult.error?.title ??
-      "The target definition could not be loaded.",
+    error: undefined,
     recentRuns: runsResult.data?.items ?? [],
     runsAvailable: runsResult.data !== undefined,
+    scheduledRuns,
     target: targetResult.data,
   };
 }
@@ -161,6 +198,14 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
         />
       ) : null}
 
+      {loaderData.scheduledRuns.length > 0 ? (
+        <ScheduledActions
+          archived={record.archivedAt !== undefined}
+          records={loaderData.scheduledRuns}
+          targetId={record.id}
+        />
+      ) : null}
+
       <Stack gap="md">
         <SectionHeader
           description="Each action resolves the target defaults below into an immutable execution."
@@ -191,6 +236,131 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
       />
 
       <TargetDefaults target={target} />
+    </Stack>
+  );
+}
+
+function ScheduledActions({
+  archived,
+  records,
+  targetId,
+}: Readonly<{
+  archived: boolean;
+  records: ScheduledActionRun[];
+  targetId: string;
+}>) {
+  useActivityRefresh(
+    records.some(
+      (record) =>
+        record.state === "available" && record.run !== undefined && record.run.phase !== "finished",
+    ),
+  );
+
+  return (
+    <Stack gap="md">
+      <SectionHeader
+        description={scheduledActionsDescription(archived)}
+        title="Scheduled actions"
+      />
+      {archived ? (
+        <Alert color="gray" title="Schedules inactive">
+          This Target is archived. Schedule history is retained, but new occurrences are not
+          evaluated.
+        </Alert>
+      ) : null}
+      {records.length === 0 ? (
+        <Paper p="md" withBorder>
+          <Text c="dimmed">No scheduled actions are defined for this Target.</Text>
+        </Paper>
+      ) : (
+        <Paper withBorder>
+          <Table.ScrollContainer minWidth={960} type="native">
+            <Table verticalSpacing="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Action</Table.Th>
+                  <Table.Th>Trigger</Table.Th>
+                  <Table.Th>Schedule</Table.Th>
+                  <Table.Th>Latest Run</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Scheduled occurrence</Table.Th>
+                  <Table.Th>History</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {records.map((record) => {
+                  const presentation = scheduledRunPresentation(record);
+                  const latestRun = record.state === "available" ? record.run : undefined;
+                  const scheduledAt = latestRun?.source.schedule?.scheduledAt;
+
+                  return (
+                    <Table.Tr
+                      key={`${record.definition.actionName}:${record.definition.triggerName}`}
+                    >
+                      <Table.Td>
+                        <Stack gap={0}>
+                          <Text fw={600} size="sm">
+                            {record.definition.actionTitle ?? record.definition.actionName}
+                          </Text>
+                          {record.definition.actionTitle ? (
+                            <Text c="dimmed" ff="monospace" size="xs">
+                              {record.definition.actionName}
+                            </Text>
+                          ) : null}
+                        </Stack>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text ff="monospace" size="sm">
+                          {record.definition.triggerName}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Stack gap={0}>
+                          <Code>{record.definition.cron}</Code>
+                          <Text c="dimmed" size="xs">
+                            UTC
+                          </Text>
+                        </Stack>
+                      </Table.Td>
+                      <Table.Td>
+                        {latestRun ? (
+                          <Anchor component={Link} fw={600} to={`/runs/${latestRun.id}`}>
+                            {shortIdentifier(latestRun.id)}
+                          </Anchor>
+                        ) : (
+                          <Text c="dimmed">—</Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color={presentation.color} variant="light">
+                          {presentation.label}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        {scheduledAt ? (
+                          <Timestamp size="sm" value={scheduledAt} />
+                        ) : (
+                          <Text c="dimmed">—</Text>
+                        )}
+                      </Table.Td>
+                      <Table.Td>
+                        <Anchor
+                          component={Link}
+                          fw={600}
+                          size="sm"
+                          to={scheduledRunHistoryPath(targetId, record.definition)}
+                        >
+                          View history
+                        </Anchor>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
+      )}
     </Stack>
   );
 }

@@ -54,6 +54,13 @@ identity, observed container image identities, exit code, diagnostics, and
 observation freshness are separate facts. A disconnected Controller or stale
 observation does not rewrite phase or fail an active Run.
 
+Run history is read from PostgreSQL in descending creation order. Filters may
+combine Repository, commit, input Artifact, Target, Action, source, trigger,
+Cluster, lifecycle phase, review state, and pagination. Trigger-name filtering
+requires a source that carries a named automatic trigger, currently `git` or
+`schedule`. This allows `limit=1` to select the exact latest Run for one named
+trigger without maintaining a separate latest-result projection.
+
 The Run domain owns allowed observation transitions. Persistence locks the Run,
 validates the new observation, and writes current facts plus phase history in one
 transaction. Duplicate terminal reports are idempotent and cannot move a Run or

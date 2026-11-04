@@ -95,6 +95,19 @@ AND (
     OR target_id = sqlc.narg(target_id)
 )
 AND (
+    sqlc.narg(action_name)::text IS NULL
+    OR action_name = sqlc.narg(action_name)
+)
+AND (
+    sqlc.narg(source_type)::text IS NULL
+    OR source->>'type' = sqlc.narg(source_type)
+)
+AND (
+    sqlc.narg(trigger_name)::text IS NULL
+    OR source->'git'->>'triggerName' = sqlc.narg(trigger_name)
+    OR source->'schedule'->>'triggerName' = sqlc.narg(trigger_name)
+)
+AND (
     sqlc.narg(cluster_name)::text IS NULL
     OR cluster_name = sqlc.narg(cluster_name)
 )
@@ -133,6 +146,19 @@ AND (
 AND (
     sqlc.narg(target_id)::uuid IS NULL
     OR target_id = sqlc.narg(target_id)
+)
+AND (
+    sqlc.narg(action_name)::text IS NULL
+    OR action_name = sqlc.narg(action_name)
+)
+AND (
+    sqlc.narg(source_type)::text IS NULL
+    OR source->>'type' = sqlc.narg(source_type)
+)
+AND (
+    sqlc.narg(trigger_name)::text IS NULL
+    OR source->'git'->>'triggerName' = sqlc.narg(trigger_name)
+    OR source->'schedule'->>'triggerName' = sqlc.narg(trigger_name)
 )
 AND (
     sqlc.narg(cluster_name)::text IS NULL

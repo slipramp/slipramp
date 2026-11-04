@@ -269,15 +269,28 @@ AND (
 )
 AND (
     $5::text IS NULL
-    OR cluster_name = $5
+    OR action_name = $5
 )
 AND (
     $6::text IS NULL
-    OR phase = $6
+    OR source->>'type' = $6
 )
 AND (
     $7::text IS NULL
-    OR review_state = $7
+    OR source->'git'->>'triggerName' = $7
+    OR source->'schedule'->>'triggerName' = $7
+)
+AND (
+    $8::text IS NULL
+    OR cluster_name = $8
+)
+AND (
+    $9::text IS NULL
+    OR phase = $9
+)
+AND (
+    $10::text IS NULL
+    OR review_state = $10
 )
 `
 
@@ -286,6 +299,9 @@ type CountRunsParams struct {
 	CommitSha       *string
 	InputArtifactID pgtype.UUID
 	TargetID        pgtype.UUID
+	ActionName      *string
+	SourceType      *string
+	TriggerName     *string
 	ClusterName     *string
 	Phase           *string
 	ReviewState     *string
@@ -297,6 +313,9 @@ func (q *Queries) CountRuns(ctx context.Context, arg CountRunsParams) (int64, er
 		arg.CommitSha,
 		arg.InputArtifactID,
 		arg.TargetID,
+		arg.ActionName,
+		arg.SourceType,
+		arg.TriggerName,
 		arg.ClusterName,
 		arg.Phase,
 		arg.ReviewState,
@@ -1255,19 +1274,32 @@ AND (
 )
 AND (
     $5::text IS NULL
-    OR cluster_name = $5
+    OR action_name = $5
 )
 AND (
     $6::text IS NULL
-    OR phase = $6
+    OR source->>'type' = $6
 )
 AND (
     $7::text IS NULL
-    OR review_state = $7
+    OR source->'git'->>'triggerName' = $7
+    OR source->'schedule'->>'triggerName' = $7
+)
+AND (
+    $8::text IS NULL
+    OR cluster_name = $8
+)
+AND (
+    $9::text IS NULL
+    OR phase = $9
+)
+AND (
+    $10::text IS NULL
+    OR review_state = $10
 )
 ORDER BY created_at DESC, id DESC
-LIMIT $9
-OFFSET $8
+LIMIT $12
+OFFSET $11
 `
 
 type ListRunsParams struct {
@@ -1275,6 +1307,9 @@ type ListRunsParams struct {
 	CommitSha       *string
 	InputArtifactID pgtype.UUID
 	TargetID        pgtype.UUID
+	ActionName      *string
+	SourceType      *string
+	TriggerName     *string
 	ClusterName     *string
 	Phase           *string
 	ReviewState     *string
@@ -1288,6 +1323,9 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]Run, erro
 		arg.CommitSha,
 		arg.InputArtifactID,
 		arg.TargetID,
+		arg.ActionName,
+		arg.SourceType,
+		arg.TriggerName,
 		arg.ClusterName,
 		arg.Phase,
 		arg.ReviewState,

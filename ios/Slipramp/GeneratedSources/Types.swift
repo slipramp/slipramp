@@ -41,7 +41,7 @@ internal protocol APIProtocol: Sendable {
     func getTarget(_ input: Operations.GetTarget.Input) async throws -> Operations.GetTarget.Output
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -167,7 +167,7 @@ extension APIProtocol {
     }
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -4247,6 +4247,15 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/RunSourceType`.
+        internal enum RunSourceType: String, Codable, Hashable, Sendable, CaseIterable {
+            case manual = "manual"
+            case api = "api"
+            case mcp = "mcp"
+            case git = "git"
+            case schedule = "schedule"
+            case promotion = "promotion"
+        }
         /// - Remark: Generated from `#/components/schemas/RunReviewState`.
         internal enum RunReviewState: String, Codable, Hashable, Sendable, CaseIterable {
             case notRequired = "not-required"
@@ -4334,18 +4343,7 @@ internal enum Components {
             /// Boundary that submitted the Run.
             ///
             /// - Remark: Generated from `#/components/schemas/RunSource/type`.
-            internal enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                case manual = "manual"
-                case api = "api"
-                case mcp = "mcp"
-                case git = "git"
-                case schedule = "schedule"
-                case promotion = "promotion"
-            }
-            /// Boundary that submitted the Run.
-            ///
-            /// - Remark: Generated from `#/components/schemas/RunSource/type`.
-            internal var _type: Components.Schemas.RunSource._TypePayload
+            internal var _type: Components.Schemas.RunSourceType
             /// - Remark: Generated from `#/components/schemas/RunSource/git`.
             internal var git: Components.Schemas.GitRunSource?
             /// - Remark: Generated from `#/components/schemas/RunSource/schedule`.
@@ -4360,7 +4358,7 @@ internal enum Components {
             ///   - schedule:
             ///   - promotion:
             internal init(
-                _type: Components.Schemas.RunSource._TypePayload,
+                _type: Components.Schemas.RunSourceType,
                 git: Components.Schemas.GitRunSource? = nil,
                 schedule: Components.Schemas.ScheduleRunSource? = nil,
                 promotion: Components.Schemas.PromotionRunSource? = nil
@@ -6879,7 +6877,7 @@ internal enum Operations {
     }
     /// List recent Runs
     ///
-    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+    /// Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
     ///
     /// - Remark: HTTP `GET /api/v1/runs`.
     /// - Remark: Generated from `#/paths//api/v1/runs/get(listRuns)`.
@@ -6896,6 +6894,18 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/targetId`.
                 internal var targetId: Swift.String?
+                /// Limit results to one Action name.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/action`.
+                internal var action: Components.Schemas.CatalogName?
+                /// Limit results to one Run source type.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/source`.
+                internal var source: Components.Schemas.RunSourceType?
+                /// Limit results to one automatic trigger name. Requires source to be git or schedule.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/triggerName`.
+                internal var triggerName: Components.Schemas.CatalogName?
                 /// Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/runs/GET/query/commitSha`.
@@ -6937,6 +6947,9 @@ internal enum Operations {
                 /// - Parameters:
                 ///   - repositoryId: Limit results to one repository.
                 ///   - targetId: Limit results to one durable Target.
+                ///   - action: Limit results to one Action name.
+                ///   - source: Limit results to one Run source type.
+                ///   - triggerName: Limit results to one automatic trigger name. Requires source to be git or schedule.
                 ///   - commitSha: Limit results to Runs pinned to this full Git object ID. Requires repositoryId.
                 ///   - inputArtifactId: Limit results to Runs that consume this exact artifact.
                 ///   - cluster: Limit results to Runs assigned to one execution cluster.
@@ -6947,6 +6960,9 @@ internal enum Operations {
                 internal init(
                     repositoryId: Swift.String? = nil,
                     targetId: Swift.String? = nil,
+                    action: Components.Schemas.CatalogName? = nil,
+                    source: Components.Schemas.RunSourceType? = nil,
+                    triggerName: Components.Schemas.CatalogName? = nil,
                     commitSha: Swift.String? = nil,
                     inputArtifactId: Swift.String? = nil,
                     cluster: Components.Schemas.CatalogName? = nil,
@@ -6957,6 +6973,9 @@ internal enum Operations {
                 ) {
                     self.repositoryId = repositoryId
                     self.targetId = targetId
+                    self.action = action
+                    self.source = source
+                    self.triggerName = triggerName
                     self.commitSha = commitSha
                     self.inputArtifactId = inputArtifactId
                     self.cluster = cluster

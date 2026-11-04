@@ -1223,7 +1223,7 @@ export const downloadRunInput = <ThrowOnError extends boolean = false>(
 /**
  * List recent Runs
  *
- * Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, cluster, phase, and review state filters scope execution history.
+ * Lists Runs in descending creation order with offset pagination. Repository, commit, input artifact, target, Action, source, trigger, cluster, phase, and review state filters scope execution history.
  */
 export const listRuns = <ThrowOnError extends boolean = false>(
   options?: Options<ListRunsData, ThrowOnError>,
