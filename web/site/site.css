@@ -117,6 +117,7 @@ a:focus-visible {
 }
 
 .hero {
+  container-type: inline-size;
   display: grid;
   min-height: 620px;
   align-items: center;
@@ -166,7 +167,7 @@ h3 {
 .hero h1 {
   max-width: 11ch;
   margin-bottom: 1.65rem;
-  font-size: clamp(3.5rem, 6.9vw, 6.4rem);
+  font-size: clamp(3.5rem, 7.6cqi, 6.4rem);
   font-weight: 770;
   letter-spacing: -0.072em;
   line-height: 0.94;

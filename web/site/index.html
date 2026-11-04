@@ -13,7 +13,7 @@
       property="og:title"
     />
     <meta
-      content="Run exact Git commits across Kubernetes clusters while keeping the control plane yours."
+      content="A self-hosted, GitOps-driven infrastructure control plane for homelabs and teams."
       property="og:description"
     />
     <meta content="website" property="og:type" />
@@ -28,14 +28,21 @@
     <header class="site-header">
       <div class="shell nav-shell">
         <a class="brand" href="/" aria-label="Slipramp home">
-          <img alt="" aria-hidden="true" height="36" src="/slipramp-mark.png" width="36" />
+          <img
+            alt=""
+            aria-hidden="true"
+            height="36"
+            src="/slipramp-mark.png"
+            width="36"
+          />
           <span>Slipramp</span>
         </a>
         <nav aria-label="Primary navigation">
           <a href="#how-it-works">How it works</a>
           <a href="/privacy/">Privacy</a>
-          <a href="https://mascot.slipramp.com/">Mascot</a>
-          <a class="nav-github" href="https://github.com/slipramp/slipramp">GitHub</a>
+          <a class="nav-github" href="https://github.com/slipramp/slipramp"
+            >GitHub</a
+          >
         </nav>
       </div>
     </header>
@@ -43,18 +50,25 @@
     <main>
       <section class="hero shell">
         <div class="hero-copy">
-          <p class="eyebrow"><span></span> Self-hosted infrastructure control plane</p>
-          <h1>Serious infrastructure. <span>A happier place to run it.</span></h1>
+          <h1>
+            Serious infrastructure. <span>A happier place to run it.</span>
+          </h1>
           <p class="hero-lede">
-            Slipramp turns versioned Actions into Kubernetes Jobs across your clusters—with exact
-            commits, live logs, durable artifacts, and cluster-local execution.
+            Slipramp provides a home for all your Terraform, OpenTofu, Ansible
+            and pyinfra workflows, executed in your Kubernetes clusters across
+            the cloud and bare metal.
           </p>
           <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/slipramp/slipramp">
+            <a
+              class="button button-primary"
+              href="https://github.com/slipramp/slipramp"
+            >
               Explore on GitHub
               <span aria-hidden="true">↗</span>
             </a>
-            <a class="button button-secondary" href="#how-it-works">See how it works</a>
+            <a class="button button-secondary" href="#how-it-works"
+              >See how it works</a
+            >
           </div>
         </div>
 
@@ -73,28 +87,37 @@
       <section class="proof-strip" aria-label="Slipramp principles">
         <div class="shell proof-grid">
           <p>
-            <strong>Exact commits</strong
-            ><span>Every Run is pinned to the source it executes.</span>
+            <strong>GitOps-driven</strong>
+            <span>
+              Workflows live in Git, executions are pinned to exact commits.
+            </span>
           </p>
           <p>
-            <strong>Outbound control</strong
-            ><span>Controllers connect from each execution cluster.</span>
+            <strong>Kubernetes execution</strong>
+            <span>
+              Controllers in each cluster reach out to the control plane, no
+              inbound access needed.
+            </span>
           </p>
           <p>
-            <strong>Portable Actions</strong
-            ><span>Use ordinary containers, commands, and credentials.</span>
+            <strong>Portable Actions</strong>
+            <span>
+              Use your existing container images, scripts, and secrets
+              management.
+            </span>
           </p>
         </div>
       </section>
 
       <section class="section shell" id="how-it-works">
+        <p class="eyebrow">
+          <span></span> Multi-cluster, multi-cloud workflows
+        </p>
         <div class="section-heading">
-          <p class="eyebrow"><span></span> Server and Controller</p>
-          <h2>The Server schedules. Controllers execute.</h2>
+          <h2>The Slipramp control plane</h2>
           <p>
-            The Server validates Git definitions and manages product state. A Controller in each
-            cluster creates local Kubernetes Jobs. Logs stream to the Server, and declared artifacts
-            are retained.
+            Centralized control plane handles tracking your Git repositories and
+            scheduling executions in your clusters.
           </p>
         </div>
         <ol class="steps">
@@ -102,7 +125,10 @@
             <span class="step-number">01</span>
             <div>
               <h3>Define Targets and Actions</h3>
-              <p>Keep operational definitions with the infrastructure code they control.</p>
+              <p>
+                From basic scripts to first-class Terraform, OpenTofu, Ansible,
+                and pyinfra workflows.
+              </p>
             </div>
           </li>
           <li>
@@ -110,18 +136,19 @@
             <div>
               <h3>Create a pinned Run</h3>
               <p>
-                Start manually, through the API, or from a named Git trigger. Slipramp snapshots the
-                definition and commit before dispatch.
+                Run workflows manually through the web UI or CLI, let your agent
+                handle it through MCP, or automate runs with Git and scheduled
+                triggers.
               </p>
             </div>
           </li>
           <li>
             <span class="step-number">03</span>
             <div>
-              <h3>Execute inside the cluster</h3>
+              <h3>Execute inside your clusters</h3>
               <p>
-                The local Controller creates the Job and reports its status. The Server never needs
-                Kubernetes access.
+                The local controller creates the Kubernetes Job and reports its
+                status. The server never requires direct Kubernetes access.
               </p>
             </div>
           </li>
@@ -130,23 +157,26 @@
 
       <section class="privacy-callout shell">
         <div>
-          <p class="eyebrow eyebrow-light"><span></span> Data boundaries</p>
-          <h2>Your installation does not call home.</h2>
+          <h2>Your data stays local.</h2>
         </div>
         <div class="privacy-copy">
           <p>
-            Slipramp has no product analytics. Repository contents, credentials, Run inputs and
-            outputs, logs, and artifacts are not sent to the project maintainers. Cloudflare hosts
-            this public website and provides ordinary traffic analytics for visits to slipramp.com.
+            Slipramp has no product analytics. Details about your Git
+            repositories, runs, and executions do not leave your infrastructure.
           </p>
-          <a href="/privacy/">Read the privacy policy <span aria-hidden="true">→</span></a>
+          <a href="/privacy/">
+            Read the privacy policy <span aria-hidden="true">→</span>
+          </a>
         </div>
       </section>
 
       <section class="closing shell">
-        <p class="eyebrow"><span></span> Open source</p>
-        <h2>Code, Helm charts, and a complete catalog example—all on GitHub.</h2>
-        <a class="button button-primary" href="https://github.com/slipramp/slipramp">
+        <p class="eyebrow"><span></span> Try it today</p>
+        <h2>Open source and self-hosted.</h2>
+        <a
+          class="button button-primary"
+          href="https://github.com/slipramp/slipramp"
+        >
           Browse the repository
           <span aria-hidden="true">↗</span>
         </a>
@@ -156,7 +186,13 @@
     <footer>
       <div class="shell footer-shell">
         <a class="brand" href="/" aria-label="Slipramp home">
-          <img alt="" aria-hidden="true" height="30" src="/slipramp-mark.png" width="30" />
+          <img
+            alt=""
+            aria-hidden="true"
+            height="30"
+            src="/slipramp-mark.png"
+            width="30"
+          />
           <span>Slipramp</span>
         </a>
         <p>GitOps-driven infrastructure control for homelabs and teams.</p>
