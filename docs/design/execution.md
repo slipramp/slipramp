@@ -100,8 +100,10 @@ requested.
 
 The Run-scoped transfer credential is removed from the child environment.
 Artifact transfer failure makes an otherwise successful execution fail and
-never hides a nonzero child exit code. Runtime images and tools require no
-Slipramp libraries or protocol support.
+never hides a nonzero child exit code. Output uploads retry transient transport
+failures and retryable Server responses with bounded exponential backoff; they
+never rerun the Action command. Runtime images and tools require no Slipramp
+libraries or protocol support.
 
 ## Optional tool adapters
 

@@ -66,7 +66,9 @@ func run(command []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) 
 		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
 		return 1
 	}
-	if err := artifactConfig.UploadArtifacts(ctx); err != nil {
+	uploadContext, stopUploads := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGHUP, syscall.SIGTERM)
+	defer stopUploads()
+	if err := artifactConfig.UploadArtifacts(uploadContext); err != nil {
 		_, _ = fmt.Fprintf(stderr, "slipramp-harness: %v\n", err)
 		if exitCode == 0 {
 			return 1

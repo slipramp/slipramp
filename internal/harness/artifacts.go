@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +27,10 @@ const (
 	ArtifactInputsEnvironment = "SLIPRAMP_ARTIFACT_INPUTS"
 
 	maximumErrorResponseBodyBytes = 4 << 10
+
+	artifactUploadRetryBudget         = 5 * time.Minute
+	artifactUploadInitialRetryBackoff = 500 * time.Millisecond
+	artifactUploadMaximumRetryBackoff = 30 * time.Second
 )
 
 var internalEnvironmentNames = map[string]struct{}{
@@ -36,6 +41,8 @@ var internalEnvironmentNames = map[string]struct{}{
 	ArtifactInputsEnvironment:   {},
 	CancellationFileEnvironment: {},
 }
+
+var errArtifactUploadRetryBudgetExhausted = errors.New("artifact upload retry budget exhausted")
 
 type ArtifactDeclaration struct {
 	Path      string `json:"path"`
@@ -54,6 +61,14 @@ type ArtifactConfig struct {
 	Artifacts map[string]ArtifactDeclaration
 	Inputs    map[string]InputDeclaration
 	Client    *http.Client
+
+	uploadRetryPolicy artifactUploadRetryPolicy
+}
+
+type artifactUploadRetryPolicy struct {
+	budget         time.Duration
+	initialBackoff time.Duration
+	maximumBackoff time.Duration
 }
 
 func LoadArtifactConfig(lookup func(string) string) (ArtifactConfig, error) {
@@ -128,9 +143,13 @@ func (c ArtifactConfig) MaterializeInputs(ctx context.Context) error {
 }
 
 func (c ArtifactConfig) UploadArtifacts(ctx context.Context) error {
+	policy := c.effectiveUploadRetryPolicy()
+	retryContext, cancel := context.WithTimeoutCause(ctx, policy.budget, errArtifactUploadRetryBudgetExhausted)
+	defer cancel()
+
 	for _, name := range slices.Sorted(maps.Keys(c.Artifacts)) {
 		declaration := c.Artifacts[name]
-		if err := c.uploadArtifact(ctx, name, declaration.Path); err != nil {
+		if err := c.uploadArtifact(retryContext, policy, name, declaration.Path); err != nil {
 			return fmt.Errorf("upload artifact %q: %w", name, err)
 		}
 	}
@@ -191,7 +210,12 @@ func (c ArtifactConfig) downloadInput(ctx context.Context, name string, destinat
 	return nil
 }
 
-func (c ArtifactConfig) uploadArtifact(ctx context.Context, name, path string) error {
+func (c ArtifactConfig) uploadArtifact(
+	ctx context.Context,
+	policy artifactUploadRetryPolicy,
+	name string,
+	path string,
+) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("stat declared file: %w", err)
@@ -208,7 +232,8 @@ func (c ArtifactConfig) uploadArtifact(ctx context.Context, name, path string) e
 		"/artifacts/" + url.PathEscape(name)
 
 	var lastErr error
-	for attempt := range 3 {
+	backoff := policy.initialBackoff
+	for attempt := 1; ; attempt++ {
 		body := io.ReadCloser(http.NoBody)
 		if info.Size() > 0 {
 			body, err = os.Open(path)
@@ -227,32 +252,109 @@ func (c ArtifactConfig) uploadArtifact(ctx context.Context, name, path string) e
 		request.Header.Set("X-Slipramp-Content-SHA256", digest)
 		response, err := c.Client.Do(request)
 		_ = body.Close()
+		retryAfter := time.Duration(0)
 		if err == nil {
 			if response.StatusCode == http.StatusNoContent {
 				_ = response.Body.Close()
 				return nil
 			}
 			responseErr := serverResponseError(response)
+			retryAfter = artifactUploadRetryAfter(response.Header.Get("Retry-After"), time.Now())
 			_ = response.Body.Close()
-			if response.StatusCode < 500 {
+			if !retryableArtifactUploadStatus(response.StatusCode) {
 				return responseErr
 			}
 			lastErr = responseErr
 		} else {
 			lastErr = err
 		}
-		if attempt < 2 {
-			timer := time.NewTimer(time.Duration(attempt+1) * 250 * time.Millisecond)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return ctx.Err()
-			case <-timer.C:
-			}
+
+		if ctx.Err() != nil {
+			return artifactUploadRetryExhausted(ctx, policy.budget, attempt, lastErr)
 		}
+
+		delay := max(backoff, retryAfter)
+		if !waitForArtifactUploadRetry(ctx, delay) {
+			return artifactUploadRetryExhausted(ctx, policy.budget, attempt, lastErr)
+		}
+		backoff = min(backoff*2, policy.maximumBackoff)
+	}
+}
+
+func (c ArtifactConfig) effectiveUploadRetryPolicy() artifactUploadRetryPolicy {
+	policy := c.uploadRetryPolicy
+	if policy.budget <= 0 {
+		policy.budget = artifactUploadRetryBudget
+	}
+	if policy.initialBackoff <= 0 {
+		policy.initialBackoff = artifactUploadInitialRetryBackoff
+	}
+	if policy.maximumBackoff <= 0 {
+		policy.maximumBackoff = artifactUploadMaximumRetryBackoff
+	}
+	if policy.maximumBackoff < policy.initialBackoff {
+		policy.maximumBackoff = policy.initialBackoff
 	}
 
-	return lastErr
+	return policy
+}
+
+func retryableArtifactUploadStatus(status int) bool {
+	return status == http.StatusRequestTimeout || status == http.StatusTooManyRequests || status >= 500
+}
+
+func artifactUploadRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+
+	seconds, err := strconv.ParseInt(value, 10, 64)
+	if err == nil && seconds > 0 {
+		maximumSeconds := int64(artifactUploadRetryBudget / time.Second)
+		if seconds >= maximumSeconds {
+			return artifactUploadRetryBudget
+		}
+
+		return time.Duration(seconds) * time.Second
+	}
+
+	retryAt, err := http.ParseTime(value)
+	if err != nil || !retryAt.After(now) {
+		return 0
+	}
+
+	return min(retryAt.Sub(now), artifactUploadRetryBudget)
+}
+
+func waitForArtifactUploadRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+func artifactUploadRetryExhausted(
+	ctx context.Context,
+	budget time.Duration,
+	attempts int,
+	lastErr error,
+) error {
+	if !errors.Is(context.Cause(ctx), errArtifactUploadRetryBudgetExhausted) {
+		return ctx.Err()
+	}
+
+	return fmt.Errorf(
+		"artifact upload retry budget exhausted after %s and %d attempts: %w",
+		budget,
+		attempts,
+		lastErr,
+	)
 }
 
 func serverResponseError(response *http.Response) error {

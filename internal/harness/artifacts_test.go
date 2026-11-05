@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestArtifactTransfersDownloadInputsAndRetryUploads(t *testing.T) {
@@ -67,6 +68,11 @@ func TestArtifactTransfersDownloadInputsAndRetryUploads(t *testing.T) {
 			"plan": {MountPath: inputPath},
 		},
 		Client: client,
+		uploadRetryPolicy: artifactUploadRetryPolicy{
+			budget:         100 * time.Millisecond,
+			initialBackoff: time.Millisecond,
+			maximumBackoff: 5 * time.Millisecond,
+		},
 	}
 
 	if err := config.PrepareArtifactOutputs(); err != nil {
@@ -152,9 +158,9 @@ func TestArtifactTransferErrorsIncludeResponseBodies(t *testing.T) {
 			uploadAttempts.Add(1)
 			return testHTTPResponse(
 				request,
-				http.StatusInternalServerError,
+				http.StatusBadRequest,
 				http.Header{},
-				`{"detail":"artifact storage is unavailable"}`+"\n",
+				`{"detail":"artifact contents are invalid"}`+"\n",
 			), nil
 		default:
 			return testHTTPResponse(request, http.StatusMethodNotAllowed, http.Header{}, ""), nil
@@ -186,12 +192,104 @@ func TestArtifactTransferErrorsIncludeResponseBodies(t *testing.T) {
 	}
 
 	err = config.UploadArtifacts(context.Background())
-	want = `upload artifact "result": server returned HTTP 500: response body "{\"detail\":\"artifact storage is unavailable\"}"`
+	want = `upload artifact "result": server returned HTTP 400: response body "{\"detail\":\"artifact contents are invalid\"}"`
 	if err == nil || err.Error() != want {
 		t.Fatalf("UploadArtifacts() error = %v, want %q", err, want)
 	}
-	if uploadAttempts.Load() != 3 {
-		t.Errorf("upload attempts = %d, want 3", uploadAttempts.Load())
+	if uploadAttempts.Load() != 1 {
+		t.Errorf("upload attempts = %d, want 1", uploadAttempts.Load())
+	}
+}
+
+func TestArtifactUploadExhaustsBoundedRetryBudget(t *testing.T) {
+	t.Parallel()
+
+	var uploadAttempts atomic.Int32
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		uploadAttempts.Add(1)
+
+		return testHTTPResponse(
+			request,
+			http.StatusServiceUnavailable,
+			http.Header{},
+			`{"detail":"artifact storage is unavailable"}`+"\n",
+		), nil
+	})}
+
+	outputPath := filepath.Join(t.TempDir(), "result.txt")
+	if err := os.WriteFile(outputPath, []byte("result bytes"), 0o600); err != nil {
+		t.Fatalf("write output fixture: %v", err)
+	}
+	config := ArtifactConfig{
+		ServerURL: "https://slipramp.test",
+		RunID:     "run-1",
+		Token:     "run-token",
+		Artifacts: map[string]ArtifactDeclaration{
+			"result": {Path: outputPath},
+		},
+		Client: client,
+		uploadRetryPolicy: artifactUploadRetryPolicy{
+			budget:         15 * time.Millisecond,
+			initialBackoff: time.Millisecond,
+			maximumBackoff: 2 * time.Millisecond,
+		},
+	}
+
+	err := config.UploadArtifacts(context.Background())
+	if err == nil ||
+		!strings.Contains(err.Error(), "artifact upload retry budget exhausted after 15ms") ||
+		!strings.Contains(err.Error(), `server returned HTTP 503`) {
+		t.Fatalf("UploadArtifacts() error = %v", err)
+	}
+	if uploadAttempts.Load() < 2 {
+		t.Errorf("upload attempts = %d, want at least 2", uploadAttempts.Load())
+	}
+}
+
+func TestArtifactUploadRetryResponsePolicy(t *testing.T) {
+	t.Parallel()
+
+	for _, status := range []int{
+		http.StatusRequestTimeout,
+		http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+	} {
+		if !retryableArtifactUploadStatus(status) {
+			t.Errorf("status %d is not retryable", status)
+		}
+	}
+	for _, status := range []int{
+		http.StatusBadRequest,
+		http.StatusUnauthorized,
+		http.StatusConflict,
+	} {
+		if retryableArtifactUploadStatus(status) {
+			t.Errorf("status %d is retryable", status)
+		}
+	}
+}
+
+func TestArtifactUploadRetryAfter(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.November, 5, 12, 0, 0, 0, time.UTC)
+	tests := map[string]struct {
+		value string
+		want  time.Duration
+	}{
+		"seconds":   {value: "12", want: 12 * time.Second},
+		"date":      {value: now.Add(45 * time.Second).Format(http.TimeFormat), want: 45 * time.Second},
+		"past date": {value: now.Add(-time.Minute).Format(http.TimeFormat), want: 0},
+		"invalid":   {value: "later", want: 0},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := artifactUploadRetryAfter(test.value, now); got != test.want {
+				t.Errorf("artifactUploadRetryAfter(%q) = %s, want %s", test.value, got, test.want)
+			}
+		})
 	}
 }
 
