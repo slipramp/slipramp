@@ -9,13 +9,14 @@ import (
 	"github.com/slipramp/slipramp/internal/cluster"
 )
 
-func TestInventoryServiceReturnsSanitizedEffectiveConfiguration(t *testing.T) {
+func TestInventoryServiceReturnsValidatedConfiguration(t *testing.T) {
 	t.Parallel()
 
-	configured, err := NewSet(map[string]Config{
+	configured, err := NewSetWithClusterLimits(map[string]Config{
 		"preview": {
 			ClusterName:        "development",
 			JobNamespace:       "previews",
+			MaximumActiveRuns:  2,
 			ServiceAccountName: "preview-runner",
 			Timeout:            20 * time.Minute,
 			Resources: ResourceRequirements{
@@ -26,12 +27,13 @@ func TestInventoryServiceReturnsSanitizedEffectiveConfiguration(t *testing.T) {
 				"registry": {SecretRef: SecretReference{Name: "private-registry-secret"}},
 				"cloud":    {SecretRef: SecretReference{Name: "cloud-secret"}},
 			},
+			NodeSelector: map[string]string{"topology.kubernetes.io/zone": "us-west-2a"},
 		},
 		"infrastructure": {
 			ClusterName:  "colo",
 			JobNamespace: "slipramp-runs",
 		},
-	})
+	}, map[string]int32{"development": 4})
 	if err != nil {
 		t.Fatalf("NewSet() error = %v", err)
 	}
@@ -92,14 +94,27 @@ func TestInventoryServiceReturnsSanitizedEffectiveConfiguration(t *testing.T) {
 		preview.CredentialNames[1] != "registry" {
 		t.Errorf("preview CredentialNames = %v", preview.CredentialNames)
 	}
+	if preview.ClusterMaximumActiveRuns == nil || *preview.ClusterMaximumActiveRuns != 4 ||
+		preview.Configuration.MaximumActiveRuns != 2 ||
+		preview.Configuration.Credentials["cloud"].SecretRef.Name != "cloud-secret" ||
+		preview.Configuration.NodeSelector["topology.kubernetes.io/zone"] != "us-west-2a" {
+		t.Errorf("preview Configuration = %#v", preview)
+	}
 
 	preview.Resources.Requests["cpu"] = "2"
+	preview.Configuration.NodeSelector["topology.kubernetes.io/zone"] = "changed"
 	again, err := service.Inventory(context.Background())
 	if err != nil {
 		t.Fatalf("Inventory() again error = %v", err)
 	}
 	if again.Items[1].Resources.Requests["cpu"] != "100m" {
 		t.Errorf("Inventory() retained mutated request = %q", again.Items[1].Resources.Requests["cpu"])
+	}
+	if again.Items[1].Configuration.NodeSelector["topology.kubernetes.io/zone"] != "us-west-2a" {
+		t.Errorf(
+			"Inventory() retained mutated node selector = %q",
+			again.Items[1].Configuration.NodeSelector["topology.kubernetes.io/zone"],
+		)
 	}
 }
 

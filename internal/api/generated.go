@@ -694,6 +694,36 @@ func (e PlacementControllerConnectionState) Valid() bool {
 	}
 }
 
+// Defines values for PlacementDefinitionAPIVersion.
+const (
+	PlacementDefinitionAPIVersionV1Alpha1 PlacementDefinitionAPIVersion = "slipramp.com/v1alpha1"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDefinitionAPIVersion enum.
+func (e PlacementDefinitionAPIVersion) Valid() bool {
+	switch e {
+	case PlacementDefinitionAPIVersionV1Alpha1:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlacementDefinitionKind.
+const (
+	PlacementDefinitionKindPlacementConfig PlacementDefinitionKind = "PlacementConfig"
+)
+
+// Valid indicates whether the value is a known member of the PlacementDefinitionKind enum.
+func (e PlacementDefinitionKind) Valid() bool {
+	switch e {
+	case PlacementDefinitionKindPlacementConfig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PlacementPreflightCleanupState.
 const (
 	PlacementPreflightCleanupStateFailed      PlacementPreflightCleanupState = "failed"
@@ -2788,11 +2818,60 @@ type Placement struct {
 // PlacementControllerConnectionState Whether the configured Cluster's Controller has checked in within the connection window. A Controller that has never checked in is unreachable.
 type PlacementControllerConnectionState string
 
+// PlacementClusterConfiguration defines model for PlacementClusterConfiguration.
+type PlacementClusterConfiguration struct {
+	MaximumActiveRuns *int32 `json:"maximumActiveRuns,omitempty"`
+}
+
+// PlacementConfiguration defines model for PlacementConfiguration.
+type PlacementConfiguration struct {
+	// ActionVolumeMounts Operator-defined mounts for the Placement action volumes.
+	ActionVolumeMounts *[]map[string]interface{} `json:"actionVolumeMounts,omitempty"`
+
+	// ActionVolumes Operator-defined Kubernetes volumes exposed only to the Action container.
+	ActionVolumes     *[]map[string]interface{}             `json:"actionVolumes,omitempty"`
+	Cluster           CatalogName                           `json:"cluster"`
+	Credentials       *map[string]PlacementCredentialSource `json:"credentials,omitempty"`
+	JobNamespace      CatalogName                           `json:"jobNamespace"`
+	MaximumActiveRuns *int32                                `json:"maximumActiveRuns,omitempty"`
+	NodeSelector      *map[string]string                    `json:"nodeSelector,omitempty"`
+
+	// PodTemplate Validated Kubernetes PodTemplateSpec extensions.
+	PodTemplate        *map[string]interface{} `json:"podTemplate,omitempty"`
+	Resources          *ResourceRequirements   `json:"resources,omitempty"`
+	ServiceAccountName *string                 `json:"serviceAccountName,omitempty"`
+	Timeout            *string                 `json:"timeout,omitempty"`
+}
+
+// PlacementCredentialSource defines model for PlacementCredentialSource.
+type PlacementCredentialSource struct {
+	SecretRef PlacementSecretReference `json:"secretRef"`
+}
+
+// PlacementDefinition defines model for PlacementDefinition.
+type PlacementDefinition struct {
+	APIVersion PlacementDefinitionAPIVersion `json:"apiVersion"`
+
+	// Clusters Configuration for the selected Placement's Cluster, when present.
+	Clusters *map[string]PlacementClusterConfiguration `json:"clusters,omitempty"`
+	Kind     PlacementDefinitionKind                   `json:"kind"`
+
+	// Placements The selected validated Placement configuration.
+	Placements map[string]PlacementConfiguration `json:"placements"`
+}
+
+// PlacementDefinitionAPIVersion defines model for PlacementDefinition.APIVersion.
+type PlacementDefinitionAPIVersion string
+
+// PlacementDefinitionKind defines model for PlacementDefinition.Kind.
+type PlacementDefinitionKind string
+
 // PlacementDetail defines model for PlacementDetail.
 type PlacementDetail struct {
 	// ConfigurationChecksum SHA-256 checksum of the validated effective Placement set.
-	ConfigurationChecksum string    `json:"configurationChecksum"`
-	Placement             Placement `json:"placement"`
+	ConfigurationChecksum string              `json:"configurationChecksum"`
+	Definition            PlacementDefinition `json:"definition"`
+	Placement             Placement           `json:"placement"`
 }
 
 // PlacementExplanation defines model for PlacementExplanation.
@@ -2897,6 +2976,11 @@ type PlacementPreflightReportState string
 type PlacementResourceRequirements struct {
 	Limits   map[string]string `json:"limits"`
 	Requests map[string]string `json:"requests"`
+}
+
+// PlacementSecretReference defines model for PlacementSecretReference.
+type PlacementSecretReference struct {
+	Name string `json:"name"`
 }
 
 // Principal defines model for Principal.
@@ -5308,7 +5392,7 @@ type ClientInterface interface {
 
 	// GetPlacement Get a configured execution Placement
 	//
-	// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+	// Returns one effective Placement currently loaded by the Server together with its complete validated definition and the checksum of the complete effective Placement set.
 	//
 	// Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 	GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6290,7 +6374,7 @@ func (c *Client) ListPlacements(ctx context.Context, params *ListPlacementsParam
 
 // GetPlacement Get a configured execution Placement
 //
-// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+// Returns one effective Placement currently loaded by the Server together with its complete validated definition and the checksum of the complete effective Placement set.
 //
 // Corresponds with GET /api/v1/placements/{placementName} (the `GetPlacement` operationId).
 func (c *Client) GetPlacement(ctx context.Context, placementName CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -12039,7 +12123,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetPlacementWithResponse Get a configured execution Placement
 	//
-	// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+	// Returns one effective Placement currently loaded by the Server together with its complete validated definition and the checksum of the complete effective Placement set.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -18982,7 +19066,7 @@ func (c *ClientWithResponses) ListPlacementsWithResponse(ctx context.Context, pa
 
 // GetPlacementWithResponse Get a configured execution Placement
 //
-// Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+// Returns one effective Placement currently loaded by the Server together with its complete validated definition and the checksum of the complete effective Placement set.
 //
 // Returns a wrapper object for the known response body format(s).
 //

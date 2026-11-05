@@ -840,7 +840,7 @@ export const listPlacements = <ThrowOnError extends boolean = false>(
 /**
  * Get a configured execution Placement
  *
- * Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+ * Returns one effective Placement currently loaded by the Server together with its complete validated definition and the checksum of the complete effective Placement set.
  */
 export const getPlacement = <ThrowOnError extends boolean = false>(
   options: Options<GetPlacementData, ThrowOnError>,

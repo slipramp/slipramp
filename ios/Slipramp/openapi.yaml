@@ -1270,7 +1270,7 @@ paths:
     get:
       operationId: getPlacement
       summary: Get a configured execution Placement
-      description: Returns one sanitized effective Placement currently loaded by the Server together with the checksum of the complete effective Placement set. Kubernetes Secret references and arbitrary pod configuration are not exposed.
+      description: Returns one effective Placement currently loaded by the Server together with its complete validated definition and the checksum of the complete effective Placement set.
       security:
         - ProductSession: []
         - ProductBearer: []
@@ -5689,6 +5689,7 @@ components:
       required:
         - placement
         - configurationChecksum
+        - definition
       properties:
         placement:
           $ref: '#/components/schemas/Placement'
@@ -5696,6 +5697,8 @@ components:
           type: string
           pattern: ^[0-9a-f]{64}$
           description: SHA-256 checksum of the validated effective Placement set.
+        definition:
+          $ref: '#/components/schemas/PlacementDefinition'
     PlacementPreflight:
       type: object
       additionalProperties: false
@@ -8718,6 +8721,111 @@ components:
           additionalProperties:
             type: string
             minLength: 1
+    PlacementClusterConfiguration:
+      type: object
+      additionalProperties: false
+      properties:
+        maximumActiveRuns:
+          type: integer
+          format: int32
+          minimum: 1
+    PlacementSecretReference:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    PlacementCredentialSource:
+      type: object
+      additionalProperties: false
+      required:
+        - secretRef
+      properties:
+        secretRef:
+          $ref: '#/components/schemas/PlacementSecretReference'
+    PlacementConfiguration:
+      type: object
+      additionalProperties: false
+      required:
+        - cluster
+        - jobNamespace
+      properties:
+        cluster:
+          $ref: '#/components/schemas/CatalogName'
+        jobNamespace:
+          $ref: '#/components/schemas/CatalogName'
+        maximumActiveRuns:
+          type: integer
+          format: int32
+          minimum: 1
+        serviceAccountName:
+          type: string
+          minLength: 1
+          maxLength: 253
+        timeout:
+          type: string
+          minLength: 1
+        resources:
+          $ref: '#/components/schemas/ResourceRequirements'
+        nodeSelector:
+          type: object
+          additionalProperties:
+            type: string
+        credentials:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PlacementCredentialSource'
+        podTemplate:
+          type: object
+          additionalProperties: true
+          description: Validated Kubernetes PodTemplateSpec extensions.
+        actionVolumes:
+          type: array
+          description: Operator-defined Kubernetes volumes exposed only to the Action container.
+          items:
+            type: object
+            additionalProperties: true
+        actionVolumeMounts:
+          type: array
+          description: Operator-defined mounts for the Placement action volumes.
+          items:
+            type: object
+            additionalProperties: true
+    PlacementDefinition:
+      type: object
+      additionalProperties: false
+      required:
+        - apiVersion
+        - kind
+        - placements
+      properties:
+        apiVersion:
+          type: string
+          enum:
+            - slipramp.com/v1alpha1
+          x-enum-varnames:
+            - PlacementDefinitionAPIVersionV1Alpha1
+        kind:
+          type: string
+          enum:
+            - PlacementConfig
+          x-enum-varnames:
+            - PlacementDefinitionKindPlacementConfig
+        clusters:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/PlacementClusterConfiguration'
+          description: Configuration for the selected Placement's Cluster, when present.
+        placements:
+          type: object
+          minProperties: 1
+          maxProperties: 1
+          additionalProperties:
+            $ref: '#/components/schemas/PlacementConfiguration'
+          description: The selected validated Placement configuration.
     PlacementPreflightDiagnostic:
       type: object
       additionalProperties: false

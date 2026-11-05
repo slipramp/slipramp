@@ -570,6 +570,7 @@ export type PlacementDetail = {
    * SHA-256 checksum of the validated effective Placement set.
    */
   configurationChecksum: string;
+  definition: PlacementDefinition;
 };
 
 export type PlacementPreflight = {
@@ -1856,6 +1857,68 @@ export type PlacementResourceRequirements = {
   };
   limits: {
     [key: string]: string;
+  };
+};
+
+export type PlacementClusterConfiguration = {
+  maximumActiveRuns?: number;
+};
+
+export type PlacementSecretReference = {
+  name: string;
+};
+
+export type PlacementCredentialSource = {
+  secretRef: PlacementSecretReference;
+};
+
+export type PlacementConfiguration = {
+  cluster: CatalogName;
+  jobNamespace: CatalogName;
+  maximumActiveRuns?: number;
+  serviceAccountName?: string;
+  timeout?: string;
+  resources?: ResourceRequirements;
+  nodeSelector?: {
+    [key: string]: string;
+  };
+  credentials?: {
+    [key: string]: PlacementCredentialSource;
+  };
+  /**
+   * Validated Kubernetes PodTemplateSpec extensions.
+   */
+  podTemplate?: {
+    [key: string]: unknown;
+  };
+  /**
+   * Operator-defined Kubernetes volumes exposed only to the Action container.
+   */
+  actionVolumes?: Array<{
+    [key: string]: unknown;
+  }>;
+  /**
+   * Operator-defined mounts for the Placement action volumes.
+   */
+  actionVolumeMounts?: Array<{
+    [key: string]: unknown;
+  }>;
+};
+
+export type PlacementDefinition = {
+  apiVersion: "slipramp.com/v1alpha1";
+  kind: "PlacementConfig";
+  /**
+   * Configuration for the selected Placement's Cluster, when present.
+   */
+  clusters?: {
+    [key: string]: PlacementClusterConfiguration;
+  };
+  /**
+   * The selected validated Placement configuration.
+   */
+  placements: {
+    [key: string]: PlacementConfiguration;
   };
 };
 

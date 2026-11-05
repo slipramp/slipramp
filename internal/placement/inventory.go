@@ -33,6 +33,7 @@ type Inventory struct {
 type InventoryPlacement struct {
 	Name                      string
 	ClusterName               string
+	ClusterMaximumActiveRuns  *int32
 	ControllerConnectionState cluster.ConnectionState
 	ControllerLastSeenAt      *time.Time
 	JobNamespace              string
@@ -41,6 +42,7 @@ type InventoryPlacement struct {
 	Resources                 ResourceRequirements
 	CredentialNames           []string
 	TargetCount               int64
+	Configuration             Config
 }
 
 func NewInventoryService(placements Set, clusters ClusterInventory, targets TargetUsage) *InventoryService {
@@ -65,6 +67,7 @@ func (s *InventoryService) Inventory(ctx context.Context) (Inventory, error) {
 	items := make([]InventoryPlacement, 0, s.placements.Len())
 	for _, name := range s.placements.Names() {
 		cfg, _ := s.placements.Lookup(name)
+		clusterMaximumActiveRuns, hasClusterMaximum := s.placements.ClusterMaximumActiveRuns(cfg.ClusterName)
 		serviceAccountName := cfg.ServiceAccountName
 		if serviceAccountName == "" {
 			serviceAccountName = defaultServiceAccountName
@@ -82,6 +85,10 @@ func (s *InventoryService) Inventory(ctx context.Context) (Inventory, error) {
 			},
 			CredentialNames: slices.Sorted(maps.Keys(cfg.Credentials)),
 			TargetCount:     targetUsage[name],
+			Configuration:   cfg,
+		}
+		if hasClusterMaximum {
+			item.ClusterMaximumActiveRuns = new(clusterMaximumActiveRuns)
 		}
 		if cfg.Timeout > 0 {
 			item.Timeout = new(cfg.Timeout)

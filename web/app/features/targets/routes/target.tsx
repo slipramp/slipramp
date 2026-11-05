@@ -45,6 +45,8 @@ import { PageHeader, PageHeaderFact, PageHeaderFacts, SectionHeader } from "~/sh
 import { RecentRuns, recentRunLimit } from "~/features/runs/recent-runs";
 import { RunHistoryButton } from "~/features/runs/run-history-button";
 import { useActivityRefresh } from "~/features/shell/activity-refresh";
+import { YamlDefinitionCard } from "~/shared/yaml-definition-card";
+import { canonicalTargetDefinition } from "~/features/targets/target-definition";
 import {
   loadLatestScheduledRuns,
   scheduledActionDefinitions,
@@ -142,6 +144,7 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
   const record = loaderData.target;
   const target = record.definition;
   const actions = sortedEntries(target.spec.actions);
+  const definitionDocument = canonicalTargetDefinition(target);
 
   return (
     <Stack gap="lg">
@@ -236,6 +239,11 @@ export default function TargetDetail({ loaderData }: Route.ComponentProps) {
       />
 
       <TargetDefaults target={target} />
+
+      <YamlDefinitionCard
+        description="Normalized Target accepted from the catalog. Server-managed source and status fields are omitted."
+        value={definitionDocument}
+      />
     </Stack>
   );
 }

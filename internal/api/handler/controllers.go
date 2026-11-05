@@ -469,7 +469,7 @@ func reconcileKargoPromotionCommand(command promotion.ReconciliationCommand) api
 }
 
 func placementPreflightCommand(record placement.Preflight) (api.ControllerCommand, error) {
-	podTemplate, err := assignmentPodTemplateResponse(record.Snapshot.PodTemplate)
+	podTemplate, err := podTemplateResponse(record.Snapshot.PodTemplate)
 	if err != nil {
 		return api.ControllerCommand{}, err
 	}
@@ -532,18 +532,18 @@ func (h *Handler) runAssignmentResponse(record run.Run) (api.RunAssignment, erro
 	}
 	token := h.artifacts.RunToken(record.ID)
 
-	podTemplate, err := assignmentPodTemplateResponse(record.Snapshot.Placement.PodTemplate)
+	podTemplate, err := podTemplateResponse(record.Snapshot.Placement.PodTemplate)
 	if err != nil {
 		return api.RunAssignment{}, err
 	}
-	actionVolumes, err := assignmentKubernetesObjects(
+	actionVolumes, err := kubernetesObjectsResponse(
 		"action volumes",
 		record.Snapshot.Placement.ActionVolumes,
 	)
 	if err != nil {
 		return api.RunAssignment{}, err
 	}
-	actionVolumeMounts, err := assignmentKubernetesObjects(
+	actionVolumeMounts, err := kubernetesObjectsResponse(
 		"action volume mounts",
 		record.Snapshot.Placement.ActionVolumeMounts,
 	)
@@ -656,37 +656,37 @@ func assignmentPlacementResponse(
 	}
 }
 
-func assignmentKubernetesObjects[T any](subject string, values []T) (*[]map[string]any, error) {
+func kubernetesObjectsResponse[T any](subject string, values []T) (*[]map[string]any, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
 
 	encoded, err := json.Marshal(values)
 	if err != nil {
-		return nil, fmt.Errorf("encode run assignment %s: %w", subject, err)
+		return nil, fmt.Errorf("encode Kubernetes %s: %w", subject, err)
 	}
 
 	var decoded []map[string]any
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
-		return nil, fmt.Errorf("decode run assignment %s: %w", subject, err)
+		return nil, fmt.Errorf("decode Kubernetes %s: %w", subject, err)
 	}
 
 	return &decoded, nil
 }
 
-func assignmentPodTemplateResponse(podTemplate *corev1.PodTemplateSpec) (*map[string]any, error) {
+func podTemplateResponse(podTemplate *corev1.PodTemplateSpec) (*map[string]any, error) {
 	if podTemplate == nil {
 		return nil, nil
 	}
 
 	encoded, err := json.Marshal(podTemplate)
 	if err != nil {
-		return nil, fmt.Errorf("encode run assignment pod template: %w", err)
+		return nil, fmt.Errorf("encode Kubernetes pod template: %w", err)
 	}
 
 	var decoded map[string]any
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
-		return nil, fmt.Errorf("decode run assignment pod template: %w", err)
+		return nil, fmt.Errorf("decode Kubernetes pod template: %w", err)
 	}
 
 	return &decoded, nil

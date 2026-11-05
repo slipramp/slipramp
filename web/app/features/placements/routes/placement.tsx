@@ -29,6 +29,8 @@ import { PageBackLink } from "~/shared/page-back-link";
 import { problemDetail } from "~/shared/form-data";
 import { CodeList, ResourceRequirementsTable, TechnicalValue } from "~/shared/technical-definition";
 import { pageTitle } from "~/shared/page-title";
+import { YamlDefinitionCard } from "~/shared/yaml-definition-card";
+import { canonicalPlacementDefinition } from "~/features/placements/placement-definition";
 
 import type { Route } from "./+types/placement";
 
@@ -130,7 +132,7 @@ export default function PlacementDetail({ actionData, loaderData }: Route.Compon
             {placement.controllerConnectionState}
           </Badge>
         }
-        description="Sanitized execution configuration currently loaded by the Server."
+        description="Validated execution configuration currently loaded by the Server."
         details={
           <PageHeaderFacts>
             <PageHeaderFact label="Cluster">
@@ -235,6 +237,11 @@ export default function PlacementDetail({ actionData, loaderData }: Route.Compon
           </SimpleGrid>
         </Stack>
       </Paper>
+
+      <YamlDefinitionCard
+        description="Normalized loaded Placement configuration, including its Cluster constraint."
+        value={canonicalPlacementDefinition(loaderData.detail.definition)}
+      />
     </Stack>
   );
 }

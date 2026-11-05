@@ -106,6 +106,7 @@ PlacementDetail:
   required:
     - placement
     - configurationChecksum
+    - definition
   properties:
     placement:
       $ref: "#/Placement"
@@ -113,6 +114,118 @@ PlacementDetail:
       type: string
       pattern: ^[0-9a-f]{64}$
       description: SHA-256 checksum of the validated effective Placement set.
+    definition:
+      $ref: "#/PlacementDefinition"
+
+PlacementDefinition:
+  type: object
+  additionalProperties: false
+  required:
+    - apiVersion
+    - kind
+    - placements
+  properties:
+    apiVersion:
+      type: string
+      enum:
+        - slipramp.com/v1alpha1
+      x-enum-varnames:
+        - PlacementDefinitionAPIVersionV1Alpha1
+    kind:
+      type: string
+      enum:
+        - PlacementConfig
+      x-enum-varnames:
+        - PlacementDefinitionKindPlacementConfig
+    clusters:
+      type: object
+      additionalProperties:
+        $ref: "#/PlacementClusterConfiguration"
+      description: Configuration for the selected Placement's Cluster, when present.
+    placements:
+      type: object
+      minProperties: 1
+      maxProperties: 1
+      additionalProperties:
+        $ref: "#/PlacementConfiguration"
+      description: The selected validated Placement configuration.
+
+PlacementClusterConfiguration:
+  type: object
+  additionalProperties: false
+  properties:
+    maximumActiveRuns:
+      type: integer
+      format: int32
+      minimum: 1
+
+PlacementConfiguration:
+  type: object
+  additionalProperties: false
+  required:
+    - cluster
+    - jobNamespace
+  properties:
+    cluster:
+      $ref: ./runs.yaml#/CatalogName
+    jobNamespace:
+      $ref: ./runs.yaml#/CatalogName
+    maximumActiveRuns:
+      type: integer
+      format: int32
+      minimum: 1
+    serviceAccountName:
+      type: string
+      minLength: 1
+      maxLength: 253
+    timeout:
+      type: string
+      minLength: 1
+    resources:
+      $ref: ./catalog.yaml#/ResourceRequirements
+    nodeSelector:
+      type: object
+      additionalProperties:
+        type: string
+    credentials:
+      type: object
+      additionalProperties:
+        $ref: "#/PlacementCredentialSource"
+    podTemplate:
+      type: object
+      additionalProperties: true
+      description: Validated Kubernetes PodTemplateSpec extensions.
+    actionVolumes:
+      type: array
+      description: Operator-defined Kubernetes volumes exposed only to the Action container.
+      items:
+        type: object
+        additionalProperties: true
+    actionVolumeMounts:
+      type: array
+      description: Operator-defined mounts for the Placement action volumes.
+      items:
+        type: object
+        additionalProperties: true
+
+PlacementCredentialSource:
+  type: object
+  additionalProperties: false
+  required:
+    - secretRef
+  properties:
+    secretRef:
+      $ref: "#/PlacementSecretReference"
+
+PlacementSecretReference:
+  type: object
+  additionalProperties: false
+  required:
+    - name
+  properties:
+    name:
+      type: string
+      minLength: 1
 
 PlacementPreflight:
   type: object

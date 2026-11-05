@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/cluster"
@@ -168,10 +169,41 @@ func TestListPlacementsReturnsInventoryFailure(t *testing.T) {
 func TestGetPlacement(t *testing.T) {
 	t.Parallel()
 
+	clusterMaximumActiveRuns := int32(4)
 	service := &staticPlacementService{inventory: placement.Inventory{
 		ConfigurationChecksum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		Items: []placement.InventoryPlacement{
-			{Name: "infrastructure", ClusterName: "colo", TargetCount: 3},
+			{
+				Name:                     "infrastructure",
+				ClusterName:              "colo",
+				ClusterMaximumActiveRuns: &clusterMaximumActiveRuns,
+				TargetCount:              3,
+				Configuration: placement.Config{
+					ClusterName:        "colo",
+					JobNamespace:       "slipramp-runs",
+					MaximumActiveRuns:  2,
+					ServiceAccountName: "infrastructure-admin",
+					Timeout:            30 * time.Minute,
+					Resources: placement.ResourceRequirements{
+						Requests: map[string]string{"cpu": "100m"},
+						Limits:   map[string]string{"memory": "1Gi"},
+					},
+					NodeSelector: map[string]string{"topology.kubernetes.io/zone": "us-west-2a"},
+					Credentials: map[string]placement.CredentialSource{
+						"cloud": {SecretRef: placement.SecretReference{Name: "cloud-credentials"}},
+					},
+					PodTemplate: &corev1.PodTemplateSpec{
+						Labels: map[string]string{"isolation": "strict"},
+					},
+					ActionVolumes: []corev1.Volume{{
+						Name:     "tool-cache",
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					}},
+					ActionVolumeMounts: []corev1.VolumeMount{{
+						Name: "tool-cache", MountPath: "/cache",
+					}},
+				},
+			},
 		},
 	}}
 	handler := newHandler(Dependencies{Placements: service})
@@ -190,6 +222,27 @@ func TestGetPlacement(t *testing.T) {
 		result.Placement.Name != "infrastructure" || result.Placement.Cluster != "colo" ||
 		result.Placement.TargetCount != 3 {
 		t.Errorf("GetPlacement() result = %#v", result)
+	}
+	definition := result.Definition.Placements["infrastructure"]
+	if result.Definition.APIVersion != api.PlacementDefinitionAPIVersionV1Alpha1 ||
+		result.Definition.Kind != api.PlacementDefinitionKindPlacementConfig ||
+		result.Definition.Clusters == nil ||
+		(*result.Definition.Clusters)["colo"].MaximumActiveRuns == nil ||
+		*(*result.Definition.Clusters)["colo"].MaximumActiveRuns != 4 ||
+		definition.Cluster != "colo" || definition.JobNamespace != "slipramp-runs" ||
+		definition.MaximumActiveRuns == nil || *definition.MaximumActiveRuns != 2 ||
+		definition.ServiceAccountName == nil || *definition.ServiceAccountName != "infrastructure-admin" ||
+		definition.Timeout == nil || *definition.Timeout != "30m0s" ||
+		definition.Resources == nil || definition.Resources.Requests == nil ||
+		(*definition.Resources.Requests)["cpu"] != "100m" ||
+		definition.NodeSelector == nil ||
+		(*definition.NodeSelector)["topology.kubernetes.io/zone"] != "us-west-2a" ||
+		definition.Credentials == nil ||
+		(*definition.Credentials)["cloud"].SecretRef.Name != "cloud-credentials" ||
+		definition.PodTemplate == nil || (*definition.PodTemplate)["metadata"] == nil ||
+		definition.ActionVolumes == nil || len(*definition.ActionVolumes) != 1 ||
+		definition.ActionVolumeMounts == nil || len(*definition.ActionVolumeMounts) != 1 {
+		t.Errorf("GetPlacement() Definition = %#v", result.Definition)
 	}
 }
 

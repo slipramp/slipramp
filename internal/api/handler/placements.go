@@ -136,16 +136,93 @@ func (h *Handler) GetPlacement(
 		if configured.Name != string(request.PlacementName) {
 			continue
 		}
+		definition, err := placementDefinitionResponse(configured)
+		if err != nil {
+			return nil, err
+		}
 
 		return api.GetPlacement200JSONResponse{
 			Placement:             placementResponse(configured),
 			ConfigurationChecksum: inventory.ConfigurationChecksum,
+			Definition:            definition,
 		}, nil
 	}
 
 	return api.GetPlacement404ApplicationProblemPlusJSONResponse(
 		NewProblem(http.StatusNotFound, "The Placement is not configured."),
 	), nil
+}
+
+func placementDefinitionResponse(configured placement.InventoryPlacement) (api.PlacementDefinition, error) {
+	configuration := configured.Configuration
+	podTemplate, err := podTemplateResponse(configuration.PodTemplate)
+	if err != nil {
+		return api.PlacementDefinition{}, err
+	}
+	actionVolumes, err := kubernetesObjectsResponse("action volumes", configuration.ActionVolumes)
+	if err != nil {
+		return api.PlacementDefinition{}, err
+	}
+	actionVolumeMounts, err := kubernetesObjectsResponse(
+		"action volume mounts",
+		configuration.ActionVolumeMounts,
+	)
+	if err != nil {
+		return api.PlacementDefinition{}, err
+	}
+
+	credentials := make(map[string]api.PlacementCredentialSource, len(configuration.Credentials))
+	for name, source := range configuration.Credentials {
+		credentials[name] = api.PlacementCredentialSource{
+			SecretRef: api.PlacementSecretReference{Name: source.SecretRef.Name},
+		}
+	}
+
+	var maximumActiveRuns *int32
+	if configuration.MaximumActiveRuns > 0 {
+		maximumActiveRuns = new(configuration.MaximumActiveRuns)
+	}
+	var timeout *string
+	if configuration.Timeout > 0 {
+		timeout = new(configuration.Timeout.String())
+	}
+
+	placementConfiguration := api.PlacementConfiguration{
+		Cluster:            api.CatalogName(configuration.ClusterName),
+		JobNamespace:       api.CatalogName(configuration.JobNamespace),
+		MaximumActiveRuns:  maximumActiveRuns,
+		ServiceAccountName: optionalString(configuration.ServiceAccountName),
+		Timeout:            timeout,
+		Resources: &api.ResourceRequirements{
+			Requests: optionalStringMap(configuration.Resources.Requests),
+			Limits:   optionalStringMap(configuration.Resources.Limits),
+		},
+		NodeSelector:       optionalStringMap(configuration.NodeSelector),
+		Credentials:        optionalMap(credentials),
+		PodTemplate:        podTemplate,
+		ActionVolumes:      actionVolumes,
+		ActionVolumeMounts: actionVolumeMounts,
+	}
+	if placementConfiguration.Resources.Requests == nil && placementConfiguration.Resources.Limits == nil {
+		placementConfiguration.Resources = nil
+	}
+
+	var clusters *map[string]api.PlacementClusterConfiguration
+	if configured.ClusterMaximumActiveRuns != nil {
+		clusterConfigurations := map[string]api.PlacementClusterConfiguration{
+			configuration.ClusterName: {MaximumActiveRuns: configured.ClusterMaximumActiveRuns},
+		}
+		clusters = &clusterConfigurations
+	}
+
+	return api.PlacementDefinition{
+		APIVersion: api.PlacementDefinitionAPIVersionV1Alpha1,
+		Kind:       api.PlacementDefinitionKindPlacementConfig,
+		Clusters:   clusters,
+		Placements: map[string]api.PlacementConfiguration{
+			configured.Name: placementConfiguration,
+		},
+	}, nil
 }
 
 func placementResponse(configured placement.InventoryPlacement) api.Placement {
