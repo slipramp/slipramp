@@ -16,6 +16,7 @@ import {
   Textarea,
   Timeline,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconBan,
@@ -75,10 +76,12 @@ import {
   formatBinarySize,
   formatDuration,
   formatElapsedDuration,
+  formatTimestamp,
   shortIdentifier,
 } from "~/shared/display";
 import { optionalFormValue } from "~/shared/form-data";
 import { pageTitle } from "~/shared/page-title";
+import { useTimeZone } from "~/shared/time-zone-preference";
 import { runActivity, runResultActivity } from "~/features/mascot/execution-activity";
 import { runStatusColor, runStatusLabel } from "~/features/runs/run-status";
 import { runSourceLabel } from "~/features/runs/run-source";
@@ -259,6 +262,7 @@ export async function action({ context, params, request }: Route.ActionArgs) {
 
 export default function RunDetail({ actionData, loaderData }: Route.ComponentProps) {
   const navigation = useNavigation();
+  const { timeZone } = useTimeZone();
   useActivityRefresh(
     loaderData.run?.phase !== "finished" ||
       loaderData.artifactRuns.some((run) => run.phase !== "finished"),
@@ -288,6 +292,10 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
   const actor =
     run.createdBy?.displayName ??
     (run.source.type === "git" || run.source.type === "schedule" ? "Automation" : "System");
+  const scheduledSource = run.source.type === "schedule" ? run.source.schedule : undefined;
+  const scheduledSourceLabel = scheduledSource
+    ? `${scheduledSource.triggerName} · ${formatTimestamp(scheduledSource.scheduledAt, timeZone)}`
+    : undefined;
   const rerunSubmitting =
     navigation.state === "submitting" &&
     (navigation.formData?.get("intent") === "rerun-exact" ||
@@ -413,7 +421,17 @@ export default function RunDetail({ actionData, loaderData }: Route.ComponentPro
                 <RelativeTime c="dimmed" value={run.createdAt} />
               </Group>
             </PageHeaderFact>
-            <PageHeaderFact label="Source">{runSourceLabel(run.source)}</PageHeaderFact>
+            <PageHeaderFact label="Source">
+              {scheduledSource ? (
+                <Tooltip label={scheduledSourceLabel} openDelay={350}>
+                  <Text component="span" inherit>
+                    Schedule
+                  </Text>
+                </Tooltip>
+              ) : (
+                runSourceLabel(run.source)
+              )}
+            </PageHeaderFact>
             <PageHeaderFact label="Created by">
               <Identity avatarSize={22} name={actor} nameProps={{ fw: 500, size: "sm" }} />
             </PageHeaderFact>

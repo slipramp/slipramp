@@ -533,14 +533,7 @@ function ActionAccordionItem({
   targetId: string;
   target: TargetDefinition;
 }>) {
-  const parameterCount = Object.keys(actionDefinition.parameters ?? {}).length;
-  const artifactCount = Object.keys(actionDefinition.artifacts ?? {}).length;
   const inputCount = Object.keys(actionDefinition.inputs ?? {}).length;
-  const summary = [
-    parameterCount > 0 ? `${parameterCount} parameter${parameterCount === 1 ? "" : "s"}` : null,
-    artifactCount > 0 ? `${artifactCount} artifact${artifactCount === 1 ? "" : "s"}` : null,
-    inputCount > 0 ? `${inputCount} input${inputCount === 1 ? "" : "s"}` : null,
-  ].filter(Boolean);
 
   return (
     <Accordion.Item className="target-action-card" id={`action-${name}`} value={name}>
@@ -555,9 +548,9 @@ function ActionAccordionItem({
               {actionDefinition.intent ? (
                 <Badge variant="outline">{actionDefinition.intent}</Badge>
               ) : null}
-              {summary.length > 0 ? (
+              {inputCount > 0 ? (
                 <Text c="dimmed" size="sm">
-                  {summary.join(" · ")}
+                  {inputCount} input{inputCount === 1 ? "" : "s"}
                 </Text>
               ) : null}
             </Group>
