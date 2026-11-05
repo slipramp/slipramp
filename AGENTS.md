@@ -13,6 +13,10 @@ Slipramp is in early, ongoing development with its core execution and Kargo Prom
 - Prefer deleting, reusing, and collapsing mechanisms over adding abstractions. Add a new interface, helper layer, configuration option, or generalized mechanism only when current behavior requires it or when it reduces the total number of concepts.
 - Limit cleanup to the changed feature and the smallest necessary adjacent surface. Avoid unrelated renames, file moves, formatting rewrites, and repository-wide consistency changes.
 
+## Maintainer-Facing Prose
+
+Do not include conversation, prompt, or iteration history in code comments, documentation, commit messages, pull request descriptions, or other maintainer-facing prose. Describe the resulting behavior, constraints, tradeoffs, and decisions directly. Preserve durable technical rationale when it helps future maintainers understand a non-obvious constraint.
+
 ## Core Model and Naming
 
 Use the established names consistently:
