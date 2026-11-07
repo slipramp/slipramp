@@ -34,7 +34,8 @@ let package = Package(
             ],
             path: "Slipramp",
             exclude: [
-                "App",
+                "App/MainTabView.swift",
+                "App/SliprampApp.swift",
                 "DesignSystem",
                 "Features",
                 "Resources",

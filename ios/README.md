@@ -80,3 +80,32 @@ also create idempotent same-revision or latest-revision reruns and bind compatib
 Artifact inputs. The handwritten Run log reader remains separate because it
 implements Slipramp's reconnectable byte-offset SSE validation and
 replay-suppression contract.
+
+## Connection state model
+
+`AppModel.connectionState` is the only mutable source of connection workflow
+state observed by the UI. Its cases are:
+
+| Case | Meaning |
+| --- | --- |
+| `restoring` | Validating a saved Server URL and Keychain credential at launch. |
+| `disconnected` | No usable connection. It may carry an error for display. |
+| `checkingServer` | Loading and validating compatibility for a normalized Server URL. |
+| `awaitingTrustedHTTPConfirmation` | Waiting for the operator to trust private-network HTTP. |
+| `ready` | The Server is compatible and authentication can begin. Errors return here for retry. |
+| `authenticating` | Validating an API key or completing native OIDC with PKCE. |
+| `connected` | Holding the authenticated API client used by product screens. |
+
+Launch restoration moves from `restoring` to either `connected` or
+`disconnected`. Checking a URL moves through `checkingServer`, except untrusted
+private HTTP first moves to `awaitingTrustedHTTPConfirmation`; confirmation
+continues the check and cancellation returns to `disconnected`. A successful
+check enters `ready`. API-key or native OIDC sign-in moves from `ready` to
+`authenticating`, then to `connected` on success or back to `ready` on failure
+or user-canceled OIDC. Choosing another Server or disconnecting returns to
+`disconnected`, and disconnect also clears the saved URL, trusted HTTP URL, and
+Keychain credential.
+
+In-flight cases carry an operation identifier. An asynchronous result can
+change state only while its identifier is still current, so disconnecting or
+starting a newer attempt prevents stale work from restoring an older state.

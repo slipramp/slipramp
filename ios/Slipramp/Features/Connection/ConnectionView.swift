@@ -35,19 +35,20 @@ struct ConnectionView: View {
                                         .autocorrectionDisabled()
                                         .textContentType(.URL)
                                         .accessibilityLabel("Slipramp Server URL")
-                                        .disabled(model.serverCompatibility != nil)
+                                        .disabled(connectionState.checkedServer != nil)
                                 }
 
-                                if let compatibility = model.serverCompatibility {
+                                if let server = connectionState.checkedServer {
                                     SliprampCallout(
-                                        message: "Slipramp \(compatibility.serverVersion) is compatible.",
+                                        message: "Slipramp \(server.compatibility.serverVersion) is compatible.",
                                         tone: .success,
                                         symbol: "checkmark.circle.fill"
                                     )
 
-                                    if model.serverTransportSecurity == .trustedPrivateHTTP {
+                                    if server.transportSecurity == .trustedPrivateHTTP {
                                         SliprampCallout(
-                                            message: "Using HTTP on a trusted private network. That network must provide transport encryption.",
+                                            message: "Using HTTP on a trusted private network. "
+                                                + "That network must provide transport encryption.",
                                             tone: .warning,
                                             symbol: "exclamationmark.shield.fill"
                                         )
@@ -56,7 +57,7 @@ struct ConnectionView: View {
                                     Button("Use a different Server") {
                                         apiKey = ""
                                         showsAPIKey = false
-                                        model.clearServerCompatibility()
+                                        model.useDifferentServer()
                                     }
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(SliprampTheme.accent)
@@ -65,10 +66,10 @@ struct ConnectionView: View {
                                     if supportsNativeOIDC, !showsAPIKey {
                                         Button {
                                             Task {
-                                                await model.signInWithOIDC(serverURL: serverURL)
+                                                await model.signInWithOIDC()
                                             }
                                         } label: {
-                                            if model.isConnecting {
+                                            if connectionState.isAuthenticating {
                                                 ProgressView()
                                                     .tint(.white)
                                                     .accessibilityLabel("Signing in")
@@ -78,7 +79,7 @@ struct ConnectionView: View {
                                             }
                                         }
                                         .buttonStyle(SliprampPrimaryButtonStyle())
-                                        .disabled(model.isConnecting)
+                                        .disabled(connectionState.isAuthenticating)
 
                                         Button("Use an API key instead") {
                                             showsAPIKey = true
@@ -101,10 +102,10 @@ struct ConnectionView: View {
 
                                         Button {
                                             Task {
-                                                await model.connect(serverURL: serverURL, apiKey: apiKey)
+                                                await model.connect(apiKey: apiKey)
                                             }
                                         } label: {
-                                            if model.isConnecting {
+                                            if connectionState.isAuthenticating {
                                                 ProgressView()
                                                     .tint(.white)
                                                     .accessibilityLabel("Connecting")
@@ -114,7 +115,7 @@ struct ConnectionView: View {
                                             }
                                         }
                                         .buttonStyle(SliprampPrimaryButtonStyle())
-                                        .disabled(model.isConnecting || apiKey.isEmpty)
+                                        .disabled(connectionState.isAuthenticating || apiKey.isEmpty)
 
                                         if supportsNativeOIDC {
                                             Button("Use SSO instead") {
@@ -127,17 +128,17 @@ struct ConnectionView: View {
                                     }
                                 }
 
-                                if let error = model.connectionError {
+                                if let error = connectionState.errorMessage {
                                     SliprampCallout(message: error, tone: .danger)
                                 }
 
-                                if model.serverCompatibility == nil {
+                                if connectionState.checkedServer == nil {
                                     Button {
                                         Task {
                                             await model.checkServer(serverURL: serverURL)
                                         }
                                     } label: {
-                                        if model.isCheckingServer {
+                                        if connectionState.isCheckingServer {
                                             ProgressView()
                                                 .tint(.white)
                                                 .accessibilityLabel("Checking Server")
@@ -147,7 +148,7 @@ struct ConnectionView: View {
                                         }
                                     }
                                     .buttonStyle(SliprampPrimaryButtonStyle())
-                                    .disabled(model.isCheckingServer || serverURL.isEmpty)
+                                    .disabled(connectionState.isCheckingServer || serverURL.isEmpty)
                                 }
                             }
                         }
@@ -169,7 +170,7 @@ struct ConnectionView: View {
             .alert(
                 "Trust Private HTTP Server?",
                 isPresented: trustedHTTPConfirmationPresented,
-                presenting: model.pendingTrustedHTTPServer
+                presenting: connectionState.pendingTrustedHTTPServer
             ) { baseURL in
                 Button("Cancel", role: .cancel) {
                     model.cancelTrustedHTTPServerConfirmation()
@@ -181,7 +182,9 @@ struct ConnectionView: View {
                 }
             } message: { baseURL in
                 Text(
-                    "HTTP does not encrypt traffic itself. Continue only if \(baseURL.host ?? "this Server") is reached through a trusted encrypted network, such as a tailnet."
+                    "HTTP does not encrypt traffic itself. Continue only if "
+                        + "\(baseURL.host ?? "this Server") is reached through a trusted "
+                        + "encrypted network, such as a tailnet."
                 )
             }
             .task {
@@ -193,12 +196,16 @@ struct ConnectionView: View {
     }
 
     private var supportsNativeOIDC: Bool {
-        model.serverCompatibility?.authenticationMethods.contains("oidc-native") == true
+        connectionState.checkedServer?.compatibility.authenticationMethods.contains("oidc-native") == true
+    }
+
+    private var connectionState: ConnectionState {
+        model.connectionState
     }
 
     private var trustedHTTPConfirmationPresented: Binding<Bool> {
         Binding(
-            get: { model.pendingTrustedHTTPServer != nil },
+            get: { connectionState.pendingTrustedHTTPServer != nil },
             set: { isPresented in
                 if !isPresented {
                     model.cancelTrustedHTTPServerConfirmation()

@@ -24,17 +24,18 @@ private struct AppRootView: View {
             SliprampScreenBackground()
 
             Group {
-                if model.isRestoring {
+                switch model.connectionState {
+                case .restoring:
                     SliprampLoadingState(message: "Connecting to Slipramp…")
-                } else if let client = model.client {
+                case let .connected(client):
                     MainTabView(client: client)
-                } else {
+                default:
                     ConnectionView()
                 }
             }
         }
         .tint(SliprampTheme.accent)
         .preferredColorScheme(appearance.colorScheme)
-        .animation(.easeInOut(duration: 0.25), value: model.client != nil)
+        .animation(.easeInOut(duration: 0.25), value: model.connectionState.client != nil)
     }
 }
