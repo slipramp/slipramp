@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22.22.0
+          node-version: 22.23.4
 
       - name: Install site dependencies
         run: |
@@ -70,7 +70,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22.22.0
+          node-version: 22.23.4
 
       - name: Install site dependencies
         run: |
@@ -103,7 +103,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22.22.0
+          node-version: 22.23.4
 
       - name: Install site dependencies
         run: |

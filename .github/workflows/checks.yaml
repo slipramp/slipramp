@@ -32,7 +32,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22.22.0
+          node-version: 22.23.4
 
       - name: Verify pinned Xcode
         run: test "$(xcodebuild -version | head -n 1)" = "Xcode 26.6"
@@ -86,7 +86,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 22.22.0
+          node-version: 22.23.4
 
       - uses: swift-actions/setup-swift@v2.4.0
         with:

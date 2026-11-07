@@ -4,7 +4,7 @@ Run the commands in this guide from the repository root.
 
 ## Prerequisites
 
-Go 1.27.2, Git, Node.js 22.22.0 or newer, and [Task](https://taskfile.dev/) are
+Go 1.27.2, Git, Node.js 22.23.4 or newer, and [Task](https://taskfile.dev/) are
 required. Docker is required for the local PostgreSQL, RustFS, Keycloak,
 Prometheus, and Grafana services.
 Canonical source artwork is maintained in the sibling `slipramp-assets`
