@@ -278,6 +278,9 @@ func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 	if attention.Total != 3 || len(attention.Items) != 1 || attention.Items[0].Application != "charlie" {
 		t.Errorf("attention List() = %#v", attention)
 	}
+	if attention.Summary != (FreightPipelineSummary{Drifted: 2, Outdated: 2, UpToDate: 1}) {
+		t.Errorf("attention summary = %#v", attention.Summary)
+	}
 
 	drifted, err := service.List(t.Context(), FreightPipelineListFilter{
 		Attention: FreightPipelineAttentionDrifted,
@@ -301,6 +304,20 @@ func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 	if outdated.Total != 2 || len(outdated.Items) != 2 || outdated.Items[0].Application != "alpha" ||
 		outdated.Items[1].Application != "delta" {
 		t.Errorf("outdated List() = %#v", outdated)
+	}
+	if outdated.Summary != (FreightPipelineSummary{Drifted: 2, Outdated: 2, UpToDate: 1}) {
+		t.Errorf("outdated summary = %#v", outdated.Summary)
+	}
+
+	upToDate, err := service.List(t.Context(), FreightPipelineListFilter{
+		Attention: FreightPipelineAttentionUpToDate,
+		Limit:     DefaultListLimit,
+	})
+	if err != nil {
+		t.Fatalf("up-to-date List() error = %v", err)
+	}
+	if upToDate.Total != 1 || len(upToDate.Items) != 1 || upToDate.Items[0].Application != "bravo" {
+		t.Errorf("up-to-date List() = %#v", upToDate)
 	}
 }
 

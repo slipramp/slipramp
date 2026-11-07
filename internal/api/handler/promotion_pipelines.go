@@ -106,7 +106,12 @@ func (h *Handler) ListPromotionPipelines(
 	}
 
 	return api.ListPromotionPipelines200JSONResponse{
-		Items:  items,
+		Items: items,
+		Summary: api.PromotionPipelineSummary{
+			Drifted:  result.Summary.Drifted,
+			Outdated: result.Summary.Outdated,
+			UpToDate: result.Summary.UpToDate,
+		},
 		Total:  result.Total,
 		Limit:  result.Limit,
 		Offset: result.Offset,

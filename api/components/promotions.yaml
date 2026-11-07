@@ -27,6 +27,7 @@ PromotionPipelineAttention:
     - any
     - drifted
     - outdated
+    - up-to-date
 
 PromotionFreight:
   type: object
@@ -575,6 +576,7 @@ PromotionPipelineList:
   additionalProperties: false
   required:
     - items
+    - summary
     - total
     - limit
     - offset
@@ -583,6 +585,8 @@ PromotionPipelineList:
       type: array
       items:
         $ref: "#/PromotionPipeline"
+    summary:
+      $ref: "#/PromotionPipelineSummary"
     total:
       type: integer
       minimum: 0
@@ -590,6 +594,28 @@ PromotionPipelineList:
       type: integer
       minimum: 1
     offset:
+      type: integer
+      minimum: 0
+
+PromotionPipelineSummary:
+  type: object
+  additionalProperties: false
+  description: >-
+    Attention counts across every pipeline matching the scope filters, before
+    the attention filter and pagination are applied. A pipeline may be both
+    drifted and outdated. Up-to-date pipelines meet neither condition.
+  required:
+    - drifted
+    - outdated
+    - upToDate
+  properties:
+    drifted:
+      type: integer
+      minimum: 0
+    outdated:
+      type: integer
+      minimum: 0
+    upToDate:
       type: integer
       minimum: 0
 

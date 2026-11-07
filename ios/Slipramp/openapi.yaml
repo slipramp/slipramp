@@ -7582,6 +7582,7 @@ components:
       additionalProperties: false
       required:
         - items
+        - summary
         - total
         - limit
         - offset
@@ -7590,6 +7591,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionPipeline'
+        summary:
+          $ref: '#/components/schemas/PromotionPipelineSummary'
         total:
           type: integer
           minimum: 0
@@ -7597,6 +7600,24 @@ components:
           type: integer
           minimum: 1
         offset:
+          type: integer
+          minimum: 0
+    PromotionPipelineSummary:
+      type: object
+      additionalProperties: false
+      description: Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
+      required:
+        - drifted
+        - outdated
+        - upToDate
+      properties:
+        drifted:
+          type: integer
+          minimum: 0
+        outdated:
+          type: integer
+          minimum: 0
+        upToDate:
           type: integer
           minimum: 0
     PromotionBranchDriftRepository:
@@ -9741,6 +9762,7 @@ components:
         - any
         - drifted
         - outdated
+        - up-to-date
     PromotionFreightSource:
       type: object
       additionalProperties: false

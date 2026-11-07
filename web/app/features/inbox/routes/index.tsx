@@ -15,9 +15,11 @@ import {
   IconActivityHeartbeat,
   IconAlertTriangle,
   IconArrowRight,
+  IconArrowsDiff,
   IconCheck,
   IconChecklist,
   IconCircleCheck,
+  IconClock,
   IconGitBranch,
   IconGitPullRequest,
   IconServerOff,
@@ -32,8 +34,10 @@ import {
   acknowledgeInboxProblems,
   getInbox,
   getReadiness,
+  listPromotionPipelines,
   type Inbox as InboxProjection,
   type InboxItem,
+  type PromotionPipelineSummary,
   type ReadinessResponse,
 } from "~/api/generated";
 import { RelativeTime } from "~/shared/display-values";
@@ -53,8 +57,9 @@ export function meta() {
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [inboxResult, readinessResult] = await Promise.all([
+  const [inboxResult, pipelineResult, readinessResult] = await Promise.all([
     getInbox({ client }),
+    listPromotionPipelines({ client, query: { limit: 1 } }),
     getReadiness({ client }),
   ]);
 
@@ -63,6 +68,11 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     inboxError: inboxResult.error
       ? problemDetail(inboxResult.error, "The operational Inbox could not be loaded.")
       : undefined,
+    pipelineError: pipelineResult.error
+      ? problemDetail(pipelineResult.error, "Kargo pipeline status could not be loaded.")
+      : undefined,
+    pipelineSummary: pipelineResult.data?.summary,
+    pipelineTotal: pipelineResult.data?.total,
     readiness: asReadinessResponse(readinessResult.data ?? readinessResult.error),
   };
 }
@@ -137,7 +147,14 @@ export default function Inbox({ loaderData }: Route.ComponentProps) {
         </Grid.Col>
 
         <Grid.Col span={{ base: 12, lg: 4 }}>
-          <RunActivity activity={inbox?.activity} />
+          <Stack gap="lg">
+            <RunActivity activity={inbox?.activity} />
+            <PipelineStatus
+              error={loaderData.pipelineError}
+              summary={loaderData.pipelineSummary}
+              total={loaderData.pipelineTotal}
+            />
+          </Stack>
         </Grid.Col>
       </Grid>
     </Stack>
@@ -354,6 +371,106 @@ function RunActivity({
         >
           View run history
         </Button>
+      </Stack>
+    </Paper>
+  );
+}
+
+function PipelineStatus({
+  error,
+  summary,
+  total,
+}: Readonly<{
+  error?: string;
+  summary?: PromotionPipelineSummary;
+  total?: number;
+}>) {
+  return (
+    <Paper p="md" withBorder>
+      <Stack gap="md">
+        <Group justify="space-between">
+          <Group gap="xs">
+            <ThemeIcon color="lilac" size="md" variant="light">
+              <IconGitBranch aria-hidden size={17} />
+            </ThemeIcon>
+            <Text fw={650}>Kargo pipelines</Text>
+          </Group>
+          <Badge color="gray" variant="light">
+            {total ?? "—"}
+          </Badge>
+        </Group>
+        <SimpleGrid cols={3} spacing="xs">
+          <PipelineStatusCount
+            color="yellow"
+            href="/promotion-pipelines?attention=drifted"
+            icon={IconArrowsDiff}
+            label="Drifted"
+            value={summary?.drifted}
+          />
+          <PipelineStatusCount
+            color="orange"
+            href="/promotion-pipelines?attention=outdated"
+            icon={IconClock}
+            label="Out of date"
+            value={summary?.outdated}
+          />
+          <PipelineStatusCount
+            color="green"
+            href="/promotion-pipelines?attention=up-to-date"
+            icon={IconCircleCheck}
+            label="Up to date"
+            value={summary?.upToDate}
+          />
+        </SimpleGrid>
+        {error ? (
+          <Text c="red" size="xs">
+            {error}
+          </Text>
+        ) : null}
+        <Button
+          component={Link}
+          fullWidth
+          rightSection={<IconArrowRight aria-hidden size={14} />}
+          to="/promotion-pipelines?attention=any"
+          variant="subtle"
+        >
+          View pipelines
+        </Button>
+      </Stack>
+    </Paper>
+  );
+}
+
+function PipelineStatusCount({
+  color,
+  href,
+  icon: StatusIcon,
+  label,
+  value,
+}: Readonly<{
+  color: "green" | "orange" | "yellow";
+  href: string;
+  icon: TablerIcon;
+  label: string;
+  value?: number;
+}>) {
+  return (
+    <Paper
+      className="inbox-stat inbox-stat-link"
+      component={Link}
+      data-color={color}
+      data-muted={value === undefined || value === 0 || undefined}
+      p="sm"
+      to={href}
+    >
+      <Stack align="center" gap={2}>
+        <StatusIcon aria-hidden className="inbox-stat-icon" size={17} />
+        <Text className="inbox-stat-value" fw={700} size="xl">
+          {value ?? "—"}
+        </Text>
+        <Text c="dimmed" size="xs" ta="center">
+          {label}
+        </Text>
       </Stack>
     </Paper>
   );

@@ -1348,9 +1348,19 @@ export type PromotionPipeline = {
 
 export type PromotionPipelineList = {
   items: Array<PromotionPipeline>;
+  summary: PromotionPipelineSummary;
   total: number;
   limit: number;
   offset: number;
+};
+
+/**
+ * Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
+ */
+export type PromotionPipelineSummary = {
+  drifted: number;
+  outdated: number;
+  upToDate: number;
 };
 
 export type PromotionBranchDriftRepository = {
@@ -2360,7 +2370,7 @@ export type PromotionStagePolicyUpdate = {
   reason?: string;
 };
 
-export type PromotionPipelineAttention = "any" | "drifted" | "outdated";
+export type PromotionPipelineAttention = "any" | "drifted" | "outdated" | "up-to-date";
 
 export type PromotionFreightSource = {
   stageId: string;

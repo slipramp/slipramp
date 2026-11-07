@@ -15,6 +15,7 @@ const (
 	FreightPipelineAttentionAny      FreightPipelineAttention = "any"
 	FreightPipelineAttentionDrifted  FreightPipelineAttention = "drifted"
 	FreightPipelineAttentionOutdated FreightPipelineAttention = "outdated"
+	FreightPipelineAttentionUpToDate FreightPipelineAttention = "up-to-date"
 )
 
 type FreightPipelineListFilter struct {
@@ -55,10 +56,17 @@ type FreightPipeline struct {
 }
 
 type FreightPipelineList struct {
-	Items  []FreightPipeline
-	Total  int
-	Limit  int
-	Offset int
+	Items   []FreightPipeline
+	Summary FreightPipelineSummary
+	Total   int
+	Limit   int
+	Offset  int
+}
+
+type FreightPipelineSummary struct {
+	Drifted  int
+	Outdated int
+	UpToDate int
 }
 
 type FreightPipelineStore interface {
@@ -164,6 +172,7 @@ func (s *FreightPipelineService) List(
 	}
 
 	items := make([]FreightPipeline, 0, len(builders))
+	summary := FreightPipelineSummary{}
 	for _, builder := range builders {
 		for index := range builder.pipeline.Stages {
 			stage := &builder.pipeline.Stages[index]
@@ -192,7 +201,18 @@ func (s *FreightPipelineService) List(
 
 			return compareText(left.Stage.ID.String(), right.Stage.ID.String())
 		})
-		if freightPipelineMatchesAttention(builder.pipeline, filter.Attention) {
+		drifted := freightPipelineDrifted(builder.pipeline)
+		outdated := freightPipelineOutdated(builder.pipeline)
+		if drifted {
+			summary.Drifted++
+		}
+		if outdated {
+			summary.Outdated++
+		}
+		if !drifted && !outdated {
+			summary.UpToDate++
+		}
+		if freightPipelineMatchesAttention(filter.Attention, drifted, outdated) {
 			items = append(items, builder.pipeline)
 		}
 	}
@@ -231,7 +251,13 @@ func (s *FreightPipelineService) List(
 		}
 	}
 
-	return FreightPipelineList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
+	return FreightPipelineList{
+		Items:   items,
+		Summary: summary,
+		Total:   total,
+		Limit:   filter.Limit,
+		Offset:  filter.Offset,
+	}, nil
 }
 
 func stageObservationStale(stage Stage, integration IntegrationConfig, now time.Time) bool {
@@ -334,19 +360,20 @@ func availableFreight(target Stage, sources []FreightPromotionSource) []FreightI
 
 func (a FreightPipelineAttention) Valid() bool {
 	switch a {
-	case FreightPipelineAttentionAny, FreightPipelineAttentionDrifted, FreightPipelineAttentionOutdated:
+	case FreightPipelineAttentionAny,
+		FreightPipelineAttentionDrifted,
+		FreightPipelineAttentionOutdated,
+		FreightPipelineAttentionUpToDate:
 		return true
 	default:
 		return false
 	}
 }
 
-func freightPipelineMatchesAttention(pipeline FreightPipeline, attention FreightPipelineAttention) bool {
+func freightPipelineMatchesAttention(attention FreightPipelineAttention, drifted, outdated bool) bool {
 	if attention == "" {
 		return true
 	}
-	drifted := freightPipelineDrifted(pipeline)
-	outdated := freightPipelineOutdated(pipeline)
 
 	switch attention {
 	case FreightPipelineAttentionAny:
@@ -355,6 +382,8 @@ func freightPipelineMatchesAttention(pipeline FreightPipeline, attention Freight
 		return drifted
 	case FreightPipelineAttentionOutdated:
 		return outdated
+	case FreightPipelineAttentionUpToDate:
+		return !drifted && !outdated
 	default:
 		return false
 	}

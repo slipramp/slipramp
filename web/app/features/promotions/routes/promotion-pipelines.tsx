@@ -204,6 +204,7 @@ function PipelineFilters({
             { label: "Needs attention", value: "any" },
             { label: "Drifted", value: "drifted" },
             { label: "Outdated", value: "outdated" },
+            { label: "Up to date", value: "up-to-date" },
           ],
           kind: "select",
           label: "Attention",
@@ -527,5 +528,7 @@ function optionalValue(value: string | null) {
 }
 
 function optionalAttention(value: string | null): PromotionPipelineAttention | undefined {
-  return value === "any" || value === "drifted" || value === "outdated" ? value : undefined;
+  return value === "any" || value === "drifted" || value === "outdated" || value === "up-to-date"
+    ? value
+    : undefined;
 }

@@ -501,6 +501,7 @@ export type {
   PromotionPipelineAttention,
   PromotionPipelineList,
   PromotionPipelineStage,
+  PromotionPipelineSummary,
   PromotionPolicyMode,
   PromotionProject,
   PromotionProjectList,

@@ -83,9 +83,10 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 					ObservationStale:      true,
 				}},
 			}},
-			Total:  1,
-			Limit:  10,
-			Offset: 2,
+			Summary: promotion.FreightPipelineSummary{Drifted: 2, Outdated: 3, UpToDate: 4},
+			Total:   1,
+			Limit:   10,
+			Offset:  2,
 		},
 	}
 	httpHandler := NewHTTP(
@@ -132,6 +133,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 	for _, expected := range []string{
 		stageID.String(),
 		`"environmentOrder":["homelab","prod"]`,
+		`"summary":{"drifted":2,"outdated":3,"upToDate":4}`,
 		`"version":"1.2.3"`,
 		`"stageName":"external-dns-homelab"`,
 		`"promotionSources":[`,

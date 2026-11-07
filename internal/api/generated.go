@@ -900,6 +900,7 @@ const (
 	PromotionPipelineAttentionAny      PromotionPipelineAttention = "any"
 	PromotionPipelineAttentionDrifted  PromotionPipelineAttention = "drifted"
 	PromotionPipelineAttentionOutdated PromotionPipelineAttention = "outdated"
+	PromotionPipelineAttentionUpToDate PromotionPipelineAttention = "up-to-date"
 )
 
 // Valid indicates whether the value is a known member of the PromotionPipelineAttention enum.
@@ -910,6 +911,8 @@ func (e PromotionPipelineAttention) Valid() bool {
 	case PromotionPipelineAttentionDrifted:
 		return true
 	case PromotionPipelineAttentionOutdated:
+		return true
+	case PromotionPipelineAttentionUpToDate:
 		return true
 	default:
 		return false
@@ -3246,7 +3249,10 @@ type PromotionPipelineList struct {
 	Items  []PromotionPipeline `json:"items"`
 	Limit  int                 `json:"limit"`
 	Offset int                 `json:"offset"`
-	Total  int                 `json:"total"`
+
+	// Summary Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
+	Summary PromotionPipelineSummary `json:"summary"`
+	Total   int                      `json:"total"`
 }
 
 // PromotionPipelineStage defines model for PromotionPipelineStage.
@@ -3276,6 +3282,13 @@ type PromotionPipelineStage struct {
 	PendingPromotionCount int                      `json:"pendingPromotionCount"`
 	Policy                PromotionStagePolicy     `json:"policy"`
 	PromotionSources      []PromotionFreightSource `json:"promotionSources"`
+}
+
+// PromotionPipelineSummary Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
+type PromotionPipelineSummary struct {
+	Drifted  int `json:"drifted"`
+	Outdated int `json:"outdated"`
+	UpToDate int `json:"upToDate"`
 }
 
 // PromotionPolicyMode defines model for PromotionPolicyMode.

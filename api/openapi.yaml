@@ -372,6 +372,8 @@ components:
       $ref: ./components/promotions.yaml#/PromotionPipeline
     PromotionPipelineList:
       $ref: ./components/promotions.yaml#/PromotionPipelineList
+    PromotionPipelineSummary:
+      $ref: ./components/promotions.yaml#/PromotionPipelineSummary
     PromotionBranchDriftRepository:
       $ref: ./components/promotions.yaml#/PromotionBranchDriftRepository
     PromotionBranchDriftList:
