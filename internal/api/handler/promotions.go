@@ -130,7 +130,7 @@ func (h *Handler) SubmitKargoPromotion(
 	return api.SubmitKargoPromotion200JSONResponse{
 		ID:                  record.ID,
 		ExternalPromotionID: record.ExternalPromotionID,
-		Status:              api.PromotionStatus(record.Status),
+		Status:              api.PromotionStatus(record.Lifecycle.State),
 		ReviewRequired:      record.ReviewRequired,
 		Message:             record.Message,
 		UpdatedAt:           record.UpdatedAt,
@@ -338,7 +338,7 @@ func (h *Handler) ListPromotions(
 		filter.Application = *request.Params.Application
 	}
 	if request.Params.Status != nil {
-		filter.Status = promotion.PromotionStatus(*request.Params.Status)
+		filter.Status = promotion.LifecycleState(*request.Params.Status)
 	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
@@ -689,33 +689,33 @@ func promotionResponse(
 		PolicySnapshot:         promotionPolicyResponse(promotion.PolicyView(record.PolicySnapshot)),
 		SelectedFreight:        selectedFreight,
 		ReviewRequired:         record.ReviewRequired,
-		Status:                 api.PromotionStatus(record.Status),
+		Status:                 api.PromotionStatus(record.Lifecycle.State),
 		Message:                record.Message,
-		DispatchAttemptCount:   record.DispatchAttemptCount,
-		NextDispatchAt:         record.NextDispatchAt,
-		LastDispatchAt:         record.LastDispatchAt,
-		DispatchedAt:           record.DispatchedAt,
-		KargoPromotionUID:      record.KargoPromotionUID,
-		NextReconciliationAt:   record.NextReconciliationAt,
-		LastReconciliationAt:   record.LastReconciliationAt,
-		PreparationRunID:       record.PreparationRunID,
-		GitDiffArtifactID:      record.GitDiffArtifactID,
-		ArgoDiffArtifactID:     record.ArgoDiffArtifactID,
+		DispatchAttemptCount:   record.CreationDispatch.AttemptCount,
+		NextDispatchAt:         record.CreationDispatch.NextAttemptAt,
+		LastDispatchAt:         record.CreationDispatch.LastAttemptAt,
+		DispatchedAt:           record.CreationDispatch.DispatchedAt,
+		KargoPromotionUID:      record.KargoExecution.PromotionUID,
+		NextReconciliationAt:   record.KargoExecution.NextReconciliationAt,
+		LastReconciliationAt:   record.KargoExecution.LastReconciliationAt,
+		PreparationRunID:       record.Preparation.RunID,
+		GitDiffArtifactID:      record.Preparation.GitDiffArtifactID,
+		ArgoDiffArtifactID:     record.Preparation.ArgoDiffArtifactID,
 		RequestedBy:            *requestedBy,
 		CreatedAt:              record.CreatedAt,
-		PreparationCompletedAt: record.PreparationCompletedAt,
-		DecidedAt:              record.DecidedAt,
-		ExpiresAt:              record.ExpiresAt,
+		PreparationCompletedAt: record.Preparation.CompletedAt,
+		DecidedAt:              record.Lifecycle.DecidedAt,
+		ExpiresAt:              record.Lifecycle.ExpiresAt,
 		UpdatedAt:              record.UpdatedAt,
 	}
-	if record.KargoOutcome != nil {
+	if record.KargoExecution.Outcome != nil {
 		body.KargoOutcome = &api.KargoPromotionOutcome{
-			Phase:      api.KargoPromotionOutcomePhase(record.KargoOutcome.Phase),
-			ObservedAt: record.KargoOutcome.ObservedAt,
-			Diagnostic: record.KargoOutcome.Diagnostic,
+			Phase:      api.KargoPromotionOutcomePhase(record.KargoExecution.Outcome.Phase),
+			ObservedAt: record.KargoExecution.Outcome.ObservedAt,
+			Diagnostic: record.KargoExecution.Outcome.Diagnostic,
 		}
 	}
-	if record.Source == promotion.SourceKargo || record.KargoPromotionUID != nil {
+	if record.Source == promotion.SourceKargo || record.KargoExecution.PromotionUID != nil {
 		body.KargoURL = integrations.KargoPromotionURL(
 			record.Integration,
 			project,
@@ -767,11 +767,11 @@ func (h *Handler) promotionDetailResponse(
 	if err != nil {
 		return api.Promotion{}, err
 	}
-	if review.Promotion.PreparationRunID == nil {
+	if review.Promotion.Preparation.RunID == nil {
 		return body, nil
 	}
 
-	preparationRun, err := h.runs.GetRun(ctx, *review.Promotion.PreparationRunID)
+	preparationRun, err := h.runs.GetRun(ctx, *review.Promotion.Preparation.RunID)
 	if err != nil {
 		return api.Promotion{}, fmt.Errorf("load Promotion preparation Run: %w", err)
 	}
@@ -781,7 +781,7 @@ func (h *Handler) promotionDetailResponse(
 	}
 	body.PreparationRun = &runBody
 
-	artifacts, err := h.artifacts.List(ctx, *review.Promotion.PreparationRunID)
+	artifacts, err := h.artifacts.List(ctx, *review.Promotion.Preparation.RunID)
 	if err != nil {
 		return api.Promotion{}, fmt.Errorf("load Promotion preparation artifacts: %w", err)
 	}
@@ -799,13 +799,13 @@ func (h *Handler) promotionDetailResponse(
 	for _, record := range artifacts {
 		commit := artifactCommits[commitKey(record.Provenance.RepositoryID, record.Provenance.CommitSHA)]
 		switch record.ID {
-		case valueOrNilUUID(review.Promotion.GitDiffArtifactID):
+		case valueOrNilUUID(review.Promotion.Preparation.GitDiffArtifactID):
 			value, err := artifactResponse(record, commit)
 			if err != nil {
 				return api.Promotion{}, err
 			}
 			body.GitDiffArtifact = &value
-		case valueOrNilUUID(review.Promotion.ArgoDiffArtifactID):
+		case valueOrNilUUID(review.Promotion.Preparation.ArgoDiffArtifactID):
 			value, err := artifactResponse(record, commit)
 			if err != nil {
 				return api.Promotion{}, err

@@ -45,7 +45,7 @@ func TestReconciliationServiceBuildsCommandAndReport(t *testing.T) {
 		Integration:         "prod",
 		ExternalPromotionID: "external-dns-prod.01test.freight",
 		StageSnapshot:       stageSnapshot,
-		KargoPromotionUID:   &uid,
+		KargoExecution:      KargoExecutionState{PromotionUID: &uid},
 	}}
 	service := NewReconciliationService(store)
 	service.now = func() time.Time { return now }

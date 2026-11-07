@@ -76,9 +76,9 @@ func TestCandidateBranchServiceDeletesOnlyExpiredExactTerminalBranches(t *testin
 		ID:     repositoryID,
 	}
 	sha := func(character string) string { return strings.Repeat(character, 40) }
-	reference := func(branch, revision string, status PromotionStatus, updatedAt time.Time) CandidateBranchReference {
+	reference := func(branch, revision string, status LifecycleState, updatedAt time.Time) CandidateBranchReference {
 		var kargoOutcomeAt *time.Time
-		if status == StatusApproved {
+		if status == LifecycleApproved {
 			kargoOutcomeAt = &updatedAt
 		}
 		return CandidateBranchReference{
@@ -96,10 +96,10 @@ func TestCandidateBranchServiceDeletesOnlyExpiredExactTerminalBranches(t *testin
 		repositories: []repository.Repository{record},
 		references: map[uuid.UUID][]CandidateBranchReference{
 			repositoryID: {
-				reference("kargo/promotion/protected", sha("a"), StatusPending, now.Add(-48*time.Hour)),
-				reference("kargo/promotion/waiting", sha("b"), StatusApproved, now.Add(-23*time.Hour)),
-				reference("kargo/promotion/expired", sha("c"), StatusRejected, now.Add(-24*time.Hour)),
-				reference("kargo/promotion/moved", sha("d"), StatusExpired, now.Add(-48*time.Hour)),
+				reference("kargo/promotion/protected", sha("a"), LifecyclePending, now.Add(-48*time.Hour)),
+				reference("kargo/promotion/waiting", sha("b"), LifecycleApproved, now.Add(-23*time.Hour)),
+				reference("kargo/promotion/expired", sha("c"), LifecycleRejected, now.Add(-24*time.Hour)),
+				reference("kargo/promotion/moved", sha("d"), LifecycleExpired, now.Add(-48*time.Hour)),
 			},
 		},
 	}
@@ -171,8 +171,8 @@ func TestClassifyCandidateBranchProtectsNonterminalAndDisabledIntegrations(t *te
 		{
 			name: "nonterminal",
 			references: []CandidateBranchReference{
-				{Integration: "prod", CandidateRevision: revision, Status: StatusApproved, UpdatedAt: now.Add(-48 * time.Hour)},
-				{Integration: "prod", CandidateRevision: revision, Status: StatusCreating, UpdatedAt: now.Add(-time.Hour)},
+				{Integration: "prod", CandidateRevision: revision, Status: LifecycleApproved, UpdatedAt: now.Add(-48 * time.Hour)},
+				{Integration: "prod", CandidateRevision: revision, Status: LifecycleCreating, UpdatedAt: now.Add(-time.Hour)},
 			},
 			reason: "nonterminal",
 		},
@@ -181,7 +181,7 @@ func TestClassifyCandidateBranchProtectsNonterminalAndDisabledIntegrations(t *te
 			references: []CandidateBranchReference{{
 				Integration:       "edge",
 				CandidateRevision: revision,
-				Status:            StatusApproved,
+				Status:            LifecycleApproved,
 				UpdatedAt:         now.Add(-48 * time.Hour),
 			}},
 			reason: "disabled",

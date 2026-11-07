@@ -107,7 +107,7 @@ func (d *Database) ListInboxPromotions(ctx context.Context) ([]inbox.PromotionSt
 			Application:     stage.Application,
 			CandidateBranch: textValue(row.CandidateBranch),
 			TargetBranch:    row.TargetBranch,
-			Status:          promotion.PromotionStatus(row.Status),
+			Status:          promotion.LifecycleState(row.Status),
 			Message:         row.Message,
 			CreatedAt:       row.CreatedAt.Time.UTC(),
 			UpdatedAt:       row.UpdatedAt.Time.UTC(),

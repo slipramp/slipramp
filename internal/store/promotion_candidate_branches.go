@@ -27,7 +27,7 @@ func (d *Database) ListPromotionCandidateBranchReferences(
 			RepositoryID:      uuid.UUID(row.RepositoryID.Bytes),
 			CandidateBranch:   textValue(row.CandidateBranch),
 			CandidateRevision: textValue(row.CandidateRevision),
-			Status:            promotion.PromotionStatus(row.Status),
+			Status:            promotion.LifecycleState(row.Status),
 			UpdatedAt:         row.UpdatedAt.Time.UTC(),
 			KargoOutcomeAt:    applicationTime(row.KargoOutcomeObservedAt),
 		})

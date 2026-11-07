@@ -249,11 +249,11 @@ func buildSnapshot(query Query, generatedAt time.Time, source projectionSource) 
 			return Snapshot{}, err
 		}
 		switch record.Status {
-		case promotion.StatusPending:
+		case promotion.LifecyclePending:
 			if query.IncludePromotionDecisions {
 				result.Decisions = append(result.Decisions, item)
 			}
-		case promotion.StatusError:
+		case promotion.LifecycleError:
 			result.Problems = append(result.Problems, item)
 		default:
 			return Snapshot{}, fmt.Errorf("relevant Promotion %s has status %q", record.ID, record.Status)

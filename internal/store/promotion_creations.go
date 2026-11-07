@@ -126,14 +126,15 @@ func (d *Database) CreateOperatorPromotion(
 		PolicySnapshot:          policySnapshot,
 		SelectedFreightSnapshot: selectedFreight,
 		ReviewRequired:          reviewRequired,
-		Status:                  promotion.StatusCreating,
-		DispatchAttemptCount:    0,
-		NextDispatchAt:          &nextDispatchAt,
-		RequestedByPrincipalID:  acceptance.RequestedByPrincipalID,
-		RequestedBySnapshot:     acceptance.RequestedBySnapshot,
-		CreatedAt:               acceptance.AcceptedAt,
-		ExpiresAt:               expiresAt,
-		UpdatedAt:               acceptance.AcceptedAt,
+		Lifecycle: promotion.PromotionLifecycle{
+			State:     promotion.LifecycleCreating,
+			ExpiresAt: expiresAt,
+		},
+		CreationDispatch:       promotion.CreationDispatchState{NextAttemptAt: &nextDispatchAt},
+		RequestedByPrincipalID: acceptance.RequestedByPrincipalID,
+		RequestedBySnapshot:    acceptance.RequestedBySnapshot,
+		CreatedAt:              acceptance.AcceptedAt,
+		UpdatedAt:              acceptance.AcceptedAt,
 	}
 	if err := record.Validate(); err != nil {
 		return promotion.Promotion{}, err

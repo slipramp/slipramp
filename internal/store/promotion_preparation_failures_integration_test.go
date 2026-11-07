@@ -60,21 +60,21 @@ func TestPromotionPreparationDispatchFailureIsolationAndRecoveryIntegration(t *t
 	defer database.Close()
 	for count := 1; count <= promotion.PreparationFailureLimit; count++ {
 		record, err := database.GetPromotion(fixture.ctx, ids[0])
-		if err != nil || record.PreparationFailureCount != count {
+		if err != nil || record.Preparation.FailureCount != count {
 			t.Fatalf("persisted failure %d = %#v, %v", count, record, err)
 		}
 		if count == promotion.PreparationFailureLimit {
-			if record.Status != promotion.StatusError || record.NextPreparationAttemptAt != nil ||
+			if record.Lifecycle.State != promotion.LifecycleError || record.Preparation.NextAttemptAt != nil ||
 				record.Message == nil || !strings.Contains(*record.Message, "retry budget exhausted") {
 				t.Fatalf("exhausted preparation = %#v", record)
 			}
 			break
 		}
 		delay := min(promotion.PreparationInitialRetryDelay<<uint(count-1), promotion.PreparationMaximumRetryDelay)
-		if record.NextPreparationAttemptAt == nil || !record.NextPreparationAttemptAt.Equal(failure.FailedAt.Add(delay)) {
-			t.Fatalf("failure %d due time = %v, want %v", count, record.NextPreparationAttemptAt, failure.FailedAt.Add(delay))
+		if record.Preparation.NextAttemptAt == nil || !record.Preparation.NextAttemptAt.Equal(failure.FailedAt.Add(delay)) {
+			t.Fatalf("failure %d due time = %v, want %v", count, record.Preparation.NextAttemptAt, failure.FailedAt.Add(delay))
 		}
-		failure.FailedAt = *record.NextPreparationAttemptAt
+		failure.FailedAt = *record.Preparation.NextAttemptAt
 		state, recorded, err = database.RecordPromotionPreparationFailure(fixture.ctx, failure)
 		if err != nil || !recorded || state.Count != count+1 {
 			t.Fatalf("failure %d = %#v, %t, %v", count+1, state, recorded, err)
@@ -155,7 +155,7 @@ func TestPromotionFinishedPreparationFailureIsolationIntegration(t *testing.T) {
 	failed, err := fixture.database.FailPromotionPreparation(
 		fixture.ctx, first.record.ID, first.runID, "Preparation Run finished with outcome canceled.", attemptedAt,
 	)
-	if err != nil || failed.Status != promotion.StatusError || failed.NextPreparationAttemptAt != nil {
+	if err != nil || failed.Lifecycle.State != promotion.LifecycleError || failed.Preparation.NextAttemptAt != nil {
 		t.Fatalf("finished canceled preparation = %#v, %v", failed, err)
 	}
 }

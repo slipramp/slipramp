@@ -101,7 +101,7 @@ func (s *CreationDispatchService) Next(ctx context.Context, clusterName string) 
 	}
 	command := CreationCommand{
 		PromotionID:  record.ID,
-		Attempt:      record.DispatchAttemptCount,
+		Attempt:      record.CreationDispatch.AttemptCount,
 		ExternalName: record.ExternalPromotionID,
 		Integration:  record.Integration,
 		Project:      stage.Project,

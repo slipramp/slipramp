@@ -143,37 +143,39 @@ func (d *Database) acceptPromotionRequest(
 	}
 
 	reviewRequired := policySnapshot.EffectiveMode == promotion.PolicyModeReviewRequired
-	status := promotion.StatusApproved
+	status := promotion.LifecycleApproved
 	var expiresAt *time.Time
 	var nextReconciliationAt *time.Time
 	if reviewRequired {
-		status = promotion.StatusPreparing
+		status = promotion.LifecyclePreparing
 		expiresAt = new(acceptance.AcceptedAt.Add(acceptance.PendingReviewRetention))
 	} else {
 		nextReconciliationAt = new(acceptance.AcceptedAt)
 	}
 	record := promotion.Promotion{
-		ID:                     acceptance.ID,
-		Source:                 promotion.SourceKargo,
-		Integration:            acceptance.Integration,
-		ExternalPromotionID:    acceptance.Request.ExternalPromotionID,
-		RequestDigest:          acceptance.RequestDigest,
-		StageID:                stage.ID,
-		StageSnapshot:          stageSnapshot,
-		RepositoryID:           uuid.UUID(repositoryRow.ID.Bytes),
-		RepositorySnapshot:     repositorySnapshot,
-		BaseRevision:           acceptance.Request.BaseRevision,
-		CandidateRevision:      acceptance.Request.CandidateRevision,
-		CandidateBranch:        acceptance.Request.CandidateBranch,
-		TargetBranch:           stage.TargetBranch,
-		PolicySnapshot:         policySnapshot,
-		ReviewRequired:         reviewRequired,
-		Status:                 status,
-		NextReconciliationAt:   nextReconciliationAt,
+		ID:                  acceptance.ID,
+		Source:              promotion.SourceKargo,
+		Integration:         acceptance.Integration,
+		ExternalPromotionID: acceptance.Request.ExternalPromotionID,
+		RequestDigest:       acceptance.RequestDigest,
+		StageID:             stage.ID,
+		StageSnapshot:       stageSnapshot,
+		RepositoryID:        uuid.UUID(repositoryRow.ID.Bytes),
+		RepositorySnapshot:  repositorySnapshot,
+		BaseRevision:        acceptance.Request.BaseRevision,
+		CandidateRevision:   acceptance.Request.CandidateRevision,
+		CandidateBranch:     acceptance.Request.CandidateBranch,
+		TargetBranch:        stage.TargetBranch,
+		PolicySnapshot:      policySnapshot,
+		ReviewRequired:      reviewRequired,
+		Lifecycle: promotion.PromotionLifecycle{
+			State:     status,
+			ExpiresAt: expiresAt,
+		},
+		KargoExecution:         promotion.KargoExecutionState{NextReconciliationAt: nextReconciliationAt},
 		RequestedByPrincipalID: acceptance.RequestedByPrincipalID,
 		RequestedBySnapshot:    acceptance.RequestedBySnapshot,
 		CreatedAt:              acceptance.AcceptedAt,
-		ExpiresAt:              expiresAt,
 		UpdatedAt:              acceptance.AcceptedAt,
 	}
 	if err := record.Validate(); err != nil {
@@ -240,7 +242,19 @@ func finishExistingPromotionRequest(
 
 		return existing, nil
 	}
-	if existing.Source != promotion.SourceSlipramp || existing.Status != promotion.StatusCreating {
+	if existing.Source != promotion.SourceSlipramp || existing.Lifecycle.State != promotion.LifecycleCreating {
+		return promotion.Promotion{}, promotion.ErrIdentityConflict
+	}
+	nextState := promotion.LifecycleApproved
+	if existing.ReviewRequired {
+		nextState = promotion.LifecyclePreparing
+	}
+	if _, err := promotion.TransitionLifecycle(
+		existing.Lifecycle,
+		nextState,
+		existing.ReviewRequired,
+		acceptance.AcceptedAt,
+	); err != nil {
 		return promotion.Promotion{}, promotion.ErrIdentityConflict
 	}
 

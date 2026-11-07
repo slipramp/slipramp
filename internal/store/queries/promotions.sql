@@ -375,43 +375,27 @@ WHERE id = sqlc.arg(id)
   AND status = 'creating'
 RETURNING *;
 
--- name: LockPromotionCreation :one
+-- name: LockPromotion :one
 SELECT *
 FROM promotions
 WHERE id = sqlc.arg(id)
 FOR UPDATE;
 
--- name: RecordCreatedPromotionDispatch :one
+-- name: UpdatePromotionCreationDispatch :one
 UPDATE promotions
-SET next_dispatch_at = NULL,
-    dispatched_at = COALESCE(dispatched_at, sqlc.arg(dispatched_at)),
-    external_promotion_id = sqlc.arg(kargo_name),
-    kargo_promotion_uid = sqlc.arg(kargo_promotion_uid),
-    next_reconciliation_at = CASE
-        WHEN status IN ('creating', 'approved')
-        THEN COALESCE(next_reconciliation_at, sqlc.arg(dispatched_at))
-        ELSE NULL
-    END,
-    message = CASE WHEN status = 'creating' THEN NULL ELSE message END,
-    updated_at = GREATEST(updated_at, sqlc.arg(dispatched_at))
+SET external_promotion_id = sqlc.arg(external_promotion_id),
+    status = sqlc.arg(status),
+    message = sqlc.narg(message),
+    next_dispatch_at = sqlc.narg(next_dispatch_at),
+    dispatched_at = sqlc.narg(dispatched_at),
+    kargo_promotion_uid = sqlc.narg(kargo_promotion_uid),
+    next_reconciliation_at = sqlc.narg(next_reconciliation_at),
+    updated_at = sqlc.arg(updated_at)
 WHERE id = sqlc.arg(id)
-RETURNING *;
-
--- name: RecordRetryablePromotionDispatch :one
-UPDATE promotions
-SET message = sqlc.arg(message),
-    updated_at = sqlc.arg(reported_at)
-WHERE id = sqlc.arg(id)
-RETURNING *;
-
--- name: RecordFailedPromotionDispatch :one
-UPDATE promotions
-SET status = 'error',
-    next_dispatch_at = NULL,
-    next_reconciliation_at = NULL,
-    message = sqlc.arg(message),
-    updated_at = sqlc.arg(reported_at)
-WHERE id = sqlc.arg(id)
+  AND source = 'slipramp'
+  AND status = sqlc.arg(expected_status)
+  AND dispatch_attempt_count = sqlc.arg(expected_attempt_count)
+  AND kargo_promotion_uid IS NOT DISTINCT FROM sqlc.narg(expected_kargo_promotion_uid)::text
 RETURNING *;
 
 -- name: LockNextPromotionReconciliation :one
@@ -441,33 +425,20 @@ WHERE id = sqlc.arg(id)
   AND next_reconciliation_at = sqlc.arg(expected_next_reconciliation_at)
 RETURNING *;
 
--- name: BindKargoPromotionReconciliationIdentity :one
+-- name: UpdatePromotionReconciliation :one
 UPDATE promotions
-SET kargo_promotion_uid = sqlc.arg(kargo_promotion_uid),
-    updated_at = GREATEST(updated_at, sqlc.arg(observed_at))
-WHERE id = sqlc.arg(id)
-  AND source = 'kargo'
-  AND kargo_promotion_uid IS NULL
-  AND kargo_outcome_phase IS NULL
-RETURNING *;
-
--- name: RecordTerminalKargoPromotionOutcome :one
-UPDATE promotions
-SET status = CASE
-        WHEN status = 'creating' AND request_digest IS NULL THEN 'error'
-        ELSE status
-    END,
-    next_reconciliation_at = NULL,
-    kargo_outcome_phase = sqlc.arg(kargo_outcome_phase),
-    kargo_outcome_observed_at = sqlc.arg(kargo_outcome_observed_at),
+SET status = sqlc.arg(status),
+    message = sqlc.narg(message),
+    kargo_promotion_uid = sqlc.narg(kargo_promotion_uid),
+    next_reconciliation_at = sqlc.narg(next_reconciliation_at),
+    kargo_outcome_phase = sqlc.narg(kargo_outcome_phase),
+    kargo_outcome_observed_at = sqlc.narg(kargo_outcome_observed_at),
     kargo_outcome_diagnostic = sqlc.narg(kargo_outcome_diagnostic),
-    message = CASE
-        WHEN status = 'creating' AND request_digest IS NULL THEN sqlc.narg(kargo_outcome_diagnostic)
-        ELSE message
-    END,
-    updated_at = GREATEST(updated_at, sqlc.arg(kargo_outcome_observed_at))
+    updated_at = sqlc.arg(updated_at)
 WHERE id = sqlc.arg(id)
-  AND kargo_outcome_phase IS NULL
+  AND status = sqlc.arg(expected_status)
+  AND kargo_promotion_uid IS NOT DISTINCT FROM sqlc.narg(expected_kargo_promotion_uid)::text
+  AND kargo_outcome_phase IS NOT DISTINCT FROM sqlc.narg(expected_kargo_outcome_phase)::text
 RETURNING *;
 
 -- name: CountPromotionReviews :one
@@ -552,38 +523,20 @@ WHERE promotions.review_required
 ORDER BY promotions.created_at, promotions.id
 LIMIT 1;
 
--- name: RecordPromotionPreparationFailure :one
+-- name: UpdatePromotionPreparationFailure :one
 UPDATE promotions
-SET preparation_failure_count = preparation_failure_count + 1,
-    next_preparation_attempt_at = CASE
-        WHEN sqlc.arg(permanent)::boolean
-            OR preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer THEN NULL
-        ELSE sqlc.arg(failed_at)::timestamptz + make_interval(secs =>
-            LEAST(sqlc.arg(max_delay_seconds)::double precision,
-                  sqlc.arg(initial_delay_seconds)::double precision * power(2, preparation_failure_count)))
-    END,
-    status = CASE
-        WHEN sqlc.arg(permanent)::boolean
-            OR preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer THEN 'error'
-        ELSE status
-    END,
-    preparation_completed_at = CASE
-        WHEN sqlc.arg(permanent)::boolean
-            OR preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer THEN sqlc.arg(failed_at)
-        ELSE preparation_completed_at
-    END,
-    message = CASE
-        WHEN NOT sqlc.arg(permanent)::boolean
-            AND preparation_failure_count + 1 >= sqlc.arg(failure_limit)::integer
-        THEN sqlc.arg(exhausted_message)::text
-        ELSE sqlc.arg(diagnostic)::text
-    END,
-    updated_at = sqlc.arg(failed_at)
+SET preparation_failure_count = sqlc.arg(preparation_failure_count),
+    next_preparation_attempt_at = sqlc.narg(next_preparation_attempt_at),
+    status = sqlc.arg(status),
+    preparation_completed_at = sqlc.narg(preparation_completed_at),
+    message = sqlc.arg(message)::text,
+    updated_at = sqlc.arg(updated_at)
 WHERE id = sqlc.arg(id)
   AND review_required
-  AND status = 'preparing'
-  AND preparation_run_id IS NOT DISTINCT FROM sqlc.narg(preparation_run_id)::uuid
-  AND (next_preparation_attempt_at IS NULL OR next_preparation_attempt_at <= sqlc.arg(failed_at))
+  AND status = sqlc.arg(expected_status)
+  AND preparation_failure_count = sqlc.arg(expected_failure_count)
+  AND preparation_run_id IS NOT DISTINCT FROM sqlc.narg(expected_preparation_run_id)::uuid
+  AND next_preparation_attempt_at IS NOT DISTINCT FROM sqlc.narg(expected_next_preparation_attempt_at)::timestamptz
 RETURNING preparation_failure_count, status;
 
 -- name: LinkPromotionPreparationRun :execrows

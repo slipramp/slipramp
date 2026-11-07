@@ -208,8 +208,8 @@ func TestCreatePromotionReturnsDurableCreatingState(t *testing.T) {
 			TargetBranch:            "stage/external-dns/prod",
 			PolicySnapshot:          promotion.PromotionPolicySnapshot{EffectiveMode: "automatic"},
 			SelectedFreightSnapshot: &promotion.FreightItem{Origin: "Warehouse/external-dns", Name: "freight-42", Artifacts: []promotion.FreightArtifact{}},
-			Status:                  promotion.StatusCreating,
-			NextDispatchAt:          &nextDispatchAt,
+			Lifecycle:               promotion.PromotionLifecycle{State: promotion.LifecycleCreating},
+			CreationDispatch:        promotion.CreationDispatchState{NextAttemptAt: &nextDispatchAt},
 			RequestedByPrincipalID:  authentication.Principal.ID,
 			RequestedBySnapshot:     actor,
 			CreatedAt:               now,
@@ -274,7 +274,7 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 		},
 		RepositorySnapshot: promotion.PromotionRepositorySnapshot{Name: "ops"},
 		PolicySnapshot:     promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
-		Status:             promotion.StatusPreparing,
+		Lifecycle:          promotion.PromotionLifecycle{State: promotion.LifecyclePreparing},
 		RequestedBySnapshot: productidentity.ActorSnapshot{
 			PrincipalID: uuid.New(),
 			Kind:        productidentity.KindUser,
@@ -300,7 +300,7 @@ func TestPromotionExternalLinksUseSuccessfulDispatchAndStageSnapshot(t *testing.
 	}
 
 	uid := "promotion-uid"
-	record.KargoPromotionUID = &uid
+	record.KargoExecution.PromotionUID = &uid
 	body, err = promotionResponse(promotion.PromotionReview{Promotion: record}, nil, integrations)
 	if err != nil {
 		t.Fatalf("dispatched promotionResponse() error = %v", err)
@@ -350,7 +350,7 @@ func TestSubmitKargoPromotionReturnsDurableState(t *testing.T) {
 		record: promotion.Promotion{
 			ID:                  promotionID,
 			ExternalPromotionID: "external-dns-01jbe4q8",
-			Status:              promotion.StatusPreparing,
+			Lifecycle:           promotion.PromotionLifecycle{State: promotion.LifecyclePreparing},
 			ReviewRequired:      true,
 			UpdatedAt:           now,
 		},
@@ -510,7 +510,7 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 				TargetBranch:           "stage/external-dns/prod",
 				PolicySnapshot:         promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
 				ReviewRequired:         true,
-				Status:                 promotion.StatusPending,
+				Lifecycle:              promotion.PromotionLifecycle{State: promotion.LifecyclePending},
 				RequestedBySnapshot:    productidentity.ActorSnapshot{PrincipalID: uuid.New(), Kind: productidentity.KindServiceAccount, DisplayName: "Kargo"},
 				RequestedByPrincipalID: uuid.New(),
 				CreatedAt:              now,
@@ -557,7 +557,7 @@ func TestListPromotionsUsesOperatorFilters(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
 	}
-	if reviews.promotionFilter.Status != promotion.StatusPending ||
+	if reviews.promotionFilter.Status != promotion.LifecyclePending ||
 		reviews.promotionFilter.RepositoryID == nil ||
 		*reviews.promotionFilter.RepositoryID != repositoryID ||
 		reviews.promotionFilter.CommitSHA != commitSHA ||
@@ -607,7 +607,7 @@ func TestDecidePromotionUsesAuthenticatedActor(t *testing.T) {
 				TargetBranch:           "stage/external-dns/prod",
 				PolicySnapshot:         promotion.PromotionPolicySnapshot{EffectiveMode: "review-required"},
 				ReviewRequired:         true,
-				Status:                 promotion.StatusApproved,
+				Lifecycle:              promotion.PromotionLifecycle{State: promotion.LifecycleApproved},
 				RequestedByPrincipalID: uuid.New(),
 				RequestedBySnapshot:    productidentity.ActorSnapshot{PrincipalID: uuid.New(), Kind: productidentity.KindServiceAccount, DisplayName: "Kargo"},
 				CreatedAt:              now,

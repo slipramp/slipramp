@@ -480,7 +480,8 @@ func (d *Database) DecidePromotion(
 		)
 	}
 
-	if _, err := queries.LockPendingPromotion(ctx, databaseUUID(record.PromotionID)); err != nil {
+	lockedRow, err := queries.LockPendingPromotion(ctx, databaseUUID(record.PromotionID))
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			existing, decisionErr := queries.GetPromotionDecision(ctx, databaseUUID(record.PromotionID))
 			if decisionErr == nil {
@@ -490,17 +491,22 @@ func (d *Database) DecidePromotion(
 		}
 		return promotion.Promotion{}, promotion.Decision{}, fmt.Errorf("lock pending Promotion: %w", err)
 	}
-
-	status := promotion.StatusApproved
+	current, err := promotionFromRow(lockedRow)
+	if err != nil {
+		return promotion.Promotion{}, promotion.Decision{}, err
+	}
+	nextLifecycle, err := promotion.TransitionDecision(current.Lifecycle, current.ReviewRequired, record)
+	if err != nil {
+		return promotion.Promotion{}, promotion.Decision{}, err
+	}
 	var message *string
 	if record.Decision == promotion.DecisionRejected {
-		status = promotion.StatusRejected
 		message = record.Comment
 	}
 	promotionRow, err := queries.UpdatePromotionDecisionState(
 		ctx,
 		storedb.UpdatePromotionDecisionStateParams{
-			Status:    string(status),
+			Status:    string(nextLifecycle.State),
 			Message:   message,
 			DecidedAt: databaseTime(record.DecidedAt),
 			ID:        databaseUUID(record.PromotionID),
@@ -621,25 +627,25 @@ func promotionDatabaseParams(
 		CandidateBranch:              nullableText(record.CandidateBranch),
 		TargetBranch:                 record.TargetBranch,
 		ReviewRequired:               record.ReviewRequired,
-		Status:                       string(record.Status),
+		Status:                       string(record.Lifecycle.State),
 		Message:                      record.Message,
-		DispatchAttemptCount:         int32(record.DispatchAttemptCount),
-		NextDispatchAt:               optionalDatabaseTime(record.NextDispatchAt),
-		LastDispatchAt:               optionalDatabaseTime(record.LastDispatchAt),
-		DispatchedAt:                 optionalDatabaseTime(record.DispatchedAt),
-		KargoPromotionUid:            record.KargoPromotionUID,
-		NextReconciliationAt:         optionalDatabaseTime(record.NextReconciliationAt),
-		PreparationRepositoryID:      optionalDatabaseUUID(record.PreparationRepositoryID),
-		PreparationCatalogRevisionID: optionalDatabaseUUID(record.PreparationCatalogRevisionID),
-		PreparationRunID:             optionalDatabaseUUID(record.PreparationRunID),
-		GitDiffArtifactID:            optionalDatabaseUUID(record.GitDiffArtifactID),
-		ArgoDiffArtifactID:           optionalDatabaseUUID(record.ArgoDiffArtifactID),
+		DispatchAttemptCount:         int32(record.CreationDispatch.AttemptCount),
+		NextDispatchAt:               optionalDatabaseTime(record.CreationDispatch.NextAttemptAt),
+		LastDispatchAt:               optionalDatabaseTime(record.CreationDispatch.LastAttemptAt),
+		DispatchedAt:                 optionalDatabaseTime(record.CreationDispatch.DispatchedAt),
+		KargoPromotionUid:            record.KargoExecution.PromotionUID,
+		NextReconciliationAt:         optionalDatabaseTime(record.KargoExecution.NextReconciliationAt),
+		PreparationRepositoryID:      optionalDatabaseUUID(record.Preparation.RepositoryID),
+		PreparationCatalogRevisionID: optionalDatabaseUUID(record.Preparation.CatalogRevisionID),
+		PreparationRunID:             optionalDatabaseUUID(record.Preparation.RunID),
+		GitDiffArtifactID:            optionalDatabaseUUID(record.Preparation.GitDiffArtifactID),
+		ArgoDiffArtifactID:           optionalDatabaseUUID(record.Preparation.ArgoDiffArtifactID),
 		RequestedByPrincipalID:       databaseUUID(record.RequestedByPrincipalID),
 		RequestedBySnapshot:          requestedBy,
 		CreatedAt:                    databaseTime(record.CreatedAt),
-		PreparationCompletedAt:       optionalDatabaseTime(record.PreparationCompletedAt),
-		DecidedAt:                    optionalDatabaseTime(record.DecidedAt),
-		ExpiresAt:                    optionalDatabaseTime(record.ExpiresAt),
+		PreparationCompletedAt:       optionalDatabaseTime(record.Preparation.CompletedAt),
+		DecidedAt:                    optionalDatabaseTime(record.Lifecycle.DecidedAt),
+		ExpiresAt:                    optionalDatabaseTime(record.Lifecycle.ExpiresAt),
 		UpdatedAt:                    databaseTime(record.UpdatedAt),
 	}
 	if err := encodePromotionSnapshots(record, &params); err != nil {
@@ -716,48 +722,56 @@ func promotionFromRow(row storedb.Promotion) (promotion.Promotion, error) {
 		return promotion.Promotion{}, err
 	}
 	record := promotion.Promotion{
-		ID:                           uuid.UUID(row.ID.Bytes),
-		Source:                       promotion.PromotionSource(row.Source),
-		Integration:                  row.Integration,
-		ExternalPromotionID:          row.ExternalPromotionID,
-		RequestDigest:                digest,
-		StageID:                      uuid.UUID(row.StageID.Bytes),
-		SourceStageID:                applicationUUID(row.SourceStageID),
-		RepositoryID:                 uuid.UUID(row.RepositoryID.Bytes),
-		BaseRevision:                 textValue(row.BaseRevision),
-		CandidateRevision:            textValue(row.CandidateRevision),
-		CandidateBranch:              textValue(row.CandidateBranch),
-		TargetBranch:                 row.TargetBranch,
-		ReviewRequired:               row.ReviewRequired,
-		Status:                       promotion.PromotionStatus(row.Status),
-		Message:                      row.Message,
-		DispatchAttemptCount:         int(row.DispatchAttemptCount),
-		NextDispatchAt:               applicationTime(row.NextDispatchAt),
-		LastDispatchAt:               applicationTime(row.LastDispatchAt),
-		DispatchedAt:                 applicationTime(row.DispatchedAt),
-		KargoPromotionUID:            row.KargoPromotionUid,
-		NextReconciliationAt:         applicationTime(row.NextReconciliationAt),
-		LastReconciliationAt:         applicationTime(row.LastReconciliationAt),
-		PreparationRepositoryID:      applicationUUID(row.PreparationRepositoryID),
-		PreparationCatalogRevisionID: applicationUUID(row.PreparationCatalogRevisionID),
-		PreparationRunID:             applicationUUID(row.PreparationRunID),
-		PreparationFailureCount:      int(row.PreparationFailureCount),
-		NextPreparationAttemptAt:     applicationTime(row.NextPreparationAttemptAt),
-		GitDiffArtifactID:            applicationUUID(row.GitDiffArtifactID),
-		ArgoDiffArtifactID:           applicationUUID(row.ArgoDiffArtifactID),
-		RequestedByPrincipalID:       uuid.UUID(row.RequestedByPrincipalID.Bytes),
-		RequestedBySnapshot:          requestedBy,
-		CreatedAt:                    row.CreatedAt.Time.UTC(),
-		PreparationCompletedAt:       applicationTime(row.PreparationCompletedAt),
-		DecidedAt:                    applicationTime(row.DecidedAt),
-		ExpiresAt:                    applicationTime(row.ExpiresAt),
-		UpdatedAt:                    row.UpdatedAt.Time.UTC(),
+		ID:                  uuid.UUID(row.ID.Bytes),
+		Source:              promotion.PromotionSource(row.Source),
+		Integration:         row.Integration,
+		ExternalPromotionID: row.ExternalPromotionID,
+		RequestDigest:       digest,
+		StageID:             uuid.UUID(row.StageID.Bytes),
+		SourceStageID:       applicationUUID(row.SourceStageID),
+		RepositoryID:        uuid.UUID(row.RepositoryID.Bytes),
+		BaseRevision:        textValue(row.BaseRevision),
+		CandidateRevision:   textValue(row.CandidateRevision),
+		CandidateBranch:     textValue(row.CandidateBranch),
+		TargetBranch:        row.TargetBranch,
+		ReviewRequired:      row.ReviewRequired,
+		Lifecycle: promotion.PromotionLifecycle{
+			State:     promotion.LifecycleState(row.Status),
+			DecidedAt: applicationTime(row.DecidedAt),
+			ExpiresAt: applicationTime(row.ExpiresAt),
+		},
+		Message: row.Message,
+		CreationDispatch: promotion.CreationDispatchState{
+			AttemptCount:  int(row.DispatchAttemptCount),
+			NextAttemptAt: applicationTime(row.NextDispatchAt),
+			LastAttemptAt: applicationTime(row.LastDispatchAt),
+			DispatchedAt:  applicationTime(row.DispatchedAt),
+		},
+		Preparation: promotion.PreparationState{
+			RepositoryID:       applicationUUID(row.PreparationRepositoryID),
+			CatalogRevisionID:  applicationUUID(row.PreparationCatalogRevisionID),
+			RunID:              applicationUUID(row.PreparationRunID),
+			FailureCount:       int(row.PreparationFailureCount),
+			NextAttemptAt:      applicationTime(row.NextPreparationAttemptAt),
+			GitDiffArtifactID:  applicationUUID(row.GitDiffArtifactID),
+			ArgoDiffArtifactID: applicationUUID(row.ArgoDiffArtifactID),
+			CompletedAt:        applicationTime(row.PreparationCompletedAt),
+		},
+		KargoExecution: promotion.KargoExecutionState{
+			PromotionUID:         row.KargoPromotionUid,
+			NextReconciliationAt: applicationTime(row.NextReconciliationAt),
+			LastReconciliationAt: applicationTime(row.LastReconciliationAt),
+		},
+		RequestedByPrincipalID: uuid.UUID(row.RequestedByPrincipalID.Bytes),
+		RequestedBySnapshot:    requestedBy,
+		CreatedAt:              row.CreatedAt.Time.UTC(),
+		UpdatedAt:              row.UpdatedAt.Time.UTC(),
 	}
 	if row.KargoOutcomePhase != nil {
 		if !row.KargoOutcomeObservedAt.Valid {
 			return promotion.Promotion{}, errors.New("decode Promotion Kargo outcome: observation time is missing")
 		}
-		record.KargoOutcome = &promotion.KargoOutcome{
+		record.KargoExecution.Outcome = &promotion.KargoOutcome{
 			Phase:      promotion.KargoPhase(*row.KargoOutcomePhase),
 			ObservedAt: row.KargoOutcomeObservedAt.Time.UTC(),
 			Diagnostic: row.KargoOutcomeDiagnostic,

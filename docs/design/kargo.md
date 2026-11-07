@@ -76,7 +76,7 @@ External identity plus a canonical request digest makes identical retries
 idempotent and rejects conflicting reuse. Durable request state is committed
 before asynchronous creation or preparation begins.
 
-## Lifecycle
+## Orchestration state machines
 
 ```text
 creating --callback--> preparing --> pending --> approved/rejected/expired
@@ -86,18 +86,34 @@ creating --callback--> preparing --> pending --> approved/rejected/expired
 approved --Controller observation--> Kargo Succeeded/Failed/Errored/Aborted
 ```
 
-An automatic-policy callback advances directly to `approved`. `creating`
-includes queued Controller delivery, bounded materialization retries, and the
-wait for callback hydration. `preparing` owns one ordinary revision-pinned Run.
-`pending` accepts one operator decision or durable expiry. Terminal failures use
-`error` with a bounded non-sensitive diagnostic.
+The durable Promotion aggregate exposes four related state machines. They share
+one row so guarded updates remain atomic, but they are not one linear workflow:
 
-The review status and Kargo outcome are separate facts. An approved Promotion
-without a terminal outcome remains `approved` and is presented as Kargo still
-in progress. A terminal report adds an immutable outcome without rewriting the
-approval decision or review status. Failed, errored, and aborted outcomes are
-therefore visible on an approved Promotion rather than being collapsed into a
-review failure.
+| Machine | Authoritative fields | Meaning |
+| --- | --- | --- |
+| Public lifecycle | `status`, `decided_at`, `expires_at` | Creation, review preparation, pending review, decision, expiry, or orchestration error |
+| Creation dispatch | `dispatch_attempt_count`, `next_dispatch_at`, `last_dispatch_at`, `dispatched_at` | Slipramp-originated Kargo object delivery and its bounded retry budget |
+| Review preparation | preparation Repository, catalog revision, Run, retry, completion, and Artifact columns | Revision reservation, the single idempotent Run, validated review Artifacts, and coordination failure |
+| Kargo execution | `kargo_promotion_uid`, reconciliation timestamps, and Kargo outcome columns | Kubernetes identity binding, repeated observation, and the first terminal Kargo phase |
+
+Phases within the latter three machines are derived from these existing fields;
+Slipramp does not persist parallel phase columns. Domain transition functions
+define legal changes and cross-field invariants, while SQL applies the matching
+row locks and guarded updates atomically.
+
+An automatic-policy callback advances directly to `approved`. The public
+`creating` state allows queued Controller delivery, bounded materialization
+retries, and the wait for callback hydration. `preparing` owns one ordinary
+revision-pinned Run. `pending` accepts one operator decision or durable expiry.
+Terminal orchestration failures use `error` with a bounded non-sensitive
+diagnostic.
+
+The public lifecycle and Kargo execution are separate facts. An approved
+Promotion without a terminal outcome remains `approved` while its Kargo
+execution machine remains reconciling. A terminal report adds an immutable
+outcome without rewriting the approval decision or review status. Failed,
+errored, and aborted outcomes are therefore visible on an approved Promotion
+rather than being collapsed into a review failure.
 
 Domain states return as domain responses; expected lifecycle errors are not
 disguised as transport failures. Callback hydration, Controller reports,

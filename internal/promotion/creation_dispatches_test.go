@@ -52,7 +52,7 @@ func TestCreationDispatchServiceBuildsCommandAndReport(t *testing.T) {
 		ExternalPromotionID:     "external-dns-prod-slipramp-" + promotionID.String(),
 		StageSnapshot:           stageSnapshot,
 		SelectedFreightSnapshot: freightSnapshot,
-		DispatchAttemptCount:    2,
+		CreationDispatch:        CreationDispatchState{AttemptCount: 2},
 	}}
 	service := NewCreationDispatchService(store)
 	service.now = func() time.Time { return now }

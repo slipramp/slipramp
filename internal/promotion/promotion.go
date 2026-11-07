@@ -24,14 +24,6 @@ const (
 	SourceKargo    PromotionSource = "kargo"
 	SourceSlipramp PromotionSource = "slipramp"
 
-	StatusCreating  PromotionStatus = "creating"
-	StatusPreparing PromotionStatus = "preparing"
-	StatusPending   PromotionStatus = "pending"
-	StatusApproved  PromotionStatus = "approved"
-	StatusRejected  PromotionStatus = "rejected"
-	StatusExpired   PromotionStatus = "expired"
-	StatusError     PromotionStatus = "error"
-
 	DecisionApproved DecisionValue = "approved"
 	DecisionRejected DecisionValue = "rejected"
 
@@ -81,8 +73,6 @@ var (
 type PolicyMode string
 
 type PromotionSource string
-
-type PromotionStatus string
 
 type DecisionValue string
 
@@ -135,47 +125,32 @@ type StageSnapshot struct {
 }
 
 type Promotion struct {
-	ID                           uuid.UUID
-	Source                       PromotionSource
-	Integration                  string
-	ExternalPromotionID          string
-	RequestDigest                RequestDigest
-	StageID                      uuid.UUID
-	SourceStageID                *uuid.UUID
-	StageSnapshot                PromotionStageSnapshot
-	RepositoryID                 uuid.UUID
-	RepositorySnapshot           PromotionRepositorySnapshot
-	BaseRevision                 string
-	CandidateRevision            string
-	CandidateBranch              string
-	TargetBranch                 string
-	PolicySnapshot               PromotionPolicySnapshot
-	SelectedFreightSnapshot      *FreightItem
-	ReviewRequired               bool
-	Status                       PromotionStatus
-	Message                      *string
-	DispatchAttemptCount         int
-	NextDispatchAt               *time.Time
-	LastDispatchAt               *time.Time
-	DispatchedAt                 *time.Time
-	KargoPromotionUID            *string
-	NextReconciliationAt         *time.Time
-	LastReconciliationAt         *time.Time
-	KargoOutcome                 *KargoOutcome
-	PreparationRepositoryID      *uuid.UUID
-	PreparationCatalogRevisionID *uuid.UUID
-	PreparationRunID             *uuid.UUID
-	PreparationFailureCount      int
-	NextPreparationAttemptAt     *time.Time
-	GitDiffArtifactID            *uuid.UUID
-	ArgoDiffArtifactID           *uuid.UUID
-	RequestedByPrincipalID       uuid.UUID
-	RequestedBySnapshot          productidentity.ActorSnapshot
-	CreatedAt                    time.Time
-	PreparationCompletedAt       *time.Time
-	DecidedAt                    *time.Time
-	ExpiresAt                    *time.Time
-	UpdatedAt                    time.Time
+	ID                      uuid.UUID
+	Source                  PromotionSource
+	Integration             string
+	ExternalPromotionID     string
+	RequestDigest           RequestDigest
+	StageID                 uuid.UUID
+	SourceStageID           *uuid.UUID
+	StageSnapshot           PromotionStageSnapshot
+	RepositoryID            uuid.UUID
+	RepositorySnapshot      PromotionRepositorySnapshot
+	BaseRevision            string
+	CandidateRevision       string
+	CandidateBranch         string
+	TargetBranch            string
+	PolicySnapshot          PromotionPolicySnapshot
+	SelectedFreightSnapshot *FreightItem
+	ReviewRequired          bool
+	Lifecycle               PromotionLifecycle
+	Message                 *string
+	CreationDispatch        CreationDispatchState
+	Preparation             PreparationState
+	KargoExecution          KargoExecutionState
+	RequestedByPrincipalID  uuid.UUID
+	RequestedBySnapshot     productidentity.ActorSnapshot
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
 }
 
 type KargoOutcome struct {
@@ -207,19 +182,6 @@ func (m PolicyMode) Effective(expiresAt *time.Time, at time.Time) PolicyMode {
 
 func (s PromotionSource) Valid() bool {
 	return s == SourceKargo || s == SourceSlipramp
-}
-
-func (s PromotionStatus) Valid() bool {
-	switch s {
-	case StatusCreating, StatusPreparing, StatusPending, StatusApproved, StatusRejected, StatusExpired, StatusError:
-		return true
-	default:
-		return false
-	}
-}
-
-func (s PromotionStatus) Terminal() bool {
-	return s == StatusApproved || s == StatusRejected || s == StatusExpired || s == StatusError
 }
 
 func (d DecisionValue) Valid() bool {
@@ -412,116 +374,27 @@ func (p Promotion) Validate() error {
 		if !strings.HasPrefix(p.CandidateBranch, "kargo/promotion/") {
 			return fmt.Errorf("%w: candidate branch must be under kargo/promotion/", ErrInvalid)
 		}
-	} else if p.Source != SourceSlipramp || (p.Status != StatusCreating && p.Status != StatusError) {
+	} else if p.Source != SourceSlipramp ||
+		(p.Lifecycle.State != LifecycleCreating && p.Lifecycle.State != LifecycleError) {
 		return fmt.Errorf("%w: Promotion callback data is required", ErrInvalid)
 	}
 	if err := validateText("target branch", p.TargetBranch, maximumBranchLength); err != nil {
 		return err
 	}
-	if !p.Status.Valid() {
-		return fmt.Errorf("%w: Promotion status is invalid", ErrInvalid)
-	}
-	if !p.ReviewRequired && p.Status != StatusApproved && p.Status != StatusCreating && p.Status != StatusError {
-		return fmt.Errorf("%w: automatic Promotion must be approved", ErrInvalid)
-	}
-	if !p.ReviewRequired && p.Status != StatusCreating && p.Status != StatusError &&
-		(p.PreparationRepositoryID != nil || p.PreparationCatalogRevisionID != nil ||
-			p.PreparationRunID != nil || p.PreparationCompletedAt != nil ||
-			p.GitDiffArtifactID != nil || p.ArgoDiffArtifactID != nil || p.DecidedAt != nil) {
-		return fmt.Errorf("%w: automatic Promotion cannot have preparation or decision state", ErrInvalid)
-	}
 	if p.Source == SourceKargo {
-		if p.SourceStageID != nil || p.SelectedFreightSnapshot != nil || p.DispatchAttemptCount != 0 ||
-			p.NextDispatchAt != nil || p.LastDispatchAt != nil || p.DispatchedAt != nil {
-			return fmt.Errorf("%w: Kargo-originated Promotion cannot have creation dispatch state", ErrInvalid)
+		if p.SourceStageID != nil || p.SelectedFreightSnapshot != nil {
+			return fmt.Errorf("%w: Kargo-originated Promotion cannot have selected Freight", ErrInvalid)
 		}
 	} else {
 		if p.SelectedFreightSnapshot == nil {
 			return fmt.Errorf("%w: Slipramp-originated Promotion requires a Freight snapshot", ErrInvalid)
 		}
-		if p.Status == StatusCreating && hydrated {
+		if p.Lifecycle.State == LifecycleCreating && hydrated {
 			return fmt.Errorf("%w: creating Promotion cannot have callback data", ErrInvalid)
 		}
-		if p.Status == StatusCreating && p.NextDispatchAt == nil && p.DispatchedAt == nil {
-			return fmt.Errorf("%w: creating Promotion must be due for dispatch or waiting for callback", ErrInvalid)
-		}
-	}
-	if p.DispatchAttemptCount < 0 {
-		return fmt.Errorf("%w: Promotion dispatch attempt count cannot be negative", ErrInvalid)
-	}
-	if p.KargoPromotionUID != nil {
-		if err := validateText("Kargo Promotion UID", *p.KargoPromotionUID, maximumTextLength); err != nil {
-			return err
-		}
-		if p.Source == SourceSlipramp && p.DispatchedAt == nil {
-			return fmt.Errorf("%w: Kargo Promotion UID requires successful dispatch time", ErrInvalid)
-		}
-	}
-	reconciliationEligible := p.KargoOutcome == nil && (p.Status == StatusApproved ||
-		(p.Source == SourceSlipramp && p.Status == StatusCreating && p.KargoPromotionUID != nil))
-	if p.NextReconciliationAt != nil && !reconciliationEligible {
-		return fmt.Errorf("%w: Promotion is not eligible for Kargo reconciliation", ErrInvalid)
-	}
-	if reconciliationEligible && p.NextReconciliationAt == nil {
-		return fmt.Errorf("%w: Promotion awaiting a Kargo outcome must be due for reconciliation", ErrInvalid)
-	}
-	if p.LastReconciliationAt != nil && p.Source == SourceSlipramp && p.KargoPromotionUID == nil {
-		return fmt.Errorf("%w: Slipramp-originated reconciliation requires a materialized Kargo resource", ErrInvalid)
-	}
-	if (p.NextReconciliationAt != nil && p.NextReconciliationAt.Before(p.CreatedAt)) ||
-		(p.LastReconciliationAt != nil && p.LastReconciliationAt.Before(p.CreatedAt)) {
-		return fmt.Errorf("%w: Promotion reconciliation times cannot precede creation", ErrInvalid)
-	}
-	if p.NextDispatchAt != nil && p.DispatchedAt != nil {
-		return fmt.Errorf("%w: Promotion cannot be due for dispatch after successful delivery", ErrInvalid)
-	}
-	if p.Status == StatusCreating && (p.PreparationRepositoryID != nil ||
-		p.PreparationCatalogRevisionID != nil || p.PreparationRunID != nil ||
-		p.PreparationCompletedAt != nil || p.GitDiffArtifactID != nil ||
-		p.ArgoDiffArtifactID != nil || p.DecidedAt != nil) {
-		return fmt.Errorf("%w: creating Promotion cannot have preparation or decision state", ErrInvalid)
-	}
-	if p.Status == StatusPreparing && (p.PreparationCompletedAt != nil || p.GitDiffArtifactID != nil ||
-		p.ArgoDiffArtifactID != nil || p.DecidedAt != nil) {
-		return fmt.Errorf("%w: preparing Promotion cannot have completed preparation state", ErrInvalid)
-	}
-	if (p.PreparationRepositoryID == nil) != (p.PreparationCatalogRevisionID == nil) {
-		return fmt.Errorf("%w: preparation Repository and catalog revision must be reserved together", ErrInvalid)
-	}
-	if p.PreparationRunID != nil && p.PreparationCatalogRevisionID == nil {
-		return fmt.Errorf("%w: preparation Run requires a reserved catalog revision", ErrInvalid)
-	}
-	if p.PreparationFailureCount < 0 || (!p.ReviewRequired && p.PreparationFailureCount != 0) {
-		return fmt.Errorf("%w: preparation failure count is invalid", ErrInvalid)
-	}
-	if p.NextPreparationAttemptAt != nil && (p.Status != StatusPreparing ||
-		p.PreparationFailureCount == 0 || p.NextPreparationAttemptAt.Before(p.CreatedAt)) {
-		return fmt.Errorf("%w: preparation retry time is invalid", ErrInvalid)
-	}
-	if p.ReviewRequired &&
-		(p.Status == StatusPending || p.Status == StatusApproved || p.Status == StatusRejected ||
-			p.Status == StatusExpired) &&
-		(p.PreparationRepositoryID == nil || p.PreparationCatalogRevisionID == nil ||
-			p.PreparationRunID == nil || p.PreparationCompletedAt == nil ||
-			p.GitDiffArtifactID == nil || p.ArgoDiffArtifactID == nil) {
-		return fmt.Errorf("%w: prepared Promotion requires its Run and artifacts", ErrInvalid)
-	}
-	if p.ReviewRequired && (p.Status == StatusApproved || p.Status == StatusRejected) && p.DecidedAt == nil {
-		return fmt.Errorf("%w: decided Promotion requires a decision time", ErrInvalid)
-	}
-	if p.Status != StatusApproved && p.Status != StatusRejected && p.DecidedAt != nil {
-		return fmt.Errorf("%w: undecided Promotion cannot have a decision time", ErrInvalid)
 	}
 	if p.Message != nil {
 		if err := validateText("Promotion message", *p.Message, maximumMessageLength); err != nil {
-			return err
-		}
-	}
-	if p.KargoOutcome != nil {
-		if p.KargoPromotionUID == nil {
-			return fmt.Errorf("%w: Kargo outcome requires a bound Kubernetes UID", ErrInvalid)
-		}
-		if err := p.KargoOutcome.Validate(p.CreatedAt); err != nil {
 			return err
 		}
 	}
@@ -534,17 +407,17 @@ func (p Promotion) Validate() error {
 	if p.CreatedAt.IsZero() || p.UpdatedAt.Before(p.CreatedAt) {
 		return fmt.Errorf("%w: Promotion timestamps are invalid", ErrInvalid)
 	}
-	for label, value := range map[string]*time.Time{
-		"next dispatch": p.NextDispatchAt,
-		"last dispatch": p.LastDispatchAt,
-		"dispatched":    p.DispatchedAt,
-	} {
-		if value != nil && value.Before(p.CreatedAt) {
-			return fmt.Errorf("%w: Promotion %s time precedes creation", ErrInvalid, label)
-		}
+	if err := p.Lifecycle.Validate(p.ReviewRequired, p.CreatedAt); err != nil {
+		return err
 	}
-	if p.ExpiresAt != nil && !p.ExpiresAt.After(p.CreatedAt) {
-		return fmt.Errorf("%w: Promotion expiry must follow creation", ErrInvalid)
+	if err := p.CreationDispatch.Validate(p.Source, p.Lifecycle.State, p.CreatedAt); err != nil {
+		return err
+	}
+	if err := p.Preparation.Validate(p.ReviewRequired, p.Lifecycle.State, p.CreatedAt); err != nil {
+		return err
+	}
+	if err := p.KargoExecution.Validate(p.Source, p.Lifecycle.State, p.CreationDispatch, p.CreatedAt); err != nil {
+		return err
 	}
 
 	return nil

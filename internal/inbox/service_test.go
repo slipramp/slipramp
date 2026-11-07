@@ -46,8 +46,8 @@ func TestServiceBuildsCompleteSnapshot(t *testing.T) {
 			activeRun(uuid.MustParse("00000000-0000-0000-0000-000000000103"), run.PhaseRunning, "connected", at.Add(-30*time.Second)),
 		},
 		promotions: []PromotionState{
-			inboxPromotion(uuid.MustParse("00000000-0000-0000-0000-000000000301"), promotion.StatusPending, at.Add(-8*time.Minute)),
-			inboxPromotion(uuid.MustParse("00000000-0000-0000-0000-000000000302"), promotion.StatusError, at.Add(-7*time.Minute)),
+			inboxPromotion(uuid.MustParse("00000000-0000-0000-0000-000000000301"), promotion.LifecyclePending, at.Add(-8*time.Minute)),
+			inboxPromotion(uuid.MustParse("00000000-0000-0000-0000-000000000302"), promotion.LifecycleError, at.Add(-7*time.Minute)),
 		},
 		failures: []gittrigger.FailedDelivery{{
 			ID:             uuid.MustParse("00000000-0000-0000-0000-000000000401"),
@@ -119,7 +119,7 @@ func TestServiceAppliesDecisionVisibility(t *testing.T) {
 		promotions: []PromotionState{
 			inboxPromotion(
 				uuid.MustParse("00000000-0000-0000-0000-000000000502"),
-				promotion.StatusPending,
+				promotion.LifecyclePending,
 				at.Add(-time.Minute),
 			),
 		},
@@ -158,7 +158,7 @@ func TestServiceAppliesVisibilityAndAcknowledgements(t *testing.T) {
 	store := &serviceStore{
 		repositories: []repository.Repository{record},
 		promotions: []PromotionState{
-			inboxPromotion(uuid.MustParse("00000000-0000-0000-0000-000000000503"), promotion.StatusPending, at),
+			inboxPromotion(uuid.MustParse("00000000-0000-0000-0000-000000000503"), promotion.LifecyclePending, at),
 		},
 		acknowledgements: map[uuid.UUID][]string{principalID: {problemID}},
 	}
@@ -373,7 +373,7 @@ func activeRun(id uuid.UUID, phase run.Phase, clusterName string, observedAt tim
 	return record
 }
 
-func inboxPromotion(id uuid.UUID, status promotion.PromotionStatus, at time.Time) PromotionState {
+func inboxPromotion(id uuid.UUID, status promotion.LifecycleState, at time.Time) PromotionState {
 	message := "Diff collection failed."
 	return PromotionState{
 		ID:              id,

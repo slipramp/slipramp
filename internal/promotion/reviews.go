@@ -29,7 +29,7 @@ type StageListFilter struct {
 type PromotionListFilter struct {
 	RepositoryID *uuid.UUID
 	CommitSHA    string
-	Status       PromotionStatus
+	Status       LifecycleState
 	Integration  string
 	Cluster      string
 	Project      string

@@ -35,7 +35,7 @@ type PreparationFailureState struct {
 func preparationFailure(record Promotion, at time.Time, err error) PreparationFailure {
 	failure := PreparationFailure{
 		PromotionID:      record.ID,
-		PreparationRunID: record.PreparationRunID,
+		PreparationRunID: record.Preparation.RunID,
 		FailedAt:         at,
 		Diagnostic:       "Promotion preparation could not complete; check Server configuration and dependency health.",
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -45,18 +46,23 @@ func (d *Database) ClaimPromotionReconciliation(
 	if err != nil {
 		return promotion.Promotion{}, err
 	}
-	if current.NextReconciliationAt == nil {
-		return promotion.Promotion{}, fmt.Errorf("%w: locked Promotion is not due", promotion.ErrInvalid)
+	nextExecution, err := promotion.TransitionReconciliationClaim(
+		current.Source,
+		current.Lifecycle,
+		current.KargoExecution,
+		claim,
+	)
+	if err != nil {
+		return promotion.Promotion{}, err
 	}
 
-	nextReconciliationAt := claim.ClaimedAt.Add(claim.Interval)
 	claimedRow, err := queries.ClaimPromotionReconciliation(
 		ctx,
 		storedb.ClaimPromotionReconciliationParams{
-			NextReconciliationAt:         databaseTime(nextReconciliationAt),
+			NextReconciliationAt:         databaseTime(*nextExecution.NextReconciliationAt),
 			ClaimedAt:                    databaseTime(claim.ClaimedAt),
 			ID:                           databaseUUID(current.ID),
-			ExpectedNextReconciliationAt: databaseTime(*current.NextReconciliationAt),
+			ExpectedNextReconciliationAt: databaseTime(*current.KargoExecution.NextReconciliationAt),
 		},
 	)
 	if err != nil {
@@ -90,7 +96,7 @@ func (d *Database) ReportPromotionReconciliation(
 	}()
 	queries := d.queries.WithTx(transaction)
 
-	row, err := queries.LockPromotionCreation(ctx, databaseUUID(report.PromotionID))
+	row, err := queries.LockPromotion(ctx, databaseUUID(report.PromotionID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, promotion.ErrPromotionNotFound
 	}
@@ -108,56 +114,58 @@ func (d *Database) ReportPromotionReconciliation(
 	if current.ExternalPromotionID != report.KargoName {
 		return promotion.Promotion{}, promotion.ErrReconciliationConflict
 	}
-
-	updated := current
-	if current.KargoPromotionUID == nil {
-		if current.Source != promotion.SourceKargo || current.KargoOutcome != nil {
-			return promotion.Promotion{}, promotion.ErrReconciliationConflict
-		}
-		kargoUID := report.KargoUID
-		updatedRow, updateErr := queries.BindKargoPromotionReconciliationIdentity(
-			ctx,
-			storedb.BindKargoPromotionReconciliationIdentityParams{
-				KargoPromotionUid: &kargoUID,
-				ObservedAt:        databaseTime(report.ObservedAt),
-				ID:                databaseUUID(report.PromotionID),
-			},
-		)
-		if updateErr != nil {
-			return promotion.Promotion{}, fmt.Errorf("bind Kargo Promotion reconciliation identity: %w", updateErr)
-		}
-		updated, err = promotionFromRow(updatedRow)
-		if err != nil {
-			return promotion.Promotion{}, err
-		}
-	} else if *current.KargoPromotionUID != report.KargoUID {
-		return promotion.Promotion{}, promotion.ErrReconciliationConflict
+	transition, err := promotion.TransitionReconciliationReport(current, report)
+	if err != nil {
+		return promotion.Promotion{}, err
 	}
 
-	if report.Phase != nil {
-		if updated.KargoOutcome != nil {
-			if updated.KargoOutcome.Phase != *report.Phase {
-				return promotion.Promotion{}, promotion.ErrReconciliationConflict
-			}
-		} else {
-			phase := string(*report.Phase)
-			updatedRow, updateErr := queries.RecordTerminalKargoPromotionOutcome(
-				ctx,
-				storedb.RecordTerminalKargoPromotionOutcomeParams{
-					KargoOutcomePhase:      &phase,
-					KargoOutcomeObservedAt: databaseTime(report.ObservedAt),
-					KargoOutcomeDiagnostic: report.Diagnostic,
-					ID:                     databaseUUID(report.PromotionID),
-				},
-			)
-			if updateErr != nil {
-				return promotion.Promotion{}, fmt.Errorf("record terminal Kargo Promotion outcome: %w", updateErr)
-			}
-			updated, err = promotionFromRow(updatedRow)
-			if err != nil {
-				return promotion.Promotion{}, err
-			}
+	if !transition.IdentityBound && !transition.OutcomeRecorded {
+		if err := transaction.Commit(ctx); err != nil {
+			return promotion.Promotion{}, fmt.Errorf("commit repeated Promotion reconciliation report: %w", err)
 		}
+		return current, nil
+	}
+
+	var outcomePhase *string
+	var outcomeObservedAt *time.Time
+	var outcomeDiagnostic *string
+	if transition.Promotion.KargoExecution.Outcome != nil {
+		phase := string(transition.Promotion.KargoExecution.Outcome.Phase)
+		outcomePhase = &phase
+		outcomeObservedAt = &transition.Promotion.KargoExecution.Outcome.ObservedAt
+		outcomeDiagnostic = transition.Promotion.KargoExecution.Outcome.Diagnostic
+	}
+	var expectedOutcomePhase *string
+	if current.KargoExecution.Outcome != nil {
+		phase := string(current.KargoExecution.Outcome.Phase)
+		expectedOutcomePhase = &phase
+	}
+	updatedRow, err := queries.UpdatePromotionReconciliation(
+		ctx,
+		storedb.UpdatePromotionReconciliationParams{
+			Status:                    string(transition.Promotion.Lifecycle.State),
+			Message:                   transition.Promotion.Message,
+			KargoPromotionUid:         transition.Promotion.KargoExecution.PromotionUID,
+			NextReconciliationAt:      optionalDatabaseTime(transition.Promotion.KargoExecution.NextReconciliationAt),
+			KargoOutcomePhase:         outcomePhase,
+			KargoOutcomeObservedAt:    optionalDatabaseTime(outcomeObservedAt),
+			KargoOutcomeDiagnostic:    outcomeDiagnostic,
+			UpdatedAt:                 databaseTime(transition.Promotion.UpdatedAt),
+			ID:                        databaseUUID(report.PromotionID),
+			ExpectedStatus:            string(current.Lifecycle.State),
+			ExpectedKargoPromotionUid: current.KargoExecution.PromotionUID,
+			ExpectedKargoOutcomePhase: expectedOutcomePhase,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return promotion.Promotion{}, promotion.ErrReconciliationConflict
+	}
+	if err != nil {
+		return promotion.Promotion{}, fmt.Errorf("update Promotion reconciliation: %w", err)
+	}
+	updated, err := promotionFromRow(updatedRow)
+	if err != nil {
+		return promotion.Promotion{}, err
 	}
 	if err := transaction.Commit(ctx); err != nil {
 		return promotion.Promotion{}, fmt.Errorf("commit Promotion reconciliation report: %w", err)

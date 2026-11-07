@@ -170,13 +170,13 @@ func (c *PreparationCoordinator) DispatchNext(ctx context.Context) (bool, error)
 func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion) error {
 	var err error
 
-	if record.PreparationCatalogRevisionID == nil {
+	if record.Preparation.CatalogRevisionID == nil {
 		record, err = c.reservePreparationRevision(ctx, record)
 		if err != nil {
 			return err
 		}
 	}
-	if record.PreparationRepositoryID == nil || record.PreparationCatalogRevisionID == nil {
+	if record.Preparation.RepositoryID == nil || record.Preparation.CatalogRevisionID == nil {
 		return fmt.Errorf("%w: preparation catalog revision was not reserved", ErrInvalid)
 	}
 
@@ -189,7 +189,7 @@ func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion)
 		return ErrIntegrationNotFound
 	}
 	idempotencyKey := record.ID.String()
-	revisionID := *record.PreparationCatalogRevisionID
+	revisionID := *record.Preparation.CatalogRevisionID
 	actor := productidentity.Principal{
 		ID:          record.RequestedBySnapshot.PrincipalID,
 		Kind:        record.RequestedBySnapshot.Kind,
@@ -197,7 +197,7 @@ func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion)
 	}
 	target, err := c.catalogs.GetActiveTargetByName(
 		ctx,
-		*record.PreparationRepositoryID,
+		*record.Preparation.RepositoryID,
 		integration.Preparation.Target,
 	)
 	if errors.Is(err, catalog.ErrTargetNotFound) {
@@ -229,7 +229,7 @@ func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion)
 		"Promotion preparation Run created",
 		"promotion", record.ID,
 		"run", created.ID,
-		"repository", *record.PreparationRepositoryID,
+		"repository", *record.Preparation.RepositoryID,
 		"catalog_revision", revisionID,
 	)
 
@@ -297,13 +297,13 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 }
 
 func (c *PreparationCoordinator) reconcile(ctx context.Context, record Promotion) error {
-	if record.PreparationRunID == nil {
+	if record.Preparation.RunID == nil {
 		return fmt.Errorf("%w: finished preparation has no Run", ErrInvalid)
 	}
 
-	preparationRun, err := c.runs.GetRun(ctx, *record.PreparationRunID)
+	preparationRun, err := c.runs.GetRun(ctx, *record.Preparation.RunID)
 	if err != nil {
-		return fmt.Errorf("get preparation Run %s: %w", *record.PreparationRunID, err)
+		return fmt.Errorf("get preparation Run %s: %w", *record.Preparation.RunID, err)
 	}
 	completedAt := c.now().UTC()
 	if preparationRun.Phase != run.PhaseFinished || preparationRun.Outcome == nil {
@@ -410,10 +410,10 @@ func (c *PreparationCoordinator) reviewRequestedEvent(record Promotion, occurred
 	}
 
 	facts := []notification.Fact{{Label: "Repository", Value: stage.RepositoryName}}
-	if record.ExpiresAt != nil {
+	if record.Lifecycle.ExpiresAt != nil {
 		facts = append(facts, notification.Fact{
 			Label: "Expires",
-			Value: record.ExpiresAt.UTC().Format(time.RFC3339),
+			Value: record.Lifecycle.ExpiresAt.UTC().Format(time.RFC3339),
 		})
 	}
 
@@ -430,7 +430,7 @@ func (c *PreparationCoordinator) reviewRequestedEvent(record Promotion, occurred
 			Label: "Review in Slipramp",
 			Path:  "/promotions/" + record.ID.String(),
 		},
-		ExpiresAt: record.ExpiresAt,
+		ExpiresAt: record.Lifecycle.ExpiresAt,
 		CreatedAt: occurredAt,
 	})
 	if err != nil {

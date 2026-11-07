@@ -49,8 +49,8 @@ func (s *recordingPreparationStore) ReservePromotionPreparationRevision(
 ) (Promotion, error) {
 	s.reservedRepositoryID = repositoryID
 	s.reservedRevisionID = revisionID
-	s.record.PreparationRepositoryID = &repositoryID
-	s.record.PreparationCatalogRevisionID = &revisionID
+	s.record.Preparation.RepositoryID = &repositoryID
+	s.record.Preparation.CatalogRevisionID = &revisionID
 
 	return s.record, nil
 }
@@ -253,8 +253,8 @@ func TestPreparationDispatchReusesReservedRevisionAfterRestart(t *testing.T) {
 	record := preparingPromotion()
 	repositoryID := uuid.New()
 	revisionID := uuid.New()
-	record.PreparationRepositoryID = &repositoryID
-	record.PreparationCatalogRevisionID = &revisionID
+	record.Preparation.RepositoryID = &repositoryID
+	record.Preparation.CatalogRevisionID = &revisionID
 	store := &recordingPreparationStore{record: record}
 	catalogs := &recordingPreparationCatalogs{err: errors.New("must not resolve active catalog")}
 	runs := &recordingPreparationRuns{created: run.Run{ID: uuid.New()}}
@@ -286,8 +286,8 @@ func TestPreparationDispatchRecordsSafeFailureAndOnlyStopsOnStorageFailure(t *te
 			record := preparingPromotion()
 			repositoryID := uuid.New()
 			revisionID := uuid.New()
-			record.PreparationRepositoryID = &repositoryID
-			record.PreparationCatalogRevisionID = &revisionID
+			record.Preparation.RepositoryID = &repositoryID
+			record.Preparation.CatalogRevisionID = &revisionID
 			store := &recordingPreparationStore{record: record}
 			cause := errors.New("postgres://user:secret@database")
 			if permanent {
@@ -316,7 +316,7 @@ func TestPreparationReconciliationIsolatesReadFailuresWithoutCreatingAnotherRun(
 
 	record := preparingPromotion()
 	runID := uuid.New()
-	record.PreparationRunID = &runID
+	record.Preparation.RunID = &runID
 	store := &recordingPreparationStore{record: record}
 	succeeded := run.OutcomeSucceeded
 	runs := &recordingPreparationRuns{loaded: run.Run{ID: runID, Phase: run.PhaseFinished, Outcome: &succeeded}}
@@ -404,7 +404,7 @@ func TestPreparationReconciliation(t *testing.T) {
 
 			record := preparingPromotion()
 			runID := uuid.New()
-			record.PreparationRunID = &runID
+			record.Preparation.RunID = &runID
 			store := &recordingPreparationStore{record: record}
 			runs := &recordingPreparationRuns{
 				loaded: run.Run{
@@ -442,9 +442,9 @@ func TestPreparationReconciliationPlansReviewRequestedNotification(t *testing.T)
 
 	record := preparingPromotion()
 	runID := uuid.New()
-	record.PreparationRunID = &runID
+	record.Preparation.RunID = &runID
 	expiresAt := time.Date(2026, time.October, 31, 18, 0, 0, 0, time.UTC)
-	record.ExpiresAt = &expiresAt
+	record.Lifecycle.ExpiresAt = &expiresAt
 	store := &recordingPreparationStore{record: record}
 	notifications := &recordingPreparationNotifications{}
 	succeeded := run.OutcomeSucceeded
@@ -547,7 +547,7 @@ func preparingPromotion() Promotion {
 		CandidateBranch:        "kargo/promotion/external-dns-01jbe4q8",
 		TargetBranch:           "main",
 		ReviewRequired:         true,
-		Status:                 StatusPreparing,
+		Lifecycle:              PromotionLifecycle{State: LifecyclePreparing},
 		RequestedByPrincipalID: principalID,
 		RequestedBySnapshot: productidentity.ActorSnapshot{
 			PrincipalID: principalID,

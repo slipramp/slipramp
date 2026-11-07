@@ -30,7 +30,7 @@ type CandidateBranchReference struct {
 	RepositoryID      uuid.UUID
 	CandidateBranch   string
 	CandidateRevision string
-	Status            PromotionStatus
+	Status            LifecycleState
 	UpdatedAt         time.Time
 	KargoOutcomeAt    *time.Time
 }
@@ -287,7 +287,7 @@ func classifyCandidateBranch(
 			return candidateBranchDecision{reason: "cleanup disabled for referencing integration"}
 		}
 		if !reference.Status.Terminal() ||
-			(reference.Status == StatusApproved && reference.KargoOutcomeAt == nil) {
+			(reference.Status == LifecycleApproved && reference.KargoOutcomeAt == nil) {
 			return candidateBranchDecision{reason: "referenced by nonterminal Promotion"}
 		}
 	}

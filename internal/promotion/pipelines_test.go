@@ -33,8 +33,8 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 			unconfigured,
 		},
 		promotions: []Promotion{
-			{ID: uuid.New(), StageID: homelabA.ID, Status: StatusPending},
-			{ID: uuid.New(), StageID: homelabA.ID, Status: StatusApproved},
+			{ID: uuid.New(), StageID: homelabA.ID, Lifecycle: PromotionLifecycle{State: LifecyclePending}},
+			{ID: uuid.New(), StageID: homelabA.ID, Lifecycle: PromotionLifecycle{State: LifecycleApproved}},
 		},
 		policies: map[uuid.UUID]StagePolicy{
 			production.ID: {

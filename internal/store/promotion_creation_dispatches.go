@@ -56,7 +56,16 @@ func (d *Database) ClaimPromotionCreation(
 			return promotion.Promotion{}, decodeErr
 		}
 
-		if current.DispatchAttemptCount >= len(claim.RetryDelays) {
+		transition, transitionErr := promotion.TransitionCreationDispatchClaim(
+			current.Source,
+			current.Lifecycle,
+			current.CreationDispatch,
+			claim,
+		)
+		if transitionErr != nil {
+			return promotion.Promotion{}, transitionErr
+		}
+		if transition.Exhausted {
 			message := claim.ExhaustedMessage
 			if _, exhaustErr := queries.ExhaustPromotionCreationDispatch(
 				ctx,
@@ -72,14 +81,13 @@ func (d *Database) ClaimPromotionCreation(
 			continue
 		}
 
-		nextDispatchAt := claim.ClaimedAt.Add(claim.RetryDelays[current.DispatchAttemptCount])
 		claimedRow, claimErr := queries.ClaimPromotionCreationDispatch(
 			ctx,
 			storedb.ClaimPromotionCreationDispatchParams{
-				NextDispatchAt:       databaseTime(nextDispatchAt),
+				NextDispatchAt:       databaseTime(*transition.State.NextAttemptAt),
 				ClaimedAt:            databaseTime(claim.ClaimedAt),
 				ID:                   databaseUUID(current.ID),
-				ExpectedAttemptCount: int32(current.DispatchAttemptCount),
+				ExpectedAttemptCount: int32(current.CreationDispatch.AttemptCount),
 			},
 		)
 		if claimErr != nil {
@@ -114,7 +122,7 @@ func (d *Database) ReportPromotionCreation(
 	}()
 	queries := d.queries.WithTx(transaction)
 
-	row, err := queries.LockPromotionCreation(ctx, databaseUUID(report.PromotionID))
+	row, err := queries.LockPromotion(ctx, databaseUUID(report.PromotionID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return promotion.Promotion{}, promotion.ErrPromotionNotFound
 	}
@@ -129,65 +137,41 @@ func (d *Database) ReportPromotionCreation(
 	if current.Source != promotion.SourceSlipramp || stage.ClusterName != report.ClusterName {
 		return promotion.Promotion{}, promotion.ErrPromotionNotFound
 	}
-	if report.Attempt > current.DispatchAttemptCount {
-		return promotion.Promotion{}, promotion.ErrCreationDispatchConflict
+	transitioned, changed, err := promotion.TransitionCreationDispatchReport(current, report)
+	if err != nil {
+		return promotion.Promotion{}, err
+	}
+	if !changed {
+		if err := transaction.Commit(ctx); err != nil {
+			return promotion.Promotion{}, fmt.Errorf("commit repeated Promotion creation dispatch report: %w", err)
+		}
+		return current, nil
 	}
 
-	updated := current
-	switch report.Result {
-	case promotion.CreationDispatchCreated:
-		if current.KargoPromotionUID != nil &&
-			(*current.KargoPromotionUID != *report.KargoUID || current.ExternalPromotionID != *report.KargoName) {
-			return promotion.Promotion{}, promotion.ErrCreationDispatchConflict
-		}
-		if current.KargoPromotionUID == nil {
-			updatedRow, updateErr := queries.RecordCreatedPromotionDispatch(
-				ctx,
-				storedb.RecordCreatedPromotionDispatchParams{
-					DispatchedAt:      databaseTime(report.ReportedAt),
-					KargoName:         *report.KargoName,
-					KargoPromotionUid: report.KargoUID,
-					ID:                databaseUUID(report.PromotionID),
-				},
-			)
-			if updateErr != nil {
-				return promotion.Promotion{}, fmt.Errorf("record created Kargo Promotion: %w", updateErr)
-			}
-			updated, err = promotionFromRow(updatedRow)
-		}
-	case promotion.CreationDispatchRetryable:
-		if report.Attempt == current.DispatchAttemptCount && current.Status == promotion.StatusCreating &&
-			current.KargoPromotionUID == nil {
-			updatedRow, updateErr := queries.RecordRetryablePromotionDispatch(
-				ctx,
-				storedb.RecordRetryablePromotionDispatchParams{
-					Message:    report.Diagnostic,
-					ReportedAt: databaseTime(report.ReportedAt),
-					ID:         databaseUUID(report.PromotionID),
-				},
-			)
-			if updateErr != nil {
-				return promotion.Promotion{}, fmt.Errorf("record retryable Promotion creation dispatch: %w", updateErr)
-			}
-			updated, err = promotionFromRow(updatedRow)
-		}
-	case promotion.CreationDispatchFailed:
-		if report.Attempt == current.DispatchAttemptCount && current.Status == promotion.StatusCreating &&
-			current.KargoPromotionUID == nil {
-			updatedRow, updateErr := queries.RecordFailedPromotionDispatch(
-				ctx,
-				storedb.RecordFailedPromotionDispatchParams{
-					Message:    report.Diagnostic,
-					ReportedAt: databaseTime(report.ReportedAt),
-					ID:         databaseUUID(report.PromotionID),
-				},
-			)
-			if updateErr != nil {
-				return promotion.Promotion{}, fmt.Errorf("record failed Promotion creation dispatch: %w", updateErr)
-			}
-			updated, err = promotionFromRow(updatedRow)
-		}
+	updatedRow, err := queries.UpdatePromotionCreationDispatch(
+		ctx,
+		storedb.UpdatePromotionCreationDispatchParams{
+			ExternalPromotionID:       transitioned.ExternalPromotionID,
+			Status:                    string(transitioned.Lifecycle.State),
+			Message:                   transitioned.Message,
+			NextDispatchAt:            optionalDatabaseTime(transitioned.CreationDispatch.NextAttemptAt),
+			DispatchedAt:              optionalDatabaseTime(transitioned.CreationDispatch.DispatchedAt),
+			KargoPromotionUid:         transitioned.KargoExecution.PromotionUID,
+			NextReconciliationAt:      optionalDatabaseTime(transitioned.KargoExecution.NextReconciliationAt),
+			UpdatedAt:                 databaseTime(transitioned.UpdatedAt),
+			ID:                        databaseUUID(report.PromotionID),
+			ExpectedStatus:            string(current.Lifecycle.State),
+			ExpectedAttemptCount:      int32(current.CreationDispatch.AttemptCount),
+			ExpectedKargoPromotionUid: current.KargoExecution.PromotionUID,
+		},
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return promotion.Promotion{}, promotion.ErrCreationDispatchConflict
 	}
+	if err != nil {
+		return promotion.Promotion{}, fmt.Errorf("update Promotion creation dispatch: %w", err)
+	}
+	updated, err := promotionFromRow(updatedRow)
 	if err != nil {
 		return promotion.Promotion{}, err
 	}

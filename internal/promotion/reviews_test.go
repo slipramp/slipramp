@@ -99,7 +99,7 @@ func (s *reviewStore) CountPendingPromotionsByStage(
 	s.pendingStageIDs = slices.Clone(stageIDs)
 	counts := make(map[uuid.UUID]int)
 	for _, record := range s.promotions {
-		if record.Status == StatusPending && slices.Contains(stageIDs, record.StageID) {
+		if record.Lifecycle.State == LifecyclePending && slices.Contains(stageIDs, record.StageID) {
 			counts[record.StageID]++
 		}
 	}
@@ -137,11 +137,11 @@ func (s *reviewStore) DecidePromotion(
 		if current.ID != record.PromotionID {
 			continue
 		}
-		if current.Status != StatusPending {
+		if current.Lifecycle.State != LifecyclePending {
 			return Promotion{}, Decision{}, ErrTransitionConflict
 		}
-		current.Status = PromotionStatus(record.Decision)
-		current.DecidedAt = &record.DecidedAt
+		current.Lifecycle.State = LifecycleState(record.Decision)
+		current.Lifecycle.DecidedAt = &record.DecidedAt
 		current.UpdatedAt = record.DecidedAt
 		s.promotions[index] = current
 		s.decisions[record.PromotionID] = record
@@ -159,10 +159,11 @@ func (s *reviewStore) ExpirePendingPromotions(
 	s.expiredAt = at
 	var expired []Promotion
 	for index, record := range s.promotions {
-		if record.Status != StatusPending || record.ExpiresAt == nil || record.ExpiresAt.After(at) {
+		if record.Lifecycle.State != LifecyclePending || record.Lifecycle.ExpiresAt == nil ||
+			record.Lifecycle.ExpiresAt.After(at) {
 			continue
 		}
-		record.Status = StatusExpired
+		record.Lifecycle.State = LifecycleExpired
 		record.UpdatedAt = at
 		s.promotions[index] = record
 		expired = append(expired, record)
@@ -203,7 +204,10 @@ func TestReviewServiceForwardsStagePageAndEvaluatesPoliciesAtOneTime(t *testing.
 				{Stage: defaultPolicy},
 			},
 		},
-		promotions: []Promotion{{ID: uuid.New(), Status: StatusPending, ExpiresAt: &now}},
+		promotions: []Promotion{{
+			ID:        uuid.New(),
+			Lifecycle: PromotionLifecycle{State: LifecyclePending, ExpiresAt: &now},
+		}},
 	}
 	service := NewReviewService(store)
 	clockCalls := 0
@@ -237,7 +241,8 @@ func TestReviewServiceForwardsStagePageAndEvaluatesPoliciesAtOneTime(t *testing.
 		result.Items[2].Policy.UpdatedBy != nil {
 		t.Errorf("expired/default Stage policies = %#v", result.Items[1:])
 	}
-	if clockCalls != 1 || !store.expiredAt.Equal(now) || store.promotions[0].Status != StatusExpired {
+	if clockCalls != 1 || !store.expiredAt.Equal(now) ||
+		store.promotions[0].Lifecycle.State != LifecycleExpired {
 		t.Errorf("evaluation times = %d clock calls, expired at %v, Promotions %#v", clockCalls, store.expiredAt, store.promotions)
 	}
 }
@@ -290,11 +295,10 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 	now := time.Date(2026, time.October, 21, 18, 0, 0, 0, time.UTC)
 	record := Promotion{
 		ID:        uuid.New(),
-		Status:    StatusPending,
-		ExpiresAt: new(now.Add(-time.Minute)),
+		Lifecycle: PromotionLifecycle{State: LifecyclePending, ExpiresAt: new(now.Add(-time.Minute))},
 	}
 	expired := record
-	expired.Status = StatusExpired
+	expired.Lifecycle.State = LifecycleExpired
 	store := &reviewStore{
 		promotions:    []Promotion{record},
 		promotionPage: PromotionReviewPage{Items: []Promotion{expired}, Total: 5},
@@ -304,7 +308,7 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 	filter := PromotionListFilter{
 		RepositoryID: new(uuid.New()),
 		CommitSHA:    "0123456789abcdef0123456789abcdef01234567",
-		Status:       StatusExpired,
+		Status:       LifecycleExpired,
 		Integration:  "prod",
 		StageID:      new(uuid.New()),
 		Cluster:      "colo",
@@ -319,12 +323,13 @@ func TestReviewServiceExpiresBeforeReadingPromotionPage(t *testing.T) {
 		t.Fatalf("ListPromotions() error = %v", err)
 	}
 	if store.promotionCalls != 1 || store.promotionFilter != filter || !store.promotionReadAt.Equal(now) ||
-		store.promotions[0].Status != StatusExpired {
+		store.promotions[0].Lifecycle.State != LifecycleExpired {
 		t.Errorf("Promotion page read = calls %d, filter %#v, expiry time %s",
 			store.promotionCalls, store.promotionFilter, store.promotionReadAt)
 	}
 	if result.Total != 5 || result.Limit != 1 || result.Offset != 2 || len(result.Items) != 1 ||
-		result.Items[0].Promotion.ID != record.ID || result.Items[0].Promotion.Status != StatusExpired {
+		result.Items[0].Promotion.ID != record.ID ||
+		result.Items[0].Promotion.Lifecycle.State != LifecycleExpired {
 		t.Errorf("ListPromotions() = %#v", result)
 	}
 }
@@ -352,7 +357,7 @@ func TestReviewServiceDecisionUsesAuthenticatedActor(t *testing.T) {
 		policies: map[uuid.UUID]StagePolicy{},
 		promotions: []Promotion{{
 			ID:        promotionID,
-			Status:    StatusPending,
+			Lifecycle: PromotionLifecycle{State: LifecyclePending},
 			CreatedAt: now.Add(-time.Hour),
 			UpdatedAt: now.Add(-time.Hour),
 		}},
@@ -374,7 +379,7 @@ func TestReviewServiceDecisionUsesAuthenticatedActor(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decide() error = %v", err)
 	}
-	if review.Promotion.Status != StatusApproved || review.Decision == nil ||
+	if review.Promotion.Lifecycle.State != LifecycleApproved || review.Decision == nil ||
 		review.Decision.DecidedByPrincipalID != principal.ID ||
 		review.Decision.DecidedBySnapshot.DisplayName != principal.DisplayName {
 		t.Errorf("Decide() = %#v", review)

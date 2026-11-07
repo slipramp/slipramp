@@ -84,7 +84,7 @@ func (s *ReconciliationService) Next(
 		Project:     stage.Project,
 		Stage:       stage.Name,
 		KargoName:   record.ExternalPromotionID,
-		KargoUID:    record.KargoPromotionUID,
+		KargoUID:    record.KargoExecution.PromotionUID,
 	}
 	if err := command.Validate(); err != nil {
 		return ReconciliationCommand{}, err

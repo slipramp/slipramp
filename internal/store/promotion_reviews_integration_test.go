@@ -84,7 +84,7 @@ WHERE id = $1`, fixture.stage.ID, createdAt.Add(6*time.Minute)); err != nil {
 		{name: "empty page retains total", filter: promotion.PromotionListFilter{Limit: 2, Offset: 1 << 31}, total: 5},
 		{
 			name: "pending Stage", total: 2, ids: tiedIDs,
-			filter: promotion.PromotionListFilter{Status: promotion.StatusPending, StageID: &fixture.stage.ID, Limit: 10},
+			filter: promotion.PromotionListFilter{Status: promotion.LifecyclePending, StageID: &fixture.stage.ID, Limit: 10},
 		},
 		{
 			name: "historical Stage facts", total: 4, ids: baseIDs,

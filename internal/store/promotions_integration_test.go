@@ -28,9 +28,9 @@ func TestAcceptPromotionRequestIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AcceptPromotionRequest() automatic error = %v", err)
 	}
-	if automatic.ID != acceptance.ID || automatic.Status != promotion.StatusApproved ||
+	if automatic.ID != acceptance.ID || automatic.Lifecycle.State != promotion.LifecycleApproved ||
 		automatic.ReviewRequired || automatic.RepositoryID != fixture.repositoryID ||
-		automatic.PreparationRunID != nil {
+		automatic.Preparation.RunID != nil {
 		t.Errorf("automatic Promotion = %#v", automatic)
 	}
 	var storedSnapshotShape bool
@@ -96,8 +96,8 @@ FROM promotions WHERE id = $1`, automatic.ID).Scan(&storedSnapshotShape); err !=
 	if err != nil {
 		t.Fatalf("AcceptPromotionRequest() guarded error = %v", err)
 	}
-	if guarded.Status != promotion.StatusPreparing || !guarded.ReviewRequired || guarded.ExpiresAt == nil ||
-		!guarded.ExpiresAt.Equal(guardedAcceptance.AcceptedAt.Add(8*24*time.Hour)) {
+	if guarded.Lifecycle.State != promotion.LifecyclePreparing || !guarded.ReviewRequired || guarded.Lifecycle.ExpiresAt == nil ||
+		!guarded.Lifecycle.ExpiresAt.Equal(guardedAcceptance.AcceptedAt.Add(8*24*time.Hour)) {
 		t.Errorf("guarded Promotion = %#v", guarded)
 	}
 	stageSnapshot := guarded.StageSnapshot
@@ -192,11 +192,11 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateOperatorPromotion() error = %v", err)
 	}
-	if record.Source != promotion.SourceSlipramp || record.Status != promotion.StatusCreating ||
+	if record.Source != promotion.SourceSlipramp || record.Lifecycle.State != promotion.LifecycleCreating ||
 		record.ExternalPromotionID != fixture.stage.Name+"-slipramp-"+record.ID.String() || record.SourceStageID == nil ||
 		*record.SourceStageID != fixture.stage.ID || record.RequestDigest != (promotion.RequestDigest{}) ||
 		record.BaseRevision != "" || record.CandidateRevision != "" || record.CandidateBranch != "" ||
-		record.NextDispatchAt == nil || !record.NextDispatchAt.Equal(acceptedAt) || !record.ReviewRequired ||
+		record.CreationDispatch.NextAttemptAt == nil || !record.CreationDispatch.NextAttemptAt.Equal(acceptedAt) || !record.ReviewRequired ||
 		record.PolicySnapshot.EffectiveMode != promotion.PolicyModeReviewRequired ||
 		record.PolicySnapshot.ExpiresAt == nil || !record.PolicySnapshot.ExpiresAt.Equal(policyExpiresAt) {
 		t.Errorf("operator Promotion = %#v", record)
@@ -207,7 +207,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 	}
 
 	loaded, err := fixture.database.GetPromotion(fixture.ctx, record.ID)
-	if err != nil || loaded.Source != promotion.SourceSlipramp || loaded.Status != promotion.StatusCreating ||
+	if err != nil || loaded.Source != promotion.SourceSlipramp || loaded.Lifecycle.State != promotion.LifecycleCreating ||
 		loaded.SelectedFreightSnapshot == nil || loaded.SelectedFreightSnapshot.Name != "freight-42" ||
 		loaded.StageSnapshot.SuccessfulRenderAcknowledgement == nil ||
 		loaded.StageSnapshot.SuccessfulRenderAcknowledgement.SourceRevision != strings.Repeat("a", 40) {
@@ -331,7 +331,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 			ExhaustedMessage: "Promotion creation exhausted its retry budget.",
 		},
 	)
-	if err != nil || claimed.ID != automatic.ID || claimed.DispatchAttemptCount != 1 {
+	if err != nil || claimed.ID != automatic.ID || claimed.CreationDispatch.AttemptCount != 1 {
 		t.Fatalf("claim operator Promotion = %#v, %v", claimed, err)
 	}
 	callbackAt := createdAt.Add(190 * time.Second)
@@ -341,8 +341,8 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 		t.Fatalf("hydrate automatic operator Promotion: %v", err)
 	}
 	if hydrated.ID != automatic.ID || hydrated.Source != promotion.SourceSlipramp ||
-		hydrated.Status != promotion.StatusApproved || hydrated.RequestDigest != callback.RequestDigest ||
-		hydrated.BaseRevision != callback.Request.BaseRevision || hydrated.NextDispatchAt != nil ||
+		hydrated.Lifecycle.State != promotion.LifecycleApproved || hydrated.RequestDigest != callback.RequestDigest ||
+		hydrated.BaseRevision != callback.Request.BaseRevision || hydrated.CreationDispatch.NextAttemptAt != nil ||
 		hydrated.RequestedByPrincipalID != operator.ID || hydrated.RequestedBySnapshot != operatorActor {
 		t.Errorf("hydrated automatic Promotion = %#v", hydrated)
 	}
@@ -371,15 +371,15 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 		promotion.CreationDispatchReport{
 			PromotionID: automatic.ID,
 			ClusterName: fixture.stage.ClusterName,
-			Attempt:     claimed.DispatchAttemptCount,
+			Attempt:     claimed.CreationDispatch.AttemptCount,
 			Result:      promotion.CreationDispatchCreated,
 			KargoName:   &kargoName,
 			KargoUID:    &uid,
 			ReportedAt:  createdAt.Add(200 * time.Second),
 		},
 	)
-	if err != nil || reported.Status != promotion.StatusApproved || reported.KargoPromotionUID == nil ||
-		*reported.KargoPromotionUID != uid {
+	if err != nil || reported.Lifecycle.State != promotion.LifecycleApproved || reported.KargoExecution.PromotionUID == nil ||
+		*reported.KargoExecution.PromotionUID != uid {
 		t.Errorf("late successful dispatch report = %#v, %v", reported, err)
 	}
 
@@ -387,7 +387,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	repeated.ID = uuid.New()
 	repeated.AcceptedAt = createdAt.Add(210 * time.Second)
 	recovered, err := fixture.database.AcceptPromotionRequest(fixture.ctx, repeated)
-	if err != nil || recovered.ID != automatic.ID || recovered.KargoPromotionUID == nil {
+	if err != nil || recovered.ID != automatic.ID || recovered.KargoExecution.PromotionUID == nil {
 		t.Errorf("repeated hydrated callback = %#v, %v", recovered, err)
 	}
 	conflicting := callback
@@ -422,7 +422,7 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 		t.Errorf("mismatched Stage callback error = %v", err)
 	}
 	unchanged, err := fixture.database.GetPromotion(fixture.ctx, mismatched.ID)
-	if err != nil || unchanged.Status != promotion.StatusCreating ||
+	if err != nil || unchanged.Lifecycle.State != promotion.LifecycleCreating ||
 		unchanged.RequestDigest != (promotion.RequestDigest{}) {
 		t.Errorf("mismatched callback changed Promotion = %#v, %v", unchanged, err)
 	}
@@ -449,8 +449,8 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	firstCallback := <-callbackResults
 	secondCallback := <-callbackResults
 	if firstCallback.err != nil || secondCallback.err != nil || firstCallback.record.ID != concurrent.ID ||
-		secondCallback.record.ID != concurrent.ID || firstCallback.record.Status != promotion.StatusApproved ||
-		secondCallback.record.Status != promotion.StatusApproved {
+		secondCallback.record.ID != concurrent.ID || firstCallback.record.Lifecycle.State != promotion.LifecycleApproved ||
+		secondCallback.record.Lifecycle.State != promotion.LifecycleApproved {
 		t.Errorf("concurrent callbacks = %#v and %#v", firstCallback, secondCallback)
 	}
 
@@ -475,9 +475,9 @@ func TestHydrateOperatorPromotionRequestIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("hydrate guarded operator Promotion: %v", err)
 	}
-	if guarded.Status != promotion.StatusPreparing || !guarded.ReviewRequired || guarded.ExpiresAt == nil ||
-		!guarded.ExpiresAt.Equal(guardedCreatedAt.Add(8*24*time.Hour)) ||
-		guarded.RequestedByPrincipalID != operator.ID || guarded.NextDispatchAt != nil {
+	if guarded.Lifecycle.State != promotion.LifecyclePreparing || !guarded.ReviewRequired || guarded.Lifecycle.ExpiresAt == nil ||
+		!guarded.Lifecycle.ExpiresAt.Equal(guardedCreatedAt.Add(8*24*time.Hour)) ||
+		guarded.RequestedByPrincipalID != operator.ID || guarded.CreationDispatch.NextAttemptAt != nil {
 		t.Errorf("hydrated guarded Promotion = %#v", guarded)
 	}
 }
@@ -590,7 +590,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	}
 	runID := preparationRun.ID
 	promotionRecord, err = database.GetPromotion(ctx, promotionRecord.ID)
-	if err != nil || promotionRecord.PreparationRunID == nil || *promotionRecord.PreparationRunID != runID {
+	if err != nil || promotionRecord.Preparation.RunID == nil || *promotionRecord.Preparation.RunID != runID {
 		t.Fatalf("atomically linked preparation Run = %#v, %v", promotionRecord, err)
 	}
 	gitArtifactID := createPromotionArtifact(
@@ -622,7 +622,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("complete Promotion preparation: %v", err)
 	}
-	if promotionRecord.Status != promotion.StatusPending {
+	if promotionRecord.Lifecycle.State != promotion.LifecyclePending {
 		t.Errorf("prepared Promotion = %#v", promotionRecord)
 	}
 	if _, err := database.CancelRun(ctx, runID, createdAt.Add(7*time.Minute), nil); err != nil {
@@ -669,7 +669,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 		"Argo CD diff failed",
 		createdAt.Add(8*time.Minute+3*time.Second),
 	)
-	if err != nil || failed.Status != promotion.StatusError {
+	if err != nil || failed.Lifecycle.State != promotion.LifecycleError {
 		t.Errorf("FailPromotionPreparation() = %#v, %v", failed, err)
 	}
 	comment := "Validated the RBAC migration"
@@ -685,7 +685,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecidePromotion() error = %v", err)
 	}
-	if decided.Status != promotion.StatusApproved || storedDecision.Decision != promotion.DecisionApproved {
+	if decided.Lifecycle.State != promotion.LifecycleApproved || storedDecision.Decision != promotion.DecisionApproved {
 		t.Errorf("decision result = %#v, %#v", decided, storedDecision)
 	}
 	expired, err = database.ExpireArtifacts(ctx, createdAt.Add(24*time.Hour), 10)
@@ -697,7 +697,7 @@ func TestPromotionLifecycleIntegration(t *testing.T) {
 	}
 
 	repeated, _, err := database.DecidePromotion(ctx, decision)
-	if err != nil || repeated.Status != promotion.StatusApproved {
+	if err != nil || repeated.Lifecycle.State != promotion.LifecycleApproved {
 		t.Errorf("repeated DecidePromotion() = %#v, %v", repeated, err)
 	}
 	conflictingDecision := decision
@@ -732,7 +732,7 @@ func TestPromotionPreparationCompletionEnqueuesRoutedNotificationAndKeepsInboxIn
 		preparation.completedAt,
 		plan,
 	)
-	if err != nil || pending.Status != promotion.StatusPending {
+	if err != nil || pending.Lifecycle.State != promotion.LifecyclePending {
 		t.Fatalf("CompletePromotionPreparation() = %#v, %v", pending, err)
 	}
 	page, err := service.ListDeliveries(fixture.ctx, notification.DeliveryHistoryFilter{Limit: 25})
@@ -790,7 +790,7 @@ func TestPromotionPreparationCompletionEnqueuesRoutedNotificationAndKeepsInboxIn
 		unroutedPreparation.completedAt,
 		unroutedPlan,
 	)
-	if err != nil || pending.Status != promotion.StatusPending {
+	if err != nil || pending.Lifecycle.State != promotion.LifecyclePending {
 		t.Fatalf("unrouted CompletePromotionPreparation() = %#v, %v", pending, err)
 	}
 	unroutedPending := pending
@@ -892,7 +892,7 @@ func TestPromotionPreparationNotificationFailureRollsBackTransitionIntegration(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Status != promotion.StatusPreparing || stored.PreparationCompletedAt != nil {
+	if stored.Lifecycle.State != promotion.LifecyclePreparing || stored.Preparation.CompletedAt != nil {
 		t.Fatalf("Promotion after notification rollback = %#v", stored)
 	}
 	var eventCount, deliveryCount int
@@ -928,7 +928,7 @@ func promotionReviewNotification(
 			Label: "Review in Slipramp",
 			Path:  "/promotions/" + record.ID.String(),
 		},
-		ExpiresAt: record.ExpiresAt,
+		ExpiresAt: record.Lifecycle.ExpiresAt,
 		CreatedAt: occurredAt,
 	})
 	if err != nil {
@@ -947,7 +947,7 @@ func TestPromotionDecisionAtExpiryPersistsExpiredStateIntegration(t *testing.T) 
 		"expiry-race-01jbe4q8",
 		createdAt.Add(2*time.Minute),
 	)
-	if pending.ExpiresAt == nil {
+	if pending.Lifecycle.ExpiresAt == nil {
 		t.Fatal("prepared Promotion expiry is nil")
 	}
 
@@ -956,7 +956,7 @@ func TestPromotionDecisionAtExpiryPersistsExpiredStateIntegration(t *testing.T) 
 		Decision:             promotion.DecisionApproved,
 		DecidedByPrincipalID: fixture.principal.ID,
 		DecidedBySnapshot:    fixture.actor,
-		DecidedAt:            *pending.ExpiresAt,
+		DecidedAt:            *pending.Lifecycle.ExpiresAt,
 	}
 	if _, _, err := fixture.database.DecidePromotion(
 		fixture.ctx,
@@ -969,7 +969,7 @@ func TestPromotionDecisionAtExpiryPersistsExpiredStateIntegration(t *testing.T) 
 	if err != nil {
 		t.Fatalf("GetPromotion() error = %v", err)
 	}
-	if stored.Status != promotion.StatusExpired || stored.Message == nil ||
+	if stored.Lifecycle.State != promotion.LifecycleExpired || stored.Message == nil ||
 		!strings.Contains(*stored.Message, "expired") {
 		t.Errorf("expired Promotion = %#v", stored)
 	}
@@ -986,15 +986,15 @@ func TestRepeatedPromotionRequestExpiresOnlyMatchingReviewIntegration(t *testing
 	fixture := newPromotionIntegrationFixture(t, createdAt)
 	pending := preparePromotionForReview(t, fixture, "callback-expiry", createdAt.Add(2*time.Minute))
 	unrelated := preparePromotionForReview(t, fixture, "unrelated-expiry", pending.CreatedAt)
-	if pending.ExpiresAt == nil || unrelated.ExpiresAt == nil || !pending.ExpiresAt.Equal(*unrelated.ExpiresAt) {
+	if pending.Lifecycle.ExpiresAt == nil || unrelated.Lifecycle.ExpiresAt == nil || !pending.Lifecycle.ExpiresAt.Equal(*unrelated.Lifecycle.ExpiresAt) {
 		t.Fatal("prepared Promotions must share a review deadline")
 	}
 
-	callback := fixture.acceptance(t, fixture.request(pending.ExternalPromotionID), *pending.ExpiresAt)
+	callback := fixture.acceptance(t, fixture.request(pending.ExternalPromotionID), *pending.Lifecycle.ExpiresAt)
 	beforeDeadline := callback
-	beforeDeadline.AcceptedAt = pending.ExpiresAt.Add(-time.Microsecond)
+	beforeDeadline.AcceptedAt = pending.Lifecycle.ExpiresAt.Add(-time.Microsecond)
 	unchanged, err := fixture.database.AcceptPromotionRequest(fixture.ctx, beforeDeadline)
-	if err != nil || unchanged.ID != pending.ID || unchanged.Status != promotion.StatusPending ||
+	if err != nil || unchanged.ID != pending.ID || unchanged.Lifecycle.State != promotion.LifecyclePending ||
 		!unchanged.UpdatedAt.Equal(pending.UpdatedAt) || unchanged.Message != nil {
 		t.Fatalf("callback before expiry = %#v, %v", unchanged, err)
 	}
@@ -1011,7 +1011,7 @@ func TestRepeatedPromotionRequestExpiresOnlyMatchingReviewIntegration(t *testing
 		t.Fatalf("conflicting callback at expiry error = %v", err)
 	}
 	unchanged, err = fixture.database.GetPromotion(fixture.ctx, pending.ID)
-	if err != nil || unchanged.Status != promotion.StatusPending ||
+	if err != nil || unchanged.Lifecycle.State != promotion.LifecyclePending ||
 		!unchanged.UpdatedAt.Equal(pending.UpdatedAt) || unchanged.Message != nil {
 		t.Fatalf("conflicting callback changed Promotion = %#v, %v", unchanged, err)
 	}
@@ -1020,20 +1020,20 @@ func TestRepeatedPromotionRequestExpiresOnlyMatchingReviewIntegration(t *testing
 		name string
 		at   time.Time
 	}{
-		{name: "exact deadline", at: *pending.ExpiresAt},
-		{name: "repeated expired callback", at: pending.ExpiresAt.Add(time.Minute)},
+		{name: "exact deadline", at: *pending.Lifecycle.ExpiresAt},
+		{name: "repeated expired callback", at: pending.Lifecycle.ExpiresAt.Add(time.Minute)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			acceptance := callback
 			acceptance.AcceptedAt = test.at
 			record, err := fixture.database.AcceptPromotionRequest(fixture.ctx, acceptance)
-			if err != nil || record.ID != pending.ID || record.Status != promotion.StatusExpired ||
+			if err != nil || record.ID != pending.ID || record.Lifecycle.State != promotion.LifecycleExpired ||
 				record.Message == nil || *record.Message != "The review window expired before a decision was recorded." ||
-				!record.UpdatedAt.Equal(*pending.ExpiresAt) {
+				!record.UpdatedAt.Equal(*pending.Lifecycle.ExpiresAt) {
 				t.Fatalf("expired callback = %#v, %v", record, err)
 			}
 			stored, err := fixture.database.GetPromotion(fixture.ctx, pending.ID)
-			if err != nil || stored.Status != record.Status || stored.Message == nil ||
+			if err != nil || stored.Lifecycle.State != record.Lifecycle.State || stored.Message == nil ||
 				*stored.Message != *record.Message || !stored.UpdatedAt.Equal(record.UpdatedAt) {
 				t.Errorf("persisted expired Promotion = %#v, %v", stored, err)
 			}
@@ -1041,7 +1041,7 @@ func TestRepeatedPromotionRequestExpiresOnlyMatchingReviewIntegration(t *testing
 	}
 
 	unchanged, err = fixture.database.GetPromotion(fixture.ctx, unrelated.ID)
-	if err != nil || unchanged.Status != promotion.StatusPending ||
+	if err != nil || unchanged.Lifecycle.State != promotion.LifecyclePending ||
 		!unchanged.UpdatedAt.Equal(unrelated.UpdatedAt) || unchanged.Message != nil {
 		t.Errorf("unrelated eligible Promotion changed = %#v, %v", unchanged, err)
 	}
@@ -1107,8 +1107,8 @@ func TestConcurrentPromotionDecisionsRecordOneImmutableResultIntegration(t *test
 	if err != nil {
 		t.Fatalf("GetPromotion() error = %v", err)
 	}
-	if promotion.PromotionStatus(stored.Decision) != current.Status {
-		t.Errorf("decision = %s, Promotion status = %s", stored.Decision, current.Status)
+	if promotion.LifecycleState(stored.Decision) != current.Lifecycle.State {
+		t.Errorf("decision = %s, Promotion status = %s", stored.Decision, current.Lifecycle.State)
 	}
 }
 
@@ -1162,8 +1162,9 @@ func TestConcurrentPromotionApprovalAndTerminalReportPreserveBothFactsIntegratio
 	if err != nil {
 		t.Fatalf("GetPromotionDecision() error = %v", err)
 	}
-	if current.Status != promotion.StatusApproved || decision.Decision != promotion.DecisionApproved ||
-		current.KargoOutcome == nil || current.KargoOutcome.Phase != phase || current.NextReconciliationAt != nil {
+	if current.Lifecycle.State != promotion.LifecycleApproved || decision.Decision != promotion.DecisionApproved ||
+		current.KargoExecution.Outcome == nil || current.KargoExecution.Outcome.Phase != phase ||
+		current.KargoExecution.NextReconciliationAt != nil {
 		t.Fatalf("approval/report result = Promotion %#v, decision %#v", current, decision)
 	}
 }
@@ -1189,8 +1190,9 @@ func TestPromotionReviewStateSurvivesStoreRestartIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPromotion() after restart error = %v", err)
 	}
-	if review.Promotion.Status != promotion.StatusPending || review.Decision != nil ||
-		review.Promotion.GitDiffArtifactID == nil || review.Promotion.ArgoDiffArtifactID == nil {
+	if review.Promotion.Lifecycle.State != promotion.LifecyclePending || review.Decision != nil ||
+		review.Promotion.Preparation.GitDiffArtifactID == nil ||
+		review.Promotion.Preparation.ArgoDiffArtifactID == nil {
 		t.Errorf("review after restart = %#v", review)
 	}
 	policy, err := reopened.GetPromotionStagePolicy(fixture.ctx, fixture.stage.ID)

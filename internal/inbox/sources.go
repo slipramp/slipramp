@@ -27,7 +27,7 @@ type PromotionState struct {
 	Application     string
 	CandidateBranch string
 	TargetBranch    string
-	Status          promotion.PromotionStatus
+	Status          promotion.LifecycleState
 	Message         *string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time

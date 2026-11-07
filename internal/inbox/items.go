@@ -28,7 +28,7 @@ func runReviewItem(record ActiveRun) Item {
 func promotionItem(record PromotionState) (Item, error) {
 	destination := Destination{Type: DestinationPromotion, ID: record.ID.String()}
 	switch record.Status {
-	case promotion.StatusPending:
+	case promotion.LifecyclePending:
 		title := "Promotion awaits review"
 		if record.StageName != "" {
 			title = fmt.Sprintf("Promotion to %s awaits review", record.StageName)
@@ -48,7 +48,7 @@ func promotionItem(record PromotionState) (Item, error) {
 			ActionLabel: "Review",
 			Destination: destination,
 		}, nil
-	case promotion.StatusError:
+	case promotion.LifecycleError:
 		description := "Slipramp could not prepare the review artifacts."
 		if record.Message != nil {
 			description = *record.Message

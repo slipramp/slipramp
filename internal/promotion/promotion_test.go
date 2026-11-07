@@ -30,21 +30,21 @@ func TestPromotionValidateAutomaticApproval(t *testing.T) {
 
 	promotion := validPromotion()
 	promotion.ReviewRequired = false
-	promotion.Status = StatusApproved
-	promotion.PreparationRepositoryID = nil
-	promotion.PreparationCatalogRevisionID = nil
-	promotion.PreparationRunID = nil
-	promotion.GitDiffArtifactID = nil
-	promotion.ArgoDiffArtifactID = nil
-	promotion.PreparationCompletedAt = nil
+	promotion.Lifecycle.State = LifecycleApproved
+	promotion.Preparation.RepositoryID = nil
+	promotion.Preparation.CatalogRevisionID = nil
+	promotion.Preparation.RunID = nil
+	promotion.Preparation.GitDiffArtifactID = nil
+	promotion.Preparation.ArgoDiffArtifactID = nil
+	promotion.Preparation.CompletedAt = nil
 	nextReconciliationAt := promotion.UpdatedAt
-	promotion.NextReconciliationAt = &nextReconciliationAt
+	promotion.KargoExecution.NextReconciliationAt = &nextReconciliationAt
 
 	if err := promotion.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 
-	promotion.Status = StatusPending
+	promotion.Lifecycle.State = LifecyclePending
 	if err := promotion.Validate(); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("Validate() error = %v, want ErrInvalid", err)
 	}
@@ -63,14 +63,14 @@ func TestPromotionValidateCreatingOperatorPromotion(t *testing.T) {
 	record.BaseRevision = ""
 	record.CandidateRevision = ""
 	record.CandidateBranch = ""
-	record.Status = StatusCreating
-	record.PreparationRepositoryID = nil
-	record.PreparationCatalogRevisionID = nil
-	record.PreparationRunID = nil
-	record.GitDiffArtifactID = nil
-	record.ArgoDiffArtifactID = nil
-	record.PreparationCompletedAt = nil
-	record.NextDispatchAt = &nextDispatchAt
+	record.Lifecycle.State = LifecycleCreating
+	record.Preparation.RepositoryID = nil
+	record.Preparation.CatalogRevisionID = nil
+	record.Preparation.RunID = nil
+	record.Preparation.GitDiffArtifactID = nil
+	record.Preparation.ArgoDiffArtifactID = nil
+	record.Preparation.CompletedAt = nil
+	record.CreationDispatch.NextAttemptAt = &nextDispatchAt
 	record.UpdatedAt = record.CreatedAt
 
 	if err := record.Validate(); err != nil {
@@ -78,19 +78,19 @@ func TestPromotionValidateCreatingOperatorPromotion(t *testing.T) {
 	}
 	dispatchedAt := record.CreatedAt.Add(time.Second)
 	kargoUID := "promotion-uid"
-	record.NextDispatchAt = nil
-	record.DispatchedAt = &dispatchedAt
-	record.KargoPromotionUID = &kargoUID
-	record.NextReconciliationAt = &dispatchedAt
+	record.CreationDispatch.NextAttemptAt = nil
+	record.CreationDispatch.DispatchedAt = &dispatchedAt
+	record.KargoExecution.PromotionUID = &kargoUID
+	record.KargoExecution.NextReconciliationAt = &dispatchedAt
 	record.UpdatedAt = dispatchedAt
 	if err := record.Validate(); err != nil {
 		t.Fatalf("dispatched Validate() error = %v", err)
 	}
-	record.NextDispatchAt = &nextDispatchAt
+	record.CreationDispatch.NextAttemptAt = &nextDispatchAt
 	if err := record.Validate(); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("due and dispatched error = %v, want ErrInvalid", err)
 	}
-	record.NextDispatchAt = nil
+	record.CreationDispatch.NextAttemptAt = nil
 
 	record.SourceStageID = nil
 	if err := record.Validate(); err != nil {
@@ -136,36 +136,40 @@ func validPromotion() Promotion {
 	stage := reviewStage("prod", "colo", "kargo-core", "external-dns-prod", now)
 
 	return Promotion{
-		ID:                           uuid.New(),
-		Source:                       SourceKargo,
-		Integration:                  "prod",
-		ExternalPromotionID:          "external-dns-01jbe4q8",
-		RequestDigest:                RequestDigest{1},
-		StageID:                      stage.ID,
-		StageSnapshot:                stage.PromotionSnapshot(),
-		RepositoryID:                 uuid.New(),
-		RepositorySnapshot:           PromotionRepositorySnapshot{Name: "ops", CloneURL: "https://example.com/ops.git", Branch: "main"},
-		BaseRevision:                 "8b7f1d217a6b0000000000000000000000000000",
-		CandidateRevision:            "f4cb21a88e1d0000000000000000000000000000",
-		CandidateBranch:              "kargo/promotion/external-dns-01jbe4q8",
-		TargetBranch:                 "main",
-		PolicySnapshot:               PromotionPolicySnapshot{ConfiguredMode: PolicyModeReviewRequired, EffectiveMode: PolicyModeReviewRequired},
-		ReviewRequired:               true,
-		Status:                       StatusPending,
-		PreparationRepositoryID:      &preparationRepositoryID,
-		PreparationCatalogRevisionID: &preparationRevisionID,
-		PreparationRunID:             &runID,
-		GitDiffArtifactID:            &gitArtifactID,
-		ArgoDiffArtifactID:           &argoArtifactID,
-		RequestedByPrincipalID:       principalID,
+		ID:                  uuid.New(),
+		Source:              SourceKargo,
+		Integration:         "prod",
+		ExternalPromotionID: "external-dns-01jbe4q8",
+		RequestDigest:       RequestDigest{1},
+		StageID:             stage.ID,
+		StageSnapshot:       stage.PromotionSnapshot(),
+		RepositoryID:        uuid.New(),
+		RepositorySnapshot:  PromotionRepositorySnapshot{Name: "ops", CloneURL: "https://example.com/ops.git", Branch: "main"},
+		BaseRevision:        "8b7f1d217a6b0000000000000000000000000000",
+		CandidateRevision:   "f4cb21a88e1d0000000000000000000000000000",
+		CandidateBranch:     "kargo/promotion/external-dns-01jbe4q8",
+		TargetBranch:        "main",
+		PolicySnapshot:      PromotionPolicySnapshot{ConfiguredMode: PolicyModeReviewRequired, EffectiveMode: PolicyModeReviewRequired},
+		ReviewRequired:      true,
+		Lifecycle: PromotionLifecycle{
+			State:     LifecyclePending,
+			ExpiresAt: new(now.Add(8 * 24 * time.Hour)),
+		},
+		Preparation: PreparationState{
+			RepositoryID:       &preparationRepositoryID,
+			CatalogRevisionID:  &preparationRevisionID,
+			RunID:              &runID,
+			GitDiffArtifactID:  &gitArtifactID,
+			ArgoDiffArtifactID: &argoArtifactID,
+			CompletedAt:        new(now.Add(time.Minute)),
+		},
+		RequestedByPrincipalID: principalID,
 		RequestedBySnapshot: productidentity.ActorSnapshot{
 			PrincipalID: principalID,
 			Kind:        productidentity.KindServiceAccount,
 			DisplayName: "Kargo production",
 		},
-		CreatedAt:              now,
-		PreparationCompletedAt: new(now.Add(time.Minute)),
-		ExpiresAt:              new(now.Add(8 * 24 * time.Hour)),
-		UpdatedAt:              now.Add(time.Minute),
+		CreatedAt: now,
+		UpdatedAt: now.Add(time.Minute),
 	}
 }

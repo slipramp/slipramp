@@ -25,9 +25,9 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first ClaimPromotionCreation() error = %v", err)
 	}
-	if claimed.ID != record.ID || claimed.DispatchAttemptCount != 1 ||
-		claimed.LastDispatchAt == nil || !claimed.LastDispatchAt.Equal(record.CreatedAt) ||
-		claimed.NextDispatchAt == nil || !claimed.NextDispatchAt.Equal(record.CreatedAt.Add(delays[0])) {
+	if claimed.ID != record.ID || claimed.CreationDispatch.AttemptCount != 1 ||
+		claimed.CreationDispatch.LastAttemptAt == nil || !claimed.CreationDispatch.LastAttemptAt.Equal(record.CreatedAt) ||
+		claimed.CreationDispatch.NextAttemptAt == nil || !claimed.CreationDispatch.NextAttemptAt.Equal(record.CreatedAt.Add(delays[0])) {
 		t.Errorf("first dispatch claim = %#v", claimed)
 	}
 	if _, err := fixture.database.ClaimPromotionCreation(fixture.ctx, promotion.CreationDispatchClaim{
@@ -52,7 +52,7 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 		t.Fatalf("retryable ReportPromotionCreation() error = %v", err)
 	}
 	if retrying.Message == nil || *retrying.Message != diagnostic ||
-		retrying.NextDispatchAt == nil || !retrying.NextDispatchAt.Equal(record.CreatedAt.Add(delays[0])) {
+		retrying.CreationDispatch.NextAttemptAt == nil || !retrying.CreationDispatch.NextAttemptAt.Equal(record.CreatedAt.Add(delays[0])) {
 		t.Errorf("retryable dispatch = %#v", retrying)
 	}
 
@@ -65,8 +65,8 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second ClaimPromotionCreation() error = %v", err)
 	}
-	if claimed.DispatchAttemptCount != 2 || claimed.NextDispatchAt == nil ||
-		!claimed.NextDispatchAt.Equal(record.CreatedAt.Add(delays[0]+delays[1])) {
+	if claimed.CreationDispatch.AttemptCount != 2 || claimed.CreationDispatch.NextAttemptAt == nil ||
+		!claimed.CreationDispatch.NextAttemptAt.Equal(record.CreatedAt.Add(delays[0]+delays[1])) {
 		t.Errorf("second dispatch claim = %#v", claimed)
 	}
 	staleDiagnostic := "late failure from attempt one"
@@ -81,7 +81,7 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stale ReportPromotionCreation() error = %v", err)
 	}
-	if stale.Status != promotion.StatusCreating || stale.DispatchAttemptCount != 2 {
+	if stale.Lifecycle.State != promotion.LifecycleCreating || stale.CreationDispatch.AttemptCount != 2 {
 		t.Errorf("stale dispatch report changed Promotion = %#v", stale)
 	}
 
@@ -100,10 +100,10 @@ func TestPromotionCreationDispatchLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("created ReportPromotionCreation() error = %v", err)
 	}
-	if dispatched.Status != promotion.StatusCreating || dispatched.NextDispatchAt != nil ||
+	if dispatched.Lifecycle.State != promotion.LifecycleCreating || dispatched.CreationDispatch.NextAttemptAt != nil ||
 		dispatched.ExternalPromotionID != name ||
-		dispatched.KargoPromotionUID == nil || *dispatched.KargoPromotionUID != uid ||
-		dispatched.DispatchedAt == nil || !dispatched.DispatchedAt.Equal(dispatchedAt) {
+		dispatched.KargoExecution.PromotionUID == nil || *dispatched.KargoExecution.PromotionUID != uid ||
+		dispatched.CreationDispatch.DispatchedAt == nil || !dispatched.CreationDispatch.DispatchedAt.Equal(dispatchedAt) {
 		t.Errorf("created dispatch = %#v", dispatched)
 	}
 	if _, err := fixture.database.ReportPromotionCreation(fixture.ctx, promotion.CreationDispatchReport{
@@ -156,7 +156,7 @@ func TestPromotionCreationDispatchExhaustionDoesNotBlockLaterWorkIntegration(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exhausted.Status != promotion.StatusError || exhausted.NextDispatchAt != nil ||
+	if exhausted.Lifecycle.State != promotion.LifecycleError || exhausted.CreationDispatch.NextAttemptAt != nil ||
 		exhausted.Message == nil || *exhausted.Message != claim.ExhaustedMessage {
 		t.Errorf("exhausted Promotion = %#v", exhausted)
 	}
@@ -171,7 +171,7 @@ func TestPromotionCreationDispatchExhaustionDoesNotBlockLaterWorkIntegration(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if exhausted.Status != promotion.StatusError {
+	if exhausted.Lifecycle.State != promotion.LifecycleError {
 		t.Errorf("single exhausted Promotion = %#v", exhausted)
 	}
 }
@@ -208,7 +208,7 @@ func TestPromotionCreationDispatchRejectsWrongClusterAndTerminallyFailsIntegrati
 	if err != nil {
 		t.Fatal(err)
 	}
-	if failed.Status != promotion.StatusError || failed.NextDispatchAt != nil ||
+	if failed.Lifecycle.State != promotion.LifecycleError || failed.CreationDispatch.NextAttemptAt != nil ||
 		failed.Message == nil || *failed.Message != diagnostic {
 		t.Errorf("failed Promotion = %#v", failed)
 	}
@@ -270,8 +270,8 @@ func TestPromotionReconciliationLifecycleIntegration(t *testing.T) {
 	record := createDispatchablePromotion(t, fixture, createdAt.Add(2*time.Minute))
 	materializedAt := record.CreatedAt.Add(time.Second)
 	materialized := materializeOperatorPromotion(t, fixture, record, materializedAt)
-	if materialized.NextReconciliationAt == nil || !materialized.NextReconciliationAt.Equal(materializedAt) {
-		t.Fatalf("materialized Promotion reconciliation time = %v", materialized.NextReconciliationAt)
+	if materialized.KargoExecution.NextReconciliationAt == nil || !materialized.KargoExecution.NextReconciliationAt.Equal(materializedAt) {
+		t.Fatalf("materialized Promotion reconciliation time = %v", materialized.KargoExecution.NextReconciliationAt)
 	}
 
 	interval := 15 * time.Second
@@ -286,9 +286,9 @@ func TestPromotionReconciliationLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimPromotionReconciliation() error = %v", err)
 	}
-	if claimed.ID != record.ID || claimed.LastReconciliationAt == nil ||
-		!claimed.LastReconciliationAt.Equal(materializedAt) || claimed.NextReconciliationAt == nil ||
-		!claimed.NextReconciliationAt.Equal(materializedAt.Add(interval)) {
+	if claimed.ID != record.ID || claimed.KargoExecution.LastReconciliationAt == nil ||
+		!claimed.KargoExecution.LastReconciliationAt.Equal(materializedAt) || claimed.KargoExecution.NextReconciliationAt == nil ||
+		!claimed.KargoExecution.NextReconciliationAt.Equal(materializedAt.Add(interval)) {
 		t.Errorf("reconciliation claim = %#v", claimed)
 	}
 	if _, err := fixture.database.ClaimPromotionReconciliation(
@@ -315,10 +315,10 @@ func TestPromotionReconciliationLifecycleIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReportPromotionReconciliation() error = %v", err)
 	}
-	if failed.Status != promotion.StatusError || failed.NextReconciliationAt != nil ||
-		failed.Message == nil || *failed.Message != diagnostic || failed.KargoOutcome == nil ||
-		failed.KargoOutcome.Phase != promotion.KargoPhaseFailed ||
-		!failed.KargoOutcome.ObservedAt.Equal(materializedAt.Add(2*time.Second)) {
+	if failed.Lifecycle.State != promotion.LifecycleError || failed.KargoExecution.NextReconciliationAt != nil ||
+		failed.Message == nil || *failed.Message != diagnostic || failed.KargoExecution.Outcome == nil ||
+		failed.KargoExecution.Outcome.Phase != promotion.KargoPhaseFailed ||
+		!failed.KargoExecution.Outcome.ObservedAt.Equal(materializedAt.Add(2*time.Second)) {
 		t.Errorf("terminal reconciliation = %#v", failed)
 	}
 
@@ -331,10 +331,10 @@ func TestPromotionReconciliationLifecycleIntegration(t *testing.T) {
 			materializedAt.Add(3*time.Second),
 		),
 	)
-	if err != nil || repeated.Status != promotion.StatusError || repeated.Message == nil ||
-		*repeated.Message != diagnostic || repeated.KargoOutcome == nil ||
-		repeated.KargoOutcome.Diagnostic == nil || *repeated.KargoOutcome.Diagnostic != diagnostic ||
-		!repeated.KargoOutcome.ObservedAt.Equal(materializedAt.Add(2*time.Second)) {
+	if err != nil || repeated.Lifecycle.State != promotion.LifecycleError || repeated.Message == nil ||
+		*repeated.Message != diagnostic || repeated.KargoExecution.Outcome == nil ||
+		repeated.KargoExecution.Outcome.Diagnostic == nil || *repeated.KargoExecution.Outcome.Diagnostic != diagnostic ||
+		!repeated.KargoExecution.Outcome.ObservedAt.Equal(materializedAt.Add(2*time.Second)) {
 		t.Errorf("repeated reconciliation = %#v, %v", repeated, err)
 	}
 }
@@ -359,9 +359,9 @@ func TestPromotionReconciliationRecordsEveryTerminalPhaseIntegration(t *testing.
 		if err != nil {
 			t.Fatalf("ReportPromotionReconciliation(%s) error = %v", phase, err)
 		}
-		if updated.KargoOutcome == nil || updated.KargoOutcome.Phase != phase ||
-			!updated.KargoOutcome.ObservedAt.Equal(observedAt) {
-			t.Errorf("terminal %s outcome = %#v", phase, updated.KargoOutcome)
+		if updated.KargoExecution.Outcome == nil || updated.KargoExecution.Outcome.Phase != phase ||
+			!updated.KargoExecution.Outcome.ObservedAt.Equal(observedAt) {
+			t.Errorf("terminal %s outcome = %#v", phase, updated.KargoExecution.Outcome)
 		}
 	}
 }
@@ -376,8 +376,8 @@ func TestKargoOriginatedPromotionBindsIdentityBeforeTerminalOutcomeIntegration(t
 	if err != nil {
 		t.Fatalf("AcceptPromotionRequest() error = %v", err)
 	}
-	if accepted.Source != promotion.SourceKargo || accepted.Status != promotion.StatusApproved ||
-		accepted.KargoPromotionUID != nil || accepted.NextReconciliationAt == nil {
+	if accepted.Source != promotion.SourceKargo || accepted.Lifecycle.State != promotion.LifecycleApproved ||
+		accepted.KargoExecution.PromotionUID != nil || accepted.KargoExecution.NextReconciliationAt == nil {
 		t.Fatalf("accepted Kargo Promotion = %#v", accepted)
 	}
 
@@ -393,8 +393,8 @@ func TestKargoOriginatedPromotionBindsIdentityBeforeTerminalOutcomeIntegration(t
 	if err != nil {
 		t.Fatalf("identity ReportPromotionReconciliation() error = %v", err)
 	}
-	if bound.KargoPromotionUID == nil || *bound.KargoPromotionUID != uid || bound.KargoOutcome != nil ||
-		bound.NextReconciliationAt == nil {
+	if bound.KargoExecution.PromotionUID == nil || *bound.KargoExecution.PromotionUID != uid || bound.KargoExecution.Outcome != nil ||
+		bound.KargoExecution.NextReconciliationAt == nil {
 		t.Fatalf("bound Kargo Promotion = %#v", bound)
 	}
 	if _, err := fixture.database.ReportPromotionReconciliation(fixture.ctx, identity); err != nil {
@@ -414,8 +414,8 @@ func TestKargoOriginatedPromotionBindsIdentityBeforeTerminalOutcomeIntegration(t
 	identity.Phase = &phase
 	identity.ObservedAt = accepted.CreatedAt.Add(2 * time.Second)
 	finished, err := fixture.database.ReportPromotionReconciliation(fixture.ctx, identity)
-	if err != nil || finished.KargoOutcome == nil || finished.KargoOutcome.Phase != phase ||
-		finished.NextReconciliationAt != nil {
+	if err != nil || finished.KargoExecution.Outcome == nil || finished.KargoExecution.Outcome.Phase != phase ||
+		finished.KargoExecution.NextReconciliationAt != nil {
 		t.Fatalf("terminal Kargo Promotion = %#v, %v", finished, err)
 	}
 }
@@ -432,7 +432,7 @@ func TestPromotionReconciliationIsCallbackRaceSafeIntegration(t *testing.T) {
 		callbackWinner.CreatedAt.Add(2*time.Second),
 	)
 	hydrated, err := fixture.database.AcceptPromotionRequest(fixture.ctx, callback)
-	if err != nil || hydrated.Status != promotion.StatusApproved || hydrated.NextReconciliationAt == nil {
+	if err != nil || hydrated.Lifecycle.State != promotion.LifecycleApproved || hydrated.KargoExecution.NextReconciliationAt == nil {
 		t.Fatalf("callback winner = %#v, %v", hydrated, err)
 	}
 	diagnostic := "Kargo Promotion reached terminal phase Succeeded before callback."
@@ -445,8 +445,8 @@ func TestPromotionReconciliationIsCallbackRaceSafeIntegration(t *testing.T) {
 			callbackWinner.CreatedAt.Add(3*time.Second),
 		),
 	)
-	if err != nil || afterLateReport.Status != promotion.StatusApproved || afterLateReport.Message != nil ||
-		afterLateReport.KargoOutcome == nil || afterLateReport.KargoOutcome.Phase != promotion.KargoPhaseSucceeded {
+	if err != nil || afterLateReport.Lifecycle.State != promotion.LifecycleApproved || afterLateReport.Message != nil ||
+		afterLateReport.KargoExecution.Outcome == nil || afterLateReport.KargoExecution.Outcome.Phase != promotion.KargoPhaseSucceeded {
 		t.Errorf("late terminal report = %#v, %v", afterLateReport, err)
 	}
 
@@ -461,7 +461,7 @@ func TestPromotionReconciliationIsCallbackRaceSafeIntegration(t *testing.T) {
 			reportWinner.CreatedAt.Add(2*time.Second),
 		),
 	)
-	if err != nil || terminal.Status != promotion.StatusError {
+	if err != nil || terminal.Lifecycle.State != promotion.LifecycleError {
 		t.Fatalf("terminal report winner = %#v, %v", terminal, err)
 	}
 	lateCallback := fixture.acceptance(
@@ -505,7 +505,7 @@ func TestPromotionReconciliationRejectsIdentityAndClusterConflictsIntegration(t 
 	); !errors.Is(err, promotion.ErrReconciliationConflict) {
 		t.Errorf("wrong UID error = %v", err)
 	}
-	report.KargoUID = *record.KargoPromotionUID
+	report.KargoUID = *record.KargoExecution.PromotionUID
 	report.KargoName = "noncanonical-name"
 	if _, err := fixture.database.ReportPromotionReconciliation(
 		fixture.ctx,
@@ -522,7 +522,7 @@ func TestConcurrentPromotionReconciliationClaimsReturnOneCommandIntegration(t *t
 	record = materializeOperatorPromotion(t, fixture, record, record.CreatedAt.Add(time.Second))
 	claim := promotion.ReconciliationClaim{
 		ClusterName: "colo",
-		ClaimedAt:   *record.NextReconciliationAt,
+		ClaimedAt:   *record.KargoExecution.NextReconciliationAt,
 		Interval:    15 * time.Second,
 	}
 
@@ -579,7 +579,7 @@ func materializeOperatorPromotion(
 		promotion.CreationDispatchReport{
 			PromotionID: record.ID,
 			ClusterName: "colo",
-			Attempt:     claimed.DispatchAttemptCount,
+			Attempt:     claimed.CreationDispatch.AttemptCount,
 			Result:      promotion.CreationDispatchCreated,
 			KargoName:   &kargoName,
 			KargoUID:    &kargoUID,
@@ -603,7 +603,7 @@ func terminalPromotionReport(
 		PromotionID: record.ID,
 		ClusterName: record.StageSnapshot.ClusterName,
 		KargoName:   record.ExternalPromotionID,
-		KargoUID:    *record.KargoPromotionUID,
+		KargoUID:    *record.KargoExecution.PromotionUID,
 		Phase:       &phase,
 		Diagnostic:  &diagnostic,
 		ObservedAt:  observedAt,
