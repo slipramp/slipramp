@@ -30,33 +30,43 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type KeyboardEvent,
 } from "react";
 
 import { ANSI_DEFAULT_BACKGROUND, ANSI_DEFAULT_FOREGROUND, parseAnsi } from "~/features/runs/ansi";
-import type { Artifact, LogEvent } from "~/api/generated";
+import type { Artifact } from "~/api/generated";
 import { formatBinarySize } from "~/shared/display";
 import {
   BoundedLogBuffer,
   LOG_TAIL_MAX_LINES,
   LOG_TAIL_WINDOW_BYTES,
 } from "~/features/runs/log-buffer";
+import {
+  initialRunLogStreamState,
+  isRunLogStreamActive,
+  isRunLogStreamTerminal,
+  reduceRunLogStream,
+  runLogStreamDiagnostic,
+  runLogStreamLabel,
+} from "~/features/runs/run-log-stream-state";
+import {
+  startRunLogStreamSession,
+  type RunLogStreamEnvironment,
+} from "~/features/runs/run-log-stream";
 
-type LogStreamStatus =
-  | "Connecting"
-  | "Error"
-  | "Incomplete"
-  | "Live"
-  | "Paused"
-  | "Reconnecting"
-  | "Retained"
-  | "Waiting for logs";
-
-const reconnectDelayMs = 1000;
 const estimatedLineHeight = 20;
 const virtualLineOverscan = 12;
+
+const browserRunLogStreamEnvironment: RunLogStreamEnvironment = {
+  cancelAnimationFrame: (handle) => window.cancelAnimationFrame(handle),
+  clearTimeout: (handle) => window.clearTimeout(handle),
+  createEventSource: (url) => new EventSource(url),
+  requestAnimationFrame: (callback) => window.requestAnimationFrame(callback),
+  setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+};
 
 export function RunLogViewer({
   artifact,
@@ -67,118 +77,41 @@ export function RunLogViewer({
   const [buffer] = useState(() => new BoundedLogBuffer(initialOffsetBytes));
 
   const [, setBufferVersion] = useState(0);
-  const [diagnostic, setDiagnostic] = useState<string>();
   const [fullscreenOpened, setFullscreenOpened] = useState(false);
   const [matchPosition, setMatchPosition] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [status, setStatus] = useState<LogStreamStatus>(
-    logAvailable ? "Connecting" : "Waiting for logs",
+  const [streamState, dispatchStream] = useReducer(
+    reduceRunLogStream,
+    logAvailable,
+    initialRunLogStreamState,
   );
-  const [streamFinished, setStreamFinished] = useState(false);
   const [wrapLines, setWrapLines] = useState(true);
+  const streamActive = isRunLogStreamActive(streamState);
+  const streamTerminal = isRunLogStreamTerminal(streamState);
+  const paused = streamState.phase === "paused";
+  const status = runLogStreamLabel(streamState);
+  const diagnostic = runLogStreamDiagnostic(streamState);
 
   useEffect(() => {
-    if (streamFinished || paused) return;
+    dispatchStream({ artifactAvailable: logAvailable, type: "artifact-availability-changed" });
+  }, [logAvailable]);
 
-    let renderFrame: number | undefined;
-    let reconnectTimer: number | undefined;
-    let source: EventSource | undefined;
-    let stopped = false;
+  useEffect(() => {
+    if (!streamActive) return;
 
-    const scheduleRender = () => {
-      if (renderFrame !== undefined) return;
-
-      renderFrame = window.requestAnimationFrame(() => {
-        renderFrame = undefined;
-        setBufferVersion((current) => current + 1);
-      });
-    };
-    const finishRender = () => {
-      if (renderFrame === undefined) return;
-
-      window.cancelAnimationFrame(renderFrame);
-      renderFrame = undefined;
-      setBufferVersion((current) => current + 1);
-    };
-    const stopWithError = (message: string) => {
-      stopped = true;
-      source?.close();
-      setDiagnostic(message);
-      setStatus("Error");
-    };
-    const connect = (retrying = false) => {
-      if (!retrying) setStatus(logAvailable ? "Connecting" : "Waiting for logs");
-      const streamURL = new URL(`/api/v1/runs/${runId}/logs`, window.location.origin);
-      streamURL.searchParams.set("offsetBytes", String(buffer.cursorBytes));
-      source = new EventSource(streamURL);
-      source.addEventListener("open", () => {
-        setDiagnostic(undefined);
-        setStatus("Live");
-      });
-      source.addEventListener("chunk", (event) => {
-        try {
-          const payload = JSON.parse((event as MessageEvent<string>).data) as LogEvent;
-          const contents = decodeBase64(payload.contentsBase64);
-          if (
-            buffer.append({
-              contents,
-              nextOffsetBytes: payload.nextOffsetBytes,
-              offsetBytes: payload.offsetBytes,
-            })
-          ) {
-            scheduleRender();
-          }
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : "The event could not be decoded.";
-          stopWithError(`The durable log stream is invalid. ${detail}`);
-        }
-      });
-      source.addEventListener("sealed", () => {
-        stopped = true;
-        finishRender();
-        setDiagnostic(undefined);
-        setStatus("Retained");
-        setStreamFinished(true);
-        source?.close();
-      });
-      source.addEventListener("failed", () => {
-        stopped = true;
-        finishRender();
-        setDiagnostic(
-          "Only this durable prefix could be retained. The incomplete log cannot be downloaded as a complete artifact.",
-        );
-        setStatus("Incomplete");
-        setStreamFinished(true);
-        source?.close();
-      });
-      source.addEventListener("error", () => {
-        source?.close();
-        if (stopped || reconnectTimer !== undefined) return;
-
-        if (logAvailable) {
-          setDiagnostic(`Connection lost; retrying from durable byte ${buffer.cursorBytes}.`);
-          setStatus("Reconnecting");
-        } else {
-          setDiagnostic(undefined);
-          setStatus("Waiting for logs");
-        }
-        reconnectTimer = window.setTimeout(() => {
-          reconnectTimer = undefined;
-          connect(true);
-        }, reconnectDelayMs);
-      });
-    };
-
-    connect();
-
-    return () => {
-      stopped = true;
-      source?.close();
-      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
-      if (renderFrame !== undefined) window.cancelAnimationFrame(renderFrame);
-    };
-  }, [buffer, logAvailable, paused, runId, streamFinished]);
+    return startRunLogStreamSession({
+      artifactAvailable: logAvailable,
+      buffer,
+      buildURL: (offsetBytes) => {
+        const streamURL = new URL(`/api/v1/runs/${runId}/logs`, window.location.origin);
+        streamURL.searchParams.set("offsetBytes", String(offsetBytes));
+        return streamURL.toString();
+      },
+      dispatch: dispatchStream,
+      environment: browserRunLogStreamEnvironment,
+      onBufferChanged: () => setBufferVersion((current) => current + 1),
+    });
+  }, [buffer, logAvailable, runId, streamActive]);
 
   const matchingLines = buffer.findMatchingLines(searchQuery);
   const selectedMatchPosition = Math.min(matchPosition, Math.max(matchingLines.length - 1, 0));
@@ -186,10 +119,7 @@ export function RunLogViewer({
   const selectMatch = (direction: number) => {
     if (matchingLines.length === 0) return;
 
-    if (!streamFinished) {
-      setPaused(true);
-      setStatus("Paused");
-    }
+    dispatchStream({ type: "search-navigation" });
     setMatchPosition(
       (selectedMatchPosition + direction + matchingLines.length) % matchingLines.length,
     );
@@ -206,12 +136,12 @@ export function RunLogViewer({
   };
 
   const selectedMatchLine = matchingLines[selectedMatchPosition];
-  const activeMatchLine = paused || streamFinished ? selectedMatchLine : undefined;
+  const activeMatchLine = paused || streamTerminal ? selectedMatchLine : undefined;
   const hasSearchQuery = searchQuery.trim().length > 0;
   const canDownloadRaw =
     artifact !== undefined &&
     artifact.retentionState === "retained" &&
-    (artifact.state === "sealed" || status === "Retained");
+    (artifact.state === "sealed" || streamState.phase === "retained");
   const statusColor =
     status === "Error" || status === "Incomplete"
       ? "red"
@@ -236,7 +166,7 @@ export function RunLogViewer({
           </Text>
         </Group>
         <Group gap="xs" wrap="wrap">
-          {!streamFinished ? (
+          {!streamTerminal ? (
             <Button
               leftSection={
                 paused ? (
@@ -246,8 +176,9 @@ export function RunLogViewer({
                 )
               }
               onClick={() => {
-                setPaused(!paused);
-                setStatus(paused ? (logAvailable ? "Connecting" : "Waiting for logs") : "Paused");
+                dispatchStream(
+                  paused ? { artifactAvailable: logAvailable, type: "resume" } : { type: "pause" },
+                );
               }}
               size="compact-sm"
               variant="light"
@@ -622,15 +553,6 @@ const VirtualLogLine = memo(function VirtualLogLine({
     </Box>
   );
 });
-
-function decodeBase64(value: string) {
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  return bytes;
-}
 
 function findLineAtOffset(offsets: number[], offset: number) {
   let lower = 0;
