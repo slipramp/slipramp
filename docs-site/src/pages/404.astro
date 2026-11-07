@@ -1,0 +1,17 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+---
+
+<StarlightPage
+  frontmatter={{
+    editUrl: false,
+    hero: {
+      actions: [{ icon: "right-arrow", link: "/", text: "Open the user guide" }],
+      tagline: "Page not found. Check the address or use the search bar.",
+      title: "404",
+    },
+    pagefind: false,
+    template: "splash",
+    title: "Page not found",
+  }}
+/>

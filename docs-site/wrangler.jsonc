@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "slipramp-docs",
+  "compatibility_date": "2026-11-07",
+  "workers_dev": false,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+  },
+  // docs.slipramp.com is attached to this Worker once in Cloudflare. Routine
+  // deployments update its assets without requiring permission to rewrite the route.
+}

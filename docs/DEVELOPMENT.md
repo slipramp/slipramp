@@ -59,7 +59,7 @@ cancellation, structured report retention, secret redaction, serialization,
 and the direct non-report path. The generated client and host keys exist only
 for that disposable cluster.
 
-## Public sites and mascot
+## Public sites, user guide, and mascot
 
 The authenticated application exposes `/mascot` for reviewing the production
 catalog at supported UI sizes. `task mascot:dev` runs the independent public
@@ -81,6 +81,13 @@ if product analytics are added, they will exclude repository contents,
 credentials or secrets, catalog definitions, run inputs or outputs, logs, and
 artifacts. Cloudflare Network Error Logging may also collect browser reports
 about failures reaching the site.
+
+The public user guide is an independent Astro Starlight site authored in
+`docs-site`. `task docs:dev` runs its authoring server, `task docs:build` checks
+and builds it, and `task docs:deploy` publishes its static output to the
+`slipramp-docs` Worker. Attach `docs.slipramp.com` to that Worker once in
+Cloudflare; routine deployments update its assets without rewriting the zone
+binding.
 
 ## Local identity and observability
 

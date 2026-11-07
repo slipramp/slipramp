@@ -94,6 +94,25 @@ tasks:
     cmds:
       - '"{{.PNPM}}" --filter @slipramp/web run dev'
 
+  docs:dev:
+    desc: Run the public user guide development server
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run dev'
+
+  docs:build:
+    desc: Check and build the public user guide
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run check'
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run build'
+
+  docs:deploy:
+    desc: Build and deploy the public user guide to Cloudflare
+    deps: [deps:web]
+    cmds:
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run deploy'
+
   ios:test:
     desc: Test the iOS domain and networking layer
     deps: [mascot:check]
@@ -279,6 +298,7 @@ tasks:
     deps: [deps]
     cmds:
       - '"{{.GOLANGCI_LINT}}" fmt'
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run format'
       - '"{{.PNPM}}" --filter @slipramp/web run format'
 
   format:check:
@@ -286,6 +306,7 @@ tasks:
     deps: [deps]
     cmds:
       - '"{{.GOLANGCI_LINT}}" fmt --diff'
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run format:check'
       - '"{{.PNPM}}" --filter @slipramp/web run format:check'
 
   lint:
@@ -293,6 +314,7 @@ tasks:
     deps: [deps]
     cmds:
       - '"{{.GOLANGCI_LINT}}" run'
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run lint'
       - '"{{.PNPM}}" --filter @slipramp/web run lint'
 
   test:
@@ -362,6 +384,7 @@ tasks:
     deps: [deps]
     cmds:
       - go build ./...
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run build'
       - '"{{.PNPM}}" --filter @slipramp/web run build'
       - '"{{.PNPM}}" --filter @slipramp/web run build:mascot'
       - '"{{.PNPM}}" --filter @slipramp/web run build:site'
@@ -379,6 +402,10 @@ tasks:
       - '"{{.GOLANGCI_LINT}}" run'
       - go test -race ./...
       - go build ./...
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run check'
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run lint'
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run format:check'
+      - '"{{.PNPM}}" --filter @slipramp/docs-site run build'
       - '"{{.PNPM}}" --filter @slipramp/web run test'
       - '"{{.PNPM}}" --filter @slipramp/web run lint'
       - '"{{.PNPM}}" --filter @slipramp/web run format:check'

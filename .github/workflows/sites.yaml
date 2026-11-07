@@ -9,6 +9,7 @@ on:
       - package.json
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
+      - docs-site/**
       - web/**
   workflow_dispatch:
 
@@ -20,6 +21,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deploy-docs:
+    name: Deploy user guide
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: docs-production
+      url: https://docs.slipramp.com
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.22.0
+
+      - name: Install site dependencies
+        run: |
+          npm install --prefix .cache/pnpm --no-save --ignore-scripts pnpm@12.14.0
+          .cache/pnpm/node_modules/.bin/pnpm install \
+            --frozen-lockfile \
+            --store-dir .cache/pnpm-store
+
+      - name: Check and build user guide
+        run: |
+          .cache/pnpm/node_modules/.bin/pnpm --filter @slipramp/docs-site run check
+          .cache/pnpm/node_modules/.bin/pnpm --filter @slipramp/docs-site run build
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: 4.152.0
+          workingDirectory: docs-site
+          command: deploy --config wrangler.jsonc
+
   deploy-mascot:
     name: Deploy mascot gallery
     runs-on: ubuntu-24.04
@@ -34,7 +72,7 @@ jobs:
         with:
           node-version: 22.22.0
 
-      - name: Install web dependencies
+      - name: Install site dependencies
         run: |
           npm install --prefix .cache/pnpm --no-save --ignore-scripts pnpm@12.14.0
           .cache/pnpm/node_modules/.bin/pnpm install \
@@ -67,7 +105,7 @@ jobs:
         with:
           node-version: 22.22.0
 
-      - name: Install web dependencies
+      - name: Install site dependencies
         run: |
           npm install --prefix .cache/pnpm --no-save --ignore-scripts pnpm@12.14.0
           .cache/pnpm/node_modules/.bin/pnpm install \

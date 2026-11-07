@@ -3,6 +3,9 @@
 /.coverage/
 /dist/
 /node_modules/
+/docs-site/.astro/
+/docs-site/dist/
+/docs-site/node_modules/
 /web/.react-router/
 /web/build/
 /web/dist/

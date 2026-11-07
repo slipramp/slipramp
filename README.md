@@ -75,6 +75,8 @@ code, fixtures, and documentation together.
 - [Project site](https://slipramp.com) and
   [mascot gallery](https://mascot.slipramp.com): public project and artwork
   sites, published independently from the private control plane.
+- [User guide](https://docs.slipramp.com): public operator documentation,
+  published independently from the private control plane.
 
 ## License
 
