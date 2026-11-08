@@ -128,14 +128,14 @@ paths:
     $ref: ./paths/promotions.yaml#/promotionDecision
   /api/v1/promotion-projects:
     $ref: ./paths/promotions.yaml#/promotionProjects
+  /api/v1/promotion-projects/{integration}/{cluster}/{project}:
+    $ref: ./paths/promotions.yaml#/promotionProject
   /api/v1/promotion-stages:
     $ref: ./paths/promotions.yaml#/promotionStages
   /api/v1/promotion-stages/{stageId}/promotions:
     $ref: ./paths/promotions.yaml#/promotionStagePromotions
   /api/v1/promotion-stages/{stageId}/policy:
     $ref: ./paths/promotions.yaml#/promotionStagePolicy
-  /api/v1/promotion-pipelines:
-    $ref: ./paths/promotions.yaml#/promotionPipelines
   /api/v1/promotion-branch-drift:
     $ref: ./paths/promotions.yaml#/promotionBranchDrift
   /controller/v1/kargo/{integration}/stages:
@@ -360,6 +360,8 @@ components:
       $ref: ./components/promotions.yaml#/PromotionProject
     PromotionProjectList:
       $ref: ./components/promotions.yaml#/PromotionProjectList
+    PromotionProjectDetail:
+      $ref: ./components/promotions.yaml#/PromotionProjectDetail
     PromotionStage:
       $ref: ./components/promotions.yaml#/PromotionStage
     PromotionStageList:
@@ -368,12 +370,6 @@ components:
       $ref: ./components/promotions.yaml#/PromotionStagePolicy
     PromotionFreight:
       $ref: ./components/promotions.yaml#/PromotionFreight
-    PromotionPipeline:
-      $ref: ./components/promotions.yaml#/PromotionPipeline
-    PromotionPipelineList:
-      $ref: ./components/promotions.yaml#/PromotionPipelineList
-    PromotionPipelineSummary:
-      $ref: ./components/promotions.yaml#/PromotionPipelineSummary
     PromotionBranchDriftRepository:
       $ref: ./components/promotions.yaml#/PromotionBranchDriftRepository
     PromotionBranchDriftList:

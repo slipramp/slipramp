@@ -16,8 +16,7 @@ func TestIntegrationSetValidate(t *testing.T) {
 				"homelab": "https://argocd.homelab.example.com",
 				"prod":    "https://argocd.example.com/console/",
 			},
-			Repositories:     []string{"kcloud-ops"},
-			EnvironmentOrder: []string{"homelab", "prod"},
+			Repositories: []string{"kcloud-ops"},
 			Preparation: PreparationConfig{
 				Repository: "kcloud-ops",
 				Target:     "kargo-promotions",
@@ -40,19 +39,6 @@ func TestIntegrationSetValidate(t *testing.T) {
 	}
 
 	integration.Preparation.Repository = "kcloud-ops"
-	integration.EnvironmentOrder = nil
-	integrations["prod"] = integration
-	if err := integrations.Validate(); err == nil {
-		t.Fatal("Validate() error = nil for missing environment order")
-	}
-
-	integration.EnvironmentOrder = []string{"prod", "prod"}
-	integrations["prod"] = integration
-	if err := integrations.Validate(); err == nil {
-		t.Fatal("Validate() error = nil for duplicate environment")
-	}
-
-	integration.EnvironmentOrder = []string{"homelab", "prod"}
 	integration.UIURL = "ftp://kargo.example.com"
 	integrations["prod"] = integration
 	if err := integrations.Validate(); err == nil {
@@ -60,12 +46,6 @@ func TestIntegrationSetValidate(t *testing.T) {
 	}
 
 	integration.UIURL = "https://kargo.example.com"
-	integration.ArgoCDUIURLs["unknown"] = "https://argocd.example.com"
-	integrations["prod"] = integration
-	if err := integrations.Validate(); err == nil {
-		t.Fatal("Validate() error = nil for Argo CD UI URL outside environment order")
-	}
-	delete(integration.ArgoCDUIURLs, "unknown")
 	integration.ArgoCDUIURLs["prod"] = "ftp://argocd.example.com"
 	integrations["prod"] = integration
 	if err := integrations.Validate(); err == nil {

@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
-	"github.com/slipramp/slipramp/internal/promotion/projection"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -56,13 +56,6 @@ type PromotionReviewService interface {
 	ListPromotions(context.Context, promotion.PromotionListFilter) (promotion.PromotionReviewList, error)
 	GetPromotion(context.Context, uuid.UUID) (promotion.PromotionReview, error)
 	Decide(context.Context, promotion.DecisionRequest) (promotion.PromotionReview, error)
-}
-
-type PromotionPipelineService interface {
-	List(
-		context.Context,
-		projection.FreightPipelineListFilter,
-	) (projection.FreightPipelineList, error)
 }
 
 func (h *Handler) SubmitKargoPromotion(
@@ -189,7 +182,8 @@ func (h *Handler) CreatePromotion(
 			}, nil
 		case errors.Is(err, promotion.ErrStageArchived), errors.Is(err, promotion.ErrStageStale),
 			errors.Is(err, promotion.ErrStageScope), errors.Is(err, promotion.ErrFreightNotFound),
-			errors.Is(err, promotion.ErrFreightSource), errors.Is(err, promotion.ErrRepositoryNotAllowed),
+			errors.Is(err, promotion.ErrFreightSource), errors.Is(err, promotion.ErrFreightUnavailable),
+			errors.Is(err, promotion.ErrRepositoryNotAllowed),
 			errors.Is(err, promotion.ErrRepositoryUnavailable):
 			problem := NewProblem(http.StatusConflict, err.Error())
 
@@ -496,20 +490,28 @@ func (h *Handler) ReplaceKargoStageSnapshot(
 
 	stages := make([]promotion.StageObservation, 0, len(request.Body.Stages))
 	for _, observed := range request.Body.Stages {
+		sourcePaths := []string{}
+		if observed.SourcePaths != nil {
+			sourcePaths = append(sourcePaths, (*observed.SourcePaths)...)
+		}
 		stages = append(stages, promotion.StageObservation{
 			Project:                         string(observed.Project),
 			Name:                            observed.Name,
 			KubernetesUID:                   observed.KubernetesUID,
 			ResourceVersion:                 observed.ResourceVersion,
-			Application:                     observed.Application,
-			Environment:                     observed.Environment,
-			RepositoryURL:                   observed.RepositoryURL,
-			TargetBranch:                    observed.TargetBranch,
-			SourcePaths:                     observed.SourcePaths,
+			Application:                     optionalStringValue(observed.Application),
+			Environment:                     optionalStringValue(observed.Environment),
+			RepositoryURL:                   optionalStringValue(observed.RepositoryURL),
+			TargetBranch:                    optionalStringValue(observed.TargetBranch),
+			SourcePaths:                     sourcePaths,
 			RequestedFreight:                promotionFreightRequests(observed.RequestedFreight),
 			Freight:                         promotionFreightFromRequest(observed.Freight),
-			DirectFreight:                   promotionFreightFromRequest(observed.DirectFreight),
+			CandidateFreight:                promotionFreightFromRequest(observed.CandidateFreight),
 			AutoPromotionEnabled:            observed.AutoPromotionEnabled,
+			ControlFlow:                     observed.ControlFlow,
+			Conditions:                      promotionStageConditionsFromRequest(observed.Conditions),
+			CurrentPromotion:                promotionStagePromotionFromRequest(observed.CurrentPromotion),
+			LastPromotion:                   promotionStagePromotionFromRequest(observed.LastPromotion),
 			HealthStatus:                    observed.HealthStatus,
 			ArgoApplicationNamespace:        observed.ArgoApplicationNamespace,
 			SuccessfulRenderAcknowledgement: promotionAcknowledgementFromRequest(observed.SuccessfulRenderAcknowledgement),
@@ -571,6 +573,11 @@ func optionalCatalogName(value *api.CatalogName) string {
 }
 
 func (h *Handler) promotionStageResponse(review promotion.StageReview) api.PromotionStage {
+	var repository *api.CatalogName
+	if review.Stage.RepositoryName != "" {
+		value := api.CatalogName(review.Stage.RepositoryName)
+		repository = &value
+	}
 	return api.PromotionStage{
 		ID:                              review.Stage.ID,
 		Integration:                     api.CatalogName(review.Stage.Integration),
@@ -579,11 +586,11 @@ func (h *Handler) promotionStageResponse(review promotion.StageReview) api.Promo
 		Name:                            review.Stage.Name,
 		KubernetesUID:                   review.Stage.KubernetesUID,
 		ResourceVersion:                 review.Stage.ResourceVersion,
-		Application:                     review.Stage.Application,
-		Environment:                     review.Stage.Environment,
-		Repository:                      api.CatalogName(review.Stage.RepositoryName),
-		RepositoryURL:                   review.Stage.RepositoryURL,
-		TargetBranch:                    review.Stage.TargetBranch,
+		Application:                     optionalString(review.Stage.Application),
+		Environment:                     optionalString(review.Stage.Environment),
+		Repository:                      repository,
+		RepositoryURL:                   optionalString(review.Stage.RepositoryURL),
+		TargetBranch:                    optionalString(review.Stage.TargetBranch),
 		SourcePaths:                     review.Stage.SourcePaths,
 		RequestedFreight:                promotionFreightRequestResponse(review.Stage.RequestedFreight),
 		Freight:                         promotionFreightResponse(review.Stage.Freight),
@@ -605,10 +612,16 @@ func (h *Handler) promotionStageResponse(review promotion.StageReview) api.Promo
 func promotionFreightRequests(values []api.PromotionFreightRequest) []promotion.FreightRequest {
 	requests := make([]promotion.FreightRequest, 0, len(values))
 	for _, value := range values {
+		requiredSoakTime := time.Duration(0)
+		if value.RequiredSoakTime != nil {
+			requiredSoakTime, _ = time.ParseDuration(*value.RequiredSoakTime)
+		}
 		requests = append(requests, promotion.FreightRequest{
-			Origin:       value.Origin,
-			Direct:       value.Direct,
-			SourceStages: value.SourceStages,
+			Origin:               value.Origin,
+			Direct:               value.Direct,
+			SourceStages:         value.SourceStages,
+			AvailabilityStrategy: promotion.FreightAvailabilityStrategy(value.AvailabilityStrategy),
+			RequiredSoakTime:     requiredSoakTime,
 		})
 	}
 
@@ -621,14 +634,56 @@ func promotionFreightRequestResponse(values []promotion.FreightRequest) []api.Pr
 	}
 	requests := make([]api.PromotionFreightRequest, 0, len(values))
 	for _, value := range values {
+		var requiredSoakTime *string
+		if value.RequiredSoakTime > 0 {
+			formatted := value.RequiredSoakTime.String()
+			requiredSoakTime = &formatted
+		}
 		requests = append(requests, api.PromotionFreightRequest{
-			Origin:       value.Origin,
-			Direct:       value.Direct,
-			SourceStages: value.SourceStages,
+			Origin:               value.Origin,
+			Direct:               value.Direct,
+			SourceStages:         value.SourceStages,
+			AvailabilityStrategy: api.PromotionFreightRequestAvailabilityStrategy(value.AvailabilityStrategy.Effective()),
+			RequiredSoakTime:     requiredSoakTime,
 		})
 	}
 
 	return requests
+}
+
+func optionalStringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
+}
+
+func promotionStageConditionsFromRequest(values []api.PromotionStageCondition) []promotion.StageCondition {
+	conditions := make([]promotion.StageCondition, 0, len(values))
+	for _, value := range values {
+		conditions = append(conditions, promotion.StageCondition{
+			Type:               value.Type,
+			Status:             value.Status,
+			Reason:             optionalStringValue(value.Reason),
+			Message:            optionalStringValue(value.Message),
+			LastTransitionTime: value.LastTransitionTime,
+		})
+	}
+
+	return conditions
+}
+
+func promotionStagePromotionFromRequest(
+	value *api.PromotionStagePromotionReference,
+) *promotion.StagePromotionReference {
+	if value == nil {
+		return nil
+	}
+
+	return &promotion.StagePromotionReference{
+		Name: value.Name, Phase: optionalStringValue(value.Phase), FinishedAt: value.FinishedAt,
+	}
 }
 
 func promotionPolicyResponse(value promotion.PolicyView) api.PromotionStagePolicy {

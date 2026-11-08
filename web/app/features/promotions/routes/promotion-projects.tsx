@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Group, Paper, Stack, Table, Text } from "@mantine/core";
+import { Alert, Anchor, Badge, Group, Paper, Stack, Table } from "@mantine/core";
 import { Link, redirect } from "react-router";
 
 import { createServerAPIClient } from "~/api/client.server";
@@ -15,7 +15,7 @@ import type { Route } from "./+types/promotion-projects";
 const pageSize = 25;
 
 export function meta() {
-  return [{ title: pageTitle("Promotion projects") }];
+  return [{ title: pageTitle("Kargo projects") }];
 }
 
 export async function loader({ context, request }: Route.LoaderArgs) {
@@ -62,8 +62,8 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
   return (
     <Stack gap="lg">
       <PageHeader
-        description="Observed Kargo projects with direct links to their promotion pipelines."
-        title="Promotion projects"
+        description="Observed Kargo Projects with Stage health, freshness, topology, and review activity."
+        title="Kargo projects"
       />
 
       <SearchParamFilters
@@ -94,7 +94,7 @@ export default function PromotionProjects({ loaderData }: Route.ComponentProps) 
       />
 
       {!loaderData.available ? (
-        <Alert color="red" title="Promotion projects unavailable">
+        <Alert color="red" title="Kargo projects unavailable">
           {loaderData.error ?? "The Slipramp API could not be reached."}
         </Alert>
       ) : loaderData.projects.length === 0 ? (
@@ -151,18 +151,20 @@ function ProjectTable({ projects }: Readonly<{ projects: PromotionProject[] }>) 
 }
 
 function ProjectRow({ project }: Readonly<{ project: PromotionProject }>) {
+  const detailPath = `/promotion-projects/${encodeURIComponent(project.integration)}/${encodeURIComponent(project.cluster)}/${encodeURIComponent(project.project)}`;
   const scope = `integration=${encodeURIComponent(project.integration)}&project=${encodeURIComponent(project.project)}`;
 
   return (
     <Table.Tr>
       <Table.Td>
+        <Anchor component={Link} fw={650} to={detailPath}>
+          {project.project}
+        </Anchor>
         {project.kargoUrl ? (
-          <KargoLink fw={650} url={project.kargoUrl}>
-            {project.project}
+          <KargoLink size="xs" url={project.kargoUrl}>
+            Kargo
           </KargoLink>
-        ) : (
-          <Text fw={650}>{project.project}</Text>
-        )}
+        ) : null}
       </Table.Td>
       <Table.Td>
         <Group gap="xs" wrap="wrap">
@@ -174,19 +176,22 @@ function ProjectRow({ project }: Readonly<{ project: PromotionProject }>) {
       </Table.Td>
       <Table.Td>
         <Group gap={6} wrap="wrap">
-          <Anchor component={Link} to={`/promotion-stages?${scope}`}>
+          <Anchor component={Link} to={detailPath}>
             {project.stageCount} Stage{project.stageCount === 1 ? "" : "s"}
           </Anchor>
-          <Text c="dimmed" size="sm">
-            ·
-          </Text>
-          <Anchor component={Link} to={`/promotion-pipelines?${scope}`}>
-            {project.applicationCount} application{project.applicationCount === 1 ? "" : "s"}
-          </Anchor>
+          {project.unhealthyStageCount > 0 ? (
+            <Badge color="red">{project.unhealthyStageCount} non-ready</Badge>
+          ) : null}
+          {project.staleStageCount > 0 ? (
+            <Badge color="gray">{project.staleStageCount} stale</Badge>
+          ) : null}
+          {project.pendingReviewCount > 0 ? (
+            <Badge color="yellow">{project.pendingReviewCount} pending</Badge>
+          ) : null}
         </Group>
       </Table.Td>
       <Table.Td>
-        <RelativeTime size="sm" value={project.lastObservedAt} />
+        <RelativeTime size="sm" value={project.latestObservedAt} />
       </Table.Td>
       <Table.Td>
         <Anchor component={Link} to={`/promotions?${scope}`}>

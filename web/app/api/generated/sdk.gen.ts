@@ -99,6 +99,9 @@ import type {
   GetPrincipalResponses,
   GetPromotionData,
   GetPromotionErrors,
+  GetPromotionProjectData,
+  GetPromotionProjectErrors,
+  GetPromotionProjectResponses,
   GetPromotionResponses,
   GetReadinessData,
   GetReadinessErrors,
@@ -145,9 +148,6 @@ import type {
   ListPromotionBranchDriftData,
   ListPromotionBranchDriftErrors,
   ListPromotionBranchDriftResponses,
-  ListPromotionPipelinesData,
-  ListPromotionPipelinesErrors,
-  ListPromotionPipelinesResponses,
   ListPromotionProjectsData,
   ListPromotionProjectsErrors,
   ListPromotionProjectsResponses,
@@ -2034,6 +2034,33 @@ export const listPromotionProjects = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Get one Kargo Project and its observed Stage topology
+ */
+export const getPromotionProject = <ThrowOnError extends boolean = false>(
+  options: Options<GetPromotionProjectData, ThrowOnError>,
+): RequestResult<GetPromotionProjectResponses, GetPromotionProjectErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetPromotionProjectResponses,
+    GetPromotionProjectErrors,
+    ThrowOnError
+  >({
+    security: [
+      {
+        in: "cookie",
+        name: "slipramp_session",
+        type: "apiKey",
+      },
+      {
+        key: "ProductBearer",
+        scheme: "bearer",
+        type: "http",
+      },
+    ],
+    url: "/api/v1/promotion-projects/{integration}/{cluster}/{project}",
+    ...options,
+  });
+
+/**
  * List observed Kargo Stages and their effective policies
  */
 export const listPromotionStages = <ThrowOnError extends boolean = false>(
@@ -2120,33 +2147,6 @@ export const updatePromotionStagePolicy = <ThrowOnError extends boolean = false>
       "Content-Type": "application/json",
       ...options.headers,
     },
-  });
-
-/**
- * Compare current Freight across ordered Kargo environments
- */
-export const listPromotionPipelines = <ThrowOnError extends boolean = false>(
-  options?: Options<ListPromotionPipelinesData, ThrowOnError>,
-): RequestResult<ListPromotionPipelinesResponses, ListPromotionPipelinesErrors, ThrowOnError> =>
-  (options?.client ?? client).get<
-    ListPromotionPipelinesResponses,
-    ListPromotionPipelinesErrors,
-    ThrowOnError
-  >({
-    security: [
-      {
-        in: "cookie",
-        name: "slipramp_session",
-        type: "apiKey",
-      },
-      {
-        key: "ProductBearer",
-        scheme: "bearer",
-        type: "http",
-      },
-    ],
-    url: "/api/v1/promotion-pipelines",
-    ...options,
   });
 
 /**

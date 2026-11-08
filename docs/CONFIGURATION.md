@@ -181,7 +181,6 @@ integrations:
       homelab: https://argocd.homelab.example.com
       prod: https://argocd.example.com
     repositories: [kcloud-ops]
-    environmentOrder: [homelab, prod]
     preparation:
       repository: kcloud-ops
       target: kargo-promotions
@@ -226,7 +225,7 @@ Stages labeled for another integration are excluded from its complete snapshot.
 Removing or changing the label archives the Stage in the old integration after
 its next successful snapshot.
 
-Every participating Stage supplies these annotations explicitly:
+Participating Stages may supply Slipramp enrichment annotations:
 
 ```yaml
 metadata:
@@ -240,15 +239,19 @@ metadata:
     slipramp.com/promotion-source-paths: '["terraform/dns", "config/production.yaml"]'
 ```
 
-The Repository URL must exactly match one Repository in the integration's
-allowlist. The application identifies the Argo CD Application used for review.
-The environment selects its presentation order and configured Argo CD endpoint.
-The target branch is the branch Kargo updates. Source paths are a nonempty JSON
-array of distinct, clean repository-relative paths used for branch-drift checks;
-`.` selects the whole repository. Absolute paths and parent traversal are
-invalid. All annotations are required; malformed participating Stages fail the
-whole snapshot so incomplete inventory cannot archive valid Stages. Template
-variables, directory layout, and branch naming conventions are not inferred.
+These annotations enrich the native Kargo Stage inventory; none are required to
+retain and display a participating Stage. The Repository URL must exactly match
+one Repository in the integration's allowlist before Slipramp enables Promotion
+creation, review preparation, or branch-drift analysis for that Stage. The
+application identifies the Argo CD Application used for review. The environment
+selects a configured Argo CD endpoint. The target branch is the branch Kargo
+updates. Source paths are a JSON array of distinct, clean repository-relative
+paths used for branch-drift checks; `.` selects the whole repository. Absolute
+paths and parent traversal are invalid. An omitted annotation disables the
+dependent Slipramp capability without removing the Stage from Project topology.
+Malformed annotations reject the observation rather than being guessed.
+Template variables, directory layout, and branch naming conventions are not
+inferred.
 
 The optional successful-render acknowledgement currently recognizes a succeeded
 last Promotion with `clone` and `commit` output-state aliases (including nested

@@ -15,7 +15,6 @@ import {
   IconActivityHeartbeat,
   IconAlertTriangle,
   IconArrowRight,
-  IconArrowsDiff,
   IconCheck,
   IconChecklist,
   IconCircleCheck,
@@ -35,10 +34,9 @@ import {
   getInbox,
   getReadiness,
   listPromotionBranchDrift,
-  listPromotionPipelines,
+  listPromotionProjects,
   type Inbox as InboxProjection,
   type InboxItem,
-  type PromotionPipelineSummary,
   type ReadinessResponse,
 } from "~/api/generated";
 import { RelativeTime } from "~/shared/display-values";
@@ -58,9 +56,9 @@ export function meta() {
 
 export async function loader({ context, request }: Route.LoaderArgs) {
   const client = createServerAPIClient(request, context);
-  const [inboxResult, pipelineResult, branchDriftResult, readinessResult] = await Promise.all([
+  const [inboxResult, projectResult, branchDriftResult, readinessResult] = await Promise.all([
     getInbox({ client }),
-    listPromotionPipelines({ client, query: { limit: 1 } }),
+    listPromotionProjects({ client, query: { limit: 200 } }),
     listPromotionBranchDrift({ client, query: { limit: 1, status: "drifted" } }),
     getReadiness({ client }),
   ]);
@@ -70,11 +68,21 @@ export async function loader({ context, request }: Route.LoaderArgs) {
     inboxError: inboxResult.error
       ? problemDetail(inboxResult.error, "The operational Inbox could not be loaded.")
       : undefined,
-    pipelineError: pipelineResult.error
-      ? problemDetail(pipelineResult.error, "Kargo pipeline status could not be loaded.")
+    projectError: projectResult.error
+      ? problemDetail(projectResult.error, "Kargo Project status could not be loaded.")
       : undefined,
-    pipelineSummary: pipelineResult.data?.summary,
-    pipelineTotal: pipelineResult.data?.total,
+    projectSummary: projectResult.data
+      ? projectResult.data.items.reduce(
+          (summary, project) => ({
+            pendingReviews: summary.pendingReviews + project.pendingReviewCount,
+            stages: summary.stages + project.stageCount,
+            stale: summary.stale + project.staleStageCount,
+            unhealthy: summary.unhealthy + project.unhealthyStageCount,
+          }),
+          { pendingReviews: 0, stages: 0, stale: 0, unhealthy: 0 },
+        )
+      : undefined,
+    projectTotal: projectResult.data?.total,
     branchDriftError: branchDriftResult.error
       ? problemDetail(branchDriftResult.error, "Kargo Stage branch drift could not be loaded.")
       : undefined,
@@ -155,12 +163,12 @@ export default function Inbox({ loaderData }: Route.ComponentProps) {
         <Grid.Col span={{ base: 12, lg: 4 }}>
           <Stack gap="lg">
             <RunActivity activity={inbox?.activity} />
-            <PipelineStatus
+            <KargoStatus
               branchDriftError={loaderData.branchDriftError}
               branchDriftTotal={loaderData.branchDriftTotal}
-              error={loaderData.pipelineError}
-              summary={loaderData.pipelineSummary}
-              total={loaderData.pipelineTotal}
+              error={loaderData.projectError}
+              summary={loaderData.projectSummary}
+              total={loaderData.projectTotal}
             />
           </Stack>
         </Grid.Col>
@@ -389,7 +397,7 @@ function RunActivity({
   );
 }
 
-function PipelineStatus({
+function KargoStatus({
   branchDriftError,
   branchDriftTotal,
   error,
@@ -399,7 +407,7 @@ function PipelineStatus({
   branchDriftError?: string;
   branchDriftTotal?: number;
   error?: string;
-  summary?: PromotionPipelineSummary;
+  summary?: { pendingReviews: number; stages: number; stale: number; unhealthy: number };
   total?: number;
 }>) {
   return (
@@ -410,33 +418,33 @@ function PipelineStatus({
             <ThemeIcon color="lilac" size="md" variant="light">
               <IconGitBranch aria-hidden size={17} />
             </ThemeIcon>
-            <Text fw={650}>Kargo pipelines</Text>
+            <Text fw={650}>Kargo Projects</Text>
           </Group>
           <Badge color="gray" variant="light">
             {total ?? "—"}
           </Badge>
         </Group>
         <SimpleGrid cols={3} spacing="xs">
-          <PipelineStatusCount
-            color="yellow"
-            href="/promotion-pipelines?attention=drifted"
-            icon={IconArrowsDiff}
-            label="Drifted"
-            value={summary?.drifted}
-          />
-          <PipelineStatusCount
+          <KargoStatusCount
             color="orange"
-            href="/promotion-pipelines?attention=outdated"
-            icon={IconClock}
-            label="Out of date"
-            value={summary?.outdated}
+            href="/promotion-projects"
+            icon={IconAlertTriangle}
+            label="Unhealthy"
+            value={summary?.unhealthy}
           />
-          <PipelineStatusCount
-            color="green"
-            href="/promotion-pipelines?attention=up-to-date"
-            icon={IconCircleCheck}
-            label="Up to date"
-            value={summary?.upToDate}
+          <KargoStatusCount
+            color="orange"
+            href="/promotion-projects"
+            icon={IconClock}
+            label="Stale"
+            value={summary?.stale}
+          />
+          <KargoStatusCount
+            color="yellow"
+            href="/promotion-projects"
+            icon={IconChecklist}
+            label="Reviews"
+            value={summary?.pendingReviews}
           />
         </SimpleGrid>
         <Button
@@ -468,17 +476,17 @@ function PipelineStatus({
           component={Link}
           fullWidth
           rightSection={<IconArrowRight aria-hidden size={14} />}
-          to="/promotion-pipelines?attention=any"
+          to="/promotion-projects"
           variant="subtle"
         >
-          View pipelines
+          View Kargo Projects{summary ? ` · ${summary.stages} Stages` : ""}
         </Button>
       </Stack>
     </Paper>
   );
 }
 
-function PipelineStatusCount({
+function KargoStatusCount({
   color,
   href,
   icon: StatusIcon,

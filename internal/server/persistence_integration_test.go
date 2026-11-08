@@ -59,7 +59,7 @@ func TestPersistenceIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse readiness response: %v", err)
 	}
-	if readinessResponse.JSON200 == nil || readinessResponse.JSON200.Status != api.Ready {
+	if readinessResponse.JSON200 == nil || readinessResponse.JSON200.Status != api.ReadinessResponseStatusReady {
 		t.Errorf("readiness response = %#v, want ready", readinessResponse.JSON200)
 	}
 

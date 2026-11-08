@@ -79,9 +79,18 @@ func encodePromotionStageJSON(record promotion.Stage, params *storedb.UpsertProm
 	if err != nil {
 		return fmt.Errorf("encode Stage Freight: %w", err)
 	}
-	params.DirectFreightJson, err = json.Marshal(promotionFreightValue(record.DirectFreight))
+	params.CandidateFreightJson, err = json.Marshal(promotionFreightValue(record.CandidateFreight))
 	if err != nil {
-		return fmt.Errorf("encode direct Stage Freight: %w", err)
+		return fmt.Errorf("encode candidate Stage Freight: %w", err)
+	}
+	params.StageStatusJson, err = json.Marshal(promotionStageStatusJSON{
+		ControlFlow:      record.ControlFlow,
+		Conditions:       record.Conditions,
+		CurrentPromotion: record.CurrentPromotion,
+		LastPromotion:    record.LastPromotion,
+	})
+	if err != nil {
+		return fmt.Errorf("encode Kargo Stage status: %w", err)
 	}
 	if record.SuccessfulRenderAcknowledgement != nil {
 		params.SuccessfulRenderAcknowledgement, err = json.Marshal(record.SuccessfulRenderAcknowledgement)
@@ -101,10 +110,18 @@ func decodePromotionStageJSON(row storedb.PromotionStage, record *promotion.Stag
 		return fmt.Errorf("decode Stage Freight: %w", err)
 	}
 	record.Freight = promotionFreightValue(record.Freight)
-	if err := json.Unmarshal(row.DirectFreightJson, &record.DirectFreight); err != nil {
-		return fmt.Errorf("decode direct Stage Freight: %w", err)
+	if err := json.Unmarshal(row.CandidateFreightJson, &record.CandidateFreight); err != nil {
+		return fmt.Errorf("decode candidate Stage Freight: %w", err)
 	}
-	record.DirectFreight = promotionFreightValue(record.DirectFreight)
+	record.CandidateFreight = promotionFreightValue(record.CandidateFreight)
+	var status promotionStageStatusJSON
+	if err := json.Unmarshal(row.StageStatusJson, &status); err != nil {
+		return fmt.Errorf("decode Kargo Stage status: %w", err)
+	}
+	record.ControlFlow = status.ControlFlow
+	record.Conditions = status.Conditions
+	record.CurrentPromotion = status.CurrentPromotion
+	record.LastPromotion = status.LastPromotion
 	if len(row.SuccessfulRenderAcknowledgement) > 0 {
 		if err := json.Unmarshal(row.SuccessfulRenderAcknowledgement, &record.SuccessfulRenderAcknowledgement); err != nil {
 			return fmt.Errorf("decode Stage render acknowledgement: %w", err)
@@ -112,6 +129,13 @@ func decodePromotionStageJSON(row storedb.PromotionStage, record *promotion.Stag
 	}
 
 	return nil
+}
+
+type promotionStageStatusJSON struct {
+	ControlFlow      bool                               `json:"controlFlow"`
+	Conditions       []promotion.StageCondition         `json:"conditions"`
+	CurrentPromotion *promotion.StagePromotionReference `json:"currentPromotion,omitempty"`
+	LastPromotion    *promotion.StagePromotionReference `json:"lastPromotion,omitempty"`
 }
 
 func promotionFreightValue(value promotion.Freight) promotion.Freight {

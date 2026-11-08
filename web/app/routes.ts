@@ -36,8 +36,10 @@ export default [
   route("promotions", "features/promotions/routes/promotions.tsx"),
   route("promotions/:promotionId", "features/promotions/routes/promotion.tsx"),
   route("promotion-projects", "features/promotions/routes/promotion-projects.tsx"),
-  route("promotion-stages", "features/promotions/routes/promotion-stages.tsx"),
-  route("promotion-pipelines", "features/promotions/routes/promotion-pipelines.tsx"),
+  route(
+    "promotion-projects/:integration/:cluster/:project",
+    "features/promotions/routes/promotion-project.tsx",
+  ),
   route("promotion-branch-drift", "features/promotions/routes/promotion-branch-drift.tsx"),
   route("api/v1/artifacts/:artifactId/download", "features/artifacts/routes/artifact-download.ts"),
   route("api/v1/runs/:runId/logs", "features/runs/routes/run-log.ts"),

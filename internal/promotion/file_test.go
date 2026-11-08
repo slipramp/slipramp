@@ -22,7 +22,6 @@ integrations:
       homelab: https://argocd.homelab.example.com
       prod: https://argocd.example.com
     repositories: [kcloud-ops]
-    environmentOrder: [homelab, prod]
     preparation:
       repository: kcloud-ops
       target: kargo-promotions
@@ -142,7 +141,6 @@ integrations:
   prod:
     cluster: colo
     repositories: [kcloud-ops]
-    environmentOrder: [prod]
     preparation:
       repository: kcloud-ops
       target: kargo-promotions

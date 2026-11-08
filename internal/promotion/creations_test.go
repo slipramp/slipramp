@@ -139,6 +139,11 @@ func TestSelectPromotionFreightValidatesUpstreamTopology(t *testing.T) {
 			Origin:       "Warehouse/external-dns",
 			SourceStages: []string{source.Name},
 		}},
+		CandidateFreight: Freight{Items: []FreightItem{{
+			Origin: "Warehouse/external-dns", Name: "freight-42", EvidenceObserved: true,
+			VerifiedIn: []FreightVerification{{Stage: source.Name}},
+			Artifacts:  []FreightArtifact{{Kind: "image", Version: "1.2.3"}},
+		}}},
 	}
 
 	selected, err := SelectPromotionFreight(target, source, "freight-42")
@@ -169,34 +174,34 @@ func TestSelectPromotionFreightValidatesUpstreamTopology(t *testing.T) {
 	}
 }
 
-func TestSelectDirectPromotionFreightValidatesRequest(t *testing.T) {
+func TestSelectPromotionFreightCandidateValidatesReadiness(t *testing.T) {
 	t.Parallel()
 
 	target := Stage{
 		RequestedFreight: []FreightRequest{{Origin: "Warehouse/app", Direct: true}},
-		DirectFreight: Freight{Items: []FreightItem{{
+		CandidateFreight: Freight{Items: []FreightItem{{
 			Origin: "Warehouse/app", Name: "freight-42",
 			Artifacts: []FreightArtifact{{Kind: "image", Version: "1.2.3"}},
 		}}},
 	}
 
-	selected, err := SelectDirectPromotionFreight(target, "freight-42")
+	selected, err := SelectPromotionFreightCandidate(target, "freight-42")
 	if err != nil {
-		t.Fatalf("SelectDirectPromotionFreight() error = %v", err)
+		t.Fatalf("SelectPromotionFreightCandidate() error = %v", err)
 	}
 	if selected.Name != "freight-42" || selected.Origin != "Warehouse/app" {
 		t.Errorf("selected Freight = %#v", selected)
 	}
-	target.DirectFreight.Items[0].Artifacts[0].Version = "2.0.0"
+	target.CandidateFreight.Items[0].Artifacts[0].Version = "2.0.0"
 	if selected.Artifacts[0].Version != "1.2.3" {
 		t.Error("selected direct Freight changed with the observed Stage")
 	}
 
 	target.RequestedFreight[0].Direct = false
-	if _, err := SelectDirectPromotionFreight(target, "freight-42"); !errors.Is(err, ErrFreightSource) {
-		t.Fatalf("indirect request error = %v, want ErrFreightSource", err)
+	if _, err := SelectPromotionFreightCandidate(target, "freight-42"); !errors.Is(err, ErrFreightUnavailable) {
+		t.Fatalf("indirect request error = %v, want ErrFreightUnavailable", err)
 	}
-	if _, err := SelectDirectPromotionFreight(target, "missing"); !errors.Is(err, ErrFreightNotFound) {
+	if _, err := SelectPromotionFreightCandidate(target, "missing"); !errors.Is(err, ErrFreightNotFound) {
 		t.Fatalf("missing Freight error = %v, want ErrFreightNotFound", err)
 	}
 }

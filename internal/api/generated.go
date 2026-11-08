@@ -294,16 +294,16 @@ func (e ControllerCommandType) Valid() bool {
 
 // Defines values for DependencyStatus.
 const (
-	Available   DependencyStatus = "available"
-	Unavailable DependencyStatus = "unavailable"
+	DependencyStatusAvailable   DependencyStatus = "available"
+	DependencyStatusUnavailable DependencyStatus = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the DependencyStatus enum.
 func (e DependencyStatus) Valid() bool {
 	switch e {
-	case Available:
+	case DependencyStatusAvailable:
 		return true
-	case Unavailable:
+	case DependencyStatusUnavailable:
 		return true
 	default:
 		return false
@@ -895,24 +895,39 @@ func (e PromotionFreightArtifactKind) Valid() bool {
 	}
 }
 
-// Defines values for PromotionPipelineAttention.
+// Defines values for PromotionFreightCandidateReadiness.
 const (
-	PromotionPipelineAttentionAny      PromotionPipelineAttention = "any"
-	PromotionPipelineAttentionDrifted  PromotionPipelineAttention = "drifted"
-	PromotionPipelineAttentionOutdated PromotionPipelineAttention = "outdated"
-	PromotionPipelineAttentionUpToDate PromotionPipelineAttention = "up-to-date"
+	PromotionFreightCandidateReadinessReady       PromotionFreightCandidateReadiness = "ready"
+	PromotionFreightCandidateReadinessUnavailable PromotionFreightCandidateReadiness = "unavailable"
+	PromotionFreightCandidateReadinessUnknown     PromotionFreightCandidateReadiness = "unknown"
 )
 
-// Valid indicates whether the value is a known member of the PromotionPipelineAttention enum.
-func (e PromotionPipelineAttention) Valid() bool {
+// Valid indicates whether the value is a known member of the PromotionFreightCandidateReadiness enum.
+func (e PromotionFreightCandidateReadiness) Valid() bool {
 	switch e {
-	case PromotionPipelineAttentionAny:
+	case PromotionFreightCandidateReadinessReady:
 		return true
-	case PromotionPipelineAttentionDrifted:
+	case PromotionFreightCandidateReadinessUnavailable:
 		return true
-	case PromotionPipelineAttentionOutdated:
+	case PromotionFreightCandidateReadinessUnknown:
 		return true
-	case PromotionPipelineAttentionUpToDate:
+	default:
+		return false
+	}
+}
+
+// Defines values for PromotionFreightRequestAvailabilityStrategy.
+const (
+	PromotionFreightRequestAvailabilityStrategyAll   PromotionFreightRequestAvailabilityStrategy = "All"
+	PromotionFreightRequestAvailabilityStrategyOneOf PromotionFreightRequestAvailabilityStrategy = "OneOf"
+)
+
+// Valid indicates whether the value is a known member of the PromotionFreightRequestAvailabilityStrategy enum.
+func (e PromotionFreightRequestAvailabilityStrategy) Valid() bool {
+	switch e {
+	case PromotionFreightRequestAvailabilityStrategyAll:
+		return true
+	case PromotionFreightRequestAvailabilityStrategyOneOf:
 		return true
 	default:
 		return false
@@ -937,6 +952,24 @@ func (e PromotionPolicyMode) Valid() bool {
 	}
 }
 
+// Defines values for PromotionProjectFreightRequestAvailabilityStrategy.
+const (
+	PromotionProjectFreightRequestAvailabilityStrategyAll   PromotionProjectFreightRequestAvailabilityStrategy = "All"
+	PromotionProjectFreightRequestAvailabilityStrategyOneOf PromotionProjectFreightRequestAvailabilityStrategy = "OneOf"
+)
+
+// Valid indicates whether the value is a known member of the PromotionProjectFreightRequestAvailabilityStrategy enum.
+func (e PromotionProjectFreightRequestAvailabilityStrategy) Valid() bool {
+	switch e {
+	case PromotionProjectFreightRequestAvailabilityStrategyAll:
+		return true
+	case PromotionProjectFreightRequestAvailabilityStrategyOneOf:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PromotionSource.
 const (
 	Kargo    PromotionSource = "kargo"
@@ -949,6 +982,57 @@ func (e PromotionSource) Valid() bool {
 	case Kargo:
 		return true
 	case Slipramp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromotionStageCapabilitiesBranchDrift.
+const (
+	PromotionStageCapabilitiesBranchDriftReady       PromotionStageCapabilitiesBranchDrift = "ready"
+	PromotionStageCapabilitiesBranchDriftUnavailable PromotionStageCapabilitiesBranchDrift = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the PromotionStageCapabilitiesBranchDrift enum.
+func (e PromotionStageCapabilitiesBranchDrift) Valid() bool {
+	switch e {
+	case PromotionStageCapabilitiesBranchDriftReady:
+		return true
+	case PromotionStageCapabilitiesBranchDriftUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromotionStageCapabilitiesPolicy.
+const (
+	PromotionStageCapabilitiesPolicyReady PromotionStageCapabilitiesPolicy = "ready"
+)
+
+// Valid indicates whether the value is a known member of the PromotionStageCapabilitiesPolicy enum.
+func (e PromotionStageCapabilitiesPolicy) Valid() bool {
+	switch e {
+	case PromotionStageCapabilitiesPolicyReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PromotionStageCapabilitiesPromotion.
+const (
+	PromotionStageCapabilitiesPromotionReady       PromotionStageCapabilitiesPromotion = "ready"
+	PromotionStageCapabilitiesPromotionUnavailable PromotionStageCapabilitiesPromotion = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the PromotionStageCapabilitiesPromotion enum.
+func (e PromotionStageCapabilitiesPromotion) Valid() bool {
+	switch e {
+	case PromotionStageCapabilitiesPromotionReady:
+		return true
+	case PromotionStageCapabilitiesPromotionUnavailable:
 		return true
 	default:
 		return false
@@ -1056,16 +1140,16 @@ func (e PyinfraDeployReportSummaryMode) Valid() bool {
 
 // Defines values for ReadinessResponseStatus.
 const (
-	NotReady ReadinessResponseStatus = "not-ready"
-	Ready    ReadinessResponseStatus = "ready"
+	ReadinessResponseStatusNotReady ReadinessResponseStatus = "not-ready"
+	ReadinessResponseStatusReady    ReadinessResponseStatus = "ready"
 )
 
 // Valid indicates whether the value is a known member of the ReadinessResponseStatus enum.
 func (e ReadinessResponseStatus) Valid() bool {
 	switch e {
-	case NotReady:
+	case ReadinessResponseStatusNotReady:
 		return true
-	case Ready:
+	case ReadinessResponseStatusReady:
 		return true
 	default:
 		return false
@@ -3226,26 +3310,52 @@ type PromotionFreightArtifact struct {
 // PromotionFreightArtifactKind defines model for PromotionFreightArtifact.Kind.
 type PromotionFreightArtifactKind string
 
+// PromotionFreightCandidate defines model for PromotionFreightCandidate.
+type PromotionFreightCandidate struct {
+	Evidence  []string                           `json:"evidence"`
+	Freight   PromotionFreightItem               `json:"freight"`
+	Readiness PromotionFreightCandidateReadiness `json:"readiness"`
+	Reason    *string                            `json:"reason,omitempty"`
+}
+
+// PromotionFreightCandidateReadiness defines model for PromotionFreightCandidate.Readiness.
+type PromotionFreightCandidateReadiness string
+
 // PromotionFreightItem defines model for PromotionFreightItem.
 type PromotionFreightItem struct {
-	Artifacts []PromotionFreightArtifact `json:"artifacts"`
-	Name      string                     `json:"name"`
-	Origin    string                     `json:"origin"`
+	ApprovedFor *[]string                       `json:"approvedFor,omitempty"`
+	Artifacts   []PromotionFreightArtifact      `json:"artifacts"`
+	CurrentlyIn *[]PromotionFreightOccupancy    `json:"currentlyIn,omitempty"`
+	Name        string                          `json:"name"`
+	Origin      string                          `json:"origin"`
+	VerifiedIn  *[]PromotionFreightVerification `json:"verifiedIn,omitempty"`
+}
+
+// PromotionFreightOccupancy defines model for PromotionFreightOccupancy.
+type PromotionFreightOccupancy struct {
+	Since time.Time `json:"since"`
+	Stage string    `json:"stage"`
 }
 
 // PromotionFreightRequest defines model for PromotionFreightRequest.
 type PromotionFreightRequest struct {
-	Direct       bool     `json:"direct"`
-	Origin       string   `json:"origin"`
-	SourceStages []string `json:"sourceStages"`
+	AvailabilityStrategy PromotionFreightRequestAvailabilityStrategy `json:"availabilityStrategy"`
+	Direct               bool                                        `json:"direct"`
+	Origin               string                                      `json:"origin"`
+
+	// RequiredSoakTime Optional Kargo duration required in an upstream Stage.
+	RequiredSoakTime *string  `json:"requiredSoakTime,omitempty"`
+	SourceStages     []string `json:"sourceStages"`
 }
 
-// PromotionFreightSource defines model for PromotionFreightSource.
-type PromotionFreightSource struct {
-	Environment string             `json:"environment"`
-	Freight     PromotionFreight   `json:"freight"`
-	StageID     openapi_types.UUID `json:"stageId"`
-	StageName   string             `json:"stageName"`
+// PromotionFreightRequestAvailabilityStrategy defines model for PromotionFreightRequest.AvailabilityStrategy.
+type PromotionFreightRequestAvailabilityStrategy string
+
+// PromotionFreightVerification defines model for PromotionFreightVerification.
+type PromotionFreightVerification struct {
+	// LongestCompletedSoak Go duration representing the longest completed continuous occupancy.
+	LongestCompletedSoak string `json:"longestCompletedSoak"`
+	Stage                string `json:"stage"`
 }
 
 // PromotionList defines model for PromotionList.
@@ -3256,82 +3366,45 @@ type PromotionList struct {
 	Total  int         `json:"total"`
 }
 
-// PromotionPipeline defines model for PromotionPipeline.
-type PromotionPipeline struct {
-	Application      string                   `json:"application"`
-	Cluster          CatalogName              `json:"cluster"`
-	EnvironmentOrder []string                 `json:"environmentOrder"`
-	Integration      CatalogName              `json:"integration"`
-	Project          CatalogName              `json:"project"`
-	Repository       CatalogName              `json:"repository"`
-	Stages           []PromotionPipelineStage `json:"stages"`
-}
-
-// PromotionPipelineAttention defines model for PromotionPipelineAttention.
-type PromotionPipelineAttention string
-
-// PromotionPipelineList defines model for PromotionPipelineList.
-type PromotionPipelineList struct {
-	Items  []PromotionPipeline `json:"items"`
-	Limit  int                 `json:"limit"`
-	Offset int                 `json:"offset"`
-
-	// Summary Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
-	Summary PromotionPipelineSummary `json:"summary"`
-	Total   int                      `json:"total"`
-}
-
-// PromotionPipelineStage defines model for PromotionPipelineStage.
-type PromotionPipelineStage struct {
-	// ArgoCdURL Direct link to the observed Application in the configured Argo CD UI.
-	ArgoCdURL *string `json:"argoCdUrl,omitempty"`
-
-	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
-	AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
-
-	// AvailableFreight Exact observed Freight not currently deployed to this Stage.
-	AvailableFreight PromotionFreight `json:"availableFreight"`
-	Environment      string           `json:"environment"`
-	Freight          PromotionFreight `json:"freight"`
-
-	// HealthStatus Most recently observed aggregate Kargo health status for this Stage.
-	HealthStatus *string            `json:"healthStatus,omitempty"`
-	ID           openapi_types.UUID `json:"id"`
-
-	// KargoURL Direct link to this Stage in the configured Kargo UI.
-	KargoURL       *string   `json:"kargoUrl,omitempty"`
-	LastObservedAt time.Time `json:"lastObservedAt"`
-	Name           string    `json:"name"`
-
-	// ObservationStale Whether the Stage observation exceeds the integration freshness limit.
-	ObservationStale      bool                     `json:"observationStale"`
-	PendingPromotionCount int                      `json:"pendingPromotionCount"`
-	Policy                PromotionStagePolicy     `json:"policy"`
-	PromotionSources      []PromotionFreightSource `json:"promotionSources"`
-}
-
-// PromotionPipelineSummary Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
-type PromotionPipelineSummary struct {
-	Drifted  int `json:"drifted"`
-	Outdated int `json:"outdated"`
-	UpToDate int `json:"upToDate"`
-}
-
 // PromotionPolicyMode defines model for PromotionPolicyMode.
 type PromotionPolicyMode string
 
 // PromotionProject defines model for PromotionProject.
 type PromotionProject struct {
-	ApplicationCount int         `json:"applicationCount"`
-	Cluster          CatalogName `json:"cluster"`
-	Integration      CatalogName `json:"integration"`
+	Cluster     CatalogName `json:"cluster"`
+	Integration CatalogName `json:"integration"`
 
 	// KargoURL Direct link to this Project in the configured Kargo UI.
-	KargoURL       *string     `json:"kargoUrl,omitempty"`
-	LastObservedAt time.Time   `json:"lastObservedAt"`
-	Project        CatalogName `json:"project"`
-	StageCount     int         `json:"stageCount"`
+	KargoURL            *string     `json:"kargoUrl,omitempty"`
+	LatestObservedAt    time.Time   `json:"latestObservedAt"`
+	PendingReviewCount  int         `json:"pendingReviewCount"`
+	Project             CatalogName `json:"project"`
+	StageCount          int         `json:"stageCount"`
+	StaleStageCount     int         `json:"staleStageCount"`
+	UnhealthyStageCount int         `json:"unhealthyStageCount"`
 }
+
+// PromotionProjectDetail defines model for PromotionProjectDetail.
+type PromotionProjectDetail struct {
+	Cluster     CatalogName             `json:"cluster"`
+	Integration CatalogName             `json:"integration"`
+	KargoURL    *string                 `json:"kargoUrl,omitempty"`
+	Project     CatalogName             `json:"project"`
+	Stages      []PromotionProjectStage `json:"stages"`
+}
+
+// PromotionProjectFreightRequest defines model for PromotionProjectFreightRequest.
+type PromotionProjectFreightRequest struct {
+	AvailabilityStrategy PromotionProjectFreightRequestAvailabilityStrategy `json:"availabilityStrategy"`
+	Candidates           []PromotionFreightCandidate                        `json:"candidates"`
+	Direct               bool                                               `json:"direct"`
+	Origin               string                                             `json:"origin"`
+	RequiredSoakTime     *string                                            `json:"requiredSoakTime,omitempty"`
+	Sources              []PromotionProjectStageSource                      `json:"sources"`
+}
+
+// PromotionProjectFreightRequestAvailabilityStrategy defines model for PromotionProjectFreightRequest.AvailabilityStrategy.
+type PromotionProjectFreightRequestAvailabilityStrategy string
 
 // PromotionProjectList defines model for PromotionProjectList.
 type PromotionProjectList struct {
@@ -3339,6 +3412,37 @@ type PromotionProjectList struct {
 	Limit  int                `json:"limit"`
 	Offset int                `json:"offset"`
 	Total  int                `json:"total"`
+}
+
+// PromotionProjectStage defines model for PromotionProjectStage.
+type PromotionProjectStage struct {
+	ArgoCdURL             *string                           `json:"argoCdUrl,omitempty"`
+	AutoPromotionEnabled  bool                              `json:"autoPromotionEnabled"`
+	Capabilities          PromotionStageCapabilities        `json:"capabilities"`
+	Conditions            []PromotionStageCondition         `json:"conditions"`
+	ControlFlow           bool                              `json:"controlFlow"`
+	CurrentPromotion      *PromotionStagePromotionReference `json:"currentPromotion,omitempty"`
+	Enrichment            *PromotionStageEnrichment         `json:"enrichment,omitempty"`
+	FirstObservedAt       time.Time                         `json:"firstObservedAt"`
+	Freight               PromotionFreight                  `json:"freight"`
+	HealthStatus          *string                           `json:"healthStatus,omitempty"`
+	ID                    openapi_types.UUID                `json:"id"`
+	KargoURL              *string                           `json:"kargoUrl,omitempty"`
+	KubernetesUID         string                            `json:"kubernetesUid"`
+	LastObservedAt        time.Time                         `json:"lastObservedAt"`
+	LastPromotion         *PromotionStagePromotionReference `json:"lastPromotion,omitempty"`
+	Name                  string                            `json:"name"`
+	ObservationStale      bool                              `json:"observationStale"`
+	PendingPromotionCount int                               `json:"pendingPromotionCount"`
+	Policy                PromotionStagePolicy              `json:"policy"`
+	RequestedFreight      []PromotionProjectFreightRequest  `json:"requestedFreight"`
+	ResourceVersion       string                            `json:"resourceVersion"`
+}
+
+// PromotionProjectStageSource defines model for PromotionProjectStageSource.
+type PromotionProjectStageSource struct {
+	Name    string              `json:"name"`
+	StageID *openapi_types.UUID `json:"stageId,omitempty"`
 }
 
 // PromotionRepositorySnapshot defines model for PromotionRepositorySnapshot.
@@ -3359,13 +3463,13 @@ type PromotionSource string
 
 // PromotionStage defines model for PromotionStage.
 type PromotionStage struct {
-	Application string     `json:"application"`
+	Application *string    `json:"application,omitempty"`
 	ArchivedAt  *time.Time `json:"archivedAt,omitempty"`
 
 	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
 	AutoPromotionEnabled bool               `json:"autoPromotionEnabled"`
 	Cluster              CatalogName        `json:"cluster"`
-	Environment          string             `json:"environment"`
+	Environment          *string            `json:"environment,omitempty"`
 	FirstObservedAt      time.Time          `json:"firstObservedAt"`
 	Freight              PromotionFreight   `json:"freight"`
 	ID                   openapi_types.UUID `json:"id"`
@@ -3379,13 +3483,49 @@ type PromotionStage struct {
 	PendingPromotionCount           int                              `json:"pendingPromotionCount"`
 	Policy                          PromotionStagePolicy             `json:"policy"`
 	Project                         CatalogName                      `json:"project"`
-	Repository                      CatalogName                      `json:"repository"`
-	RepositoryURL                   string                           `json:"repositoryUrl"`
+	Repository                      *CatalogName                     `json:"repository,omitempty"`
+	RepositoryURL                   *string                          `json:"repositoryUrl,omitempty"`
 	RequestedFreight                []PromotionFreightRequest        `json:"requestedFreight"`
 	ResourceVersion                 string                           `json:"resourceVersion"`
 	SourcePaths                     []string                         `json:"sourcePaths"`
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    string                           `json:"targetBranch"`
+	TargetBranch                    *string                          `json:"targetBranch,omitempty"`
+}
+
+// PromotionStageCapabilities defines model for PromotionStageCapabilities.
+type PromotionStageCapabilities struct {
+	BranchDrift PromotionStageCapabilitiesBranchDrift `json:"branchDrift"`
+	Issues      []string                              `json:"issues"`
+	Policy      PromotionStageCapabilitiesPolicy      `json:"policy"`
+	Promotion   PromotionStageCapabilitiesPromotion   `json:"promotion"`
+}
+
+// PromotionStageCapabilitiesBranchDrift defines model for PromotionStageCapabilities.BranchDrift.
+type PromotionStageCapabilitiesBranchDrift string
+
+// PromotionStageCapabilitiesPolicy defines model for PromotionStageCapabilities.Policy.
+type PromotionStageCapabilitiesPolicy string
+
+// PromotionStageCapabilitiesPromotion defines model for PromotionStageCapabilities.Promotion.
+type PromotionStageCapabilitiesPromotion string
+
+// PromotionStageCondition defines model for PromotionStageCondition.
+type PromotionStageCondition struct {
+	LastTransitionTime *time.Time `json:"lastTransitionTime,omitempty"`
+	Message            *string    `json:"message,omitempty"`
+	Reason             *string    `json:"reason,omitempty"`
+	Status             string     `json:"status"`
+	Type               string     `json:"type"`
+}
+
+// PromotionStageEnrichment defines model for PromotionStageEnrichment.
+type PromotionStageEnrichment struct {
+	Application   *string      `json:"application,omitempty"`
+	Environment   *string      `json:"environment,omitempty"`
+	Repository    *CatalogName `json:"repository,omitempty"`
+	RepositoryURL *string      `json:"repositoryUrl,omitempty"`
+	SourcePaths   *[]string    `json:"sourcePaths,omitempty"`
+	TargetBranch  *string      `json:"targetBranch,omitempty"`
 }
 
 // PromotionStageList defines model for PromotionStageList.
@@ -3398,7 +3538,7 @@ type PromotionStageList struct {
 
 // PromotionStageObservation defines model for PromotionStageObservation.
 type PromotionStageObservation struct {
-	Application string `json:"application"`
+	Application *string `json:"application,omitempty"`
 
 	// ArgoApplicationNamespace Namespace of the matching Argo CD Application reported by Kargo health output.
 	ArgoApplicationNamespace *string `json:"argoApplicationNamespace,omitempty"`
@@ -3406,22 +3546,28 @@ type PromotionStageObservation struct {
 	// AutoPromotionEnabled Effective Kargo auto-promotion state for this Stage.
 	AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
 
-	// DirectFreight Latest directly sourced Freight observed for each requested origin.
-	DirectFreight PromotionFreight `json:"directFreight"`
-	Environment   string           `json:"environment"`
-	Freight       PromotionFreight `json:"freight"`
+	// CandidateFreight Latest observed Freight for each requested origin, including Kargo eligibility evidence.
+	CandidateFreight PromotionFreight          `json:"candidateFreight"`
+	Conditions       []PromotionStageCondition `json:"conditions"`
+
+	// ControlFlow Whether the Stage has no Promotion steps and only describes control flow.
+	ControlFlow      bool                              `json:"controlFlow"`
+	CurrentPromotion *PromotionStagePromotionReference `json:"currentPromotion,omitempty"`
+	Environment      *string                           `json:"environment,omitempty"`
+	Freight          PromotionFreight                  `json:"freight"`
 
 	// HealthStatus Aggregate health status reported by Kargo for this Stage.
-	HealthStatus                    *string                          `json:"healthStatus,omitempty"`
-	KubernetesUID                   string                           `json:"kubernetesUid"`
-	Name                            string                           `json:"name"`
-	Project                         CatalogName                      `json:"project"`
-	RepositoryURL                   string                           `json:"repositoryUrl"`
-	RequestedFreight                []PromotionFreightRequest        `json:"requestedFreight"`
-	ResourceVersion                 string                           `json:"resourceVersion"`
-	SourcePaths                     []string                         `json:"sourcePaths"`
-	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement `json:"successfulRenderAcknowledgement,omitempty"`
-	TargetBranch                    string                           `json:"targetBranch"`
+	HealthStatus                    *string                           `json:"healthStatus,omitempty"`
+	KubernetesUID                   string                            `json:"kubernetesUid"`
+	LastPromotion                   *PromotionStagePromotionReference `json:"lastPromotion,omitempty"`
+	Name                            string                            `json:"name"`
+	Project                         CatalogName                       `json:"project"`
+	RepositoryURL                   *string                           `json:"repositoryUrl,omitempty"`
+	RequestedFreight                []PromotionFreightRequest         `json:"requestedFreight"`
+	ResourceVersion                 string                            `json:"resourceVersion"`
+	SourcePaths                     *[]string                         `json:"sourcePaths,omitempty"`
+	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement  `json:"successfulRenderAcknowledgement,omitempty"`
+	TargetBranch                    *string                           `json:"targetBranch,omitempty"`
 }
 
 // PromotionStagePolicy defines model for PromotionStagePolicy.
@@ -3439,6 +3585,13 @@ type PromotionStagePolicyUpdate struct {
 	ExpiresAt *time.Time          `json:"expiresAt,omitempty"`
 	Mode      PromotionPolicyMode `json:"mode"`
 	Reason    *string             `json:"reason,omitempty"`
+}
+
+// PromotionStagePromotionReference defines model for PromotionStagePromotionReference.
+type PromotionStagePromotionReference struct {
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	Name       string     `json:"name"`
+	Phase      *string    `json:"phase,omitempty"`
 }
 
 // PromotionStageSnapshot defines model for PromotionStageSnapshot.
@@ -4511,20 +4664,6 @@ type ListPromotionBranchDriftParams struct {
 	Offset      *Offset                     `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
-// ListPromotionPipelinesParams defines parameters for ListPromotionPipelines.
-type ListPromotionPipelinesParams struct {
-	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
-	Project     *CatalogName `form:"project,omitempty" json:"project,omitempty"`
-	Application *string      `form:"application,omitempty" json:"application,omitempty"`
-	Cluster     *CatalogName `form:"cluster,omitempty" json:"cluster,omitempty"`
-	Repository  *CatalogName `form:"repository,omitempty" json:"repository,omitempty"`
-
-	// Attention Include pipelines with Stage drift, newer Freight available to a manual Stage, or either condition. Stage drift requires comparable Freight in at least two environments.
-	Attention *PromotionPipelineAttention `form:"attention,omitempty" json:"attention,omitempty"`
-	Limit     *Limit                      `form:"limit,omitempty" json:"limit,omitempty"`
-	Offset    *Offset                     `form:"offset,omitempty" json:"offset,omitempty"`
-}
-
 // ListPromotionProjectsParams defines parameters for ListPromotionProjects.
 type ListPromotionProjectsParams struct {
 	Integration *CatalogName `form:"integration,omitempty" json:"integration,omitempty"`
@@ -5530,15 +5669,15 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/promotion-branch-drift (the `ListPromotionBranchDrift` operationId).
 	ListPromotionBranchDrift(ctx context.Context, params *ListPromotionBranchDriftParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListPromotionPipelines Compare current Freight across ordered Kargo environments
-	//
-	// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
-	ListPromotionPipelines(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListPromotionProjects List Kargo Projects derived from active observed Stages
 	//
 	// Corresponds with GET /api/v1/promotion-projects (the `ListPromotionProjects` operationId).
 	ListPromotionProjects(ctx context.Context, params *ListPromotionProjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetPromotionProject Get one Kargo Project and its observed Stage topology
+	//
+	// Corresponds with GET /api/v1/promotion-projects/{integration}/{cluster}/{project} (the `GetPromotionProject` operationId).
+	GetPromotionProject(ctx context.Context, integration CatalogName, cluster CatalogName, project CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListPromotionStages List observed Kargo Stages and their effective policies
 	//
@@ -6642,11 +6781,11 @@ func (c *Client) ListPromotionBranchDrift(ctx context.Context, params *ListPromo
 	return c.Client.Do(req)
 }
 
-// ListPromotionPipelines Compare current Freight across ordered Kargo environments
+// ListPromotionProjects List Kargo Projects derived from active observed Stages
 //
-// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
-func (c *Client) ListPromotionPipelines(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPromotionPipelinesRequest(c.Server, params)
+// Corresponds with GET /api/v1/promotion-projects (the `ListPromotionProjects` operationId).
+func (c *Client) ListPromotionProjects(ctx context.Context, params *ListPromotionProjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListPromotionProjectsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6657,11 +6796,11 @@ func (c *Client) ListPromotionPipelines(ctx context.Context, params *ListPromoti
 	return c.Client.Do(req)
 }
 
-// ListPromotionProjects List Kargo Projects derived from active observed Stages
+// GetPromotionProject Get one Kargo Project and its observed Stage topology
 //
-// Corresponds with GET /api/v1/promotion-projects (the `ListPromotionProjects` operationId).
-func (c *Client) ListPromotionProjects(ctx context.Context, params *ListPromotionProjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListPromotionProjectsRequest(c.Server, params)
+// Corresponds with GET /api/v1/promotion-projects/{integration}/{cluster}/{project} (the `GetPromotionProject` operationId).
+func (c *Client) GetPromotionProject(ctx context.Context, integration CatalogName, cluster CatalogName, project CatalogName, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetPromotionProjectRequest(c.Server, integration, cluster, project)
 	if err != nil {
 		return nil, err
 	}
@@ -9362,144 +9501,6 @@ func NewListPromotionBranchDriftRequest(server string, params *ListPromotionBran
 	return req, nil
 }
 
-// NewListPromotionPipelinesRequest constructs an http.Request for the ListPromotionPipelines method
-func NewListPromotionPipelinesRequest(server string, params *ListPromotionPipelinesParams) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/v1/promotion-pipelines")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Integration != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "integration", *params.Integration, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Project != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "project", *params.Project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Application != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "application", *params.Application, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Cluster != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cluster", *params.Cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Repository != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "repository", *params.Repository, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Attention != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "attention", *params.Attention, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Offset != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewListPromotionProjectsRequest constructs an http.Request for the ListPromotionProjects method
 func NewListPromotionProjectsRequest(server string, params *ListPromotionProjectsParams) (*http.Request, error) {
 	var err error
@@ -9592,6 +9593,54 @@ func NewListPromotionProjectsRequest(server string, params *ListPromotionProject
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetPromotionProjectRequest constructs an http.Request for the GetPromotionProject method
+func NewGetPromotionProjectRequest(server string, integration CatalogName, cluster CatalogName, project CatalogName) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "integration", integration, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "cluster", cluster, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "project", project, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/promotion-projects/%s/%s/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -12279,19 +12328,19 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/promotion-branch-drift (the `ListPromotionBranchDrift` operationId).
 	ListPromotionBranchDriftWithResponse(ctx context.Context, params *ListPromotionBranchDriftParams, reqEditors ...RequestEditorFn) (*ListPromotionBranchDriftResponse, error)
 
-	// ListPromotionPipelinesWithResponse Compare current Freight across ordered Kargo environments
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
-	ListPromotionPipelinesWithResponse(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*ListPromotionPipelinesResponse, error)
-
 	// ListPromotionProjectsWithResponse List Kargo Projects derived from active observed Stages
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/promotion-projects (the `ListPromotionProjects` operationId).
 	ListPromotionProjectsWithResponse(ctx context.Context, params *ListPromotionProjectsParams, reqEditors ...RequestEditorFn) (*ListPromotionProjectsResponse, error)
+
+	// GetPromotionProjectWithResponse Get one Kargo Project and its observed Stage topology
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/promotion-projects/{integration}/{cluster}/{project} (the `GetPromotionProject` operationId).
+	GetPromotionProjectWithResponse(ctx context.Context, integration CatalogName, cluster CatalogName, project CatalogName, reqEditors ...RequestEditorFn) (*GetPromotionProjectResponse, error)
 
 	// ListPromotionStagesWithResponse List observed Kargo Stages and their effective policies
 	//
@@ -15248,75 +15297,6 @@ func (r ListPromotionBranchDriftResponse) ContentType() string {
 	return ""
 }
 
-type ListPromotionPipelinesResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *PromotionPipelineList
-	// ApplicationProblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationProblemJSON400 *BadRequest
-	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationProblemJSON401 *Unauthorized
-	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationProblemJSON403 *Forbidden
-	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
-	ApplicationProblemJSON500 *InternalError
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r ListPromotionPipelinesResponse) GetJSON200() *PromotionPipelineList {
-	return r.JSON200
-}
-
-// GetApplicationProblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON400() *BadRequest {
-	return r.ApplicationProblemJSON400
-}
-
-// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON401() *Unauthorized {
-	return r.ApplicationProblemJSON401
-}
-
-// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON403() *Forbidden {
-	return r.ApplicationProblemJSON403
-}
-
-// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
-func (r ListPromotionPipelinesResponse) GetApplicationProblemJSON500() *InternalError {
-	return r.ApplicationProblemJSON500
-}
-
-// GetBody returns the raw response body bytes
-func (r ListPromotionPipelinesResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r ListPromotionPipelinesResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListPromotionPipelinesResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r ListPromotionPipelinesResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type ListPromotionProjectsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15380,6 +15360,75 @@ func (r ListPromotionProjectsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListPromotionProjectsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetPromotionProjectResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PromotionProjectDetail
+	// ApplicationProblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationProblemJSON401 *Unauthorized
+	// ApplicationProblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationProblemJSON403 *Forbidden
+	// ApplicationProblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationProblemJSON404 *NotFound
+	// ApplicationProblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationProblemJSON500 *InternalError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetPromotionProjectResponse) GetJSON200() *PromotionProjectDetail {
+	return r.JSON200
+}
+
+// GetApplicationProblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetPromotionProjectResponse) GetApplicationProblemJSON401() *Unauthorized {
+	return r.ApplicationProblemJSON401
+}
+
+// GetApplicationProblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetPromotionProjectResponse) GetApplicationProblemJSON403() *Forbidden {
+	return r.ApplicationProblemJSON403
+}
+
+// GetApplicationProblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetPromotionProjectResponse) GetApplicationProblemJSON404() *NotFound {
+	return r.ApplicationProblemJSON404
+}
+
+// GetApplicationProblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetPromotionProjectResponse) GetApplicationProblemJSON500() *InternalError {
+	return r.ApplicationProblemJSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetPromotionProjectResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetPromotionProjectResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetPromotionProjectResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetPromotionProjectResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -19300,19 +19349,6 @@ func (c *ClientWithResponses) ListPromotionBranchDriftWithResponse(ctx context.C
 	return ParseListPromotionBranchDriftResponse(rsp)
 }
 
-// ListPromotionPipelinesWithResponse Compare current Freight across ordered Kargo environments
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /api/v1/promotion-pipelines (the `ListPromotionPipelines` operationId).
-func (c *ClientWithResponses) ListPromotionPipelinesWithResponse(ctx context.Context, params *ListPromotionPipelinesParams, reqEditors ...RequestEditorFn) (*ListPromotionPipelinesResponse, error) {
-	rsp, err := c.ListPromotionPipelines(ctx, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListPromotionPipelinesResponse(rsp)
-}
-
 // ListPromotionProjectsWithResponse List Kargo Projects derived from active observed Stages
 //
 // Returns a wrapper object for the known response body format(s).
@@ -19324,6 +19360,19 @@ func (c *ClientWithResponses) ListPromotionProjectsWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseListPromotionProjectsResponse(rsp)
+}
+
+// GetPromotionProjectWithResponse Get one Kargo Project and its observed Stage topology
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/promotion-projects/{integration}/{cluster}/{project} (the `GetPromotionProject` operationId).
+func (c *ClientWithResponses) GetPromotionProjectWithResponse(ctx context.Context, integration CatalogName, cluster CatalogName, project CatalogName, reqEditors ...RequestEditorFn) (*GetPromotionProjectResponse, error) {
+	rsp, err := c.GetPromotionProject(ctx, integration, cluster, project, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetPromotionProjectResponse(rsp)
 }
 
 // ListPromotionStagesWithResponse List observed Kargo Stages and their effective policies
@@ -22286,60 +22335,6 @@ func ParseListPromotionBranchDriftResponse(rsp *http.Response) (*ListPromotionBr
 	return response, nil
 }
 
-// ParseListPromotionPipelinesResponse parses an HTTP response from a ListPromotionPipelinesWithResponse call
-func ParseListPromotionPipelinesResponse(rsp *http.Response) (*ListPromotionPipelinesResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListPromotionPipelinesResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest PromotionPipelineList
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest BadRequest
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Unauthorized
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Forbidden
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest InternalError
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationProblemJSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
 // ParseListPromotionProjectsResponse parses an HTTP response from a ListPromotionProjectsWithResponse call
 func ParseListPromotionProjectsResponse(rsp *http.Response) (*ListPromotionProjectsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -22381,6 +22376,60 @@ func ParseListPromotionProjectsResponse(rsp *http.Response) (*ListPromotionProje
 			return nil, err
 		}
 		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetPromotionProjectResponse parses an HTTP response from a GetPromotionProjectWithResponse call
+func ParseGetPromotionProjectResponse(rsp *http.Response) (*GetPromotionProjectResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetPromotionProjectResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PromotionProjectDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest NotFound
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationProblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest InternalError
@@ -25282,12 +25331,12 @@ type ServerInterface interface {
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(w http.ResponseWriter, r *http.Request, params ListPromotionBranchDriftParams)
-	// ListPromotionPipelines Compare current Freight across ordered Kargo environments
-	// (GET /api/v1/promotion-pipelines)
-	ListPromotionPipelines(w http.ResponseWriter, r *http.Request, params ListPromotionPipelinesParams)
 	// ListPromotionProjects List Kargo Projects derived from active observed Stages
 	// (GET /api/v1/promotion-projects)
 	ListPromotionProjects(w http.ResponseWriter, r *http.Request, params ListPromotionProjectsParams)
+	// GetPromotionProject Get one Kargo Project and its observed Stage topology
+	// (GET /api/v1/promotion-projects/{integration}/{cluster}/{project})
+	GetPromotionProject(w http.ResponseWriter, r *http.Request, integration CatalogName, cluster CatalogName, project CatalogName)
 	// ListPromotionStages List observed Kargo Stages and their effective policies
 	// (GET /api/v1/promotion-stages)
 	ListPromotionStages(w http.ResponseWriter, r *http.Request, params ListPromotionStagesParams)
@@ -26593,130 +26642,6 @@ func (siw *ServerInterfaceWrapper) ListPromotionBranchDrift(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
-// ListPromotionPipelines operation middleware
-func (siw *ServerInterfaceWrapper) ListPromotionPipelines(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListPromotionPipelinesParams
-
-	// ------------- Optional query parameter "integration" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "integration", r.URL.Query(), &params.Integration, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "integration"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "integration", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "project" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "project", r.URL.Query(), &params.Project, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "project"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "application" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "application", r.URL.Query(), &params.Application, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "application"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "application", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "cluster" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "cluster", r.URL.Query(), &params.Cluster, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cluster"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "repository" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "repository", r.URL.Query(), &params.Repository, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repository"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "attention" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "attention", r.URL.Query(), &params.Attention, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "attention"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "attention", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		}
-		return
-	}
-
-	// ------------- Optional query parameter "offset" -------------
-
-	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
-	if err != nil {
-		var requiredError *runtime.RequiredParameterError
-		if errors.As(err, &requiredError) {
-			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
-		} else {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
-		}
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListPromotionPipelines(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListPromotionProjects operation middleware
 func (siw *ServerInterfaceWrapper) ListPromotionProjects(w http.ResponseWriter, r *http.Request) {
 
@@ -26793,6 +26718,50 @@ func (siw *ServerInterfaceWrapper) ListPromotionProjects(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPromotionProjects(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetPromotionProject operation middleware
+func (siw *ServerInterfaceWrapper) GetPromotionProject(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "integration" -------------
+	var integration CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "integration", r.PathValue("integration"), &integration, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "integration", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "cluster" -------------
+	var cluster CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "cluster", r.PathValue("cluster"), &cluster, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cluster", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "project" -------------
+	var project CatalogName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "project", r.PathValue("project"), &project, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "project", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPromotionProject(w, r, integration, cluster, project)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -28681,10 +28650,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotions/{promotionId}", wrapper.GetPromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotions/{promotionId}/decision", wrapper.DecidePromotion)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects", wrapper.ListPromotionProjects)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-projects/{integration}/{cluster}/{project}", wrapper.GetPromotionProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-stages", wrapper.ListPromotionStages)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}/promotions", wrapper.CreatePromotion)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/promotion-stages/{stageId}/policy", wrapper.UpdatePromotionStagePolicy)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-pipelines", wrapper.ListPromotionPipelines)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/promotion-branch-drift", wrapper.ListPromotionBranchDrift)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/controller/v1/kargo/{integration}/stages", wrapper.ReplaceKargoStageSnapshot)
 
@@ -31791,92 +31760,6 @@ func (response ListPromotionBranchDrift500ApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
-type ListPromotionPipelinesRequestObject struct {
-	Params ListPromotionPipelinesParams
-}
-
-type ListPromotionPipelinesResponseObject interface {
-	VisitListPromotionPipelinesResponse(w http.ResponseWriter) error
-}
-
-type ListPromotionPipelines200JSONResponse PromotionPipelineList
-
-func (response ListPromotionPipelines200JSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListPromotionPipelines400ApplicationProblemPlusJSONResponse struct {
-	BadRequestApplicationProblemPlusJSONResponse
-}
-
-func (response ListPromotionPipelines400ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListPromotionPipelines401ApplicationProblemPlusJSONResponse struct {
-	UnauthorizedApplicationProblemPlusJSONResponse
-}
-
-func (response ListPromotionPipelines401ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListPromotionPipelines403ApplicationProblemPlusJSONResponse struct {
-	ForbiddenApplicationProblemPlusJSONResponse
-}
-
-func (response ListPromotionPipelines403ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListPromotionPipelines500ApplicationProblemPlusJSONResponse struct {
-	InternalErrorApplicationProblemPlusJSONResponse
-}
-
-func (response ListPromotionPipelines500ApplicationProblemPlusJSONResponse) VisitListPromotionPipelinesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/problem+json")
-	w.WriteHeader(500)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type ListPromotionProjectsRequestObject struct {
 	Params ListPromotionProjectsParams
 }
@@ -31952,6 +31835,94 @@ type ListPromotionProjects500ApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListPromotionProjects500ApplicationProblemPlusJSONResponse) VisitListPromotionProjectsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionProjectRequestObject struct {
+	Integration CatalogName `json:"integration"`
+	Cluster     CatalogName `json:"cluster"`
+	Project     CatalogName `json:"project"`
+}
+
+type GetPromotionProjectResponseObject interface {
+	VisitGetPromotionProjectResponse(w http.ResponseWriter) error
+}
+
+type GetPromotionProject200JSONResponse PromotionProjectDetail
+
+func (response GetPromotionProject200JSONResponse) VisitGetPromotionProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionProject401ApplicationProblemPlusJSONResponse struct {
+	UnauthorizedApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionProject401ApplicationProblemPlusJSONResponse) VisitGetPromotionProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionProject403ApplicationProblemPlusJSONResponse struct {
+	ForbiddenApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionProject403ApplicationProblemPlusJSONResponse) VisitGetPromotionProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionProject404ApplicationProblemPlusJSONResponse struct {
+	NotFoundApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionProject404ApplicationProblemPlusJSONResponse) VisitGetPromotionProjectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPromotionProject500ApplicationProblemPlusJSONResponse struct {
+	InternalErrorApplicationProblemPlusJSONResponse
+}
+
+func (response GetPromotionProject500ApplicationProblemPlusJSONResponse) VisitGetPromotionProjectResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -36530,12 +36501,12 @@ type StrictServerInterface interface {
 	// ListPromotionBranchDrift Inspect cached Kargo Stage branch drift grouped by Repository
 	// (GET /api/v1/promotion-branch-drift)
 	ListPromotionBranchDrift(ctx context.Context, request ListPromotionBranchDriftRequestObject) (ListPromotionBranchDriftResponseObject, error)
-	// ListPromotionPipelines Compare current Freight across ordered Kargo environments
-	// (GET /api/v1/promotion-pipelines)
-	ListPromotionPipelines(ctx context.Context, request ListPromotionPipelinesRequestObject) (ListPromotionPipelinesResponseObject, error)
 	// ListPromotionProjects List Kargo Projects derived from active observed Stages
 	// (GET /api/v1/promotion-projects)
 	ListPromotionProjects(ctx context.Context, request ListPromotionProjectsRequestObject) (ListPromotionProjectsResponseObject, error)
+	// GetPromotionProject Get one Kargo Project and its observed Stage topology
+	// (GET /api/v1/promotion-projects/{integration}/{cluster}/{project})
+	GetPromotionProject(ctx context.Context, request GetPromotionProjectRequestObject) (GetPromotionProjectResponseObject, error)
 	// ListPromotionStages List observed Kargo Stages and their effective policies
 	// (GET /api/v1/promotion-stages)
 	ListPromotionStages(ctx context.Context, request ListPromotionStagesRequestObject) (ListPromotionStagesResponseObject, error)
@@ -37565,32 +37536,6 @@ func (sh *strictHandler) ListPromotionBranchDrift(w http.ResponseWriter, r *http
 	}
 }
 
-// ListPromotionPipelines operation middleware
-func (sh *strictHandler) ListPromotionPipelines(w http.ResponseWriter, r *http.Request, params ListPromotionPipelinesParams) {
-	var request ListPromotionPipelinesRequestObject
-
-	request.Params = params
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListPromotionPipelines(ctx, request.(ListPromotionPipelinesRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListPromotionPipelines")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListPromotionPipelinesResponseObject); ok {
-		if err := validResponse.VisitListPromotionPipelinesResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // ListPromotionProjects operation middleware
 func (sh *strictHandler) ListPromotionProjects(w http.ResponseWriter, r *http.Request, params ListPromotionProjectsParams) {
 	var request ListPromotionProjectsRequestObject
@@ -37610,6 +37555,34 @@ func (sh *strictHandler) ListPromotionProjects(w http.ResponseWriter, r *http.Re
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListPromotionProjectsResponseObject); ok {
 		if err := validResponse.VisitListPromotionProjectsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPromotionProject operation middleware
+func (sh *strictHandler) GetPromotionProject(w http.ResponseWriter, r *http.Request, integration CatalogName, cluster CatalogName, project CatalogName) {
+	var request GetPromotionProjectRequestObject
+
+	request.Integration = integration
+	request.Cluster = cluster
+	request.Project = project
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPromotionProject(ctx, request.(GetPromotionProjectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPromotionProject")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPromotionProjectResponseObject); ok {
+		if err := validResponse.VisitGetPromotionProjectResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

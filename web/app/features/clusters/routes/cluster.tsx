@@ -158,10 +158,10 @@ function PromotionStages({
             component={Link}
             leftSection={<IconListDetails size={16} />}
             size="compact-md"
-            to={`/promotion-stages?cluster=${encodeURIComponent(clusterName)}`}
+            to={`/promotion-projects?cluster=${encodeURIComponent(clusterName)}`}
             variant="light"
           >
-            View all stages
+            View Kargo projects
           </Button>
         }
         description={`The latest ${stageLimit} active Kargo Stages observed in this execution cluster.`}

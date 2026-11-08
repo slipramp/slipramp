@@ -24,20 +24,21 @@ through the existing outbound command protocol.
 ## Integration configuration and inventory
 
 Named integrations are strict versioned Server startup configuration. Each
-selects a Cluster, Repository allowlist, ordered presentation environments,
+selects a Cluster, Repository allowlist,
 preparation Target and Action, freshness and review retention, optional Kargo
 and Argo CD links, and optional candidate-branch cleanup policy. Controller
 configuration selects the Stage namespaces observed for an integration.
 
 An optional Controller observer reads every Stage page from configured
 namespaces and selects Stages whose `slipramp.com/integration` label equals the
-integration name. Explicit Stage annotations supply application, environment,
-Repository URL, target branch, and source paths; the observer does not infer
-those coordinates from promotion-template variables or repository layout.
+integration name. Optional Stage annotations enrich the inventory with
+application, environment, Repository URL, target branch, and source paths; the
+observer does not infer those coordinates from promotion-template variables or
+repository layout.
 See the [Stage metadata contract](../CONFIGURATION.md#kargo-stage-metadata).
 
 The observer submits complete authenticated snapshots of participating Stages.
-A partial list or malformed participating Stage is never accepted as complete;
+A partial list is never accepted as complete;
 unselected Stages do not affect inventory. Repeated snapshot identity is
 idempotent; successful snapshots archive missing or deselected Stages while
 retaining policy and history. Inventory failure affects Stage freshness without
@@ -45,10 +46,12 @@ interrupting ordinary Run delivery.
 
 Stage identity is `(integration, project, name)`, with project equal to the
 Kubernetes namespace and Cluster supplied by the authenticated Controller.
-Stored observations contain typed current Freight, requested-Freight origins,
-declared source Stages, direct-Warehouse eligibility, aggregate health,
-application identity, repository and branch context, and successful-render
-acknowledgement.
+Stored observations contain typed current and candidate Freight, native
+requested-Freight origins, availability strategy, required soak time, requested
+source Stages, status conditions, current and last Promotion references,
+aggregate health, optional Slipramp enrichment, and successful-render
+acknowledgement. Missing enrichment disables only the Slipramp capability that
+needs it; the Stage remains visible in its Kargo Project.
 
 Stage policy defaults to `automatic`. `review-required` may have an expiry.
 Promotion acceptance snapshots the effective policy; later policy changes do
@@ -208,15 +211,24 @@ Promotion command.
 
 ## Operational projections
 
-Pipeline, Freight availability, health, and branch drift are derived from Stage
-observations and cached read-only Git evidence. They do not create a second
-Promotion lifecycle or query Kargo and Argo CD during ordinary product reads.
-Promotion reads include the durable Kargo outcome already reported by the
-Controller and never cause a live cluster query.
+The Project inventory is the canonical product topology. Its identity is the
+exact `(integration, cluster, project)` boundary, and it retains every observed
+participating Stage. Relationships are resolved only from Kargo's native
+requested-Freight source references. Slipramp does not reconstruct pipelines,
+infer environment adjacency, or merge Projects across integrations or Clusters.
+Project list summaries derive Stage count, unhealthy and stale Stage counts,
+pending reviews, and latest observation time from the same Stage observations.
 
-Freight choices come from exact observed upstream Stage or directly requested
-Warehouse evidence, not inferred environment adjacency. Environment order is a
-presentation setting only. Drift compares watched source paths and target
-movement independently, preserves the last successful render acknowledgement,
-and reports stale, failed, or unknown evidence rather than treating absence as
-agreement.
+Freight eligibility is conservative. Directly requested Warehouse Freight is
+eligible. Upstream Freight requires observed verification and required soak-time
+evidence unless Kargo records explicit approval for the target Stage. `OneOf`
+requires one eligible source and `All` requires every requested source. Missing
+evidence is `unknown`, never assumed ready. Control-flow Stages remain in the
+topology, but Slipramp does not offer a Freight-based Promotion when no concrete
+requested Freight is available.
+
+Project and Promotion reads do not query Kargo or Argo CD. Branch drift uses
+cached read-only Git evidence and remains a separate workflow. It compares
+watched source paths and target movement independently, preserves the last
+successful render acknowledgement, and reports stale, failed, or unknown
+evidence rather than treating absence as agreement.

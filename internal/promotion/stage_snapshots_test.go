@@ -77,7 +77,7 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 				TargetBranch:             "stage/external-dns/prod",
 				SourcePaths:              []string{"k8s/external-dns/base"},
 				Freight:                  Freight{Items: []FreightItem{}},
-				DirectFreight:            Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}},
+				CandidateFreight:         Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}},
 				AutoPromotionEnabled:     true,
 				HealthStatus:             &healthStatus,
 				ArgoApplicationNamespace: &argoNamespace,
@@ -97,7 +97,7 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 		stage.ClusterName != "colo" || !stage.AutoPromotionEnabled ||
 		stage.HealthStatus == nil || *stage.HealthStatus != "Healthy" ||
 		stage.ArgoApplicationNamespace == nil || *stage.ArgoApplicationNamespace != "argocd" ||
-		len(stage.DirectFreight.Items) != 1 || stage.DirectFreight.Items[0].Name != "freight-new" {
+		len(stage.CandidateFreight.Items) != 1 || stage.CandidateFreight.Items[0].Name != "freight-new" {
 		t.Errorf("stored Stage = %#v", stage)
 	}
 	stage.RequestedFreight = []FreightRequest{{Origin: "Warehouse/app", SourceStages: []string{"app-qa"}}}
@@ -119,9 +119,10 @@ func TestStageServiceReplacesSnapshotWithMatchedRepository(t *testing.T) {
 	}
 }
 
-func TestStageServiceRejectsWrongClusterAndUnmatchedRepository(t *testing.T) {
+func TestStageServiceRejectsWrongClusterAndRetainsUnmatchedRepositoryAsEnrichmentIssue(t *testing.T) {
 	t.Parallel()
 
+	store := &recordingStageSnapshotStore{}
 	service := NewStageService(
 		IntegrationSet{
 			"prod": {
@@ -130,7 +131,7 @@ func TestStageServiceRejectsWrongClusterAndUnmatchedRepository(t *testing.T) {
 			},
 		},
 		staticRepositoryLister{},
-		&recordingStageSnapshotStore{},
+		store,
 	)
 
 	err := service.ReplaceStageSnapshot(t.Context(), "prod", "edge", StageSnapshotReplacement{})
@@ -157,8 +158,12 @@ func TestStageServiceRejectsWrongClusterAndUnmatchedRepository(t *testing.T) {
 			},
 		},
 	})
-	if !errors.Is(err, ErrRepositoryNotAllowed) {
-		t.Fatalf("repository error = %v", err)
+	if err != nil {
+		t.Fatalf("unmatched repository error = %v", err)
+	}
+	if len(store.stages) != 1 || store.stages[0].RepositoryName != "" ||
+		store.stages[0].RepositoryURL != "https://example.com/unconfigured.git" {
+		t.Fatalf("stored Stage = %#v", store.stages)
 	}
 }
 

@@ -2,7 +2,7 @@ import type {
   ProductPrincipal,
   PromotionBranchDriftStage,
   PromotionFreightItem,
-  PromotionPipelineStage,
+  PromotionProjectStage,
   PromotionStagePolicy,
   PromotionStagePolicyUpdate,
 } from "~/api/generated";
@@ -60,35 +60,22 @@ export function promotionReviewPolicyUpdate(
   };
 }
 
-export function pipelinePromotionChoices(stage: PromotionPipelineStage): PromotionChoice[] {
-  const upstream = stage.promotionSources.flatMap((source) =>
-    source.freight.items.map((freight) => ({
-      freight,
-      sourceEnvironment: source.environment,
-      sourceStageId: source.stageId,
-      sourceStageName: source.stageName,
-      targetEnvironment: stage.environment,
-      targetStageId: stage.id,
-      targetStageName: stage.name,
-      targetPolicy: stage.policy,
-    })),
-  );
-  const upstreamFreight = new Set(
-    upstream.map((choice) => `${choice.freight.origin}\u0000${choice.freight.name}`),
-  );
-  const direct = stage.availableFreight.items
-    .filter((freight) => !upstreamFreight.has(`${freight.origin}\u0000${freight.name}`))
-    .map((freight) => ({
-      freight,
-      sourceEnvironment: "Direct",
-      sourceStageName: freight.origin,
-      targetEnvironment: stage.environment,
-      targetStageId: stage.id,
-      targetStageName: stage.name,
-      targetPolicy: stage.policy,
-    }));
+export function projectPromotionChoices(stage: PromotionProjectStage): PromotionChoice[] {
+  if (stage.capabilities.promotion !== "ready") return [];
 
-  return [...upstream, ...direct];
+  return stage.requestedFreight.flatMap((request) =>
+    request.candidates
+      .filter((candidate) => candidate.readiness === "ready")
+      .map((candidate) => ({
+        freight: candidate.freight,
+        sourceEnvironment: "Kargo eligible",
+        sourceStageName: candidate.freight.origin,
+        targetEnvironment: stage.enrichment?.environment ?? stage.name,
+        targetStageId: stage.id,
+        targetStageName: stage.name,
+        targetPolicy: stage.policy,
+      })),
+  );
 }
 
 export function inPlacePromotionChoices(stage: PromotionBranchDriftStage): PromotionChoice[] {

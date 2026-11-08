@@ -50,7 +50,6 @@ server:
       acceptance:
         cluster: kind
         repositories: [acceptance]
-        environmentOrder: [homelab, prod]
         preparation:
           repository: acceptance
           target: kargo-promotions

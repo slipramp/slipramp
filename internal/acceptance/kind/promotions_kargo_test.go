@@ -156,28 +156,29 @@ func (s *suite) applyKargoCallbackSecret(t *testing.T, token string) {
 	s.kubectlApplyInput(t, manifest)
 }
 
-func (s *suite) waitForKargoFreight(t *testing.T) (api.PromotionPipelineStage, string) {
+func (s *suite) waitForKargoFreight(t *testing.T) (api.PromotionProjectStage, string) {
 	t.Helper()
 
 	integration := api.CatalogName("acceptance")
+	cluster := api.CatalogName("kind")
+	project := api.CatalogName("kargo-acceptance")
 	deadline := time.Now().Add(s.timeout)
 	var lastBody []byte
 	for time.Now().Before(deadline) {
-		response, err := s.productClient.ListPromotionPipelinesWithResponse(t.Context(), &api.ListPromotionPipelinesParams{
-			Integration: &integration,
-		})
+		response, err := s.productClient.GetPromotionProjectWithResponse(t.Context(), integration, cluster, project)
 		if err == nil {
 			lastBody = response.Body
 			if response.JSON200 != nil {
-				for _, pipeline := range response.JSON200.Items {
-					if pipeline.Project != "kargo-acceptance" {
+				for _, stage := range response.JSON200.Stages {
+					if stage.Name != "acceptance" {
 						continue
 					}
-					for _, stage := range pipeline.Stages {
-						if stage.Name != "acceptance" {
-							continue
-						}
-						for _, freight := range stage.AvailableFreight.Items {
+					for _, request := range stage.RequestedFreight {
+						for _, candidate := range request.Candidates {
+							freight := candidate.Freight
+							if candidate.Readiness != api.PromotionFreightCandidateReadinessReady {
+								continue
+							}
 							if freight.Origin != "Warehouse/acceptance" || !slices.ContainsFunc(
 								freight.Artifacts,
 								func(artifact api.PromotionFreightArtifact) bool {
@@ -196,7 +197,7 @@ func (s *suite) waitForKargoFreight(t *testing.T) (api.PromotionPipelineStage, s
 		wait(t, time.Second)
 	}
 	t.Fatalf("Kargo Freight was not observed: %s", lastBody)
-	return api.PromotionPipelineStage{}, ""
+	return api.PromotionProjectStage{}, ""
 }
 
 func (s *suite) waitForKargoCallbackAndPendingPromotion(t *testing.T, promotionID uuid.UUID) api.Promotion {

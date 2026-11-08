@@ -36,12 +36,12 @@ func (h *Handler) GetReadiness(
 	}
 
 	response := api.ReadinessResponse{
-		Status:          api.NotReady,
+		Status:          api.ReadinessResponseStatusNotReady,
 		Database:        readinessStatus(report.Database),
 		ArtifactStorage: readinessStatus(report.ArtifactStorage),
 	}
 	if report.Ready() {
-		response.Status = api.Ready
+		response.Status = api.ReadinessResponseStatusReady
 
 		return api.GetReadiness200JSONResponse(response), nil
 	}
@@ -51,8 +51,8 @@ func (h *Handler) GetReadiness(
 
 func readinessStatus(status readiness.DependencyStatus) api.DependencyStatus {
 	if status == readiness.DependencyAvailable {
-		return api.Available
+		return api.DependencyStatusAvailable
 	}
 
-	return api.Unavailable
+	return api.DependencyStatusUnavailable
 }

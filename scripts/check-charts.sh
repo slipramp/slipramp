@@ -141,7 +141,6 @@ kargo_checksum_default=$(grep -E 'checksum/kargo:' "$server_render" | awk '{prin
   --values "$testdata/slipramp-required.yaml" \
   --set-string server.kargo.integrations.prod.cluster=primary \
   --set-json 'server.kargo.integrations.prod.repositories=["ops"]' \
-  --set-json 'server.kargo.integrations.prod.environmentOrder=["prod"]' \
   --set-string server.kargo.integrations.prod.preparation.repository=ops \
   --set-string server.kargo.integrations.prod.preparation.target=kargo-promotions \
   --set-string server.kargo.integrations.prod.preparation.action=prepare-review \
@@ -319,15 +318,6 @@ assert_render_fails "Missing Server database credential" \
   --set-string server.database.url.existingSecret.key=
 assert_render_fails "Ambiguous Server database credential" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" --set-string server.database.url.value=postgres-secret
-assert_render_fails "Kargo integration without environment order" \
-  invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
-  --set-string server.kargo.integrations.prod.cluster=primary \
-  --set-json 'server.kargo.integrations.prod.repositories=["ops"]' \
-  --set-string server.kargo.integrations.prod.preparation.repository=ops \
-  --set-string server.kargo.integrations.prod.preparation.target=kargo-promotions \
-  --set-string server.kargo.integrations.prod.preparation.action=prepare-review \
-  --set-string server.kargo.integrations.prod.maximumStageObservationAge=5m \
-  --set-string server.kargo.integrations.prod.pendingReviewRetention=192h
 assert_render_fails "Notification destination without public URL" \
   invalid "$server_chart" --values "$testdata/slipramp-required.yaml" \
   --set-string server.notifications.destinations.operations.type=slack \

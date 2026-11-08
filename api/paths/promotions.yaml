@@ -215,6 +215,46 @@ promotionProjects:
       "500":
         $ref: "#/components/responses/InternalError"
 
+promotionProject:
+  get:
+    operationId: getPromotionProject
+    summary: Get one Kargo Project and its observed Stage topology
+    security:
+      - ProductSession: []
+      - ProductBearer: []
+    tags: [Promotions]
+    parameters:
+      - name: integration
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: cluster
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+      - name: project
+        in: path
+        required: true
+        schema:
+          $ref: ../components/runs.yaml#/CatalogName
+    responses:
+      "200":
+        description: Canonical observed Stages and native requested-Freight relationships.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/promotions.yaml#/PromotionProjectDetail
+      "401":
+        $ref: "#/components/responses/Unauthorized"
+      "403":
+        $ref: "#/components/responses/Forbidden"
+      "404":
+        $ref: "#/components/responses/NotFound"
+      "500":
+        $ref: "#/components/responses/InternalError"
+
 promotionStages:
   get:
     operationId: listPromotionStages
@@ -352,63 +392,6 @@ promotionStagePromotions:
         $ref: "#/components/responses/NotFound"
       "409":
         $ref: "#/components/responses/Conflict"
-      "500":
-        $ref: "#/components/responses/InternalError"
-
-promotionPipelines:
-  get:
-    operationId: listPromotionPipelines
-    summary: Compare current Freight across ordered Kargo environments
-    security:
-      - ProductSession: []
-      - ProductBearer: []
-    tags: [Promotions]
-    parameters:
-      - name: integration
-        in: query
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
-      - name: project
-        in: query
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
-      - name: application
-        in: query
-        schema:
-          type: string
-          minLength: 1
-          maxLength: 200
-      - name: cluster
-        in: query
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
-      - name: repository
-        in: query
-        schema:
-          $ref: ../components/runs.yaml#/CatalogName
-      - name: attention
-        in: query
-        description: >-
-          Include pipelines with Stage drift, newer Freight available to a
-          manual Stage, or either condition. Stage drift requires comparable
-          Freight in at least two environments.
-        schema:
-          $ref: ../components/promotions.yaml#/PromotionPipelineAttention
-      - $ref: "#/components/parameters/Limit"
-      - $ref: "#/components/parameters/Offset"
-    responses:
-      "200":
-        description: Active Kargo Stages grouped into ordered Freight comparisons.
-        content:
-          application/json:
-            schema:
-              $ref: ../components/promotions.yaml#/PromotionPipelineList
-      "400":
-        $ref: "#/components/responses/BadRequest"
-      "401":
-        $ref: "#/components/responses/Unauthorized"
-      "403":
-        $ref: "#/components/responses/Forbidden"
       "500":
         $ref: "#/components/responses/InternalError"
 

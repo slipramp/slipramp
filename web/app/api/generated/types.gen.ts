@@ -1277,8 +1277,10 @@ export type PromotionProject = {
   cluster: CatalogName;
   project: CatalogName;
   stageCount: number;
-  applicationCount: number;
-  lastObservedAt: string;
+  unhealthyStageCount: number;
+  staleStageCount: number;
+  pendingReviewCount: number;
+  latestObservedAt: string;
   /**
    * Direct link to this Project in the configured Kargo UI.
    */
@@ -1292,6 +1294,14 @@ export type PromotionProjectList = {
   offset: number;
 };
 
+export type PromotionProjectDetail = {
+  integration: CatalogName;
+  cluster: CatalogName;
+  project: CatalogName;
+  kargoUrl?: string;
+  stages: Array<PromotionProjectStage>;
+};
+
 export type PromotionStage = {
   id: string;
   integration: CatalogName;
@@ -1300,11 +1310,11 @@ export type PromotionStage = {
   name: string;
   kubernetesUid: string;
   resourceVersion: string;
-  application: string;
-  environment: string;
-  repository: CatalogName;
-  repositoryUrl: string;
-  targetBranch: string;
+  application?: string;
+  environment?: string;
+  repository?: CatalogName;
+  repositoryUrl?: string;
+  targetBranch?: string;
   sourcePaths: Array<string>;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
@@ -1342,33 +1352,6 @@ export type PromotionStagePolicy = {
 
 export type PromotionFreight = {
   items: Array<PromotionFreightItem>;
-};
-
-export type PromotionPipeline = {
-  integration: CatalogName;
-  cluster: CatalogName;
-  project: CatalogName;
-  repository: CatalogName;
-  application: string;
-  environmentOrder: Array<string>;
-  stages: Array<PromotionPipelineStage>;
-};
-
-export type PromotionPipelineList = {
-  items: Array<PromotionPipeline>;
-  summary: PromotionPipelineSummary;
-  total: number;
-  limit: number;
-  offset: number;
-};
-
-/**
- * Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
- */
-export type PromotionPipelineSummary = {
-  drifted: number;
-  outdated: number;
-  upToDate: number;
 };
 
 export type PromotionBranchDriftRepository = {
@@ -2301,6 +2284,11 @@ export type PromotionFreightRequest = {
   origin: string;
   direct: boolean;
   sourceStages: Array<string>;
+  availabilityStrategy: "OneOf" | "All";
+  /**
+   * Optional Kargo duration required in an upstream Stage.
+   */
+  requiredSoakTime?: string;
 };
 
 export type PromotionFreightArtifact = {
@@ -2309,10 +2297,26 @@ export type PromotionFreightArtifact = {
   version: string;
 };
 
+export type PromotionFreightVerification = {
+  stage: string;
+  /**
+   * Go duration representing the longest completed continuous occupancy.
+   */
+  longestCompletedSoak: string;
+};
+
+export type PromotionFreightOccupancy = {
+  stage: string;
+  since: string;
+};
+
 export type PromotionFreightItem = {
   origin: string;
   name: string;
   artifacts: Array<PromotionFreightArtifact>;
+  approvedFor?: Array<string>;
+  verifiedIn?: Array<PromotionFreightVerification>;
+  currentlyIn?: Array<PromotionFreightOccupancy>;
 };
 
 export type SuccessfulRenderAcknowledgement = {
@@ -2377,54 +2381,85 @@ export type PromotionDecisionUpdate = {
   comment?: string;
 };
 
+export type PromotionStageCondition = {
+  type: string;
+  status: string;
+  reason?: string;
+  message?: string;
+  lastTransitionTime?: string;
+};
+
+export type PromotionStagePromotionReference = {
+  name: string;
+  phase?: string;
+  finishedAt?: string;
+};
+
+export type PromotionProjectStageSource = {
+  name: string;
+  stageId?: string;
+};
+
+export type PromotionFreightCandidate = {
+  freight: PromotionFreightItem;
+  readiness: "ready" | "unavailable" | "unknown";
+  reason?: string;
+  evidence: Array<string>;
+};
+
+export type PromotionProjectFreightRequest = {
+  origin: string;
+  direct: boolean;
+  sources: Array<PromotionProjectStageSource>;
+  availabilityStrategy: "OneOf" | "All";
+  requiredSoakTime?: string;
+  candidates: Array<PromotionFreightCandidate>;
+};
+
+export type PromotionStageEnrichment = {
+  application?: string;
+  environment?: string;
+  repository?: CatalogName;
+  repositoryUrl?: string;
+  targetBranch?: string;
+  sourcePaths?: Array<string>;
+};
+
+export type PromotionStageCapabilities = {
+  promotion: "ready" | "unavailable";
+  policy: "ready";
+  branchDrift: "ready" | "unavailable";
+  issues: Array<string>;
+};
+
+export type PromotionProjectStage = {
+  id: string;
+  name: string;
+  kubernetesUid: string;
+  resourceVersion: string;
+  observationStale: boolean;
+  controlFlow: boolean;
+  conditions: Array<PromotionStageCondition>;
+  currentPromotion?: PromotionStagePromotionReference;
+  lastPromotion?: PromotionStagePromotionReference;
+  requestedFreight: Array<PromotionProjectFreightRequest>;
+  freight: PromotionFreight;
+  autoPromotionEnabled: boolean;
+  healthStatus?: string;
+  policy: PromotionStagePolicy;
+  pendingPromotionCount: number;
+  enrichment?: PromotionStageEnrichment;
+  capabilities: PromotionStageCapabilities;
+  firstObservedAt: string;
+  lastObservedAt: string;
+  kargoUrl?: string;
+  argoCdUrl?: string;
+};
+
 export type PromotionStagePolicyUpdate = {
   mode: PromotionPolicyMode;
   expiresAt?: string;
   reason?: string;
-};
-
-export type PromotionPipelineAttention = "any" | "drifted" | "outdated" | "up-to-date";
-
-export type PromotionFreightSource = {
-  stageId: string;
-  stageName: string;
-  environment: string;
-  freight: PromotionFreight;
-};
-
-export type PromotionPipelineStage = {
-  id: string;
-  name: string;
-  environment: string;
-  freight: PromotionFreight;
-  promotionSources: Array<PromotionFreightSource>;
-  /**
-   * Exact observed Freight not currently deployed to this Stage.
-   */
-  availableFreight: PromotionFreight;
-  /**
-   * Effective Kargo auto-promotion state for this Stage.
-   */
-  autoPromotionEnabled: boolean;
-  policy: PromotionStagePolicy;
-  pendingPromotionCount: number;
-  /**
-   * Most recently observed aggregate Kargo health status for this Stage.
-   */
-  healthStatus?: string;
-  /**
-   * Whether the Stage observation exceeds the integration freshness limit.
-   */
-  observationStale: boolean;
-  lastObservedAt: string;
-  /**
-   * Direct link to this Stage in the configured Kargo UI.
-   */
-  kargoUrl?: string;
-  /**
-   * Direct link to the observed Application in the configured Argo CD UI.
-   */
-  argoCdUrl?: string;
 };
 
 export type PromotionBranchDriftStatus = "current" | "drifted" | "unknown";
@@ -2463,21 +2498,28 @@ export type PromotionStageObservation = {
   name: string;
   kubernetesUid: string;
   resourceVersion: string;
-  application: string;
-  environment: string;
-  repositoryUrl: string;
-  targetBranch: string;
-  sourcePaths: Array<string>;
+  application?: string;
+  environment?: string;
+  repositoryUrl?: string;
+  targetBranch?: string;
+  sourcePaths?: Array<string>;
   requestedFreight: Array<PromotionFreightRequest>;
   freight: PromotionFreight;
   /**
-   * Latest directly sourced Freight observed for each requested origin.
+   * Latest observed Freight for each requested origin, including Kargo eligibility evidence.
    */
-  directFreight: PromotionFreight;
+  candidateFreight: PromotionFreight;
   /**
    * Effective Kargo auto-promotion state for this Stage.
    */
   autoPromotionEnabled: boolean;
+  /**
+   * Whether the Stage has no Promotion steps and only describes control flow.
+   */
+  controlFlow: boolean;
+  conditions: Array<PromotionStageCondition>;
+  currentPromotion?: PromotionStagePromotionReference;
+  lastPromotion?: PromotionStagePromotionReference;
   /**
    * Aggregate health status reported by Kargo for this Stage.
    */
@@ -5824,6 +5866,48 @@ export type ListPromotionProjectsResponses = {
 export type ListPromotionProjectsResponse =
   ListPromotionProjectsResponses[keyof ListPromotionProjectsResponses];
 
+export type GetPromotionProjectData = {
+  body?: never;
+  path: {
+    integration: CatalogName;
+    cluster: CatalogName;
+    project: CatalogName;
+  };
+  query?: never;
+  url: "/api/v1/promotion-projects/{integration}/{cluster}/{project}";
+};
+
+export type GetPromotionProjectErrors = {
+  /**
+   * A valid credential is required.
+   */
+  401: Problem;
+  /**
+   * The authenticated principal lacks the required role or scope.
+   */
+  403: Problem;
+  /**
+   * The requested integration, Stage, or Promotion does not exist.
+   */
+  404: Problem;
+  /**
+   * The operation could not be completed.
+   */
+  500: Problem;
+};
+
+export type GetPromotionProjectError = GetPromotionProjectErrors[keyof GetPromotionProjectErrors];
+
+export type GetPromotionProjectResponses = {
+  /**
+   * Canonical observed Stages and native requested-Freight relationships.
+   */
+  200: PromotionProjectDetail;
+};
+
+export type GetPromotionProjectResponse =
+  GetPromotionProjectResponses[keyof GetPromotionProjectResponses];
+
 export type ListPromotionStagesData = {
   body?: never;
   path?: never;
@@ -5973,57 +6057,6 @@ export type UpdatePromotionStagePolicyResponses = {
 
 export type UpdatePromotionStagePolicyResponse =
   UpdatePromotionStagePolicyResponses[keyof UpdatePromotionStagePolicyResponses];
-
-export type ListPromotionPipelinesData = {
-  body?: never;
-  path?: never;
-  query?: {
-    integration?: CatalogName;
-    project?: CatalogName;
-    application?: string;
-    cluster?: CatalogName;
-    repository?: CatalogName;
-    /**
-     * Include pipelines with Stage drift, newer Freight available to a manual Stage, or either condition. Stage drift requires comparable Freight in at least two environments.
-     */
-    attention?: PromotionPipelineAttention;
-    limit?: number;
-    offset?: number;
-  };
-  url: "/api/v1/promotion-pipelines";
-};
-
-export type ListPromotionPipelinesErrors = {
-  /**
-   * The request is malformed or invalid.
-   */
-  400: Problem;
-  /**
-   * A valid credential is required.
-   */
-  401: Problem;
-  /**
-   * The authenticated principal lacks the required role or scope.
-   */
-  403: Problem;
-  /**
-   * The operation could not be completed.
-   */
-  500: Problem;
-};
-
-export type ListPromotionPipelinesError =
-  ListPromotionPipelinesErrors[keyof ListPromotionPipelinesErrors];
-
-export type ListPromotionPipelinesResponses = {
-  /**
-   * Active Kargo Stages grouped into ordered Freight comparisons.
-   */
-  200: PromotionPipelineList;
-};
-
-export type ListPromotionPipelinesResponse =
-  ListPromotionPipelinesResponses[keyof ListPromotionPipelinesResponses];
 
 export type ListPromotionBranchDriftData = {
   body?: never;

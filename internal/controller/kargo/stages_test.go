@@ -89,7 +89,7 @@ func TestNormalizeKargoStage(t *testing.T) {
 	}
 	if observed.Project != "kargo-core" || observed.Name != "external-dns-prod" ||
 		observed.KubernetesUID != "stage-uid" || observed.ResourceVersion != "42" ||
-		observed.Application != "external-dns-phi" || observed.Environment != "prod" ||
+		valueOrEmpty(observed.Application) != "external-dns-phi" || valueOrEmpty(observed.Environment) != "prod" ||
 		!observed.AutoPromotionEnabled {
 		t.Errorf("identity = %#v", observed)
 	}
@@ -97,15 +97,15 @@ func TestNormalizeKargoStage(t *testing.T) {
 		valueOrEmpty(observed.ArgoApplicationNamespace) != "argocd" {
 		t.Errorf("health = %#v, Argo namespace = %v", observed.HealthStatus, observed.ArgoApplicationNamespace)
 	}
-	if observed.RepositoryURL != "https://example.com/ops.git" ||
-		observed.TargetBranch != "environments/production" {
+	if valueOrEmpty(observed.RepositoryURL) != "https://example.com/ops.git" ||
+		valueOrEmpty(observed.TargetBranch) != "environments/production" {
 		t.Errorf("branch details = %#v", observed)
 	}
 	wantPaths := []string{
 		"terraform/dns",
 		"config/production.yaml",
 	}
-	if !reflect.DeepEqual(observed.SourcePaths, wantPaths) {
+	if observed.SourcePaths == nil || !reflect.DeepEqual(*observed.SourcePaths, wantPaths) {
 		t.Errorf("source paths = %#v, want %#v", observed.SourcePaths, wantPaths)
 	}
 	if len(observed.RequestedFreight) != 1 ||
@@ -141,7 +141,7 @@ func TestNormalizeKargoStage(t *testing.T) {
 	}
 }
 
-func TestKargoStageObserverReportsNewestDirectFreight(t *testing.T) {
+func TestKargoStageObserverReportsCandidateFreightNewestFirst(t *testing.T) {
 	t.Parallel()
 
 	stage := minimalUnstructuredStage(t, "kargo-core", "external-dns-prod")
@@ -180,13 +180,55 @@ func TestKargoStageObserverReportsNewestDirectFreight(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Snapshot() error = %v", err)
 	}
-	if len(snapshot.Stages) != 1 || len(snapshot.Stages[0].DirectFreight.Items) != 1 {
+	if len(snapshot.Stages) != 1 || len(snapshot.Stages[0].CandidateFreight.Items) != 2 {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
-	item := snapshot.Stages[0].DirectFreight.Items[0]
+	item := snapshot.Stages[0].CandidateFreight.Items[0]
 	if item.Name != "freight-new" || item.Origin != "Warehouse/external-dns" ||
 		len(item.Artifacts) != 1 || item.Artifacts[0].Version != "2.0.0" {
 		t.Errorf("direct Freight = %#v", item)
+	}
+}
+
+func TestNormalizeKargoStageRetainsUnannotatedControlFlowStage(t *testing.T) {
+	t.Parallel()
+
+	stage := minimalUnstructuredStage(t, "kargo-core", "release-gate")
+	stage.SetAnnotations(nil)
+
+	observed, err := normalizeKargoStage(stage)
+	if err != nil {
+		t.Fatalf("normalizeKargoStage() error = %v", err)
+	}
+	if observed.Application != nil || observed.Environment != nil || observed.RepositoryURL != nil ||
+		observed.TargetBranch != nil || observed.SourcePaths != nil || !observed.ControlFlow {
+		t.Errorf("unannotated control-flow Stage = %#v", observed)
+	}
+}
+
+func TestNormalizeKargoFreightPreservesEligibilityEvidence(t *testing.T) {
+	t.Parallel()
+
+	freight := unstructuredFreight(t, "kargo-core", "freight-1", "2026-11-08T10:00:00Z", "1.2.3")
+	freight.Object["status"] = map[string]any{
+		"approvedFor": map[string]any{"prod": map[string]any{}},
+		"verifiedIn": map[string]any{
+			"test": map[string]any{"longestSoak": "45m"},
+		},
+		"currentlyIn": map[string]any{
+			"test": map[string]any{"since": "2026-11-08T09:00:00Z"},
+		},
+	}
+
+	observed, err := normalizeKargoFreight(freight)
+	if err != nil {
+		t.Fatalf("normalizeKargoFreight() error = %v", err)
+	}
+	if observed.item.ApprovedFor == nil || !reflect.DeepEqual(*observed.item.ApprovedFor, []string{"prod"}) ||
+		observed.item.VerifiedIn == nil || len(*observed.item.VerifiedIn) != 1 ||
+		(*observed.item.VerifiedIn)[0].LongestCompletedSoak != "45m0s" ||
+		observed.item.CurrentlyIn == nil || len(*observed.item.CurrentlyIn) != 1 {
+		t.Errorf("eligibility evidence = %#v", observed.item)
 	}
 }
 
@@ -292,20 +334,6 @@ func TestKargoStageObserverRejectsInvalidSnapshots(t *testing.T) {
 		name   string
 		lister kargoStagePageLister
 	}{
-		{
-			name: "selected Stage lacks explicit context",
-			lister: kargoStagePageListerFunc(func(
-				_ context.Context,
-				namespace string,
-				_ metav1.ListOptions,
-			) (*unstructured.UnstructuredList, error) {
-				stage := minimalUnstructuredStage(t, namespace, "invalid")
-				stage.SetAnnotations(nil)
-				return &unstructured.UnstructuredList{Items: []unstructured.Unstructured{
-					*minimalUnstructuredStage(t, namespace, "valid"), *stage,
-				}}, nil
-			}),
-		},
 		{
 			name: "partial list failure",
 			lister: kargoStagePageListerFunc(func(

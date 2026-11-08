@@ -23,8 +23,12 @@ type StageObservation struct {
 	SourcePaths                     []string
 	RequestedFreight                []FreightRequest
 	Freight                         Freight
-	DirectFreight                   Freight
+	CandidateFreight                Freight
 	AutoPromotionEnabled            bool
+	ControlFlow                     bool
+	Conditions                      []StageCondition
+	CurrentPromotion                *StagePromotionReference
+	LastPromotion                   *StagePromotionReference
 	HealthStatus                    *string
 	ArgoApplicationNamespace        *string
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
@@ -116,13 +120,9 @@ func (s *StageService) ReplaceStageSnapshot(
 	stages := make([]Stage, 0, len(replacement.Stages))
 	for _, observed := range replacement.Stages {
 		matches := allowedRepositories[observed.RepositoryURL]
-		if len(matches) != 1 {
-			return fmt.Errorf(
-				"%w: repository URL %q matches %d allowed repositories",
-				ErrRepositoryNotAllowed,
-				observed.RepositoryURL,
-				len(matches),
-			)
+		repositoryName := ""
+		if len(matches) == 1 {
+			repositoryName = matches[0].Name
 		}
 
 		stage := Stage{
@@ -135,14 +135,18 @@ func (s *StageService) ReplaceStageSnapshot(
 			ResourceVersion:                 observed.ResourceVersion,
 			Application:                     observed.Application,
 			Environment:                     observed.Environment,
-			RepositoryName:                  matches[0].Name,
+			RepositoryName:                  repositoryName,
 			RepositoryURL:                   observed.RepositoryURL,
 			TargetBranch:                    observed.TargetBranch,
 			SourcePaths:                     slices.Clone(observed.SourcePaths),
 			RequestedFreight:                cloneFreightRequests(observed.RequestedFreight),
 			Freight:                         cloneFreight(observed.Freight),
-			DirectFreight:                   cloneFreight(observed.DirectFreight),
+			CandidateFreight:                cloneFreight(observed.CandidateFreight),
 			AutoPromotionEnabled:            observed.AutoPromotionEnabled,
+			ControlFlow:                     observed.ControlFlow,
+			Conditions:                      cloneStageConditions(observed.Conditions),
+			CurrentPromotion:                cloneStagePromotionReference(observed.CurrentPromotion),
+			LastPromotion:                   cloneStagePromotionReference(observed.LastPromotion),
 			HealthStatus:                    cloneOptionalString(observed.HealthStatus),
 			ArgoApplicationNamespace:        cloneOptionalString(observed.ArgoApplicationNamespace),
 			SuccessfulRenderAcknowledgement: cloneRenderAcknowledgement(observed.SuccessfulRenderAcknowledgement),
@@ -156,4 +160,27 @@ func (s *StageService) ReplaceStageSnapshot(
 	}
 
 	return s.snapshots.ReplacePromotionStageSnapshot(ctx, snapshot, stages)
+}
+
+func cloneStageConditions(values []StageCondition) []StageCondition {
+	cloned := slices.Clone(values)
+	for index := range cloned {
+		if values[index].LastTransitionTime != nil {
+			cloned[index].LastTransitionTime = new(*values[index].LastTransitionTime)
+		}
+	}
+
+	return cloned
+}
+
+func cloneStagePromotionReference(value *StagePromotionReference) *StagePromotionReference {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	if value.FinishedAt != nil {
+		cloned.FinishedAt = new(*value.FinishedAt)
+	}
+
+	return &cloned
 }

@@ -61,7 +61,6 @@ integrations:
       homelab: https://argocd.homelab.example.com
       prod: https://argocd.example.com
     repositories: [kcloud-ops]
-    environmentOrder: [homelab, prod]
     preparation:
       repository: kcloud-ops
       target: kargo-promotions
@@ -211,8 +210,7 @@ integrations:
 	integration, ok := cfg.KargoIntegrations.Lookup("prod")
 	if !ok || integration.ClusterName != "colo" || integration.UIURL != "https://kargo.example.com" ||
 		integration.PendingReviewRetention != 192*time.Hour ||
-		integration.ArgoCDUIURLs["prod"] != "https://argocd.example.com" ||
-		len(integration.EnvironmentOrder) != 2 || integration.EnvironmentOrder[0] != "homelab" {
+		integration.ArgoCDUIURLs["prod"] != "https://argocd.example.com" {
 		t.Errorf("KargoIntegrations[prod] = %#v, %t", integration, ok)
 	}
 	if integration.CandidateBranchCleanup == nil ||

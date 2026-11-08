@@ -4740,25 +4740,44 @@ internal enum Components {
             internal var direct: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest/sourceStages`.
             internal var sourceStages: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest/availabilityStrategy`.
+            internal enum AvailabilityStrategyPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case oneOf = "OneOf"
+                case all = "All"
+            }
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest/availabilityStrategy`.
+            internal var availabilityStrategy: Components.Schemas.PromotionFreightRequest.AvailabilityStrategyPayload
+            /// Optional Kargo duration required in an upstream Stage.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightRequest/requiredSoakTime`.
+            internal var requiredSoakTime: Swift.String?
             /// Creates a new `PromotionFreightRequest`.
             ///
             /// - Parameters:
             ///   - origin:
             ///   - direct:
             ///   - sourceStages:
+            ///   - availabilityStrategy:
+            ///   - requiredSoakTime: Optional Kargo duration required in an upstream Stage.
             internal init(
                 origin: Swift.String,
                 direct: Swift.Bool,
-                sourceStages: [Swift.String]
+                sourceStages: [Swift.String],
+                availabilityStrategy: Components.Schemas.PromotionFreightRequest.AvailabilityStrategyPayload,
+                requiredSoakTime: Swift.String? = nil
             ) {
                 self.origin = origin
                 self.direct = direct
                 self.sourceStages = sourceStages
+                self.availabilityStrategy = availabilityStrategy
+                self.requiredSoakTime = requiredSoakTime
             }
             internal enum CodingKeys: String, CodingKey {
                 case origin
                 case direct
                 case sourceStages
+                case availabilityStrategy
+                case requiredSoakTime
             }
             internal init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -4774,10 +4793,20 @@ internal enum Components {
                     [Swift.String].self,
                     forKey: .sourceStages
                 )
+                self.availabilityStrategy = try container.decode(
+                    Components.Schemas.PromotionFreightRequest.AvailabilityStrategyPayload.self,
+                    forKey: .availabilityStrategy
+                )
+                self.requiredSoakTime = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .requiredSoakTime
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "origin",
                     "direct",
-                    "sourceStages"
+                    "sourceStages",
+                    "availabilityStrategy",
+                    "requiredSoakTime"
                 ])
             }
         }
@@ -4836,6 +4865,84 @@ internal enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PromotionFreightVerification`.
+        internal struct PromotionFreightVerification: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightVerification/stage`.
+            internal var stage: Swift.String
+            /// Go duration representing the longest completed continuous occupancy.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightVerification/longestCompletedSoak`.
+            internal var longestCompletedSoak: Swift.String
+            /// Creates a new `PromotionFreightVerification`.
+            ///
+            /// - Parameters:
+            ///   - stage:
+            ///   - longestCompletedSoak: Go duration representing the longest completed continuous occupancy.
+            internal init(
+                stage: Swift.String,
+                longestCompletedSoak: Swift.String
+            ) {
+                self.stage = stage
+                self.longestCompletedSoak = longestCompletedSoak
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case stage
+                case longestCompletedSoak
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.stage = try container.decode(
+                    Swift.String.self,
+                    forKey: .stage
+                )
+                self.longestCompletedSoak = try container.decode(
+                    Swift.String.self,
+                    forKey: .longestCompletedSoak
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "stage",
+                    "longestCompletedSoak"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PromotionFreightOccupancy`.
+        internal struct PromotionFreightOccupancy: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightOccupancy/stage`.
+            internal var stage: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightOccupancy/since`.
+            internal var since: Foundation.Date
+            /// Creates a new `PromotionFreightOccupancy`.
+            ///
+            /// - Parameters:
+            ///   - stage:
+            ///   - since:
+            internal init(
+                stage: Swift.String,
+                since: Foundation.Date
+            ) {
+                self.stage = stage
+                self.since = since
+            }
+            internal enum CodingKeys: String, CodingKey {
+                case stage
+                case since
+            }
+            internal init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.stage = try container.decode(
+                    Swift.String.self,
+                    forKey: .stage
+                )
+                self.since = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .since
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "stage",
+                    "since"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/PromotionFreightItem`.
         internal struct PromotionFreightItem: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/origin`.
@@ -4844,25 +4951,43 @@ internal enum Components {
             internal var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/artifacts`.
             internal var artifacts: [Components.Schemas.PromotionFreightArtifact]
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/approvedFor`.
+            internal var approvedFor: [Swift.String]?
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/verifiedIn`.
+            internal var verifiedIn: [Components.Schemas.PromotionFreightVerification]?
+            /// - Remark: Generated from `#/components/schemas/PromotionFreightItem/currentlyIn`.
+            internal var currentlyIn: [Components.Schemas.PromotionFreightOccupancy]?
             /// Creates a new `PromotionFreightItem`.
             ///
             /// - Parameters:
             ///   - origin:
             ///   - name:
             ///   - artifacts:
+            ///   - approvedFor:
+            ///   - verifiedIn:
+            ///   - currentlyIn:
             internal init(
                 origin: Swift.String,
                 name: Swift.String,
-                artifacts: [Components.Schemas.PromotionFreightArtifact]
+                artifacts: [Components.Schemas.PromotionFreightArtifact],
+                approvedFor: [Swift.String]? = nil,
+                verifiedIn: [Components.Schemas.PromotionFreightVerification]? = nil,
+                currentlyIn: [Components.Schemas.PromotionFreightOccupancy]? = nil
             ) {
                 self.origin = origin
                 self.name = name
                 self.artifacts = artifacts
+                self.approvedFor = approvedFor
+                self.verifiedIn = verifiedIn
+                self.currentlyIn = currentlyIn
             }
             internal enum CodingKeys: String, CodingKey {
                 case origin
                 case name
                 case artifacts
+                case approvedFor
+                case verifiedIn
+                case currentlyIn
             }
             internal init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -4878,10 +5003,25 @@ internal enum Components {
                     [Components.Schemas.PromotionFreightArtifact].self,
                     forKey: .artifacts
                 )
+                self.approvedFor = try container.decodeIfPresent(
+                    [Swift.String].self,
+                    forKey: .approvedFor
+                )
+                self.verifiedIn = try container.decodeIfPresent(
+                    [Components.Schemas.PromotionFreightVerification].self,
+                    forKey: .verifiedIn
+                )
+                self.currentlyIn = try container.decodeIfPresent(
+                    [Components.Schemas.PromotionFreightOccupancy].self,
+                    forKey: .currentlyIn
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "origin",
                     "name",
-                    "artifacts"
+                    "artifacts",
+                    "approvedFor",
+                    "verifiedIn",
+                    "currentlyIn"
                 ])
             }
         }

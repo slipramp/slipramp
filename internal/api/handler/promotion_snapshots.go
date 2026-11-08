@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/promotion"
 )
@@ -36,6 +38,40 @@ func promotionFreightResponse(value promotion.Freight) api.PromotionFreight {
 	return api.PromotionFreight{Items: items}
 }
 
+func promotionFreightItemResponse(item promotion.FreightItem) api.PromotionFreightItem {
+	artifacts := make([]api.PromotionFreightArtifact, 0, len(item.Artifacts))
+	for _, artifact := range item.Artifacts {
+		artifacts = append(artifacts, api.PromotionFreightArtifact{
+			Kind:       api.PromotionFreightArtifactKind(artifact.Kind),
+			Repository: artifact.Repository,
+			Version:    artifact.Version,
+		})
+	}
+	result := api.PromotionFreightItem{Origin: item.Origin, Name: item.Name, Artifacts: artifacts}
+	if !item.EvidenceObserved {
+		return result
+	}
+	approvedFor := append([]string{}, item.ApprovedFor...)
+	verifiedIn := make([]api.PromotionFreightVerification, 0, len(item.VerifiedIn))
+	for _, evidence := range item.VerifiedIn {
+		verifiedIn = append(verifiedIn, api.PromotionFreightVerification{
+			Stage: evidence.Stage, LongestCompletedSoak: evidence.LongestCompletedSoak.String(),
+		})
+	}
+	currentlyIn := make([]api.PromotionFreightOccupancy, 0, len(item.CurrentlyIn))
+	for _, evidence := range item.CurrentlyIn {
+		currentlyIn = append(currentlyIn, api.PromotionFreightOccupancy{
+			Stage: evidence.Stage, Since: evidence.Since,
+		})
+	}
+
+	result.ApprovedFor = &approvedFor
+	result.VerifiedIn = &verifiedIn
+	result.CurrentlyIn = &currentlyIn
+
+	return result
+}
+
 func promotionRepositorySnapshotResponse(value promotion.PromotionRepositorySnapshot) api.PromotionRepositorySnapshot {
 	return api.PromotionRepositorySnapshot{
 		Name:                   api.CatalogName(value.Name),
@@ -54,7 +90,35 @@ func promotionFreightFromRequest(value api.PromotionFreight) promotion.Freight {
 				Kind: string(artifact.Kind), Repository: artifact.Repository, Version: artifact.Version,
 			})
 		}
-		items = append(items, promotion.FreightItem{Origin: item.Origin, Name: item.Name, Artifacts: artifacts})
+		approvedFor := []string{}
+		if item.ApprovedFor != nil {
+			approvedFor = append(approvedFor, (*item.ApprovedFor)...)
+		}
+		verifiedIn := []promotion.FreightVerification{}
+		if item.VerifiedIn != nil {
+			for _, evidence := range *item.VerifiedIn {
+				longestSoak, err := time.ParseDuration(evidence.LongestCompletedSoak)
+				if err != nil {
+					longestSoak = 0
+				}
+				verifiedIn = append(verifiedIn, promotion.FreightVerification{
+					Stage: evidence.Stage, LongestCompletedSoak: longestSoak,
+				})
+			}
+		}
+		currentlyIn := []promotion.FreightOccupancy{}
+		if item.CurrentlyIn != nil {
+			for _, evidence := range *item.CurrentlyIn {
+				currentlyIn = append(currentlyIn, promotion.FreightOccupancy{
+					Stage: evidence.Stage, Since: evidence.Since,
+				})
+			}
+		}
+		items = append(items, promotion.FreightItem{
+			Origin: item.Origin, Name: item.Name, Artifacts: artifacts,
+			ApprovedFor: approvedFor, VerifiedIn: verifiedIn, CurrentlyIn: currentlyIn,
+			EvidenceObserved: item.ApprovedFor != nil && item.VerifiedIn != nil && item.CurrentlyIn != nil,
+		})
 	}
 
 	return promotion.Freight{Items: items}

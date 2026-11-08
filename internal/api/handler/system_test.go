@@ -101,7 +101,7 @@ func TestReadinessEndpoint(t *testing.T) {
 				ArtifactStorage: readiness.DependencyAvailable,
 			},
 			wantStatus: http.StatusOK,
-			wantReady:  api.Ready,
+			wantReady:  api.ReadinessResponseStatusReady,
 		},
 		{
 			name: "database unavailable",
@@ -110,7 +110,7 @@ func TestReadinessEndpoint(t *testing.T) {
 				ArtifactStorage: readiness.DependencyAvailable,
 			},
 			wantStatus: http.StatusServiceUnavailable,
-			wantReady:  api.NotReady,
+			wantReady:  api.ReadinessResponseStatusNotReady,
 		},
 		{
 			name: "artifact storage unavailable",
@@ -119,7 +119,7 @@ func TestReadinessEndpoint(t *testing.T) {
 				ArtifactStorage: readiness.DependencyUnavailable,
 			},
 			wantStatus: http.StatusServiceUnavailable,
-			wantReady:  api.NotReady,
+			wantReady:  api.ReadinessResponseStatusNotReady,
 		},
 	}
 

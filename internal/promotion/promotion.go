@@ -43,6 +43,7 @@ const (
 var (
 	ErrInvalid                    = errors.New("invalid promotion")
 	ErrStageNotFound              = errors.New("promotion Stage not found")
+	ErrProjectNotFound            = errors.New("kargo project not found")
 	ErrPolicyNotFound             = errors.New("promotion policy not found")
 	ErrIntegrationNotFound        = errors.New("kargo integration not found")
 	ErrIntegrationCluster         = errors.New("kargo integration belongs to another cluster")
@@ -61,6 +62,7 @@ var (
 	ErrInvalidPreparationArtifact = errors.New("promotion preparation artifact is invalid")
 	ErrFreightNotFound            = errors.New("promotion Freight was not found on the source Stage")
 	ErrFreightSource              = errors.New("promotion Freight source is not accepted by the target Stage")
+	ErrFreightUnavailable         = errors.New("promotion Freight is not observed as available to the target Stage")
 	ErrStageScope                 = errors.New("promotion source and target Stages must share integration, cluster, and project")
 	ErrNoCreationDispatch         = errors.New("no Promotion creation dispatch is available")
 	ErrCreationDispatchConflict   = errors.New("promotion creation dispatch conflicts with current state")
@@ -96,14 +98,32 @@ type Stage struct {
 	SourcePaths                     []string
 	RequestedFreight                []FreightRequest
 	Freight                         Freight
-	DirectFreight                   Freight
+	CandidateFreight                Freight
 	AutoPromotionEnabled            bool
+	ControlFlow                     bool
+	Conditions                      []StageCondition
+	CurrentPromotion                *StagePromotionReference
+	LastPromotion                   *StagePromotionReference
 	HealthStatus                    *string
 	ArgoApplicationNamespace        *string
 	SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
 	FirstObservedAt                 time.Time
 	LastObservedAt                  time.Time
 	ArchivedAt                      *time.Time
+}
+
+type StageCondition struct {
+	Type               string     `json:"type"`
+	Status             string     `json:"status"`
+	Reason             string     `json:"reason,omitempty"`
+	Message            string     `json:"message,omitempty"`
+	LastTransitionTime *time.Time `json:"lastTransitionTime,omitempty"`
+}
+
+type StagePromotionReference struct {
+	Name       string     `json:"name"`
+	Phase      string     `json:"phase,omitempty"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
 }
 
 type StagePolicy struct {
@@ -216,10 +236,6 @@ func (s Stage) Validate() error {
 	for label, value := range map[string]string{
 		"Kubernetes UID":   s.KubernetesUID,
 		"resource version": s.ResourceVersion,
-		"application":      s.Application,
-		"environment":      s.Environment,
-		"repository URL":   s.RepositoryURL,
-		"target branch":    s.TargetBranch,
 	} {
 		maximum := maximumTextLength
 		if label == "repository URL" {
@@ -232,8 +248,30 @@ func (s Stage) Validate() error {
 			return err
 		}
 	}
-	if err := kubevalidate.DNSLabel("repository name", s.RepositoryName); err != nil {
-		return invalid(err)
+	for label, value := range map[string]string{
+		"application":    s.Application,
+		"environment":    s.Environment,
+		"repository URL": s.RepositoryURL,
+		"target branch":  s.TargetBranch,
+	} {
+		if value == "" {
+			continue
+		}
+		maximum := maximumTextLength
+		if label == "repository URL" {
+			maximum = maximumURLLength
+		}
+		if label == "target branch" {
+			maximum = maximumBranchLength
+		}
+		if err := validateText(label, value, maximum); err != nil {
+			return err
+		}
+	}
+	if s.RepositoryName != "" {
+		if err := kubevalidate.DNSLabel("repository name", s.RepositoryName); err != nil {
+			return invalid(err)
+		}
 	}
 	if s.HealthStatus != nil {
 		if err := validateText("Kargo Stage health status", *s.HealthStatus, maximumTextLength); err != nil {
@@ -245,9 +283,6 @@ func (s Stage) Validate() error {
 			return invalid(err)
 		}
 	}
-	if len(s.SourcePaths) == 0 {
-		return fmt.Errorf("%w: at least one source path is required", ErrInvalid)
-	}
 	seenFreightOrigins := make(map[string]struct{}, len(s.RequestedFreight))
 	for _, request := range s.RequestedFreight {
 		if err := validateText("requested Freight origin", request.Origin, maximumFreightOriginLength); err != nil {
@@ -257,6 +292,15 @@ func (s Stage) Validate() error {
 			return fmt.Errorf("%w: requested Freight origin %q is duplicated", ErrInvalid, request.Origin)
 		}
 		seenFreightOrigins[request.Origin] = struct{}{}
+		if !request.AvailabilityStrategy.Valid() {
+			return fmt.Errorf("%w: requested Freight availability strategy is invalid", ErrInvalid)
+		}
+		if request.RequiredSoakTime < 0 {
+			return fmt.Errorf("%w: requested Freight soak time must not be negative", ErrInvalid)
+		}
+		if !request.Direct && len(request.SourceStages) == 0 {
+			return fmt.Errorf("%w: requested Freight must have a direct or Stage source", ErrInvalid)
+		}
 		seenSources := make(map[string]struct{}, len(request.SourceStages))
 		for _, source := range request.SourceStages {
 			if err := kubevalidate.DNSSubdomain("requested Freight source Stage", source); err != nil {

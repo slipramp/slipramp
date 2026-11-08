@@ -659,7 +659,7 @@ func (s *suite) waitForReadiness(
 	t.Helper()
 
 	expectedStatus := http.StatusServiceUnavailable
-	if database == api.Available && artifactStorage == api.Available {
+	if database == api.DependencyStatusAvailable && artifactStorage == api.DependencyStatusAvailable {
 		expectedStatus = http.StatusOK
 	}
 

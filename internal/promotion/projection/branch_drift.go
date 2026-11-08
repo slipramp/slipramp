@@ -205,6 +205,9 @@ func (s *BranchDriftService) List(
 		if _, configured := s.integrations.Lookup(stage.Integration); !configured {
 			continue
 		}
+		if !stageCapabilities(stage).BranchDriftReady {
+			continue
+		}
 		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)
 		if stageMatchesBranchDriftFilter(stage, filter) {
 			matchingStageCounts[stage.RepositoryName]++
@@ -391,6 +394,9 @@ func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
 			continue
 		}
 		if _, configured := s.integrations.Lookup(stage.Integration); !configured {
+			continue
+		}
+		if !stageCapabilities(stage).BranchDriftReady {
 			continue
 		}
 		stagesByRepository[stage.RepositoryName] = append(stagesByRepository[stage.RepositoryName], stage)

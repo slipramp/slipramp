@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   inPlacePromotionChoices,
   parsePromotionReviewPolicySelection,
-  pipelinePromotionChoices,
+  projectPromotionChoices,
   promotionChoiceKey,
   promotionReviewPolicyUpdate,
 } from "./promotion-creation.ts";
@@ -16,63 +16,31 @@ const freight = (origin, name, version) => ({
 });
 const automaticPolicy = { configuredMode: "automatic", effectiveMode: "automatic" };
 
-test("pipeline choices preserve exact eligible Freight and source Stage", () => {
+test("project choices preserve exact Kargo-eligible Freight", () => {
   const stage = {
-    autoPromotionEnabled: false,
-    availableFreight: { items: [] },
-    environment: "prod",
-    freight: { items: [] },
+    capabilities: { branchDrift: "ready", issues: [], promotion: "ready" },
+    enrichment: { environment: "prod" },
     id: "target-id",
-    lastObservedAt: "2026-10-23T12:00:00Z",
     name: "app-prod",
-    pendingPromotionCount: 0,
     policy: automaticPolicy,
-    promotionSources: [
+    requestedFreight: [
       {
-        environment: "homelab",
-        freight: { items: [freight("Warehouse/app", "freight-42", "1.2.3")] },
-        stageId: "source-id",
-        stageName: "app-homelab",
+        candidates: [
+          {
+            freight: freight("Warehouse/app", "freight-42", "1.2.3"),
+            readiness: "ready",
+          },
+        ],
       },
     ],
   };
 
-  const choices = pipelinePromotionChoices(stage);
+  const choices = projectPromotionChoices(stage);
 
   assert.deepEqual(choices, [
     {
       freight: freight("Warehouse/app", "freight-42", "1.2.3"),
-      sourceEnvironment: "homelab",
-      sourceStageId: "source-id",
-      sourceStageName: "app-homelab",
-      targetEnvironment: "prod",
-      targetStageId: "target-id",
-      targetStageName: "app-prod",
-      targetPolicy: automaticPolicy,
-    },
-  ]);
-  assert.equal(promotionChoiceKey(choices[0]), '["source-id","Warehouse/app","freight-42"]');
-});
-
-test("pipeline choices include directly available Warehouse Freight", () => {
-  const directFreight = freight("Warehouse/app", "freight-43", "1.2.4");
-  const choices = pipelinePromotionChoices({
-    autoPromotionEnabled: false,
-    availableFreight: { items: [directFreight] },
-    environment: "prod",
-    freight: { items: [] },
-    id: "target-id",
-    lastObservedAt: "2026-10-23T12:00:00Z",
-    name: "app-prod",
-    pendingPromotionCount: 0,
-    policy: automaticPolicy,
-    promotionSources: [],
-  });
-
-  assert.deepEqual(choices, [
-    {
-      freight: directFreight,
-      sourceEnvironment: "Direct",
+      sourceEnvironment: "Kargo eligible",
       sourceStageName: "Warehouse/app",
       targetEnvironment: "prod",
       targetStageId: "target-id",
@@ -80,7 +48,27 @@ test("pipeline choices include directly available Warehouse Freight", () => {
       targetPolicy: automaticPolicy,
     },
   ]);
-  assert.equal(promotionChoiceKey(choices[0]), '[null,"Warehouse/app","freight-43"]');
+  assert.equal(promotionChoiceKey(choices[0]), '[null,"Warehouse/app","freight-42"]');
+});
+
+test("project choices omit Freight without positive readiness", () => {
+  const directFreight = freight("Warehouse/app", "freight-43", "1.2.4");
+  const choices = projectPromotionChoices({
+    capabilities: { branchDrift: "unavailable", issues: [], promotion: "ready" },
+    id: "target-id",
+    name: "app-prod",
+    policy: automaticPolicy,
+    requestedFreight: [
+      {
+        candidates: [
+          { freight: directFreight, readiness: "unknown" },
+          { freight: freight("Warehouse/app", "freight-44", "1.2.5"), readiness: "unavailable" },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(choices, []);
 });
 
 test("in-place choices target the same Stage for each current Freight item", () => {

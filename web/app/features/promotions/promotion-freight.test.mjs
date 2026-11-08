@@ -9,7 +9,7 @@ import {
 } from "./promotion-freight.ts";
 
 const stage = (id, name, environment, version) => ({
-  environment,
+  enrichment: { environment },
   freight: {
     items: [
       {
@@ -25,47 +25,26 @@ const stage = (id, name, environment, version) => ({
   pendingPromotionCount: 0,
 });
 
-test("buildFreightColumns preserves configured gaps and appends unknown environments", () => {
-  const columns = buildFreightColumns({
-    application: "app",
-    cluster: "colo",
-    environmentOrder: ["homelab", "prod"],
-    integration: "primary",
-    project: "kargo-core",
-    repository: "ops",
-    stages: [
-      stage("2", "app-canary", "canary", "1.2.0"),
-      stage("1", "app-homelab", "homelab", "1.2.0"),
-    ],
-  });
+test("buildFreightColumns sorts explicitly selected Stages without inferred gaps", () => {
+  const columns = buildFreightColumns([
+    stage("2", "app-canary", "canary", "1.2.0"),
+    stage("1", "app-homelab", "homelab", "1.2.0"),
+  ]);
 
   assert.deepEqual(
-    columns.map(({ configured, environment, stage: value }) => [
-      environment,
-      value?.name,
-      configured,
-    ]),
+    columns.map(({ key, label }) => [key, label]),
     [
-      ["homelab", "app-homelab", true],
-      ["prod", undefined, true],
-      ["canary", "app-canary", false],
+      ["2", "app-canary · canary"],
+      ["1", "app-homelab · homelab"],
     ],
   );
 });
 
 test("buildFreightRows aligns versions and reports exact equality", () => {
-  const columns = buildFreightColumns({
-    application: "app",
-    cluster: "colo",
-    environmentOrder: ["homelab", "prod"],
-    integration: "primary",
-    project: "kargo-core",
-    repository: "ops",
-    stages: [
-      stage("1", "app-homelab", "homelab", "1.2.0"),
-      stage("2", "app-prod", "prod", "1.2.0"),
-    ],
-  });
+  const columns = buildFreightColumns([
+    stage("1", "app-homelab", "homelab", "1.2.0"),
+    stage("2", "app-prod", "prod", "1.2.0"),
+  ]);
   const rows = buildFreightRows(columns);
 
   assert.equal(rows.length, 1);
@@ -77,16 +56,8 @@ test("buildFreightRows aligns versions and reports exact equality", () => {
   assert.equal(freightRowStatus(rows[0], columns), "different");
 });
 
-test("Freight is not comparable until Stages exist in two environments", () => {
-  const columns = buildFreightColumns({
-    application: "app",
-    cluster: "colo",
-    environmentOrder: ["homelab", "prod"],
-    integration: "primary",
-    project: "kargo-core",
-    repository: "ops",
-    stages: [stage("1", "app-homelab", "homelab", "1.2.0")],
-  });
+test("Freight is not comparable until two Stages are selected", () => {
+  const columns = buildFreightColumns([stage("1", "app-homelab", "homelab", "1.2.0")]);
   const rows = buildFreightRows(columns);
 
   assert.equal(freightRowStatus(rows[0], columns), undefined);

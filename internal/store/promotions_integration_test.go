@@ -149,7 +149,7 @@ func TestCreateOperatorPromotionIntegration(t *testing.T) {
 		Origin: "Warehouse/external-dns",
 		Direct: true,
 	}}
-	fixture.stage.DirectFreight = promotion.Freight{Items: []promotion.FreightItem{{
+	fixture.stage.CandidateFreight = promotion.Freight{Items: []promotion.FreightItem{{
 		Origin: "Warehouse/external-dns",
 		Name:   "freight-43",
 		Artifacts: []promotion.FreightArtifact{{
@@ -1233,10 +1233,16 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 	secondSnapshot := promotionTestSnapshot(uuid.New(), "prod", "colo", secondObservedAt)
 	externalDNS := promotionTestStage("prod", "colo", "kargo-core", "external-dns-prod", secondObservedAt)
 	externalDNS.ResourceVersion = "2"
+	externalDNS.Application = ""
+	externalDNS.Environment = ""
+	externalDNS.RepositoryName = ""
+	externalDNS.RepositoryURL = ""
+	externalDNS.TargetBranch = ""
+	externalDNS.SourcePaths = nil
 	externalDNS.AutoPromotionEnabled = true
 	externalDNS.HealthStatus = new("Healthy")
 	externalDNS.ArgoApplicationNamespace = new("argocd")
-	externalDNS.DirectFreight = promotion.Freight{Items: []promotion.FreightItem{{
+	externalDNS.CandidateFreight = promotion.Freight{Items: []promotion.FreightItem{{
 		Origin: "Warehouse/external-dns",
 		Name:   "freight-new",
 	}}}
@@ -1253,8 +1259,10 @@ func TestReplacePromotionStageSnapshotIntegration(t *testing.T) {
 		t.Fatalf("get active Stage: %v", err)
 	}
 	if active.ID != firstStages[0].ID || active.ResourceVersion != "2" || active.ArchivedAt != nil ||
-		!active.AutoPromotionEnabled || len(active.DirectFreight.Items) != 1 ||
-		active.DirectFreight.Items[0].Name != "freight-new" ||
+		!active.AutoPromotionEnabled || len(active.CandidateFreight.Items) != 1 ||
+		active.CandidateFreight.Items[0].Name != "freight-new" ||
+		active.Application != "" || active.Environment != "" || active.RepositoryName != "" ||
+		active.RepositoryURL != "" || active.TargetBranch != "" || len(active.SourcePaths) != 0 ||
 		active.HealthStatus == nil || *active.HealthStatus != "Healthy" ||
 		active.ArgoApplicationNamespace == nil || *active.ArgoApplicationNamespace != "argocd" {
 		t.Errorf("active Stage = %#v", active)

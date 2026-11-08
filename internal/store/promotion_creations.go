@@ -62,7 +62,7 @@ func (d *Database) CreateOperatorPromotion(
 
 	var selectedFreight *promotion.FreightItem
 	if source == nil {
-		selectedFreight, err = promotion.SelectDirectPromotionFreight(target, acceptance.FreightName)
+		selectedFreight, err = promotion.SelectPromotionFreightCandidate(target, acceptance.FreightName)
 	} else {
 		selectedFreight, err = promotion.SelectPromotionFreight(target, *source, acceptance.FreightName)
 	}

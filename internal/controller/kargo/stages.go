@@ -97,7 +97,7 @@ func (o *StageSnapshotter) Integration() string {
 func (o *StageSnapshotter) Snapshot(ctx context.Context) (api.KargoStageSnapshot, error) {
 	stages := make([]api.PromotionStageObservation, 0)
 	for _, namespace := range o.namespaces {
-		directFreight, err := o.latestDirectFreight(ctx, namespace)
+		candidateFreight, err := o.candidateFreight(ctx, namespace)
 		if err != nil {
 			return api.KargoStageSnapshot{}, err
 		}
@@ -124,7 +124,7 @@ func (o *StageSnapshotter) Snapshot(ctx context.Context) (api.KargoStageSnapshot
 				if item.GetLabels()[promotionIntegrationLabel] != o.integration {
 					continue
 				}
-				observed, err := normalizeKargoStageWithDirectFreight(item, directFreight)
+				observed, err := normalizeKargoStageWithCandidateFreight(item, candidateFreight)
 				if err != nil {
 					return api.KargoStageSnapshot{}, fmt.Errorf(
 						"normalize Kargo Stage %s/%s: %w",
@@ -162,13 +162,13 @@ type observedKargoFreight struct {
 	discoveredAt time.Time
 }
 
-func (o *StageSnapshotter) latestDirectFreight(
+func (o *StageSnapshotter) candidateFreight(
 	ctx context.Context,
 	namespace string,
-) (map[string]api.PromotionFreightItem, error) {
-	latest := make(map[string]observedKargoFreight)
+) (map[string][]api.PromotionFreightItem, error) {
+	observedByOrigin := make(map[string][]observedKargoFreight)
 	if o.freight == nil {
-		return map[string]api.PromotionFreightItem{}, nil
+		return map[string][]api.PromotionFreightItem{}, nil
 	}
 
 	continueToken := ""
@@ -199,11 +199,7 @@ func (o *StageSnapshotter) latestDirectFreight(
 					normalizeErr,
 				)
 			}
-			current, ok := latest[observed.item.Origin]
-			if !ok || observed.discoveredAt.After(current.discoveredAt) ||
-				(observed.discoveredAt.Equal(current.discoveredAt) && observed.item.Name > current.item.Name) {
-				latest[observed.item.Origin] = observed
-			}
+			observedByOrigin[observed.item.Origin] = append(observedByOrigin[observed.item.Origin], observed)
 		}
 
 		continueToken = page.GetContinue()
@@ -212,9 +208,18 @@ func (o *StageSnapshotter) latestDirectFreight(
 		}
 	}
 
-	items := make(map[string]api.PromotionFreightItem, len(latest))
-	for origin, observed := range latest {
-		items[origin] = observed.item
+	items := make(map[string][]api.PromotionFreightItem, len(observedByOrigin))
+	for origin, observed := range observedByOrigin {
+		sort.Slice(observed, func(i, j int) bool {
+			if !observed[i].discoveredAt.Equal(observed[j].discoveredAt) {
+				return observed[i].discoveredAt.After(observed[j].discoveredAt)
+			}
+			return observed[i].item.Name > observed[j].item.Name
+		})
+		items[origin] = make([]api.PromotionFreightItem, 0, len(observed))
+		for _, candidate := range observed {
+			items[origin] = append(items[origin], candidate.item)
+		}
 	}
 
 	return items, nil
@@ -228,13 +233,21 @@ type kargoStage struct {
 				Name string `json:"name"`
 			} `json:"origin"`
 			Sources struct {
-				Direct bool     `json:"direct"`
-				Stages []string `json:"stages"`
+				Direct               bool     `json:"direct"`
+				Stages               []string `json:"stages"`
+				AvailabilityStrategy string   `json:"availabilityStrategy"`
+				RequiredSoakTime     string   `json:"requiredSoakTime"`
 			} `json:"sources"`
 		} `json:"requestedFreight"`
+		PromotionTemplate *struct {
+			Spec struct {
+				Steps []json.RawMessage `json:"steps"`
+			} `json:"spec"`
+		} `json:"promotionTemplate"`
 	} `json:"spec"`
 	Status struct {
-		AutoPromotionEnabled bool `json:"autoPromotionEnabled"`
+		Conditions           []metav1.Condition `json:"conditions"`
+		AutoPromotionEnabled bool               `json:"autoPromotionEnabled"`
 		Health               struct {
 			Status string `json:"status"`
 			Output []struct {
@@ -247,13 +260,18 @@ type kargoStage struct {
 		FreightHistory []struct {
 			Items map[string]kargoFreightReference `json:"items"`
 		} `json:"freightHistory"`
-		LastPromotion *struct {
-			Status struct {
-				Phase string                     `json:"phase"`
-				State map[string]json.RawMessage `json:"state"`
-			} `json:"status"`
-		} `json:"lastPromotion"`
+		CurrentPromotion *kargoPromotionReference `json:"currentPromotion"`
+		LastPromotion    *kargoPromotionReference `json:"lastPromotion"`
 	} `json:"status"`
+}
+
+type kargoPromotionReference struct {
+	Name   string `json:"name"`
+	Status struct {
+		Phase string                     `json:"phase"`
+		State map[string]json.RawMessage `json:"state"`
+	} `json:"status"`
+	FinishedAt *metav1.Time `json:"finishedAt"`
 }
 
 type kargoFreight struct {
@@ -277,6 +295,15 @@ type kargoFreight struct {
 		Name          string `json:"name"`
 		Version       string `json:"version"`
 	} `json:"charts"`
+	Status struct {
+		CurrentlyIn map[string]struct {
+			Since *metav1.Time `json:"since"`
+		} `json:"currentlyIn"`
+		VerifiedIn map[string]struct {
+			LongestCompletedSoak *metav1.Duration `json:"longestSoak"`
+		} `json:"verifiedIn"`
+		ApprovedFor map[string]json.RawMessage `json:"approvedFor"`
+	} `json:"status"`
 }
 
 type kargoFreightReference struct {
@@ -299,12 +326,12 @@ type kargoFreightReference struct {
 }
 
 func normalizeKargoStage(item *unstructured.Unstructured) (api.PromotionStageObservation, error) {
-	return normalizeKargoStageWithDirectFreight(item, nil)
+	return normalizeKargoStageWithCandidateFreight(item, nil)
 }
 
-func normalizeKargoStageWithDirectFreight(
+func normalizeKargoStageWithCandidateFreight(
 	item *unstructured.Unstructured,
-	directFreight map[string]api.PromotionFreightItem,
+	candidateFreight map[string][]api.PromotionFreightItem,
 ) (api.PromotionStageObservation, error) {
 	encoded, err := json.Marshal(item.Object)
 	if err != nil {
@@ -318,9 +345,13 @@ func normalizeKargoStageWithDirectFreight(
 	annotations := item.GetAnnotations()
 	application := strings.TrimSpace(annotations[promotionApplicationAnnotation])
 	healthStatus, argoApplicationNamespace := kargoStageHealth(raw, application)
-	sourcePaths, err := kargoSourcePaths(annotations[promotionSourcePathsAnnotation])
-	if err != nil {
-		return api.PromotionStageObservation{}, err
+	var sourcePaths *[]string
+	if value := strings.TrimSpace(annotations[promotionSourcePathsAnnotation]); value != "" {
+		parsed, parseErr := kargoSourcePaths(value)
+		if parseErr != nil {
+			return api.PromotionStageObservation{}, parseErr
+		}
+		sourcePaths = &parsed
 	}
 	requestedFreight, err := requestedKargoFreight(raw)
 	if err != nil {
@@ -331,15 +362,19 @@ func normalizeKargoStageWithDirectFreight(
 		Name:                 item.GetName(),
 		KubernetesUID:        string(item.GetUID()),
 		ResourceVersion:      item.GetResourceVersion(),
-		Application:          application,
-		Environment:          strings.TrimSpace(annotations[promotionEnvironmentAnnotation]),
-		RepositoryURL:        strings.TrimSpace(annotations[promotionRepositoryAnnotation]),
-		TargetBranch:         strings.TrimSpace(annotations[promotionTargetBranchAnnotation]),
+		Application:          optionalNonemptyString(application),
+		Environment:          optionalNonemptyString(strings.TrimSpace(annotations[promotionEnvironmentAnnotation])),
+		RepositoryURL:        optionalNonemptyString(strings.TrimSpace(annotations[promotionRepositoryAnnotation])),
+		TargetBranch:         optionalNonemptyString(strings.TrimSpace(annotations[promotionTargetBranchAnnotation])),
 		SourcePaths:          sourcePaths,
 		RequestedFreight:     requestedFreight,
 		Freight:              currentKargoFreight(raw),
-		DirectFreight:        directKargoFreight(raw, directFreight),
+		CandidateFreight:     candidateKargoFreight(raw, candidateFreight),
 		AutoPromotionEnabled: raw.Status.AutoPromotionEnabled,
+		ControlFlow:          raw.Spec.PromotionTemplate == nil || len(raw.Spec.PromotionTemplate.Spec.Steps) == 0,
+		Conditions:           kargoStageConditions(raw),
+		CurrentPromotion:     observedStagePromotionReference(raw.Status.CurrentPromotion),
+		LastPromotion:        observedStagePromotionReference(raw.Status.LastPromotion),
 		HealthStatus:         optionalNonemptyString(healthStatus),
 		ArgoApplicationNamespace: optionalNonemptyString(
 			argoApplicationNamespace,
@@ -353,20 +388,50 @@ func normalizeKargoStageWithDirectFreight(
 		"name":             observed.Name,
 		"Kubernetes UID":   observed.KubernetesUID,
 		"resource version": observed.ResourceVersion,
-		"application":      observed.Application,
-		"environment":      observed.Environment,
-		"repository URL":   observed.RepositoryURL,
-		"target branch":    observed.TargetBranch,
 	} {
 		if value == "" {
 			return api.PromotionStageObservation{}, fmt.Errorf("%s is required", subject)
 		}
 	}
-	if len(observed.SourcePaths) == 0 {
-		return api.PromotionStageObservation{}, errors.New("at least one source path is required")
+	return observed, nil
+}
+
+func kargoStageConditions(stage kargoStage) []api.PromotionStageCondition {
+	conditions := make([]api.PromotionStageCondition, 0, len(stage.Status.Conditions))
+	for _, condition := range stage.Status.Conditions {
+		var transitionedAt *time.Time
+		if !condition.LastTransitionTime.IsZero() {
+			value := condition.LastTransitionTime.Time
+			transitionedAt = &value
+		}
+		conditions = append(conditions, api.PromotionStageCondition{
+			Type:               condition.Type,
+			Status:             string(condition.Status),
+			Reason:             optionalNonemptyString(strings.TrimSpace(condition.Reason)),
+			Message:            optionalNonemptyString(strings.TrimSpace(condition.Message)),
+			LastTransitionTime: transitionedAt,
+		})
+	}
+	sort.Slice(conditions, func(i, j int) bool { return conditions[i].Type < conditions[j].Type })
+
+	return conditions
+}
+
+func observedStagePromotionReference(value *kargoPromotionReference) *api.PromotionStagePromotionReference {
+	if value == nil || strings.TrimSpace(value.Name) == "" {
+		return nil
+	}
+	var finishedAt *time.Time
+	if value.FinishedAt != nil && !value.FinishedAt.IsZero() {
+		observed := value.FinishedAt.Time
+		finishedAt = &observed
 	}
 
-	return observed, nil
+	return &api.PromotionStagePromotionReference{
+		Name:       value.Name,
+		Phase:      optionalNonemptyString(strings.TrimSpace(value.Status.Phase)),
+		FinishedAt: finishedAt,
+	}
 }
 
 func kargoStageHealth(stage kargoStage, application string) (string, string) {
@@ -424,28 +489,51 @@ func normalizeKargoFreight(item *unstructured.Unstructured) (observedKargoFreigh
 		Images:  raw.Images,
 		Charts:  raw.Charts,
 	}
+	freight := kargoFreightItem(kind+"/"+name, reference)
+	approvedFor := make([]string, 0, len(raw.Status.ApprovedFor))
+	for stage := range raw.Status.ApprovedFor {
+		approvedFor = append(approvedFor, stage)
+	}
+	sort.Strings(approvedFor)
+	freight.ApprovedFor = &approvedFor
+	verifiedIn := make([]api.PromotionFreightVerification, 0, len(raw.Status.VerifiedIn))
+	for stage, evidence := range raw.Status.VerifiedIn {
+		longestSoak := time.Duration(0)
+		if evidence.LongestCompletedSoak != nil {
+			longestSoak = evidence.LongestCompletedSoak.Duration
+		}
+		verifiedIn = append(verifiedIn, api.PromotionFreightVerification{
+			Stage: stage, LongestCompletedSoak: longestSoak.String(),
+		})
+	}
+	sort.Slice(verifiedIn, func(i, j int) bool { return verifiedIn[i].Stage < verifiedIn[j].Stage })
+	freight.VerifiedIn = &verifiedIn
+	currentlyIn := make([]api.PromotionFreightOccupancy, 0, len(raw.Status.CurrentlyIn))
+	for stage, evidence := range raw.Status.CurrentlyIn {
+		if evidence.Since == nil || evidence.Since.IsZero() {
+			continue
+		}
+		currentlyIn = append(currentlyIn, api.PromotionFreightOccupancy{Stage: stage, Since: evidence.Since.Time})
+	}
+	sort.Slice(currentlyIn, func(i, j int) bool { return currentlyIn[i].Stage < currentlyIn[j].Stage })
+	freight.CurrentlyIn = &currentlyIn
 
 	return observedKargoFreight{
-		item:         kargoFreightItem(kind+"/"+name, reference),
+		item:         freight,
 		discoveredAt: discoveredAt,
 	}, nil
 }
 
-func directKargoFreight(
+func candidateKargoFreight(
 	stage kargoStage,
-	latest map[string]api.PromotionFreightItem,
+	candidates map[string][]api.PromotionFreightItem,
 ) api.PromotionFreight {
 	result := api.PromotionFreight{Items: []api.PromotionFreightItem{}}
 	for _, request := range stage.Spec.RequestedFreight {
-		if !request.Sources.Direct {
-			continue
-		}
 		origin := strings.TrimSpace(request.Origin.Kind) + "/" + strings.TrimSpace(request.Origin.Name)
-		if item, ok := latest[origin]; ok {
-			result.Items = append(result.Items, item)
-		}
+		result.Items = append(result.Items, candidates[origin]...)
 	}
-	sort.Slice(result.Items, func(i, j int) bool { return result.Items[i].Origin < result.Items[j].Origin })
+	sort.SliceStable(result.Items, func(i, j int) bool { return result.Items[i].Origin < result.Items[j].Origin })
 
 	return result
 }
@@ -465,10 +553,25 @@ func requestedKargoFreight(stage kargoStage) ([]api.PromotionFreightRequest, err
 			}
 		}
 		sort.Strings(sources)
+		strategy := api.PromotionFreightRequestAvailabilityStrategyOneOf
+		if raw.Sources.AvailabilityStrategy == "All" {
+			strategy = api.PromotionFreightRequestAvailabilityStrategyAll
+		} else if raw.Sources.AvailabilityStrategy != "" && raw.Sources.AvailabilityStrategy != "OneOf" {
+			return nil, fmt.Errorf("requested Freight availability strategy %q is invalid", raw.Sources.AvailabilityStrategy)
+		}
+		var requiredSoakTime *string
+		if value := strings.TrimSpace(raw.Sources.RequiredSoakTime); value != "" {
+			if _, err := time.ParseDuration(value); err != nil {
+				return nil, fmt.Errorf("requested Freight soak time %q is invalid: %w", value, err)
+			}
+			requiredSoakTime = &value
+		}
 		requests = append(requests, api.PromotionFreightRequest{
-			Origin:       kind + "/" + name,
-			Direct:       raw.Sources.Direct,
-			SourceStages: uniqueStrings(sources),
+			Origin:               kind + "/" + name,
+			Direct:               raw.Sources.Direct,
+			SourceStages:         uniqueStrings(sources),
+			AvailabilityStrategy: strategy,
+			RequiredSoakTime:     requiredSoakTime,
 		})
 	}
 	sort.Slice(requests, func(i, j int) bool { return requests[i].Origin < requests[j].Origin })

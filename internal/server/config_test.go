@@ -387,10 +387,9 @@ func TestConfigValidate(t *testing.T) {
 func validKargoIntegrations() promotion.IntegrationSet {
 	return promotion.IntegrationSet{
 		"prod": {
-			ClusterName:      "colo",
-			UIURL:            "https://kargo.example.com",
-			Repositories:     []string{"kcloud-ops"},
-			EnvironmentOrder: []string{"homelab", "prod"},
+			ClusterName:  "colo",
+			UIURL:        "https://kargo.example.com",
+			Repositories: []string{"kcloud-ops"},
 			Preparation: promotion.PreparationConfig{
 				Repository: "kcloud-ops",
 				Target:     "kargo-promotions",

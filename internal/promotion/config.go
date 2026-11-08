@@ -31,7 +31,6 @@ type IntegrationConfig struct {
 	UIURL                      string
 	ArgoCDUIURLs               map[string]string
 	Repositories               []string
-	EnvironmentOrder           []string
 	Preparation                PreparationConfig
 	CandidateBranchCleanup     *CandidateBranchCleanupConfig
 	MaximumStageObservationAge time.Duration
@@ -100,23 +99,9 @@ func (c IntegrationConfig) Validate() error {
 		}
 		seenRepositories[name] = struct{}{}
 	}
-	if len(c.EnvironmentOrder) == 0 {
-		return fmt.Errorf("at least one Kargo environment is required")
-	}
-
-	seenEnvironments := make(map[string]struct{}, len(c.EnvironmentOrder))
-	for _, environment := range c.EnvironmentOrder {
+	for environment, uiURL := range c.ArgoCDUIURLs {
 		if err := validateText("Kargo environment", environment, maximumTextLength); err != nil {
 			return err
-		}
-		if _, ok := seenEnvironments[environment]; ok {
-			return fmt.Errorf("kargo environment %q is configured more than once", environment)
-		}
-		seenEnvironments[environment] = struct{}{}
-	}
-	for environment, uiURL := range c.ArgoCDUIURLs {
-		if _, ok := seenEnvironments[environment]; !ok {
-			return fmt.Errorf("argo CD UI environment %q is not in the environment order", environment)
 		}
 		if uiURL == "" {
 			return fmt.Errorf("argo CD UI URL for environment %q is required", environment)

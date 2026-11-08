@@ -171,42 +171,50 @@ func SelectPromotionFreight(target Stage, source Stage, name string) (*FreightIt
 		return nil, ErrStageScope
 	}
 
-	selected, err := selectFreightByName(source.Freight.Items, name)
+	if target.ID == source.ID {
+		selected, err := selectFreightByName(source.Freight.Items, name)
+		if err != nil {
+			return nil, err
+		}
+		cloned := cloneFreightItem(*selected)
+		return &cloned, nil
+	}
+
+	selected, err := selectFreightByName(target.CandidateFreight.Items, name)
 	if err != nil {
 		return nil, err
 	}
-
-	if target.ID != source.ID {
-		accepted := false
-		for _, request := range target.RequestedFreight {
-			if request.Origin == selected.Origin && slices.Contains(request.SourceStages, source.Name) {
-				accepted = true
-				break
-			}
-		}
-		if !accepted {
-			return nil, ErrFreightSource
+	acceptedSource := false
+	for _, request := range target.RequestedFreight {
+		if request.Origin == selected.Origin && slices.Contains(request.SourceStages, source.Name) {
+			acceptedSource = true
+			break
 		}
 	}
+	if !acceptedSource {
+		return nil, ErrFreightSource
+	}
 
-	cloned := cloneFreightItem(*selected)
-	return &cloned, nil
+	return selectEligiblePromotionFreight(target, *selected)
 }
 
-func SelectDirectPromotionFreight(target Stage, name string) (*FreightItem, error) {
-	selected, err := selectFreightByName(target.DirectFreight.Items, name)
+func SelectPromotionFreightCandidate(target Stage, name string) (*FreightItem, error) {
+	selected, err := selectFreightByName(target.CandidateFreight.Items, name)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, request := range target.RequestedFreight {
-		if request.Direct && request.Origin == selected.Origin {
-			cloned := cloneFreightItem(*selected)
-			return &cloned, nil
-		}
-	}
+	return selectEligiblePromotionFreight(target, *selected)
+}
 
-	return nil, ErrFreightSource
+func selectEligiblePromotionFreight(target Stage, selected FreightItem) (*FreightItem, error) {
+	evidence := EvaluateFreightReadiness(target, selected)
+	if evidence.Readiness != FreightReadinessReady {
+		return nil, fmt.Errorf("%w: %s", ErrFreightUnavailable, evidence.Reason)
+	}
+	cloned := cloneFreightItem(selected)
+
+	return &cloned, nil
 }
 
 func selectFreightByName(items []FreightItem, name string) (*FreightItem, error) {

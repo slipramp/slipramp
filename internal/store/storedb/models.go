@@ -294,9 +294,10 @@ type PromotionStage struct {
 	ArchivedAt                      pgtype.Timestamptz
 	RequestedFreightJson            []byte
 	AutoPromotionEnabled            bool
-	DirectFreightJson               []byte
+	CandidateFreightJson            []byte
 	HealthStatus                    *string
 	ArgoApplicationNamespace        *string
+	StageStatusJson                 []byte
 }
 
 type PromotionStagePolicy struct {

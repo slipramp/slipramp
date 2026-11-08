@@ -581,6 +581,10 @@ func finishExistingDecision(
 }
 
 func stageDatabaseParams(record promotion.Stage) (storedb.UpsertPromotionStageParams, error) {
+	sourcePaths := record.SourcePaths
+	if sourcePaths == nil {
+		sourcePaths = []string{}
+	}
 	params := storedb.UpsertPromotionStageParams{
 		ID:                       databaseUUID(record.ID),
 		Integration:              record.Integration,
@@ -594,7 +598,7 @@ func stageDatabaseParams(record promotion.Stage) (storedb.UpsertPromotionStagePa
 		RepositoryName:           record.RepositoryName,
 		RepositoryUrl:            record.RepositoryURL,
 		TargetBranch:             record.TargetBranch,
-		SourcePaths:              record.SourcePaths,
+		SourcePaths:              sourcePaths,
 		AutoPromotionEnabled:     record.AutoPromotionEnabled,
 		HealthStatus:             record.HealthStatus,
 		ArgoApplicationNamespace: record.ArgoApplicationNamespace,

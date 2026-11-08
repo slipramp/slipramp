@@ -36,9 +36,7 @@ import {
   IconNotification,
   IconPalette,
   IconRocket,
-  IconRoute,
   IconServer2,
-  IconShieldCheck,
   IconSparkles,
   IconSun,
   IconTargetArrow,
@@ -75,15 +73,13 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
   },
   {
     items: [
-      { icon: IconFolder, label: "Projects", to: "/promotion-projects" },
+      { icon: IconFolder, label: "Kargo projects", to: "/promotion-projects" },
       { icon: IconRocket, label: "Promotions", to: "/promotions" },
-      { icon: IconRoute, label: "Pipelines", to: "/promotion-pipelines?attention=any" },
       {
         icon: IconArrowsDiff,
         label: "Branch drift",
         to: "/promotion-branch-drift?status=drifted",
       },
-      { icon: IconShieldCheck, label: "Stage policies", to: "/promotion-stages" },
     ],
     label: "Promote",
   },

@@ -26,12 +26,11 @@ type integrationFileDocument struct {
 }
 
 type integrationFileConfig struct {
-	ClusterName      string            `yaml:"cluster"`
-	UIURL            string            `yaml:"uiUrl,omitempty"`
-	ArgoCDUIURLs     map[string]string `yaml:"argoCdUiUrls,omitempty"`
-	Repositories     []string          `yaml:"repositories"`
-	EnvironmentOrder []string          `yaml:"environmentOrder"`
-	Preparation      struct {
+	ClusterName  string            `yaml:"cluster"`
+	UIURL        string            `yaml:"uiUrl,omitempty"`
+	ArgoCDUIURLs map[string]string `yaml:"argoCdUiUrls,omitempty"`
+	Repositories []string          `yaml:"repositories"`
+	Preparation  struct {
 		Repository string `yaml:"repository"`
 		Target     string `yaml:"target"`
 		Action     string `yaml:"action"`
@@ -119,11 +118,10 @@ func DecodeIntegrationFile(input io.Reader) (IntegrationSet, error) {
 		}
 
 		integrations[name] = IntegrationConfig{
-			ClusterName:      input.ClusterName,
-			UIURL:            input.UIURL,
-			ArgoCDUIURLs:     maps.Clone(input.ArgoCDUIURLs),
-			Repositories:     slices.Clone(input.Repositories),
-			EnvironmentOrder: slices.Clone(input.EnvironmentOrder),
+			ClusterName:  input.ClusterName,
+			UIURL:        input.UIURL,
+			ArgoCDUIURLs: maps.Clone(input.ArgoCDUIURLs),
+			Repositories: slices.Clone(input.Repositories),
 			Preparation: PreparationConfig{
 				Repository: input.Preparation.Repository,
 				Target:     input.Preparation.Target,

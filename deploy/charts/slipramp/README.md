@@ -84,7 +84,7 @@ The resulting Git config path is
 `/var/run/slipramp/repository-credentials/github-readonly/gitconfig`.
 
 Optional Kargo integrations are static Server configuration. Each integration
-selects a registered Cluster, a repository allowlist, ordered environments, and
+selects a registered Cluster, a repository allowlist, and
 the repository-defined Target and Action that prepare review artifacts. The
 same configuration enables observed-Freight operator creation; Kargo remains
 authoritative for admission and availability. The chart renders these values as
@@ -102,7 +102,6 @@ server:
           homelab: https://argocd.homelab.example.com
           prod: https://argocd.example.com
         repositories: [kcloud-ops]
-        environmentOrder: [homelab, prod]
         preparation:
           repository: kcloud-ops
           target: kargo-promotions
@@ -120,9 +119,8 @@ The optional `uiUrl` enables direct Project, Stage, and Promotion links from the
 The optional `argoCdUiUrls` map enables direct Application links for observed
 Stages in each configured environment. Kargo supplies the Application identity;
 the Server uses this map only to construct browser links and never contacts Argo CD.
-`environmentOrder` is required and controls Freight comparison columns.
-Observed environments that are absent from the list remain visible after the
-configured columns. Changing Kargo integration configuration requires a Server
+Freight comparisons use explicitly selected Stages and do not infer an
+environment order. Changing Kargo integration configuration requires a Server
 rollout.
 
 Candidate branch cleanup is opt-in per integration. It scans remote

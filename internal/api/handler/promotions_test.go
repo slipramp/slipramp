@@ -154,7 +154,7 @@ func TestReplaceKargoStageSnapshotUsesAuthenticatedCluster(t *testing.T) {
             "sourcePaths":["k8s/external-dns/base"],
             "requestedFreight":[],
             "freight":{"items":[]},
-            "directFreight":{"items":[]},
+            "candidateFreight":{"items":[]},
             "autoPromotionEnabled":false
           }]
         }`),

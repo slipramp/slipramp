@@ -167,8 +167,8 @@ func (s *suite) testRustFSOutageRecovery(t *testing.T) {
 		}
 	}()
 	s.setRustFSAvailable(t, false)
-	report := s.waitForReadiness(t, api.Available, api.Unavailable)
-	if report.Status != api.NotReady {
+	report := s.waitForReadiness(t, api.DependencyStatusAvailable, api.DependencyStatusUnavailable)
+	if report.Status != api.ReadinessResponseStatusNotReady {
 		t.Fatalf("readiness during RustFS outage = %#v", report)
 	}
 
@@ -185,8 +185,8 @@ func (s *suite) testRustFSOutageRecovery(t *testing.T) {
 
 	s.setRustFSAvailable(t, true)
 	outageActive = false
-	report = s.waitForReadiness(t, api.Available, api.Available)
-	if report.Status != api.Ready {
+	report = s.waitForReadiness(t, api.DependencyStatusAvailable, api.DependencyStatusAvailable)
+	if report.Status != api.ReadinessResponseStatusReady {
 		t.Fatalf("readiness after RustFS recovery = %#v", report)
 	}
 	s.waitForRunOutcome(t, run.ID, api.RunOutcomeSucceeded)
@@ -211,8 +211,8 @@ func (s *suite) testCancellationDuringRustFSOutage(t *testing.T) {
 		}
 	}()
 	s.setRustFSAvailable(t, false)
-	report := s.waitForReadiness(t, api.Available, api.Unavailable)
-	if report.Status != api.NotReady {
+	report := s.waitForReadiness(t, api.DependencyStatusAvailable, api.DependencyStatusUnavailable)
+	if report.Status != api.ReadinessResponseStatusNotReady {
 		t.Fatalf("readiness during RustFS outage = %#v", report)
 	}
 
@@ -236,8 +236,8 @@ func (s *suite) testCancellationDuringRustFSOutage(t *testing.T) {
 
 	s.setRustFSAvailable(t, true)
 	outageActive = false
-	report = s.waitForReadiness(t, api.Available, api.Available)
-	if report.Status != api.Ready {
+	report = s.waitForReadiness(t, api.DependencyStatusAvailable, api.DependencyStatusAvailable)
+	if report.Status != api.ReadinessResponseStatusReady {
 		t.Fatalf("readiness after RustFS recovery = %#v", report)
 	}
 	finished := s.waitForRunOutcome(t, run.ID, api.RunOutcomeCanceled)
@@ -269,8 +269,8 @@ func (s *suite) testPostgresOutageRecovery(t *testing.T) {
 		}
 	}()
 	s.setPostgresAvailable(t, false)
-	report := s.waitForReadiness(t, api.Unavailable, api.Available)
-	if report.Status != api.NotReady {
+	report := s.waitForReadiness(t, api.DependencyStatusUnavailable, api.DependencyStatusAvailable)
+	if report.Status != api.ReadinessResponseStatusNotReady {
 		t.Fatalf("readiness during PostgreSQL outage = %#v", report)
 	}
 	s.assertHealthy(t)
@@ -286,8 +286,8 @@ func (s *suite) testPostgresOutageRecovery(t *testing.T) {
 
 	s.setPostgresAvailable(t, true)
 	outageActive = false
-	report = s.waitForReadiness(t, api.Available, api.Available)
-	if report.Status != api.Ready {
+	report = s.waitForReadiness(t, api.DependencyStatusAvailable, api.DependencyStatusAvailable)
+	if report.Status != api.ReadinessResponseStatusReady {
 		t.Fatalf("readiness after PostgreSQL recovery = %#v", report)
 	}
 

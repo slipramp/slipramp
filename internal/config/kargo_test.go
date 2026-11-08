@@ -19,7 +19,6 @@ integrations:
   prod:
     cluster: colo
     repositories: [kcloud-ops]
-    environmentOrder: [prod]
     preparation:
       repository: kcloud-ops
       target: kargo-promotions
@@ -50,7 +49,6 @@ integrations:
   prod:
     cluster: colo
     repositories: [kcloud-ops]
-    environmentOrder: [prod]
     preparation:
       repository: kcloud-ops
       target: kargo-promotions

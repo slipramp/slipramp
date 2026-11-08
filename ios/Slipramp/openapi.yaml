@@ -4129,6 +4129,46 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
+  /api/v1/promotion-projects/{integration}/{cluster}/{project}:
+    get:
+      operationId: getPromotionProject
+      summary: Get one Kargo Project and its observed Stage topology
+      security:
+        - ProductSession: []
+        - ProductBearer: []
+      tags:
+        - Promotions
+      parameters:
+        - name: integration
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: cluster
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+        - name: project
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/CatalogName'
+      responses:
+        '200':
+          description: Canonical observed Stages and native requested-Freight relationships.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromotionProjectDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /api/v1/promotion-stages:
     get:
       operationId: listPromotionStages
@@ -4267,60 +4307,6 @@ paths:
           $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLargeResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /api/v1/promotion-pipelines:
-    get:
-      operationId: listPromotionPipelines
-      summary: Compare current Freight across ordered Kargo environments
-      security:
-        - ProductSession: []
-        - ProductBearer: []
-      tags:
-        - Promotions
-      parameters:
-        - name: integration
-          in: query
-          schema:
-            $ref: '#/components/schemas/CatalogName'
-        - name: project
-          in: query
-          schema:
-            $ref: '#/components/schemas/CatalogName'
-        - name: application
-          in: query
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 200
-        - name: cluster
-          in: query
-          schema:
-            $ref: '#/components/schemas/CatalogName'
-        - name: repository
-          in: query
-          schema:
-            $ref: '#/components/schemas/CatalogName'
-        - name: attention
-          in: query
-          description: Include pipelines with Stage drift, newer Freight available to a manual Stage, or either condition. Stage drift requires comparable Freight in at least two environments.
-          schema:
-            $ref: '#/components/schemas/PromotionPipelineAttention'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Offset'
-      responses:
-        '200':
-          description: Active Kargo Stages grouped into ordered Freight comparisons.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PromotionPipelineList'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '500':
           $ref: '#/components/responses/InternalError'
   /api/v1/promotion-branch-drift:
@@ -7351,8 +7337,10 @@ components:
         - cluster
         - project
         - stageCount
-        - applicationCount
-        - lastObservedAt
+        - unhealthyStageCount
+        - staleStageCount
+        - pendingReviewCount
+        - latestObservedAt
       properties:
         integration:
           $ref: '#/components/schemas/CatalogName'
@@ -7363,10 +7351,16 @@ components:
         stageCount:
           type: integer
           minimum: 1
-        applicationCount:
+        unhealthyStageCount:
           type: integer
-          minimum: 1
-        lastObservedAt:
+          minimum: 0
+        staleStageCount:
+          type: integer
+          minimum: 0
+        pendingReviewCount:
+          type: integer
+          minimum: 0
+        latestObservedAt:
           type: string
           format: date-time
         kargoUrl:
@@ -7395,6 +7389,28 @@ components:
         offset:
           type: integer
           minimum: 0
+    PromotionProjectDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - integration
+        - cluster
+        - project
+        - stages
+      properties:
+        integration:
+          $ref: '#/components/schemas/CatalogName'
+        cluster:
+          $ref: '#/components/schemas/CatalogName'
+        project:
+          $ref: '#/components/schemas/CatalogName'
+        kargoUrl:
+          type: string
+          format: uri
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionProjectStage'
     PromotionStage:
       type: object
       additionalProperties: false
@@ -7406,11 +7422,6 @@ components:
         - name
         - kubernetesUid
         - resourceVersion
-        - application
-        - environment
-        - repository
-        - repositoryUrl
-        - targetBranch
         - sourcePaths
         - requestedFreight
         - freight
@@ -7549,86 +7560,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionFreightItem'
-    PromotionPipeline:
-      type: object
-      additionalProperties: false
-      required:
-        - integration
-        - cluster
-        - project
-        - repository
-        - application
-        - environmentOrder
-        - stages
-      properties:
-        integration:
-          $ref: '#/components/schemas/CatalogName'
-        cluster:
-          $ref: '#/components/schemas/CatalogName'
-        project:
-          $ref: '#/components/schemas/CatalogName'
-        repository:
-          $ref: '#/components/schemas/CatalogName'
-        application:
-          type: string
-          minLength: 1
-          maxLength: 200
-        environmentOrder:
-          type: array
-          minItems: 1
-          uniqueItems: true
-          items:
-            type: string
-            minLength: 1
-            maxLength: 200
-        stages:
-          type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/PromotionPipelineStage'
-    PromotionPipelineList:
-      type: object
-      additionalProperties: false
-      required:
-        - items
-        - summary
-        - total
-        - limit
-        - offset
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/PromotionPipeline'
-        summary:
-          $ref: '#/components/schemas/PromotionPipelineSummary'
-        total:
-          type: integer
-          minimum: 0
-        limit:
-          type: integer
-          minimum: 1
-        offset:
-          type: integer
-          minimum: 0
-    PromotionPipelineSummary:
-      type: object
-      additionalProperties: false
-      description: Attention counts across every pipeline matching the scope filters, before the attention filter and pagination are applied. A pipeline may be both drifted and outdated. Up-to-date pipelines meet neither condition.
-      required:
-        - drifted
-        - outdated
-        - upToDate
-      properties:
-        drifted:
-          type: integer
-          minimum: 0
-        outdated:
-          type: integer
-          minimum: 0
-        upToDate:
-          type: integer
-          minimum: 0
     PromotionBranchDriftRepository:
       type: object
       additionalProperties: false
@@ -9533,6 +9464,7 @@ components:
         - origin
         - direct
         - sourceStages
+        - availabilityStrategy
       properties:
         origin:
           type: string
@@ -9548,6 +9480,14 @@ components:
             minLength: 1
             maxLength: 253
             pattern: ^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$
+        availabilityStrategy:
+          type: string
+          enum:
+            - OneOf
+            - All
+        requiredSoakTime:
+          type: string
+          description: Optional Kargo duration required in an upstream Stage.
     PromotionFreightArtifact:
       type: object
       additionalProperties: false
@@ -9569,6 +9509,34 @@ components:
           type: string
           minLength: 1
           maxLength: 512
+    PromotionFreightVerification:
+      type: object
+      additionalProperties: false
+      required:
+        - stage
+        - longestCompletedSoak
+      properties:
+        stage:
+          type: string
+          minLength: 1
+          maxLength: 253
+        longestCompletedSoak:
+          type: string
+          description: Go duration representing the longest completed continuous occupancy.
+    PromotionFreightOccupancy:
+      type: object
+      additionalProperties: false
+      required:
+        - stage
+        - since
+      properties:
+        stage:
+          type: string
+          minLength: 1
+          maxLength: 253
+        since:
+          type: string
+          format: date-time
     PromotionFreightItem:
       type: object
       additionalProperties: false
@@ -9589,6 +9557,21 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PromotionFreightArtifact'
+        approvedFor:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 253
+        verifiedIn:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionFreightVerification'
+        currentlyIn:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionFreightOccupancy'
     SuccessfulRenderAcknowledgement:
       type: object
       additionalProperties: false
@@ -9758,6 +9741,257 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
+    PromotionStageCondition:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - status
+      properties:
+        type:
+          type: string
+          minLength: 1
+          maxLength: 200
+        status:
+          type: string
+          minLength: 1
+          maxLength: 32
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        lastTransitionTime:
+          type: string
+          format: date-time
+    PromotionStagePromotionReference:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 253
+        phase:
+          type: string
+          minLength: 1
+          maxLength: 100
+        finishedAt:
+          type: string
+          format: date-time
+    PromotionProjectStageSource:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 253
+        stageId:
+          type: string
+          format: uuid
+    PromotionFreightCandidate:
+      type: object
+      additionalProperties: false
+      required:
+        - freight
+        - readiness
+        - evidence
+      properties:
+        freight:
+          $ref: '#/components/schemas/PromotionFreightItem'
+        readiness:
+          type: string
+          enum:
+            - ready
+            - unavailable
+            - unknown
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        evidence:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
+    PromotionProjectFreightRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - origin
+        - direct
+        - sources
+        - availabilityStrategy
+        - candidates
+      properties:
+        origin:
+          type: string
+          minLength: 1
+          maxLength: 512
+        direct:
+          type: boolean
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionProjectStageSource'
+        availabilityStrategy:
+          type: string
+          enum:
+            - OneOf
+            - All
+        requiredSoakTime:
+          type: string
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionFreightCandidate'
+    PromotionStageEnrichment:
+      type: object
+      additionalProperties: false
+      properties:
+        application:
+          type: string
+          minLength: 1
+          maxLength: 200
+        environment:
+          type: string
+          minLength: 1
+          maxLength: 200
+        repository:
+          $ref: '#/components/schemas/CatalogName'
+        repositoryUrl:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        targetBranch:
+          type: string
+          minLength: 1
+          maxLength: 255
+        sourcePaths:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 1024
+    PromotionStageCapabilities:
+      type: object
+      additionalProperties: false
+      required:
+        - promotion
+        - policy
+        - branchDrift
+        - issues
+      properties:
+        promotion:
+          type: string
+          enum:
+            - ready
+            - unavailable
+        policy:
+          type: string
+          enum:
+            - ready
+        branchDrift:
+          type: string
+          enum:
+            - ready
+            - unavailable
+        issues:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
+    PromotionProjectStage:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - kubernetesUid
+        - resourceVersion
+        - observationStale
+        - controlFlow
+        - conditions
+        - requestedFreight
+        - freight
+        - autoPromotionEnabled
+        - policy
+        - pendingPromotionCount
+        - firstObservedAt
+        - lastObservedAt
+        - capabilities
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 253
+        kubernetesUid:
+          type: string
+          minLength: 1
+          maxLength: 200
+        resourceVersion:
+          type: string
+          minLength: 1
+          maxLength: 200
+        observationStale:
+          type: boolean
+        controlFlow:
+          type: boolean
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionStageCondition'
+        currentPromotion:
+          $ref: '#/components/schemas/PromotionStagePromotionReference'
+        lastPromotion:
+          $ref: '#/components/schemas/PromotionStagePromotionReference'
+        requestedFreight:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionProjectFreightRequest'
+        freight:
+          $ref: '#/components/schemas/PromotionFreight'
+        autoPromotionEnabled:
+          type: boolean
+        healthStatus:
+          type: string
+          minLength: 1
+          maxLength: 200
+        policy:
+          $ref: '#/components/schemas/PromotionStagePolicy'
+        pendingPromotionCount:
+          type: integer
+          minimum: 0
+        enrichment:
+          $ref: '#/components/schemas/PromotionStageEnrichment'
+        capabilities:
+          $ref: '#/components/schemas/PromotionStageCapabilities'
+        firstObservedAt:
+          type: string
+          format: date-time
+        lastObservedAt:
+          type: string
+          format: date-time
+        kargoUrl:
+          type: string
+          format: uri
+        argoCdUrl:
+          type: string
+          format: uri
     PromotionStagePolicyUpdate:
       type: object
       additionalProperties: false
@@ -9773,98 +10007,6 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
-    PromotionPipelineAttention:
-      type: string
-      enum:
-        - any
-        - drifted
-        - outdated
-        - up-to-date
-    PromotionFreightSource:
-      type: object
-      additionalProperties: false
-      required:
-        - stageId
-        - stageName
-        - environment
-        - freight
-      properties:
-        stageId:
-          type: string
-          format: uuid
-        stageName:
-          type: string
-          minLength: 1
-          maxLength: 253
-        environment:
-          type: string
-          minLength: 1
-          maxLength: 200
-        freight:
-          $ref: '#/components/schemas/PromotionFreight'
-    PromotionPipelineStage:
-      type: object
-      additionalProperties: false
-      required:
-        - id
-        - name
-        - environment
-        - freight
-        - promotionSources
-        - availableFreight
-        - autoPromotionEnabled
-        - policy
-        - pendingPromotionCount
-        - observationStale
-        - lastObservedAt
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-          minLength: 1
-          maxLength: 253
-        environment:
-          type: string
-          minLength: 1
-          maxLength: 200
-        freight:
-          $ref: '#/components/schemas/PromotionFreight'
-        promotionSources:
-          type: array
-          items:
-            $ref: '#/components/schemas/PromotionFreightSource'
-        availableFreight:
-          $ref: '#/components/schemas/PromotionFreight'
-          description: Exact observed Freight not currently deployed to this Stage.
-        autoPromotionEnabled:
-          type: boolean
-          description: Effective Kargo auto-promotion state for this Stage.
-        policy:
-          $ref: '#/components/schemas/PromotionStagePolicy'
-        pendingPromotionCount:
-          type: integer
-          minimum: 0
-        healthStatus:
-          type: string
-          minLength: 1
-          maxLength: 200
-          description: Most recently observed aggregate Kargo health status for this Stage.
-        observationStale:
-          type: boolean
-          description: Whether the Stage observation exceeds the integration freshness limit.
-        lastObservedAt:
-          type: string
-          format: date-time
-        kargoUrl:
-          type: string
-          format: uri
-          description: Direct link to this Stage in the configured Kargo UI.
-        argoCdUrl:
-          type: string
-          format: uri
-          description: Direct link to the observed Application in the configured Argo CD UI.
     PromotionBranchDriftStatus:
       type: string
       enum:
@@ -9963,15 +10105,12 @@ components:
         - name
         - kubernetesUid
         - resourceVersion
-        - application
-        - environment
-        - repositoryUrl
-        - targetBranch
-        - sourcePaths
         - requestedFreight
         - freight
-        - directFreight
+        - candidateFreight
         - autoPromotionEnabled
+        - controlFlow
+        - conditions
       properties:
         project:
           $ref: '#/components/schemas/CatalogName'
@@ -10018,12 +10157,23 @@ components:
             $ref: '#/components/schemas/PromotionFreightRequest'
         freight:
           $ref: '#/components/schemas/PromotionFreight'
-        directFreight:
+        candidateFreight:
           $ref: '#/components/schemas/PromotionFreight'
-          description: Latest directly sourced Freight observed for each requested origin.
+          description: Latest observed Freight for each requested origin, including Kargo eligibility evidence.
         autoPromotionEnabled:
           type: boolean
           description: Effective Kargo auto-promotion state for this Stage.
+        controlFlow:
+          type: boolean
+          description: Whether the Stage has no Promotion steps and only describes control flow.
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PromotionStageCondition'
+        currentPromotion:
+          $ref: '#/components/schemas/PromotionStagePromotionReference'
+        lastPromotion:
+          $ref: '#/components/schemas/PromotionStagePromotionReference'
         healthStatus:
           type: string
           minLength: 1

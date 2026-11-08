@@ -1,16 +1,11 @@
-import type {
-  PromotionFreightArtifact,
-  PromotionPipeline,
-  PromotionPipelineStage,
-} from "~/api/generated";
+import type { PromotionFreightArtifact, PromotionProjectStage } from "~/api/generated";
 
 export type FreightComparisonStatus = "equal" | "different";
 
 export type FreightColumn = {
   key: string;
-  environment: string;
-  configured: boolean;
-  stage?: PromotionPipelineStage;
+  label: string;
+  stage: PromotionProjectStage;
 };
 
 export type FreightComparisonRow = {
@@ -21,55 +16,23 @@ export type FreightComparisonRow = {
   values: Record<string, string[]>;
 };
 
-export function buildFreightColumns(pipeline: PromotionPipeline): FreightColumn[] {
-  const configured = new Set(pipeline.environmentOrder);
-  const byEnvironment = new Map<string, PromotionPipelineStage[]>();
-  for (const stage of pipeline.stages) {
-    const stages = byEnvironment.get(stage.environment) ?? [];
-    stages.push(stage);
-    byEnvironment.set(stage.environment, stages);
-  }
-  for (const [environment, stages] of byEnvironment) {
-    byEnvironment.set(
-      environment,
-      stages.toSorted(
-        (left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id),
-      ),
+export function buildFreightColumns(stages: PromotionProjectStage[]): FreightColumn[] {
+  return stages
+    .map((stage) => ({
+      key: stage.id,
+      label: stage.enrichment?.environment
+        ? `${stage.name} · ${stage.enrichment.environment}`
+        : stage.name,
+      stage,
+    }))
+    .toSorted(
+      (left, right) => left.label.localeCompare(right.label) || left.key.localeCompare(right.key),
     );
-  }
-
-  const unknownEnvironments = [...byEnvironment.keys()]
-    .filter((environment) => !configured.has(environment))
-    .toSorted((left, right) => left.localeCompare(right));
-  const columns: FreightColumn[] = [];
-  for (const environment of [...pipeline.environmentOrder, ...unknownEnvironments]) {
-    const stages = byEnvironment.get(environment) ?? [];
-    if (stages.length === 0) {
-      columns.push({
-        configured: true,
-        environment,
-        key: `missing:${environment}`,
-      });
-      continue;
-    }
-    for (const stage of stages) {
-      columns.push({
-        configured: configured.has(environment),
-        environment,
-        key: stage.id,
-        stage,
-      });
-    }
-  }
-
-  return columns;
 }
 
 export function buildFreightRows(columns: FreightColumn[]): FreightComparisonRow[] {
   const rows = new Map<string, FreightComparisonRow>();
   for (const column of columns) {
-    if (!column.stage) continue;
-
     for (const item of column.stage.freight.items) {
       for (const artifact of item.artifacts) {
         const key = JSON.stringify([item.origin, artifact.kind, artifact.repository ?? ""]);
@@ -97,7 +60,7 @@ export function buildFreightRows(columns: FreightColumn[]): FreightComparisonRow
   );
 }
 
-export function freightNames(stage: PromotionPipelineStage) {
+export function freightNames(stage: PromotionProjectStage) {
   return stage.freight.items
     .map((item) => item.name)
     .filter((name, index, names) => names.indexOf(name) === index);
@@ -107,11 +70,9 @@ export function freightRowStatus(
   row: FreightComparisonRow,
   columns: FreightColumn[],
 ): FreightComparisonStatus | undefined {
-  const presentColumns = columns.filter((column) => column.stage);
-  const environments = new Set(presentColumns.map((column) => column.environment));
-  if (environments.size < 2) return undefined;
+  if (columns.length < 2) return undefined;
 
-  const values = presentColumns.map((column) => row.values[column.key] ?? []);
+  const values = columns.map((column) => row.values[column.key] ?? []);
   const expected = values[0] ?? [];
   const equal =
     expected.length > 0 &&
