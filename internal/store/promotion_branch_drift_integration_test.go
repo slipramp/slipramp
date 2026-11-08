@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -81,7 +82,7 @@ func TestPromotionBranchDriftRetainsLastSuccessAfterFailedPromotionIntegration(t
 	}
 
 	scanner := &failedPromotionBranchScanner{}
-	service := promotion.NewBranchDriftService(
+	service := projection.NewBranchDriftService(
 		promotion.IntegrationSet{"prod": {}},
 		database,
 		scanner,
@@ -93,8 +94,8 @@ func TestPromotionBranchDriftRetainsLastSuccessAfterFailedPromotionIntegration(t
 		t.Fatalf("Refresh() error = %v", err)
 	}
 
-	result, err := service.List(ctx, promotion.BranchDriftListFilter{
-		Status: promotion.BranchDriftStatusDrifted,
+	result, err := service.List(ctx, projection.BranchDriftListFilter{
+		Status: projection.BranchDriftStatusDrifted,
 		Limit:  promotion.DefaultListLimit,
 	})
 	if err != nil {

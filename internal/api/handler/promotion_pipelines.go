@@ -7,13 +7,14 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 )
 
 func (h *Handler) ListPromotionPipelines(
 	ctx context.Context,
 	request api.ListPromotionPipelinesRequestObject,
 ) (api.ListPromotionPipelinesResponseObject, error) {
-	filter := promotion.FreightPipelineListFilter{
+	filter := projection.FreightPipelineListFilter{
 		Integration: optionalCatalogName(request.Params.Integration),
 		Cluster:     optionalCatalogName(request.Params.Cluster),
 		Project:     optionalCatalogName(request.Params.Project),
@@ -24,7 +25,7 @@ func (h *Handler) ListPromotionPipelines(
 		filter.Application = *request.Params.Application
 	}
 	if request.Params.Attention != nil {
-		filter.Attention = promotion.FreightPipelineAttention(*request.Params.Attention)
+		filter.Attention = projection.FreightPipelineAttention(*request.Params.Attention)
 	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)

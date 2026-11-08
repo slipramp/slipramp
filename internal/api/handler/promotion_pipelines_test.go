@@ -12,18 +12,19 @@ import (
 
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 )
 
 type recordingPromotionPipelineService struct {
-	filter promotion.FreightPipelineListFilter
-	result promotion.FreightPipelineList
+	filter projection.FreightPipelineListFilter
+	result projection.FreightPipelineList
 	err    error
 }
 
 func (s *recordingPromotionPipelineService) List(
 	_ context.Context,
-	filter promotion.FreightPipelineListFilter,
-) (promotion.FreightPipelineList, error) {
+	filter projection.FreightPipelineListFilter,
+) (projection.FreightPipelineList, error) {
 	s.filter = filter
 
 	return s.result, s.err
@@ -38,15 +39,15 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 	healthStatus := "Healthy"
 	argoNamespace := "argocd"
 	pipelines := &recordingPromotionPipelineService{
-		result: promotion.FreightPipelineList{
-			Items: []promotion.FreightPipeline{{
+		result: projection.FreightPipelineList{
+			Items: []projection.FreightPipeline{{
 				Integration:      "prod",
 				ClusterName:      "colo",
 				Project:          "kargo-core",
 				Repository:       "ops",
 				Application:      "external-dns",
 				EnvironmentOrder: []string{"homelab", "prod"},
-				Stages: []promotion.FreightPipelineStage{{
+				Stages: []projection.FreightPipelineStage{{
 					Stage: promotion.Stage{
 						ID:                       stageID,
 						Name:                     "external-dns-prod",
@@ -62,7 +63,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 						EffectiveMode:  promotion.PolicyModeReviewRequired,
 						ExpiresAt:      &policyExpiresAt,
 					},
-					PromotionSources: []promotion.FreightPromotionSource{{
+					PromotionSources: []projection.FreightPromotionSource{{
 						StageID:     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1908"),
 						StageName:   "external-dns-homelab",
 						Environment: "homelab",
@@ -83,7 +84,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 					ObservationStale:      true,
 				}},
 			}},
-			Summary: promotion.FreightPipelineSummary{Drifted: 2, Outdated: 3, UpToDate: 4},
+			Summary: projection.FreightPipelineSummary{Drifted: 2, Outdated: 3, UpToDate: 4},
 			Total:   1,
 			Limit:   10,
 			Offset:  2,
@@ -126,7 +127,7 @@ func TestListPromotionPipelinesReturnsOrderedFreightReadModel(t *testing.T) {
 	if pipelines.filter.Integration != "prod" || pipelines.filter.Cluster != "colo" ||
 		pipelines.filter.Project != "kargo-core" || pipelines.filter.Repository != "ops" ||
 		pipelines.filter.Application != "external-dns" ||
-		pipelines.filter.Attention != promotion.FreightPipelineAttentionAny || pipelines.filter.Limit != 10 ||
+		pipelines.filter.Attention != projection.FreightPipelineAttentionAny || pipelines.filter.Limit != 10 ||
 		pipelines.filter.Offset != 2 {
 		t.Errorf("pipeline filter = %#v", pipelines.filter)
 	}

@@ -12,19 +12,20 @@ import (
 
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type recordingPromotionBranchDriftService struct {
-	filter promotion.BranchDriftListFilter
-	result promotion.BranchDriftList
+	filter projection.BranchDriftListFilter
+	result projection.BranchDriftList
 	err    error
 }
 
 func (s *recordingPromotionBranchDriftService) List(
 	_ context.Context,
-	filter promotion.BranchDriftListFilter,
-) (promotion.BranchDriftList, error) {
+	filter projection.BranchDriftListFilter,
+) (projection.BranchDriftList, error) {
 	s.filter = filter
 
 	return s.result, s.err
@@ -38,11 +39,11 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	policyExpiresAt := now.Add(24 * time.Hour)
 	stageID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1910")
 	drift := &recordingPromotionBranchDriftService{
-		result: promotion.BranchDriftList{
-			Items: []promotion.BranchDriftRepository{{
+		result: projection.BranchDriftList{
+			Items: []projection.BranchDriftRepository{{
 				Repository: repository.Repository{Name: "ops", Branch: "main"},
 				ScannedAt:  now,
-				Stages: []promotion.BranchDriftStage{{
+				Stages: []projection.BranchDriftStage{{
 					Stage: promotion.Stage{
 						ID:             stageID,
 						Integration:    "prod",
@@ -61,7 +62,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 						EffectiveMode:  promotion.PolicyModeReviewRequired,
 						ExpiresAt:      &policyExpiresAt,
 					},
-					Status:                         promotion.BranchDriftStatusCurrent,
+					Status:                         projection.BranchDriftStatusCurrent,
 					AcknowledgedSourceRevision:     strings.Repeat("a", 40),
 					AcknowledgedRenderBaseRevision: strings.Repeat("b", 40),
 					AcknowledgedRenderRevision:     strings.Repeat("b", 40),
@@ -107,7 +108,7 @@ func TestListPromotionBranchDriftReturnsRepositoryGroupedCache(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusOK, response.Body)
 	}
-	if drift.filter.Status != promotion.BranchDriftStatusCurrent ||
+	if drift.filter.Status != projection.BranchDriftStatusCurrent ||
 		drift.filter.Integration != "prod" || drift.filter.Project != "kargo-core" ||
 		drift.filter.Application != "external-dns" ||
 		drift.filter.Repository != "ops" ||

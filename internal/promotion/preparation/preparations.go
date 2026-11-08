@@ -1,4 +1,4 @@
-package promotion
+package preparation
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -23,16 +24,19 @@ const (
 )
 
 type PreparationStore interface {
-	GetPromotionAwaitingDispatch(context.Context, time.Time) (Promotion, error)
-	RecordPromotionPreparationFailure(context.Context, PreparationFailure) (PreparationFailureState, bool, error)
+	GetPromotionAwaitingDispatch(context.Context, time.Time) (promotion.Promotion, error)
+	RecordPromotionPreparationFailure(
+		context.Context,
+		promotion.PreparationFailure,
+	) (promotion.PreparationFailureState, bool, error)
 	ReservePromotionPreparationRevision(
 		ctx context.Context,
 		promotionID uuid.UUID,
 		repositoryID uuid.UUID,
 		catalogRevisionID uuid.UUID,
 		updatedAt time.Time,
-	) (Promotion, error)
-	GetPromotionWithFinishedPreparation(context.Context, time.Time) (Promotion, error)
+	) (promotion.Promotion, error)
+	GetPromotionWithFinishedPreparation(context.Context, time.Time) (promotion.Promotion, error)
 	CompletePromotionPreparation(
 		ctx context.Context,
 		promotionID uuid.UUID,
@@ -41,14 +45,18 @@ type PreparationStore interface {
 		argoArtifactID uuid.UUID,
 		completedAt time.Time,
 		notificationPlan *notification.EnqueuePlan,
-	) (Promotion, error)
+	) (promotion.Promotion, error)
 	FailPromotionPreparation(
 		ctx context.Context,
 		promotionID uuid.UUID,
 		runID uuid.UUID,
 		message string,
 		completedAt time.Time,
-	) (Promotion, error)
+	) (promotion.Promotion, error)
+}
+
+type RepositoryLister interface {
+	ListRepositories(context.Context) ([]repository.Repository, error)
 }
 
 type PreparationCatalogs interface {
@@ -71,7 +79,7 @@ type PreparationNotifications interface {
 }
 
 type PreparationCoordinator struct {
-	integrations  IntegrationSet
+	integrations  promotion.IntegrationSet
 	repositories  RepositoryLister
 	catalogs      PreparationCatalogs
 	runs          PreparationRuns
@@ -84,7 +92,7 @@ type PreparationCoordinator struct {
 }
 
 func NewPreparationCoordinator(
-	integrations IntegrationSet,
+	integrations promotion.IntegrationSet,
 	repositories RepositoryLister,
 	catalogs PreparationCatalogs,
 	runs PreparationRuns,
@@ -154,7 +162,7 @@ func (c *PreparationCoordinator) processAndLog(ctx context.Context) {
 
 func (c *PreparationCoordinator) DispatchNext(ctx context.Context) (bool, error) {
 	record, err := c.store.GetPromotionAwaitingDispatch(ctx, c.now().UTC())
-	if errors.Is(err, ErrNoPreparationWork) {
+	if errors.Is(err, promotion.ErrNoPreparationWork) {
 		return false, nil
 	}
 	if err != nil {
@@ -167,7 +175,7 @@ func (c *PreparationCoordinator) DispatchNext(ctx context.Context) (bool, error)
 	return true, nil
 }
 
-func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion) error {
+func (c *PreparationCoordinator) dispatch(ctx context.Context, record promotion.Promotion) error {
 	var err error
 
 	if record.Preparation.CatalogRevisionID == nil {
@@ -177,7 +185,7 @@ func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion)
 		}
 	}
 	if record.Preparation.RepositoryID == nil || record.Preparation.CatalogRevisionID == nil {
-		return fmt.Errorf("%w: preparation catalog revision was not reserved", ErrInvalid)
+		return fmt.Errorf("%w: preparation catalog revision was not reserved", promotion.ErrInvalid)
 	}
 
 	parameters, err := record.PreparationParameters()
@@ -186,7 +194,7 @@ func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion)
 	}
 	integration, ok := c.integrations.Lookup(record.Integration)
 	if !ok {
-		return ErrIntegrationNotFound
+		return promotion.ErrIntegrationNotFound
 	}
 	idempotencyKey := record.ID.String()
 	revisionID := *record.Preparation.CatalogRevisionID
@@ -238,15 +246,15 @@ func (c *PreparationCoordinator) dispatch(ctx context.Context, record Promotion)
 
 func (c *PreparationCoordinator) reservePreparationRevision(
 	ctx context.Context,
-	record Promotion,
-) (Promotion, error) {
+	record promotion.Promotion,
+) (promotion.Promotion, error) {
 	integration, ok := c.integrations.Lookup(record.Integration)
 	if !ok {
-		return Promotion{}, ErrIntegrationNotFound
+		return promotion.Promotion{}, promotion.ErrIntegrationNotFound
 	}
 	repositories, err := c.repositories.ListRepositories(ctx)
 	if err != nil {
-		return Promotion{}, fmt.Errorf("list preparation repositories: %w", err)
+		return promotion.Promotion{}, fmt.Errorf("list preparation repositories: %w", err)
 	}
 
 	var selected *repository.Repository
@@ -257,14 +265,17 @@ func (c *PreparationCoordinator) reservePreparationRevision(
 		}
 	}
 	if selected == nil {
-		return Promotion{}, ErrRepositoryUnavailable
+		return promotion.Promotion{}, promotion.ErrRepositoryUnavailable
 	}
 	revision, err := c.catalogs.GetActiveRevision(ctx, selected.ID)
 	if errors.Is(err, catalog.ErrNotFound) {
-		return Promotion{}, fmt.Errorf("%w: preparation catalog is unavailable", ErrRepositoryUnavailable)
+		return promotion.Promotion{}, fmt.Errorf(
+			"%w: preparation catalog is unavailable",
+			promotion.ErrRepositoryUnavailable,
+		)
 	}
 	if err != nil {
-		return Promotion{}, fmt.Errorf("get active preparation catalog: %w", err)
+		return promotion.Promotion{}, fmt.Errorf("get active preparation catalog: %w", err)
 	}
 
 	reserved, err := c.store.ReservePromotionPreparationRevision(
@@ -275,7 +286,11 @@ func (c *PreparationCoordinator) reservePreparationRevision(
 		c.now().UTC(),
 	)
 	if err != nil {
-		return Promotion{}, fmt.Errorf("reserve preparation revision for Promotion %s: %w", record.ID, err)
+		return promotion.Promotion{}, fmt.Errorf(
+			"reserve preparation revision for Promotion %s: %w",
+			record.ID,
+			err,
+		)
 	}
 
 	return reserved, nil
@@ -283,7 +298,7 @@ func (c *PreparationCoordinator) reservePreparationRevision(
 
 func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error) {
 	record, err := c.store.GetPromotionWithFinishedPreparation(ctx, c.now().UTC())
-	if errors.Is(err, ErrNoPreparationWork) {
+	if errors.Is(err, promotion.ErrNoPreparationWork) {
 		return false, nil
 	}
 	if err != nil {
@@ -296,9 +311,9 @@ func (c *PreparationCoordinator) ReconcileNext(ctx context.Context) (bool, error
 	return true, nil
 }
 
-func (c *PreparationCoordinator) reconcile(ctx context.Context, record Promotion) error {
+func (c *PreparationCoordinator) reconcile(ctx context.Context, record promotion.Promotion) error {
 	if record.Preparation.RunID == nil {
-		return fmt.Errorf("%w: finished preparation has no Run", ErrInvalid)
+		return fmt.Errorf("%w: finished preparation has no Run", promotion.ErrInvalid)
 	}
 
 	preparationRun, err := c.runs.GetRun(ctx, *record.Preparation.RunID)
@@ -307,7 +322,7 @@ func (c *PreparationCoordinator) reconcile(ctx context.Context, record Promotion
 	}
 	completedAt := c.now().UTC()
 	if preparationRun.Phase != run.PhaseFinished || preparationRun.Outcome == nil {
-		return fmt.Errorf("%w: selected preparation Run is not finished", ErrTransitionConflict)
+		return fmt.Errorf("%w: selected preparation Run is not finished", promotion.ErrTransitionConflict)
 	}
 	if *preparationRun.Outcome != run.OutcomeSucceeded {
 		message := fmt.Sprintf("Preparation Run finished with outcome %s.", *preparationRun.Outcome)
@@ -381,7 +396,11 @@ func (c *PreparationCoordinator) reconcile(ctx context.Context, record Promotion
 	return nil
 }
 
-func (c *PreparationCoordinator) recordFailure(ctx context.Context, record Promotion, cause error) (bool, error) {
+func (c *PreparationCoordinator) recordFailure(
+	ctx context.Context,
+	record promotion.Promotion,
+	cause error,
+) (bool, error) {
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}
@@ -403,10 +422,16 @@ func (c *PreparationCoordinator) recordFailure(ctx context.Context, record Promo
 	return true, nil
 }
 
-func (c *PreparationCoordinator) reviewRequestedEvent(record Promotion, occurredAt time.Time) (notification.Event, error) {
+func (c *PreparationCoordinator) reviewRequestedEvent(
+	record promotion.Promotion,
+	occurredAt time.Time,
+) (notification.Event, error) {
 	stage := record.StageSnapshot
 	if stage.Project == "" || stage.Name == "" || stage.RepositoryName == "" {
-		return notification.Event{}, fmt.Errorf("%w: Promotion Stage notification snapshot is incomplete", ErrInvalid)
+		return notification.Event{}, fmt.Errorf(
+			"%w: Promotion Stage notification snapshot is incomplete",
+			promotion.ErrInvalid,
+		)
 	}
 
 	facts := []notification.Fact{{Label: "Repository", Value: stage.RepositoryName}}

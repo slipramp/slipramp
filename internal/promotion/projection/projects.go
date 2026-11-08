@@ -1,9 +1,11 @@
-package promotion
+package projection
 
 import (
 	"context"
 	"slices"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 type ProjectListFilter struct {
@@ -31,15 +33,15 @@ type ProjectList struct {
 }
 
 type ProjectStore interface {
-	ListPromotionStages(context.Context) ([]Stage, error)
+	ListPromotionStages(context.Context) ([]promotion.Stage, error)
 }
 
 type ProjectService struct {
-	integrations IntegrationSet
+	integrations promotion.IntegrationSet
 	store        ProjectStore
 }
 
-func NewProjectService(integrations IntegrationSet, store ProjectStore) *ProjectService {
+func NewProjectService(integrations promotion.IntegrationSet, store ProjectStore) *ProjectService {
 	return &ProjectService{integrations: integrations, store: store}
 }
 
@@ -123,7 +125,7 @@ func (s *ProjectService) List(ctx context.Context, filter ProjectListFilter) (Pr
 	return ProjectList{Items: items, Total: total, Limit: filter.Limit, Offset: filter.Offset}, nil
 }
 
-func stageMatchesProjectFilter(stage Stage, filter ProjectListFilter) bool {
+func stageMatchesProjectFilter(stage promotion.Stage, filter ProjectListFilter) bool {
 	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
 		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
 		(filter.Project == "" || stage.Project == filter.Project)

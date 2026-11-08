@@ -15,6 +15,7 @@ import (
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/preparation"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
@@ -1507,15 +1508,15 @@ func preparePromotionForCompletion(
 		t,
 		fixture.database,
 		preparationRun.ID,
-		promotion.GitDiffArtifactName,
-		promotion.GitDiffArtifactMediaType,
+		preparation.GitDiffArtifactName,
+		preparation.GitDiffArtifactMediaType,
 		acceptedAt.Add(4*time.Second),
 	)
 	argoArtifactID := createPromotionArtifact(
 		t,
 		fixture.database,
 		preparationRun.ID,
-		promotion.ArgoDiffArtifactName,
+		preparation.ArgoDiffArtifactName,
 		argodiff.MediaType,
 		acceptedAt.Add(4*time.Second),
 	)

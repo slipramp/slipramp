@@ -8,18 +8,19 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
 type PromotionBranchDriftService interface {
-	List(context.Context, promotion.BranchDriftListFilter) (promotion.BranchDriftList, error)
+	List(context.Context, projection.BranchDriftListFilter) (projection.BranchDriftList, error)
 }
 
 func (h *Handler) ListPromotionBranchDrift(
 	ctx context.Context,
 	request api.ListPromotionBranchDriftRequestObject,
 ) (api.ListPromotionBranchDriftResponseObject, error) {
-	filter := promotion.BranchDriftListFilter{
+	filter := projection.BranchDriftListFilter{
 		Integration: optionalCatalogName(request.Params.Integration),
 		Project:     optionalCatalogName(request.Params.Project),
 		Repository:  optionalCatalogName(request.Params.Repository),
@@ -29,7 +30,7 @@ func (h *Handler) ListPromotionBranchDrift(
 		filter.Application = *request.Params.Application
 	}
 	if request.Params.Status != nil {
-		filter.Status = promotion.BranchDriftStatus(*request.Params.Status)
+		filter.Status = projection.BranchDriftStatus(*request.Params.Status)
 	}
 	if request.Params.Limit != nil {
 		filter.Limit = int(*request.Params.Limit)
@@ -128,7 +129,7 @@ func (h *Handler) ListPromotionBranchDrift(
 			if stage.AcknowledgedSourceRevision != "" {
 				response.NoOpRender = new(stage.NoOpRender)
 			}
-			if stage.Status != promotion.BranchDriftStatusUnknown {
+			if stage.Status != projection.BranchDriftStatusUnknown {
 				response.SourceDrift = new(stage.SourceDrift)
 				response.TargetDrift = new(stage.TargetDrift)
 			}

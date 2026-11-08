@@ -11,6 +11,7 @@ import (
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -60,8 +61,8 @@ type PromotionReviewService interface {
 type PromotionPipelineService interface {
 	List(
 		context.Context,
-		promotion.FreightPipelineListFilter,
-	) (promotion.FreightPipelineList, error)
+		projection.FreightPipelineListFilter,
+	) (projection.FreightPipelineList, error)
 }
 
 func (h *Handler) SubmitKargoPromotion(

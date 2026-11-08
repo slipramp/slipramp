@@ -1,4 +1,4 @@
-package promotion
+package projection
 
 import (
 	"errors"
@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
@@ -22,8 +24,8 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 	archived.ArchivedAt = new(now)
 	unconfigured := pipelineStage("removed", "kargo-core", "removed", "removed-prod", "prod", now)
 
-	store := &reviewStore{
-		stages: []Stage{
+	store := &projectionTestStore{
+		stages: []promotion.Stage{
 			production,
 			homelabB,
 			archived,
@@ -32,19 +34,16 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 			homelabA,
 			unconfigured,
 		},
-		promotions: []Promotion{
-			{ID: uuid.New(), StageID: homelabA.ID, Lifecycle: PromotionLifecycle{State: LifecyclePending}},
-			{ID: uuid.New(), StageID: homelabA.ID, Lifecycle: PromotionLifecycle{State: LifecycleApproved}},
-		},
-		policies: map[uuid.UUID]StagePolicy{
+		pendingCounts: map[uuid.UUID]int{homelabA.ID: 1},
+		policies: map[uuid.UUID]promotion.StagePolicy{
 			production.ID: {
 				StageID: production.ID,
-				Mode:    PolicyModeReviewRequired,
+				Mode:    promotion.PolicyModeReviewRequired,
 			},
 		},
 	}
 	service := NewFreightPipelineService(
-		IntegrationSet{
+		promotion.IntegrationSet{
 			"prod": {
 				EnvironmentOrder: []string{"homelab", "prod"},
 			},
@@ -52,7 +51,7 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 		store,
 	)
 
-	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: DefaultListLimit})
+	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: promotion.DefaultListLimit})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -76,8 +75,8 @@ func TestFreightPipelineServiceGroupsAndOrdersActiveStages(t *testing.T) {
 	if pipeline.Stages[0].PendingPromotionCount != 1 {
 		t.Errorf("pending count = %d, want 1", pipeline.Stages[0].PendingPromotionCount)
 	}
-	if pipeline.Stages[2].Policy.EffectiveMode != PolicyModeReviewRequired ||
-		pipeline.Stages[0].Policy.EffectiveMode != PolicyModeAutomatic {
+	if pipeline.Stages[2].Policy.EffectiveMode != promotion.PolicyModeReviewRequired ||
+		pipeline.Stages[0].Policy.EffectiveMode != promotion.PolicyModeAutomatic {
 		t.Errorf("Stage policies = %#v", pipeline.Stages)
 	}
 	wantPendingStageIDs := []uuid.UUID{production.ID, homelabB.ID, canary.ID, otherApplication.ID, homelabA.ID}
@@ -100,17 +99,17 @@ func TestFreightPipelineServiceReportsStageObservationFreshness(t *testing.T) {
 	fresh := pipelineStage("prod", "kargo-core", "fresh", "fresh-prod", "prod", now.Add(-5*time.Minute))
 	stale := pipelineStage("prod", "kargo-core", "stale", "stale-prod", "prod", now.Add(-5*time.Minute-time.Microsecond))
 	service := NewFreightPipelineService(
-		IntegrationSet{
+		promotion.IntegrationSet{
 			"prod": {
 				EnvironmentOrder:           []string{"prod"},
 				MaximumStageObservationAge: 5 * time.Minute,
 			},
 		},
-		&reviewStore{stages: []Stage{stale, fresh}},
+		&projectionTestStore{stages: []promotion.Stage{stale, fresh}},
 	)
 	service.now = func() time.Time { return now }
 
-	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: DefaultListLimit})
+	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: promotion.DefaultListLimit})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -124,15 +123,15 @@ func TestFreightPipelineServiceFiltersAndPaginatesPipelines(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
-	store := &reviewStore{
-		stages: []Stage{
+	store := &projectionTestStore{
+		stages: []promotion.Stage{
 			pipelineStage("prod", "kargo-core", "alpha", "alpha-prod", "prod", now),
 			pipelineStage("prod", "kargo-core", "bravo", "bravo-prod", "prod", now),
 			pipelineStage("prod", "kargo-platform", "charlie", "charlie-prod", "prod", now),
 		},
 	}
 	service := NewFreightPipelineService(
-		IntegrationSet{"prod": {EnvironmentOrder: []string{"prod"}}},
+		promotion.IntegrationSet{"prod": {EnvironmentOrder: []string{"prod"}}},
 		store,
 	)
 
@@ -158,24 +157,24 @@ func TestFreightPipelineServiceBuildsPromotionSourcesFromDeclaredTopology(t *tes
 
 	now := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
 	source := pipelineStage("prod", "kargo-core", "shared-source", "app-homelab", "homelab", now)
-	source.Freight = Freight{Items: []FreightItem{
-		{Origin: "Warehouse/app", Name: "freight-42", Artifacts: []FreightArtifact{{Kind: "image", Version: "1.2.3"}}},
-		{Origin: "Warehouse/other", Name: "freight-other", Artifacts: []FreightArtifact{}},
+	source.Freight = promotion.Freight{Items: []promotion.FreightItem{
+		{Origin: "Warehouse/app", Name: "freight-42", Artifacts: []promotion.FreightArtifact{{Kind: "image", Version: "1.2.3"}}},
+		{Origin: "Warehouse/other", Name: "freight-other", Artifacts: []promotion.FreightArtifact{}},
 	}}
 	target := pipelineStage("prod", "kargo-core", "app", "app-prod", "prod", now)
-	target.RequestedFreight = []FreightRequest{{
+	target.RequestedFreight = []promotion.FreightRequest{{
 		Origin:       "Warehouse/app",
 		SourceStages: []string{source.Name},
 	}}
-	store := &reviewStore{stages: []Stage{target, source}}
+	store := &projectionTestStore{stages: []promotion.Stage{target, source}}
 	service := NewFreightPipelineService(
-		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
+		promotion.IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
 		store,
 	)
 
 	result, err := service.List(t.Context(), FreightPipelineListFilter{
 		Application: target.Application,
-		Limit:       DefaultListLimit,
+		Limit:       promotion.DefaultListLimit,
 	})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
@@ -209,14 +208,14 @@ func TestFreightPipelineServiceReportsDirectFreightNotCurrentlyDeployed(t *testi
 
 	now := time.Date(2026, time.October, 23, 12, 0, 0, 0, time.UTC)
 	stage := pipelineStage("prod", "kargo-core", "app", "app-homelab", "homelab", now)
-	stage.Freight = Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-old"}}}
-	stage.DirectFreight = Freight{Items: []FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}}
+	stage.Freight = promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/app", Name: "freight-old"}}}
+	stage.DirectFreight = promotion.Freight{Items: []promotion.FreightItem{{Origin: "Warehouse/app", Name: "freight-new"}}}
 	service := NewFreightPipelineService(
-		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab"}}},
-		&reviewStore{stages: []Stage{stage}},
+		promotion.IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab"}}},
+		&projectionTestStore{stages: []promotion.Stage{stage}},
 	)
 
-	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: DefaultListLimit})
+	result, err := service.List(t.Context(), FreightPipelineListFilter{Limit: promotion.DefaultListLimit})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -253,7 +252,7 @@ func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 	deltaProd.DirectFreight = pipelineFreight("4.0.0")
 	deltaProd.DirectFreight.Items[0].Name = "freight-delta-new"
 
-	store := &reviewStore{stages: []Stage{
+	store := &projectionTestStore{stages: []promotion.Stage{
 		alphaHomelab,
 		bravoHomelab,
 		bravoProd,
@@ -263,7 +262,7 @@ func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 		deltaProd,
 	}}
 	service := NewFreightPipelineService(
-		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
+		promotion.IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
 		store,
 	)
 
@@ -284,7 +283,7 @@ func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 
 	drifted, err := service.List(t.Context(), FreightPipelineListFilter{
 		Attention: FreightPipelineAttentionDrifted,
-		Limit:     DefaultListLimit,
+		Limit:     promotion.DefaultListLimit,
 	})
 	if err != nil {
 		t.Fatalf("drifted List() error = %v", err)
@@ -296,7 +295,7 @@ func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 
 	outdated, err := service.List(t.Context(), FreightPipelineListFilter{
 		Attention: FreightPipelineAttentionOutdated,
-		Limit:     DefaultListLimit,
+		Limit:     promotion.DefaultListLimit,
 	})
 	if err != nil {
 		t.Fatalf("outdated List() error = %v", err)
@@ -311,7 +310,7 @@ func TestFreightPipelineServiceFiltersAttentionBeforePagination(t *testing.T) {
 
 	upToDate, err := service.List(t.Context(), FreightPipelineListFilter{
 		Attention: FreightPipelineAttentionUpToDate,
-		Limit:     DefaultListLimit,
+		Limit:     promotion.DefaultListLimit,
 	})
 	if err != nil {
 		t.Fatalf("up-to-date List() error = %v", err)
@@ -331,12 +330,12 @@ func TestFreightPipelineServiceRequiresStagesInTwoEnvironmentsForComparison(t *t
 	homelabB.Freight = pipelineFreight("2.0.0")
 
 	service := NewFreightPipelineService(
-		IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
-		&reviewStore{stages: []Stage{homelabA, homelabB}},
+		promotion.IntegrationSet{"prod": {EnvironmentOrder: []string{"homelab", "prod"}}},
+		&projectionTestStore{stages: []promotion.Stage{homelabA, homelabB}},
 	)
 	result, err := service.List(t.Context(), FreightPipelineListFilter{
 		Attention: FreightPipelineAttentionDrifted,
-		Limit:     DefaultListLimit,
+		Limit:     promotion.DefaultListLimit,
 	})
 	if err != nil {
 		t.Fatalf("drifted List() error = %v", err)
@@ -349,12 +348,12 @@ func TestFreightPipelineServiceRequiresStagesInTwoEnvironmentsForComparison(t *t
 func TestFreightPipelineServiceRejectsInvalidAttention(t *testing.T) {
 	t.Parallel()
 
-	service := NewFreightPipelineService(IntegrationSet{}, &reviewStore{})
+	service := NewFreightPipelineService(promotion.IntegrationSet{}, &projectionTestStore{})
 	_, err := service.List(t.Context(), FreightPipelineListFilter{
 		Attention: "invalid",
-		Limit:     DefaultListLimit,
+		Limit:     promotion.DefaultListLimit,
 	})
-	if !errors.Is(err, ErrInvalid) {
+	if !errors.Is(err, promotion.ErrInvalid) {
 		t.Fatalf("List() error = %v, want ErrInvalid", err)
 	}
 }
@@ -366,17 +365,17 @@ func pipelineStage(
 	name string,
 	environment string,
 	now time.Time,
-) Stage {
-	stage := reviewStage(integration, "colo", project, name, now)
+) promotion.Stage {
+	stage := projectionTestStage(integration, "colo", project, name, now)
 	stage.Application = application
 	stage.Environment = environment
 
 	return stage
 }
 
-func pipelineFreight(version string) Freight {
-	return Freight{Items: []FreightItem{{
+func pipelineFreight(version string) promotion.Freight {
+	return promotion.Freight{Items: []promotion.FreightItem{{
 		Origin: "Warehouse/app", Name: "freight",
-		Artifacts: []FreightArtifact{{Kind: "image", Repository: new("ghcr.io/example/app"), Version: version}},
+		Artifacts: []promotion.FreightArtifact{{Kind: "image", Repository: new("ghcr.io/example/app"), Version: version}},
 	}}}
 }

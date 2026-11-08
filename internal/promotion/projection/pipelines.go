@@ -1,4 +1,4 @@
-package promotion
+package projection
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 type FreightPipelineAttention string
@@ -30,10 +32,10 @@ type FreightPipelineListFilter struct {
 }
 
 type FreightPipelineStage struct {
-	Stage                 Stage
-	Policy                PolicyView
+	Stage                 promotion.Stage
+	Policy                promotion.PolicyView
 	PromotionSources      []FreightPromotionSource
-	AvailableFreight      []FreightItem
+	AvailableFreight      []promotion.FreightItem
 	PendingPromotionCount int
 	ObservationStale      bool
 }
@@ -42,7 +44,7 @@ type FreightPromotionSource struct {
 	StageID     uuid.UUID
 	StageName   string
 	Environment string
-	Freight     []FreightItem
+	Freight     []promotion.FreightItem
 }
 
 type FreightPipeline struct {
@@ -71,18 +73,18 @@ type FreightPipelineSummary struct {
 
 type FreightPipelineStore interface {
 	StagePolicyStore
-	ListPromotionStages(context.Context) ([]Stage, error)
+	ListPromotionStages(context.Context) ([]promotion.Stage, error)
 	CountPendingPromotionsByStage(context.Context, []uuid.UUID) (map[uuid.UUID]int, error)
 }
 
 type FreightPipelineService struct {
-	integrations IntegrationSet
+	integrations promotion.IntegrationSet
 	store        FreightPipelineStore
 	now          func() time.Time
 }
 
 func NewFreightPipelineService(
-	integrations IntegrationSet,
+	integrations promotion.IntegrationSet,
 	store FreightPipelineStore,
 ) *FreightPipelineService {
 	return &FreightPipelineService{integrations: integrations, store: store, now: time.Now}
@@ -96,7 +98,7 @@ func (s *FreightPipelineService) List(
 		return FreightPipelineList{}, err
 	}
 	if filter.Attention != "" && !filter.Attention.Valid() {
-		return FreightPipelineList{}, fmt.Errorf("%w: pipeline attention filter is invalid", ErrInvalid)
+		return FreightPipelineList{}, fmt.Errorf("%w: pipeline attention filter is invalid", promotion.ErrInvalid)
 	}
 
 	stages, err := s.store.ListPromotionStages(ctx)
@@ -117,7 +119,7 @@ func (s *FreightPipelineService) List(
 	}
 
 	builders := make(map[pipelineKey]*pipelineBuilder)
-	activeStages := make(map[stageIdentity]Stage)
+	activeStages := make(map[stageIdentity]promotion.Stage)
 	stageIDs := make([]uuid.UUID, 0, len(stages))
 	for _, stage := range stages {
 		if stage.ArchivedAt != nil {
@@ -260,7 +262,7 @@ func (s *FreightPipelineService) List(
 	}, nil
 }
 
-func stageObservationStale(stage Stage, integration IntegrationConfig, now time.Time) bool {
+func stageObservationStale(stage promotion.Stage, integration promotion.IntegrationConfig, now time.Time) bool {
 	if integration.MaximumStageObservationAge <= 0 {
 		return false
 	}
@@ -275,7 +277,7 @@ type stageIdentity struct {
 	name        string
 }
 
-func newStageIdentity(stage Stage) stageIdentity {
+func newStageIdentity(stage promotion.Stage) stageIdentity {
 	return stageIdentity{
 		integration: stage.Integration,
 		cluster:     stage.ClusterName,
@@ -284,7 +286,10 @@ func newStageIdentity(stage Stage) stageIdentity {
 	}
 }
 
-func promotionSources(target Stage, stages map[stageIdentity]Stage) []FreightPromotionSource {
+func promotionSources(
+	target promotion.Stage,
+	stages map[stageIdentity]promotion.Stage,
+) []FreightPromotionSource {
 	sources := make([]FreightPromotionSource, 0)
 	sourceIndexes := make(map[uuid.UUID]int)
 	for _, request := range target.RequestedFreight {
@@ -308,7 +313,7 @@ func promotionSources(target Stage, stages map[stageIdentity]Stage) []FreightPro
 						StageID:     source.ID,
 						StageName:   source.Name,
 						Environment: source.Environment,
-						Freight:     []FreightItem{},
+						Freight:     []promotion.FreightItem{},
 					})
 				}
 				sources[index].Freight = append(sources[index].Freight, item)
@@ -319,15 +324,15 @@ func promotionSources(target Stage, stages map[stageIdentity]Stage) []FreightPro
 	return sources
 }
 
-func availableFreight(target Stage, sources []FreightPromotionSource) []FreightItem {
+func availableFreight(target promotion.Stage, sources []FreightPromotionSource) []promotion.FreightItem {
 	current := make(map[string]string, len(target.Freight.Items))
 	for _, item := range target.Freight.Items {
 		current[item.Origin] = item.Name
 	}
 
-	available := make([]FreightItem, 0)
+	available := make([]promotion.FreightItem, 0)
 	seen := make(map[string]struct{})
-	add := func(item FreightItem) {
+	add := func(item promotion.FreightItem) {
 		if current[item.Origin] == item.Name {
 			return
 		}
@@ -348,7 +353,7 @@ func availableFreight(target Stage, sources []FreightPromotionSource) []FreightI
 		}
 	}
 
-	slices.SortFunc(available, func(left, right FreightItem) int {
+	slices.SortFunc(available, func(left, right promotion.FreightItem) int {
 		if value := compareText(left.Origin, right.Origin); value != 0 {
 			return value
 		}
@@ -356,6 +361,20 @@ func availableFreight(target Stage, sources []FreightPromotionSource) []FreightI
 	})
 
 	return available
+}
+
+func cloneFreightItem(item promotion.FreightItem) promotion.FreightItem {
+	artifacts := make([]promotion.FreightArtifact, len(item.Artifacts))
+	for index, value := range item.Artifacts {
+		artifacts[index] = value
+		if value.Repository != nil {
+			repositoryName := *value.Repository
+			artifacts[index].Repository = &repositoryName
+		}
+	}
+	item.Artifacts = artifacts
+
+	return item
 }
 
 func (a FreightPipelineAttention) Valid() bool {
@@ -466,7 +485,7 @@ func freightValuesEqual(values map[uuid.UUID][]string, stages []FreightPipelineS
 	return len(expected) > 0
 }
 
-func stageMatchesPipelineFilter(stage Stage, filter FreightPipelineListFilter) bool {
+func stageMatchesPipelineFilter(stage promotion.Stage, filter FreightPipelineListFilter) bool {
 	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
 		(filter.Cluster == "" || stage.ClusterName == filter.Cluster) &&
 		(filter.Project == "" || stage.Project == filter.Project) &&

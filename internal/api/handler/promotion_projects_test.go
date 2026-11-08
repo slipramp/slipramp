@@ -10,18 +10,19 @@ import (
 
 	"github.com/slipramp/slipramp/internal/productidentity"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 )
 
 type recordingPromotionProjectService struct {
-	filter promotion.ProjectListFilter
-	result promotion.ProjectList
+	filter projection.ProjectListFilter
+	result projection.ProjectList
 	err    error
 }
 
 func (s *recordingPromotionProjectService) List(
 	_ context.Context,
-	filter promotion.ProjectListFilter,
-) (promotion.ProjectList, error) {
+	filter projection.ProjectListFilter,
+) (projection.ProjectList, error) {
 	s.filter = filter
 
 	return s.result, s.err
@@ -32,8 +33,8 @@ func TestListPromotionProjectsReturnsObservedProjectSummaries(t *testing.T) {
 
 	now := time.Date(2026, time.October, 22, 12, 0, 0, 0, time.UTC)
 	projects := &recordingPromotionProjectService{
-		result: promotion.ProjectList{
-			Items: []promotion.ProjectSummary{{
+		result: projection.ProjectList{
+			Items: []projection.ProjectSummary{{
 				Integration:      "prod",
 				ClusterName:      "colo",
 				Project:          "kargo-core",

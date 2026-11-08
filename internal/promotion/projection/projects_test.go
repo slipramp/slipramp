@@ -1,9 +1,11 @@
-package promotion
+package projection
 
 import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 func TestProjectServiceGroupsActiveStages(t *testing.T) {
@@ -19,11 +21,11 @@ func TestProjectServiceGroupsActiveStages(t *testing.T) {
 	unconfigured := pipelineStage("removed", "kargo-removed", "removed", "removed-prod", "prod", now)
 
 	service := NewProjectService(
-		IntegrationSet{"prod": {}},
-		&reviewStore{stages: []Stage{archived, third, unconfigured, second, other, first}},
+		promotion.IntegrationSet{"prod": {}},
+		&projectionTestStore{stages: []promotion.Stage{archived, third, unconfigured, second, other, first}},
 	)
 
-	result, err := service.List(t.Context(), ProjectListFilter{Limit: DefaultListLimit})
+	result, err := service.List(t.Context(), ProjectListFilter{Limit: promotion.DefaultListLimit})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
@@ -53,8 +55,8 @@ func TestProjectServiceFiltersAndPaginatesProjects(t *testing.T) {
 	third := pipelineStage("dev", "kargo-dev", "charlie", "charlie-dev", "dev", now)
 
 	service := NewProjectService(
-		IntegrationSet{"dev": {}, "prod": {}},
-		&reviewStore{stages: []Stage{third, second, first}},
+		promotion.IntegrationSet{"dev": {}, "prod": {}},
+		&projectionTestStore{stages: []promotion.Stage{third, second, first}},
 	)
 
 	result, err := service.List(t.Context(), ProjectListFilter{

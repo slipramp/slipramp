@@ -7,17 +7,18 @@ import (
 
 	"github.com/slipramp/slipramp/internal/api"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 )
 
 type PromotionProjectService interface {
-	List(context.Context, promotion.ProjectListFilter) (promotion.ProjectList, error)
+	List(context.Context, projection.ProjectListFilter) (projection.ProjectList, error)
 }
 
 func (h *Handler) ListPromotionProjects(
 	ctx context.Context,
 	request api.ListPromotionProjectsRequestObject,
 ) (api.ListPromotionProjectsResponseObject, error) {
-	filter := promotion.ProjectListFilter{
+	filter := projection.ProjectListFilter{
 		Integration: optionalCatalogName(request.Params.Integration),
 		Cluster:     optionalCatalogName(request.Params.Cluster),
 		Project:     optionalCatalogName(request.Params.Project),

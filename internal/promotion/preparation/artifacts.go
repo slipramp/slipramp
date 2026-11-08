@@ -1,4 +1,4 @@
-package promotion
+package preparation
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 
 	"github.com/slipramp/slipramp/internal/argodiff"
 	"github.com/slipramp/slipramp/internal/artifact"
+	"github.com/slipramp/slipramp/internal/promotion"
 )
 
 const (
@@ -39,7 +40,7 @@ func (c *PreparationCoordinator) validPreparationArtifact(
 	if record.ID == uuid.Nil {
 		return artifact.Artifact{}, fmt.Errorf(
 			"%w: required %s artifact is missing",
-			ErrInvalidPreparationArtifact,
+			promotion.ErrInvalidPreparationArtifact,
 			name,
 		)
 	}
@@ -47,7 +48,7 @@ func (c *PreparationCoordinator) validPreparationArtifact(
 		record.MediaType != mediaType || !record.Sensitive || record.RetentionState != artifact.RetentionRetained {
 		return artifact.Artifact{}, fmt.Errorf(
 			"%w: required %s artifact is not a retained sensitive sealed %s output",
-			ErrInvalidPreparationArtifact,
+			promotion.ErrInvalidPreparationArtifact,
 			name,
 			mediaType,
 		)
@@ -55,7 +56,7 @@ func (c *PreparationCoordinator) validPreparationArtifact(
 	if record.SizeBytes > MaximumPreparationArtifactSizeBytes {
 		return artifact.Artifact{}, fmt.Errorf(
 			"%w: required %s artifact exceeds the %d-byte limit",
-			ErrInvalidPreparationArtifact,
+			promotion.ErrInvalidPreparationArtifact,
 			name,
 			MaximumPreparationArtifactSizeBytes,
 		)
@@ -73,7 +74,7 @@ func (c *PreparationCoordinator) validPreparationArtifact(
 	if int64(len(contents)) != record.SizeBytes {
 		return artifact.Artifact{}, fmt.Errorf(
 			"%w: required %s artifact size does not match its metadata",
-			ErrInvalidPreparationArtifact,
+			promotion.ErrInvalidPreparationArtifact,
 			name,
 		)
 	}
@@ -81,14 +82,14 @@ func (c *PreparationCoordinator) validPreparationArtifact(
 	if hex.EncodeToString(digest[:]) != *record.SHA256 {
 		return artifact.Artifact{}, fmt.Errorf(
 			"%w: required %s artifact digest does not match its metadata",
-			ErrInvalidPreparationArtifact,
+			promotion.ErrInvalidPreparationArtifact,
 			name,
 		)
 	}
 	if name == GitDiffArtifactName && !utf8.Valid(contents) {
 		return artifact.Artifact{}, fmt.Errorf(
 			"%w: required %s artifact is not valid UTF-8 text",
-			ErrInvalidPreparationArtifact,
+			promotion.ErrInvalidPreparationArtifact,
 			name,
 		)
 	}
@@ -96,7 +97,7 @@ func (c *PreparationCoordinator) validPreparationArtifact(
 		if _, err := argodiff.Decode(contents); err != nil {
 			return artifact.Artifact{}, fmt.Errorf(
 				"%w: required %s artifact is malformed: %w",
-				ErrInvalidPreparationArtifact,
+				promotion.ErrInvalidPreparationArtifact,
 				name,
 				err,
 			)

@@ -1,4 +1,4 @@
-package promotion
+package projection
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/slipramp/slipramp/internal/promotion"
 	"github.com/slipramp/slipramp/internal/repository"
 )
 
@@ -38,8 +39,8 @@ type BranchDriftListFilter struct {
 }
 
 type BranchDriftStage struct {
-	Stage                          Stage
-	Policy                         PolicyView
+	Stage                          promotion.Stage
+	Policy                         promotion.PolicyView
 	Status                         BranchDriftStatus
 	AcknowledgedSourceRevision     string
 	AcknowledgedRenderBaseRevision string
@@ -70,12 +71,12 @@ type BranchDriftList struct {
 
 type BranchDriftStore interface {
 	StagePolicyStore
-	ListPromotionStages(context.Context) ([]Stage, error)
+	ListPromotionStages(context.Context) ([]promotion.Stage, error)
 	ListRepositories(context.Context) ([]repository.Repository, error)
 }
 
 type BranchDriftService struct {
-	integrations IntegrationSet
+	integrations promotion.IntegrationSet
 	store        BranchDriftStore
 	scanner      repository.BranchScanner
 	cachePeriod  time.Duration
@@ -97,7 +98,7 @@ type branchDriftCacheEntry struct {
 
 type branchDriftEvidence struct {
 	status               BranchDriftStatus
-	acknowledgement      SuccessfulRenderAcknowledgement
+	acknowledgement      promotion.SuccessfulRenderAcknowledgement
 	acknowledgedTargetAt *time.Time
 	sourceBranchRevision string
 	sourceBranchAt       *time.Time
@@ -107,8 +108,25 @@ type branchDriftEvidence struct {
 	message              string
 }
 
+type branchDriftEvidenceError struct {
+	message string
+	cause   error
+}
+
+func (e branchDriftEvidenceError) Error() string {
+	if e.cause == nil {
+		return e.message
+	}
+
+	return e.message + ": " + e.cause.Error()
+}
+
+func (e branchDriftEvidenceError) Unwrap() error {
+	return e.cause
+}
+
 func NewBranchDriftService(
-	integrations IntegrationSet,
+	integrations promotion.IntegrationSet,
 	store BranchDriftStore,
 	scanner repository.BranchScanner,
 	cachePeriod time.Duration,
@@ -162,7 +180,7 @@ func (s *BranchDriftService) List(
 		return BranchDriftList{}, err
 	}
 	if filter.Status != "" && !filter.Status.Valid() {
-		return BranchDriftList{}, fmt.Errorf("%w: branch drift status filter is invalid", ErrInvalid)
+		return BranchDriftList{}, fmt.Errorf("%w: branch drift status filter is invalid", promotion.ErrInvalid)
 	}
 
 	stages, err := s.store.ListPromotionStages(ctx)
@@ -178,7 +196,7 @@ func (s *BranchDriftService) List(
 	for _, record := range repositories {
 		repositoriesByName[record.Name] = record
 	}
-	stagesByRepository := make(map[string][]Stage)
+	stagesByRepository := make(map[string][]promotion.Stage)
 	matchingStageCounts := make(map[string]int)
 	for _, stage := range stages {
 		if stage.ArchivedAt != nil {
@@ -271,7 +289,7 @@ func (s BranchDriftStatus) Valid() bool {
 func (s *BranchDriftService) scanRepository(
 	ctx context.Context,
 	record repository.Repository,
-	stages []Stage,
+	stages []promotion.Stage,
 	fingerprint [sha256.Size]byte,
 ) (branchDriftCacheEntry, error) {
 	entry := branchDriftCacheEntry{
@@ -367,7 +385,7 @@ func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
 	for _, record := range repositories {
 		repositoriesByName[record.Name] = record
 	}
-	stagesByRepository := make(map[string][]Stage)
+	stagesByRepository := make(map[string][]promotion.Stage)
 	for _, stage := range stages {
 		if stage.ArchivedAt != nil {
 			continue
@@ -380,7 +398,7 @@ func (s *BranchDriftService) Refresh(ctx context.Context) (int, error) {
 
 	type scan struct {
 		record      repository.Repository
-		stages      []Stage
+		stages      []promotion.Stage
 		fingerprint [sha256.Size]byte
 	}
 	now := s.currentTime()
@@ -456,7 +474,7 @@ func (s *BranchDriftService) finishRefresh(repositoryID uuid.UUID, fingerprint [
 
 func (s *BranchDriftService) readCache(
 	record repository.Repository,
-	stages []Stage,
+	stages []promotion.Stage,
 ) branchDriftCacheEntry {
 	fingerprint := branchDriftFingerprint(record, stages)
 	cached, ok := s.cacheEntry(record.ID)
@@ -526,7 +544,7 @@ func (s *BranchDriftService) refreshAndLog(ctx context.Context) {
 
 func pendingBranchDriftCacheEntry(
 	fingerprint [sha256.Size]byte,
-	stages []Stage,
+	stages []promotion.Stage,
 	scannedAt time.Time,
 ) branchDriftCacheEntry {
 	entry := branchDriftCacheEntry{
@@ -551,11 +569,13 @@ func pendingBranchDriftCacheEntry(
 	return entry
 }
 
-func validatedRenderAcknowledgement(value *SuccessfulRenderAcknowledgement) (SuccessfulRenderAcknowledgement, error) {
+func validatedRenderAcknowledgement(
+	value *promotion.SuccessfulRenderAcknowledgement,
+) (promotion.SuccessfulRenderAcknowledgement, error) {
 	if value == nil {
-		return SuccessfulRenderAcknowledgement{}, fmt.Errorf(
-			"Stage has no successful-render acknowledgement",
-		)
+		return promotion.SuccessfulRenderAcknowledgement{}, branchDriftEvidenceError{
+			message: "Stage has no successful-render acknowledgement",
+		}
 	}
 
 	acknowledgement := *value
@@ -565,17 +585,17 @@ func validatedRenderAcknowledgement(value *SuccessfulRenderAcknowledgement) (Suc
 		"render result revision": acknowledgement.ResultRevision,
 	} {
 		if err := validateRevision(label, revision); err != nil {
-			return SuccessfulRenderAcknowledgement{}, fmt.Errorf(
-				"Stage successful-render acknowledgement is invalid: %w",
-				err,
-			)
+			return promotion.SuccessfulRenderAcknowledgement{}, branchDriftEvidenceError{
+				message: "Stage successful-render acknowledgement is invalid",
+				cause:   err,
+			}
 		}
 	}
 
 	return acknowledgement, nil
 }
 
-func branchDriftStage(stage Stage, evidence branchDriftEvidence) BranchDriftStage {
+func branchDriftStage(stage promotion.Stage, evidence branchDriftEvidence) BranchDriftStage {
 	return BranchDriftStage{
 		Stage:                          stage,
 		Status:                         evidence.status,
@@ -594,12 +614,12 @@ func branchDriftStage(stage Stage, evidence branchDriftEvidence) BranchDriftStag
 	}
 }
 
-func branchDriftFingerprint(record repository.Repository, stages []Stage) [sha256.Size]byte {
+func branchDriftFingerprint(record repository.Repository, stages []promotion.Stage) [sha256.Size]byte {
 	type fingerprintStage struct {
 		ID                              uuid.UUID
 		TargetBranch                    string
 		SourcePaths                     []string
-		SuccessfulRenderAcknowledgement *SuccessfulRenderAcknowledgement
+		SuccessfulRenderAcknowledgement *promotion.SuccessfulRenderAcknowledgement
 	}
 	type fingerprintValue struct {
 		CloneURL              string
@@ -631,7 +651,7 @@ func branchDriftFingerprint(record repository.Repository, stages []Stage) [sha25
 
 func missingBranchDriftRepository(
 	name string,
-	stages []Stage,
+	stages []promotion.Stage,
 	filter BranchDriftListFilter,
 	scannedAt time.Time,
 ) BranchDriftRepository {
@@ -654,7 +674,7 @@ func missingBranchDriftRepository(
 	return item
 }
 
-func stageMatchesBranchDriftFilter(stage Stage, filter BranchDriftListFilter) bool {
+func stageMatchesBranchDriftFilter(stage promotion.Stage, filter BranchDriftListFilter) bool {
 	return (filter.Integration == "" || stage.Integration == filter.Integration) &&
 		(filter.Project == "" || stage.Project == filter.Project) &&
 		(filter.Application == "" || stage.Application == filter.Application) &&
@@ -676,7 +696,7 @@ func filterBranchDriftStages(stages []BranchDriftStage, status BranchDriftStatus
 	return filtered
 }
 
-func compareBranchDriftStages(left, right Stage) int {
+func compareBranchDriftStages(left, right promotion.Stage) int {
 	for _, values := range [][2]string{
 		{left.Integration, right.Integration},
 		{left.Project, right.Project},

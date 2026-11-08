@@ -1,4 +1,4 @@
-package promotion
+package preparation
 
 import (
 	"bytes"
@@ -21,22 +21,33 @@ import (
 	"github.com/slipramp/slipramp/internal/catalog"
 	"github.com/slipramp/slipramp/internal/notification"
 	"github.com/slipramp/slipramp/internal/productidentity"
+	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
 )
 
+type staticRepositoryLister []repository.Repository
+
+func (l staticRepositoryLister) ListRepositories(context.Context) ([]repository.Repository, error) {
+	return l, nil
+}
+
 type recordingPreparationStore struct {
-	record                  Promotion
+	record                  promotion.Promotion
 	reservedRepositoryID    uuid.UUID
 	reservedRevisionID      uuid.UUID
 	completedGitArtifactID  uuid.UUID
 	completedArgoArtifactID uuid.UUID
 	notificationPlan        *notification.EnqueuePlan
 	failureMessage          string
-	failure                 PreparationFailure
+	failure                 promotion.PreparationFailure
 	failureError            error
 }
 
-func (s *recordingPreparationStore) GetPromotionAwaitingDispatch(context.Context, time.Time) (Promotion, error) {
+func (s *recordingPreparationStore) GetPromotionAwaitingDispatch(
+	context.Context,
+	time.Time,
+) (promotion.Promotion, error) {
 	return s.record, nil
 }
 
@@ -46,7 +57,7 @@ func (s *recordingPreparationStore) ReservePromotionPreparationRevision(
 	repositoryID uuid.UUID,
 	revisionID uuid.UUID,
 	_ time.Time,
-) (Promotion, error) {
+) (promotion.Promotion, error) {
 	s.reservedRepositoryID = repositoryID
 	s.reservedRevisionID = revisionID
 	s.record.Preparation.RepositoryID = &repositoryID
@@ -55,18 +66,21 @@ func (s *recordingPreparationStore) ReservePromotionPreparationRevision(
 	return s.record, nil
 }
 
-func (s *recordingPreparationStore) GetPromotionWithFinishedPreparation(context.Context, time.Time) (Promotion, error) {
+func (s *recordingPreparationStore) GetPromotionWithFinishedPreparation(
+	context.Context,
+	time.Time,
+) (promotion.Promotion, error) {
 	return s.record, nil
 }
 
 func (s *recordingPreparationStore) RecordPromotionPreparationFailure(
 	_ context.Context,
-	failure PreparationFailure,
-) (PreparationFailureState, bool, error) {
+	failure promotion.PreparationFailure,
+) (promotion.PreparationFailureState, bool, error) {
 	s.failure = failure
 	s.failureMessage = failure.Diagnostic
 
-	return PreparationFailureState{Count: 1, Terminal: failure.Permanent}, true, s.failureError
+	return promotion.PreparationFailureState{Count: 1, Terminal: failure.Permanent}, true, s.failureError
 }
 
 func (s *recordingPreparationStore) CompletePromotionPreparation(
@@ -77,7 +91,7 @@ func (s *recordingPreparationStore) CompletePromotionPreparation(
 	argoArtifactID uuid.UUID,
 	_ time.Time,
 	notificationPlan *notification.EnqueuePlan,
-) (Promotion, error) {
+) (promotion.Promotion, error) {
 	s.completedGitArtifactID = gitArtifactID
 	s.completedArgoArtifactID = argoArtifactID
 	s.notificationPlan = notificationPlan
@@ -107,7 +121,7 @@ func (s *recordingPreparationStore) FailPromotionPreparation(
 	_ uuid.UUID,
 	message string,
 	_ time.Time,
-) (Promotion, error) {
+) (promotion.Promotion, error) {
 	s.failureMessage = message
 
 	return s.record, nil
@@ -241,8 +255,8 @@ func TestPreparationDispatchReservesRevisionAndCreatesIdempotentRun(t *testing.T
 		request.Actor == nil || request.Actor.ID != record.RequestedByPrincipalID {
 		t.Errorf("preparation Run request = %#v", request)
 	}
-	if request.Parameters[PreparationParameterCandidateRevision] != record.CandidateRevision ||
-		request.Parameters[PreparationParameterSourcePaths] != `["k8s/external-dns"]` {
+	if request.Parameters[promotion.PreparationParameterCandidateRevision] != record.CandidateRevision ||
+		request.Parameters[promotion.PreparationParameterSourcePaths] != `["k8s/external-dns"]` {
 		t.Errorf("preparation parameters = %#v", request.Parameters)
 	}
 }
@@ -359,7 +373,7 @@ func TestPreparationReconciliation(t *testing.T) {
 			configureArtifacts: func(artifacts *recordingPreparationArtifacts) {
 				delete(artifacts.records, GitDiffArtifactName)
 			},
-			wantMessage: ErrInvalidPreparationArtifact.Error(),
+			wantMessage: promotion.ErrInvalidPreparationArtifact.Error(),
 		},
 		{
 			name:    "deleted artifact",
@@ -369,7 +383,7 @@ func TestPreparationReconciliation(t *testing.T) {
 				gitDiff.RetentionState = artifact.RetentionDeleted
 				artifacts.records[GitDiffArtifactName] = gitDiff
 			},
-			wantMessage: ErrInvalidPreparationArtifact.Error(),
+			wantMessage: promotion.ErrInvalidPreparationArtifact.Error(),
 		},
 		{
 			name:    "invalid Argo diff shape",
@@ -384,7 +398,7 @@ func TestPreparationReconciliation(t *testing.T) {
 				artifacts.records[ArgoDiffArtifactName] = record
 				artifacts.contents[record.ID] = contents
 			},
-			wantMessage: ErrInvalidPreparationArtifact.Error(),
+			wantMessage: promotion.ErrInvalidPreparationArtifact.Error(),
 		},
 		{
 			name:    "oversized diff",
@@ -394,7 +408,7 @@ func TestPreparationReconciliation(t *testing.T) {
 				record.SizeBytes = MaximumPreparationArtifactSizeBytes + 1
 				artifacts.records[GitDiffArtifactName] = record
 			},
-			wantMessage: ErrInvalidPreparationArtifact.Error(),
+			wantMessage: promotion.ErrInvalidPreparationArtifact.Error(),
 		},
 	}
 
@@ -500,9 +514,9 @@ func testPreparationCoordinator(
 	}
 
 	return NewPreparationCoordinator(
-		IntegrationSet{
+		promotion.IntegrationSet{
 			"prod": {
-				Preparation: PreparationConfig{
+				Preparation: promotion.PreparationConfig{
 					Repository: "ops",
 					Target:     "kargo-promotions",
 					Action:     "prepare-review",
@@ -520,9 +534,9 @@ func testPreparationCoordinator(
 	)
 }
 
-func preparingPromotion() Promotion {
+func preparingPromotion() promotion.Promotion {
 	principalID := uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1923")
-	stageSnapshot := PromotionStageSnapshot{
+	stageSnapshot := promotion.PromotionStageSnapshot{
 		ID:             uuid.New(),
 		Integration:    "prod",
 		ClusterName:    "colo",
@@ -536,8 +550,8 @@ func preparingPromotion() Promotion {
 		SourcePaths:    []string{"k8s/external-dns"},
 	}
 
-	return Promotion{
-		Source:                 SourceKargo,
+	return promotion.Promotion{
+		Source:                 promotion.SourceKargo,
 		ID:                     uuid.MustParse("018f90ff-9fd8-7b5f-b7e1-f32ff54c1924"),
 		Integration:            "prod",
 		ExternalPromotionID:    "external-dns-01jbe4q8",
@@ -547,7 +561,7 @@ func preparingPromotion() Promotion {
 		CandidateBranch:        "kargo/promotion/external-dns-01jbe4q8",
 		TargetBranch:           "main",
 		ReviewRequired:         true,
-		Lifecycle:              PromotionLifecycle{State: LifecyclePreparing},
+		Lifecycle:              promotion.PromotionLifecycle{State: promotion.LifecyclePreparing},
 		RequestedByPrincipalID: principalID,
 		RequestedBySnapshot: productidentity.ActorSnapshot{
 			PrincipalID: principalID,

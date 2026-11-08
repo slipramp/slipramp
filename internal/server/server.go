@@ -24,6 +24,8 @@ import (
 	"github.com/slipramp/slipramp/internal/placement"
 	"github.com/slipramp/slipramp/internal/productauth"
 	"github.com/slipramp/slipramp/internal/promotion"
+	"github.com/slipramp/slipramp/internal/promotion/preparation"
+	"github.com/slipramp/slipramp/internal/promotion/projection"
 	"github.com/slipramp/slipramp/internal/readiness"
 	"github.com/slipramp/slipramp/internal/repository"
 	"github.com/slipramp/slipramp/internal/run"
@@ -45,7 +47,7 @@ type Server struct {
 	metricsServer        metricsRunner
 	persistence          *persistence
 	workers              []func(context.Context)
-	promotionBranchDrift *promotion.BranchDriftService
+	promotionBranchDrift *projection.BranchDriftService
 	telemetry            *telemetry.Telemetry
 }
 
@@ -199,9 +201,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		promotionReconciliations,
 	)
 	promotionReviews := promotion.NewReviewService(persistence.database)
-	promotionProjects := promotion.NewProjectService(cfg.KargoIntegrations, persistence.database)
-	promotionPipelines := promotion.NewFreightPipelineService(cfg.KargoIntegrations, persistence.database)
-	promotionBranchDrift := promotion.NewBranchDriftService(
+	promotionProjects := projection.NewProjectService(cfg.KargoIntegrations, persistence.database)
+	promotionPipelines := projection.NewFreightPipelineService(cfg.KargoIntegrations, persistence.database)
+	promotionBranchDrift := projection.NewBranchDriftService(
 		cfg.KargoIntegrations,
 		persistence.database,
 		repository.NewGitBranchScanner(cfg.RepositoryRefreshCredentials),
@@ -246,7 +248,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 		metrics.RunSnapshotWorker,
 	}
 	if len(cfg.KargoIntegrations) > 0 {
-		promotionPreparations := promotion.NewPreparationCoordinator(
+		promotionPreparations := preparation.NewPreparationCoordinator(
 			cfg.KargoIntegrations,
 			repositories,
 			catalogs,
@@ -254,7 +256,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger, serviceVersion st
 			artifacts,
 			notificationService,
 			persistence.database,
-			promotion.DefaultPreparationInterval,
+			preparation.DefaultPreparationInterval,
 			logger,
 		)
 		promotionExpirations := promotion.NewExpirationCoordinator(

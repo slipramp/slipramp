@@ -275,23 +275,3 @@ func validateListWindow(limit, offset int) error {
 
 	return nil
 }
-
-func page[T any](items []T, offset, limit int) []T {
-	if offset >= len(items) {
-		return []T{}
-	}
-	end := min(offset+limit, len(items))
-
-	return items[offset:end]
-}
-
-func compareText(left, right string) int {
-	if left < right {
-		return -1
-	}
-	if left > right {
-		return 1
-	}
-
-	return 0
-}
